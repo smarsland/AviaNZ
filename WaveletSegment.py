@@ -153,7 +153,7 @@ class WaveletSegment:
         print("Wavelet segmenting completed in", time.time() - opst)
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alpha, window, maxlen):
+    def waveletSegmentChp(self, filtnum, alpha, window, maxlen, alg):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
@@ -161,6 +161,7 @@ class WaveletSegment:
             2. alpha: penalty strength for the detector
             3. window: wavelets will be merged in groups of this size (s) before analysis
             4. maxlen: maximum allowed length (s) of signal segments
+            5. alg: 1 - standard epidemic detector, 2 - nuisance-signal detector
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -173,7 +174,7 @@ class WaveletSegment:
             print("Identifying calls using subfilter", subfilter["calltype"])
             goodnodes = subfilter['WaveletParams']["nodes"]
 
-            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen)
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg)
 
             detected_allsubf.append(detected)
         print("WV changepoint segmenting completed in", time.time() - opst)
@@ -735,7 +736,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1):
+    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
@@ -746,6 +747,7 @@ class WaveletSegment:
         alpha - penalty strength for the detector
         maxlen - maximum allowed signal segment length, in s
         window - energy will be calculated over these windows, in s
+        alg - standard (1) or with nuisance segments (2)
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
@@ -793,9 +795,11 @@ class WaveletSegment:
                 continue    # return np.zeros(nw)
 
             # convert into a matrix (seconds x wcs in sec), and get the energy of each row (second)
-            E = (C**2).reshape((nwindows, WCperWindow)).sum(axis=1) / WCperWindow
-            print("Global mean = %f, var = %f" % ( np.mean(C), np.mean(E)))
-            print("Global range of E: %f-%f" % (np.min(E), np.max(E)))
+            E = (C**2).reshape((nwindows, WCperWindow)).mean(axis=1)
+
+            sigma2 = np.percentile(E, 10)
+            print("Global mean = %.1f, var = %.1f" % ( np.mean(C), np.mean(E)))
+            print("Global range of E: %.1f-%.1f, Q10: %.1f" % (np.min(E), np.max(E), sigma2))
 
             # sqrt because the detector squares the data itself (sign not important)
             E = np.sqrt(E)
@@ -805,8 +809,13 @@ class WaveletSegment:
             # analyze by our algorithms.
             # returns a matrix of n x [s, e, type]
             # type is an int corresponding to 'n'=NUIS, 's'=SEG, 'o'=SEGonNUIS
-            segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
-            print(segm1)
+            if alg==1:
+                segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
+            else:
+                segm1 = ce_detect.launchDetector2(E, sigma2, realmaxlen, alpha=alpha).astype('float')
+
+            for seg in segm1:
+                print(seg, round(np.mean(E[int(seg[0]):int(seg[1])]**2)))
 
             # convert from the window scale into actual seconds
             segm1[:,:2] = segm1[:,:2] * realwindow

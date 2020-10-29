@@ -897,12 +897,14 @@ class Segmentation(QDialog):
         self.medSize.valueChanged.connect(self.medSizeChange)
 
         # Parameter selectors for changepoint methods
+        self.chp2l = QCheckBox("Use 2-level detector")
+
         self.chpalpha = QDoubleSpinBox()
         self.chpalpha.setRange(0.1, 20)
         self.chpalpha.setValue(3)
 
         self.chpwin = QDoubleSpinBox()
-        self.chpwin.setRange(0.1, 3)
+        self.chpwin.setRange(0.05, 3)
         self.chpwin.setValue(0.5)
 
         self.maxlen = QDoubleSpinBox()
@@ -929,6 +931,7 @@ class Segmentation(QDialog):
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
         self.chpLayout = QFormLayout()
+        self.chpLayout.addRow(self.chp2l)
         self.chpLayout.addRow("Alpha:", self.chpalpha)
         self.chpLayout.addRow("Window size (s):", self.chpwin)
         self.chpLayout.addRow("Max length (s):", self.maxlen)
@@ -1053,7 +1056,8 @@ class Segmentation(QDialog):
         settings = {"medThr": self.medThr.text(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": self.species.currentText(), "species_cc": self.species_cc.currentText(), "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
-                    "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value()}
+                    "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
+                    "chp2l": self.chp2l.isChecked()}
         return(str(self.algs.currentText()), settings)
 
 #======

@@ -42,7 +42,7 @@ def analyzeFile2(infile, startfrom=None, upto=None):
         xs = xs[:(upto+1)]
 
     cdef int maxlookback = int(0.15*len(xs))
-    res = launchDetector2(xs, maxlookback, alpha=3)
+    res = launchDetector2(xs, 1, maxlookback, alpha=3)
     return(res)
 
 def launchDetector1(xs, int maxlookback, float alpha):
@@ -73,14 +73,14 @@ def launchDetector1(xs, int maxlookback, float alpha):
     res = np.vstack((outst[:outnum], oute[:outnum]+1, outt[:outnum]))
     return(res.T)
 
-def launchDetector2(xs, int maxlookback, float alpha=3):
+def launchDetector2(xs, float sigma2, int maxlookback, float alpha):
     xs = np.asarray(xs, dtype='float64')
     print("using %d datapoints" % len(xs))
 
-    cdef double sigma2 = 1
+    # Type conversion, not sure if needed
+    cdef double csigma2 = sigma2
     cdef int n = len(xs)
     cdef double penalty = 1.1*alpha*np.log(n)
-    cdef double mu0 = 0
 
     if n>10000:
         print("ERROR: n=%d exceeds max permitted series size" % n)
@@ -90,7 +90,7 @@ def launchDetector2(xs, int maxlookback, float alpha=3):
     cdef np.ndarray[int] outst = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[int] oute = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[np.uint8_t] outt = np.zeros(n, dtype='uint8')
-    succ = alg2_var(<double*> np.PyArray_DATA(xs), n, maxlookback, sigma2, penalty, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
+    succ = alg2_var(<double*> np.PyArray_DATA(xs), n, maxlookback, csigma2, penalty, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
     if succ>0:
         print("ERROR: C detector failure")
         return

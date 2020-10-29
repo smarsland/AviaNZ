@@ -176,7 +176,7 @@ int alg1_var(double xs[], const size_t n, const size_t maxlb, const double mu0, 
         possiblestarts[numpossiblestarts++] = t;
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
-    printf("Final cost: %.3f\n", F[n-1]);
+    printf("Final cost: %.2f, final wt: %.4f\n", F[n-1], wts[n-1]);
 
     // extract changepoints
     size_t i = n-1;
@@ -307,7 +307,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
         possiblestarts[numpossiblestarts++] = t;
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
-    printf("Final cost: %.3f\n", F[n-1]);
+    printf("Final cost: %.2f, final wt: %.4f\n", F[n-1], wts[n-1]);
 
     // extract changepoints
     size_t i = n-1;

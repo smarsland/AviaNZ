@@ -4212,7 +4212,7 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
-            xs = np.arange(0, int(self.datalengthSec)+0.5, 0.25)
+            xs = np.arange(0, self.datalengthSec, 0.25)
             Esep = np.zeros(( numNodes, len(xs) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
@@ -4249,6 +4249,11 @@ class AviaNZ(QMainWindow):
                 meanC = np.mean(C)
                 sdC = np.std(C)
 
+                # For our new detection: print energy of the quietest second
+                trimmedlength = math.floor(self.datalengthSec)*spInfo['SampleRate']
+                persecE = np.reshape(E[0:trimmedlength], (math.floor(self.datalengthSec), spInfo['SampleRate'])).mean(axis=1)
+                print("Node %i: mean %f, SD %f, range %f - %f" % (node, meanC, sdC, min(persecE), max(persecE)))
+
                 # get true freqs of this band
                 freqmin, freqmax = WF.getWCFreq(node, spInfo['SampleRate'])
                 # convert freqs to spec Y units
@@ -4272,7 +4277,7 @@ class AviaNZ(QMainWindow):
 
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
-                        diagCall = pg.ROI((specs*xs[w], (freqmin+freqmax)/2),
+                        diagCall = pg.ROI((specs*xs[w], freqmin),
                                           (specs*0.25, freqmax-freqmin),
                                           pen=plotcol, movable=False)
                         self.diagnosticCalls.append(diagCall)
@@ -4282,7 +4287,7 @@ class AviaNZ(QMainWindow):
                 self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen(plotcol, width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
-                r = r + 1 
+                r = r + 1
 
             ### DENOISE: add line of wind strength
             # self.p_plot.addItem(pg.PlotDataItem(np.arange(int(self.datalengthSec))+0.5, np.log(windMaxE),
@@ -5066,6 +5071,9 @@ class AviaNZ(QMainWindow):
                 oldsegs = self.segments.getSpecies(filtspecies)
                 # deleting from the end, because deleteSegments shifts IDs:
                 for si in reversed(oldsegs):
+                    # DO NOT delete segments in other pages
+                    if self.listRectanglesa1[si] is None:
+                        continue
                     # clear these species from overview colors
                     self.refreshOverviewWith(self.segments[si], delete=True)
                     # remove all labels for the current species
@@ -5118,7 +5126,7 @@ class AviaNZ(QMainWindow):
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
-                newSegments = ws.waveletSegmentChp(0, settings["chpalpha"], settings["chpwindow"], settings["maxlen"])
+                newSegments = ws.waveletSegmentChp(0, settings["chpalpha"], settings["chpwindow"], settings["maxlen"], alg=settings["chp2l"]+1)
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
