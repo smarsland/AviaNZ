@@ -1763,7 +1763,8 @@ class PostProcess:
             denoisedData=self.audioData
 
         if f:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
+            filteredDenoisedData = self.sp.bandpassFilter(denoisedData, self.sampleRate, start=f1, end=f2)
+            # filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
         else:
             filteredDenoisedData = denoisedData
 
