@@ -201,9 +201,12 @@ class WaveletSegment:
 
         # 2a. prefilter audio to species freq range
         for filenum in range(len(self.audioList)):
-            self.audioList[filenum] = self.sp.ButterworthBandpass(self.audioList[filenum],
-                                            self.spInfo['SampleRate'],
-                                            low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
+            self.audioList[filenum] = self.sp.bandpassFilter(self.audioList[filenum], self.spInfo['SampleRate'],
+                                                             start=subfilter['FreqRange'][0],
+                                                             end=subfilter['FreqRange'][1])
+            # self.audioList[filenum] = self.sp.ButterworthBandpass(self.audioList[filenum],
+            #                                 self.spInfo['SampleRate'],
+            #                                 low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
         # 2b. actually compute correlations
         for filenum in range(len(self.audioList)):
             print("Computing wavelet node correlations in file", filenum+1)
@@ -633,8 +636,8 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = self.sp.ButterworthBandpass(C, win_sr, low=subfilter['FreqRange'][0],
-                                                high=subfilter['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, win_sr, start=subfilter['FreqRange'][0], end=subfilter['FreqRange'][1])
+                # C = self.sp.ButterworthBandpass(C, win_sr, low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
             C = np.abs(C)
             N = len(C)
             # Virginia: number of segments = number of centers of length inc

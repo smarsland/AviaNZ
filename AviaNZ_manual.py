@@ -2243,7 +2243,8 @@ class AviaNZ(QMainWindow):
 
             # preprocess
             data = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
-            data = self.sp.ButterworthBandpass(data, self.sampleRate, 100, 16000)
+            # data = self.sp.ButterworthBandpass(data, self.sampleRate, 100, 16000)
+            data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
@@ -3708,8 +3709,8 @@ class AviaNZ(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
+                # C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'], low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, spInfo['SampleRate'], start=spSubf['FreqRange'][0], end=spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))

@@ -440,6 +440,11 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxTime.hide()
             self.addSp.hide()
             self.warning.show()
+        if currname == "NZ Bats":
+            self.boxPost.hide()
+            self.boxTime.hide()
+            self.addSp.hide()
+            self.warning.hide()
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -530,7 +535,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(900, 700)
+        self.setMinimumSize(1000, 700)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
@@ -573,8 +578,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_processButton1.clicked.connect(self.reviewClickedSingle)
         self.w_processButton1.setEnabled(False)
 
-        self.w_speLabel1 = QLabel("Choose a species (or review all):")
+        self.w_speLabel1 = QLabel("Choose a species\n(or review all)")
         self.w_spe1 = QComboBox()
+        self.w_spe1.setMinimumWidth(175)
         self.w_spe1.currentIndexChanged.connect(self.speChanged)
         self.spList = []
         self.w_spe1.addItem('All species')
@@ -582,7 +588,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_spe1.setEnabled(False)
 
         #minCertLab = QLabel("Skip if certainty above:\n")
-        minCertLab = QLabel("Skip if certainty above:\nTo see all annotation set to 100")
+        minCertLab = QLabel("Skip annotations with certainty above\n(e.g. to see all annotations choose 100)")
+        minCertLab.setFixedWidth(260)
         #minCertExp = QLabel("To see all annotation set to 100")
         self.certBox = QSpinBox()
         self.certBox.setRange(0,100)
@@ -592,23 +599,24 @@ class AviaNZ_reviewAll(QMainWindow):
         # add controls to dock
         self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
         self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
-        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_dir, row=1,col=1, colspan=2)
         self.d_detection.addWidget(self.w_browse, row=1,col=0)
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
-        self.d_detection.addWidget(self.w_spe1,row=2,col=1)
-        self.d_detection.addWidget(self.w_processButton1, row=2, col=2)
-        #self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
-        self.d_detection.addWidget(self.w_processButton, row=3, col=2)
+        self.d_detection.addWidget(self.w_spe1,row=2, col=1, colspan=2)
         self.d_detection.addWidget(minCertLab, row=3, col=0)
-        self.d_detection.addWidget(self.certBox, row=3, col=1)
+        self.d_detection.addWidget(self.certBox, row=3, col=1, colspan=2)
         #self.d_detection.addWidget(minCertExp, row=4, col=0)
+        self.d_detection.addWidget(self.w_processButton1, row=4, col=1)
+        # self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
+        self.d_detection.addWidget(self.w_processButton, row=4, col=2)
 
         # Excel export section
         linesep2 = QFrame()
         linesep2.setFrameShape(QFrame.HLine)
         linesep2.setFrameShadow(QFrame.Sunken)
         #self.d_detection.addWidget(linesep2, row=5, col=0, colspan=3)
-        self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
+        self.w_resLabel = QLabel("Size(s) of presence/absence windows\nin the output")
+        self.w_resLabel.setFixedWidth(260)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
@@ -617,9 +625,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.timePrecisionBox = QComboBox()
         self.timePrecisionBox.addItems(["Down to seconds", "Down to milliseconds"])
         self.d_excel.addWidget(self.w_resLabel, row=6, col=0)
-        self.d_excel.addWidget(self.w_res, row=6, col=1)
+        self.d_excel.addWidget(self.w_res, row=6, col=1, colspan=2)
         self.d_excel.addWidget(timePrecisionLabel, row=7, col=0)
-        self.d_excel.addWidget(self.timePrecisionBox, row=7, col=1)
+        self.d_excel.addWidget(self.timePrecisionBox, row=7, col=1, colspan=2)
 
         self.w_excelButton = QPushButton(" Generate Excel  ")
         self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
@@ -627,7 +635,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
         self.w_excelButton.clicked.connect(self.exportExcel)
         self.w_excelButton.setEnabled(False)
-        self.d_excel.addWidget(self.w_excelButton, row=6, col=2)
+        self.d_excel.addWidget(self.w_excelButton, row=8, col=2)
 
         self.toggleSettingsBtn = QPushButton(" Advanced settings ")
         self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; font-size:12px; padding: 2px 2px 2px 4px}')
@@ -1502,7 +1510,8 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            # sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            sp.data = sp.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True,need_even=False)
