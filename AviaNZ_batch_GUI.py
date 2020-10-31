@@ -75,7 +75,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.area.addDock(self.d_files, 'left')
 
         self.w_browse = QPushButton("  &Browse Folder")
-        self.w_browse.setToolTip("Can select a folder with sub folders to process")
+        self.w_browse.setToolTip("Select a folder to process (may contain sub folders)")
         self.w_browse.setFixedSize(165, 50)
         self.w_browse.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
@@ -404,7 +404,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def fillSpeciesBoxes(self):
         # select filters with Fs matching box 1 selection
-        # and show/hide minlen maxgap sliders
+        # and show/hide any other UI elements specific to bird filters or AnySound methods
         spp = []
         currname = self.w_spe1.currentText()
         if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
@@ -440,11 +440,18 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxTime.hide()
             self.addSp.hide()
             self.warning.show()
-        if currname == "NZ Bats":
-            self.boxPost.hide()
-            self.boxTime.hide()
-            self.addSp.hide()
-            self.warning.hide()
+
+        if currname=="NZ Bats":
+            self.addSp.setEnabled(False)
+            self.addSp.setToolTip("Bat recognisers cannot be combined with others")
+            self.w_wind.setChecked(False)
+            self.w_wind.setEnabled(False)
+            self.w_wind.setToolTip("Filter not applicable to bats")
+        else:
+            self.addSp.setEnabled(True)
+            self.addSp.setToolTip("")
+            self.w_wind.setEnabled(True)
+            self.w_wind.setToolTip("")
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -535,14 +542,14 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(1000, 700)
+        self.setMinimumSize(1000, 750)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
         self.d_detection = Dock("Review",size=(600, 250), autoOrientation=False)
-        self.d_files = Dock("File list", size=(300, 700))
+        self.d_files = Dock("File list", size=(300, 750))
         self.d_excel = Dock("Excel", size=(600, 150))
-        self.d_settings = Dock("Advanced settings", size=(600, 300))
+        self.d_settings = Dock("Advanced settings", size=(600, 350))
         self.d_excel.hideTitleBar()
         self.d_settings.hideTitleBar()
 
@@ -554,7 +561,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
         self.w_browse = QPushButton("  &Browse Folder")
-        self.w_browse.setToolTip("Can select a folder with sub folders to process")
+        self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
         self.w_browse.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton))
@@ -587,14 +594,11 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_spe1.addItems(self.spList)
         self.w_spe1.setEnabled(False)
 
-        #minCertLab = QLabel("Skip if certainty above:\n")
-        minCertLab = QLabel("Skip annotations with certainty above\n(e.g. to see all annotations choose 100)")
-        minCertLab.setFixedWidth(260)
-        #minCertExp = QLabel("To see all annotation set to 100")
-        self.certBox = QSpinBox()
-        self.certBox.setRange(0,100)
-        self.certBox.setSingleStep(10)
-        self.certBox.setValue(90)
+        # Simple certainty selector:
+        self.certCombo = QComboBox()
+        self.certCombo.addItems(["Show all (even previously reviewed)", "Show only auto/unknown", "Custom certainty bounds"])
+        self.certCombo.setCurrentIndex(1)
+        self.certCombo.activated.connect(self.changedCertSimple)
 
         # add controls to dock
         self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
@@ -603,11 +607,11 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.w_browse, row=1,col=0)
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
         self.d_detection.addWidget(self.w_spe1,row=2, col=1, colspan=2)
-        self.d_detection.addWidget(minCertLab, row=3, col=0)
-        self.d_detection.addWidget(self.certBox, row=3, col=1, colspan=2)
-        #self.d_detection.addWidget(minCertExp, row=4, col=0)
+
+        self.d_detection.addWidget(QLabel("Minimum certainty to show"), row=3, col=0)
+        self.d_detection.addWidget(self.certCombo, row=3, col=1, colspan=2)
+
         self.d_detection.addWidget(self.w_processButton1, row=4, col=1)
-        # self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
         self.d_detection.addWidget(self.w_processButton, row=4, col=2)
 
         # Excel export section
@@ -647,6 +651,15 @@ class AviaNZ_reviewAll(QMainWindow):
         # linesep = QFrame()
         # linesep.setFrameShape(QFrame.HLine)
         # linesep.setFrameShadow(QFrame.Sunken)
+
+        # ADVANCED SETTINGS:
+
+        # precise certainty bounds
+        self.certBox = QSpinBox()
+        self.certBox.setRange(0,100)
+        self.certBox.setSingleStep(10)
+        self.certBox.setValue(90)
+        self.certBox.valueChanged.connect(self.changedCert)
 
         # sliders to select min/max frequencies for ALL SPECIES only
         self.fLow = QSlider(Qt.Horizontal)
@@ -693,20 +706,22 @@ class AviaNZ_reviewAll(QMainWindow):
         self.chunksizeBox.setValue(10)
         self.chunksizeBox.setEnabled(False)
 
-
+        # Advanced Settings Layout
         self.d_settings.addWidget(self.toggleSettingsBtn, row=0, col=2, colspan=2, rowspan=1)
-        self.d_settings.addWidget(self.fLowcheck, row=1, col=0)
-        self.d_settings.addWidget(self.fLowtext, row=1, col=1)
-        self.d_settings.addWidget(self.fLow, row=1, col=2, colspan=2, rowspan=1)
-        self.d_settings.addWidget(self.fLowvalue, row=1, col=4)
-        self.d_settings.addWidget(self.fHighcheck, row=2, col=0)
-        self.d_settings.addWidget(self.fHightext, row=2, col=1)
-        self.d_settings.addWidget(self.fHigh, row=2, col=2, colspan=2, rowspan=1)
-        self.d_settings.addWidget(self.fHighvalue, row=2, col=4)
-        self.d_settings.addWidget(QLabel("FFT window size"), row=3, col=1)
-        self.d_settings.addWidget(self.winwidthBox, row=3, col=2)
-        self.d_settings.addWidget(QLabel("FFT hop size"), row=3, col=3)
-        self.d_settings.addWidget(self.incrBox, row=3, col=4)
+        self.d_settings.addWidget(QLabel("Skip if certainty above:"), row=1, col=0, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.certBox, row=1, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fLowcheck, row=2, col=0)
+        self.d_settings.addWidget(self.fLowtext, row=2, col=1)
+        self.d_settings.addWidget(self.fLow, row=2, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fLowvalue, row=2, col=4)
+        self.d_settings.addWidget(self.fHighcheck, row=3, col=0)
+        self.d_settings.addWidget(self.fHightext, row=3, col=1)
+        self.d_settings.addWidget(self.fHigh, row=3, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fHighvalue, row=3, col=4)
+        self.d_settings.addWidget(QLabel("FFT window size"), row=4, col=1)
+        self.d_settings.addWidget(self.winwidthBox, row=4, col=2)
+        self.d_settings.addWidget(QLabel("FFT hop size"), row=4, col=3)
+        self.d_settings.addWidget(self.incrBox, row=4, col=4)
 
         self.d_settings.addWidget(self.chunksizeAuto, row=5, col=0, colspan=2, rowspan=1)
         self.d_settings.addWidget(self.chunksizeManual, row=6, col=0, colspan=2, rowspan=1)
@@ -744,21 +759,54 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.layout.setColumnStretch(2, 5)
         self.show()
 
-    def toggleSettings(self):
-        if self.d_settings.widgets[1].isVisible():
-            # self.d_settings.setVisible(False)
-            for item in self.d_settings.widgets:
-                if item!=self.toggleSettingsBtn:
-                    item.hide()
-            self.toggleSettingsBtn.setText(" Advanced settings ")
-            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+    def changedCertSimple(self, cert):
+        # update certainty spinbox (adv setting) when dropdown changed
+        if cert==0:
+            # Will show all annotations
+            self.certBox.setValue(100)
+        elif cert==1:
+            # Will show yellow, red annotations
+            self.certBox.setValue(90)
         else:
+            # Will show a custom range
+            # Make sure the advanced settings dock is visible, to make it obvious
+            # where to change this parameter
+            self.toggleSettings(None, forceOn=True)
+            self.certBox.setFocus()
+
+    def changedCert(self, cert):
+        # update certainty dropdown when advanced setting changed
+        if cert==100:
+            # "Show all"
+            self.certCombo.setCurrentIndex(0)
+        elif cert==90:
+            # "Show yellow + red"
+            self.certCombo.setCurrentIndex(1)
+        else:
+            # "custom"
+            self.certCombo.setCurrentIndex(2)
+
+    def toggleSettings(self, clicked, forceOn=None):
+        """ forceOn can be None to toggle, or True/False to force Visible/Hidden. """
+        if forceOn is None:
+            forceOn = not self.d_settings.widgets[1].isVisible()
+
+        if forceOn:
             for item in self.d_settings.widgets:
                 if item!=self.toggleSettingsBtn:
                     item.show()
             # self.d_settings.setVisible(True)
+            self.d_excel.hide()
             self.toggleSettingsBtn.setText(" Hide settings ")
             self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsless.png')))
+        else:
+            # self.d_settings.setVisible(False)
+            for item in self.d_settings.widgets:
+                if item!=self.toggleSettingsBtn:
+                    item.hide()
+            self.d_excel.show()
+            self.toggleSettingsBtn.setText(" Advanced settings ")
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
         self.repaint()
         QApplication.processEvents()
 
@@ -782,8 +830,10 @@ class AviaNZ_reviewAll(QMainWindow):
     def speChanged(self, value):
         if self.w_spe1.currentText() == "All species":
             self.w_processButton1.setEnabled(False)
+            self.w_processButton1.setToolTip("Only one species at a time can be reviewed in quick mode")
         else:
             self.w_processButton1.setEnabled(True)
+            self.w_processButton1.setToolTip("")
 
     def fLowChanged(self, value):
         self.fLowvalue.setText(str(int(value)))

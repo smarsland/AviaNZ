@@ -902,6 +902,7 @@ class AviaNZ(QMainWindow):
         self.d_spec.addWidget(self.playSlider)
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.bar.btn = self.MouseDrawingButton
+        self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         # guides that can be used in batmode
         self.guidelines = [0]*4
@@ -2174,10 +2175,7 @@ class AviaNZ(QMainWindow):
                 self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count, remaking, coordsAbsolute=True)
 
             # This is the moving bar for the playback
-            if not hasattr(self,'bar'):
-                self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
-                self.p_spec.addItem(self.bar, ignoreBounds=True)
-                self.bar.sigPositionChangeFinished.connect(self.barMoved)
+            self.p_spec.addItem(self.bar, ignoreBounds=True)
 
         QApplication.processEvents()
 
