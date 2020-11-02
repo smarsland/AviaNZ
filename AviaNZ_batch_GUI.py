@@ -1398,7 +1398,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            sp.data = sp.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
