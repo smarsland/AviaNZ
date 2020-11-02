@@ -153,15 +153,16 @@ class WaveletSegment:
         print("Wavelet segmenting completed in", time.time() - opst)
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alpha, window, maxlen, alg):
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
             1. filtnum: index of the current filter in self.spInfo (which is a list of filters...)
-            2. alpha: penalty strength for the detector
-            3. window: wavelets will be merged in groups of this size (s) before analysis
-            4. maxlen: maximum allowed length (s) of signal segments
-            5. alg: 1 - standard epidemic detector, 2 - nuisance-signal detector
+            2. alg: 1 - standard epidemic detector, 2 - nuisance-signal detector
+            3. alpha: penalty strength for the detector
+            4. window: wavelets will be merged in groups of this size (s) before analysis
+            5. maxlen: maximum allowed length (s) of signal segments
+              3-5 can be None, in which case they are retrieved from self.spInfo.
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -173,6 +174,12 @@ class WaveletSegment:
         for subfilter in self.spInfo[filtnum]["Filters"]:
             print("Identifying calls using subfilter", subfilter["calltype"])
             goodnodes = subfilter['WaveletParams']["nodes"]
+            if alpha is None:
+                alpha = subfilter["WaveletParams"]["thr"]
+            if window is None:
+                window = subfilter["TimeRange"][0]
+            if maxlen is None:
+                maxlen = subfilter["TimeRange"][1]
 
             detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg)
 

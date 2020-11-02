@@ -179,9 +179,11 @@ class AviaNZ(QMainWindow):
                 firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
                 while firstFile == '':
                     msg = SupportClasses_GUI.MessagePopup("w", "Select Sound File", "Choose a sound file to proceed.\nDo you want to continue?")
-                    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    msg.setStandardButtons(QMessageBox.No)
+                    msg.addButton("Choose a file", QMessageBox.YesRole)
+                    msg.button(QMessageBox.No).setText("Exit")
                     reply = msg.exec_()
-                    if reply == QMessageBox.Yes:
+                    if reply == 0:
                         firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
                     else:
                         sys.exit()
@@ -384,6 +386,7 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
+            actionMenu.addAction("Summaries for a WV changepoint detector", self.prepChpDetector)
         actionMenu.addSeparator()
         self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
         actionMenu.addSeparator()
@@ -394,6 +397,8 @@ class AviaNZ(QMainWindow):
 
         actionMenu.addSeparator()
 
+        if not self.DOC:
+            actionMenu.addAction("Export spectrogram image", self.saveImageRaw)
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
 
         #actionMenu.addSeparator()
@@ -4237,8 +4242,8 @@ class AviaNZ(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, spInfo['SampleRate'],
+                        start=spSubf['FreqRange'][0], end=spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -4700,6 +4705,20 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
+    def prepChpDetector(self):
+        """ Can be used to extract some summaries, useful for building a changepoint detector. """
+        self.saveSegments()
+
+        print("Choosing window...")
+        # manually setting b/c using short files
+        window = 0.05
+
+        print("Choosing maxlb...")
+        # simply the max length of any provided segments
+        maxlb = max([seg[1]-seg[0] for seg in self.segments])
+
+        print("Recommended settings: window=%f, maxlb=%f" % (window, maxlb))
+
     def buildRecogniser(self):
         """Listener for 'Build a recogniser' - Advanced mode
            This mode expects to have more engagement with the user, the user can give sensible names to the clusters
@@ -5121,12 +5140,15 @@ class AviaNZ(QMainWindow):
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 newSegments = ws.waveletSegment(0, wpmode="new")
             elif alg == 'WV Changepoint':
-                print("Changepoint detection, alg1 requested")
+                print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
-                newSegments = ws.waveletSegmentChp(0, settings["chpalpha"], settings["chpwindow"], settings["maxlen"], alg=settings["chp2l"]+1)
+                # using all passed params:
+                # newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
+                # Or if no params are passed, they will be read from the filter file TimeRange:
+                newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5685,6 +5707,11 @@ class AviaNZ(QMainWindow):
         except Exception as e:
             print("Warning: failed to save image")
             print(e)
+
+    def saveImageRaw(self):
+        imageFile = self.filename[:-4] + '.png'
+        print("Exporting raw spectrogram to file %s" % imageFile)
+        self.specPlot.save(imageFile)
 
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
