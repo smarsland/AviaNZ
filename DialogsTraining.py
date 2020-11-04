@@ -120,6 +120,7 @@ class BuildRecAdvWizard(QWizard):
             if value < 4000:
                 value = 4000
             self.fstext.setText(str(value))
+            self.fs.setValue(value)
 
         def fillFileList(self, dirName):
             """ Generates the list of files for a file listbox. """
@@ -1114,7 +1115,7 @@ class BuildRecAdvWizard(QWizard):
             self.filtSummary.addRow("Current M:", self.bestM)
             self.filtSummary.addRow("Threshold:", self.bestThr)
             self.filtSummary.addRow("Wavelet nodes:", self.bestNodes)
-            self.filtSummary.addRow("Frquency bands (Hz):", self.bestFrqBands)
+            self.filtSummary.addRow("Frequency bands (Hz):", self.bestFrqBands)
 
             self.selectedTPR = QLineEdit()
             self.selectedFPR = QLineEdit()
