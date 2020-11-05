@@ -49,6 +49,7 @@ from sklearn.cluster import AffinityPropagation
 from sklearn import metrics
 from sklearn.manifold import TSNE
 from statistics import mode
+from sklearn.metrics.pairwise import pairwise_distances
 
 
 class Clustering:
@@ -61,6 +62,10 @@ class Clustering:
         self.features = features
         self.targets = labels
         self.n_clusters = nclusters
+
+    def custom_dist(self, x, y):
+            d, _ = librosa.sequence.dtw(x, y, metric='euclidean')
+            return d[d.shape[0] - 1][d.shape[1] - 1]
 
     def clusteringScore1(self, labels_true, labels):
         """ Evaluate clustering performance using different scores when ground truth labels are present.
@@ -172,13 +177,18 @@ class Clustering:
 
         return model
 
-    def DBscan(self, eps=0.5, min_samples=5, metric='euclidean'):
+    # def DBscan(self, eps=0.5, min_samples=5, metric='euclidean'):
+    def DBscan(self, eps=0.5, min_samples=5):
         """ Density-Based Spatial Clustering of Applications with Noise. An extension to mean shift clustering.
             Finds core samples of high density and expands clusters from them.
             Usecase: non-flat geometry, uneven cluster sizes
         """
-        model = DBSCAN(eps=eps, min_samples=min_samples, metric=metric)
-        model.fit(self.features)
+        # model = DBSCAN(eps=eps, min_samples=min_samples, metric=metric)
+        # model = DBSCAN(eps=eps, min_samples=min_samples, metric=self.custom_dist)
+        model = DBSCAN(metric='precomputed')
+        d = pairwise_distances(self.features, self.features, metric=self.custom_dist)
+        # model.fit(self.features)
+        model.fit(d)
 
         return model
 
@@ -215,7 +225,9 @@ class Clustering:
         """
         model = AgglomerativeClustering(n_clusters=n_clusters, distance_threshold=distance_threshold, linkage=linkage,
                                         affinity=affinity, compute_full_tree=compute_full_tree)
-        model.fit(self.features)
+        d = pairwise_distances(self.features, self.features, metric=self.custom_dist)
+        model.fit(d)
+        # model.fit(self.features)
 
         return model
 
@@ -250,7 +262,9 @@ class Clustering:
 
         return som
 
-    def cluster(self, dirname, fs, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
+    # def cluster(self, dirname, fs, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
+    def cluster(self, dirname, fs, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False,
+                    alg='agglomerative'):
         """
         Cluster segments during training to make sub-filters.
         Given wav + annotation files,
@@ -270,6 +284,7 @@ class Clustering:
         """
 
         self.alg = alg
+        nlevels = 6
 
         # 1. Get the frequency band and sampling frequency from annotations
         f1, f2 = self.getFrqRange(dirname, species, fs)
@@ -282,9 +297,7 @@ class Clustering:
             ind_fhigh = (np.abs(mels - f2)).argmin()
 
         elif feature == 'we' and f1 != 0 and f2 != 0:
-            linear = np.linspace(0, fs / 2, 62)
-            ind_flow = (np.abs(linear - f1)).argmin()
-            ind_fhigh = (np.abs(linear - f2)).argmin()
+            weInds = self.nodesInRange(nlevels, f1, f2, fs)
 
         # 3. Clustering at syllable level, therefore find the syllables in each segment
         dataset = self.findSyllables(dirname, species, minlen, fs, f1, f2, denoise)
@@ -327,10 +340,12 @@ class Clustering:
                 record.insert(3, mfcc)
             elif feature == 'we':  # Wavelet Energy
                 ws = WaveletSegment.WaveletSegment(spInfo={})
-                we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new')
+                we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=nlevels, wpmode='new')
                 we = we.mean(axis=1)
-                if f1 != 0 and f2 != 0:
-                    we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f1, f2
+                if weInds:
+                    we = we[weInds]
+                # if f1 != 0 and f2 != 0:
+                #     we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f1, f2
                 features.append(we)
                 record.insert(3, we)
             elif feature == 'chroma':
@@ -341,7 +356,7 @@ class Clustering:
                 record.insert(3, chroma)
 
         # 5. Actual clustering
-        features = TSNE().fit_transform(features)
+        # features = TSNE().fit_transform(features)
         self.features = features
 
         model = self.trainModel()
@@ -399,12 +414,24 @@ class Clustering:
 
         return clustered_dataset, nclasses, duration
 
+    def nodesInRange(self, nlevels, f1, f2, fs):
+        ''' Return the indices (nodes) to keep
+        '''
+        allnodes = range(1, 2 ** (nlevels + 1) - 1)
+        inband = []
+        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=fs)
+        for i in allnodes:
+            flow, fhigh = WF.getWCFreq(i, fs)
+            if flow < f2 and fhigh > f1:
+                inband.append(i-1)
+
+        return inband
+
     def getFrqRange(self, dirname, species, fs):
         ''' Get the frequency band and sampling frequency from annotations
         '''
         lowlist = []
         highlist = []
-        # srlist = []
 
         # Directory mode (from the training dialog)
         if os.path.isdir(dirname):
@@ -524,12 +551,21 @@ class Clustering:
         :return: syllables list
         """
         # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
-        audiodata = self.loadFile(filename=file, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
+        # audiodata = self.loadFile(filename=file, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
+        audiodata = self.loadFile(filename=file, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
         start = seg[0]
         sp = SignalProc.SignalProc()
         sp.data = audiodata
         sp.sampleRate = fs
         _ = sp.spectrogram()
+        # Show only the segment frequencies to the median clipping and avoid overlapping noise - better than filtering when loading audiodata (it could make aliasing effect)
+        linear = np.linspace(0, fs / 2, sp.window_width/2)
+        # ind_flow = (np.abs(linear - f1)).argmin()
+        # ind_fhigh = (np.abs(linear - f2)).argmin()
+        ind_flow = (np.abs(linear - seg[2])).argmin()
+        ind_fhigh = (np.abs(linear - seg[3])).argmin()
+        sp.sg = sp.sg[:, ind_flow:ind_fhigh]
+
         segment = Segment.Segmenter(sp, fs)
 
         syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
@@ -568,12 +604,18 @@ class Clustering:
             print('\nAgglomerative Clustering----------------------')
             # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
             if not self.n_clusters:
-                model = self.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
-                                                     linkage='complete')
+                model = self.agglomerativeClustering(n_clusters=None, distance_threshold=0.5, linkage='average', affinity='precomputed')
             else:
-                model = self.agglomerativeClustering(n_clusters=self.n_clusters, compute_full_tree=False,
-                                                     distance_threshold=None, linkage='complete')
-            model.fit_predict(self.features)
+                model = self.agglomerativeClustering(n_clusters=self.n_clusters, distance_threshold=None, linkage='average', affinity='precomputed')
+
+            # # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
+            # if not self.n_clusters:
+            #     model = self.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
+            #                                          linkage='complete')
+            # else:
+            #     model = self.agglomerativeClustering(n_clusters=self.n_clusters, compute_full_tree=False,
+            #                                          distance_threshold=None, linkage='complete')
+            # # model.fit_predict(self.features)
         return model
 
     def getClusterCenter(self, cluster, fs, f1, f2, feature, duration, n_mels=24, denoise=False):
