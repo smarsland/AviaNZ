@@ -898,43 +898,14 @@ class WaveletSegment:
 
         # now, need to go over the segments and find any overlapping ones (i.e. combine across nodes).
         # NOTE: will sort them
-        outsegs = self.mergeOverlaps(detected)
+        s = Segment.Segmenter()
+        outsegs = s.checkSegmentOverlap(detected)
         print("After merge:", outsegs)
 
         E = None
         del E
         gc.collect()
         return outsegs
-
-    def mergeOverlaps(self, detected):
-        """ Takes a list of segments and merges any overlapping ones
-            (does NOT merge those that only touch!)
-            format: [[s1,e1], [s2,e2]] -> [[s1, e2]]
-        """
-        # TODO: could probably replace with something from Segment.py
-        numdets = np.shape(detected)[0]
-        outsegs = []
-        if numdets>0:
-            # sort:
-            sortix = detected[:,0].argsort()
-            detected = detected[sortix]
-
-            currstart = detected[0,0]
-            currend = detected[0,1]
-            # if there is more than 1 detection, merge loop starts:
-            for i in range(1, np.shape(detected)[0]):
-                if(currend > detected[i, 0]):
-                    # there is overlap, so merge:
-                    currend = max(currend, detected[i, 1])
-                else:
-                    # no overlap, so store the current:
-                    outsegs.append([currstart, currend])
-                    # and start a new one:
-                    currstart = detected[i,0]
-                    currend = detected[i,1]
-            outsegs.append([currstart, currend])
-        return(outsegs)
-
 
     def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
         """ Take list of energy peaks of dimensions:

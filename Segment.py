@@ -617,8 +617,9 @@ class Segmenter:
         return segs
 
     def mergeSegments(self, segs1, segs2=None):
-        """ Given two segmentations of the same file, return the merged set of them:
-        [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
+        """ Given two segmentations of the same file, join them,
+        and if one wasn't empty, merge any overlapping segments.
+        format: [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
         Can take in one or two lists. """
         if segs1 == [] and segs2 == []:
             return []
@@ -629,17 +630,9 @@ class Segmenter:
 
         if segs2 is not None:
             segs1.extend(segs2)
-        segs1.sort(key=lambda seg: seg[0])
-        out = [segs1[0]]
-        for curr in segs1:
-            lastout = out[-1]
-            if curr[0] < lastout[1]:
-                lastout[1] = max(lastout[1], curr[1])
-            else:
-                # note that segments that only touch ([1,2][2,3])
-                # will not be merged
-                out.append(curr)
+        out = self.checkSegmentOverlap(segs1)
         return out
+
 
     def convert01(self, presabs, window=1):
         """ Turns a list of presence/absence [0 1 1 1]
@@ -742,31 +735,33 @@ class Segmenter:
 
     def checkSegmentOverlap(self, segments):
         """ Merges overlapping segments.
-            Operates on start-end list [[1,3], [2,4]] -> [[1,4]]
+            format: [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
+            Note that segments that only touch will not be merged!
         """
-        # Needs to be python array, not np array
+        # Needs to be python nested list, not np array
         # Sort by increasing start times
         if isinstance(segments, np.ndarray):
             segments = segments.tolist()
-        segments = sorted(segments)
-        segments = np.array(segments)
+        if len(segments)==0:
+            return []
 
-        newsegs = []
-        s = 0
-        # Loop over segs until the start value of 1 is not inside the end value of the previous
-        while s<len(segments):
-            i = s
-            end = segments[i,1]
-            while i < len(segments)-1 and segments[i+1,0] < end:
-                i += 1
-                end = max(end, segments[i,1])
-            newsegs.append([segments[s,0],end])
-            s = i+1
+        segments.sort(key=lambda seg: seg[0])
 
-        return newsegs
+        # Loop over segs until the start value of next segment
+        #  is not inside the end value of the previous
+        out = [segments[0]]
+        for curr in segments:
+            lastout = out[-1]
+            if curr[0] < lastout[1]:
+                # there is overlap, so merge (by modifying the stored one inplace)
+                lastout[1] = max(lastout[1], curr[1])
+            else:
+                # no overlap, so store the current:
+                out.append(curr)
+        return out
 
     def checkSegmentOverlap3(self, segments):
-        """ Merges overllaping segments.
+        """ Merges overlapping segments.
             Operates on list of 3-element segments:
             [[[1,3], 50], [[2,5], 70]] -> [[[1,5], 60]]
             Currently, certainties are just averaged over the number of segs.
