@@ -462,7 +462,11 @@ class AviaNZ_batchProcess():
                     print("Working with recogniser:", filters[speciesix])
                     if self.method!="Click":
                         # note: using 'recaa' mode = partial antialias
-                        thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
+                        if "method" not in filters[speciesix] or filters[speciesix]["method"]=="wv":
+                            thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
+                        else:
+                            # TODO note that only allowing alg 2 now
+                            thisPageSegs = self.ws.waveletSegmentChp(speciesix, alg=2)
                     else:
                         click_label, data_test, gen_spec = self.ClickSearch(self.sp.sg, self.filename)
                         print('number of detected clicks = ', gen_spec)

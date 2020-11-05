@@ -417,6 +417,7 @@ class AviaNZ(QMainWindow):
         recMenu = self.menuBar().addMenu("&Recognisers")
         extrarecMenu = recMenu.addMenu("Train an automated recogniser")
         extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
+        extrarecMenu.addAction("Train a changepoint recogniser", self.buildChpRecogniser)
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
@@ -4719,15 +4720,25 @@ class AviaNZ(QMainWindow):
 
         print("Recommended settings: window=%f, maxlb=%f" % (window, maxlb))
 
-    def buildRecogniser(self):
-        """Listener for 'Build a recogniser' - Advanced mode
-           This mode expects to have more engagement with the user, the user can give sensible names to the clusters
-           and adjust some parameters based on user's expertise on the particular species.
+    def buildChpRecogniser(self):
+        """ Train a changepoint detector.
+            Currently, takes nodes from a selected wavelet filter,
+            and only trains alpha, length etc.
+        """
+        self.saveSegments()
+        self.buildRecChpWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
+        # TODO connect the final page buttons to something
+        self.buildRecChpWizard.activateWindow()
+        self.buildRecChpWizard.exec_()
+        # reread filters list with the new one
+        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
+    def buildRecogniser(self):
+        """Listener for 'Build a recogniser'
            All training and file I/O are done in Dialogs.py currently.
         """
         self.saveSegments()
-        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config)
+        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
         self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
         self.buildRecAdvWizard.activateWindow()

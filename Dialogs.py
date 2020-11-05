@@ -854,7 +854,9 @@ class Segmentation(QDialog):
 
         spp = list(species.keys())
         spp.insert(0, "Choose species...")
+        self.filters = species
         self.species.addItems(spp)
+        self.species.currentTextChanged.connect(self.filterChange)
 
         Box.addWidget(self.specieslabel)
         Box.addWidget(self.species)
@@ -1041,6 +1043,13 @@ class Segmentation(QDialog):
             self.maxgap.hide()
             self.minlenlbl.hide()
             self.minlen.hide()
+
+    def filterChange(self, species):
+        """ Override UI with parameters from the requested filter. """
+        subfilt = self.filters[species]["Filters"][0]
+        self.chpalpha.setValue(subfilt["WaveletParams"]["thr"])
+        self.chpwin.setValue(subfilt["TimeRange"][0])
+        self.maxlen.setValue(subfilt["TimeRange"][1])
 
     def medSizeChange(self,value):
         self.medSizeText.setText("Minimum length: %s ms" % value)

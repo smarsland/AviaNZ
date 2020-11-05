@@ -501,8 +501,7 @@ class SegmentList(list):
         return(lenMin, lenMax, fLow, fHigh)
 
     def exportGT(self, filename, species, window=1, inc=None):
-        """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file,
-            and returns other parameters for populating the training dialogs.
+        """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file
         filename - current wav file name.
         species - string, will export the annotations for it.
         Window and inc defined as in waveletSegment.
