@@ -1099,6 +1099,7 @@ class WaveletSegment:
         # top_nodes = []
 
         nodesToTest = self.bestNodes
+        segmenter = Segment.Segmenter()  # for segment postproc functions
 
         # Grid search over thr x Files
         for indext in range(len(thrList)):
@@ -1177,7 +1178,7 @@ class WaveletSegment:
                     # What do we detect if we add this node to currently best detections?
                     if np.shape(segm1)[0]>0:
                         segm_candidate = np.vstack((segm_best, segm1))
-                        segm_candidate = self.mergeOverlaps(segm_candidate)  # will also sort them
+                        segm_candidate = segmenter.checkSegmentOverlap(segm_candidate)  # will also sort them
                     else:
                         # no new detections
                         segm_candidate = segm_best

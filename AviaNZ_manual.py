@@ -418,6 +418,7 @@ class AviaNZ(QMainWindow):
         extrarecMenu = recMenu.addMenu("Train an automated recogniser")
         extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
         extrarecMenu.addAction("Train a changepoint recogniser", self.buildChpRecogniser)
+        extrarecMenu.addAction("Train a median clipping recogniser", self.buildMCRecogniser)
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
@@ -2120,9 +2121,11 @@ class AviaNZ(QMainWindow):
         if not self.cheatsheet and not self.zooniverse:
             for count in range(len(self.segments)):
                 if self.segments[count][2] == 0 and self.segments[count][3] == 0:
-                    self.addSegment(self.segments[count][0], self.segments[count][1], 0, 0, self.segments[count][4], False, count, remaking)
+                    self.addSegment(self.segments[count][0], self.segments[count][1], 0, 0, self.segments[count][4],
+                            saveSeg=False, index=count, remaking=remaking)
                 else:
-                    self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count, remaking)
+                    self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4],
+                            saveSeg=False, index=count, remaking=remaking)
 
             # This is the moving bar for the playback
             if not hasattr(self,'bar'):
@@ -2518,8 +2521,9 @@ class AviaNZ(QMainWindow):
         startpoint, endpoint are in amplitude coordinates
         y1, y2 should be the frequencies (between 0 and Fs//2)
         species - list of labels (including certainties, .data format)
-        saveSeg means that we are drawing the saved ones. Need to check that those ones fit into
-          the current window, can assume the other do, but have to save their times correctly.
+        saveSeg - save the created segments? Also enforces page-relative coordinates!
+          Otherwise will assume absolute coordinates (i.e. when showing everything from self.segments)
+          and check if they should be shown.
         remaking - can be turned to True to reuse some existing objects
         """
         print("Segment added at %d-%d, %d-%d" % (startpoint, endpoint, y1, y2))
@@ -4726,10 +4730,26 @@ class AviaNZ(QMainWindow):
             and only trains alpha, length etc.
         """
         self.saveSegments()
-        self.buildRecChpWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
-        # TODO connect the final page buttons to something
-        self.buildRecChpWizard.activateWindow()
-        self.buildRecChpWizard.exec_()
+        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
+        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.activateWindow()
+        self.buildRecAdvWizard.exec_()
+        # reread filters list with the new one
+        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+
+    def buildMCRecogniser(self):
+        """ Train a median clipping detector.
+            Currently, takes nodes from a selected wavelet filter,
+            and only trains alpha, length etc.
+        """
+        # TODO
+        self.saveSegments()
+        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="mc")
+        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.activateWindow()
+        self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
@@ -5157,9 +5177,9 @@ class AviaNZ(QMainWindow):
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 # using all passed params:
-                # newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
                 # Or if no params are passed, they will be read from the filter file TimeRange:
-                newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
+                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5263,9 +5283,10 @@ class AviaNZ(QMainWindow):
             return
 
         self.removeSegments()
+        self.segments = copy.deepcopy(self.prevSegments)
         for seg in self.prevSegments:
-            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], index=-1)
-            self.segmentsToSave = True
+            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], saveSeg=False)
+        self.segmentsToSave = True
 
     def exportSeg(self):
         # First, deal with older xls if present:

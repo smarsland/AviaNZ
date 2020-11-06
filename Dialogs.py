@@ -900,6 +900,7 @@ class Segmentation(QDialog):
 
         # Parameter selectors for changepoint methods
         self.chp2l = QCheckBox("Use 2-level detector")
+        self.chp2l.setChecked(True)
 
         self.chpalpha = QDoubleSpinBox()
         self.chpalpha.setRange(0.1, 20)

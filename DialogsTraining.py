@@ -900,26 +900,29 @@ class BuildRecAdvWizard(QWizard):
             form1_step4 = QFormLayout()
             if method=="wv":
                 self.minlen = QLineEdit(self)
-                self.minlen.setText('')
                 form1_step4.addRow('Min call length (sec)', self.minlen)
                 self.maxlen = QLineEdit(self)
-                self.maxlen.setText('')
                 form1_step4.addRow('Max call length (sec)', self.maxlen)
                 self.avgslen = QLineEdit(self)
-                self.avgslen.setText('')
                 form1_step4.addRow('Avg syllable length (sec)', self.avgslen)
                 self.maxgap = QLineEdit(self)
-                self.maxgap.setText('')
                 form1_step4.addRow('Max gap between syllables (sec)', self.maxgap)
             elif method=="chp":
                 self.usernodes = QLineEdit(self)
                 form1_step4.addRow('Enter nodes (comma-sep.)', self.usernodes)
                 self.minlen = QLineEdit(self)
-                self.minlen.setText('')
                 form1_step4.addRow('Window size (sec)', self.minlen)
                 self.maxlen = QLineEdit(self)
-                self.maxlen.setText('')
                 form1_step4.addRow('Max call length (sec)', self.maxlen)
+            elif method=="mc":
+                self.usernodes = QLineEdit(self)
+                form1_step4.addRow('Enter nodes (comma-sep.)', self.usernodes)
+                self.minlen = QLineEdit(self)
+                form1_step4.addRow('Min call length (sec)', self.minlen)
+                self.maxlen = QLineEdit(self)
+                form1_step4.addRow('Max call length (sec)', self.maxlen)
+                self.maxgap = QLineEdit(self)
+                form1_step4.addRow('Max gap between syllables (sec)', self.maxgap)
 
             # FreqRange parameters
             self.fLow = QSlider(Qt.Horizontal)
@@ -993,7 +996,7 @@ class BuildRecAdvWizard(QWizard):
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
 
             # need some more properties for the older method
-            if self.method=="wv":
+            if self.method=="wv" or self.method=="mc":
                 # this is just the minimum call length then:
                 self.minlen.setText(str(round(np.min(len_min),2)))
                 # Get max inter syllable gap
@@ -1007,16 +1010,17 @@ class BuildRecAdvWizard(QWizard):
                     maxgap = max(gaps)
                 else:
                     maxgap = 0
-
-                # get average syllable length
-                syllen = []
-                for longseg in self.segments:
-                    for i in range(len(longseg[2])):
-                        syllen.append(longseg[2][i][1] - longseg[2][i][0])
-
-                avgslen = np.mean(syllen)
                 self.maxgap.setText(str(round(maxgap,2)))
-                self.avgslen.setText(str(round(avgslen,2)))
+
+                if self.method=="wv":
+                    # get average syllable length
+                    syllen = []
+                    for longseg in self.segments:
+                        for i in range(len(longseg[2])):
+                            syllen.append(longseg[2][i][1] - longseg[2][i][0])
+
+                    avgslen = np.mean(syllen)
+                    self.avgslen.setText(str(round(avgslen,2)))
             elif self.method=="chp":
                 # this is window size:
                 # let's say, 10 % of the min call length
@@ -1157,6 +1161,12 @@ class BuildRecAdvWizard(QWizard):
                 mlen = float(self.field("mlen"+str(self.pageId)))
                 usernodes = list(map(int, self.field("usernodes"+str(self.pageId)).split(',')))
                 self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [chpwin, mlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
+            elif self.method=="mc":
+                minlen = float(self.field("minlen"+str(self.pageId)))
+                maxlen = float(self.field("maxlen"+str(self.pageId)))
+                maxgap = float(self.field("maxgap" + str(self.pageId)))
+                usernodes = list(map(int, self.field("usernodes"+str(self.pageId)).split(',')))
+                self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, 0.0, maxgap], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
             window = 1
@@ -1209,13 +1219,18 @@ class BuildRecAdvWizard(QWizard):
                                                                     self.thrList, self.MList,
                                                                     d=False, rf=True,
                                                                     learnMode="recaa", window=window, inc=inc)
-                else:
+                elif self.method=="chp":
                     # Note: using energies averaged over window size set before
                     numthr = 7
                     self.thrList = np.geomspace(0.02, 20, num=numthr)
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainChp(self.field("trainDir"),
                                                                     self.thrList, usernodes,
                                                                     maxlen=mlen, window=chpwin)
+                elif self.method=="mc":
+                    # TODO
+                    print("NOT IMPLEMENTED YET")
+                    return
+
                 print("Filtered nodes: ", self.nodes)
                 print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
                 self.TPR = TP/(TP+FN)
@@ -1494,6 +1509,16 @@ class BuildRecAdvWizard(QWizard):
                     nodes = eval(self.field("bestNodes"+str(pageId)))
 
                     newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [win, mlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                elif self.wizard().method=="mc":
+                    minlen = float(self.field("minlen"+str(pageId)))
+                    maxlen = float(self.field("maxlen"+str(pageId)))
+                    maxgap = float(self.field("maxgap" + str(pageId)))
+                    fLow = int(self.field("fLow"+str(pageId)))
+                    fHigh = int(self.field("fHigh"+str(pageId)))
+                    thr = float(self.field("bestThr"+str(pageId)))
+                    nodes = eval(self.field("bestNodes"+str(pageId)))
+
+                    newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, 0.0, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
                 else:
                     print("ERROR: unrecognized method %s" % self.wizard().method)
                     return
@@ -1532,7 +1557,7 @@ class BuildRecAdvWizard(QWizard):
 
     # Main init of the training wizard
     def __init__(self, filtdir, config, method, parent=None):
-        # method: "wv" or "chp" to easily switch between old wavelet filter
+        # method: "wv", "chp" or "mc" to easily switch between old wavelet filter
         # and the new changepoint detection
         super(BuildRecAdvWizard, self).__init__()
         self.setWindowTitle("Build Recogniser")
@@ -1633,7 +1658,20 @@ class BuildRecAdvWizard(QWizard):
                 page4.registerField("mlen"+str(pageid), page4.maxlen)
                 page4.registerField("fLow"+str(pageid), page4.fLow)
                 page4.registerField("fHigh"+str(pageid), page4.fHigh)
+                # These are for user input to be passed between pages 4 and 5:
                 page4.registerField("usernodes"+str(pageid), page4.usernodes)
+
+                # note: pageid is the same for both page fields
+                page5.registerField("bestThr"+str(pageid)+"*", page5.bestThr)
+                # WHile this stores the output nodes from ROC, which in principle may be different from page4
+                page5.registerField("bestNodes"+str(pageid)+"*", page5.bestNodes)
+            elif self.method=="mc":
+                page4.registerField("minlen"+str(pageid), page4.minlen)
+                page4.registerField("maxlen"+str(pageid), page4.maxlen)
+                page4.registerField("maxgap" + str(pageid), page4.maxgap)
+                page4.registerField("fLow"+str(pageid), page4.fLow)
+                page4.registerField("fHigh"+str(pageid), page4.fHigh)
+                page4.registerField("usernodes"+str(pageid)+"*", page5.bestNodes)
 
                 # note: pageid is the same for both page fields
                 page5.registerField("bestThr"+str(pageid)+"*", page5.bestThr)
