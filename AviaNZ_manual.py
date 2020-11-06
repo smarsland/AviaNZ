@@ -596,10 +596,13 @@ class AviaNZ(QMainWindow):
         placeInFileBox.addWidget(self.placeInFileSelector)
         placeInFileBox.addWidget(self.next5mins)
         placeInFileBox.addWidget(self.placeInFileLabel)
-        placeInFileBox.addStretch(4)
-        placeInFileBox.addWidget(self.annotJumpLabel)
-        placeInFileBox.addWidget(self.annotJumpBtns)
-        placeInFileBox.addStretch(4)
+        if self.DOC:
+            placeInFileBox.addStretch(10)
+        else:
+            placeInFileBox.addStretch(4)
+            placeInFileBox.addWidget(self.annotJumpLabel)
+            placeInFileBox.addWidget(self.annotJumpBtns)
+            placeInFileBox.addStretch(4)
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
         # Corresponding keyboard shortcuts:
