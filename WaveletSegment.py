@@ -205,6 +205,7 @@ class WaveletSegment:
                                             self.spInfo['SampleRate'],
                                             start=subfilter['FreqRange'][0],
                                             end=subfilter['FreqRange'][1])
+
         # 2b. actually compute correlations
         for filenum in range(len(self.audioList)):
             print("Computing wavelet node correlations in file", filenum+1)
@@ -635,6 +636,7 @@ class WaveletSegment:
             # Filter
             if rf:
                 C = self.sp.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
+
             C = np.abs(C)
             N = len(C)
             # Virginia: number of segments = number of centers of length inc
