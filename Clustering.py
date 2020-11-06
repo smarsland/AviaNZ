@@ -285,6 +285,7 @@ class Clustering:
 
         self.alg = alg
         nlevels = 6
+        weInds = []
 
         # 1. Get the frequency band and sampling frequency from annotations
         f1, f2 = self.getFrqRange(dirname, species, fs)

@@ -3160,7 +3160,7 @@ class ExportBats(QDialog):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
-        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.xlsx, you will need to email it yourself\nFields with a * are mandatory\n')
+        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.csv, you will need to email it yourself\nFields with a * are mandatory)\n')
         l2 = QLabel('*Data source (e.g., your community group): ')
         self.data = QLineEdit(self)
         hbox1 = QHBoxLayout()
