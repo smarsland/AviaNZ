@@ -1614,12 +1614,14 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("Segment matches")
                 del self.origSeg[i]
             else:
-                oldlabel = self.origSeg[i][4] 
-                newlabel = self.segments[i][4] 
+                oldlabel = self.origSeg[i][4]
+                newlabel = self.segments[i][4]
                 if "-To Be Deleted-" in [lab["species"] for lab in newlabel]:
                     self.origSeg[i] = [self.origSeg[i], []]
                 else:
-                    if [lab["species"] for lab in oldlabel] != [lab["species"] for lab in newlabel] or [lab["calltype"] for lab in oldlabel] != [lab["calltype"] for lab in newlabel]:
+                    # Note that we have to use .get to allow unspecified calltype
+                    if [lab["species"] for lab in oldlabel] != [lab["species"] for lab in newlabel] or \
+                       [lab.get("calltype") for lab in oldlabel] != [lab.get("calltype") for lab in newlabel]:
                         self.origSeg[i] = [self.origSeg[i], newlabel]
 
         if len(self.origSeg)>0:
