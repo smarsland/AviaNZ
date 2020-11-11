@@ -885,19 +885,19 @@ class AviaNZ_batchProcess():
             elif HasBat:
                 label.append({"species": "Short-tailed bat", "certainty": 50})
 
-            #plot clicks probabilities + save images
-            #Each row has a differen plot: LT, ST NT
-            # Lt first columin, st second, nt third
-            fig, ax = plt.subplots()
-            ax.plot(LT_prob, 'ro', label='LT' )
-            ax.plot(ST_prob, 'ob', label='ST')
-            ax.plot(NT_prob,'og', label='Not-bat')
-            if label:
-                ax.set_title('File classified as '+label[0]['species']+' cert ='+str(label[0]['certainty'])+', num. clicks = '+str(len(LT_prob)))
-            else:
-                ax.set_title('File classified as Noise, num. clicks = '+str(len(LT_prob)))
-            legend = ax.legend(loc='upper rigth')
-            plt.savefig(self.filename[:-4]+"_click_prob.png")  
+            ##plot clicks probabilities + save images
+            ##Each row has a differen plot: LT, ST NT
+            ## Lt first columin, st second, nt third
+            #fig, ax = plt.subplots()
+            #ax.plot(LT_prob, 'ro', label='LT' )
+            #ax.plot(ST_prob, 'ob', label='ST')
+            #ax.plot(NT_prob,'og', label='Not-bat')
+            #if label:
+            #    ax.set_title('File classified as '+label[0]['species']+' cert ='+str(label[0]['certainty'])+', num. clicks = '+str(len(LT_prob)))
+            #else:
+            #    ax.set_title('File classified as Noise, num. clicks = '+str(len(LT_prob)))
+            #legend = ax.legend(loc='upper rigth')
+            #plt.savefig(self.filename[:-4]+"_click_prob.png")  
 
         return label
 

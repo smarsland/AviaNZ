@@ -272,10 +272,10 @@ def ClickSearch3(imspec, label):
     # Threshold
     #thr_spec=(np.mean(mean_spec_all)+np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
     #thr_spec=(np.mean(mean_spec_all))*np.ones((np.shape(mean_spec_all)))
-    #mean_spec_all=np.mean(imspec, axis=0)[2:]
-    #thr_spec=np.mean(mean_spec_all)*0.7
-    mean_spec_all=np.mean(imspec, axis=0)
-    thr_spec=mean_spec_all*0.75
+    mean_spec_all=np.mean(imspec, axis=0)[2:]
+    thr_spec=np.mean(mean_spec_all)
+    #mean_spec_all=np.mean(imspec, axis=0)
+    #thr_spec=mean_spec_all*0.75
 
     # 2 Frequency bands we want to check
     #[21k,36k]+[50k,60k]
@@ -482,7 +482,7 @@ Work flow on Bat_tests:
 #root_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\BattyBats'
 root_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests"
 test_num=0
-Test_fold="Genral_Test_"+str(test_num)
+Test_fold="General_Test_"+str(test_num)
 #data_fold=root_path+"\\Data"
 storing_directory="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\ClickSearch_GeneralTest"
 
@@ -500,66 +500,67 @@ list_dir=os.listdir(root_path)
 
 for dir in list_dir:
     if dir.startswith('R'):
-        if Test_fold not in os.listdir(root_path+'\\'+dir):
-            os.mkdir(root_path+'\\'+dir+"\\"+Test_fold)
+        for sub_dir in os.listdir(root_path+'\\'+dir+'\\Bat'):
+            if sub_dir.startswith('2'):
+                root_dir=root_path+'\\'+dir+'\\Bat'+'\\'+sub_dir
+                if Test_fold not in os.listdir(root_dir):
+                    os.mkdir(root_dir+'\\'+Test_fold)
+                for root, dirs, files in os.walk(root_dir):
+                    for file in files:
+                        if not file.endswith('.bmp'):
+                            print(file, "is not a .bmp file")
+                            continue
+                        #count=0 #counts number of clicks detected
+                        print('Analizing file ', file)
+                        filepath=root+'\\'+file
 
-        for root, dirs, files in os.walk(root_path+'\\'+dir):
+                        #read GT annotation
 
-            for file in files:
-                if not file.endswith('.bmp'):
-                    print(file, "is not a .bmp file")
-                    continue
-                #count=0 #counts number of clicks detected
-                print('Analizing file ', file)
-                filepath=root+'\\'+file
+                        GT_path=root+'\\GT'
+                        GT_annotations=os.listdir(GT_path)
 
-                #read GT annotation
+                        if file+'.data' in GT_annotations:
+                            GT_annotation_file=GT_path+'\\'+file+'.data'
+                            print('Annotation file found')
+                            GT_segments = Segment.SegmentList()
+                            GT_segments.parseJSON(GT_annotation_file)
+                            print('GT annotations ', GT_segments)
+                        else:
+                            print('Annotation file not found')
+                            GT_segments=[] 
 
-                GT_path=root+'\\GT'
-                GT_annotations=os.listdir(GT_path)
-
-                if file+'.data' in GT_annotations:
-                    GT_annotation_file=GT_path+'\\'+file+'.data'
-                    print('Annotation file found')
-                    GT_segments = Segment.SegmentList()
-                    GT_segments.parseJSON(GT_annotation_file)
-                    print('GT annotations ', GT_segments)
-                else:
-                    print('Annotation file not found')
-                    GT_segments=[] 
-
-                if len(GT_segments)==0:
-                    label="Don't know"
-                else:
-                    label=GT_segments[0][4][0]["species"]
+                        if len(GT_segments)==0:
+                            label="Don't know"
+                        else:
+                            label=GT_segments[0][4][0]["species"]
             
 
-                #read image
-                sp.readBmp(filepath, rotate=False)
-                print('Spectrogram dimensions:', np.shape(sp.sg))
-                file_num+=1
+                        #read image
+                        sp.readBmp(filepath, rotate=False)
+                        print('Spectrogram dimensions:', np.shape(sp.sg))
+                        file_num+=1
 
-                #CLickSearch
-                detected_clicks, count=ClickSearch(sp.sg,label)
-                print(count, '  clicks detected')
+                        #CLickSearch
+                        detected_clicks, count=ClickSearch(sp.sg,label)
+                        print(count, '  clicks detected')
 
-                #updating count
-                if label=="Don't know":
-                    if count==0:
-                        TND+=1
-                    else:
-                        FD+=1
-                else:
-                    if count==0:
-                        FND+=1
-                    else:
-                        TD+=1
+                        #updating count
+                        if label=="Don't know":
+                            if count==0:
+                                TND+=1
+                            else:
+                                FD+=1
+                        else:
+                            if count==0:
+                                FND+=1
+                            else:
+                                TD+=1
 
-                #save segments
-                #save segments in datafile
-                f = open(root_path+'\\'+dir+"\\"+Test_fold+"\\"+file +'.data', 'w')
-                json.dump(detected_clicks, f)
-                f.close()
+                        #save segments
+                        #save segments in datafile
+                        f = open(root_dir+"\\"+Test_fold+"\\"+file +'.data', 'w')
+                        json.dump(detected_clicks, f)
+                        f.close()
 
 #evaluating metrics
 Recall=TD/(TD+FND)*100
