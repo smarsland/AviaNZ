@@ -18,6 +18,7 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Fixed
 - Greatly reduced CPU load for mouseover detection in spectrogram items
 - Batch settings are appropriately greyed out and provide tooltips
+- 8-bit WAV playback was not working
 
 ## [3.1] - 2020-10-09
 
