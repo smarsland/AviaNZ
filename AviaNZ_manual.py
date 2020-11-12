@@ -596,13 +596,10 @@ class AviaNZ(QMainWindow):
         placeInFileBox.addWidget(self.placeInFileSelector)
         placeInFileBox.addWidget(self.next5mins)
         placeInFileBox.addWidget(self.placeInFileLabel)
-        if self.DOC:
-            placeInFileBox.addStretch(10)
-        else:
-            placeInFileBox.addStretch(4)
-            placeInFileBox.addWidget(self.annotJumpLabel)
-            placeInFileBox.addWidget(self.annotJumpBtns)
-            placeInFileBox.addStretch(4)
+        placeInFileBox.addStretch(4)
+        placeInFileBox.addWidget(self.annotJumpLabel)
+        placeInFileBox.addWidget(self.annotJumpBtns)
+        placeInFileBox.addStretch(4)
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
         # Corresponding keyboard shortcuts:
@@ -2714,12 +2711,12 @@ class AviaNZ(QMainWindow):
 
         # mark this as the current segment
         if index>-1:
-            self.box1id = index
+            box1id = index
         else:
-            self.box1id = len(self.segments) - 1
+            box1id = len(self.segments) - 1
 
         # update its displayed label
-        self.updateText(self.box1id)
+        self.updateText(box1id)
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
@@ -3578,23 +3575,32 @@ class AviaNZ(QMainWindow):
         """ Scrolls to next annotation of no more than maxcert certainty. """
         # Current position:
         with pg.BusyCursor():
-            minX, maxX = self.overviewImageRegion.getRegion()
-            currx = self.convertSpectoAmpl(minX) + self.startRead
+            # Identify the "current" annotation: selected or whatever is on screen
+            if self.box1id > -1:
+                currx = self.segments[self.box1id][0]
+                self.deselectSegment(self.box1id)
+            else:
+                minX, maxX = self.overviewImageRegion.getRegion()
+                currx = self.convertSpectoAmpl(minX) + self.startRead
 
-            target = None
-            for seg in self.segments:
+            # Find next annotation:
+            targetix = None
+            for segix in range(len(self.segments)):
+                seg = self.segments[segix]
                 if seg[0]<=currx:
                     continue
                 # Note that the segments are not sorted by time,
                 # hence some extra mess to find the next one:
-                if target is not None and seg[0]>=target[0]:
+                if targetix is not None and seg[0]>=self.segments[targetix][0]:
                     continue
                 for lab in seg[4]:
                     if lab["certainty"]<=maxcert:
-                        target = seg
-            if target is None:
+                        targetix = segix
+            if targetix is None:
                 print("No further annotation to jump to found")
                 return
+
+            target = self.segments[targetix]
 
             if target[0]>self.startRead + self.datalengthSec:
                 pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
@@ -3603,10 +3609,12 @@ class AviaNZ(QMainWindow):
                     print("Warning: annotation outside file bounds")
                     return
                 self.moveTo5mins(pagenum)
-            newminX = self.convertAmpltoSpec(target[0]-self.startRead)
-            newmaxX = self.convertAmpltoSpec(min(target[1]-self.startRead, self.datalengthSec))
+            newminT = target[0] - self.startRead - self.windowSize / 2  # in s
+            newminX = self.convertAmpltoSpec(newminT)  # in spec pixels
+            newmaxX = self.convertAmpltoSpec(newminT + self.windowSize)
             # this will trigger update of the other views
             self.overviewImageRegion.setRegion([newminX, newmaxX])
+            self.selectSegment(targetix)
 
 
 # ===============
