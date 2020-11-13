@@ -2657,12 +2657,12 @@ class AviaNZ(QMainWindow):
 
         # mark this as the current segment
         if index>-1:
-            self.box1id = index
+            box1id = index
         else:
-            self.box1id = len(self.segments) - 1
+            box1id = len(self.listLabels) - 1
 
         # update its displayed label
-        self.updateText(self.box1id)
+        self.updateText(box1id)
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
@@ -3283,7 +3283,6 @@ class AviaNZ(QMainWindow):
         """ When the user sets or changes the name in a segment, update the text label.
             Only requires the segment ID, or defaults to the selected one, and
             will read the label from it."""
-
         if segID is None:
             segID = self.box1id
         seg = self.segments[segID]

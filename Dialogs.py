@@ -907,11 +907,13 @@ class Segmentation(QDialog):
         self.chpalpha.setValue(3)
 
         self.chpwin = QDoubleSpinBox()
-        self.chpwin.setRange(0.05, 3)
+        self.chpwin.setDecimals(3)
+        self.chpwin.setRange(0.005, 3)
         self.chpwin.setValue(0.5)
 
         self.maxlen = QDoubleSpinBox()
-        self.maxlen.setRange(0.1, 100)
+        self.chpwin.setDecimals(3)
+        self.maxlen.setRange(0.05, 100)
         self.maxlen.setValue(10)
 
         # Sliders for minlen and maxgap are in ms scale
