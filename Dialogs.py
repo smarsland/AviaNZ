@@ -338,9 +338,7 @@ class Excel2Annotation(QDialog):
         lblSpecies.setFixedWidth(220)
         lblSpecies.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         # Show a template
         tableWidget = QTableWidget()
@@ -485,9 +483,7 @@ class Tag2Annotation(QDialog):
         lblDuration.setFixedWidth(220)
         lblDuration.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel())
@@ -541,9 +537,7 @@ class BackupAnnotation(QDialog):
         self.btnBrowseDst.setFixedWidth(220)
         self.btnBrowseDst.clicked.connect(self.browseDst)
 
-        self.btnCopyAnnot = QPushButton("Copy Annotations")
-        self.btnCopyAnnot.setFixedHeight(50)
-        self.btnCopyAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnCopyAnnot = SupportClasses_GUI.MainPushButton("Copy Annotations")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel('This allows you to get a copy of your annotations while preserving the directory hierarchy, only copy the .data files.\nSelect the directory you want to backup the annotations from and create a destination directory to copy the annotations'))
@@ -2765,7 +2759,6 @@ class FilterManager(QDialog):
 
         # filter dir contents
         self.listFiles = QListWidget()
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.setMinimumHeight(275)
         self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
 

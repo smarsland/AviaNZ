@@ -204,9 +204,9 @@ class AviaNZ(QMainWindow):
 
         # parse mouse settings
         if self.config['drawingRightBtn']:
-            self.MouseDrawingButton = QtCore.Qt.RightButton
+            self.MouseDrawingButton = Qt.RightButton
         else:
-            self.MouseDrawingButton = QtCore.Qt.LeftButton
+            self.MouseDrawingButton = Qt.LeftButton
 
         # Boxes with area smaller than this will be ignored -
         # to avoid accidentally creating little boxes
@@ -539,6 +539,8 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
         self.p_overview2.setPreferredHeight(25)
 
+        self.p_overview2.setCursor(Qt.PointingHandCursor)
+
         # The buttons to move through the overview
         self.leftBtn = QPushButton()
         self.leftBtn.setIcon(QIcon("img/overview-back.png"))
@@ -653,6 +655,23 @@ class AviaNZ(QMainWindow):
         # Hide diagnostic plot window until requested
         self.d_plot.hide()
 
+        # The slider to show playback position
+        # This is hidden, but controls the moving bar
+        self.playSlider = QSlider(Qt.Horizontal)
+        # self.playSlider.sliderReleased.connect(self.playSliderMoved)
+        self.playSlider.setVisible(False)
+        self.d_spec.addWidget(self.playSlider)
+        self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+        self.bar.btn = self.MouseDrawingButton
+        self.bar.sigPositionChangeFinished.connect(self.barMoved)
+
+        # guides that can be used in batmode
+        self.guidelines = [0]*4
+        self.guidelines[0] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
+        self.guidelines[1] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
+        self.guidelines[2] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
+        self.guidelines[3] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
+
         # The print out at the bottom of the spectrogram with data in
         # Note: widgets cannot be directly added to GraphicsLayout, so need to convert
         # them to proxy GraphicsWidgets using the proxy
@@ -671,13 +690,21 @@ class AviaNZ(QMainWindow):
         self.overviewImageRegion = SupportClasses_GUI.LinearRegionItemO(pen=pg.mkPen(120,80,200, width=2),
                 hoverPen=pg.mkPen(60, 40, 230, width=3.5))
         # this is needed for compatibility with other shaded rectangles:
-        self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
-        self.overviewImageRegion.lines[1].btn = QtCore.Qt.RightButton
+        self.overviewImageRegion.lines[0].btn = Qt.RightButton
+        self.overviewImageRegion.lines[1].btn = Qt.RightButton
         self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.amplPlot = pg.PlotDataItem()
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
         self.p_spec.addItem(self.specPlot)
+        if self.MouseDrawingButton==Qt.RightButton:
+            self.p_ampl.unsetCursor()
+            self.specPlot.unsetCursor()
+            self.bar.setCursor(Qt.OpenHandCursor)
+        else:
+            self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+            self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+            self.bar.unsetCursor()
 
         # Connect up the listeners
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
@@ -894,23 +921,6 @@ class AviaNZ(QMainWindow):
         # for c in range(4):
         #     self.w_controls.layout.setColumnStretch(c, 2)
 
-        # The slider to show playback position
-        # This is hidden, but controls the moving bar
-        self.playSlider = QSlider(Qt.Horizontal)
-        # self.playSlider.sliderReleased.connect(self.playSliderMoved)
-        self.playSlider.setVisible(False)
-        self.d_spec.addWidget(self.playSlider)
-        self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
-        self.bar.btn = self.MouseDrawingButton
-        self.bar.sigPositionChangeFinished.connect(self.barMoved)
-
-        # guides that can be used in batmode
-        self.guidelines = [0]*4
-        self.guidelines[0] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
-        self.guidelines[1] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[2] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[3] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
-
         # A slider to move through the file easily
         self.scrollSlider = QScrollBar(Qt.Horizontal)
         self.scrollSlider.valueChanged.connect(self.scroll)
@@ -918,7 +928,6 @@ class AviaNZ(QMainWindow):
 
         # List to hold the list of files
         self.listFiles = SupportClasses_GUI.LightedFileList(self.ColourNone, self.ColourPossibleDark, self.ColourNamed)
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
@@ -943,8 +952,8 @@ class AviaNZ(QMainWindow):
         self.ROItype = type(p_spec_r)
 
         # Listener for key presses
-        self.p_ampl.keyPressed.connect(self.handleKey)
-        self.p_spec.keyPressed.connect(self.handleKey)
+        self.w_ampl.installEventFilter(self)
+        self.w_spec.installEventFilter(self)
 
         # add statusbar
         self.statusLeft = QLabel("Left")
@@ -980,6 +989,7 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
         self.showPointerDetailsCheck()
+        self.w_spec.setFocus()
 
     def toggleBatMode(self):
         """ Enables/disables GUI elements when bat mode is entered/left.
@@ -1032,16 +1042,6 @@ class AviaNZ(QMainWindow):
         else:  # not checked, not batmode
             pass
         self.readonly.setEnabled(not self.batmode)
-
-    def handleKey(self,ev):
-        """ Handle keys pressed during program use.
-        These are:
-            backspace to delete a segment
-            escape to pause playback """
-        if ev == Qt.Key_Backspace or ev == Qt.Key_Delete:
-            self.deleteSegment()
-        elif ev == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
-            self.stopPlayback()
 
     def refreshSegmentControls(self):
         """ Just toggles all the segment controls on/off when a segment
@@ -1713,6 +1713,7 @@ class AviaNZ(QMainWindow):
             self.setWindowTitle('AviaNZ - Manual Processing ' + self.filename)
             dlg += 1
             dlg.update()
+            self.w_spec.setFocus()
             self.statusLeft.setText("Ready")
 
     def openNextFile(self):
@@ -2578,6 +2579,8 @@ class AviaNZ(QMainWindow):
         coordsAbsolute - set to True to accept start,end in absolute coords (from file start)
         """
         print("Segment added at %d-%d, %d-%d" % (startpoint, endpoint, y1, y2))
+        if self.box1id>-1:
+            self.deselectSegment(self.box1id)
 
         # Make sure startpoint and endpoint are in the right order
         if startpoint > endpoint:
@@ -2711,12 +2714,12 @@ class AviaNZ(QMainWindow):
 
         # mark this as the current segment
         if index>-1:
-            box1id = index
+            self.box1id = index
         else:
-            box1id = len(self.segments) - 1
+            self.box1id = len(self.segments) - 1
 
         # update its displayed label
-        self.updateText(box1id)
+        self.updateText(self.box1id)
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
@@ -2849,9 +2852,9 @@ class AviaNZ(QMainWindow):
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
                 modifiers = QApplication.keyboardModifiers()
-                if modifiers == QtCore.Qt.ShiftModifier:
+                if modifiers == Qt.ShiftModifier:
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                elif modifiers == QtCore.Qt.ControlModifier:
+                elif modifiers == Qt.ControlModifier:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList(unsure=True)
@@ -2868,6 +2871,10 @@ class AviaNZ(QMainWindow):
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
+                # reset cursor to not drawing (or leave as drawing if LMB draws)
+                if self.MouseDrawingButton==Qt.RightButton:
+                    self.p_ampl.unsetCursor()
+                    self.specPlot.unsetCursor()
             # if this is the first click:
             else:
                 # if this is right click (drawing mode):
@@ -2905,6 +2912,9 @@ class AviaNZ(QMainWindow):
                     self.started = not (self.started)
                     self.startedInAmpl = True
 
+                    # Force cursor to drawing
+                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                 # if this is left click (selection mode):
                 else:
                     # Check if the user has clicked in a box
@@ -2925,7 +2935,7 @@ class AviaNZ(QMainWindow):
                         if wasSelected==box1id:
                             # popup dialog
                             modifiers = QApplication.keyboardModifiers()
-                            if modifiers == QtCore.Qt.ControlModifier:
+                            if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             else:
                                 self.fillBirdList()
@@ -2980,6 +2990,11 @@ class AviaNZ(QMainWindow):
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
+                # reset cursor to not drawing (or leave as drawing if LMB draws)
+                if self.MouseDrawingButton==Qt.RightButton:
+                    self.p_ampl.unsetCursor()
+                    self.specPlot.unsetCursor()
+
                 # Pass either default y coords or box limits:
                 x1 = self.start_ampl_loc
                 x2 = self.convertSpectoAmpl(max(mousePoint.x(), 0.0))
@@ -3009,9 +3024,9 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QApplication.keyboardModifiers()
-                if modifiers == QtCore.Qt.ShiftModifier:
+                if modifiers == Qt.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
-                elif modifiers == QtCore.Qt.ControlModifier:
+                elif modifiers == Qt.ControlModifier:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList(unsure=True)
@@ -3072,6 +3087,9 @@ class AviaNZ(QMainWindow):
                     self.started = not (self.started)
                     self.startedInAmpl = False
 
+                    # Force cursor to drawing
+                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                 # if this is left click (selection mode):
                 else:
                     # Check if the user has clicked in a box
@@ -3099,7 +3117,7 @@ class AviaNZ(QMainWindow):
                         # if this segment is clicked again, pop up bird menu:
                         if wasSelected==box1id:
                             modifiers = QApplication.keyboardModifiers()
-                            if modifiers == QtCore.Qt.ControlModifier:
+                            if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             else:
                                 self.fillBirdList()
@@ -3217,7 +3235,7 @@ class AviaNZ(QMainWindow):
                 return
 
             # maybe the genus is already listed?
-            index = self.model.findItems(match.group(1), QtCore.Qt.MatchFixedString)
+            index = self.model.findItems(match.group(1), Qt.MatchFixedString)
             if len(index) == 0:
                 # Genus isn't in list
                 item = QStandardItem(match.group(1))
@@ -5448,9 +5466,15 @@ class AviaNZ(QMainWindow):
             elif childName == 'Mouse settings.Use right button to make segments':
                 self.config['drawingRightBtn'] = data
                 if self.config['drawingRightBtn']:
-                    self.MouseDrawingButton = QtCore.Qt.RightButton
+                    self.MouseDrawingButton = Qt.RightButton
+                    self.specPlot.unsetCursor()
+                    self.p_ampl.unsetCursor()
+                    self.bar.setCursor(Qt.OpenHandCursor)
                 else:
-                    self.MouseDrawingButton = QtCore.Qt.LeftButton
+                    self.MouseDrawingButton = Qt.LeftButton
+                    self.bar.unsetCursor()
+                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                 self.bar.btn = self.MouseDrawingButton
             elif childName == 'Mouse settings.Spectrogram mouse action':
                 self.config['specMouseAction'] = data
@@ -5798,15 +5822,53 @@ class AviaNZ(QMainWindow):
                 copyfile(source, destination)
 
     def eventFilter(self, obj, event):
-        # This is an event filter for the context menu. It allows the user to select
-        # multiple birds by stopping the menu being closed on first click
-        if isinstance(obj, QtGui.QMenu) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+        """ Handles two types of events:
+            1) Clicks for the context menu. It allows the user to select
+            multiple birds by stopping the menu being closed on first click.
+            2) Keyboard presses for spec/ampl plots:
+              backspace to delete a segment
+              escape to pause playback
+              ctrl on Mac to detect right clicks
+        """
+        if isinstance(obj, QMenu) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
             if hasattr(self, 'multipleBirds') and self.multipleBirds:
                 if obj.activeAction():
-                    if not obj.activeAction().menu(): 
+                    if not obj.activeAction().menu():
                         #if the selected action does not have a submenu
                         #eat the event, but trigger the function
                         obj.activeAction().trigger()
                         return True
-        return QMenu.eventFilter(self,obj, event)
-
+            return QMenu.eventFilter(self,obj, event)
+        if isinstance(obj, pg.GraphicsLayoutWidget):
+            if event.type()==QtCore.QEvent.KeyPress:
+                key = event.key()
+                if key == Qt.Key_Backspace or key == Qt.Key_Delete:
+                    self.deleteSegment()
+                    return True
+                elif key == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
+                    self.stopPlayback()
+                    return True
+                elif key == Qt.Key_Meta and platform.system() == 'Darwin':
+                    # flip to rightMB cursors
+                    if self.MouseDrawingButton==Qt.RightButton:
+                        self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                        self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                        self.bar.unsetCursor()
+                    else:
+                        self.p_ampl.unsetCursor()
+                        self.specPlot.unsetCursor()
+                        self.bar.setCursor(Qt.OpenHandCursor)
+                    return True
+            elif event.type()==QtCore.QEvent.KeyRelease:
+                if event.key() == Qt.Key_Meta and platform.system() == 'Darwin':
+                    # revert to standard cursors (for leftMB)
+                    if self.MouseDrawingButton==Qt.RightButton:
+                        self.p_ampl.unsetCursor()
+                        self.specPlot.unsetCursor()
+                        self.bar.setCursor(Qt.OpenHandCursor)
+                    else:
+                        self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                        self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                        self.bar.unsetCursor()
+                    return True
+        return False

@@ -72,7 +72,6 @@ class BuildRecAdvWizard(QWizard):
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(225)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
@@ -1329,7 +1328,6 @@ class BuildRecAdvWizard(QWizard):
             # filter dir listbox
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(200)
             filtdir = QDir(filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
@@ -1592,7 +1590,6 @@ class TestRecWizard(QWizard):
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
@@ -2569,7 +2566,6 @@ class BuildCNNWizard(QWizard):
             # filter dir listbox
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(200)
             filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
