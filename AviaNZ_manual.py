@@ -396,6 +396,7 @@ class AviaNZ(QMainWindow):
         self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addAction("Calculate segment statistics", self.calculateStats)
+        actionMenu.addAction("Export multichannel raw powers to csv", self.powerstocsv)
 
         if not self.DOC:
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
@@ -3905,7 +3906,9 @@ class AviaNZ(QMainWindow):
 
             self.statusLeft.setText("Ready")
             
-      
+    def powerstocsv(self):
+
+        print(self.filename)
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
         
@@ -3917,8 +3920,8 @@ class AviaNZ(QMainWindow):
         for seg in self.segments:
             qs+=1
 
-        csv = open(self.filename[:-4] + '_features.csv', "w")
-        csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
+        #csv = open(self.filename[:-4] + '_features.csv', "w")
+        #csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
 
         for seg in self.segments:
             for lab in seg[4]:
@@ -3973,15 +3976,15 @@ class AviaNZ(QMainWindow):
             q+=1
             # TODO: Hardcoded for now - add a dialog to read parameters?
             # TODO: Workout the units
-            f = Features.Features(data=data, sampleRate=self.sampleRate, window_width=256, incr=128)
-            avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
+            #f = Features.Features(data=data, sampleRate=self.sampleRate, window_width=256, incr=128)
+            #avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             # quartile1, quartile2, quartile3, f5, f95, interquartileRange = f.get_Raven_robust_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
-            print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
+            #print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
             # print(quartile1, quartile2, quartile3, f5, f95, interquartileRange)
             # csv.write("%s\t%.4f\t%.4f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq, quartile1, quartile2, quartile3, f5, f95, interquartileRange))
             # csv.write("%s,%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
-            csv.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
-        csv.close()            
+            #csv.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
+        #csv.close()            
         # fill outarray...
         # save as text file for now:
         outarray[4]=q-4
