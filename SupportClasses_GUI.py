@@ -22,7 +22,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton
 from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
@@ -377,9 +377,6 @@ pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexib
 class DemousedViewBox(pg.ViewBox):
     # A version of ViewBox with no mouse events.
     # Dramatically reduces CPU usage when such events are not needed.
-    def keyPressEvent(self, ev):
-        return
-
     def mouseDragEvent(self, ev, axis=None):
         return
 
@@ -557,9 +554,6 @@ class LinearRegionItemO(LinearRegionItem2):
         p.drawRect(self.boundingRect())
 
     # Immediate rejects on all unneeded events:
-    def keyPressEvent(self, ev):
-        return
-
     def mouseClickEvent(self, ev):
         ev.accept()
         return
@@ -964,7 +958,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v3.1 (October 2020)")
+            self.setText("The AviaNZ Program, v3.1.2 (November 2020)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -1209,6 +1203,7 @@ class LightedFileList(QListWidget):
         self.fsList = set()
         self.listOfFiles = []
         self.minCertainty = 100
+        self.setMinimumWidth(150)
 
         # for the traffic light icons
         self.pixmap = QPixmap(10, 10)
@@ -1424,3 +1419,19 @@ class LightedFileList(QListWidget):
 
         # collect some extra info about this file as we've read it anyway
         self.spList.update(filesp)
+
+
+class MainPushButton(QPushButton):
+    """ QPushButton with a standard styling """
+    def __init__(self, *args, **kwargs):
+        super(MainPushButton, self).__init__(*args, **kwargs)
+        self.setStyleSheet("""
+          MainPushButton { font-weight: bold; font-size: 14px; padding: 3px 3px 3px 7px; }
+        """)
+        # would like to add more stuff such as:
+        #    border: 2px solid #8f8f91; background-color: #dddddd}
+        #  MainPushButton:disabled { border: 2 px solid #cccccc }
+        #  MainPushButton:hover { background-color: #eeeeee }
+        #  MainPushButton:pressed { background-color: #cccccc }
+        # But any such change overrides default drawing style entirely.
+        self.setFixedHeight(45)

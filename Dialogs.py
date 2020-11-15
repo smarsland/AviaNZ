@@ -338,9 +338,7 @@ class Excel2Annotation(QDialog):
         lblSpecies.setFixedWidth(220)
         lblSpecies.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         # Show a template
         tableWidget = QTableWidget()
@@ -485,9 +483,7 @@ class Tag2Annotation(QDialog):
         lblDuration.setFixedWidth(220)
         lblDuration.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel())
@@ -541,9 +537,7 @@ class BackupAnnotation(QDialog):
         self.btnBrowseDst.setFixedWidth(220)
         self.btnBrowseDst.clicked.connect(self.browseDst)
 
-        self.btnCopyAnnot = QPushButton("Copy Annotations")
-        self.btnCopyAnnot.setFixedHeight(50)
-        self.btnCopyAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnCopyAnnot = SupportClasses_GUI.MainPushButton("Copy Annotations")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel('This allows you to get a copy of your annotations while preserving the directory hierarchy, only copy the .data files.\nSelect the directory you want to backup the annotations from and create a destination directory to copy the annotations'))
@@ -1973,6 +1967,8 @@ class HumanClassify1(QDialog):
                 if self.batmode:
                     ind = self.batList.index(lsp)
                     self.birdbtns[ind].setChecked(True)
+
+                    # since there is no long list or birds3 box, we ignore those parts.
                 else:
                     if lsp in self.shortBirdList[:29]:
                         ind = self.shortBirdList.index(lsp)
@@ -1980,7 +1976,7 @@ class HumanClassify1(QDialog):
                     else:
                         self.birdbtns[29].setChecked(True)
                         self.birds3.setEnabled(True)
-    
+
                     # mark this species in the long list box
                     if lsp not in self.longBirdList:
                         # try genus>species instead of genus (species)
@@ -1994,11 +1990,11 @@ class HumanClassify1(QDialog):
                             cc = self.birds3.count()
                             self.birds3.insertItem(cc-1, lsp)
                             self.saveConfig = True
-    
-                # all species by now are in the long bird list
-                if self.longBirdList is not None:
-                    ind = self.longBirdList.index(lsp)
-                    self.birds3.item(ind).setSelected(True)
+
+                    # all species by now are in the long bird list
+                    if self.longBirdList is not None:
+                        ind = self.longBirdList.index(lsp)
+                        self.birds3.item(ind).setSelected(True)
 
         self.label = specnames
 
@@ -2766,7 +2762,6 @@ class FilterManager(QDialog):
 
         # filter dir contents
         self.listFiles = QListWidget()
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.setMinimumHeight(275)
         self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
 
@@ -3163,7 +3158,7 @@ class ExportBats(QDialog):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
-        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.xlsx, you will need to email it yourself\nFields with a * are mandatory\n')
+        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.csv, you will need to email it yourself\nFields with a * are mandatory)\n')
         l2 = QLabel('*Data source (e.g., your community group): ')
         self.data = QLineEdit(self)
         hbox1 = QHBoxLayout()
