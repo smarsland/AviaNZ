@@ -450,12 +450,12 @@ def File_label_1(predictions, thr1, thr2, dir_2_save, bmpfile):
             hasSTlow =ST_best4mean>thr1
             hasLTlow = LT_best4mean>thr1
             
-            if hasLT:
+            if reallyHasLT:
                 label.append({"species": "Long-tailed bat", "certainty": 100})
             elif hasLTlow:
                 label.append({"species": "Long-tailed bat", "certainty": 50})
 
-            if hasST:
+            if reallyHasST:
                 label.append({"species": "Short-tailed bat", "certainty": 100})
             elif hasSTlow:
                 label.append({"species": "Short-tailed bat", "certainty": 50})
@@ -621,12 +621,10 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
     else:
 
         if correct_label=='Noise':
-            if ('Long' in assigned_label and LT_check<thr_check ) or ('Short' in assigned_label and ST_check<thr_check):
+            if LT_check>=thr_check or ST_check>=thr_check:
                 problem='CNN'
-            elif click_num==0:
-                problem='CD'
             elif click_num<4:
-                problem='CD?'
+                problem='CD'
             else:
                 problem='Label'
             update_csv(saving_dir+'/false_positives.csv', dir, file, correct_label, assigned_label, problem)
@@ -643,12 +641,10 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
             elif assigned_label=='Both?':
                 confusion_matrix[5][5]+=1
         elif assigned_label=='Noise':
-            if ('Long' in correct_label and LT_check<thr_check ) or ('Short' in correct_label and ST_check<thr_check):
+            if LT_check<thr_check or ST_check<thr_check:
                 problem='CNN'
-            elif click_num==0:
-                problem='CD'
             elif click_num<4:
-                problem='CD?'
+                problem='CD'
             else:
                 problem='Label'
             update_csv(saving_dir+'/missed_files.csv', dir, file, correct_label, assigned_label, problem)
@@ -669,10 +665,8 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
                 else:
                     if LT_check<thr_check or ST_check>=thr_check:
                         problem='CNN'
-                    elif click_num==0:
-                        problem='CD'
                     elif click_num<4:
-                        problem='CD?'
+                        problem='CD'
                     else:
                         problem='Label'
                     update_csv(saving_dir+'/misclassified_files.csv', dir, file, correct_label, assigned_label, problem)
@@ -690,10 +684,8 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
                 else:
                     if LT_check<thr_check or ST_check>=thr_check:
                         problem='CNN'
-                    elif click_num==0:
-                        problem='CD'
                     elif click_num<4:
-                        problem='CD?'
+                        problem='CD'
                     else:
                         problem='Label'
                     update_csv(saving_dir+'/misclassified_files.csv', dir, file, correct_label, assigned_label, problem)
@@ -711,10 +703,8 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
                 else:
                     if LT_check>=thr_check or ST_check<thr_check:
                         problem='CNN'
-                    elif click_num==0:
-                        problem='CD'
                     elif click_num<4:
-                        problem='CD?'
+                        problem='CD'
                     else:
                         problem='Label'
                     update_csv(saving_dir+'/misclassified_files.csv', dir, file, correct_label, assigned_label, problem)
@@ -732,10 +722,8 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
                 else:
                     if LT_check>=thr_check or ST_check<thr_check:
                         problem='CNN'
-                    elif click_num==0:
-                        problem='CD'
                     elif click_num<4:
-                        problem='CD?'
+                        problem='CD'
                     else:
                         problem='Label'
                     update_csv(saving_dir+'/misclassified_files.csv', dir, file, correct_label, assigned_label, problem)
@@ -753,10 +741,8 @@ def update_confusion_matrix(saving_dir, dir, file, assigned_label, correct_label
                 else:
                     if LT_check>=thr_check or ST_check>=thr_check:
                         problem='CNN'
-                    elif click_num==0:
-                        problem='CD'
                     elif click_num<4:
-                        problem='CD?'
+                        problem='CD'
                     else:
                         problem='Label'
                     update_csv(saving_dir+'/misclassified_files.csv', dir, file, correct_label, assigned_label, problem)
@@ -874,13 +860,13 @@ def metrics(confusion_matrix, file_num):
 
 #inizialization
 
-train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/New_Train_Datasets" #directory with train files
-test_dataset_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset" #directory where to find test dataset files
-test_count=0 #counter for test number
+train_dir = "C:\\Users\\Virginia\\Documents\\Work\Data\\Bats\\New_Train_Datasets" #directory with train files
+test_dataset_dir="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\Test_dataset" #directory where to find test dataset files
+test_count=1 #counter for test number
 #test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
 
-test_general_results_dir = "/am/state-opera/home1/listanvirg/Documents/Experiments_result" #directory to store test result
-test_dataset_storage_dir="/am/state-opera/home1/listanvirg/Documents/Bat_tests" #local directory where to store annotations 
+test_general_results_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\New_CNN_train_bats" #directory to store test result
+test_dataset_storage_dir="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\Test_dataset" #local directory where to store annotations 
 
 sp=SignalProc.SignalProc(1024,512)
 thr1_0=10
@@ -899,9 +885,9 @@ if test_fold not in os.listdir(test_general_results_dir):
     os.mkdir(test_general_results_dir+ '/' + test_fold)
     
 
-for i in range(6):
-    #if test_count==11:
-    #    i=0
+for i in range(2):
+    if test_count==1:
+        i=0
     #identify train dataset
     train_fold='Train_'+str(i)
 
@@ -917,8 +903,8 @@ for i in range(6):
     file_number_train=len(file_list_train)
     for j in range(4):
 
-        #if test_count==11:
-        #    j=3
+        if test_count==1:
+            j=0
         #inizializations of counters
         train_featuress =[]
         
@@ -1098,10 +1084,36 @@ for i in range(6):
         #recover model
         model=load_model(modelpath)
 
+        #Saving Training info 
+        #Save training info into a file
+        cnn_train_info_file=test_general_results_dir+'/'+test_fold+'/CNN_train_data_info.txt'
+        file1=open(cnn_train_info_file,'w')
+        
+        L00=["Training dataset used "+train_dir]
+        L0=['Click search parameters: f0= %5d, f1= %5d \n' %(f0,f1) ]
+        if window==3:
+            L1=['window used 3x2 \n']
+        else:
+            L1=['window used %2d \n' %window]
+        L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
+        "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
+        "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
+        "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
+        "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
+        "\n Spectrograms used for validation = %5d \n" %np.shape(y_validation)[0],
+        "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
+        "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
+        "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
+        L2=['\n Model used %5d \n' %index_best_model]
+        L3=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
+        L4=['Path best model '+ model_paths[index_best_model]]
+        file1.writelines(np.concatenate((L00,L0,L1,L, L2, L3, L4)))
+        file1.close()
+
         ## 3 test with differen Label strategies
         for label_index in range(3):
-            #if test_count==11:
-            #    label_index=2
+            if test_count==1:
+                label_index=1
             ########## TEST TRAINED MODEL ###########################
          
             print('\n ----------------------------------------------- \n')
@@ -1314,36 +1326,6 @@ for i in range(6):
                 file_number_tot+=file_number
                 ##updating total confusion_matrix
                 confusion_matrix_tot+=confusion_matrix 
-
-                #Saving Training/Testing info into a file
-                cnn_train_info_file=test_general_results_dir+'/'+test_fold+'/CNN_train_data_info.txt'
-                file1=open(cnn_train_info_file,'w')
-        
-                L00=["Training dataset used "+train_fold]
-                L0=['\n Click search parameters: f0= %5d, f1= %5d \n' %(f0,f1) ]
-                if window==3:
-                    L1=['window used 3x2 \n']
-                else:
-                    L1=['window used %2d \n' %window]
-                L11=['\n Label function used = File_label%2d \n' %label_index]
-                L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
-                "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
-                "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
-                "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
-                "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
-                "\n Spectrograms used for validation = %5d \n" %np.shape(y_validation)[0],
-                "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
-                "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
-                "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
-                L2=['\n Model used %5d \n' %index_best_model]
-                L3=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
-                L4=['Path best model '+ model_paths[index_best_model]]
-                L5=['\n Indeces check \n']
-                L6=['\n i=%2d' %i, '\n j=%2d' %j, '\n label_index=%2d'%label_index]
-                file1.writelines(np.concatenate((L00,L0,L1,L11,L, L2, L3, L4, L5, L6)))
-                file1.close()
-
-
                 #printing metrics
                 print("-------------------------------------------")
                 print('Number files with detected clicks detected ', count_clicks, 'in ', Moira_dir, 'with ', file_number, ' files')
