@@ -688,15 +688,23 @@ class Segmenter:
         """ Merges segments within maxgap units.
             Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
         """
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments = sorted(segments)
+
         out = []
         i = 0
         if len(segments)==0:
             return out
         while i < len(segments):
             start = segments[i][0]
-            while i+1 < len(segments) and segments[i+1][0]-segments[i][1] <= maxgap:
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0]-end <= maxgap:
+                end = max(segments[i+1][1], end)
                 i += 1
-            out.append([start, segments[i][1]])
+            out.append([start, end])
             i += 1
         return out
 
@@ -706,6 +714,13 @@ class Segmenter:
             [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
             Currently, certainties are just averaged over the number of segs.
         """
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments.sort(key=lambda seg: seg[0][0])
+        # sorted() appears to work fine as well
+
         out = []
         i = 0
         if len(segments)==0:
@@ -713,11 +728,13 @@ class Segmenter:
 
         while i < len(segments):
             start = segments[i][0][0]
+            end = segments[i][0][1]
             cert = [segments[i][1]]
-            while i + 1 < len(segments) and segments[i + 1][0][0] - segments[i][0][1] <= maxgap:
+            while i + 1 < len(segments) and segments[i + 1][0][0] - end <= maxgap:
+                end = max(segments[i+1][0][1], end)
                 i += 1
                 cert.append(segments[i][1])
-            out.append([[start, segments[i][0][1]], np.mean(cert)])
+            out.append([[start, end], np.mean(cert)])
             i += 1
         return out
 
