@@ -1,13 +1,12 @@
 
 # SupportClasses.py
-
 # Support classes for the AviaNZ program
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,7 +22,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
 from openpyxl.styles import Font
 
 QtMM = True
@@ -165,12 +163,11 @@ class ConfigLoader(object):
             config = json.load(f)
             f.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     def filters(self, dir, bats=True):
         """ Returns a dict of filter JSONs,
@@ -360,12 +357,11 @@ class ConfigLoader(object):
             config = json.load(configfile)
             configfile.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     # Dumps the provided JSON array to the corresponding bird file.
     def blwrite(self, content, file, configdir):
@@ -395,9 +391,8 @@ class ConfigLoader(object):
             # will always be an absolute path to the user configdir.
             with open(file, 'w') as f:
                 json.dump(content, f, indent=1)
-
         except Exception as e:
-            print("ERROR while saving config file:")
+            print("Warning: could not save config file:")
             print(e)
 
 
@@ -416,14 +411,19 @@ class ExcelIO():
         pagelen:    page length, seconds (for filling out absence)
         numpages:   number of pages in this file (of size pagelen)
         speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
-        startTime:  timestamp for cell names
-        resolution: output resolution on excel (sheet 3) in seconds. Default is 1
+        startTime:  timestamp for page start, or None to autodetect from file name
+        precisionMS:  timestamp resolution for sheet 1: False=in s, True=in ms
+        resolution: output resolution (sheet 3) in seconds
     """
     # functions for filling out the excel sheets:
     # First page lists all segments (of a species, if specified)
     # segsLL: list of SegmentList with filename attribute
     # startTime: offset from 0, when exporting a single page
-    def writeToExcelp1(self, wb, segsLL, currsp, startTime):
+    def writeToExcelp1(self, wb, segsLL, currsp, startTime, precisionMS):
+        if precisionMS:
+            timeStrFormat = "hh:mm:ss.zzz"
+        else:
+            timeStrFormat = "hh:mm:ss"
         from PyQt5.QtCore import QTime
         ws = wb['Time Stamps']
         r = ws.max_row + 1
@@ -439,14 +439,27 @@ class ExcelIO():
             if len(speciesSegs)==0:
                 continue
 
+            if startTime is None:
+                # if no startTime was provided, try to figure it out based on the filename
+                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(segsl.filename)[:-8])
+
+                if DOCRecording:
+                    print("time stamp found", DOCRecording)
+                    startTimeFile = DOCRecording.group(2)
+                    startTimeFile = QTime(int(startTimeFile[:2]), int(startTimeFile[2:4]), int(startTimeFile[4:6]))
+                else:
+                    startTimeFile = QTime(0,0,0)
+            else:
+                startTimeFile = QTime(0,0,0).addSecs(startTime)
+
             # Loop over the segments
             for seg in speciesSegs:
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(seg[0]*1000).toString(timeStrFormat)))
+                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(seg[1]*1000).toString(timeStrFormat)))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
@@ -512,7 +525,7 @@ class ExcelIO():
 
         # print resolution "header"
         ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
-        ft = Font(color=colors.DARKYELLOW)
+        ft = Font(color="808000")
         ws.cell(row=r, column=1).font=ft
 
         # print file name and page number
@@ -554,7 +567,7 @@ class ExcelIO():
             ws.cell(row=r+1, column=c, value=detected[t])
             c += 1
 
-    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=0, resolution=10):
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=None, precisionMS=False, resolution=10):
         # will export species present in self, + passed as arg, + "all species" excel
         speciesList = set(speciesList)
         for segl in segments:
@@ -592,8 +605,12 @@ class ExcelIO():
                 wb.create_sheet(title='Time Stamps', index=1)
                 ws = wb['Time Stamps']
                 ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+                if precisionMS:
+                    ws.cell(row=1, column=2, value="start (hh:mm:ss.ms)")
+                    ws.cell(row=1, column=3, value="end (hh:mm:ss.ms)")
+                else:
+                    ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+                    ws.cell(row=1, column=3, value="end (hh:mm:ss)")
                 ws.cell(row=1, column=4, value="min freq. (Hz)")
                 ws.cell(row=1, column=5, value="max freq. (Hz)")
                 if species=="Any sound":
@@ -632,7 +649,7 @@ class ExcelIO():
                 return 0
 
             # export segments
-            self.writeToExcelp1(wb, segments, species, startTime)
+            self.writeToExcelp1(wb, segments, species, startTime, precisionMS)
 
             if species!="Any sound":
                 # loop over all SegmentLists, i.e. for each wav file:

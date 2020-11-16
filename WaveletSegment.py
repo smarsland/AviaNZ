@@ -1,12 +1,11 @@
 # WaveletSegment.py
-#
 # Wavelet Segmentation
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -291,9 +290,11 @@ class WaveletSegment:
 
         # 2a. prefilter audio to species freq range
         for filenum in range(len(self.audioList)):
-            self.audioList[filenum] = self.sp.ButterworthBandpass(self.audioList[filenum],
+            self.audioList[filenum] = self.sp.bandpassFilter(self.audioList[filenum],
                                             self.spInfo['SampleRate'],
-                                            low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
+                                            start=subfilter['FreqRange'][0],
+                                            end=subfilter['FreqRange'][1])
+
         # 2b. actually compute correlations
         for filenum in range(len(self.audioList)):
             print("Computing wavelet node correlations in file", filenum+1)
@@ -819,8 +820,8 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = self.sp.ButterworthBandpass(C, win_sr, low=subfilter['FreqRange'][0],
-                                                high=subfilter['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
+
             C = np.abs(C)
             N = len(C)
             # Virginia: number of segments = number of centers of length inc

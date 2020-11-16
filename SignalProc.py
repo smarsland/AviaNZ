@@ -1,13 +1,12 @@
 
 # SignalProc.py
-#
 # A variety of signal processing algorithms for AviaNZ.
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -44,7 +43,7 @@ try:
     from spectrum import dpss, pmtm
 except ImportError:
     specExtra = False
-    
+
 # for fund freq
 from scipy.signal import medfilt
 # for impulse masking
@@ -164,12 +163,14 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
+        print(np.shape(img2))
         # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
         img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
         img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
+        print(np.shape(img2))
 
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples
@@ -296,7 +297,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType=None,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -312,6 +313,8 @@ class SignalProc:
         #log_S = librosa.amplitude_to_db(S, ref=np.max)
         #self.sg = librosa.pcen(S * (2**31))
         #return self.sg.T
+        if sgType is None:
+            sgType = 'Standard'
 
         if window_width is None:
             window_width = self.window_width
@@ -369,7 +372,7 @@ class SignalProc:
             self.sg -= self.sg.mean()
 
         starts = range(0, len(self.sg) - window_width, incr)
-        if multitaper:
+        if sgType=='Multi-tapered':
             if specExtra:
                 [tapers, eigen] = dpss(window_width, 2.5, 4)
                 counter = 0
@@ -383,10 +386,30 @@ class SignalProc:
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")
+        elif sgType=='Reassigned':
+            ft = np.zeros((len(starts), window_width),dtype='complex')
+            ft2 = np.zeros((len(starts), window_width),dtype='complex')
+            for i in starts:
+                winddata = window * self.sg[i:i + window_width]
+                ft[i // incr, :] = fft.fft(winddata)[:window_width]
+                winddata = window * np.roll(self.sg[i:i + window_width],1)
+                ft2[i // incr, :] = fft.fft(winddata)[:window_width]
+
+            # Approximate the derivative by finite differences and get the angle of the complex number
+            CIF = np.mod(np.angle(ft*np.conj(ft2))/(2*np.pi),1.0)
+            delay = (0.5 - np.mod(np.angle(ft*np.conj(np.roll(ft,1,axis=1)))/(2*np.pi),1.0))
+
+            # Messiness. Need to work out where to put each pixel
+            # I wish I could think of a way that didn't need a histogram
+            times = np.tile(np.arange(0, (len(self.data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
+            self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
+
+            self.sg = np.absolute(self.sg[:, :window_width //2]) + 0.1
+
+            print("SG range:", np.min(self.sg),np.max(self.sg))
         else:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
-
 
             # this mode is optimized for speed, but reportedly sometimes
             # results in crashes when lots of large files are batch processed.
@@ -416,11 +439,35 @@ class SignalProc:
                         winddata = window * self.sg[i:i + window_width]
                         ft[i // incr, :] = fft.fft(winddata)
                 self.sg = np.absolute(ft)
+            print(np.min(self.sg),np.max(self.sg))
 
             del ft
             gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return self.sg
+
+    def scalogram(self,wavelet='morl'):
+        # Compute the wavelet scalogram
+        import pywt
+        scalogram, freqs = pywt.cwt(self.audiodata, widths, wavelet)
+
+    def Stockwell(self):
+        # Stockwell transform (Brown et al. version)
+        # Need to get the starts etc. sorted
+
+        width = len(self.audiodata) // 2
+
+        # Gaussian window for frequencies
+        f_half = np.arange(0, width + 1) / (2 * width)
+        f = np.concatenate((f_half, np.flipud(-f_half[1:-1])))
+        p = 2 * np.pi * np.outer(f, 1 / f_half[1:])
+        window = np.exp(-p ** 2 / 2).T
+
+        f_tran = fft.fft(self.audiodata, 2*width, overwrite_x=True)
+        diag_con = np.linalg.toeplitz(np.conj(f_tran[:width + 1]), f_tran)
+        # Remove zero freq line
+        diag_con = diag_con[1:width + 1, :]  
+        return np.flipud(fft.ifft(diag_con * window, axis=1))
 
     def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
         """ FIR bandpass filter
@@ -573,7 +620,12 @@ class SignalProc:
             b, a = signal.butter(7, [lowPass, highPass], btype='bandpass')
 
         # check if filter is stable
-        filterUnstable = np.any(np.abs(np.roots(a))>1)
+        filterUnstable = True
+        try:
+            filterUnstable = np.any(np.abs(np.roots(a))>1)
+        except Exception as e:
+            print("Warning:", e)
+            filterUnstable = True
         if filterUnstable:
             # redesign to SOS and filter.
             # uses order=30 because why not
@@ -593,19 +645,19 @@ class SignalProc:
         return data
 
     # The next functions perform spectrogram inversion
-    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
+    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10, window='Hann'):
         # Assumes that this is the plain (not power) spectrogram
         # Make the spectrogram two-sided and make the values small
         sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
 
         sg_best = copy.deepcopy(sg)
         for i in range(nits):
-            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
+            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0), window=window)
             self.setData(invertedSgram)
-            est = self.spectrogram(window_width, incr, onesided=False,need_even=True)
+            est = self.spectrogram(window_width, incr, onesided=False,need_even=True, window=window)
             phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
             sg_best = sg * phase[:len(sg)]
-        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False)
+        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False, window=window)
         return np.real(invertedSgram)
 
     def inversion_iteration(self,sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
@@ -632,16 +684,42 @@ class SignalProc:
         total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
         #Virginia: adding different windows
 
-        if window == 'Hann':
-            # Hann window
+        
+       # Set of window options
+        if window=='Hann':
+            # This is the Hann window
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
-        elif window == 'Blackman':
+        elif window=='Parzen':
+            # Parzen (window_width even)
+            n = np.arange(size) - 0.5*size
+            window = np.where(np.abs(n)<0.25*size,1 - 6*(n/(0.5*size))**2*(1-np.abs(n)/(0.5*size)), 2*(1-np.abs(n)/(0.5*size))**3)
+        elif window=='Welch':
+            # Welch
+            window = 1.0 - ((np.arange(size) - 0.5*(size-1))/(0.5*(size-1)))**2
+        elif window=='Hamming':
+            # Hamming
+            alpha = 0.54
+            beta = 1.-alpha
+            window = alpha - beta*np.cos(2 * np.pi * np.arange(size) / (size - 1))
+        elif window=='Blackman':
             # Blackman
             alpha = 0.16
-            a0 = 0.5 * (1 - alpha)
+            a0 = 0.5*(1-alpha)
             a1 = 0.5
-            a2 = 0.5 * alpha
-            window = a0 - a1 * np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2 * np.cos(4 * np.pi * np.arange(size) / (size - 1))
+            a2 = 0.5*alpha
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1))
+        elif window=='BlackmanHarris':
+            # Blackman-Harris
+            a0 = 0.358375
+            a1 = 0.48829
+            a2 = 0.14128
+            a3 = 0.01168
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1)) - a3*np.cos(6 * np.pi * np.arange(size) / (size - 1))
+        elif window=='Ones':
+            window = np.ones(size)
+        else:
+            print("Unknown window, using Hann")
+            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
 
         est_start = int(size // 2) - 1
         est_end = est_start + size
@@ -658,7 +736,7 @@ class SignalProc:
             if calculate_offset and i > 0:
                 offset_size = size - incr
                 if offset_size <= 0:
-                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
+                    #print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
                 offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
             else:
@@ -780,6 +858,7 @@ class SignalProc:
         # helper function to parse output for plotting spectral derivs.
         sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
         x, y = np.where(sd > 0)
+        #print(y)
 
         # remove points beyond frq range to show
         y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
@@ -840,6 +919,27 @@ class SignalProc:
             out.append((starts[i], y))
         return out
 
+    def drawFormants(self,ncoeff=None):
+
+        ys = self.formants(ncoeff)
+        x = []
+        y = []
+
+        step = self.window_width // self.incr
+        starts = np.arange(0,np.shape(self.sg)[0],step)
+
+        # remove points beyond frq range to show
+        for t in range(len(ys)):
+            for f in range(len(ys[t])):
+                if (ys[t][f] >= self.minFreqShow) & (ys[t][f] <= self.maxFreqShow):
+                    x.append(starts[t])
+                    y.append(ys[t][f]/self.sampleRate*2*np.shape(self.sg)[1])
+
+        valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+        y = [i - valminfrq for i in y]
+
+        return x, y
+
     def max_energy(self, sg,thr=1.2):
         # Remember that spectrogram is actually rotated!
 
@@ -874,6 +974,35 @@ class SignalProc:
         y = [i - specstarty for i in y]
 
         return x, y
+
+    def formants(self,ncoeff=None):
+        # First look at formants. Snell and Milinazzo '93 method
+        from LevinsonDurbanRecursion import LPC
+
+        if ncoeff is None:
+            # TODO
+            ncoeff = 2 + self.sampleRate // 1000
+
+        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
+        starts = range(0, len(self.data) - self.window_width, self.window_width)
+        freqs = []
+        for start in starts:
+            x = self.data[start:start + self.window_width]*window
+            # High-pass filter
+            x = signal.lfilter([1], [1., 0.63], x)
+
+            # LPC
+            A, e, k = LPC(x, ncoeff)
+            A = np.squeeze(A)
+
+            # Extract roots, turn into angles
+            roots = np.roots(A)
+            roots = [r for r in roots if np.imag(r) >= 0]
+            angles = np.arctan2(np.imag(roots), np.real(roots))
+
+            freqs.append(sorted(angles / 2 / np.pi * self.sampleRate))
+
+        return freqs
 
     def denoiseImage(self,sg,thr=1.2):
         from skimage.restoration import (denoise_tv_chambolle, denoise_bilateral, denoise_wavelet, estimate_sigma)
@@ -983,7 +1112,7 @@ class SignalProc:
         sp = SignalProc(window, window)     # No overlap
         sp.data = self.data
         sp.sampleRate = self.sampleRate
-        sg = sp.spectrogram(multitaper=False)
+        sg = sp.spectrogram()
 
         # For each frq band get sections where energy exceeds some (90%) percentile, engp
         # and generate a binary spectrogram

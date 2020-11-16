@@ -1,14 +1,13 @@
 
 # SupportClasses_GUI.py
-
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -123,16 +122,16 @@ class AxisWidget(QAbstractButton):
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(70, sgsize)
-        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 14)
+        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 13)
 
     def paintEvent(self, event):
         if type(event) is not bool:
             painter = QPainter(self)
             # actual axis line painting
             bottomR = event.rect().bottomRight()
-            bottomR.setX(bottomR.x()-6)
+            bottomR.setX(bottomR.x()-12)
             topR = event.rect().topRight()
-            topR.setX(topR.x()-6)
+            topR.setX(topR.x()-12)
             painter.setPen(QPen(QColor(20,20,20), 1))
             painter.drawLine(bottomR, topR)
 
@@ -375,13 +374,38 @@ pg.graphicsItems.ROI.Handle.mouseDragEvent = mouseDragEventFlexible
 pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexibleLine
 
 
+class DemousedViewBox(pg.ViewBox):
+    # A version of ViewBox with no mouse events.
+    # Dramatically reduces CPU usage when such events are not needed.
+    def keyPressEvent(self, ev):
+        return
+
+    def mouseDragEvent(self, ev, axis=None):
+        return
+
+    def mouseClickEvent(self, ev):
+        return
+
+    def mouseMoveEvent(self, ev):
+        return
+
+    def wheelEvent(self, ev, axis=None):
+        return
+
+
+# Two subclasses of LinearRegionItem, that account for spectrogram bounds when resizing
+# and use boundary caching to reduce CPU load e.g. when detecting mouse hover
 class LinearRegionItem2(pg.LinearRegionItem):
     def __init__(self, parent, bounds=None, *args, **kwds):
         pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)
         self.parent = parent
         self.bounds = bounds
-        self.lines[0].btn = self.parent.MouseDrawingButton
-        self.lines[1].btn = self.parent.MouseDrawingButton
+        self.useCachedView = None
+        # we don't provide parent, and therefore don't switch buttons,
+        # when using this for overview
+        if self.parent is not None:
+            self.lines[0].btn = self.parent.MouseDrawingButton
+            self.lines[1].btn = self.parent.MouseDrawingButton
         self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
 
     def setHoverBrush(self, *br, **kargs):
@@ -391,8 +415,62 @@ class LinearRegionItem2(pg.LinearRegionItem):
         self.lines[0].setPen(*pen, **kargs)
         self.lines[1].setPen(*pen, **kargs)
 
+    def viewRect(self):
+        """ Return the visible bounds of this item's ViewBox or GraphicsWidget,
+            in the local coordinate system of the item.
+            Overwritten to use caching. """
+        if self.useCachedView is not None:
+            return self.useCachedView
+
+        view = self.getViewBox()
+        if view is None:
+            return None
+        bounds = view.viewRect()
+        bounds = self.mapRectFromView(bounds)
+        if bounds is None:
+            return None
+
+        bounds = bounds.normalized()
+
+        # For debugging cache misses:
+        # if self.useCachedView is not None:
+        #     if self.useCachedView.top()!=bounds.top() or self.useCachedView.bottom()!=bounds.bottom():
+        #         import traceback
+        #         traceback.print_stack()
+        #         print("cached:", self.useCachedView)
+        #         print(bounds)
+
+        self.useCachedView = bounds
+        return bounds
+
+    def viewTransformChanged(self):
+        # Clear cache
+        self.useCachedView = None
+
+    # def boundingRect(self):
+    #     # because we react to hover, this is called frequently
+
+    #     # ORIGINAL:
+    #     br = self.viewRect()  # bounds of containing ViewBox mapped to local coords.
+
+    #     rng = self.getRegion()
+    #     br.setLeft(rng[0])
+    #     br.setRight(rng[1])
+    #     length = br.height()
+    #     br.setBottom(br.top() + length * self.span[1])
+    #     br.setTop(br.top() + length * self.span[0])
+
+    #     br = br.normalized()
+
+    #     if self._bounds != br:
+    #         print("Preparing geom")
+    #         self._bounds = br
+    #         self.prepareGeometryChange()
+
+    #     return br
+
     def mouseDragEvent(self, ev):
-        if not self.movable or ev.button()==self.parent.MouseDrawingButton:
+        if not self.movable or (self.parent is not None and ev.button()==self.parent.MouseDrawingButton):
             return
         ev.accept()
 
@@ -432,6 +510,73 @@ class LinearRegionItem2(pg.LinearRegionItem):
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
+
+
+# Just another slight optimization - immediately dropping unneeded mouse events
+class LinearRegionItemO(LinearRegionItem2):
+    def __init__(self, *args, **kwds):
+        LinearRegionItem2.__init__(self, parent=None, bounds=[0,100], *args, **kwds)
+
+    def setRegion(self, rgn):
+        """Set the values for the edges of the region.
+        ==============   ==============================================
+        **Arguments:**
+        rgn              A list or tuple of the lower and upper values.
+        bounds           A tuple indicating allowed x range
+        ==============   ==============================================
+        """
+        if self.lines[0].value() == rgn[0] and self.lines[1].value() == rgn[1]:
+            return
+        # shift the requested length to fit within bounds:
+        if self.bounds[0] is not None:
+            if rgn[0]<self.bounds[0]:
+                ll = rgn[1]-rgn[0]
+                rgn[0] = self.bounds[0]
+                rgn[1] = rgn[0]+ll
+        if self.bounds[1] is not None:
+            if rgn[1]>self.bounds[1]:
+                ll = rgn[1]-rgn[0]
+                rgn[1] = self.bounds[1]
+                rgn[0] = max(0, rgn[1]-ll)
+        self.blockLineSignal = True
+        self.lines[0].setValue(rgn[0])
+        self.lines[1].setValue(rgn[1])
+        self.blockLineSignal = False
+        # self.lineMoved(0)
+        # self.lineMoved(1)
+        self.lineMoveFinished()
+
+    def setBounds(self, bounds):
+        self.bounds = bounds
+        super(LinearRegionItemO, self).setBounds(bounds)
+
+    # identical to original, just w/o debugger
+    def paint(self, p, *args):
+        p.setBrush(self.currentBrush)
+        p.setPen(fn.mkPen(None))
+        p.drawRect(self.boundingRect())
+
+    # Immediate rejects on all unneeded events:
+    def keyPressEvent(self, ev):
+        return
+
+    def mouseClickEvent(self, ev):
+        ev.accept()
+        return
+
+    def wheelEvent(self, ev):
+        ev.accept()
+        return
+
+    # Other events could be dropped too:
+    # def lineMoved(self, i):
+    #     return
+    # def lineMoveFinished(self):
+    #     return
+    # def setMouseHover(self, hover):
+    #     return
+    # def hoverEvent(self, ev):
+    #     return
 
 
 class DragViewBox(pg.ViewBox):
@@ -517,6 +662,40 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
         # or center:
         x = self.mapRectToParent(self.boundingRect()).center().x()
         self.parentWidget().resend(x)
+
+
+class PartlyResizableGLW(pg.GraphicsLayoutWidget):
+    # a widget which has a fixed aspect ratio, set by height.
+    # useful for horizontal scroll areas.
+    def __init__(self):
+        self.plotAspect = 5
+        # to prevent infinite loops:
+        self.alreadyResizing = False
+        super(PartlyResizableGLW, self).__init__()
+
+    def forceResize(self):
+        # this should be doable by postEvent(QResizeEvent),
+        # but somehow doesn't always work.
+        self.alreadyResizing = False
+        self.setMinimumWidth(self.height()*self.plotAspect-10)
+        self.setMaximumWidth(self.height()*self.plotAspect+10)
+        self.adjustSize()
+
+    def resizeEvent(self, e):
+        if e is not None:
+            # break any infinite loops,
+            # and also processes every second event:
+            if self.alreadyResizing:
+                self.alreadyResizing = False
+                return
+
+            self.alreadyResizing = True
+            # Some buffer for flexibility, so that it could adjust itself
+            # and avoid infinite loops
+            self.setMinimumWidth(e.size().height()*self.plotAspect-10)
+            self.setMaximumWidth(e.size().height()*self.plotAspect+10)
+
+            pg.GraphicsLayoutWidget.resizeEvent(self, e)
 
 
 class ControllableAudio(QAudioOutput):
@@ -785,8 +964,8 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.2 (April 2020)")
-            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
+            self.setText("The AviaNZ Program, v3.1.2 (November 2020)")
+            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
 
@@ -1149,28 +1328,48 @@ class LightedFileList(QListWidget):
 
         # mark the current file or first row (..), if not found
         if fileName:
-            index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+            # for matching dirs:
+            # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+            index = self.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:
                 self.setCurrentRow(0)
 
-    def refreshFile(self, fileName):
-        """ Repaint a single file icon.
+    def refreshFile(self, fileName, cert):
+        """ Repaint a single file icon with the provided certainty.
             fileName: file stem (dir will be read from self)
+            cert:     0-100, or -1 if no annotations
         """
-        index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+        # for matching dirs - not sure if needed:
+        # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+        index = self.findItems(fileName,Qt.MatchExactly)
         if len(index)==0:
             return
 
-        if self.soundDir is None:
-            # something bad happened
-            print("Warning: soundDir not set, cannot find .data files")
-            return
-
         curritem = index[0]
-        datafile = os.path.join(self.soundDir, fileName)+'.data'
-        self.paintItem(curritem, datafile)
+        # Repainting identical to paintItem
+        if cert == -1:
+            # .data exists, but no annotations
+            self.pixmap.fill(QColor(255,255,255,0))
+            painter = QPainter(self.pixmap)
+            painter.setPen(self.blackpen)
+            painter.drawRect(self.pixmap.rect())
+            painter.end()
+            curritem.setIcon(QIcon(self.pixmap))
+            # no change to self.minCertainty
+        elif cert == 0:
+            self.pixmap.fill(self.ColourNone)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = 0
+        elif cert < 100:
+            self.pixmap.fill(self.ColourPossibleDark)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = min(self.minCertainty, cert)
+        else:
+            self.pixmap.fill(self.ColourNamed)
+            curritem.setIcon(QIcon(self.pixmap))
+            # self.minCertainty cannot be changed by a cert=100 segment
 
     def paintItem(self, item, datafile):
         """ Read the JSON and draw the traffic light for a single item """
@@ -1219,7 +1418,7 @@ class LightedFileList(QListWidget):
                 item.setIcon(QIcon(self.pixmap))
                 # self.minCertainty cannot be changed by a cert=100 segment
         else:
-            # it is a file, but no .data
+            # no .data for this sound file
             self.pixmap.fill(QColor(255,255,255,0))
             item.setIcon(QIcon(self.pixmap))
 

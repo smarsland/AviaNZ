@@ -3,6 +3,27 @@
 # Wrapper script to SplitWav audio splitter.
 # Splits wavs, and AviaNZ-format annotation files.
 
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
+# This file: Julius Juodakis
+
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2020
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QStyle
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QIcon
@@ -19,7 +40,7 @@ import SupportClasses_GUI
 class SplitData(QMainWindow):
     def __init__(self):
         super(SplitData, self).__init__()
-        print("Starting...")
+        print("Starting AviaNZ WAV splitter")
         self.setWindowTitle("AviaNZ WAV splitter")
 
         self.dirName = []
@@ -31,7 +52,7 @@ class SplitData(QMainWindow):
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
         fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec_())
-        fileMenu.addAction("Quit", lambda: QApplication.quit())
+        fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
         #    helpMenu.addAction("About",self.showAbout,"Ctrl+A")
@@ -144,6 +165,7 @@ class SplitData(QMainWindow):
         area.setMinimumSize(400, 400)
         self.setSizePolicy(QSizePolicy(1,1))
         self.setMinimumSize(200, 400)
+        self.show()
 
     def browse(self):
         if self.dirName:
