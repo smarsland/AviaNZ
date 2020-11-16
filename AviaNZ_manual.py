@@ -48,7 +48,6 @@ import Segment
 import WaveletSegment
 import WaveletFunctions
 import Clustering
-import Features
 import colourMaps
 
 import librosa
@@ -359,9 +358,10 @@ class AviaNZ(QMainWindow):
         self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
         self.showSpectral.setCheckable(True)
         self.showSpectral.setChecked(False)
-        self.showFormant = markMenu.addAction("Formants", self.showFormants)
-        self.showFormant.setCheckable(True)
-        self.showFormant.setChecked(False)
+        if not self.DOC:
+            self.showFormant = markMenu.addAction("Formants", self.showFormants)
+            self.showFormant.setCheckable(True)
+            self.showFormant.setChecked(False)
         self.showEnergies = markMenu.addAction("Maximum energies", self.showMaxEnergy)
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
@@ -395,9 +395,8 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
 
-        actionMenu.addAction("Calculate segment statistics", self.calculateStats)
-
         if not self.DOC:
+            actionMenu.addAction("Calculate segment statistics", self.calculateStats)
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
@@ -1338,11 +1337,12 @@ class AviaNZ(QMainWindow):
             pass
 
         # Remove formants
-        self.showFormant.setChecked(False)
-        try:
-            self.p_spec.removeItem(self.formantPlot)
-        except Exception:
-            pass
+        if not self.DOC:
+            self.showFormant.setChecked(False)
+            try:
+                self.p_spec.removeItem(self.formantPlot)
+            except Exception:
+                pass
 
         # remove max energies
         self.showEnergies.setChecked(False)
@@ -2242,7 +2242,6 @@ class AviaNZ(QMainWindow):
 
             # preprocess
             data = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
-            # data = self.sp.ButterworthBandpass(data, self.sampleRate, 100, 16000)
             data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
@@ -3736,8 +3735,7 @@ class AviaNZ(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                # C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'], low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
-                C = self.sp.bandpassFilter(C, spInfo['SampleRate'], start=spSubf['FreqRange'][0], end=spSubf['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -3937,6 +3935,7 @@ class AviaNZ(QMainWindow):
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
 
+        import Features
         # these are all segments in file
         print("segs", self.segments)
 
@@ -4331,12 +4330,13 @@ class AviaNZ(QMainWindow):
             else:
                 self.showSpectralDeriv()
 
-            try:
-                self.p_spec.removeItem(self.formantPlot)
-            except Exception:
-                pass
-            else:
-                self.showFormants()
+            if not self.DOC:
+                try:
+                    self.p_spec.removeItem(self.formantPlot)
+                except Exception:
+                    pass
+                else:
+                    self.showFormants()
 
             try:
                 self.p_spec.removeItem(self.energyPlot)
