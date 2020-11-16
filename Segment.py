@@ -960,6 +960,7 @@ class Segmenter:
             for j in range(np.shape(sg)[1]):
                 if (sg[i, j] > thr * rowmedians[i]) and (sg[i, j] > thr * colmedians[j]):
                     clipped[i, j] = 1
+        print("Found", np.sum(clipped), "pixels")
 
         # This is the stencil for the closing and dilation. It's a 5x5 diamond. Can also use a 3x3 diamond
         diamond = np.zeros((5,5),dtype=int)

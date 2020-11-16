@@ -472,6 +472,7 @@ class AviaNZ_batchProcess():
                         print('number of detected clicks = ', gen_spec)
                         thisPageSegs = []
 
+                    # TODO This needs to be bypassed for Chp and MC methods
                     # Post-process:
                     # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     print("Segments detected (all subfilters): ", thisPageSegs)

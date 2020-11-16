@@ -739,7 +739,7 @@ class Segmentation(QDialog):
         if DOC:
             self.algs.addItems(["Wavelets", "FIR", "Median Clipping"])
         else:
-            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint"])
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint", "WV MC"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
@@ -791,7 +791,7 @@ class Segmentation(QDialog):
         self.medThr = QDoubleSpinBox()
         self.medThr.setRange(0.2,6)
         self.medThr.setSingleStep(1)
-        self.medThr.setDecimals(1)
+        self.medThr.setDecimals(2)
         self.medThr.setValue(3)
 
         # set min seg size for median clipping
@@ -834,11 +834,9 @@ class Segmentation(QDialog):
         #Box.addWidget(self.Onsetslabel)
 
         self.medlabel = QLabel("Set median threshold")
-        Box.addWidget(self.medlabel)
         self.medlabel.show()
 
         self.eclabel = QLabel("Set energy curve threshold")
-        Box.addWidget(self.eclabel)
         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
 
         self.specieslabel = QLabel("Species")
@@ -868,10 +866,12 @@ class Segmentation(QDialog):
         Box.addWidget(self.HarmaThr2)
         Box.addWidget(self.PowerThr)
 
+        Box.addWidget(self.medlabel)
         Box.addWidget(self.medThr)
         Box.addWidget(self.medSizeText)
         Box.addWidget(self.medSize)
 
+        Box.addWidget(self.eclabel)
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
         Box.addWidget(self.ecThr)
@@ -912,7 +912,7 @@ class Segmentation(QDialog):
         self.chpwin.setValue(0.5)
 
         self.maxlen = QDoubleSpinBox()
-        self.chpwin.setDecimals(3)
+        self.maxlen.setDecimals(3)
         self.maxlen.setRange(0.05, 100)
         self.maxlen.setValue(10)
 
@@ -1035,12 +1035,17 @@ class Segmentation(QDialog):
             self.specieslabel_cc.show()
             self.species_cc.show()
         else:
-            #"Wavelets" or "WV Changepoint"
+            #"Wavelets" or "WV Changepoint" or "WV MC"
             self.specieslabel.show()
             self.species.show()
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
                     self.chpLayout.itemAt(ww).widget().show()
+                self.wind.hide()
+            elif alg == "WV MC":
+                # TODO any other settings
+                self.medlabel.show()
+                self.medThr.show()
                 self.wind.hide()
             self.maxgaplbl.hide()
             self.maxgap.hide()
@@ -1051,6 +1056,7 @@ class Segmentation(QDialog):
         """ Override UI with parameters from the requested filter. """
         subfilt = self.filters[species]["Filters"][0]
         self.chpalpha.setValue(subfilt["WaveletParams"]["thr"])
+        self.medThr.setValue(subfilt["WaveletParams"]["thr"])
         self.chpwin.setValue(subfilt["TimeRange"][0])
         self.maxlen.setValue(subfilt["TimeRange"][1])
 
@@ -1065,7 +1071,7 @@ class Segmentation(QDialog):
 
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
-        settings = {"medThr": self.medThr.text(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
+        settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": self.species.currentText(), "species_cc": self.species_cc.currentText(), "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),

@@ -5098,7 +5098,7 @@ class AviaNZ(QMainWindow):
             self.segmentDialog = Dialogs.Segmentation(maxampl)
 
         opstartingtime = time.time()
-        print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+        print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.localtime()))
         # for undoing:
         self.prevSegments = copy.deepcopy(self.segments)
 
@@ -5110,7 +5110,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText('Segmenting...')
             # Delete old segments:
             # only this species, if using species-specific methods:
-            if alg == 'Wavelets' or alg == 'WV Changepoint':
+            if alg == 'Wavelets' or alg == 'WV Changepoint' or alg == 'WV MC':
                 if filtname == 'Choose species...':
                     msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec_()
@@ -5141,7 +5141,7 @@ class AviaNZ(QMainWindow):
             if alg == 'Default':
                 newSegments = self.seg.bestSegments()
             elif alg == 'Median Clipping':
-                newSegments = self.seg.medianClip(float(str(settings["medThr"])), minSegment=self.config['minSegment'])
+                newSegments = self.seg.medianClip(settings["medThr"], minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
                 # will also remove too short segments (medSize is set in ms because sliders limited to int)
                 # print("before length", newSegments)
@@ -5179,6 +5179,17 @@ class AviaNZ(QMainWindow):
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
                 # Or if no params are passed, they will be read from the filter file TimeRange:
                 # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
+            elif alg == 'WV MC':
+                print("Wavelet median clipping requested")
+                speciesData = self.FilterDicts[filtname]
+                # this will produce a list of lists (over subfilters)
+                ws = WaveletSegment.WaveletSegment(speciesData)
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                # TODO maxlen isn't used here
+                # Note that MC does its own posprocessing to join the very small segments produced
+                newSegments = ws.waveletSegmentMC(0, thr=settings["medThr"], maxlen=10.0)
+                # or if reading all from the filter file:
+                # newSegments = ws.waveletSegmentMC(0)
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5194,7 +5205,7 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            if alg == 'Wavelets' or alg == 'WV Changepoint':
+            if alg == 'Wavelets' or alg == 'WV Changepoint' or alg == 'WV MC':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')
                 # load target CNN model if exists
@@ -5244,7 +5255,7 @@ class AviaNZ(QMainWindow):
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
-            if alg=='Wavelets' or alg=='WV Changepoint':
+            if alg=='Wavelets' or alg=='WV Changepoint' or alg=='WV MC':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
