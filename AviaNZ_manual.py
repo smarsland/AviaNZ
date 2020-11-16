@@ -3901,8 +3901,20 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Ready")
             
     def powerstocsv(self):
-
+        """ Calculate and export summary statistics for the currently marked segments """
+        
         print(self.filename)
+        
+        #csv = open(self.filename[:-4] + '_features.csv', "w")
+        #csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
+        for seg in self.segments:
+            #        starttime = int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
+             #       endtime = int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
+                    starttime=self.startRead
+                    endtime=self.startRead+self.datalengthSec
+                    noise=self.sp.getpower(starttime,endtime)
+                    print(noise)
+        
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
         
