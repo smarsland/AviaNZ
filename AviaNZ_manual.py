@@ -48,7 +48,6 @@ import Segment
 import WaveletSegment
 import WaveletFunctions
 import Clustering
-import Features
 import colourMaps
 
 import librosa
@@ -359,9 +358,10 @@ class AviaNZ(QMainWindow):
         self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
         self.showSpectral.setCheckable(True)
         self.showSpectral.setChecked(False)
-        self.showFormant = markMenu.addAction("Formants", self.showFormants)
-        self.showFormant.setCheckable(True)
-        self.showFormant.setChecked(False)
+        if not self.DOC:
+            self.showFormant = markMenu.addAction("Formants", self.showFormants)
+            self.showFormant.setCheckable(True)
+            self.showFormant.setChecked(False)
         self.showEnergies = markMenu.addAction("Maximum energies", self.showMaxEnergy)
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
@@ -389,16 +389,7 @@ class AviaNZ(QMainWindow):
         #actionMenu.addAction("Find matches",self.findMatches)
 
         if not self.DOC:
-            actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
-            actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
-
-        actionMenu.addSeparator()
-        self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
-        actionMenu.addAction("Export segments to Excel",self.exportSeg)
-        actionMenu.addAction("Calculate segment statistics", self.calculateStats)
-        actionMenu.addAction("Export multichannel raw powers to csv", self.powerstocsv)
-
-        if not self.DOC:
+            actionMenu.addAction("Calculate segment statistics", self.calculateStats)
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
@@ -597,10 +588,13 @@ class AviaNZ(QMainWindow):
         placeInFileBox.addWidget(self.placeInFileSelector)
         placeInFileBox.addWidget(self.next5mins)
         placeInFileBox.addWidget(self.placeInFileLabel)
-        placeInFileBox.addStretch(4)
-        placeInFileBox.addWidget(self.annotJumpLabel)
-        placeInFileBox.addWidget(self.annotJumpBtns)
-        placeInFileBox.addStretch(4)
+        if self.DOC:
+            placeInFileBox.addStretch(10)
+        else:
+            placeInFileBox.addStretch(4)
+            placeInFileBox.addWidget(self.annotJumpLabel)
+            placeInFileBox.addWidget(self.annotJumpBtns)
+            placeInFileBox.addStretch(4)
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
         # Corresponding keyboard shortcuts:
@@ -903,6 +897,7 @@ class AviaNZ(QMainWindow):
         self.d_spec.addWidget(self.playSlider)
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.bar.btn = self.MouseDrawingButton
+        self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         # guides that can be used in batmode
         self.guidelines = [0]*4
@@ -1338,11 +1333,12 @@ class AviaNZ(QMainWindow):
             pass
 
         # Remove formants
-        self.showFormant.setChecked(False)
-        try:
-            self.p_spec.removeItem(self.formantPlot)
-        except Exception:
-            pass
+        if not self.DOC:
+            self.showFormant.setChecked(False)
+            try:
+                self.p_spec.removeItem(self.formantPlot)
+            except Exception:
+                pass
 
         # remove max energies
         self.showEnergies.setChecked(False)
@@ -2175,10 +2171,7 @@ class AviaNZ(QMainWindow):
                 self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count, remaking, coordsAbsolute=True)
 
             # This is the moving bar for the playback
-            if not hasattr(self,'bar'):
-                self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
-                self.p_spec.addItem(self.bar, ignoreBounds=True)
-                self.bar.sigPositionChangeFinished.connect(self.barMoved)
+            self.p_spec.addItem(self.bar, ignoreBounds=True)
 
         QApplication.processEvents()
 
@@ -2244,7 +2237,7 @@ class AviaNZ(QMainWindow):
 
             # preprocess
             data = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
-            data = self.sp.ButterworthBandpass(data, self.sampleRate, 100, 16000)
+            data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
@@ -3709,8 +3702,7 @@ class AviaNZ(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -3783,7 +3775,8 @@ class AviaNZ(QMainWindow):
         for ct in CTs:
             self.diagnosticDialogCNN.chkboxes.append(QCheckBox(ct))
         for cb in self.diagnosticDialogCNN.chkboxes:
-            cb.setChecked(True)
+            if cb.text() != 'Noise':
+                cb.setChecked(True)
             self.diagnosticDialogCNN.ctbox.addWidget(cb)
 
     def clearDiagnosticCNN(self):
@@ -3850,7 +3843,8 @@ class AviaNZ(QMainWindow):
                     # basic divergent color palette
                     plotcol = (255 * ct // len(CTs), 127 * (ct % 2), 0)
                     y = Psep[ct, :]
-                    x = np.linspace(0, CNNwindow*len(y), len(y))
+                    # x = np.linspace(0, CNNwindow*len(y), len(y))
+                    x = np.linspace(CNNwindow/2, CNNwindow*len(y)-CNNwindow/2, len(y))
                     self.plotDiag = pg.PlotDataItem(x, y, pen=fn.mkPen(plotcol, width=2))
                     self.p_plot.addItem(self.plotDiag)
                     self.p_legend.addItem(self.plotDiag, CTs[ct])
@@ -3922,7 +3916,6 @@ class AviaNZ(QMainWindow):
 
         #csv = open(self.filename[:-4] + '_features.csv', "w")
         #csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
-
         for seg in self.segments:
             for lab in seg[4]:
                 if lab["species"]=="Background":
@@ -4345,12 +4338,13 @@ class AviaNZ(QMainWindow):
             else:
                 self.showSpectralDeriv()
 
-            try:
-                self.p_spec.removeItem(self.formantPlot)
-            except Exception:
-                pass
-            else:
-                self.showFormants()
+            if not self.DOC:
+                try:
+                    self.p_spec.removeItem(self.formantPlot)
+                except Exception:
+                    pass
+                else:
+                    self.showFormants()
 
             try:
                 self.p_spec.removeItem(self.energyPlot)

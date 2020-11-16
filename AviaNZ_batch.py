@@ -27,6 +27,7 @@ import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
+import wavio
 
 import traceback
 import time
@@ -255,23 +256,25 @@ class AviaNZ_batchProcess():
             if not self.CLI:
                 self.ui.dlg.setValue(total+1)
 
+            # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
+            if self.method == 'Click':
+                self.exportToBatSearch(self.dirName)
+                if not self.CLI:
+                    import Dialogs
+                    exportResults = Dialogs.ExportBats(self.config['operator'])
+                    exportResults.show()
+                    if exportResults.exec_() == 1:
+                        exportResults = exportResults.getValues()
+                        self.exportBatSurvey(self.dirName, exportResults)
+                else:
+                    self.exportBatSurvey(self.dirName, None)
+
             # END of processing and exporting. Final cleanup
             self.log.file.close()
             if not self.CLI:
                 self.ui.endproc(total)
 
-        # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
-        if self.method=='Click':
-            self.exportToBatSearch(self.dirName)  
-            if not self.CLI:
-                import Dialogs
-                exportResults = Dialogs.ExportBats(self.config['operator'])
-                exportResults.show()
-                if exportResults.exec_() == 1:
-                    exportResults = exportResults.getValues()
-                    self.exportBatSurvey(self.dirName,exportResults)
-            else:
-                self.exportBatSurvey(self.dirName,None)
+
 
         print("Processed all %d files" % total)
         return(0)
@@ -394,6 +397,23 @@ class AviaNZ_batchProcess():
             processingTime = time.time() - processingTimeStart
             print("File processed in", processingTime)
             # END of audio batch processing
+
+    def addRegularSegments(self):
+        """ Perform the Hartley bodge: add 10s segments every minute. """
+        # if wav.data exists get the duration
+        (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
+        self.segments.metadata = dict()
+        self.segments.metadata["Operator"] = "Auto"
+        self.segments.metadata["Reviewer"] = ""
+        self.segments.metadata["Duration"] = nseconds
+        i = 0
+        segments = []
+        print("Adding segments (%d s every %d s) to %s" %(self.config['protocolSize'], self.config['protocolInterval'], str(self.filename)))
+        while i < nseconds:
+            segments.append([i, i + self.config['protocolSize']])
+            i += self.config['protocolInterval']
+        post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        self.makeSegments(post.segments)
 
     def useWindF(self, flow, fhigh):
         """
@@ -890,22 +910,18 @@ class AviaNZ_batchProcess():
         operator = "AviaNZ 3.0"
         site = "Nowhere"
         # BatSeach codes
-        namedict = {"Unassigned":0,"Non-bat":1,"Unknown":2,"Long Tail":3,"Short Tail":4,"Possible LT":5,"Possible ST":6,"Both":7}
-        currroot = dirName
+        namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
         # File header
         start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
-        output=start
+        output = start
         if not os.path.isdir(dirName):
             print("Folder doesn't exist")
             return 0
-        for root, dirs, files in os.walk(dirName,topdown=True):
+        for root, dirs, files in os.walk(dirName, topdown=True):
             nfiles = len(files)
-            if nfiles>0:
+            if nfiles > 0:
                 for count in range(nfiles):
                     filename = files[count]
-                    fname = os.path.join(root,filename)
-                    f = fname.split('/')
-                
                     if filename.endswith('.data'):
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
@@ -941,16 +957,15 @@ class AviaNZ_batchProcess():
                         # DOC format
                         s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
                         s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
-                        s7 = "<RecordingFolderName>"+os.path.relpath(currroot,dirName)+"</RecordingFolderName>\n"
+                        s7 = "<RecordingFolderName>.\\"+os.path.relpath(root, dirName)+"</RecordingFolderName>\n"
                         s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
                         s9 = "</BatRecording>\n"
                         output+= s1+s2+s3+s4+s5+s6+s7+s8+s9
                 # Now write the file if necessary
                 if output != start:
                     output += "</ArrayOfBatRecording>\n"
-                    currroot = '/'.join(f[:-1])
-                    file = open(os.path.join(currroot,savefile), 'w')
-                    print("writing to",os.path.join(currroot,savefile))
+                    file = open(os.path.join(root, savefile), 'w')
+                    print("writing to", os.path.join(root, savefile))
                     file.write(output)
                     file.write("\n")
                     file.close()
@@ -1007,7 +1022,7 @@ class AviaNZ_batchProcess():
                                 elif s[0] == 'Short-tailed bat':
                                     species[1] += 1
 
-        f = open(os.path.join(dirName,'out.csv'),'w')
+        f = open(os.path.join(dirName,'BatDB.csv'),'w')
         
         f.write('Data Source,Observer,Survey method,Species,Passes,Date,Detector type,Date recorder put out,Date recorder collected,No. of nights out,Effective nights out,Notes,Eastings,Northings,Site name,Region\n')
 

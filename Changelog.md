@@ -12,10 +12,12 @@ All notable changes to AviaNZ program will be documented in this file.
 
 - "One-by-one" review (previously All Species) can now be run on single species
 - Batch Review settings separated into Advanced and Simple
+- Simpler dropdown to set review certainty bounds
 - Better spectrogram type selection UI
 
 ### Fixed
 - Greatly reduced CPU load for mouseover detection in spectrogram items
+- Batch settings are appropriately greyed out and provide tooltips
 
 ## [3.1] - 2020-10-09
 
