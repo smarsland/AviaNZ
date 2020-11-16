@@ -27,6 +27,7 @@ import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
+import wavio
 
 import traceback
 import time
@@ -396,6 +397,23 @@ class AviaNZ_batchProcess():
             processingTime = time.time() - processingTimeStart
             print("File processed in", processingTime)
             # END of audio batch processing
+
+    def addRegularSegments(self):
+        """ Perform the Hartley bodge: add 10s segments every minute. """
+        # if wav.data exists get the duration
+        (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
+        self.segments.metadata = dict()
+        self.segments.metadata["Operator"] = "Auto"
+        self.segments.metadata["Reviewer"] = ""
+        self.segments.metadata["Duration"] = nseconds
+        i = 0
+        segments = []
+        print("Adding segments (%d s every %d s) to %s" %(self.config['protocolSize'], self.config['protocolInterval'], str(self.filename)))
+        while i < nseconds:
+            segments.append([i, i + self.config['protocolSize']])
+            i += self.config['protocolInterval']
+        post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        self.makeSegments(post.segments)
 
     def useWindF(self, flow, fhigh):
         """
