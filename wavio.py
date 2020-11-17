@@ -32,7 +32,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division as _division
 
-import PyWave as _wave
+import PyWave as _pi
+import wave as _wave
 import numpy as _np
 import array
 import struct
@@ -141,7 +142,7 @@ def readFmt(file):
         sampwidth : int
             Sample width, in bites (16, 24 etc.)
     """
-    wav = _wave.open(file,mode="r")
+    wav = _pi.open(file,mode="r")
     rate = wav.frequency
     nchannels = wav.channels
     sampwidth = wav.bits_per_sample/8
@@ -186,7 +187,7 @@ def read(file,nseconds=None,offset=0):
     contains 24 bit samples, the resulting numpy array is 32 bit integers,
     with values that have been sign-extended.
     """
-    wav = _wave.open(file,mode="r")
+    wav = _pi.open(file,mode="r")
     rate = wav.frequency
     nchannels = wav.channels
     sampwidth = wav.bits_per_sample/8
@@ -397,8 +398,10 @@ def write(file, data, rate, scale=None, sampwidth=None):
     wavdata = _array2wav(data, sampwidth)
     print("GOING TO OPEN")   
     print("wavdata's type is: ",type(wavdata))
-    w = _wave.open(file,mode="w",channels=data.shape[1],bits_per_sample=sampwidth,frequency=rate)#,format=1)
-    print("PARIPURI?????")
-    #w.write(wavdata)
-    #print(type(wavdata))
+    #w = _pi.open(file,mode="w",channels=data.shape[1],bits_per_sample=sampwidth,frequency=rate)#,format=1)
+    w = _wave.open(file, 'wb')
+    w.setnchannels(data.shape[1])
+    w.setsampwidth(sampwidth)
+    w.setframerate(rate)
+    w.writeframes(wavdata)
     w.close()
