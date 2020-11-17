@@ -14,6 +14,7 @@ numpy==1.16.2
 openpyxl==2.5.5
 pyFFTW==0.12.0
 PyQt5==5.13.1
+pywave==0.4.1
 git+git://github.com/pyqtgraph/pyqtgraph@2203933#egg=pyqtgraph
 scikit-image==0.15.0
 scipy==1.4.1
