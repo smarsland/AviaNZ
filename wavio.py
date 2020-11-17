@@ -194,18 +194,17 @@ def read(file,nseconds=None,offset=0):
     nframes = wav.samples
 
     if nseconds is None:
-        nseconds = nframes
+        framestoread = nframes
+    else:
+        framestoread = int(min(nseconds*rate, nframes))
 
-    if float(nframes)/rate < nseconds:
-        nseconds = float(nframes)/rate
     if nframes - offset*rate < 0:
         offset = 0
-    wav.data_position=int(offset*rate)
-    print("praa",nframes, nseconds*rate, int(nseconds*rate), offset)
-    data = wav.read()
 
-    #data = wav.readframes(nframes)
+    wav.seek(int(offset*rate))
+    data = wav.read_samples(framestoread)
     wav.close()
+
     array = _wav2array(nchannels, sampwidth, data)
     w = Wav(data=array, rate=rate, sampwidth=sampwidth, nframes=nframes)
     return w
