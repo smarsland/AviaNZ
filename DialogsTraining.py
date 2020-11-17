@@ -1136,10 +1136,10 @@ class BuildRecAdvWizard(QWizard):
             # These are connected to fields and actually control the wizard's flow
             self.bestThr = QLineEdit()
             self.bestNodes = QLineEdit()
+            self.bestFrqBands = QLineEdit()
             self.bestThr.setReadOnly(True)
             self.bestNodes.setReadOnly(True)
             self.bestFrqBands.setReadOnly(True)
-            self.bestM.setStyleSheet("QLineEdit { color : #808080; }")
             self.bestThr.setStyleSheet("QLineEdit { color : #808080; }")
             self.bestNodes.setStyleSheet("QLineEdit { color : #808080; }")
             self.bestFrqBands.setStyleSheet("QLineEdit { color : #808080; }")
@@ -1148,6 +1148,7 @@ class BuildRecAdvWizard(QWizard):
             if self.method=="wv":
                 self.bestM = QLineEdit()
                 self.bestM.setReadOnly(True)
+                self.bestM.setStyleSheet("QLineEdit { color : #808080; }")
                 self.filtSummary.addRow("Current M:", self.bestM)
             self.filtSummary.addRow("Threshold:", self.bestThr)
             self.filtSummary.addRow("Wavelet nodes:", self.bestNodes)

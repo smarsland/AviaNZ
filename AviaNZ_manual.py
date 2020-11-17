@@ -2871,7 +2871,7 @@ class AviaNZ(QMainWindow):
                 self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
-                self.selectSegment(self.box1id)
+                self.selectSegment(len(self.segments)-1)
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
@@ -3031,7 +3031,7 @@ class AviaNZ(QMainWindow):
                 self.p_spec.setFocus()
 
                 # select the new segment/box
-                self.selectSegment(self.box1id)
+                self.selectSegment(len(self.segments)-1)
 
             # if this is the first click:
             else:
@@ -4764,7 +4764,7 @@ class AviaNZ(QMainWindow):
                         self.updateText(si)
                         self.updateColour(si)
                 # reverse loop to allow deleting segments
-                for dl in reversed(todelete):
+                for dl in todelete:
                     self.deleteSegment(dl)
             else:
                 self.removeSegments()
