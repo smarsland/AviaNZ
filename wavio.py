@@ -34,7 +34,8 @@ from __future__ import division as _division
 
 import PyWave as _wave
 import numpy as _np
-
+import array
+import struct
 
 __version__ = "0.0.4.dev1"
 
@@ -60,6 +61,7 @@ def _wav2array(nchannels, sampwidth, data):
         dt_char = 'u' if sampwidth == 1 else 'i'
         a = _np.fromstring(data, dtype='<%s%d' % (dt_char, sampwidth))
         result = a.reshape(-1, nchannels)
+        print(result)
     return result
 
 
@@ -139,7 +141,7 @@ def readFmt(file):
         sampwidth : int
             Sample width, in bites (16, 24 etc.)
     """
-    wav = _wave.open(file)
+    wav = _wave.open(file,mode="r")
     rate = wav.frequency
     nchannels = wav.channels
     sampwidth = wav.bits_per_sample/8
@@ -184,7 +186,7 @@ def read(file,nseconds=None,offset=0):
     contains 24 bit samples, the resulting numpy array is 32 bit integers,
     with values that have been sign-extended.
     """
-    wav = _wave.open(file)
+    wav = _wave.open(file,mode="r")
     rate = wav.frequency
     nchannels = wav.channels
     sampwidth = wav.bits_per_sample/8
@@ -393,7 +395,10 @@ def write(file, data, rate, scale=None, sampwidth=None):
         data = data.reshape(-1, 1)
 
     wavdata = _array2wav(data, sampwidth)
-
-    w = _wave.open(file,mode='w',channels=data.shape[1],bits_per_sample=sampwidth,frequency=rate,format=1)
-    w.write(wavdata)
+    print("GOING TO OPEN")   
+    print("wavdata's type is: ",type(wavdata))
+    w = _wave.open(file,mode="w",channels=data.shape[1],bits_per_sample=sampwidth,frequency=rate)#,format=1)
+    print("PARIPURI?????")
+    #w.write(wavdata)
+    #print(type(wavdata))
     w.close()
