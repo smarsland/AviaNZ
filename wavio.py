@@ -43,7 +43,7 @@ __version__ = "0.0.4.dev1"
 def _wav2array(nchannels, sampwidth, data):
     """data must be the string containing the bytes from the wav file."""
     num_samples, remainder = divmod(len(data), sampwidth * nchannels)
-    
+
     if remainder > 0:
         raise ValueError('The length of data is not a multiple of '
                          'sampwidth * num_channels.')
@@ -51,7 +51,7 @@ def _wav2array(nchannels, sampwidth, data):
         raise ValueError("sampwidth must not be greater than 4.")
 
     if sampwidth == 3:
-        a = _np.empty((num_samples, nchannels, 4), dtype=_np.uint8)
+        a = _np.empty((int(num_samples), nchannels, 4), dtype=_np.uint8)
         raw_bytes = _np.fromstring(data, dtype=_np.uint8)
         a[:, :, :sampwidth] = raw_bytes.reshape(-1, nchannels, sampwidth)
         a[:, :, sampwidth:] = (a[:, :, sampwidth - 1:sampwidth] >> 7) * 255
@@ -61,13 +61,11 @@ def _wav2array(nchannels, sampwidth, data):
         dt_char = 'u' if sampwidth == 1 else 'i'
         a = _np.fromstring(data, dtype='<%s%d' % (dt_char, sampwidth))
         result = a.reshape(-1, nchannels)
-        
+
     return result
 
 
 def _array2wav(a, sampwidth):
-#HERE IS WHERE YOU ARE STUCK
-    #print("SAMPWIDTH",sampwidth)
     """
     Convert the input array `a` to a string of WAV data.
     a.dtype must be one of uint8, int16 or int32.  Allowed sampwidth
@@ -139,7 +137,7 @@ def readFmt(file):
         nchannels : int
             Number of channels in file
         sampwidth : int
-            Sample width, in bites (16, 24 etc.)
+            Sample width, in bytes (1, 2, 4 etc.)
     """
     wav = _pi.open(file,mode="r")
     rate = wav.frequency
@@ -189,8 +187,8 @@ def read(file,nseconds=None,offset=0):
     wav = _pi.open(file,mode="r")
     rate = wav.frequency
     nchannels = wav.channels
-    sampwidth = wav.bits_per_sample/8
-    nframes = wav.samples
+    sampwidth = wav.bits_per_sample//8
+    nframes = wav.samples  # NOTE: pywave uses wrong terminology here
 
     if nseconds is None:
         framestoread = nframes
@@ -201,7 +199,7 @@ def read(file,nseconds=None,offset=0):
         offset = 0
 
     wav.seek(int(offset*rate))
-    data = wav.read_samples(framestoread)
+    data = wav.read_samples(framestoread*nchannels)
     wav.close()
 
     array = _wav2array(nchannels, sampwidth, data)
