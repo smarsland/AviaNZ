@@ -35,8 +35,7 @@ from __future__ import division as _division
 import PyWave as _pi
 import wave as _wave
 import numpy as _np
-import array
-import struct
+
 
 __version__ = "0.0.4.dev1"
 
@@ -44,7 +43,7 @@ __version__ = "0.0.4.dev1"
 def _wav2array(nchannels, sampwidth, data):
     """data must be the string containing the bytes from the wav file."""
     num_samples, remainder = divmod(len(data), sampwidth * nchannels)
-    print("data length",len(data),"REMAINDER",remainder)
+    
     if remainder > 0:
         raise ValueError('The length of data is not a multiple of '
                          'sampwidth * num_channels.')
@@ -62,13 +61,13 @@ def _wav2array(nchannels, sampwidth, data):
         dt_char = 'u' if sampwidth == 1 else 'i'
         a = _np.fromstring(data, dtype='<%s%d' % (dt_char, sampwidth))
         result = a.reshape(-1, nchannels)
-        print(result)
+        
     return result
 
 
 def _array2wav(a, sampwidth):
 #HERE IS WHERE YOU ARE STUCK
-    print("SAMPWIDTH",sampwidth)
+    #print("SAMPWIDTH",sampwidth)
     """
     Convert the input array `a` to a string of WAV data.
     a.dtype must be one of uint8, int16 or int32.  Allowed sampwidth
@@ -395,8 +394,8 @@ def write(file, data, rate, scale=None, sampwidth=None):
         data = data.reshape(-1, 1)
 
     wavdata = _array2wav(data, sampwidth)
-    print("GOING TO OPEN")   
-    print("wavdata's type is: ",type(wavdata))
+    
+    
     #w = _pi.open(file,mode="w",channels=data.shape[1],bits_per_sample=sampwidth,frequency=rate)#,format=1)
     w = _wave.open(file, 'wb')
     w.setnchannels(data.shape[1])
