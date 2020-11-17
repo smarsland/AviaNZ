@@ -390,6 +390,7 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
+            actionMenu.addAction("Calculate segment power", self.powerstocsv)
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
@@ -1010,7 +1011,7 @@ class AviaNZ(QMainWindow):
 
         self.addRegularAction.setEnabled(not self.batmode)
         self.denoiseAction.setEnabled(not self.batmode)
-        self.segmentAction.setEnabled(not self.batmode)
+        #self.segmentAction.setEnabled(not self.batmode)
 
         self.playButton.setEnabled(not self.batmode)
         self.stopButton.setEnabled(not self.batmode)
@@ -3934,12 +3935,12 @@ class AviaNZ(QMainWindow):
         #csv = open(self.filename[:-4] + '_features.csv', "w")
         #csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
         for seg in self.segments:
-            #        starttime = int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
-             #       endtime = int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
-                    starttime=self.startRead
-                    endtime=self.startRead+self.datalengthSec
+                    starttime = int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
+                    endtime = int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
+                    #starttime=self.startRead
+                    #endtime=self.startRead+self.datalengthSec
                     noise=self.sp.getpower(starttime,endtime)
-                    print(noise)
+                    print('start',starttime,'end',endtime,'len',len(seg),'pow',noise)
         
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """

@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division as _division
 
-import wave as _wave
+import PyWave as _wave
 import numpy as _np
 
 
@@ -42,6 +42,7 @@ __version__ = "0.0.4.dev1"
 def _wav2array(nchannels, sampwidth, data):
     """data must be the string containing the bytes from the wav file."""
     num_samples, remainder = divmod(len(data), sampwidth * nchannels)
+    print("data length",len(data),"REMAINDER",remainder)
     if remainder > 0:
         raise ValueError('The length of data is not a multiple of '
                          'sampwidth * num_channels.')
@@ -63,6 +64,8 @@ def _wav2array(nchannels, sampwidth, data):
 
 
 def _array2wav(a, sampwidth):
+#HERE IS WHERE YOU ARE STUCK
+    print("SAMPWIDTH",sampwidth)
     """
     Convert the input array `a` to a string of WAV data.
     a.dtype must be one of uint8, int16 or int32.  Allowed sampwidth
@@ -108,7 +111,6 @@ class Wav(object):
         self.rate = rate
         self.sampwidth = sampwidth
         self.nframes = nframes
-
     def __repr__(self):
         s = ("Wav(data.shape=%s, data.dtype=%s, rate=%r, sampwidth=%r, nframes=%r)" %
              (self.data.shape, self.data.dtype, self.rate, self.sampwidth, self.nframes))
@@ -138,10 +140,10 @@ def readFmt(file):
             Sample width, in bites (16, 24 etc.)
     """
     wav = _wave.open(file)
-    rate = wav.getframerate()
-    nchannels = wav.getnchannels()
-    sampwidth = wav.getsampwidth() * 8
-    nseconds = float(wav.getnframes())/rate
+    rate = wav.frequency
+    nchannels = wav.channels
+    sampwidth = wav.bits_per_sample/8
+    nseconds = float(wav.samples)/rate
     wav.close()
     return (rate, nseconds, nchannels, sampwidth)
 
@@ -183,10 +185,10 @@ def read(file,nseconds=None,offset=0):
     with values that have been sign-extended.
     """
     wav = _wave.open(file)
-    rate = wav.getframerate()
-    nchannels = wav.getnchannels()
-    sampwidth = wav.getsampwidth()
-    nframes = wav.getnframes()
+    rate = wav.frequency
+    nchannels = wav.channels
+    sampwidth = wav.bits_per_sample/8
+    nframes = wav.samples
 
     if nseconds is None:
         nseconds = nframes
@@ -195,9 +197,9 @@ def read(file,nseconds=None,offset=0):
         nseconds = float(nframes)/rate
     if nframes - offset*rate < 0:
         offset = 0
-    wav.setpos(int(offset*rate))
-    # print(nframes, nseconds*rate, int(nseconds*rate), offset)
-    data = wav.readframes(int(nseconds*rate))
+    wav.data_position=int(offset*rate)
+    print("praa",nframes, nseconds*rate, int(nseconds*rate), offset)
+    data = wav.read()
 
     #data = wav.readframes(nframes)
     wav.close()
@@ -392,9 +394,6 @@ def write(file, data, rate, scale=None, sampwidth=None):
 
     wavdata = _array2wav(data, sampwidth)
 
-    w = _wave.open(file, 'wb')
-    w.setnchannels(data.shape[1])
-    w.setsampwidth(sampwidth)
-    w.setframerate(rate)
-    w.writeframes(wavdata)
+    w = _wave.open(file,mode='w',channels=data.shape[1],bits_per_sample=sampwidth,frequency=rate,format=1)
+    w.write(wavdata)
     w.close()
