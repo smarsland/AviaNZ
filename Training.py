@@ -36,12 +36,14 @@ from sklearn.utils import shuffle
 import numpy as np
 import matplotlib.pyplot as plt
 from time import strftime, gmtime
+import math
 
 import SupportClasses
 import SignalProc
 import CNN
 import Segment, WaveletSegment
 import AviaNZ_batch
+import wavio
 
 class CNNtrain:
 
@@ -650,7 +652,7 @@ class CNNtest:
                                                         sdir=self.testDir, recogniser=filtname, wind=True)
 
         # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
-        self.text = self.getSummary(avianz_batch, CNN=False)
+        self.text = self.getSummary(CNN=False)
 
         # 3. Report statistics of WF followed by post-proc steps (wind-CNN-merge neighbours-delete short)
         if "CNN" in self.currfilt:
@@ -659,7 +661,7 @@ class CNNtest:
             CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [filtname])
             if filtname in CNNDicts.keys():
                 CNNmodel = CNNDicts[filtname]
-                self.text = self.getSummary(avianz_batch, CNN=True, CNNmodel=CNNmodel)
+                self.text = self.getSummary(CNN=True, CNNmodel=CNNmodel)
             else:
                 print("ERROR: Couldn't find a matching CNN!")
                 self.outfile.write("No matching CNN found!\n")
@@ -672,33 +674,29 @@ class CNNtest:
         print("Testing output written to " + os.path.join(self.testDir, "test-results.txt"))
 
         # Tidy up
-        for root, dirs, files in os.walk(self.testDir):
-            for file in files:
-                if file.endswith('.tmpdata'):
-                    os.remove(os.path.join(root, file))
+        # for root, dirs, files in os.walk(self.testDir):
+        #     for file in files:
+        #         if file.endswith('.tmpdata'):
+        #             os.remove(os.path.join(root, file))
 
     def getOutput(self):
         return self.text
 
-    def findCTsegments(self, file, calltypei):
+    def findCTsegments(self, datafile, calltypei):
         calltypeSegments = []
         species = self.currfilt["species"]
-        if file.lower().endswith('.wav') and os.path.isfile(file + '.tmpdata'):
-            segments = Segment.SegmentList()
-            segments.parseJSON(file + '.tmpdata')
-            if len(self.calltypes) == 1:
-                ctSegments = segments.getSpecies(species)
-            else:
-                ctSegments = segments.getCalltype(species, self.calltypes[calltypei])
-            for indx in ctSegments:
-                seg = segments[indx]
-                calltypeSegments.append(seg[:2])
+        segments = Segment.SegmentList()
+        segments.parseJSON(datafile)
+        if len(self.calltypes) == 1:
+            ctSegments = segments.getSpecies(species)
+        else:
+            ctSegments = segments.getCalltype(species, self.calltypes[calltypei])
+        calltypeSegments = [segments[indx][:2] for indx in ctSegments]
 
         return calltypeSegments
 
-    def getSummary(self, avianz_batch, CNN=False, CNNmodel=None):
-        autoSegNum = 0
-        autoSegCT = [[] for i in range(len(self.calltypes))]
+    def getSummary(self, CNN=False, CNNmodel=None):
+        autoSegCTnum = [0] * len(self.calltypes)
         ws = WaveletSegment.WaveletSegment()
         TP = FP = TN = FN = 0
         for root, dirs, files in os.walk(self.testDir):
@@ -706,38 +704,24 @@ class CNNtest:
                 wavFile = os.path.join(root, file)
                 if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and \
                         file + '.tmpdata' in files and file[:-4] + '-res' + str(float(self.window)) + 'sec.txt' in files:
-                    autoSegCTCurrent = [[] for i in range(len(self.calltypes))]
-                    avianz_batch.filename = os.path.join(root, file)
-                    avianz_batch.loadFile([self.filtname], anysound=False)
-                    duration = int(np.ceil(len(avianz_batch.audiodata) / avianz_batch.sampleRate))
+                    # Extract all segments and back-convert to 0/1:
+                    _, duration, _, _ = wavio.readFmt(wavFile)
+                    det01 = np.zeros(int(duration))
+
                     for i in range(len(self.calltypes)):
-                        ctsegments = self.findCTsegments(avianz_batch.filename, i)
-                        post = Segment.PostProcess(configdir=self.configdir, audioData=avianz_batch.audiodata,
-                                                   sampleRate=avianz_batch.sampleRate,
-                                                   tgtsampleRate=self.sampleRate, segments=ctsegments,
-                                                   subfilter=self.currfilt['Filters'][i], CNNmodel=CNNmodel, cert=50)
-                        post.wind()
-                        if CNN and CNNmodel:
-                            post.CNN()
-                        if 'F0' in self.currfilt['Filters'][i] and 'F0Range' in self.currfilt['Filters'][i]:
-                            if self.currfilt['Filters'][i]["F0"]:
-                                print("Checking for fundamental frequency...")
-                                post.fundamentalFrq()
-                        post.joinGaps(maxgap=self.currfilt['Filters'][i]['TimeRange'][3])
-                        post.deleteShort(minlength=self.currfilt['Filters'][i]['TimeRange'][0])
-                        if post.segments:
-                            for seg in post.segments:
-                                autoSegCTCurrent[i].append(seg[0])
-                                autoSegCT[i].append(seg[0])
-                                autoSegNum += 1
-                    # back-convert to 0/1:
-                    det01 = np.zeros(duration)
-                    for i in range(len(self.calltypes)):
-                        for seg in autoSegCTCurrent[i]:
-                            det01[int(seg[0]):int(seg[1])] = 1
+                        if CNN:
+                            # read segments
+                            ctsegments = self.findCTsegments(wavFile+'.tmpdata', i)
+                        else:
+                            # read segments from an identical postproc pipeline w/o CNN
+                            ctsegments = self.findCTsegments(wavFile+'.tmp2data', i)
+                        autoSegCTnum[i] += len(ctsegments)
+
+                        for seg in ctsegments:
+                            det01[math.floor(seg[0]):math.ceil(seg[1])] = 1
+
                     # get and parse the agreement metrics
-                    GT = self.loadGT(os.path.join(root, file[:-4] + '-res' + str(float(self.window)) + 'sec.txt'),
-                                     duration)
+                    GT = self.loadGT(os.path.join(root, file[:-4] + '-res' + str(float(self.window)) + 'sec.txt'), duration)
                     _, _, tp, fp, tn, fn = ws.fBetaScore(GT, det01)
                     TP += tp
                     FP += fp
@@ -774,8 +758,8 @@ class CNNtest:
         self.outfile.write("Accuracy:\t\t%.2f %%\n\n" % (accuracy * 100))
         self.outfile.write("Manually labelled segments:\t%d\n" % (self.manSegNum))
         for i in range(len(self.calltypes)):
-            self.outfile.write("Auto suggested \'%s\' segments:\t%d\n" % (self.calltypes[i], len(autoSegCT[i])))
-        self.outfile.write("Total auto suggested segments:\t%d\n\n" % (autoSegNum))
+            self.outfile.write("Auto suggested \'%s\' segments:\t%d\n" % (self.calltypes[i], autoSegCTnum[i]))
+        self.outfile.write("Total auto suggested segments:\t%d\n\n" % sum(autoSegCTnum))
 
         if CNN:
             text = "Wavelet Pre-Processor + CNN detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t%.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \

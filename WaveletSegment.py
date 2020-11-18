@@ -456,9 +456,8 @@ class WaveletSegment:
         resol = 1.0
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[
-                                                                                                        :-4] + '-res' + str(
-                        float(resol)) + 'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and \
+                        file[:-4] + '-res' + str(float(resol)) + 'sec.txt' in files:
                     filenames.append(os.path.join(root, file))
         if len(filenames) < 1:
             print("ERROR: no suitable files")

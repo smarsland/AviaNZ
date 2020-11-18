@@ -1805,17 +1805,17 @@ class TestRecWizard(QWizard):
 
         def cleanupPage(self):
             self.lblWFsummary.setText('')
-            self.lblWFCNNsummary.setText('')
+            # self.lblWFCNNsummary.setText('')
             self.lblSpecies.setText('')
             self.lblTestDir.setText('')
             self.lblTestFilter.setText('')
 
         def validatePage(self):
             # Clean tmpdata
-            for root, dirs, files in os.walk(self.field("testDir")):
-                for file in files:
-                    if file.endswith('.tmpdata'):
-                        os.remove(os.path.join(root, file))
+            #for root, dirs, files in os.walk(self.field("testDir")):
+            #    for file in files:
+            #        if file.endswith('.tmpdata'):
+            #            os.remove(os.path.join(root, file))
             return True
 
     # extra page to display the full results?
