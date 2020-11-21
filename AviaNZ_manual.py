@@ -665,11 +665,9 @@ class AviaNZ(QMainWindow):
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         # guides that can be used in batmode
-        self.guidelines = [0]*4
-        self.guidelines[0] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
-        self.guidelines[1] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[2] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[3] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
+        self.guidelines = [0]*len(self.config['guidecol'])
+        for gi in range(len(self.config['guidecol'])):
+            self.guidelines[gi] = pg.InfiniteLine(angle=0, movable=False, pen={'color': self.config['guidecol'][gi], 'width': 2})
 
         # The print out at the bottom of the spectrogram with data in
         # Note: widgets cannot be directly added to GraphicsLayout, so need to convert
@@ -1380,9 +1378,6 @@ class AviaNZ(QMainWindow):
             self.filename = os.path.join(self.SoundFileDir, fileNameOld)
             self.listLoadFile(fileNameOld)
 
-        #self.fillFileList(self.SoundFileDir, current)
-        self.listFiles.setCurrentItem(current)
-
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
         Does the safety checks for file existence etc.
@@ -1449,6 +1444,8 @@ class AviaNZ(QMainWindow):
         # if a file was clicked, open it
         if not os.path.isdir(fullcurrent):
             self.loadFile(fullcurrent)
+
+        # self.listFiles.setCurrentItem(current)
 
         return(0)
 
@@ -1920,6 +1917,19 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(self.formantPlot)
             self.statusLeft.setText("Ready")
 
+    def drawGuidelines(self):
+        # Frequency guides for bat mode
+        print("Updating guidelines...")
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+            for gi in range(len(self.guidelines)):
+                self.guidelines[gi].setValue(self.convertFreqtoY(self.config['guidepos'][gi]))
+                self.guidelines[gi].setPen(color=self.config['guidecol'][gi], width=2)
+                self.p_spec.addItem(self.guidelines[gi], ignoreBounds=True)
+        else:
+            # easy way to hide
+            for g in self.guidelines:
+                g.setValue(-1000)
+
     # def showCQT(self):
     #     cqt = self.sp.comp_cqt()
     #     print(np.shape(cqt),np.shape(self.sg))
@@ -2120,18 +2130,7 @@ class AviaNZ(QMainWindow):
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
 
-        # Frequency guides for bat mode
-        if self.batmode:
-            self.guidelines[0].setValue(self.convertFreqtoY(20000))
-            self.guidelines[1].setValue(self.convertFreqtoY(36000))
-            self.guidelines[2].setValue(self.convertFreqtoY(50000))
-            self.guidelines[3].setValue(self.convertFreqtoY(60000))
-            for g in self.guidelines:
-                self.p_spec.addItem(g, ignoreBounds=True)
-        else:
-            # easy way to hide
-            for g in self.guidelines:
-                g.setValue(-1000)
+        self.drawGuidelines()
 
         if self.zooniverse:
             offset=6
@@ -5389,6 +5388,19 @@ class AviaNZ(QMainWindow):
                     {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'],
                      'tip': "Currently selected segment"},
                 ]},
+                {'name': 'Guidelines', 'type': 'group', 'children': [
+                    {'name': 'Show frequency guides', 'type': 'list', 'values':
+                        {'Always': 'always', 'For bats only': 'bat', 'Never': 'never'},
+                        'value': self.config['guidelinesOn']},
+                    {'name': 'Guideline 1 frequency', 'type': 'float', 'value': self.config['guidepos'][0]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 1 colour', 'type': 'color', 'value': self.config['guidecol'][0]},
+                    {'name': 'Guideline 2 frequency', 'type': 'float', 'value': self.config['guidepos'][1]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 2 colour', 'type': 'color', 'value': self.config['guidecol'][1]},
+                    {'name': 'Guideline 3 frequency', 'type': 'float', 'value': self.config['guidepos'][2]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 3 colour', 'type': 'color', 'value': self.config['guidecol'][2]},
+                    {'name': 'Guideline 4 frequency', 'type': 'float', 'value': self.config['guidepos'][3]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 4 colour', 'type': 'color', 'value': self.config['guidecol'][3]},
+                ]},
                 {'name': 'Check-ignore protocol', 'type': 'group', 'children': [
                     {'name': 'Show check-ignore marks', 'type': 'bool', 'value': self.config['protocolOn']},
                     {'name': 'Length of checking zone', 'type': 'float', 'value': self.config['protocolSize'],
@@ -5447,6 +5459,10 @@ class AviaNZ(QMainWindow):
         """
         # first save the annotations
         self.saveSegments()
+
+        # some regexes to parse guideline settings
+        rgx_guide_pos = re.compile(r"Annotation.Guidelines.Guideline ([0-9]) frequency")
+        rgx_guide_col = re.compile(r"Annotation.Guidelines.Guideline ([0-9]) colour")
 
         for param, change, data in changes:
             path = self.p.childPath(param)
@@ -5540,6 +5556,18 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], self.config['ColourSelected'][3])
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
+            elif childName=='Annotation.Guidelines.Show frequency guides':
+                self.config['guidelinesOn'] = data
+                self.drawGuidelines()
+            elif rgx_guide_pos.match(childName): # childName=='Annotation.Guidelines.Guideline 1 frequency':
+                guideid = int(rgx_guide_pos.search(childName).group(1))-1
+                self.config['guidepos'][guideid] = float(data)*1000
+                self.drawGuidelines()
+            elif rgx_guide_col.match(childName): # childName=='Annotation.Guidelines.Guideline 1 colour':
+                guideid = int(rgx_guide_col.search(childName).group(1))-1
+                print(data)
+                self.config['guidecol'][guideid] = data
+                self.drawGuidelines()
             elif childName=='Annotation.Check-ignore protocol.Show check-ignore marks':
                 self.config['protocolOn'] = data
                 self.drawProtocolMarks()

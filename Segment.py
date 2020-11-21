@@ -684,60 +684,6 @@ class Segmenter:
                 out.append(seg)
         return out
 
-    def joinGaps(self, segments, maxgap=3):
-        """ Merges segments within maxgap units.
-            Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
-        """
-        # Needs to be python array, not np array
-        # Sort by increasing start times
-        if isinstance(segments, np.ndarray):
-            segments = segments.tolist()
-        segments = sorted(segments)
-
-        out = []
-        i = 0
-        if len(segments)==0:
-            return out
-        while i < len(segments):
-            start = segments[i][0]
-            end = segments[i][1]
-            while i+1 < len(segments) and segments[i+1][0]-end <= maxgap:
-                end = max(segments[i+1][1], end)
-                i += 1
-            out.append([start, end])
-            i += 1
-        return out
-
-    def joinGaps3(self, segments, maxgap=3):
-        """ Merges segments within maxgap units.
-            Operates on list of 3-element segments:
-            [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
-            Currently, certainties are just averaged over the number of segs.
-        """
-        # Needs to be python array, not np array
-        # Sort by increasing start times
-        if isinstance(segments, np.ndarray):
-            segments = segments.tolist()
-        segments.sort(key=lambda seg: seg[0][0])
-        # sorted() appears to work fine as well
-
-        out = []
-        i = 0
-        if len(segments)==0:
-            return out
-
-        while i < len(segments):
-            start = segments[i][0][0]
-            end = segments[i][0][1]
-            cert = [segments[i][1]]
-            while i + 1 < len(segments) and segments[i + 1][0][0] - end <= maxgap:
-                end = max(segments[i+1][0][1], end)
-                i += 1
-                cert.append(segments[i][1])
-            out.append([[start, end], np.mean(cert)])
-            i += 1
-        return out
-
     def splitLong3(self, segments, maxlen=10):
         """
         Splits long segments (> maxlen) evenly
@@ -757,6 +703,7 @@ class Segmenter:
                 out.append(seg)
         return out
 
+    ##  MERGING ALGORITHMS: do the same with very small settings variations
     def checkSegmentOverlap(self, segments):
         """ Merges overlapping segments.
             Operates on start-end list [[1,3], [2,4]] -> [[1,4]]
@@ -768,48 +715,101 @@ class Segmenter:
         segments = sorted(segments)
         segments = np.array(segments)
 
-        newsegs = []
-        s = 0
-        # Loop over segs until the start value of 1 is not inside the end value of the previous
-        while s<len(segments):
-            i = s
-            end = segments[i,1]
-            while i < len(segments)-1 and segments[i+1,0] < end:
+        # Loop over segs until the start value of next segment
+        #  is not inside the end value of the previous
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0]
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0]-end < 0:
+                # there is overlap, so merge
                 i += 1
-                end = max(end, segments[i,1])
-            newsegs.append([segments[s,0],end])
-            s = i+1
+                end = max(end, segments[i][1])
+            # no more overlap, so store the current:
+            out.append([start, end])
+            i += 1
+        return out
 
-        return newsegs
+    def joinGaps(self, segments, maxgap=3):
+        """ Merges segments within maxgap units.
+            Identical to above, except merges touching segments, and allows a gap.
+            Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
+        """
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        if len(segments)==0:
+            return []
+
+        segments.sort(key=lambda seg: seg[0])
+
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0]
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0]-end <= maxgap:
+                i += 1
+                end = max(end, segments[i][1])
+            out.append([start, end])
+            i += 1
+        return out
 
     def checkSegmentOverlap3(self, segments):
-        """ Merges overllaping segments.
-            Operates on list of 3-element segments:
+        """ Merges overlapping segments.
+            Identical to above, but operates on list of 3-element segments:
             [[[1,3], 50], [[2,5], 70]] -> [[[1,5], 60]]
             Currently, certainties are just averaged over the number of segs.
         """
-        # Needs to be python array, not np array
-        # Sort by increasing start times
         if isinstance(segments, np.ndarray):
             segments = segments.tolist()
-        segments = sorted(segments)
-        segments = np.array(segments)
+        if len(segments)==0:
+            return []
 
-        newsegs = []
-        s = 0
-        # Loop over segs until the start value of 1 is not inside the end value of the previous
-        while s < len(segments):
-            i = s
+        segments.sort(key=lambda seg: seg[0][0])
+        # sorted() appears to work fine as well
+
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0][0]
             end = segments[i][0][1]
             cert = [segments[i][1]]
-            while i < len(segments) - 1 and segments[i + 1][0][0] < end:
+            while i+1 < len(segments) and segments[i+1][0][0]-end < 0:
                 i += 1
                 end = max(end, segments[i][0][1])
                 cert.append(segments[i][1])
-            newsegs.append([[segments[s][0][0], end], np.mean(cert)])
-            s = i + 1
+            out.append([[start, end], np.mean(cert)])
+            i += 1
+        return out
 
-        return newsegs
+    def joinGaps3(self, segments, maxgap=3):
+        """ Merges segments within maxgap units.
+            Operates on list of 3-element segments:
+            [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
+            Identical to above, except merges touching segments, and allows a gap.
+            Currently, certainties are just averaged over the number of segs.
+        """
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        if len(segments)==0:
+            return []
+
+        segments.sort(key=lambda seg: seg[0][0])
+
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0][0]
+            end = segments[i][0][1]
+            cert = [segments[i][1]]
+            while i+1 < len(segments) and segments[i+1][0][0]-end <= maxgap:
+                i += 1
+                end = max(end, segments[i][0][1])
+                cert.append(segments[i][1])
+            out.append([[start, end], np.mean(cert)])
+            i += 1
+        return out
 
     def segmentByFIR(self, threshold):
         """ Segmentation using FIR envelope.
