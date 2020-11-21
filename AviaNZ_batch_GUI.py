@@ -1102,7 +1102,9 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_all(filename, sTime)
             else:
                 filesuccess = self.review_single(filename, sTime)
+
             # merge back any split segments, plus ANY overlaps within calltypes
+            # (NOTE: applied to either review type to get identical results)
             todelete = self.segments.mergeSplitSeg()
             for dl in todelete:
                 del self.segments[dl]
@@ -1112,6 +1114,12 @@ class AviaNZ_reviewAll(QMainWindow):
             if filesuccess == 0:
                 print("Review stopped")
                 break
+
+            if reviewAll:
+                # save changes and corrections (on nice exit only):
+                if self.config['saveCorrections']:
+                    self.saveCorrections()
+                self.finishDeleting()
 
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
@@ -1149,9 +1157,6 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            if self.config['saveCorrections']:
-                self.saveCorrections()
-            self.finishDeleting()
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1257,8 +1262,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.loadFile(filename, species=self.species, chunksize=chunksize)
 
-        if self.batmode:
-            guides = [20000, 36000, 50000, 60000]
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+            guides = self.config['guidepos']
         else:
             guides = None
 
@@ -1267,7 +1272,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
-                                                           guidefreq=guides,
+                                                           guidefreq=guides, guidecol=self.config['guidecol'],
                                                            filename=self.filename)
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog2.resize(self.dialogSize)
@@ -1444,7 +1449,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.dialogPlotAspect, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1462,12 +1467,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()
-            return(0)
 
-        if self.config['saveCorrections']:
-            self.saveCorrections()
-        self.finishDeleting()
-        return(1)
+        return(success)
 
     def loadFile(self, filename, species=None, chunksize=None):
         """ Needs to generate spectrograms and audiodatas
@@ -1601,7 +1602,6 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of file loading
 
     def saveCorrections(self):
-        print("here")
         for i in reversed(range(len(self.segments))):
             print(self.segments[i][4],self.origSeg[i][4])
             if self.segments[i][4] == self.origSeg[i][4]:
@@ -1650,8 +1650,8 @@ class AviaNZ_reviewAll(QMainWindow):
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
 
-            if self.batmode:
-                guides = [sp.convertFreqtoY(f) for f in [20000, 36000, 50000, 60000]]
+            if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
             else:
                 guides = None
 
@@ -1845,7 +1845,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def finishDeleting(self):
         # Does the work of deleting segments
-        segsToSave = False
+        # segsToSave = False
 
         # Loop over segments
         for seg in reversed(self.segments):
@@ -1859,12 +1859,13 @@ class AviaNZ_reviewAll(QMainWindow):
             if todel:
                 print("Removing",seg)
                 self.segments.remove(seg)
-                segsToSave = True
+        # TODO check: I believe this is not needed as it is done in the main loop anyway
+        #        segsToSave = True
 
-        if segsToSave:
-            cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save segments!")
+        #if segsToSave:
+        #    cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
+        #    if cleanexit != 1:
+        #        print("Warning: could not save segments!")
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)
