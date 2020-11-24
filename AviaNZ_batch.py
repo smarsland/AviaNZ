@@ -260,8 +260,37 @@ class AviaNZ_batchProcess():
             if self.method == 'Click':
                 self.exportToBatSearch(self.dirName)
                 if not self.CLI:
+                    # TODO: what if you start from a different folder?
+                    # TODO: autofill some metadata if user has filled it in once?
+                    easting = None
+                    northing = None
+                    try:
+                        f = open(os.path.join(self.dirName,'log.txt'),'r')
+                    except:
+                        f = None
+                    print(f,self.dirName)
+                    if f is not None:
+                        # Find a line that contains GPS (lat, long),
+                        # And read the two numbers after it
+                        # This version just returns the last ones
+                        for line in f.readlines():
+                            if 'GPS (lat,long)' in line:
+                                l = line.strip()
+                                y = l.split(",")
+                                x = l[-2].split(":")
+                                easting = x[-1]
+                                northing = y[-1]
+                            elif 'GPS:' in line:
+                                l = line.strip()
+                                y = l.split("=")
+                                x = y[-2].split(",")
+                                print(y,x)
+                                easting = x[-2]
+                                northing = y[-1]
+                    print(easting,northing)
+                        
                     import Dialogs
-                    exportResults = Dialogs.ExportBats(self.config['operator'])
+                    exportResults = Dialogs.ExportBats(self.config['operator'],easting,northing)
                     exportResults.show()
                     if exportResults.exec_() == 1:
                         exportResults = exportResults.getValues()
@@ -836,7 +865,6 @@ class AviaNZ_batchProcess():
             ST_prob.append(predictions[k][1])
             NT_prob.append(predictions[k][2])
 
-
         # if no clicks => automatically Noise
         label = []
 
@@ -977,7 +1005,7 @@ class AviaNZ_batchProcess():
         import datetime as dt
         # Export an excel file for the Bat survey database
         # TODO: turn into full excel?
-        print(responses)
+        #print(responses)
         if responses is None:
             responses = ['',self.config['operator'],'','ABM','','','','','']
 
@@ -1026,14 +1054,16 @@ class AviaNZ_batchProcess():
         
         f.write('Data Source,Observer,Survey method,Species,Passes,Date,Detector type,Date recorder put out,Date recorder collected,No. of nights out,Effective nights out,Notes,Eastings,Northings,Site name,Region\n')
 
+        # TODO: Get effective days (how?)
+        # TODO: Try and read easting and northings
         if species[0] > 0 and species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         elif species[0] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         elif species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(dt.date.today())+','+responses[3]+','+str(e)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(dt.date.today())+','+responses[3]+','+str(e)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         else:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         f.close()
     
     def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):

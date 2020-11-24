@@ -3148,7 +3148,7 @@ class Cluster(QDialog):
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 class ExportBats(QDialog):
-    def __init__(self,observer):
+    def __init__(self,observer,easting,northing):
         QDialog.__init__(self)
         self.setWindowTitle('Export Results?')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -3183,8 +3183,12 @@ class ExportBats(QDialog):
         hbox4.addWidget(self.notes)
         l7 = QLabel('*Easting: ')
         self.easting = QLineEdit(self)
+        if easting is not None:
+            self.easting.setText(easting)
         l8 = QLabel('*Northing: ')
         self.northing = QLineEdit(self)
+        if northing is not None:
+            self.northing.setText(northing)
         hbox6 = QHBoxLayout()
         hbox6.addWidget(l7)
         hbox6.addWidget(self.easting)
