@@ -388,7 +388,7 @@ class AviaNZ(QMainWindow):
         self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
         actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
         #actionMenu.addAction("Find matches",self.findMatches)
-
+        self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
             actionMenu.addAction("Calculate segment power", self.powerstocsv)
