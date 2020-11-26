@@ -242,19 +242,38 @@ class CompareCalls(QMainWindow):
             print(e)
             return(1)
 
+
+        # TODO Note: this is a bit fidgety as needs to be adapted to each survey
+        recsInDirNames = True
+        defaultToDMY = True
+
         # read in all datas to self.annots
         for f in alldatas:
             # must have correct naming format:
             infilestem = os.path.basename(f)[:-9]
+
             try:
-                recname, filedate, filetime = infilestem.split("_")  # get [date, time]
+                if recsInDirNames:
+                    recname = os.path.basename(os.path.normpath(os.path.dirname(f)))
+                    filedate, filetime = infilestem.split("_")  # get [date, time]
+                else:
+                    recname, filedate, filetime = infilestem.split("_")  # get [rec, date, time]
                 datestamp = filedate + '_' + filetime  # make "date_time"
                 # check both 4-digit and 2-digit codes (century that produces closest year to now is inferred)
-                try:
+                if len(filedate)==8:
                     d = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
-                except ValueError:
-                    d = dt.datetime.strptime(datestamp, "%y%m%d_%H%M%S")
-
+                else:
+                    if defaultToDMY:
+                        try:
+                            d = dt.datetime.strptime(datestamp, "%d%m%y_%H%M%S")
+                        except ValueError:
+                            d = dt.datetime.strptime(datestamp, "%y%m%d_%H%M%S")
+                    else:
+                        try:
+                            d = dt.datetime.strptime(datestamp, "%y%m%d_%H%M%S")
+                        except ValueError:
+                            d = dt.datetime.strptime(datestamp, "%d%m%y_%H%M%S")
+                print("Recorder ", recname, " timestamp ", d)
                 # timestamp identified, so read this file:
                 segs = Segment.SegmentList()
                 try:
