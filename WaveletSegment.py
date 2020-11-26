@@ -186,15 +186,14 @@ class WaveletSegment:
         print("WV changepoint segmenting completed in", time.time() - opst)
         return detected_allsubf
 
-    def waveletSegmentMC(self, filtnum, maxlen=None, thr=None, wpmode="new"):
+    def waveletSegmentMC(self, filtnum, thr=None, wpmode="new"):
         """ Main analysis wrapper (segmentation in batch mode).
             Uses Median Clipping over a spectrogram from reconstructed signal.
             Reads data pre-loaded onto self.WF.tree by self.readBatch.
             Args:
             1. filtnum: index of the current filter in self.spInfo (which is a list of filters...)
-            2. maxlen: max call length, in s - NOT USED CURRENTLY
-            3. thr: threshold in medians
-            4. wpmode: old/new/aa to indicate no/partial/full antialias
+            2. thr: threshold in medians
+            3. wpmode: old/new/aa to indicate no/partial/full antialias
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -208,9 +207,6 @@ class WaveletSegment:
             goodnodes = subfilter['WaveletParams']["nodes"]
             if thr is None:
                 thr = subfilter["WaveletParams"]["thr"]
-            if maxlen is None:
-                maxlen = subfilter["TimeRange"][1]
-                # TODO utilize maxlen somewhere
 
             # Reconstruct signal from the nodes
             datalen = len(self.WF.tree[0])
@@ -225,14 +221,11 @@ class WaveletSegment:
             self.sp.sampleRate = self.spInfo[filtnum]["SampleRate"]
             _ = self.sp.spectrogram()
 
-            # TODO pass params
-
             # Median clipping:
             segmenter = Segment.Segmenter(self.sp)
             detected = segmenter.medianClip(thr=thr)
             print("Segments detected: ", detected)
 
-            # TODO consider more postproc?
             # merge neighbours in order to convert the detections into segments
             detected = segmenter.joinGaps(detected, maxgap=subfilter["TimeRange"][3])
             detected_allsubf.append(detected)

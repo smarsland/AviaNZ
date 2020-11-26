@@ -186,7 +186,6 @@ class AviaNZ_batchProcess():
                 text = "Method: " + self.method + ".\nNumber of files to analyse: " + str(total) + "\n"
             else:
                 text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyse: " + str(total) + ", " + str(cnt) + " done so far.\n"
-                text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
             text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
             if speciesStr=="Any sound" or self.method=="Click":
                 text += "\nWarning: any previous annotations in these files will be deleted!\n"
@@ -274,8 +273,6 @@ class AviaNZ_batchProcess():
             self.log.file.close()
             if not self.CLI:
                 self.ui.endproc(total)
-
-
 
         print("Processed all %d files" % total)
         return(0)
@@ -441,7 +438,7 @@ class AviaNZ_batchProcess():
         # Segment over pages separately, to allow dealing with large files smoothly:
         # TODO: page size fixed for now
         #samplesInPage = 900*16000
-        samplesInPage = 300*8000
+        samplesInPage = 300*self.sampleRate
         # (ceil division for large integers)
         numPages = (self.datalength - 1) // samplesInPage + 1
 
@@ -597,15 +594,16 @@ class AviaNZ_batchProcess():
             start, end: start and end of this page, in samples
             CNNmodel: None or a CNN
         """
+        subfilter = spInfo["Filters"][filtix]
         post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end],
                             sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"],
-                            segments=segments[filtix], subfilter=spInfo['Filters'][filtix],
+                            segments=segments[filtix], subfilter=subfilter,
                             CNNmodel=CNNmodel, cert=50)
         print("Segments detected after WF: ", len(segments[filtix]))
 
         # Wind detection. Only do for standard wavelet filter currently:
         if "method" not in spInfo or spInfo["method"]=="wv":
-            if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],spInfo['Filters'][filtix]['FreqRange'][1]):
+            if self.wind and self.useWindF(subfilter['FreqRange'][0],subfilter['FreqRange'][1]):
                 post.wind()
 
         if CNNmodel:
@@ -614,13 +612,17 @@ class AviaNZ_batchProcess():
 
         # Fund freq and merging. Only do for standard wavelet filter currently:
         if "method" not in spInfo or spInfo["method"]=="wv":
-            if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix] and \
-                    spInfo['Filters'][filtix]["F0"]:
+            if 'F0' in subfilter and 'F0Range' in subfilter and subfilter["F0"]:
                 print("Checking for fundamental frequency...")
                 post.fundamentalFrq()
 
-            post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
-            post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+            post.joinGaps(maxgap=subfilter['TimeRange'][3])
+            post.deleteShort(minlength=subfilter['TimeRange'][0])
+
+        # POSSIBLE OPTION: split and rejoin everything in pieces
+        if "PostResolution" in subfilter:
+            post.joinGaps(subfilter["PostResolution"])
+            post.splitLong(subfilter["PostResolution"])
 
         # adjust segment starts for 15min "pages"
         if start != 0:

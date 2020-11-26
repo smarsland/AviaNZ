@@ -1484,7 +1484,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, plotAspect=2, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, plotAspect=2, loop=False, autoplay=False, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1673,6 +1673,8 @@ class HumanClassify1(QDialog):
         # Audio playback object
         self.media_obj2 = SupportClasses_GUI.ControllableAudio(audioFormat)
         self.media_obj2.notify.connect(self.endListener)
+        self.media_obj2.loop = loop
+        self.autoplay = autoplay
 
         # The layouts
         birds1Layout = QVBoxLayout()
@@ -1845,7 +1847,10 @@ class HumanClassify1(QDialog):
         Also hijacked to move the playback bar."""
         time = self.media_obj2.elapsedUSecs() // 1000
         if time > self.duration:
-            self.stopPlayback()
+            if self.media_obj2.loop:
+                self.media_obj2.restart()
+            else:
+                self.stopPlayback()
         else:
             barx = time / 1000 * self.sampleRate / self.incr
             self.bar.setValue(barx)
@@ -2064,6 +2069,9 @@ class HumanClassify1(QDialog):
 
         # Determine if we can review call types based on selected annotations
         self.checkCallTypes()
+
+        if self.autoplay:
+            self.playSeg()
 
     def checkCallTypes(self):
         # parses current annotations to determine if call type review allowed
@@ -2341,10 +2349,11 @@ class HumanClassify2(QDialog):
         4. name of the species that we are reviewing
         5-10. spec color parameters
         11-12. guide positions for batmode
-        13. Filename - just for setting the window title
+        13. Loop playback or not?
+        14. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, loop=False, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2398,6 +2407,8 @@ class HumanClassify2(QDialog):
         if not haveaudio:
             self.volSlider.setEnabled(False)
             self.volIcon.setEnabled(False)
+
+        self.loop = loop
 
         # Brightness and contrast sliders - need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -2578,7 +2589,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, loop=self.loop)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:

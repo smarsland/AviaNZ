@@ -4845,13 +4845,14 @@ class AviaNZ(QMainWindow):
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
+                    subfilter = speciesData['Filters'][filtix]
                     CNNmodel = None
                     if filtname in self.CNNDicts.keys():
                         CNNmodel = self.CNNDicts[filtname]
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                    if settings["wind"] and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):
+                                               subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
+                    if settings["wind"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
@@ -4861,14 +4862,20 @@ class AviaNZ(QMainWindow):
                     if settings["rain"]:
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))
-                    if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
-                        if speciesData['Filters'][filtix]['F0']:
+                    if 'F0' in subfilter and 'F0Range' in subfilter:
+                        if subfilter['F0']:
                             print("Checking for fundamental frequency...")
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
                     if alg=='Wavelets':
-                        post.joinGaps(maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
-                        post.deleteShort(minlength=speciesData['Filters'][filtix]['TimeRange'][0])
+                        post.joinGaps(maxgap=subfilter['TimeRange'][3])
+                        post.deleteShort(minlength=subfilter['TimeRange'][0])
+
+                    # POSSIBLE OPTION: merge & split everything into pieces again, at custom resolution
+                    if "PostResolution" in subfilter:
+                        post.joinGaps(subfilter["PostResolution"])
+                        post.splitLong(subfilter["PostResolution"])
+
                     newSegments[filtix] = post.segments
             else:
                 print('Segments detected: ', len(newSegments))
@@ -5278,8 +5285,12 @@ class AviaNZ(QMainWindow):
 
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
-            print("Stopped at %d ms" % eltime)
-            self.stopPlayback()
+            # TODO: allow the user set looping somehow?
+            if self.media_obj.loop:
+                self.media_obj.restart()
+            else:
+                print("Stopped at %d ms" % eltime)
+                self.stopPlayback()
         else:
             self.playSlider.setValue(eltime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
@@ -5290,7 +5301,7 @@ class AviaNZ(QMainWindow):
         Controls the slider, text timer, and listens for playback finish.
         Very similar to previous, but slightly easier just to reproduce the code.
         """
-        eltime = self.media_slow.processedUSecs() // 1000 // self.slowSpeed + self.media_slow.timeoffset // self.slowSpeed
+        eltime = (self.media_slow.processedUSecs() // 1000 + self.media_slow.timeoffset) // self.slowSpeed
         bufsize = 0.02
 
         # listener for playback finish. Note small buffer for catching up
