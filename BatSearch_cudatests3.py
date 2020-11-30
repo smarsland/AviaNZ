@@ -876,7 +876,7 @@ def metrics(confusion_matrix, file_num):
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/New_Train_Datasets" #directory with train files
 test_dataset_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset" #directory where to find test dataset files
-test_count=0 #counter for test number
+test_count=59 #counter for test number
 #test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
 
 test_general_results_dir = "/am/state-opera/home1/listanvirg/Documents/Experiments_result" #directory to store test result
@@ -897,11 +897,15 @@ print('Starting test ', test_count)
 test_fold= "Test_New_"+str(test_count) #Test folder where to save all the stats
 if test_fold not in os.listdir(test_general_results_dir):
     os.mkdir(test_general_results_dir+ '/' + test_fold)
-    
+ 
 
-for i in range(6):
-    #if test_count==11:
-    #    i=0
+if test_count==59:
+    start_i=4
+else:
+    start_i=0
+
+for i in range(start_i,6):
+    
     #identify train dataset
     train_fold='Train_'+str(i)
 
@@ -915,10 +919,15 @@ for i in range(6):
                 file_list_train.append(sub_dir+'/'+f)
 
     file_number_train=len(file_list_train)
-    for j in range(4):
 
-        #if test_count==11:
-        #    j=3
+    if test_count==59:
+        start_j=3
+    else:
+        start_j=0
+
+    for j in range(start_j,4):
+
+        
         #inizializations of counters
         train_featuress =[]
         
@@ -1098,10 +1107,13 @@ for i in range(6):
         #recover model
         model=load_model(modelpath)
 
+        if test_count==59:
+            start_label_index=1
+        else:
+            start_label_index=0
         ## 3 test with differen Label strategies
-        for label_index in range(3):
-            #if test_count==11:
-            #    label_index=2
+        for label_index in range(start_label_index,3):
+            
             ########## TEST TRAINED MODEL ###########################
          
             print('\n ----------------------------------------------- \n')
@@ -1315,35 +1327,6 @@ for i in range(6):
                 ##updating total confusion_matrix
                 confusion_matrix_tot+=confusion_matrix 
 
-                #Saving Training/Testing info into a file
-                cnn_train_info_file=test_general_results_dir+'/'+test_fold+'/CNN_train_data_info.txt'
-                file1=open(cnn_train_info_file,'w')
-        
-                L00=["Training dataset used "+train_fold]
-                L0=['\n Click search parameters: f0= %5d, f1= %5d \n' %(f0,f1) ]
-                if window==3:
-                    L1=['window used 3x2 \n']
-                else:
-                    L1=['window used %2d \n' %window]
-                L11=['\n Label function used = File_label%2d \n' %label_index]
-                L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
-                "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
-                "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
-                "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
-                "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
-                "\n Spectrograms used for validation = %5d \n" %np.shape(y_validation)[0],
-                "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
-                "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
-                "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
-                L2=['\n Model used %5d \n' %index_best_model]
-                L3=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
-                L4=['Path best model '+ model_paths[index_best_model]]
-                L5=['\n Indeces check \n']
-                L6=['\n i=%2d' %i, '\n j=%2d' %j, '\n label_index=%2d'%label_index]
-                file1.writelines(np.concatenate((L00,L0,L1,L11,L, L2, L3, L4, L5, L6)))
-                file1.close()
-
-
                 #printing metrics
                 print("-------------------------------------------")
                 print('Number files with detected clicks detected ', count_clicks, 'in ', Moira_dir, 'with ', file_number, ' files')
@@ -1407,9 +1390,9 @@ for i in range(6):
                 with open(test_sub_dir+'/confusion_matrix.csv', 'w', newline='') as csvfile:
                      writer=csv.DictWriter(csvfile, fieldnames=fieldnames)
                      writer.writeheader()
-                     for i in range(7):
-                        writer.writerow({'  ':column_fieldnames[i], 'LT':confusion_matrix[i][0], 'LT?':confusion_matrix[i][1], 'ST':confusion_matrix[i][2], 'ST?':confusion_matrix[i][3], 'BT':confusion_matrix[i][4], 'Noise':confusion_matrix[i][5]})
-    
+                     for row in range(7):
+                        writer.writerow({'  ':column_fieldnames[row], 'LT':confusion_matrix[row][0], 'LT?':confusion_matrix[row][1], 'ST':confusion_matrix[row][2], 'ST?':confusion_matrix[row][3], 'BT':confusion_matrix[row][4], 'Noise':confusion_matrix[row][5]})
+   
      
 
                 #saving Click Detector Stats
@@ -1430,6 +1413,35 @@ for i in range(6):
                 #file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9)))
                 file1.close()
 
+
+
+            #Saving Training/Testing info into a file
+            cnn_train_info_file=test_general_results_dir+'/'+test_fold+'/CNN_train_data_info.txt'
+            file1=open(cnn_train_info_file,'w')
+        
+            L00=["Training dataset used "+train_fold]
+            L0=['\n Click search parameters: f0= %5d, f1= %5d \n' %(f0,f1) ]
+            if window==3:
+                L1=['window used 3x2 \n']
+            else:
+                L1=['window used %2d \n' %window]
+            L11=['\n Label function used = File_label%2d \n' %label_index]
+            L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
+            "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
+            "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
+            "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
+            "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
+            "\n Spectrograms used for validation = %5d \n" %np.shape(y_validation)[0],
+            "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
+            "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
+            "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
+            L2=['\n Model used %5d \n' %index_best_model]
+            L3=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
+            L4=['Path best model '+ model_paths[index_best_model]]
+            L5=['\n Indeces check \n']
+            L6=['\n i=%2d' %i, '\n j=%2d' %j, '\n label_index=%2d'%label_index]
+            file1.writelines(np.concatenate((L00,L0,L1,L11,L, L2, L3, L4, L5, L6)))
+            file1.close()
 
             # Evaluating metrics at the end of the process
             print('Evualuating Bat Search performance on the entire Dataset')
