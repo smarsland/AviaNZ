@@ -876,7 +876,7 @@ def metrics(confusion_matrix, file_num):
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/New_Train_Datasets" #directory with train files
 test_dataset_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset" #directory where to find test dataset files
-test_count=59 #counter for test number
+test_count=60 #counter for test number
 #test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
 
 test_general_results_dir = "/am/state-opera/home1/listanvirg/Documents/Experiments_result" #directory to store test result
@@ -899,7 +899,7 @@ if test_fold not in os.listdir(test_general_results_dir):
     os.mkdir(test_general_results_dir+ '/' + test_fold)
  
 
-if test_count==59:
+if test_count==60:
     start_i=4
 else:
     start_i=0
@@ -920,7 +920,7 @@ for i in range(start_i,6):
 
     file_number_train=len(file_list_train)
 
-    if test_count==59:
+    if test_count==60:
         start_j=3
     else:
         start_j=0
@@ -1032,7 +1032,7 @@ for i in range(start_i,6):
         validation_labels = tensorflow.keras.utils.to_categorical(y_validation, num_labels)
         #test_labels = tensorflow.keras.utils.to_categorical(y_test, 8)   #change this to set labels  
 
-        accuracies=np.zeros((10,1)) #initializing accuracies array
+        accuracies=np.zeros((3,1)) #initializing accuracies array
         model_paths=[] #initializing list where to stor model path
         #repeat training 10 times and take the best one on validation accuracy
         for k in range(3):
@@ -1107,8 +1107,8 @@ for i in range(start_i,6):
         #recover model
         model=load_model(modelpath)
 
-        if test_count==59:
-            start_label_index=1
+        if test_count==60:
+            start_label_index=2
         else:
             start_label_index=0
         ## 3 test with differen Label strategies
