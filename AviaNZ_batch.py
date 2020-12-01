@@ -261,6 +261,8 @@ class AviaNZ_batchProcess():
                 self.exportToBatSearch(self.dirName)
                 if not self.CLI:
                     # TODO: what if you start from a different folder?
+                    # I think that this is OK, but need to check -- it should (?) put a BatDB file in each folder, just like the log files.
+                    # Then it's up to the user to sort them. Or maybe not?
                     # TODO: autofill some metadata if user has filled it in once?
                     easting = None
                     northing = None
@@ -268,7 +270,7 @@ class AviaNZ_batchProcess():
                         f = open(os.path.join(self.dirName,'log.txt'),'r')
                     except:
                         f = None
-                    print(f,self.dirName)
+                    #print(f,self.dirName)
                     if f is not None:
                         # Find a line that contains GPS (lat, long),
                         # And read the two numbers after it
@@ -1054,16 +1056,15 @@ class AviaNZ_batchProcess():
         
         f.write('Data Source,Observer,Survey method,Species,Passes,Date,Detector type,Date recorder put out,Date recorder collected,No. of nights out,Effective nights out,Notes,Eastings,Northings,Site name,Region\n')
 
-        # TODO: Get effective days (how?)
-        # TODO: Try and read easting and northings
+        # TODO: Get effective days (how?) I think it is temperature > 7 degrees
         if species[0] > 0 and species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         elif species[0] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         elif species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(dt.date.today())+','+responses[3]+','+str(e)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         else:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         f.close()
     
     def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):
