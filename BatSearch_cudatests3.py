@@ -50,7 +50,7 @@ import librosa
 import WaveletSegment
 import WaveletFunctions
 
-import cv2  # image -processing
+#import cv2  # image -processing
 from scipy import misc
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -1035,7 +1035,7 @@ for i in range(start_i,6):
         accuracies=np.zeros((10,1)) #initializing accuracies array
         model_paths=[] #initializing list where to stor model path
         #repeat training 10 times and take the best one on validation accuracy
-        for k in range(10):
+        for k in range(3):
             #Build CNN architecture
             model = Sequential()
             model.add(Conv2D(32, kernel_size=(3,3), #I don't think this nees to be changed
@@ -1100,7 +1100,7 @@ for i in range(start_i,6):
         modelpath=model_paths[index_best_model] 
 
         #erase models
-        for k in range(10):
+        for k in range(3):
             if k!=index_best_model:
                 os.remove(model_paths[k])
    
