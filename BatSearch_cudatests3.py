@@ -876,7 +876,7 @@ def metrics(confusion_matrix, file_num):
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/New_Train_Datasets" #directory with train files
 test_dataset_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset" #directory where to find test dataset files
-test_count=60 #counter for test number
+test_count=70 #counter for test number
 #test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
 
 test_general_results_dir = "/am/state-opera/home1/listanvirg/Documents/Experiments_result" #directory to store test result
@@ -899,8 +899,8 @@ if test_fold not in os.listdir(test_general_results_dir):
     os.mkdir(test_general_results_dir+ '/' + test_fold)
  
 
-if test_count==60:
-    start_i=4
+if test_count==70:
+    start_i=5
 else:
     start_i=0
 
@@ -920,7 +920,7 @@ for i in range(start_i,6):
 
     file_number_train=len(file_list_train)
 
-    if test_count==60:
+    if test_count==70:
         start_j=3
     else:
         start_j=0
@@ -985,13 +985,14 @@ for i in range(start_i,6):
         
         #ag_flag=False
         data_train=train_featuress
+        del(train_featuress)
         sg_train=np.ndarray(shape=(np.shape(data_train)[0],np.shape(data_train[0][0])[0], np.shape(data_train[0][0])[1]), dtype=float) #check
         target_train = np.zeros((np.shape(data_train)[0], 1)) #label train
         for k in range(np.shape(data_train)[0]):
             maxg = np.max(data_train[k][0][:])
             sg_train[k][:] = data_train[k][0][:]/maxg
             target_train[k][0] = data_train[k][-1]
-
+        del(data_train)
         #validation data
         # randomly choose 75% train data and keep the rest as validation data
         idxs = np.random.permutation(np.shape(sg_train)[0])
@@ -1099,6 +1100,14 @@ for i in range(start_i,6):
         print('Best accuracy reached ',accuracies[index_best_model])
         modelpath=model_paths[index_best_model] 
 
+        #removing variable
+        del(sg_train)
+        #del(target_train)
+        del(train_images)
+        del(validation_images)
+        del(train_labels)
+        del(validation_labels)
+
         #erase models
         for k in range(3):
             if k!=index_best_model:
@@ -1107,8 +1116,8 @@ for i in range(start_i,6):
         #recover model
         model=load_model(modelpath)
 
-        if test_count==60:
-            start_label_index=2
+        if test_count==70:
+            start_label_index=0
         else:
             start_label_index=0
         ## 3 test with differen Label strategies
