@@ -358,11 +358,16 @@ class CNNtrain:
         TNs = [0 for i in range(len(self.calltypes) + 1)]
         FNs = [0 for i in range(len(self.calltypes) + 1)]
         CTps = [[[] for i in range(len(self.calltypes) + 1)] for j in range(len(self.calltypes) + 1)]
-        N = len(filenames)
+        # Do all the plots based on Validation set (eliminate augmented?)
+        # N = len(filenames)
+        N = len(X_val_filenames)
+        y_val = np.argmax(y_val, axis=1)
         
         for i in range(int(np.ceil(N / self.LearningDict['batchsize_ROC']))):
-            imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
-            labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
+            # imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            # labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
+            imagesb = cnn.loadImgBatch(X_val_filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            labelsb = y_val[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
             for ct in range(len(self.calltypes) + 1):
                 res, ctp = self.testCT(ct, imagesb, labelsb, model)  # res=[thrlist, TPs, FPs, TNs, FNs], ctp=[[0to0 probs], [0to1 probs], [0to2 probs]]
                 for j in range(len(self.calltypes) + 1):
@@ -384,6 +389,9 @@ class CNNtrain:
         self.Precisions = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
         self.Accs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
 
+        plt.style.use('ggplot')
+        fig, axs = plt.subplots(len(self.calltypes) + 1, len(self.calltypes) + 1, sharey=True, sharex='col')
+
         for ct in range(len(self.calltypes) + 1):
             self.TPRs[ct] = [TPs[ct][i] / (TPs[ct][i] + FNs[ct][i]) for i in range(len(self.Thrs))]
             self.FPRs[ct] = [FPs[ct][i] / (TNs[ct][i] + FPs[ct][i]) for i in range(len(self.Thrs))]
@@ -394,21 +402,38 @@ class CNNtrain:
             # Temp plot is saved in train data directory - prediction probabilities for instances of current ct
             for i in range(len(self.calltypes) + 1):
                 CTps[ct][i] = sorted(CTps[ct][i], key=float)
-                fig = plt.figure()
-                ax = plt.axes()
-                ax.plot(CTps[ct][i], 'k')
-                ax.plot(CTps[ct][i], 'bo')
-                plt.xlabel('Number of samples')
-                plt.ylabel('Probability')
-                if ct == len(self.calltypes):
-                    plt.title('Class: Noise')
-                else:
-                    plt.title('Class: ' + str(self.calltypes[ct]))
-                if self.folderTrain1:
-                    fig.savefig(os.path.join(self.folderTrain1, str(ct) + '-' + str(i) + '.png'))
-                else:
-                    fig.savefig(os.path.join(self.folderTrain2, str(ct) + '-' + str(i) + '.png'))
-                plt.close()
+                axs[i, ct].plot(CTps[ct][i], 'k')
+                axs[i, ct].plot(CTps[ct][i], 'bo')
+                if ct == i == len(self.calltypes):
+                    axs[i, 0].set_ylabel('Noise')
+                    axs[0, ct].set_title('Noise')
+                elif ct == i:
+                    axs[i, 0].set_ylabel(str(self.calltypes[ct]))
+                    axs[0, ct].set_title(str(self.calltypes[ct]))
+                if i == len(self.calltypes):
+                    axs[i, ct].set_xlabel('Number of samples')
+        fig.suptitle('Human')
+        if self.folderTrain1:
+            fig.savefig(os.path.join(self.folderTrain1, 'validation-plots.png'))
+        else:
+            fig.savefig(os.path.join(self.folderTrain2, 'validation-plots.png'))
+
+                # # Individual plots
+                # fig = plt.figure()
+                # ax = plt.axes()
+                # ax.plot(CTps[ct][i], 'k')
+                # ax.plot(CTps[ct][i], 'bo')
+                # plt.xlabel('Number of samples')
+                # plt.ylabel('Probability')
+                # if ct == len(self.calltypes):
+                #     plt.title('Class: Noise')
+                # else:
+                #     plt.title('Class: ' + str(self.calltypes[ct]))
+                # if self.folderTrain1:
+                #     fig.savefig(os.path.join(self.folderTrain1, str(ct) + '-' + str(i) + '.png'))
+                # else:
+                #     fig.savefig(os.path.join(self.folderTrain2, str(ct) + '-' + str(i) + '.png'))
+                # plt.close()
 
         # 4. Auto select the upper threshold (fpr = 0)
         for ct in range(len(self.calltypes)):

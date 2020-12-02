@@ -27,6 +27,7 @@ import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
+import wavio
 
 import traceback
 import time
@@ -255,23 +256,55 @@ class AviaNZ_batchProcess():
             if not self.CLI:
                 self.ui.dlg.setValue(total+1)
 
+            # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
+            if self.method == 'Click':
+                self.exportToBatSearch(self.dirName)
+                if not self.CLI:
+                    # TODO: what if you start from a different folder?
+                    # I think that this is OK, but need to check -- it should (?) put a BatDB file in each folder, just like the log files.
+                    # Then it's up to the user to sort them. Or maybe not?
+                    # TODO: autofill some metadata if user has filled it in once?
+                    easting = None
+                    northing = None
+                    try:
+                        f = open(os.path.join(self.dirName,'log.txt'),'r')
+                    except:
+                        f = None
+                    recorder = os.path.split(self.dirName)[-1]
+                    print(recorder)
+                    #print(f,self.dirName)
+                    if f is not None:
+                        # Find a line that contains GPS (lat, long),
+                        # And read the two numbers after it
+                        # This version just returns the last ones
+                        for line in f.readlines():
+                            if 'GPS (lat,long)' in line:
+                                l = line.strip()
+                                y = l.split(",")
+                                x = l[-2].split(":")
+                                easting = x[-1]
+                                northing = y[-1]
+                            elif 'GPS:' in line:
+                                l = line.strip()
+                                y = l.split("=")
+                                x = y[-2].split(",")
+                                easting = x[-2]
+                                northing = y[-1]
+                    #print(easting,northing)
+                        
+                    import Dialogs
+                    exportResults = Dialogs.ExportBats(self.config['operator'],easting,northing,recorder)
+                    exportResults.show()
+                    if exportResults.exec_() == 1:
+                        exportResults = exportResults.getValues()
+                        self.exportBatSurvey(self.dirName, exportResults)
+                else:
+                    self.exportBatSurvey(self.dirName, None)
+
             # END of processing and exporting. Final cleanup
             self.log.file.close()
             if not self.CLI:
                 self.ui.endproc(total)
-
-        # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
-        if self.method=='Click':
-            self.exportToBatSearch(self.dirName)  
-            if not self.CLI:
-                import Dialogs
-                exportResults = Dialogs.ExportBats(self.config['operator'])
-                exportResults.show()
-                if exportResults.exec_() == 1:
-                    exportResults = exportResults.getValues()
-                    self.exportBatSurvey(self.dirName,exportResults)
-            else:
-                self.exportBatSurvey(self.dirName,None)
 
         print("Processed all %d files" % total)
         return(0)
@@ -395,6 +428,23 @@ class AviaNZ_batchProcess():
             print("File processed in", processingTime)
             # END of audio batch processing
 
+    def addRegularSegments(self):
+        """ Perform the Hartley bodge: add 10s segments every minute. """
+        # if wav.data exists get the duration
+        (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
+        self.segments.metadata = dict()
+        self.segments.metadata["Operator"] = "Auto"
+        self.segments.metadata["Reviewer"] = ""
+        self.segments.metadata["Duration"] = nseconds
+        i = 0
+        segments = []
+        print("Adding segments (%d s every %d s) to %s" %(self.config['protocolSize'], self.config['protocolInterval'], str(self.filename)))
+        while i < nseconds:
+            segments.append([i, i + self.config['protocolSize']])
+            i += self.config['protocolInterval']
+        post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        self.makeSegments(post.segments)
+
     def useWindF(self, flow, fhigh):
         """
         Check if the wind filter is appropriate for this species/call type.
@@ -434,7 +484,7 @@ class AviaNZ_batchProcess():
                     self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
                 self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
-                _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                _ = self.sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True)
                 self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
@@ -816,7 +866,6 @@ class AviaNZ_batchProcess():
             ST_prob.append(predictions[k][1])
             NT_prob.append(predictions[k][2])
 
-
         # if no clicks => automatically Noise
         label = []
 
@@ -890,22 +939,18 @@ class AviaNZ_batchProcess():
         operator = "AviaNZ 3.0"
         site = "Nowhere"
         # BatSeach codes
-        namedict = {"Unassigned":0,"Non-bat":1,"Unknown":2,"Long Tail":3,"Short Tail":4,"Possible LT":5,"Possible ST":6,"Both":7}
-        currroot = dirName
+        namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
         # File header
         start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
-        output=start
+        output = start
         if not os.path.isdir(dirName):
             print("Folder doesn't exist")
             return 0
-        for root, dirs, files in os.walk(dirName,topdown=True):
+        for root, dirs, files in os.walk(dirName, topdown=True):
             nfiles = len(files)
-            if nfiles>0:
+            if nfiles > 0:
                 for count in range(nfiles):
                     filename = files[count]
-                    fname = os.path.join(root,filename)
-                    f = fname.split('/')
-                
                     if filename.endswith('.data'):
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
@@ -941,16 +986,15 @@ class AviaNZ_batchProcess():
                         # DOC format
                         s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
                         s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
-                        s7 = "<RecordingFolderName>"+os.path.relpath(currroot,dirName)+"</RecordingFolderName>\n"
+                        s7 = "<RecordingFolderName>.\\"+os.path.relpath(root, dirName)+"</RecordingFolderName>\n"
                         s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
                         s9 = "</BatRecording>\n"
                         output+= s1+s2+s3+s4+s5+s6+s7+s8+s9
                 # Now write the file if necessary
                 if output != start:
                     output += "</ArrayOfBatRecording>\n"
-                    currroot = '/'.join(f[:-1])
-                    file = open(os.path.join(currroot,savefile), 'w')
-                    print("writing to",os.path.join(currroot,savefile))
+                    file = open(os.path.join(root, savefile), 'w')
+                    print("writing to", os.path.join(root, savefile))
                     file.write(output)
                     file.write("\n")
                     file.close()
@@ -962,7 +1006,7 @@ class AviaNZ_batchProcess():
         import datetime as dt
         # Export an excel file for the Bat survey database
         # TODO: turn into full excel?
-        print(responses)
+        #print(responses)
         if responses is None:
             responses = ['',self.config['operator'],'','ABM','','','','','']
 
@@ -1007,18 +1051,19 @@ class AviaNZ_batchProcess():
                                 elif s[0] == 'Short-tailed bat':
                                     species[1] += 1
 
-        f = open(os.path.join(dirName,'out.csv'),'w')
+        f = open(os.path.join(dirName,'BatDB.csv'),'w')
         
         f.write('Data Source,Observer,Survey method,Species,Passes,Date,Detector type,Date recorder put out,Date recorder collected,No. of nights out,Effective nights out,Notes,Eastings,Northings,Site name,Region\n')
 
+        # TODO: Get effective days (how?) I think it is temperature > 7 degrees
         if species[0] > 0 and species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         elif species[0] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         elif species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(dt.date.today())+','+responses[3]+','+str(e)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         else:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
         f.close()
     
     def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):

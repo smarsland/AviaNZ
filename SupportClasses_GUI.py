@@ -22,7 +22,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton
 from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
@@ -377,9 +377,6 @@ pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexib
 class DemousedViewBox(pg.ViewBox):
     # A version of ViewBox with no mouse events.
     # Dramatically reduces CPU usage when such events are not needed.
-    def keyPressEvent(self, ev):
-        return
-
     def mouseDragEvent(self, ev, axis=None):
         return
 
@@ -557,9 +554,6 @@ class LinearRegionItemO(LinearRegionItem2):
         p.drawRect(self.boundingRect())
 
     # Immediate rejects on all unneeded events:
-    def keyPressEvent(self, ev):
-        return
-
     def mouseClickEvent(self, ev):
         ev.accept()
         return
@@ -964,7 +958,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v3.1 (October 2020)")
+            self.setText("The AviaNZ Program, v3.1.2 (November 2020)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -977,7 +971,7 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, guidecol=None, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -990,16 +984,19 @@ class PicButton(QAbstractButton):
         self.playButton = QtGui.QToolButton(self)
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.hide()
+
+        # batmode frequency guides (in Y positions 0-1)
+        self.guides = guides
+        if guides is not None:
+            self.guidelines = [0]*len(self.guides)
+            self.guidecol = [QColor(*col) for col in guidecol]
+
         # check if playback possible (e.g. batmode)
         if len(audiodata)>0:
             self.noaudio = False
             self.playButton.clicked.connect(self.playImage)
         else:
             self.noaudio = True
-            # batmode frequency guides (in Y positions 0-1)
-            if guides is not None:
-                self.guides = guides
-                self.guidelines = [0]*len(self.guides)
 
         # setImage reads some properties from self, to allow easy update
         # when color map changes
@@ -1053,7 +1050,7 @@ class PicButton(QAbstractButton):
             self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, self.im1.size().height())
 
             # create guides for batmode
-            if self.noaudio:
+            if self.guides is not None:
                 for i in range(len(self.guides)):
                     self.guidelines[i] = QLineF(0, self.im1.height() - self.guides[i]/heightRedFact, targwidth, self.im1.height() - self.guides[i]/heightRedFact)
 
@@ -1078,13 +1075,10 @@ class PicButton(QAbstractButton):
                 painter.drawLine(self.line1)
                 painter.drawLine(self.line2)
 
-            if self.noaudio:
-                painter.setPen(QPen(QColor(255,232,140), 2))
-                painter.drawLine(self.guidelines[0])
-                painter.drawLine(self.guidelines[3])
-                painter.setPen(QPen(QColor(239,189,124), 2))
-                painter.drawLine(self.guidelines[1])
-                painter.drawLine(self.guidelines[2])
+            if self.guides is not None:
+                for gi in range(len(self.guidelines)):
+                    painter.setPen(QPen(self.guidecol[gi], 2))
+                    painter.drawLine(self.guidelines[gi])
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
@@ -1209,6 +1203,7 @@ class LightedFileList(QListWidget):
         self.fsList = set()
         self.listOfFiles = []
         self.minCertainty = 100
+        self.setMinimumWidth(150)
 
         # for the traffic light icons
         self.pixmap = QPixmap(10, 10)
@@ -1424,3 +1419,19 @@ class LightedFileList(QListWidget):
 
         # collect some extra info about this file as we've read it anyway
         self.spList.update(filesp)
+
+
+class MainPushButton(QPushButton):
+    """ QPushButton with a standard styling """
+    def __init__(self, *args, **kwargs):
+        super(MainPushButton, self).__init__(*args, **kwargs)
+        self.setStyleSheet("""
+          MainPushButton { font-weight: bold; font-size: 14px; padding: 3px 3px 3px 7px; }
+        """)
+        # would like to add more stuff such as:
+        #    border: 2px solid #8f8f91; background-color: #dddddd}
+        #  MainPushButton:disabled { border: 2 px solid #cccccc }
+        #  MainPushButton:hover { background-color: #eeeeee }
+        #  MainPushButton:pressed { background-color: #cccccc }
+        # But any such change overrides default drawing style entirely.
+        self.setFixedHeight(45)

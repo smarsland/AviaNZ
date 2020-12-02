@@ -556,7 +556,7 @@ class GenerateData:
 
     def generateFeatures(self, dirName, dataset, hop):
         '''
-        Read the segment library and generate features
+        Read the segment library and generate features, training
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop:
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.

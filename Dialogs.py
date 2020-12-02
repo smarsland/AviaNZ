@@ -155,7 +155,7 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, batmode=False, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, sgtype='Standard', batmode=False, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -166,17 +166,15 @@ class Spectrogram(QDialog):
         self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
         self.windowType.setCurrentText(window)
 
+        self.sgType = QComboBox()
+        self.sgType.addItems(['Standard','Multi-tapered','Reassigned'])
+        self.sgType.setCurrentText(sgtype)
+
         self.mean_normalise = QCheckBox()
         self.mean_normalise.setChecked(True)
 
         self.equal_loudness = QCheckBox()
         self.equal_loudness.setChecked(False)
-
-        self.multitaper = QCheckBox()
-        self.multitaper.setChecked(False)
-
-        self.reassigned = QCheckBox()
-        self.reassigned.setChecked(False)
 
         self.low = QSlider(Qt.Horizontal)
         self.low.setTickPosition(QSlider.TicksBelow)
@@ -215,10 +213,11 @@ class Spectrogram(QDialog):
         Box = QVBoxLayout()
         form = QFormLayout()
         form.addRow('Window', self.windowType)
+        form.addRow('Spectrogram type', self.sgType)
         form.addRow('Mean normalise', self.mean_normalise)
         form.addRow('Equal loudness', self.equal_loudness)
-        form.addRow('Multitapering', self.multitaper)
-        form.addRow('Reassignment', self.reassigned)
+        #form.addRow('Multitapering', self.multitaper)
+        #form.addRow('Reassignment', self.reassigned)
         form.addRow('Window width', self.window_width)
         form.addRow('Hop', self.incr)
         form.setVerticalSpacing(15)
@@ -264,7 +263,7 @@ class Spectrogram(QDialog):
             self.window_width.setText('256')
         low = int(self.low.value() // 100 *100)
         high = int(self.high.value() // 100 *100)
-        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.reassigned.checkState(),self.window_width.text(),self.incr.text(),low,high]
+        return [self.windowType.currentText(),self.sgType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.window_width.text(),self.incr.text(),low,high]
 
     def lowChange(self,value):
         # NOTE returned values should also use this rounding
@@ -280,8 +279,8 @@ class Spectrogram(QDialog):
 
         self.mean_normalise.setChecked(True)
         self.equal_loudness.setChecked(False)
-        self.multitaper.setChecked(False)
-        self.reassigned.setChecked(False)
+        #self.multitaper.setChecked(False)
+        #self.reassigned.setChecked(False)
 
         self.setValues(self.low.minimum(), self.low.maximum(), self.low.minimum(), self.high.maximum())
 
@@ -339,9 +338,7 @@ class Excel2Annotation(QDialog):
         lblSpecies.setFixedWidth(220)
         lblSpecies.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         # Show a template
         tableWidget = QTableWidget()
@@ -486,9 +483,7 @@ class Tag2Annotation(QDialog):
         lblDuration.setFixedWidth(220)
         lblDuration.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel())
@@ -542,9 +537,7 @@ class BackupAnnotation(QDialog):
         self.btnBrowseDst.setFixedWidth(220)
         self.btnBrowseDst.clicked.connect(self.browseDst)
 
-        self.btnCopyAnnot = QPushButton("Copy Annotations")
-        self.btnCopyAnnot.setFixedHeight(50)
-        self.btnCopyAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnCopyAnnot = SupportClasses_GUI.MainPushButton("Copy Annotations")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel('This allows you to get a copy of your annotations while preserving the directory hierarchy, only copy the .data files.\nSelect the directory you want to backup the annotations from and create a destination directory to copy the annotations'))
@@ -779,6 +772,44 @@ class Diagnostic(QDialog):
 
     def getValues(self):
         return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
+
+class DiagnosticCNN(QDialog):
+    # Class for the diagnostic dialog box - CNN
+    def __init__(self, filters, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('CNN Diagnostic Plot Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(300)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+
+        # species / filter
+        self.filterLabel = QLabel("Select recogniser to use")
+        self.filter = QComboBox()
+        # add filter file names to combobox
+        self.filter.addItems(list(filters.keys()))
+
+        # select call types to plot
+        self.ctbox = QHBoxLayout()
+        self.chkboxes = []
+
+        # buttons
+        self.activate = QPushButton("Make plots")
+        self.clear = QPushButton("Clear plots")
+
+        # layout
+        Box = QVBoxLayout()
+        Box.addWidget(self.filterLabel)
+        Box.addWidget(self.filter)
+        Box.addLayout(self.ctbox)
+
+        Box.addWidget(self.activate)
+        Box.addWidget(self.clear)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        return [self.filter.currentText(), [cb.isChecked() for cb in self.chkboxes]]
 
 #======
 class Segmentation(QDialog):
@@ -1386,7 +1417,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, plotAspect=2, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1438,13 +1469,11 @@ class HumanClassify1(QDialog):
         self.pPlot.addItem(self.line2)
 
         # prepare guides for marking true segment boundaries
-        self.guidelines = [0]*4
-        self.guidelines[0] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
-        self.guidelines[1] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[2] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[3] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
-        for g in self.guidelines:
-            self.pPlot.addItem(g)
+
+        self.guidelines = [0]*len(guidecols)
+        for gi in range(len(guidecols)):
+            self.guidelines[gi] = pg.InfiniteLine(angle=0, pen={'color': guidecols[gi], 'width': 2})
+            self.pPlot.addItem(self.guidelines[gi])
 
         # time texts to go along these two lines
         self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1.10))
@@ -1933,6 +1962,8 @@ class HumanClassify1(QDialog):
                 if self.batmode:
                     ind = self.batList.index(lsp)
                     self.birdbtns[ind].setChecked(True)
+
+                    # since there is no long list or birds3 box, we ignore those parts.
                 else:
                     if lsp in self.shortBirdList[:29]:
                         ind = self.shortBirdList.index(lsp)
@@ -1940,7 +1971,7 @@ class HumanClassify1(QDialog):
                     else:
                         self.birdbtns[29].setChecked(True)
                         self.birds3.setEnabled(True)
-    
+
                     # mark this species in the long list box
                     if lsp not in self.longBirdList:
                         # try genus>species instead of genus (species)
@@ -1954,11 +1985,11 @@ class HumanClassify1(QDialog):
                             cc = self.birds3.count()
                             self.birds3.insertItem(cc-1, lsp)
                             self.saveConfig = True
-    
-                # all species by now are in the long bird list
-                if self.longBirdList is not None:
-                    ind = self.longBirdList.index(lsp)
-                    self.birds3.item(ind).setSelected(True)
+
+                    # all species by now are in the long bird list
+                    if self.longBirdList is not None:
+                        ind = self.longBirdList.index(lsp)
+                        self.birds3.item(ind).setSelected(True)
 
         self.label = specnames
 
@@ -2244,7 +2275,7 @@ class HumanClassify2(QDialog):
         13. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2295,6 +2326,7 @@ class HumanClassify2(QDialog):
 
         # batmode customizations:
         self.guidefreq = guidefreq
+        self.guidecol = guidecol
         if not haveaudio:
             self.volSlider.setEnabled(False)
             self.volIcon.setEnabled(False)
@@ -2478,7 +2510,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2726,7 +2758,6 @@ class FilterManager(QDialog):
 
         # filter dir contents
         self.listFiles = QListWidget()
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.setMinimumHeight(275)
         self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
 
@@ -3044,8 +3075,7 @@ class Cluster(QDialog):
         for seg in self.segments:
             sp = SignalProc.SignalProc(512, 256)
             sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
-            sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
-                                   multitaper=False, reassigned=False, need_even=False)
+            sgRaw = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.setColourMap()
@@ -3118,13 +3148,13 @@ class Cluster(QDialog):
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 class ExportBats(QDialog):
-    def __init__(self,observer):
+    def __init__(self,observer,easting,northing,recorder):
         QDialog.__init__(self)
         self.setWindowTitle('Export Results?')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
-        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.xlsx, you will need to email it yourself\nFields with a * are mandatory\n')
+        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.csv, you will need to email it yourself\nFields with a * are mandatory)\n')
         l2 = QLabel('*Data source (e.g., your community group): ')
         self.data = QLineEdit(self)
         hbox1 = QHBoxLayout()
@@ -3153,8 +3183,12 @@ class ExportBats(QDialog):
         hbox4.addWidget(self.notes)
         l7 = QLabel('*Easting: ')
         self.easting = QLineEdit(self)
+        if easting is not None:
+            self.easting.setText(easting)
         l8 = QLabel('*Northing: ')
         self.northing = QLineEdit(self)
+        if northing is not None:
+            self.northing.setText(northing)
         hbox6 = QHBoxLayout()
         hbox6.addWidget(l7)
         hbox6.addWidget(self.easting)
@@ -3162,6 +3196,7 @@ class ExportBats(QDialog):
         hbox6.addWidget(self.northing)
         l6 = QLabel('*Site where data collected: ')
         self.site = QLineEdit(self)
+        self.site.setText(recorder)
         l9 = QLabel('Region where data collected: ')
         self.region = QLineEdit(self)
         hbox7 = QHBoxLayout()

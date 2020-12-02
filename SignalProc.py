@@ -69,9 +69,6 @@ class SignalProc:
             self.audioFormat = QAudioFormat()
             self.audioFormat.setCodec("audio/pcm")
             self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
-            self.audioFormat.setSampleType(QAudioFormat.SignedInt)
-        #else:
-            #self.audioFormat = {}
 
     def readWav(self, file, len=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -83,8 +80,6 @@ class SignalProc:
             self.data = self.data[:, 0]
         if QtMM:
             self.audioFormat.setChannelCount(1)
-        #else:
-            #self.audioFormat['channelCount'] = 1
 
         # force float type
         if self.data.dtype != 'float':
@@ -98,9 +93,11 @@ class SignalProc:
         if QtMM:
             self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
             self.audioFormat.setSampleRate(self.sampleRate)
-        #else:
-            #self.audioFormat['sampleSize'] = wavobj.sampwidth * 8
-            #self.audioFormat['sampleRate'] = self.sampleRate
+            # Only 8-bit WAVs are unsigned:
+            if wavobj.sampwidth==1:
+                self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
+            else:
+                self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -111,8 +108,6 @@ class SignalProc:
         if not silent:
             if QtMM:
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-            #else:
-                #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat['channelCount'], self.audioFormat['sampleRate'], self.audioFormat['sampleSize']))
 
     def readBmp(self, file, len=None, off=0, silent=False, rotate=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
@@ -297,7 +292,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,reassigned=False,need_even=False):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType=None,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -313,6 +308,8 @@ class SignalProc:
         #log_S = librosa.amplitude_to_db(S, ref=np.max)
         #self.sg = librosa.pcen(S * (2**31))
         #return self.sg.T
+        if sgType is None:
+            sgType = 'Standard'
 
         if window_width is None:
             window_width = self.window_width
@@ -370,7 +367,7 @@ class SignalProc:
             self.sg -= self.sg.mean()
 
         starts = range(0, len(self.sg) - window_width, incr)
-        if multitaper:
+        if sgType=='Multi-tapered':
             if specExtra:
                 [tapers, eigen] = dpss(window_width, 2.5, 4)
                 counter = 0
@@ -384,7 +381,7 @@ class SignalProc:
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")
-        elif reassigned:
+        elif sgType=='Reassigned':
             ft = np.zeros((len(starts), window_width),dtype='complex')
             ft2 = np.zeros((len(starts), window_width),dtype='complex')
             for i in starts:
@@ -1110,7 +1107,7 @@ class SignalProc:
         sp = SignalProc(window, window)     # No overlap
         sp.data = self.data
         sp.sampleRate = self.sampleRate
-        sg = sp.spectrogram(multitaper=False)
+        sg = sp.spectrogram()
 
         # For each frq band get sections where energy exceeds some (90%) percentile, engp
         # and generate a binary spectrogram
