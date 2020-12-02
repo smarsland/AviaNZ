@@ -270,6 +270,8 @@ class AviaNZ_batchProcess():
                         f = open(os.path.join(self.dirName,'log.txt'),'r')
                     except:
                         f = None
+                    recorder = os.path.split(self.dirName)[-1]
+                    print(recorder)
                     #print(f,self.dirName)
                     if f is not None:
                         # Find a line that contains GPS (lat, long),
@@ -286,13 +288,12 @@ class AviaNZ_batchProcess():
                                 l = line.strip()
                                 y = l.split("=")
                                 x = y[-2].split(",")
-                                print(y,x)
                                 easting = x[-2]
                                 northing = y[-1]
-                    print(easting,northing)
+                    #print(easting,northing)
                         
                     import Dialogs
-                    exportResults = Dialogs.ExportBats(self.config['operator'],easting,northing)
+                    exportResults = Dialogs.ExportBats(self.config['operator'],easting,northing,recorder)
                     exportResults.show()
                     if exportResults.exec_() == 1:
                         exportResults = exportResults.getValues()
@@ -304,8 +305,6 @@ class AviaNZ_batchProcess():
             self.log.file.close()
             if not self.CLI:
                 self.ui.endproc(total)
-
-
 
         print("Processed all %d files" % total)
         return(0)
