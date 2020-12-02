@@ -72,7 +72,6 @@ class BuildRecAdvWizard(QWizard):
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(225)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
@@ -120,6 +119,7 @@ class BuildRecAdvWizard(QWizard):
             if value < 4000:
                 value = 4000
             self.fstext.setText(str(value))
+            self.fs.setValue(value)
 
         def fillFileList(self, dirName):
             """ Generates the list of files for a file listbox. """
@@ -808,8 +808,7 @@ class BuildRecAdvWizard(QWizard):
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
                 incr = 256 * sp.sampleRate // self.field("fs")
-                sgRaw = sp.spectrogram(window='Hann', incr=incr, mean_normalise=True, onesided=True,
-                                              multitaper=False, need_even=False)
+                sgRaw = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                 maxsg = np.min(sgRaw)
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                 self.setColourMap()
@@ -1115,7 +1114,7 @@ class BuildRecAdvWizard(QWizard):
             self.filtSummary.addRow("Current M:", self.bestM)
             self.filtSummary.addRow("Threshold:", self.bestThr)
             self.filtSummary.addRow("Wavelet nodes:", self.bestNodes)
-            self.filtSummary.addRow("Frquency bands (Hz):", self.bestFrqBands)
+            self.filtSummary.addRow("Frequency bands (Hz):", self.bestFrqBands)
 
             self.selectedTPR = QLineEdit()
             self.selectedFPR = QLineEdit()
@@ -1329,7 +1328,6 @@ class BuildRecAdvWizard(QWizard):
             # filter dir listbox
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(200)
             filtdir = QDir(filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
@@ -1592,7 +1590,6 @@ class TestRecWizard(QWizard):
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
@@ -2569,7 +2566,6 @@ class BuildCNNWizard(QWizard):
             # filter dir listbox
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(200)
             filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
