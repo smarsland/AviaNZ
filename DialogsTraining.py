@@ -120,6 +120,7 @@ class BuildRecAdvWizard(QWizard):
             if value < 4000:
                 value = 4000
             self.fstext.setText(str(value))
+            self.fs.setValue(value)
 
         def fillFileList(self, dirName):
             """ Generates the list of files for a file listbox. """
@@ -808,8 +809,7 @@ class BuildRecAdvWizard(QWizard):
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
                 incr = 256 * sp.sampleRate // self.field("fs")
-                sgRaw = sp.spectrogram(window='Hann', incr=incr, mean_normalise=True, onesided=True,
-                                              multitaper=False, need_even=False)
+                sgRaw = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                 maxsg = np.min(sgRaw)
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                 self.setColourMap()
@@ -1115,7 +1115,7 @@ class BuildRecAdvWizard(QWizard):
             self.filtSummary.addRow("Current M:", self.bestM)
             self.filtSummary.addRow("Threshold:", self.bestThr)
             self.filtSummary.addRow("Wavelet nodes:", self.bestNodes)
-            self.filtSummary.addRow("Frquency bands (Hz):", self.bestFrqBands)
+            self.filtSummary.addRow("Frequency bands (Hz):", self.bestFrqBands)
 
             self.selectedTPR = QLineEdit()
             self.selectedFPR = QLineEdit()

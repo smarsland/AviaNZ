@@ -688,15 +688,23 @@ class Segmenter:
         """ Merges segments within maxgap units.
             Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
         """
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments = sorted(segments)
+
         out = []
         i = 0
         if len(segments)==0:
             return out
         while i < len(segments):
             start = segments[i][0]
-            while i+1 < len(segments) and segments[i+1][0]-segments[i][1] <= maxgap:
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0]-end <= maxgap:
+                end = max(segments[i+1][1], end)
                 i += 1
-            out.append([start, segments[i][1]])
+            out.append([start, end])
             i += 1
         return out
 
@@ -706,6 +714,13 @@ class Segmenter:
             [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
             Currently, certainties are just averaged over the number of segs.
         """
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments.sort(key=lambda seg: seg[0][0])
+        # sorted() appears to work fine as well
+
         out = []
         i = 0
         if len(segments)==0:
@@ -713,11 +728,13 @@ class Segmenter:
 
         while i < len(segments):
             start = segments[i][0][0]
+            end = segments[i][0][1]
             cert = [segments[i][1]]
-            while i + 1 < len(segments) and segments[i + 1][0][0] - segments[i][0][1] <= maxgap:
+            while i + 1 < len(segments) and segments[i + 1][0][0] - end <= maxgap:
+                end = max(segments[i+1][0][1], end)
                 i += 1
                 cert.append(segments[i][1])
-            out.append([[start, segments[i][0][1]], np.mean(cert)])
+            out.append([[start, end], np.mean(cert)])
             i += 1
         return out
 
@@ -1219,14 +1236,17 @@ class PostProcess:
             self.fLow = 0
             self.fHigh = 0
 
-    def generateFeaturesCNN(self, seg, data, fs):
+    def generateFeaturesCNN(self, seg, data, fs, overlap=True):
         '''
         Prepare a syllable to input to the CNN model
         Returns the features (currently the spectrogram)
         '''
         featuress = []
-        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / self.CNNhop + 1)
-        # n = (seg[1] - seg[0]) // self.CNNwindow
+        if overlap:
+            n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / self.CNNhop + 1)
+        else:
+            n = (seg[1] - seg[0]) // self.CNNwindow
+            self.CNNhop = self.CNNwindow
 
         sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
         sp.data = data
@@ -1243,6 +1263,8 @@ class PostProcess:
             sgstart = int(self.CNNhop * i * fs / sp.incr)
             sgend = sgstart + specFrameSize
             if sgend > np.shape(sp.sg)[0]:
+                # sgstart = np.shape(sp.sg)[0] - specFrameSize
+                # sgend = np.shape(sp.sg)[0]
                 continue
             sgRaw = sp.sg[sgstart:sgend, :]
             maxg = np.max(sgRaw)
@@ -1338,15 +1360,13 @@ class PostProcess:
 
         return certainty
 
-    def getSubSegs(self, probs, ctkey, seg, imglength, incr):
+    def getSubSegs(self, probs, ctkey, seg):
         '''
         Fine tune a segment - during CNN.
         Get predicted probability matrix on overlapped images of the segment and find sub-segments.
         :param probs: probability matrix
         :param ctkey: call type key
         :param seg: parent segment
-        :param imglength: image length in sec
-        :param incr: hop in sec
         :return: sub-segments
         '''
         binaryout = np.zeros((np.shape(probs)[0]))
@@ -1357,12 +1377,13 @@ class PostProcess:
         if len(binaryout) == 1:
             binaryout = np.append(binaryout, 0)
         subsegs = segmenter.convert01(binaryout)
+        # subsegs = segmenter.convert01(binaryout, self.CNNhop)
         for i in range(len(subsegs)):
-            subsegs[i] = [[subsegs[i][0]*incr+seg[0][0], (subsegs[i][1]-1)*incr+imglength+seg[0][0]], seg[1]]
+            subsegs[i] = [[subsegs[i][0] * self.CNNhop + seg[0][0], (subsegs[i][1] + 1) * self.CNNhop + seg[0][0]], seg[1]]
         subsegs = segmenter.checkSegmentOverlap3(subsegs)
         return subsegs
 
-    def CNN(self):
+    def CNN1(self):
         """
         Post-proc with CNN model, self.segments get updated
         """
@@ -1454,7 +1475,7 @@ class PostProcess:
             else:
                 print('Not deleted by CNN')
                 self.segments[ix][-1] = certainty
-                subsegs = self.getSubSegs(probs, ctkey, seg, self.CNNwindow, self.CNNhop)
+                subsegs = self.getSubSegs(probs, ctkey, seg)
                 if subsegs != []:
                     print("Replaced with sub-segments:", subsegs)
                     del self.segments[ix]
@@ -1463,6 +1484,144 @@ class PostProcess:
         for ns in ctnewseg[::-1]:
             self.segments.append(ns)
         print("Segments remaining after CNN: ", len(self.segments))
+
+    def CNN(self):
+        """
+        Post-proc with CNN model, self.segments get updated
+        """
+        if not self.CNNmodel:
+            print("ERROR: no CNN model specified")
+            return
+        if len(self.segments) == 0:
+            print("No segments to classify by CNN")
+            return
+        ctkey = int(list(self.CNNoutputs.keys())[list(self.CNNoutputs.values()).index(self.calltype)])
+        print('call type: ', self.calltype)
+        ctnewseg = []
+
+        for ix in reversed(range(len(self.segments))):
+            seg = self.segments[ix]
+            # expand the segment if its too small
+            callength = max(self.CNNwindow, self.maxLen/2)
+            if callength >= seg[0][1] - seg[0][0]:
+                duration = seg[0][1] - seg[0][0]
+                seg[0][0] = seg[0][0] - (callength - duration) / 2 - 0.0005
+                seg[0][1] = seg[0][1] + (callength - duration) / 2 + 0.0005
+                if seg[0][0] < 0:
+                    seg[0][0] = 0
+                    seg[0][1] = callength
+                elif seg[0][1]*self.sampleRate > len(self.audioData):
+                    seg[0][0] = len(self.audioData)/self.sampleRate - callength - 0.0005
+                    seg[0][1] = len(self.audioData)/self.sampleRate
+                data = self.audioData[int(seg[0][0] * self.sampleRate):int(seg[0][1] * self.sampleRate)]
+            else:
+                data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+            # Generate features for CNN, overlapped windows
+            sp = SignalProc.SignalProc()
+            sp.data = data
+            sp.sampleRate = self.sampleRate
+            if self.sampleRate != self.tgtsampleRate:
+                sp.resample(self.tgtsampleRate)
+            featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            featuress = np.array(featuress)
+            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+            # featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 3)
+            featuress = featuress.astype('float32')
+            # predict with CNN
+            if np.shape(featuress)[0] > 0:
+                probs = self.CNNmodel.predict(featuress)
+            else:
+                probs = 0
+
+            if isinstance(probs, int):
+                # Zero images from this segment, very unlikely to be a true seg.
+                certainty = 0
+            else:
+                if self.activelength(probs[:, ctkey], seg, self.CNNthrs[ctkey][-1]) >= self.subfilter['TimeRange'][0]:
+                    certainty = 90
+                elif self.activelength(probs[:, ctkey], seg, self.CNNthrs[ctkey][0]) >= self.subfilter['TimeRange'][0]:
+                    certainty = 50
+                else:
+                    certainty = 0
+            if certainty == 0:
+                print('Deleted by CNN')
+                del self.segments[ix]
+            else:
+                print('Not deleted by CNN')
+                self.segments[ix][-1] = certainty
+                subsegs = self.getSubSegs(probs, ctkey, seg)
+                if subsegs != []:
+                    print("Replaced with sub-segments:", subsegs)
+                    del self.segments[ix]
+                    for ns in subsegs[::-1]:
+                        ctnewseg.append(ns)
+        for ns in ctnewseg[::-1]:
+            self.segments.append(ns)
+        print("Segments remaining after CNN: ", len(self.segments))
+
+    def activelength(self, probs, seg, thr):
+        """
+        Returns the max length (secs) above thr given the probabilities of the images (overlapped)
+        """
+        binaryout = np.zeros((np.shape(probs)[0]))
+        for i in range(len(binaryout)):
+            if probs[i] >= thr:
+                binaryout[i] = 1
+        segmenter = Segmenter()
+        if len(binaryout) == 1:
+            binaryout = np.append(binaryout, 0)
+        subsegs = segmenter.convert01(binaryout)
+        # subsegs = segmenter.convert01(binaryout, self.CNNhop)
+        for i in range(len(subsegs)):
+            subsegs[i] = [[subsegs[i][0] * self.CNNhop + seg[0][0], (subsegs[i][1] + 1) * self.CNNhop + seg[0][0]], seg[1]]
+        subsegs = segmenter.checkSegmentOverlap3(subsegs)
+        lengths = [seg[0][1]-seg[0][0] for seg in subsegs]
+        if lengths:
+            return max(lengths)
+        else:
+            return 0
+
+    def CNNDiagnostic(self):
+        """
+        Return the raw probabilities
+        """
+        if not self.CNNmodel:
+            print("ERROR: no CNN model specified")
+            return
+        if len(self.segments)==0:
+            print("No segments to classify by CNN")
+            return
+
+        self.CNNhop = self.CNNwindow
+        for ix in reversed(range(len(self.segments))):
+            seg = self.segments[ix]
+
+            if self.CNNwindow >= seg[0][1] - seg[0][0]:
+                print('Current page is smaller than CNN input (%f)' % (self.CNNwindow))
+            else:
+                # data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+                data = self.audioData
+            # generate features for CNN
+            sp = SignalProc.SignalProc()
+            sp.data = data
+            sp.sampleRate = self.sampleRate
+            if self.sampleRate != self.tgtsampleRate:
+                sp.resample(self.tgtsampleRate)
+            featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate, overlap=False)
+            # featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            featuress = np.array(featuress)
+            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+            # featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 3)
+            featuress = featuress.astype('float32')
+            # predict with CNN
+            if np.shape(featuress)[0] > 0:
+                probs = self.CNNmodel.predict(featuress)
+            else:
+                probs = 0
+        return self.CNNwindow, probs
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind
@@ -1591,7 +1750,7 @@ class PostProcess:
             # data = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)
             # sp.data = data
             # sp.sampleRate = self.sampleRate
-            _ = sp.spectrogram(mean_normalise=True, onesided=True, multitaper=False)
+            _ = sp.spectrogram(mean_normalise=True, onesided=True) 
 
             segment = Segmenter(sp, fs=sp.sampleRate)
             pitch, y, minfreq, W = segment.yin(minfreq=100)
@@ -1621,7 +1780,7 @@ class PostProcess:
             denoisedData=self.audioData
 
         if f:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
+            filteredDenoisedData = self.sp.bandpassFilter(denoisedData, self.sampleRate, start=f1, end=f2)
         else:
             filteredDenoisedData = denoisedData
 
@@ -1632,7 +1791,7 @@ class PostProcess:
     def joinGaps(self, maxgap):
         seg = Segmenter()
         self.segments = seg.joinGaps3(self.segments, maxgap=maxgap)
-        print("Segments remaining after merge (<=%d secs): %d" % (maxgap, len(self.segments)))
+        print("Segments remaining after merge (<=%.2f secs): %d" % (maxgap, len(self.segments)))
 
     def deleteShort(self, minlength):
         seg = Segmenter()
