@@ -265,6 +265,9 @@ class AviaNZ_batchWindow(QMainWindow):
         self.species = list(self.species)
         print("Recogniser:", self.species)
 
+        self.batchProc.maxgap = int(self.maxgap.value())/1000
+        self.batchProc.minlen = int(self.minlen.value()) / 1000
+        self.batchProc.maxlen = int(self.maxlen.value()) / 1000
         self.batchProc.detect()
 
     def check_msg(self,title,text):

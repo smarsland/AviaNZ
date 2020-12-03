@@ -449,16 +449,16 @@ class AviaNZ_batchProcess():
                 # 3. Delete short segments
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                maxgap = int(self.maxgap.value())/1000
-                minlen = int(self.minlen.value())/1000
-                maxlen = int(self.maxlen.value())/1000
+                # maxgap = int(self.maxgap.value())/1000
+                # minlen = int(self.minlen.value())/1000
+                # maxlen = int(self.maxlen.value())/1000
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 if self.wind:
                     post.wind()
-                post.joinGaps(maxgap)
-                post.deleteShort(minlen)
+                post.joinGaps(self.maxgap)
+                post.deleteShort(self.minlen)
                 # avoid extra long segments (for Isabel)
-                post.splitLong(maxlen)
+                post.splitLong(self.maxlen)
 
                 # adjust segment starts for 15min "pages"
                 if start != 0:
@@ -631,17 +631,17 @@ class AviaNZ_batchProcess():
             self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
 
         # Read audiodata or spectrogram
-        if self.method=="Wavelets":
+        if self.method == "Clicks":
+            self.sp.readBmp(self.filename, rotate=False)
+            self.sampleRate = self.sp.sampleRate
+            self.datalength = self.sp.fileLength
+        else:
             self.sp.readWav(self.filename)
             self.sampleRate = self.sp.sampleRate
             self.audiodata = self.sp.data
 
             self.datalength = np.shape(self.audiodata)[0]
             print("Read %d samples, %f s at %d Hz" % (len(self.audiodata), float(self.datalength)/self.sampleRate, self.sampleRate))
-        else:
-            self.sp.readBmp(self.filename, rotate=False)
-            self.sampleRate = self.sp.sampleRate
-            self.datalength = self.sp.fileLength
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
