@@ -210,6 +210,109 @@ class SignalProc:
             print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
         return(0)
 
+    def readBmp2(self, file, len=None, off=0, silent=False, rotate=True):
+        """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
+            For similarity with readWav, accepts len and off args, in seconds.
+            rotate: if True, rotates to match setImage and other spectrograms (rows=time)
+                otherwise preserves normal orientation (cols=time)
+
+          NOT REPEATED ROWS
+        """
+        # !! Important to set these, as they are used in other functions
+        self.sampleRate = 176000
+        self.incr = 512
+
+        img = QImage(file, "BMP")
+        h = img.height()
+        w = img.width()
+        colc = img.colorCount()
+        if h==0 or w==0:
+            print("ERROR: image was not loaded")
+            return(1)
+
+        # Check color format and convert to grayscale
+        if not silent and (not img.allGray() or colc>256):
+            print("Warning: image provided not in 8-bit grayscale, information will be lost")
+        img.convertTo(QImage.Format_Grayscale8)
+
+        # Convert to numpy
+        # (remember that pyqtgraph images are column-major)
+        ptr = img.constBits()
+        ptr.setsize(h*w*1)
+        img2 = np.array(ptr).reshape(h, w)
+
+        # Determine if original image was rotated, based on expected num of freq bins and freq 0 being empty
+        # We also used to check if np.median(img2[-1,:])==0,
+        # but some files happen to have the bottom freq bin around 90, so we cannot rely on that.
+        if h==64:
+            # standard DoC format
+            pass
+        elif w==64:
+            # seems like DoC format, rotated at -90*
+            img2 = np.rot90(img2, 1, (1,0))
+            w, h = h, w
+        else:
+            print("ERROR: image does not appear to be in DoC format!")
+            print("Format details:")
+            print(img2)
+            print(h, w)
+            print(min(img2[-1,:]), max(img2[-1,:]))
+            print(np.sum(img2[-1,:]>0))
+            print(np.median(img2[-1,:]))
+            return(1)
+
+        print(np.shape(img2))
+        # Could skip that for visual mode - maybe useful for establishing contrast?
+        img2[-1, :] = 254  # lowest freq bin is 0, flip that
+        img2 = 255 - img2  # reverse value having the black as the most intense
+        img2 = img2/np.max(img2)  # normalization
+        img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
+        #img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
+        print(np.shape(img2))
+
+        self.data = []
+        self.fileLength = (w-2)*self.incr + self.window_width  # in samples
+        # Alternatively:
+        # self.fileLength = self.convertSpectoAmpl(h-1)*self.sampleRate
+
+        # NOTE: conversions will use self.sampleRate and self.incr, so ensure those are already set!
+        # trim to specified offset and length:
+        if off>0 or len is not None:
+            # Convert offset from seconds to pixels
+            off = int(self.convertAmpltoSpec(off))
+            if len is None:
+                img2 = img2[:, off:]
+            else:
+                # Convert length from seconds to pixels:
+                len = int(self.convertAmpltoSpec(len))
+                img2 = img2[:, off:(off+len)]
+
+        if rotate:
+            # rotate for display, b/c required spectrogram dimensions are:
+            #  t increasing over rows, f increasing over cols
+            # This will be enough if the original image was spectrogram-shape.
+            img2 = np.rot90(img2, 1, (1,0))
+
+        self.sg = img2
+
+        if QtMM:
+            self.audioFormat.setChannelCount(0)
+            self.audioFormat.setSampleSize(0)
+            self.audioFormat.setSampleRate(self.sampleRate)
+        #else:
+            #self.audioFormat['channelCount'] = 0
+            #self.audioFormat['sampleSize'] = 0
+            #self.audioFormat['sampleRate'] = self.sampleRate
+
+        self.minFreq = 0
+        self.maxFreq = self.sampleRate //2
+        self.minFreqShow = max(self.minFreq, self.minFreqShow)
+        self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
+
+        if not silent:
+            print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
+        return(0)
+
     def resample(self, target):
         if len(self.data)==0:
             print("Warning: no data set to resmample")
