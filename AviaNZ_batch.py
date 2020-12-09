@@ -440,9 +440,13 @@ class AviaNZ_batchProcess():
             Does not return anything - for use with external try/catch
         """
         # Segment over pages separately, to allow dealing with large files smoothly:
-        # TODO: page size fixed for now
-        #samplesInPage = 900*16000
-        samplesInPage = 300*self.sampleRate
+        # (page size is shorter for low freq things, i.e. bittern,
+        # since those freqs are very noisy and variable)
+        if self.sampleRate<=4000:
+            samplesInPage = 300*self.sampleRate
+        else:
+            samplesInPage = 900*16000
+
         # (ceil division for large integers)
         numPages = (self.datalength - 1) // samplesInPage + 1
 
