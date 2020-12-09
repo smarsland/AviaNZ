@@ -359,11 +359,15 @@ class AviaNZ_batchProcess():
             else:
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
-                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
+                # no impulse masking for bats or changepoints (as it distorts the means)
+                impMask = self.method!="Click" and "chp" not in [sf.get("method") for sf in filters]
+                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
 
                 # initialize empty segmenter
                 if self.method=="Wavelets":
                     self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
+                    del self.sp
+                    gc.collect()
 
                 # Main work is done here:
                 try:
@@ -507,7 +511,6 @@ class AviaNZ_batchProcess():
                             # note that only allowing alg 2 now
                             thisPageSegs = self.ws.waveletSegmentChp(speciesix, alg=2)
                         else:
-                            # TODO MC
                             thisPageSegs = self.ws.waveletSegmentMC(speciesix)
                     else:
                         click_label, data_test, gen_spec = self.ClickSearch(self.sp.sg, self.filename)
@@ -674,7 +677,7 @@ class AviaNZ_batchProcess():
         segmentList.saveJSON(str(self.filename) + suffix)
         return 1
 
-    def loadFile(self, species, anysound=False):
+    def loadFile(self, species, anysound=False, impMask=True):
         """ species: list of recognizer names, or ["Any sound"].
             Species names will be wiped based on these. """
         print(self.filename)
@@ -721,15 +724,13 @@ class AviaNZ_batchProcess():
                             del self.segments[i]
             print("%d segments loaded from .data file" % len(self.segments))
 
-        if self.method!="Click":
+        if impMask:
             # Do impulse masking by default
             if anysound:
                 self.sp.data = self.sp.impMask(engp=70, fp=0.50)
             else:
                 self.sp.data = self.sp.impMask()
             self.audiodata = self.sp.data
-            del self.sp
-        gc.collect()
 
     def ClickSearch(self, imspec, file):
         """

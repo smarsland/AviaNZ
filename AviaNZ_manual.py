@@ -4363,7 +4363,6 @@ class AviaNZ(QMainWindow):
             Currently, takes nodes from a selected wavelet filter,
             and only trains alpha, length etc.
         """
-        # TODO
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="mc")
         self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
@@ -4817,11 +4816,8 @@ class AviaNZ(QMainWindow):
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
-                # TODO maxlen isn't used here
                 # Note that MC does its own posprocessing to join the very small segments produced
-                newSegments = ws.waveletSegmentMC(0, thr=settings["medThr"], maxlen=10.0)
-                # or if reading all from the filter file:
-                # newSegments = ws.waveletSegmentMC(0)
+                newSegments = ws.waveletSegmentMC(0, thr=settings["medThr"])
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':

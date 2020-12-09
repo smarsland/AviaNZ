@@ -32,7 +32,7 @@ from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QDoubleSpinBox
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -1319,15 +1319,16 @@ class BuildRecAdvWizard(QWizard):
                                                                     learnMode="recaa", window=window, inc=inc)
                 elif self.method=="chp":
                     # Note: using energies averaged over window size set before
-                    numthr = 7
-                    self.thrList = np.geomspace(0.02, 20, num=numthr)
+                    numthr = 9
+                    self.thrList = np.geomspace(0.03, 10, num=numthr)
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainChp(self.field("trainDir"),
                                                                     self.thrList, usernodes,
                                                                     maxlen=mlen, window=chpwin)
                 elif self.method=="mc":
-                    # TODO
-                    print("NOT IMPLEMENTED YET")
-                    return
+                    numthr = 9
+                    self.thrList = np.geomspace(1, 12, num=numthr)
+                    self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainMC(self.field("trainDir"),
+                                                                    self.thrList, usernodes)
 
                 print("Filtered nodes: ", self.nodes)
                 print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
@@ -1629,7 +1630,7 @@ class BuildRecAdvWizard(QWizard):
                 page4.registerField("maxgap" + str(pageid), page4.maxgap)
                 page4.registerField("fLow"+str(pageid), page4.fLow)
                 page4.registerField("fHigh"+str(pageid), page4.fHigh)
-                page4.registerField("usernodes"+str(pageid)+"*", page5.bestNodes)
+                page4.registerField("usernodes"+str(pageid)+"*", page4.usernodes)
 
                 # note: pageid is the same for both page fields
                 page5.registerField("bestThr"+str(pageid)+"*", page5.bestThr)

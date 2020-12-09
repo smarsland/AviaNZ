@@ -240,6 +240,7 @@ class WaveletFunctions:
         flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
         # this tree will store non-downsampled coefs for reconstruction
         self.tree = [self.data]
+
         if mode != 'symmetric':
             print("ERROR: only symmetric WP mode implemented so far")
             return
@@ -399,6 +400,7 @@ class WaveletFunctions:
             C = self.tree[node][0:maxnumwcs*2:2]
         else:
             C = self.tree[node][0:maxnumwcs]
+
         # Sanity check for all zero cases:
         if not any(C):
             print("Warning: tree empty at node %d" % node)

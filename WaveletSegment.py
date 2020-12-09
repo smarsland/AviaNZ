@@ -342,7 +342,7 @@ class WaveletSegment:
         # 1. read wavs and annotations into self.annotation, self.audioList
         # NOTE: the window and inc correspond to the ground truth resolution
         self.filenames = []
-        self.loadDirectory(dirName=dirName, denoise=False, window=1, inc=1)
+        self.loadDirectory(dirName=dirName, denoise=False, window=1, inc=1, impMask=False)
         if len(self.annotation) == 0:
             print("ERROR: no files loaded!")
             return
@@ -419,6 +419,79 @@ class WaveletSegment:
         # NOTE: window and inc are annotation parameters here,
         # which don't have to match the wavelet detection resolution
         res = self.gridSearchChp(allMaxEs, allSigma2s, allWindows, thrList, maxlen, Awindow=1, Ainc=1)
+
+        return res
+
+    def waveletSegment_trainMC(self, dirName, thrList, usernodes):
+        """ Entry point to use during training, called from DialogsTraining.py.
+            Switches between various training methods, orders data loading etc.,
+            then just passes the arguments to the right training method and returns the results.
+
+            Input: path to directory with wav & wav.data files.
+            thrList: list of possible alphas to test.
+            usernodes: developer parameter to force a list of nodes
+            Return: tuple of arrays (nodes, tp, fp, tn, fn)
+        """
+        # 1. read wavs and annotations into self.annotation, self.audioList
+        # NOTE: the window and inc correspond to the ground truth resolution
+        self.filenames = []
+        self.loadDirectory(dirName=dirName, denoise=False, window=1, inc=1)
+        if len(self.annotation) == 0:
+            print("ERROR: no files loaded!")
+            return
+
+        # 2. find top nodes for each file (self.nodeCorrs)
+        self.nodeCorrs = []
+        self.bestNodes = []
+        self.worstNodes = []
+        allSPs = []
+
+        if len(self.spInfo["Filters"])>1:
+            print("ERROR: must provide only 1 subfilter at a time!")
+            return
+        else:
+            subfilter = self.spInfo["Filters"][0]
+
+        # 2a. prefilter audio to species freq range
+        for filenum in range(len(self.audioList)):
+            self.audioList[filenum] = self.sp.ButterworthBandpass(self.audioList[filenum],
+                                            self.spInfo['SampleRate'],
+                                            low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
+
+        # NOTE: only using manually set nodes, as this is not meant to be used in practice
+        self.bestNodes = usernodes
+
+        # 3. generate WPs for each file and store the reconstructed spectrograms
+        for filenum in range(len(self.audioList)):
+            print("Extracting energies from file", filenum+1)
+            data = self.audioList[filenum]
+
+            self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+
+            # Generate a full 5 level wavelet packet decomposition
+            self.WF.WaveletPacket(self.bestNodes, mode='symmetric', antialias=False)
+
+            # reconstruct from the requested nodes
+            C = self.WF.reconstructWP2(self.bestNodes[0], antialias=True, antialiasFilter=True)
+            for node in self.bestNodes[1:]:
+                C = C + self.WF.reconstructWP2(node, antialias=True, antialiasFilter=True)[:len(C)]
+            print("Reconstructed length", len(C))
+
+            # draw spectogram
+            sp = SignalProc.SignalProc()
+            sp.data = C
+            sp.sampleRate = self.spInfo['SampleRate']
+            _ = sp.spectrogram()
+
+            # put the collected spec into a list over files
+            allSPs.append(sp)
+
+        # allSpecs now is a list of [files] ndarrays
+
+        # 4. mark calls and learn threshold
+        # NOTE: window and inc are annotation parameters here,
+        # which don't have to match the wavelet detection resolution
+        res = self.gridSearchMC(allSPs, thrList, Awindow=1, Ainc=1)
 
         return res
 
@@ -1300,6 +1373,80 @@ class WaveletSegment:
         return finalnodes2, tpa, fpa, tna, fna
 
 
+    def gridSearchMC(self, sps, thrList, Awindow=1, Ainc=None):
+        """ Take list of SignalProcs over files,
+            perform grid search over the values of thr in the thrList.
+            Uses median clipping to detect peaks.
+
+            Output structure:
+            1. list of [nodes] over thr
+            2-5. 2d np arrays of TP/FP/TN/FN
+        """
+        if Ainc!=Awindow:
+            print("ERROR: only non-overlapping annotations (inc=window) supported currently")
+        shape = (1, len(thrList))  # 1 is for backward compatibility with multiple Ms
+        tpa = np.zeros(shape)
+        fpa = np.zeros(shape)
+        tna = np.zeros(shape)
+        fna = np.zeros(shape)
+
+        finalnodes = []
+        # Grid search over thr x Files
+        for indext in range(len(thrList)):
+            detected_all = []
+            annot_all = []
+
+            thr = thrList[indext]
+
+            # loop over files:
+            for indexF in range(len(sps)):
+                # bestBetaScore = 0
+                # bestRecall = 0
+
+                segmenter = Segment.Segmenter(sps[indexF])
+
+                # load the annotations for this file
+                if (Ainc is not None and Ainc!=1) or Awindow!=1:
+                    annot = self.annotation2[indexF]
+                else:
+                    annot = self.annotation[indexF]
+
+                # TODO the length of detections needn't match the length of annotations currently.
+                # not really an error but maybe it should.
+                detect_best = np.zeros(len(annot))
+
+                # spectrogram is already created from all the provided nodes.
+                segs = segmenter.medianClip(thr)
+                # convert segments into 1/0 at the annotation resolution!
+                detect_best = np.zeros(len(annot))
+                for seg in segs:
+                    start = math.floor(seg[0]/Awindow)
+                    end = math.ceil(seg[1]/Awindow)
+                    detect_best[start:end] = 1
+
+                print("Iteration f %d/%d complete" % (indexF + 1, len(self.audioList)))
+
+                # Memory cleanup:
+                gc.collect()
+
+                # build long vectors of detections and annotations
+                detected_all.extend(detect_best)
+                annot_all.extend(annot)
+
+            # Get the measures with the selected node set for this threshold and M over the set of files
+            finalnodes.append(self.bestNodes)
+            fB, recall, tp, fp, tn, fn = self.fBetaScore(annot_all, detected_all)
+            tpa[0, indext] = tp
+            fpa[0, indext] = fp
+            tna[0, indext] = tn
+            fna[0, indext] = fn
+            print("Iteration t %d/%d complete\t thr=%f\n---------------- " % (indext + 1, len(thrList), thrList[indext]))
+
+        # Extra list layer "over M" which is not used
+        finalnodes2 = [finalnodes]
+        return finalnodes2, tpa, fpa, tna, fna
+
+
     def listTopNodes(self, filenum):
         """ Selects top 10 or so nodes to be tested for this file,
             using correlations stored in nodeCorrs, and provided file index.
@@ -1368,12 +1515,13 @@ class WaveletSegment:
         gc.collect()
         return denoisedData
 
-    def loadDirectory(self, dirName, denoise, window=1, inc=None):
+    def loadDirectory(self, dirName, denoise, window=1, inc=None, impMask=True):
         """
             Finds and reads wavs from directory dirName.
             Denoise arg is passed to preprocessing.
             wpmode selects WP decomposition function ("new"-our but not AA'd, "aa"-our AA'd)
             Used in training to load an entire dir of wavs into memory.
+            impMask: impulse masking on audiodata. Off for changepoints to avoid distorting the mean
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
@@ -1395,7 +1543,7 @@ class WaveletSegment:
                     self.filenames.append(wavFile)
 
                     # adds to self.annotation array, also sets self.sp data and sampleRate
-                    succ = self.loadData(wavFile)
+                    succ = self.loadData(wavFile, impMask=impMask)
                     if not succ:
                         print("ERROR: failed to load file", wavFile)
                         return
@@ -1424,7 +1572,7 @@ class WaveletSegment:
         totalblocks = sum([len(a) for a in self.annotation])
         print("Directory loaded. %d/%d presence blocks found.\n" % (totalcalls, totalblocks))
 
-    def loadData(self, filename):
+    def loadData(self, filename, impMask=True):
         """ Loads a single WAV file and corresponding 0/1 annotations.
             Input: filename - wav file name
             Output: fills self.annotation, sets self.sp data, samplerate
@@ -1442,7 +1590,8 @@ class WaveletSegment:
         n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
         # Do impulse masking by default
-        self.sp.data = self.sp.impMask()
+        if impMask:
+            self.sp.data = self.sp.impMask()
 
         fileAnnotations = []
         # Get the segmentation from the txt file
