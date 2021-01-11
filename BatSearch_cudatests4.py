@@ -865,7 +865,7 @@ def metrics(confusion_matrix, file_num):
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/New_Train_Datasets" #directory with train files
 test_dataset_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset" #directory where to find test dataset files
-test_count=73 #counter for test number
+test_count=119 #counter for test number
 #test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
 
 test_general_results_dir = "/am/state-opera/home1/listanvirg/Documents/Experiments_result" #directory to store test result
@@ -883,13 +883,13 @@ f0=24000
 f1=54000
 
 print('Starting test ', test_count)
-test_fold= "Test_New_64row_"+str(test_count) #Test folder where to save all the stats
+test_fold= "Test_New_row64_"+str(test_count) #Test folder where to save all the stats
 if test_fold not in os.listdir(test_general_results_dir):
     os.mkdir(test_general_results_dir+ '/' + test_fold)
  
 
-if test_count==73:
-    start_i=3
+if test_count==119:
+    start_i=5
 else:
     start_i=0
 
@@ -909,8 +909,8 @@ for i in range(start_i,6):
 
     file_number_train=len(file_list_train)
 
-    if test_count==73:
-        start_j=0
+    if test_count==119:
+        start_j=3
     else:
         start_j=0
 
@@ -1105,8 +1105,8 @@ for i in range(start_i,6):
         #recover model
         model=load_model(modelpath)
 
-        if test_count==73:
-            start_label_index=0
+        if test_count==119:
+            start_label_index=1
         else:
             start_label_index=0
         ## 3 test with differen Label strategies
@@ -1417,7 +1417,7 @@ for i in range(start_i,6):
             cnn_train_info_file=test_general_results_dir+'/'+test_fold+'/CNN_train_data_info.txt'
             file1=open(cnn_train_info_file,'w')
         
-            L00=["Training dataset used "+train_fold]
+            L00=["Training dataset used "+train_fold+"+ Extra Noise Folder"]
             L0=['\n Click search parameters: f0= %5d, f1= %5d \n' %(f0,f1) ]
             if window==3:
                 L1=['window used 3x2 \n']
@@ -1486,12 +1486,12 @@ for i in range(start_i,6):
             file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9, L10)))
             #file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9)))
             file1.close()
-            if test_count<72:
-                test_count+=1
-                test_fold= "Test_New_"+str(test_count) #Test folder where to save all the stats
-                if test_fold not in os.listdir(test_general_results_dir):
-                    os.mkdir(test_general_results_dir+ '/' + test_fold)
-                print('\n\n Starting test ', test_count)
+            #if test_count<72:
+            test_count+=1
+            test_fold= "Test_New_row64_"+str(test_count) #Test folder where to save all the stats
+            if test_fold not in os.listdir(test_general_results_dir):
+                os.mkdir(test_general_results_dir+ '/' + test_fold)
+            print('\n\n Starting test ', test_count)
         
                 
 
