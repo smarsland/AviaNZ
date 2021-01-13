@@ -110,6 +110,8 @@ class CNNtrain:
 
         mincallengths = []
         maxcallengths = []
+        f1 = []
+        f2 = []
         self.maxgaps = []
         self.calltypes = []
         for fi in self.currfilt['Filters']:
@@ -117,8 +119,12 @@ class CNNtrain:
             mincallengths.append(fi['TimeRange'][0])
             maxcallengths.append(fi['TimeRange'][1])
             self.maxgaps.append(fi['TimeRange'][3])
+            f1.append(fi['FreqRange'][0])
+            f2.append(fi['FreqRange'][1])
         self.mincallength = np.max(mincallengths)
         self.maxcallength = np.max(maxcallengths)
+        self.f1 = np.min(f1)
+        self.f2 = np.max(f2)
 
         print("Manually annotated: %s" % self.folderTrain1)
         print("Auto processed and reviewed: %s" % self.folderTrain2)
@@ -127,6 +133,7 @@ class CNNtrain:
         print("Call types: %s" % self.calltypes)
         print("Call length: %.2f - %.2f sec" % (self.mincallength, self.maxcallength))
         print("Sample rate: %d Hz" % self.fs)
+        print("Frequency range: %d - %d Hz" % (self.f1, self.f2))
 
     def checkDisk(self):
         # Check disk usage
@@ -139,7 +146,7 @@ class CNNtrain:
 
     def genSegmentDataset(self, hasAnnotation):
         self.traindata = []
-        self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0)
+        self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
         # Dir1 - manually annotated
         # Find noise segments if the user is confident about full annotation
         if self.annotatedAll:
@@ -246,7 +253,7 @@ class CNNtrain:
         print('Temporary model dir:', self.tmpdir2.name)
 
         # Find train segments belong to each class
-        self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
+        self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.f1, self.f2)
 
         # Find how many images with default hop (=imgWidth), adjust hop to make a good number of images also keep space
         # for some in-built augmenting (width-shift)
@@ -584,6 +591,11 @@ class CNNtrain:
         CNNdic["windowInc"] = [self.windowWidth,self.windowInc]
         CNNdic["win"] = [self.imgWidth,self.imgWidth/5]     # TODO: remove hop
         CNNdic["inputdim"] = self.imgsize
+        if self.f1 == 0 and self.f2 == self.fs/2:
+            print('no frequency masking used')
+        else:
+            print('frequency masking used', self.f1, self.f2)
+            CNNdic["fRange"] = [self.f1, self.f2]
         output = {}
         thr = []
         for ct in range(len(self.calltypes)):

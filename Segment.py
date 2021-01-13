@@ -1217,6 +1217,11 @@ class PostProcess:
             self.CNNoutputs = CNNmodel[3]
             self.CNNwindowInc = CNNmodel[4]
             self.CNNthrs = CNNmodel[5]
+            if CNNmodel[6]:
+                self.CNNfMask = True
+                self.CNNfRange = CNNmodel[7]
+            else:
+                self.CNNfMask = False
             self.tgtsampleRate = tgtsampleRate
         else:
             self.CNNmodel = None
@@ -1284,8 +1289,8 @@ class PostProcess:
         sp.data = data
         sp.sampleRate = fs
         _ = sp.spectrogram()
-        f1 = 90 - 50    # TODO: hardcoded for bittern testing
-        f2 = 250 + 100
+        f1 = self.CNNfRange[0]
+        f2 = self.CNNfRange[1]
         # Mask out of band elements
         bin_width = fs / 2 / np.shape(sp.sg)[1]
         lb = int(np.ceil(f1 / bin_width))
@@ -1399,7 +1404,7 @@ class PostProcess:
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
-            # print('\n--- Segment', seg)
+            print('\n--- Segment', seg)
             if seg[0][1] - seg[0][0] > max(self.syllen, 1):
                 n = 5
             else:
@@ -1501,6 +1506,7 @@ class PostProcess:
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
+            print('\n--- Segment', seg)
             # expand the segment if its too small
             callength = max(self.CNNwindow, self.maxLen/2)
             if callength >= seg[0][1] - seg[0][0]:
@@ -1522,7 +1528,10 @@ class PostProcess:
             sp.sampleRate = self.sampleRate
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
-            featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            if self.CNNfMask:
+                featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            else:
+                featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             # featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             featuress = np.array(featuress)
@@ -1534,6 +1543,7 @@ class PostProcess:
                 probs = self.CNNmodel.predict(featuress)
             else:
                 probs = 0
+            print("probabilities: ", probs)
 
             if isinstance(probs, int):
                 # Zero images from this segment, very unlikely to be a true seg.

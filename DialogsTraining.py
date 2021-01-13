@@ -1847,6 +1847,9 @@ class BuildCNNWizard(QWizard):
 
         # P3
         self.parameterPage = BuildCNNWizard.WPageParameters(self.cnntrain, config)
+        self.parameterPage.registerField("frqMasked*", self.parameterPage.cbfrange, "isChecked")
+        self.parameterPage.registerField("f1*", self.parameterPage.f1, "value", self.parameterPage.f1.valueChanged)
+        self.parameterPage.registerField("f2*", self.parameterPage.f2, "value", self.parameterPage.f2.valueChanged)
         self.addPage(self.parameterPage)
 
         # add the Save & Test button
@@ -1863,7 +1866,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Select data')
             self.setSubTitle('Choose the recogniser that you want to extend with CNN, then select training data.')
 
-            self.setMinimumSize(250, 200)
+            self.setMinimumSize(300, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -2010,6 +2013,8 @@ class BuildCNNWizard(QWizard):
             self.msgrecclens.setStyleSheet("QLabel { color : #808080; }")
             self.msgrecfs = QLabel("")
             self.msgrecfs.setStyleSheet("QLabel { color : #808080; }")
+            self.msgrecfrange = QLabel("")
+            self.msgrecfrange.setStyleSheet("QLabel { color : #808080; }")
             self.warnLabel = QLabel("")
             self.warnLabel.setStyleSheet("QLabel { color : #800000; }")
             self.warnoise = QLabel("")
@@ -2046,7 +2051,8 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.msgreccts, 15, 2)
             layout.addWidget(self.msgrecclens, 16, 2)
             layout.addWidget(self.msgrecfs, 17, 2)
-            layout.addWidget(self.warnLabel, 18, 2)
+            layout.addWidget(self.msgrecfrange, 18, 2)
+            layout.addWidget(self.warnLabel, 19, 2)
             self.setLayout(layout)
 
         def initializePage(self):
@@ -2112,6 +2118,7 @@ class BuildCNNWizard(QWizard):
             self.msgreccts.setText("<b>Call types:</b> %s" % (self.cnntrain.calltypes))
             self.msgrecclens.setText("<b>Call length:</b> %.2f - %.2f sec" % (self.cnntrain.mincallength, self.cnntrain.maxcallength))
             self.msgrecfs.setText("<b>Sample rate:</b> %d Hz" % (self.cnntrain.fs))
+            self.msgrecfrange.setText("<b>Frequency range:</b> %d - %d Hz" % (self.cnntrain.f1, self.cnntrain.f2))
 
             for i in range(len(self.cnntrain.calltypes)):
                 self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.cnntrain.calltypes[i], self.cnntrain.trainN[i]))
@@ -2181,7 +2188,7 @@ class BuildCNNWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
-            self.cnntrain = cnntrain
+            # self.cnntrain = cnntrain
             self.config = config
             self.indx = np.ndarray(0)
 
@@ -2196,6 +2203,26 @@ class BuildCNNWizard(QWizard):
             self.imgsec.setValue(25)
             self.imgsec.valueChanged.connect(self.imglenChange)
             self.imgtext = QLabel('0.25 sec')
+
+            self.cbfrange = QCheckBox("Limit frequency range")
+            self.cbfrange.setStyleSheet("QCheckBox { font-weight: bold; }")
+            self.cbfrange.toggled.connect(self.onClickedFrange)
+
+            self.f1 = QSlider(Qt.Horizontal)
+            self.f1.setTickPosition(QSlider.TicksBelow)
+            self.f1.setTickInterval(1000)
+            # self.f1.setRange(0, self.cnntrain.fs)  # 0-6 sec
+            # self.f1.setValue(self.cnntrain.f1)
+            # self.f1.valueChanged.connect(self.f1Change)
+            self.f1text = QLabel('')
+
+            self.f2 = QSlider(Qt.Horizontal)
+            self.f2.setTickPosition(QSlider.TicksBelow)
+            self.f2.setTickInterval(1000)
+            # self.f2.setRange(0, self.cnntrain.fs)  # 0-6 sec
+            # self.f2.setValue(self.cnntrain.f2)
+            # self.f2.valueChanged.connect(self.f2Change)
+            self.f2text = QLabel('')
 
             space = QLabel()
             space.setFixedSize(10, 30)
@@ -2215,12 +2242,25 @@ class BuildCNNWizard(QWizard):
 
             layout0 = QVBoxLayout()
             layout0.addLayout(msglayout)
-            layout0.addWidget(space)
+            # layout0.addWidget(space)
             layout0.addWidget(QLabel('<b>Choose call length (sec) you want to show to CNN</b>'))
             layout0.addWidget(QLabel('Make sure an image covers at least couple of syllables when appropriate'))
-            layout0.addWidget(space)
+            # layout0.addWidget(space)
             layout0.addWidget(self.imgtext)
             layout0.addWidget(self.imgsec)
+            layout0.addWidget(self.cbfrange)
+            layout0a = QHBoxLayout()
+            layout0a1 = QVBoxLayout()
+            # layout0a1.addWidget(QLabel('Lower frq. limit (Hz)'))
+            layout0a1.addWidget(self.f1text)
+            layout0a1.addWidget(self.f1)
+            layout0a2 = QVBoxLayout()
+            # layout0a2.addWidget(QLabel('Upper frq. limit (Hz)'))
+            layout0a2.addWidget(self.f2text)
+            layout0a2.addWidget(self.f2)
+            layout0a.addLayout(layout0a1)
+            layout0a.addLayout(layout0a2)
+            layout0.addLayout(layout0a)
 
             layout2 = QVBoxLayout()
             layout2.addWidget(QLabel('<i>Example images from your dataset</i>'))
@@ -2252,6 +2292,23 @@ class BuildCNNWizard(QWizard):
             self.setButtonText(QWizard.NextButton, 'Generate CNN images and Train>')
 
         def initializePage(self):
+            self.cnntrain = self.wizard().confirminputPage.cnntrain
+            self.cnntrain.windowWidth = 512
+            self.cnntrain.windowInc = 256
+            self.f1.setRange(0, self.cnntrain.fs/2)
+            self.f1.setValue(0)
+            self.f1text.setText('Lower frq. limit 0 Hz')
+            self.f2.setRange(0, self.cnntrain.fs/2)
+            self.f2.setValue(self.cnntrain.fs/2)
+            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+            self.f1.valueChanged.connect(self.f1Change)
+            self.f2.valueChanged.connect(self.f2Change)
+            self.cbfrange.setChecked(False)
+            self.f1text.setEnabled(False)
+            self.f1.setEnabled(False)
+            self.f2text.setEnabled(False)
+            self.f2.setEnabled(False)
+
             self.wizard().button(QWizard.NextButton).setDefault(False)
             self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
 
@@ -2285,6 +2342,28 @@ class BuildCNNWizard(QWizard):
             self.redopages = True
             self.completeChanged.emit()
 
+        def onClickedFrange(self):
+            cbutton = self.sender()
+            if cbutton.isChecked():
+                self.f1.setEnabled(True)
+                self.f1text.setEnabled(True)
+                self.f2.setEnabled(True)
+                self.f2text.setEnabled(True)
+                if self.f1.value() == 0 and self.f2.value() == self.cnntrain.fs/2:
+                    self.f1.setValue(self.cnntrain.f1)
+                    self.f2.setValue(self.cnntrain.f2)
+                    self.f1text.setText('Lower frq. limit ' + str(self.cnntrain.f1) + ' Hz')
+                    self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.f2) + ' Hz')
+            else:
+                self.f1.setValue(0)
+                self.f2.setValue(self.cnntrain.fs)
+                self.f1text.setText('Lower frq. limit ' + str(0) + ' Hz')
+                self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+                self.f1.setEnabled(False)
+                self.f1text.setEnabled(False)
+                self.f2.setEnabled(False)
+                self.f2text.setEnabled(False)
+
         def loadFile(self, filename, duration=0, offset=0, fs=0):
             """
             Read audio file.
@@ -2315,7 +2394,16 @@ class BuildCNNWizard(QWizard):
                 self.cnntrain.sp.data = audiodata
                 self.cnntrain.sp.sampleRate = self.cnntrain.fs
                 sgRaw = self.cnntrain.sp.spectrogram(window_width=self.cnntrain.windowWidth, incr=self.cnntrain.windowInc)
+                # Frequency masking
+                f1 = self.f1.value()
+                f2 = self.f2.value()
+                # Mask out of band elements
+                bin_width = self.cnntrain.fs / 2 / np.shape(sgRaw)[1]
+                lb = int(np.ceil(f1 / bin_width))
+                ub = int(np.floor(f2 / bin_width))
                 maxsg = np.min(sgRaw)
+                sgRaw[:, 0:lb] = 0.0
+                sgRaw[:, ub:] = 0.0
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                 self.setColourMap()
                 picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(self.sg), self.cnntrain.sp.data, self.cnntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, self.colourStart, self.colourEnd, False,
@@ -2372,6 +2460,22 @@ class BuildCNNWizard(QWizard):
                 self.imgtext.setText(str(value / 100) + ' sec')
             self.cnntrain.imgWidth = self.imgsec.value()/100
             self.setWindowInc()
+            self.showimg(self.indx)
+
+        def f1Change(self, value):
+            value = value//10*10
+            if value < 0:
+                value = 0
+            self.cnntrain.f1 = value
+            self.f1text.setText('Lower frq. limit ' + str(value) + ' Hz')
+            self.showimg(self.indx)
+
+        def f2Change(self, value):
+            value = value//10*10
+            if value < 0:
+                value = 0
+            self.cnntrain.f2 = value
+            self.f2text.setText('Upper frq. limit ' + str(value) + ' Hz')
             self.showimg(self.indx)
 
         def cleanupPage(self):
@@ -2725,4 +2829,3 @@ class BuildCNNWizard(QWizard):
 
         self.parameterPage.setFinalPage(False)
         self.parameterPage.completeChanged.emit()
-

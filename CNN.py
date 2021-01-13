@@ -407,7 +407,7 @@ class GenerateData:
     .correction has segments for the noise class
     3. when extracted pieces of sounds (of call types and noise) are presented TODO
     """
-    def __init__(self, filter, length, windowwidth, inc, imageheight, imagewidth):
+    def __init__(self, filter, length, windowwidth, inc, imageheight, imagewidth, f1, f2):
         self.filter = filter
         self.species = filter["species"]
         # not sure if this is needed?
@@ -419,6 +419,8 @@ class GenerateData:
         for fi in filter['Filters']:
             self.calltypes.append(fi['calltype'])
         self.fs = filter["SampleRate"]
+        self.f1 = f1
+        self.f2 = f2
         self.length = length
         self.windowwidth = windowwidth
         self.inc = inc
@@ -621,6 +623,13 @@ class GenerateData:
                 if sgstart < 0:
                     continue
                 sgRaw_i = sgRaw[sgstart:sgend, :]
+                # Frequency masking
+                bin_width = self.fs / 2 / np.shape(sgRaw_i)[1]
+                lb = int(np.ceil(self.f1 / bin_width))
+                ub = int(np.floor(self.f2 / bin_width))
+                sgRaw_i[:, 0:lb] = 0.0
+                sgRaw_i[:, ub:] = 0.0
+
                 maxg = np.max(sgRaw_i)
                 # Normalize and rotate
                 sgRaw_i = np.rot90(sgRaw_i / maxg)
