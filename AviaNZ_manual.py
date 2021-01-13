@@ -1384,7 +1384,7 @@ class AviaNZ(QMainWindow):
             self.listLoadFile(fileNameOld)
 
         #self.fillFileList(self.SoundFileDir, current)
-        self.listFiles.setCurrentItem(current)
+        # self.listFiles.setCurrentItem(current)    # TODO: Check this
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
@@ -4765,6 +4765,7 @@ class AviaNZ(QMainWindow):
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
             if str(alg) != 'Wavelets':
                 print('Segments detected: ', len(newSegments))
+                print(newSegments)
                 print('Post-processing...')
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
@@ -4779,6 +4780,7 @@ class AviaNZ(QMainWindow):
                 newSegments = post.segments
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
+                print(newSegments)
                 print('Post-processing...')
                 # load target CNN model if exists
                 self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtname])
