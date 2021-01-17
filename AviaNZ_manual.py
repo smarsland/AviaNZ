@@ -4865,6 +4865,7 @@ class AviaNZ(QMainWindow):
                             print("After FF segments:", len(post.segments))
                     if alg=='Wavelets':
                         post.joinGaps(maxgap=subfilter['TimeRange'][3])
+                    if subfilter['TimeRange'][0]>0:
                         post.deleteShort(minlength=subfilter['TimeRange'][0])
 
                     # POSSIBLE OPTION: merge & split everything into pieces again, at custom resolution

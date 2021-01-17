@@ -79,11 +79,14 @@ Any extra parameters to be applied for all subfilters may be provided (such as `
 `TimeRange` - JSON array of length 4: `[minlen, maxlen, avgsyl, maxgap]`, respectively min and max lengths of a call, average syllable length, and maximum gap between parts of same call. Required.   
 `WaveletParams` - JSON object of parameters needed for wavelet filtering. Required. Currently uses:  
 * `thr` - numeric, threshold for detecting calls. Required.  
-* `M` - numeric, energy curve window in seconds. Required for `method="wv"`.  
 * `nodes` - JSON array of wavelet nodes used in this filter. Required.  
+* `M` - numeric, energy curve window in seconds. Required for `method="wv"`.  
+* `win` - numeric, window for energy averaging in seconds. Required for `method="chp"`.
 
 `FreqRange` - frequency band for analysis. Identified calls will be marked as boxes with these limits, or as full-band segments if not provided.
 Any extra subfilter parameters may follow, such as `"F0"`.
+
+`PostResolution` - numeric. If present, detections will be merged and resplit into pieces of this many seconds (i.e. this parameter is both the merging gap and split piece length).
 
 `CNN` - JSON object. Meta information about the Convolution Neural Network (CNN) model for this species:
 

@@ -176,7 +176,7 @@ class WaveletSegment:
             if alpha is None:
                 alpha = subfilter["WaveletParams"]["thr"]
             if window is None:
-                window = subfilter["TimeRange"][0]
+                window = subfilter["WaveletParams"]["win"]
             if maxlen is None:
                 maxlen = subfilter["TimeRange"][1]
 

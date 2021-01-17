@@ -1111,17 +1111,17 @@ class AviaNZ_reviewAll(QMainWindow):
             # (they will update self.segments and store corrections)
             if reviewAll:
                 _ = self.segments.orderTime()
-                # TODO TEMP
-                print("Splitting", self.species)
-                self.segments.splitLongSeg(species=self.species, maxlen=3.0)
+                # NOTE: uncommenting this is useful if somebody accidentally split segments
+                # print("Splitting", self.species)
+                # self.segments.splitLongSeg(species=self.species, maxlen=3.0)
                 filesuccess = self.review_all(filename, sTime)
             else:
                 filesuccess = self.review_single(filename, sTime)
                 # TODO this should be done for all segments normally
                 # merge back any split segments, plus ANY overlaps within calltypes
-                todelete = self.segments.mergeSplitSeg()
-                for dl in todelete:
-                    del self.segments[dl]
+                # todelete = self.segments.mergeSplitSeg()
+                # for dl in todelete:
+                #     del self.segments[dl]
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
@@ -1620,7 +1620,7 @@ class AviaNZ_reviewAll(QMainWindow):
         for i in reversed(range(len(self.segments))):
             print(self.segments[i][4],self.origSeg[i][4])
             if self.segments[i][4] == self.origSeg[i][4]:
-                print("Segment matches")
+                # print("Segment matches")
                 del self.origSeg[i]
             else:
                 oldlabel = self.origSeg[i][4]

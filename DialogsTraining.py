@@ -374,11 +374,16 @@ class BuildRecAdvWizard(QWizard):
         def CTannotations(self):
             """ Check if all the segments from target species has call type annotations"""
             self.hasCTannotations = True
-            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            listOfDataFiles = []
+            for root, dirs, files in os.walk(self.field("trainDir")):
+                for file in files:
+                    if file[-5:].lower() == '.data':
+                        listOfDataFiles.append(os.path.join(root, file))
+
             for file in listOfDataFiles:
                 # Read the annotation
                 segments = Segment.SegmentList()
-                segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                segments.parseJSON(file)
                 SpSegs = segments.getSpecies(self.field("species"))
                 for segix in SpSegs:
                     seg = segments[segix]
@@ -396,13 +401,20 @@ class BuildRecAdvWizard(QWizard):
             duration = []
             cl = Clustering.Clustering([], [], 5)
 
-            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
-            listOfWavFiles = QDir(self.field("trainDir")).entryList(['*.wav'])
+            listOfDataFiles = []
+            listOfWavFiles = []
+            for root, dirs, files in os.walk(self.field("trainDir")):
+                for file in files:
+                    if file[-5:].lower() == '.data':
+                        listOfDataFiles.append(os.path.join(root, file))
+                    elif file[-4:].lower() == '.wav':
+                        listOfWavFiles.append(os.path.join(root, file))
+
             for file in listOfDataFiles:
                 if file[:-5] in listOfWavFiles:
                     # Read the annotation
                     segments = Segment.SegmentList()
-                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                    segments.parseJSON(file)
                     SpSegs = segments.getSpecies(self.field("species"))
                     for segix in SpSegs:
                         seg = segments[segix]
@@ -976,8 +988,10 @@ class BuildRecAdvWizard(QWizard):
             elif method=="chp":
                 self.usernodes = QLineEdit(self)
                 form1_step4.addRow('Enter nodes (comma-sep.)', self.usernodes)
+                self.chpwin = QLineEdit(self)
+                form1_step4.addRow('Window size (sec)', self.chpwin)
                 self.minlen = QLineEdit(self)
-                form1_step4.addRow('Window size (sec)', self.minlen)
+                form1_step4.addRow('Min call length (sec)', self.minlen)
                 self.maxlen = QLineEdit(self)
                 form1_step4.addRow('Max call length (sec)', self.maxlen)
             elif method=="mc":
@@ -1060,11 +1074,11 @@ class BuildRecAdvWizard(QWizard):
                 f_high = fs/2
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
 
-            # need some more properties for the older method
-            if self.method=="wv" or self.method=="mc":
-                # this is just the minimum call length then:
-                self.minlen.setText(str(round(np.min(len_min),2)))
+            # this is just the minimum call length:
+            self.minlen.setText(str(round(np.min(len_min),2)))
 
+            # need some more properties for the older methods
+            if self.method=="wv" or self.method=="mc":
                 if not self.wizard().clusterPage.hasCTannotations:
                     # Get max inter syllable gap
                     gaps = []
@@ -1097,7 +1111,7 @@ class BuildRecAdvWizard(QWizard):
             elif self.method=="chp":
                 # this is window size:
                 # let's say, 10 % of the min call length
-                self.minlen.setText(str(round(np.min(len_min/10),2)))
+                self.chpwin.setText(str(round(np.min(len_min/10),2)))
 
             self.adjustSize()
 
@@ -1255,10 +1269,11 @@ class BuildRecAdvWizard(QWizard):
                 # note: for each page we reset the filter to contain 1 calltype
                 self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh]}]
             elif self.method=="chp":
-                chpwin = float(self.field("win"+str(self.pageId)))
-                mlen = float(self.field("mlen"+str(self.pageId)))
+                minlen = float(self.field("minlen"+str(self.pageId)))
+                maxlen = float(self.field("maxlen"+str(self.pageId)))
+                chpwin = float(self.field("chpwin"+str(self.pageId)))
                 usernodes = list(map(int, self.field("usernodes"+str(self.pageId)).split(',')))
-                self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [chpwin, mlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
+                self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
             elif self.method=="mc":
                 minlen = float(self.field("minlen"+str(self.pageId)))
                 maxlen = float(self.field("maxlen"+str(self.pageId)))
@@ -1323,7 +1338,7 @@ class BuildRecAdvWizard(QWizard):
                     self.thrList = np.geomspace(0.03, 10, num=numthr)
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainChp(self.field("trainDir"),
                                                                     self.thrList, usernodes,
-                                                                    maxlen=mlen, window=chpwin)
+                                                                    maxlen=maxlen, window=chpwin)
                 elif self.method=="mc":
                     numthr = 9
                     self.thrList = np.geomspace(1, 12, num=numthr)
@@ -1461,14 +1476,15 @@ class BuildRecAdvWizard(QWizard):
 
                     newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
                 elif self.wizard().method=="chp":
-                    win = float(self.field("win"+str(pageId)))
-                    mlen = float(self.field("mlen"+str(pageId)))
+                    chpwin = float(self.field("chpwin"+str(pageId)))
+                    minlen = float(self.field("minlen"+str(pageId)))
+                    maxlen = float(self.field("maxlen"+str(pageId)))
                     fLow = int(self.field("fLow"+str(pageId)))
                     fHigh = int(self.field("fHigh"+str(pageId)))
                     thr = float(self.field("bestThr"+str(pageId)))
                     nodes = eval(self.field("bestNodes"+str(pageId)))
 
-                    newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [win, mlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                    newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "nodes": nodes, "win": chpwin}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
                 elif self.wizard().method=="mc":
                     minlen = float(self.field("minlen"+str(pageId)))
                     maxlen = float(self.field("maxlen"+str(pageId)))
@@ -1613,8 +1629,9 @@ class BuildRecAdvWizard(QWizard):
                 page5.registerField("bestM"+str(pageid)+"*", page5.bestM)
                 page5.registerField("bestNodes"+str(pageid)+"*", page5.bestNodes)
             elif self.method=="chp":
-                page4.registerField("win"+str(pageid), page4.minlen)
-                page4.registerField("mlen"+str(pageid), page4.maxlen)
+                page4.registerField("chpwin"+str(pageid), page4.chpwin)
+                page4.registerField("minlen"+str(pageid), page4.minlen)
+                page4.registerField("maxlen"+str(pageid), page4.maxlen)
                 page4.registerField("fLow"+str(pageid), page4.fLow)
                 page4.registerField("fHigh"+str(pageid), page4.fHigh)
                 # These are for user input to be passed between pages 4 and 5:

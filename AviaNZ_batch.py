@@ -618,12 +618,16 @@ class AviaNZ_batchProcess():
             post.CNN()
 
         # Fund freq and merging. Only do for standard wavelet filter currently:
+        # (for median clipping, gap joining and some short segment cleanup was already done in WaveletSegment)
         if "method" not in spInfo or spInfo["method"]=="wv":
             if 'F0' in subfilter and 'F0Range' in subfilter and subfilter["F0"]:
                 print("Checking for fundamental frequency...")
                 post.fundamentalFrq()
 
             post.joinGaps(maxgap=subfilter['TimeRange'][3])
+
+        # delete short segments, if requested:
+        if subfilter['TimeRange'][0]>0:
             post.deleteShort(minlength=subfilter['TimeRange'][0])
 
         # POSSIBLE OPTION: split and rejoin everything in pieces

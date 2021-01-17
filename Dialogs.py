@@ -1152,7 +1152,7 @@ class Segmentation(QDialog):
         subfilt = self.filters[species]["Filters"][0]
         self.chpalpha.setValue(subfilt["WaveletParams"]["thr"])
         self.medThr.setValue(subfilt["WaveletParams"]["thr"])
-        self.chpwin.setValue(subfilt["TimeRange"][0])
+        self.chpwin.setValue(subfilt["WaveletParams"]["win"])
         self.maxlen.setValue(subfilt["TimeRange"][1])
 
     def medSizeChange(self,value):
