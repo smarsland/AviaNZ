@@ -444,7 +444,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.addSp.hide()
             self.warning.show()
 
-        if currname=="NZ Bats":
+        if currname == "NZ Bats" or currname == "NZ Bats_NP":
             self.addSp.setEnabled(False)
             self.addSp.setToolTip("Bat recognisers cannot be combined with others")
             self.w_wind.setChecked(False)

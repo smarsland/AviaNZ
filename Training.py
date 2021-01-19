@@ -424,6 +424,7 @@ class CNNtrain:
             fig.savefig(os.path.join(self.folderTrain1, 'validation-plots.png'))
         else:
             fig.savefig(os.path.join(self.folderTrain2, 'validation-plots.png'))
+        plt.close()
 
                 # # Individual plots
                 # fig = plt.figure()

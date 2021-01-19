@@ -114,7 +114,7 @@ class SignalProc:
             #else:
                 #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat['channelCount'], self.audioFormat['sampleRate'], self.audioFormat['sampleSize']))
 
-    def readBmp(self, file, len=None, off=0, silent=False, rotate=True):
+    def readBmp(self, file, len=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
             For similarity with readWav, accepts len and off args, in seconds.
             rotate: if True, rotates to match setImage and other spectrograms (rows=time)
@@ -122,7 +122,8 @@ class SignalProc:
         """
         # !! Important to set these, as they are used in other functions
         self.sampleRate = 176000
-        self.incr = 512
+        if not repeat:
+            self.incr = 512
 
         img = QImage(file, "BMP")
         h = img.height()
@@ -169,7 +170,8 @@ class SignalProc:
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
         img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
-        img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
+        if repeat:
+            img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
         print(np.shape(img2))
 
         self.data = []
