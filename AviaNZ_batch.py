@@ -454,7 +454,7 @@ class AviaNZ_batchProcess():
             end = min(start+samplesInPage, self.datalength)
             thisPageLen = (end-start) / self.sampleRate
 
-            if thisPageLen < 2 and (self.method != "Click" or self.method != "Bats"):
+            if thisPageLen < 2 and (self.method != "Click" and self.method != "Bats"):
                 print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
                 continue
 
