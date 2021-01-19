@@ -107,8 +107,10 @@ class AviaNZ_batchProcess():
         else:
             if "NZ Bats" in self.species:
                 # Should bats only be possible alone?
-                self.method = "Click"
+                self.method = "Click"   # old bat method
                 #self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+            elif "NZ Bats_NP" in self.species:
+                self.method = "Bats"
             else:
                 self.method = "Wavelets"
 
@@ -130,7 +132,7 @@ class AviaNZ_batchProcess():
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if (self.method!="Click" and filename.lower().endswith('.wav')) or (self.method=="Click" and filename.lower().endswith('.bmp')):
+                if (self.method != "Click" and filename.lower().endswith('.wav')) or (self.method == "Click" and filename.lower().endswith('.bmp')) or (self.method == "Bats" and filename.lower().endswith('.bmp')):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
 
@@ -187,7 +189,7 @@ class AviaNZ_batchProcess():
                 text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyse: " + str(total) + ", " + str(cnt) + " done so far.\n"
                 text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
             text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
-            if speciesStr=="Any sound" or self.method=="Click":
+            if speciesStr == "Any sound" or self.method == "Click" or self.method == "Bats":
                 text += "\nWarning: any previous annotations in these files will be deleted!\n"
             else:
                 text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
@@ -268,13 +270,22 @@ class AviaNZ_batchProcess():
                         self.exportBatSurvey(self.dirName, exportResults)
                 else:
                     self.exportBatSurvey(self.dirName, None)
+            elif self.method == 'Bats':
+                self.exportToBatSearch_NP(self.dirName)
+                if not self.CLI:
+                    import Dialogs
+                    exportResults = Dialogs.ExportBats(self.config['operator'])
+                    exportResults.show()
+                    if exportResults.exec_() == 1:
+                        exportResults = exportResults.getValues()
+                        self.exportBatSurvey(self.dirName, exportResults)
+                else:
+                    self.exportBatSurvey(self.dirName, None)
 
             # END of processing and exporting. Final cleanup
             self.log.file.close()
             if not self.CLI:
                 self.ui.endproc(total)
-
-
 
         print("Processed all %d files" % total)
         return(0)
@@ -315,7 +326,7 @@ class AviaNZ_batchProcess():
 
             # check if file is formatted correctly
             with open(filename, 'br') as f:
-                if (self.method=="Click" and f.read(2) != b'BM') or (self.method!="Click" and f.read(4) != b'RIFF'):
+                if (self.method == "Click" and f.read(2) != b'BM') or (self.method == "Bats" and f.read(2) != b'BM') or (self.method != "Click" and self.method != "Bats" and f.read(4) != b'RIFF'):
                     print("Warning: file %s not formatted correctly, skipping" % filename)
                     self.log.appendFile(filename)
                     continue
@@ -443,7 +454,7 @@ class AviaNZ_batchProcess():
             end = min(start+samplesInPage, self.datalength)
             thisPageLen = (end-start) / self.sampleRate
 
-            if thisPageLen < 2 and self.method!="Click":
+            if thisPageLen < 2 and (self.method != "Click" or self.method != "Bats"):
                 print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
                 continue
 
@@ -485,7 +496,7 @@ class AviaNZ_batchProcess():
                 del self.seg
                 gc.collect()
             else:
-                if self.method!="Click":
+                if self.method != "Click" and self.method != "Bats":
                     # read in the page and resample as needed
                     self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
 
@@ -493,18 +504,20 @@ class AviaNZ_batchProcess():
                 click_label = 'None'
                 for speciesix in range(len(filters)):
                     print("Working with recogniser:", filters[speciesix])
-                    if self.method!="Click":
+                    if self.method != "Click" and self.method != "Bats":
                         # note: using 'recaa' mode = partial antialias
                         thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
-                    else:
+                    elif self.method == "Click":
                         click_label, data_test, gen_spec = self.ClickSearch(self.sp.sg, self.filename)
                         print('number of detected clicks = ', gen_spec)
                         thisPageSegs = []
+                    elif self.method == "Bats":
+                        thisPageSegs = []   # No click search
 
                     # Post-process:
                     # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     print("Segments detected (all subfilters): ", thisPageSegs)
-                    if not self.testmode:
+                    if not self.testmode and self.method != "Bats":
                         print("Post-processing...")
                     # postProcess currently operates on single-level list of segments,
                     # so we run it over subfilters for wavelets:
@@ -554,6 +567,70 @@ class AviaNZ_batchProcess():
                                 else:
                                     # do not create any segments
                                     print("Nothing detected")
+                            elif self.method == "Bats":     # Let's do it here - PostProc class is not supporting bats
+                                model = CNNmodel[0]
+                                if thisPageLen < CNNmodel[1][0]:
+                                    continue
+                                elif thisPageLen >= CNNmodel[1][0]:
+                                    # print('duration:', thisPageLen)
+                                    n = math.ceil((thisPageLen - 0 - CNNmodel[1][0]) / CNNmodel[1][1] + 1)
+                                # print('* hop:', CNNmodel[1][1], 'n:', n)
+
+                                featuress = []
+                                specFrameSize = len(range(0, int(CNNmodel[1][0] * self.sp.sampleRate - self.sp.window_width), self.sp.incr))
+                                for i in range(int(n)):
+                                    # print('**', self.filename, CNNmodel[1][0], 0 + CNNmodel[1][1] * i, self.sp.sampleRate,
+                                    #       '************************************')
+                                    # Sgram images
+                                    sgRaw = self.sp.sg
+                                    sgstart = int(CNNmodel[1][1] * i * self.sp.sampleRate / self.sp.incr)
+                                    sgend = sgstart + specFrameSize
+                                    if sgend > np.shape(sgRaw)[0]:
+                                        sgend = np.shape(sgRaw)[0]
+                                        sgstart = np.shape(sgRaw)[0] - specFrameSize
+                                    if sgstart < 0:
+                                        continue
+                                    sgRaw_i = sgRaw[sgstart:sgend, :]
+                                    maxg = np.max(sgRaw_i)
+                                    # Normalize and rotate
+                                    featuress.append([np.rot90(sgRaw_i / maxg).tolist()])
+                                featuress = np.array(featuress)
+                                # featuress = featuress.reshape(featuress.shape[0], 512, 687, 1)
+                                # featuress = featuress.reshape(featuress.shape[0], 512, 343, 1)
+                                # featuress = featuress.reshape(featuress.shape[0], 512, 34, 1)
+                                featuress = featuress.reshape(featuress.shape[0], CNNmodel[2][0], CNNmodel[2][1], 1)
+                                featuress = featuress.astype('float32')
+                                if np.shape(featuress)[0] > 0:
+                                    probs = model.predict(featuress)
+                                else:
+                                    probs = 0
+                                if isinstance(probs, int):
+                                    # there is no at least one img generated from this segment, very unlikely to be a true seg.
+                                    label = []
+                                else:
+                                    ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
+
+                                    if n > 4:
+                                        n = 4
+                                    prob = [np.mean(probs[ind[0][-n // 2:], 0]),
+                                            np.mean(probs[ind[1][-n // 2:], 1]),
+                                            (np.sum(probs[ind[0][-n // 2:], 2]) + np.sum(probs[ind[1][-n // 2:], 2])) / (n // 2 * 2)]
+                                    print(self.filename, prob)
+                                    if prob[0] >= CNNmodel[5][0][-1]:
+                                        label = [{"species": "Long-tailed bat", "certainty": 100}]
+                                    elif prob[1] >= CNNmodel[5][1][-1]:
+                                        label = [{"species": "Short-tailed bat", "certainty": 100}]
+                                    elif prob[0] >= CNNmodel[5][0][0]:
+                                        label = [{"species": "Long-tailed bat", "certainty": 50}]
+                                    elif prob[1] >= CNNmodel[5][1][0]:
+                                        label = [{"species": "Short-tailed bat", "certainty": 50}]
+                                    else:
+                                        label = []
+                                print('CNN detected: ', label)
+                                if len(label) > 0:
+                                    # Convert the annotation into a full segment in self.segments
+                                    thisPageStart = start / self.sampleRate
+                                    self.makeSegments([thisPageStart, thisPageLen, label])
                             else:
                                 # bird-style CNN and other processing:
                                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
@@ -596,7 +673,7 @@ class AviaNZ_batchProcess():
 
     def makeSegments(self, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segments to self.segments """
-        if self.method=="Click":
+        if self.method == "Click" or self.method == "Bats":
             # Batmode: segmentsNew should be already prepared as: [x1, x2, labels]
             y1 = 0
             y2 = 0
@@ -642,12 +719,17 @@ class AviaNZ_batchProcess():
             Species names will be wiped based on these. """
         print(self.filename)
         # Create an instance of the Signal Processing class
-        if not hasattr(self,'sp'):
+        if not hasattr(self, 'sp'):
             self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
 
         # Read audiodata or spectrogram
-        if self.method == "Clicks":
+        if self.method == "Click":  # old bat method
             self.sp.readBmp(self.filename, rotate=False)
+            self.sampleRate = self.sp.sampleRate
+            self.datalength = self.sp.fileLength
+        elif self.method == "Bats":
+            self.sp = SignalProc.SignalProc(512, 256)
+            self.sp.readBmp(self.filename, rotate=True, repeat=False)
             self.sampleRate = self.sp.sampleRate
             self.datalength = self.sp.fileLength
         else:
@@ -660,7 +742,7 @@ class AviaNZ_batchProcess():
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
-        if species==["Any sound"] or not os.path.isfile(self.filename + '.data') or self.method=="Click":
+        if species == ["Any sound"] or not os.path.isfile(self.filename + '.data') or self.method == "Click" or self.method == "Bats":
             # Initialize default metadata values
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
@@ -684,7 +766,7 @@ class AviaNZ_batchProcess():
                             del self.segments[i]
             print("%d segments loaded from .data file" % len(self.segments))
 
-        if self.method!="Click":
+        if self.method != "Click" and self.method != "Bats":
             # Do impulse masking by default
             if anysound:
                 self.sp.data = self.sp.impMask(engp=70, fp=0.50)
@@ -971,6 +1053,75 @@ class AviaNZ_batchProcess():
                     file.close()
                     output = start
     
+        return 1
+
+    def exportToBatSearch_NP(self, dirName, savefile='BatData.xml'):
+        # Write out a file that can be used for BatSearch import
+        # For now, looks like the xml file used there
+        # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
+        # No error checking
+        operator = "AviaNZ 3.1"
+        site = "Nowhere"
+        # BatSeach codes
+        namedict = {"Unassigned": 0, "Non-bat": 1, "Unknown": 2, "Long Tail": 3, "Short Tail": 4, "Possible LT": 5,
+                    "Possible ST": 6, "Both": 7}
+        # File header
+        start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+        output = start
+        if not os.path.isdir(dirName):
+            print("Folder doesn't exist")
+            return 0
+        for root, dirs, files in os.walk(dirName, topdown=True):
+            nfiles = len(files)
+            if nfiles > 0:
+                for count in range(nfiles):
+                    filename = files[count]
+                    if filename.endswith('.data'):
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, filename))
+                        if len(segments) > 0:
+                            seg = segments[0]
+                            print(seg)
+                            c = [lab["certainty"] for lab in seg[4]]
+                            s = [lab["species"] for lab in seg[4]]
+                            if c[0] == 100:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'Long Tail'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'Short Tail'
+                            else:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'Possible LT'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'Possible ST'
+                        else:
+                            label = 'Non-bat'
+                            # label = 'Unassigned'
+                        # This is the text for the file
+                        s1 = "<BatRecording>\n"
+                        s2 = "<AssignedBatCategory>" + str(namedict[label]) + "</AssignedBatCategory>\n"
+                        s3 = "<AssignedSite>" + site + "</AssignedSite>\n"
+                        s4 = "<AssignedUser>" + operator + "</AssignedUser>\n"
+                        # DOC format
+                        s5 = "<RecTime>" + filename[:4] + "-" + filename[4:6] + "-" + filename[6:8] + "T" + filename[
+                                                                                                            9:11] + ":" + filename[
+                                                                                                                          11:13] + ":" + filename[
+                                                                                                                                         13:15] + "</RecTime>\n"
+                        s6 = "<RecordingFileName>" + filename[:-5] + "</RecordingFileName>\n"
+                        s7 = "<RecordingFolderName>.\\" + os.path.basename(root) + "</RecordingFolderName>\n"
+                        s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
+                        s9 = "</BatRecording>\n"
+                        output += s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9
+                # Now write the file if necessary
+                if output != start:
+                    output += "</ArrayOfBatRecording>\n"
+                    file = open(os.path.join(root, savefile), 'w')
+                    print("writing to", os.path.join(root, savefile))
+                    file.write(output)
+                    file.write("\n")
+                    file.close()
+                    output = start
+
         return 1
 
     def exportBatSurvey(self,dirName,responses,threshold1=0.85):

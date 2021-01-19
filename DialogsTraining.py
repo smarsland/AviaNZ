@@ -1846,7 +1846,7 @@ class BuildCNNWizard(QWizard):
         self.addPage(self.confirminputPage)
 
         # P3
-        self.parameterPage = BuildCNNWizard.WPageParameters(self.cnntrain, config)
+        self.parameterPage = BuildCNNWizard.WPageParameters(config)
         self.parameterPage.registerField("frqMasked*", self.parameterPage.cbfrange, "isChecked")
         self.parameterPage.registerField("f1*", self.parameterPage.f1, "value", self.parameterPage.f1.valueChanged)
         self.parameterPage.registerField("f2*", self.parameterPage.f2, "value", self.parameterPage.f2.valueChanged)
@@ -2179,7 +2179,7 @@ class BuildCNNWizard(QWizard):
 
     # page 3 - set parameters, generate data and train
     class WPageParameters(QWizardPage):
-        def __init__(self, cnntrain, config,parent=None):
+        def __init__(self, config, parent=None):
             super(BuildCNNWizard.WPageParameters, self).__init__(parent)
             self.setTitle('Choose call length')
             self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN and training.\nThe process may take a long time.')
@@ -2356,7 +2356,7 @@ class BuildCNNWizard(QWizard):
                     self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.f2) + ' Hz')
             else:
                 self.f1.setValue(0)
-                self.f2.setValue(self.cnntrain.fs)
+                self.f2.setValue(self.cnntrain.fs/2)
                 self.f1text.setText('Lower frq. limit ' + str(0) + ' Hz')
                 self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
                 self.f1.setEnabled(False)
@@ -2466,7 +2466,7 @@ class BuildCNNWizard(QWizard):
             value = value//10*10
             if value < 0:
                 value = 0
-            self.cnntrain.f1 = value
+            # self.cnntrain.f1 = value
             self.f1text.setText('Lower frq. limit ' + str(value) + ' Hz')
             self.showimg(self.indx)
 
@@ -2474,7 +2474,7 @@ class BuildCNNWizard(QWizard):
             value = value//10*10
             if value < 0:
                 value = 0
-            self.cnntrain.f2 = value
+            # self.cnntrain.f2 = value
             self.f2text.setText('Upper frq. limit ' + str(value) + ' Hz')
             self.showimg(self.indx)
 
@@ -2486,6 +2486,8 @@ class BuildCNNWizard(QWizard):
 
         def validatePage(self):
             with pg.BusyCursor():
+                self.cnntrain.f1 = self.f1.value()
+                self.cnntrain.f2 = self.f2.value()
                 self.cnntrain.train()
             return True
 
@@ -2494,7 +2496,7 @@ class BuildCNNWizard(QWizard):
                 return False
             if self.redopages:
                 self.redopages = False
-                self.wizard().redoROCPages()
+                self.wizard().redoROCPages(self.cnntrain)
             return True
 
     # page 4 - ROC curve
@@ -2522,6 +2524,7 @@ class BuildCNNWizard(QWizard):
             self.setLayout(self.layout)
 
         def initializePage(self):
+            # self.cnntrain = self.wizard().parameterPage.cnntrain
             self.thrs = self.cnntrain.Thrs
             self.TPR = self.cnntrain.TPRs[self.ct]
             self.FPR = self.cnntrain.FPRs[self.ct]
@@ -2789,32 +2792,32 @@ class BuildCNNWizard(QWizard):
             else:
                 return False
 
-    def redoROCPages(self):
+    def redoROCPages(self, cnntrain):
         # clean any existing pages
         for page in self.rocpages:
             # for each calltype, remove roc page
             self.removePage(page)
         self.rocpages = []
 
-        if not self.cnntrain.autoThr:
-            for i in range(len(self.cnntrain.calltypes)):
-                print("adding ROC page for class:", self.cnntrain.calltypes[i])
-                page4 = BuildCNNWizard.WPageROC(self.cnntrain,i)
+        if not cnntrain.autoThr:
+            for i in range(len(cnntrain.calltypes)):
+                print("adding ROC page for class:", cnntrain.calltypes[i])
+                page4 = BuildCNNWizard.WPageROC(cnntrain, i)
                 pageid = self.addPage(page4)
                 self.rocpages.append(pageid)
 
-        self.summaryPage = BuildCNNWizard.WPageSummary(self.cnntrain)
+        self.summaryPage = BuildCNNWizard.WPageSummary(cnntrain)
         pageid = self.addPage(self.summaryPage)
         self.rocpages.append(pageid)
 
-        self.savePage = BuildCNNWizard.WPageSave(self.cnntrain)
+        self.savePage = BuildCNNWizard.WPageSave(cnntrain)
         pageid = self.addPage(self.savePage)
         self.rocpages.append(pageid)
 
         self.parameterPage.setFinalPage(False)
         self.parameterPage.completeChanged.emit()
 
-    def undoROCPages(self):
+    def undoROCPages(self): # TODO: not using, delete
         # clean any existing pages
         for page in self.rocpages:
             # for each calltype, remove roc page

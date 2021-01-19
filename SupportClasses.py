@@ -240,12 +240,12 @@ class ConfigLoader(object):
                         print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
                         if 'fRange' in filt["CNN"]:
-                            targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
                                                      filt["CNN"]["output"],
                                                      filt["CNN"]["windowInc"], filt["CNN"]["thr"], True,
                                                      filt["CNN"]["fRange"]]
                         else:
-                            targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
                                                      filt["CNN"]["output"], filt["CNN"]["windowInc"],
                                                      filt["CNN"]["thr"], False]
                     except Exception as e:
