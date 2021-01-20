@@ -3148,7 +3148,7 @@ class Cluster(QDialog):
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 class ExportBats(QDialog):
-    def __init__(self,observer,easting,northing,recorder):
+    def __init__(self,observer,easting=None,northing=None,recorder=None):
         QDialog.__init__(self)
         self.setWindowTitle('Export Results?')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -3196,7 +3196,8 @@ class ExportBats(QDialog):
         hbox6.addWidget(self.northing)
         l6 = QLabel('*Site where data collected: ')
         self.site = QLineEdit(self)
-        self.site.setText(recorder)
+        if recorder is not None:
+            self.site.setText(recorder)
         l9 = QLabel('Region where data collected: ')
         self.region = QLineEdit(self)
         hbox7 = QHBoxLayout()
