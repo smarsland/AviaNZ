@@ -1007,11 +1007,11 @@ class AviaNZ(QMainWindow):
             self.showDiagnosticTick.setEnabled(not self.batmode)
             self.extraMenu.setEnabled(not self.batmode)
             self.setExtraPlot("none")
+            self.showFormant.setEnabled(not self.batmode)
 
         self.showInvSpec.setVisible(self.batmode)
         self.showFundamental.setEnabled(not self.batmode)
         self.showSpectral.setEnabled(not self.batmode)
-        self.showFormant.setEnabled(not self.batmode)
         self.showEnergies.setEnabled(not self.batmode)
 
         self.addRegularAction.setEnabled(not self.batmode)
