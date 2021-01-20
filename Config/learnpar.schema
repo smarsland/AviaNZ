@@ -1,0 +1,26 @@
+{"type": "object",
+  "properties": {
+    "optimizer": {"type": "string"},
+    "loss": {"type": "string"},
+    "epochs": {"type": "integer", "minimum": 0},
+    "monitor": {"type": "string"},
+    "minPerClass": {"type": "integer", "minimum": 0},
+    "patience": {"type": "number"},
+    "hopScaling": {"type": "number"},
+    "sgramWindowWidth": {"type": "integer", "minimum": 0},
+    "sgramHop": {"type": "integer", "minimum": 0},
+    "imgX": {"type": "integer", "minimum": 0},
+    "imgY": {"type": "integer", "minimum": 0},
+    "windowScaling": {"type": "number"},
+    "t": {"type": "number"},
+    "batchsize": {"type": "integer", "minimum": 0},
+    "test_size": {"type": "number"},
+    "metrics": {"type": "array"},
+    "batchsize_ROC": {"type": "integer", "minimum": 0},
+    "tWidthShift": {"type": "number"}
+  },
+  "required": [
+    "optimizer", "loss", "epochs", "monitor", "minPerClass", "patience", "hopScaling", "sgramWindowWidth", "sgramHop", "imgX", "imgY", "windowScaling", "t", "batchsize", "test_size", "metrics", "batchsize_ROC", "tWidthShift"
+  ]
+}
+
