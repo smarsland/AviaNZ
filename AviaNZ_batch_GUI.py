@@ -74,11 +74,11 @@ class AviaNZ_batchWindow(QMainWindow):
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
 
-        self.w_browse = QPushButton("  &Browse Folder")
+        self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to process (may contain sub folders)")
         self.w_browse.setFixedSize(165, 50)
         self.w_browse.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton))
-        self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
+        self.w_browse.setStyleSheet('QPushButton {font-weight: bold; padding: 3px 3px 3px 3px}')
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setReadOnly(True)
@@ -135,11 +135,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
-        self.w_processButton = QPushButton(" &Process Folder")
-        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton = SupportClasses_GUI.MainPushButton(" Process Folder")
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
         self.w_processButton.clicked.connect(self.detect)
-        self.w_processButton.setFixedSize(165, 50)
+        self.w_processButton.setFixedWidth(165)
         self.w_processButton.setEnabled(False)
         self.w_browse.clicked.connect(self.browse)
 
@@ -202,7 +201,6 @@ class AviaNZ_batchWindow(QMainWindow):
         colourPossibleDark = QColor(self.batchProc.config['ColourPossible'][0], self.batchProc.config['ColourPossible'][1], self.batchProc.config['ColourPossible'][2], 255)
         colourNamed = QColor(self.batchProc.config['ColourNamed'][0], self.batchProc.config['ColourNamed'][1], self.batchProc.config['ColourNamed'][2], self.batchProc.config['ColourNamed'][3])
         self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
@@ -563,34 +561,29 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
-        self.w_browse = QPushButton("  &Browse Folder")
+        self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
-        self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
+        self.w_browse.setStyleSheet('QPushButton {font-weight: bold}')
         self.w_browse.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton))
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
 
-        self.w_processButton = QPushButton(" Review One-By-One")
-        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 8px}')
-        self.w_processButton.setFixedHeight(45)
-        self.w_processButton.setFixedHeight(45)
+        self.w_processButton = SupportClasses_GUI.MainPushButton(" Review One-By-One")
         self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
         self.w_processButton.clicked.connect(self.reviewClickedAll)
         self.w_processButton.setEnabled(False)
-        self.w_processButton1 = QPushButton(" Review Quick")
-        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 8px}')
-        self.w_processButton1.setFixedHeight(45)
-        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1 = SupportClasses_GUI.MainPushButton(" Review Quick")
         self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
         self.w_processButton1.clicked.connect(self.reviewClickedSingle)
         self.w_processButton1.setEnabled(False)
+        self.w_processButton.setMinimumWidth(200)
+        self.w_processButton1.setMinimumWidth(200)
 
-        self.w_speLabel1 = QLabel("Choose a species\n(or review all)")
+        self.w_speLabel1 = QLabel("Species to review")
         self.w_spe1 = QComboBox()
-        self.w_spe1.setMinimumWidth(175)
         self.w_spe1.currentIndexChanged.connect(self.speChanged)
         self.spList = []
         self.w_spe1.addItem('All species')
@@ -604,26 +597,29 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certCombo.activated.connect(self.changedCertSimple)
 
         # add controls to dock
-        self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
-        self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
-        self.d_detection.addWidget(self.w_dir, row=1,col=1, colspan=2)
-        self.d_detection.addWidget(self.w_browse, row=1,col=0)
+        self.d_detection.addWidget(self.w_dir, row=0,col=1, colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=0,col=0)
+        self.d_detection.addWidget(self.w_revLabel, row=1, col=0)
+        self.d_detection.addWidget(self.w_reviewer, row=1, col=1, colspan=2)
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
         self.d_detection.addWidget(self.w_spe1,row=2, col=1, colspan=2)
 
         self.d_detection.addWidget(QLabel("Minimum certainty to show"), row=3, col=0)
         self.d_detection.addWidget(self.certCombo, row=3, col=1, colspan=2)
 
-        self.d_detection.addWidget(self.w_processButton1, row=4, col=1)
-        self.d_detection.addWidget(self.w_processButton, row=4, col=2)
+        # self.d_detection.addWidget(self.w_processButton1, row=4, col=1)
+        # self.d_detection.addWidget(self.w_processButton, row=4, col=2)
+        procBox = QHBoxLayout()
+        procBox.addStretch(5)
+        procBox.addWidget(self.w_processButton1)
+        procBox.addStretch(1)
+        procBox.addWidget(self.w_processButton)
+        procBox.addStretch(5)
+
+        self.d_detection.layout.addLayout(procBox, 4, 0, 1, 3)
 
         # Excel export section
-        linesep2 = QFrame()
-        linesep2.setFrameShape(QFrame.HLine)
-        linesep2.setFrameShadow(QFrame.Sunken)
-        #self.d_detection.addWidget(linesep2, row=5, col=0, colspan=3)
         self.w_resLabel = QLabel("Size(s) of presence/absence windows\nin the output")
-        self.w_resLabel.setFixedWidth(260)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
@@ -636,7 +632,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_excel.addWidget(timePrecisionLabel, row=7, col=0)
         self.d_excel.addWidget(self.timePrecisionBox, row=7, col=1, colspan=2)
 
-        self.w_excelButton = QPushButton(" Generate Excel  ")
+        self.w_excelButton = QPushButton(" Generate Excel ")
         self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_excelButton.setFixedHeight(45)
         self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
@@ -645,7 +641,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_excel.addWidget(self.w_excelButton, row=8, col=2)
 
         self.toggleSettingsBtn = QPushButton(" Advanced settings ")
-        self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; font-size:12px; padding: 2px 2px 2px 4px}')
+        self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; padding: 2px 2px 2px 4px}')
         self.toggleSettingsBtn.setFixedHeight(32)
         self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
         self.toggleSettingsBtn.setIconSize(QSize(25, 17))
@@ -742,7 +738,6 @@ class AviaNZ_reviewAll(QMainWindow):
         colourPossibleDark = QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
         colourNamed = QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
         self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
@@ -1110,7 +1105,9 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_all(filename, sTime)
             else:
                 filesuccess = self.review_single(filename, sTime)
+
             # merge back any split segments, plus ANY overlaps within calltypes
+            # (NOTE: applied to either review type to get identical results)
             todelete = self.segments.mergeSplitSeg()
             for dl in todelete:
                 del self.segments[dl]
@@ -1120,6 +1117,12 @@ class AviaNZ_reviewAll(QMainWindow):
             if filesuccess == 0:
                 print("Review stopped")
                 break
+
+            if reviewAll:
+                # save changes and corrections (on nice exit only):
+                if self.config['saveCorrections']:
+                    self.saveCorrections()
+                self.finishDeleting()
 
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
@@ -1157,9 +1160,6 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            if self.config['saveCorrections']:
-                self.saveCorrections()
-            self.finishDeleting()
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1265,8 +1265,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.loadFile(filename, species=self.species, chunksize=chunksize)
 
-        if self.batmode:
-            guides = [20000, 36000, 50000, 60000]
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+            guides = self.config['guidepos']
         else:
             guides = None
 
@@ -1275,7 +1275,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
-                                                           guidefreq=guides,
+                                                           guidefreq=guides, guidecol=self.config['guidecol'],
                                                            filename=self.filename)
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog2.resize(self.dialogSize)
@@ -1452,7 +1452,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.dialogPlotAspect, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1470,12 +1470,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()
-            return(0)
 
-        if self.config['saveCorrections']:
-            self.saveCorrections()
-        self.finishDeleting()
-        return(1)
+        return(success)
 
     def loadFile(self, filename, species=None, chunksize=None):
         """ Needs to generate spectrograms and audiodatas
@@ -1609,7 +1605,6 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of file loading
 
     def saveCorrections(self):
-        print("here")
         for i in reversed(range(len(self.segments))):
             print(self.segments[i][4],self.origSeg[i][4])
             if self.segments[i][4] == self.origSeg[i][4]:
@@ -1658,8 +1653,8 @@ class AviaNZ_reviewAll(QMainWindow):
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
 
-            if self.batmode:
-                guides = [sp.convertFreqtoY(f) for f in [20000, 36000, 50000, 60000]]
+            if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
             else:
                 guides = None
 
@@ -1853,7 +1848,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def finishDeleting(self):
         # Does the work of deleting segments
-        segsToSave = False
+        # segsToSave = False
 
         # Loop over segments
         for seg in reversed(self.segments):
@@ -1867,12 +1862,13 @@ class AviaNZ_reviewAll(QMainWindow):
             if todel:
                 print("Removing",seg)
                 self.segments.remove(seg)
-                segsToSave = True
+        # TODO check: I believe this is not needed as it is done in the main loop anyway
+        #        segsToSave = True
 
-        if segsToSave:
-            cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save segments!")
+        #if segsToSave:
+        #    cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
+        #    if cleanexit != 1:
+        #        print("Warning: could not save segments!")
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)
