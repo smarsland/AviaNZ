@@ -338,9 +338,7 @@ class Excel2Annotation(QDialog):
         lblSpecies.setFixedWidth(220)
         lblSpecies.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         # Show a template
         tableWidget = QTableWidget()
@@ -485,9 +483,7 @@ class Tag2Annotation(QDialog):
         lblDuration.setFixedWidth(220)
         lblDuration.setAlignment(Qt.AlignCenter)
 
-        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
-        self.btnGenerateAnnot.setFixedHeight(50)
-        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel())
@@ -541,9 +537,7 @@ class BackupAnnotation(QDialog):
         self.btnBrowseDst.setFixedWidth(220)
         self.btnBrowseDst.clicked.connect(self.browseDst)
 
-        self.btnCopyAnnot = QPushButton("Copy Annotations")
-        self.btnCopyAnnot.setFixedHeight(50)
-        self.btnCopyAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.btnCopyAnnot = SupportClasses_GUI.MainPushButton("Copy Annotations")
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel('This allows you to get a copy of your annotations while preserving the directory hierarchy, only copy the .data files.\nSelect the directory you want to backup the annotations from and create a destination directory to copy the annotations'))
@@ -1423,7 +1417,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, plotAspect=2, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1475,13 +1469,11 @@ class HumanClassify1(QDialog):
         self.pPlot.addItem(self.line2)
 
         # prepare guides for marking true segment boundaries
-        self.guidelines = [0]*4
-        self.guidelines[0] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
-        self.guidelines[1] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[2] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[3] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
-        for g in self.guidelines:
-            self.pPlot.addItem(g)
+
+        self.guidelines = [0]*len(guidecols)
+        for gi in range(len(guidecols)):
+            self.guidelines[gi] = pg.InfiniteLine(angle=0, pen={'color': guidecols[gi], 'width': 2})
+            self.pPlot.addItem(self.guidelines[gi])
 
         # time texts to go along these two lines
         self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1.10))
@@ -2283,7 +2275,7 @@ class HumanClassify2(QDialog):
         13. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2334,6 +2326,7 @@ class HumanClassify2(QDialog):
 
         # batmode customizations:
         self.guidefreq = guidefreq
+        self.guidecol = guidecol
         if not haveaudio:
             self.volSlider.setEnabled(False)
             self.volIcon.setEnabled(False)
@@ -2517,7 +2510,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2765,7 +2758,6 @@ class FilterManager(QDialog):
 
         # filter dir contents
         self.listFiles = QListWidget()
-        self.listFiles.setMinimumWidth(150)
         self.listFiles.setMinimumHeight(275)
         self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
 
