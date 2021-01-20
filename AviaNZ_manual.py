@@ -4814,8 +4814,9 @@ class AviaNZ(QMainWindow):
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
                     CNNmodel = None
-                    if filtname in self.CNNDicts.keys():
-                        CNNmodel = self.CNNDicts[filtname]
+                    if 'CNN' in speciesData:
+                        CNNmodel = self.CNNDicts.get(speciesData['CNN']['CNN_name'])
+                    
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
