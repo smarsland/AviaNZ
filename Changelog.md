@@ -7,9 +7,14 @@ All notable changes to AviaNZ program will be documented in this file.
 - "One-by-one" review plot size expands to dialog size
 - BatSearch-compatible output for batmode
 - Segment saving feedback now shown in status bar
+- Mouse cursor indicates current mode
+- "Jump to next annotation" buttons
+- Optional frequency masking in CNN training
+- Formant marking in spectrogram
 
 ### Changed
-
+- Improved processing pipeline for bats
+- New CNN recogniser for bats
 - "One-by-one" review (previously All Species) can now be run on single species
 - Batch Review settings separated into Advanced and Simple
 - Simpler dropdown to set review certainty bounds
@@ -18,6 +23,9 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Fixed
 - Greatly reduced CPU load for mouseover detection in spectrogram items
 - Batch settings are appropriately greyed out and provide tooltips
+- 8-bit WAV playback was not working
+- Bugs in non-specific batch processing
+- Cleaned up gap-merging algorithms, could have caused bugs in edge cases
 
 ## [3.1] - 2020-10-09
 
