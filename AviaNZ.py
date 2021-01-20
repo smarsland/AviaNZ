@@ -47,8 +47,20 @@ import sys
 @click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
+    # adapt path to allow this to be launched from wherever
+    import sys, os
+    if getattr(sys, 'frozen', False):
+        appdir = sys._MEIPASS
+    else:
+        appdir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(appdir)
+
+    # print("Using python at", sys.path)
+    # print(os.environ)
+    # print("Version", sys.version)
+
     try:
-        import platform, os, json, shutil
+        import platform, json, shutil
         from jsonschema import validate
         import SupportClasses
     except Exception as e:

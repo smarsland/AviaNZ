@@ -69,9 +69,6 @@ class SignalProc:
             self.audioFormat = QAudioFormat()
             self.audioFormat.setCodec("audio/pcm")
             self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
-            self.audioFormat.setSampleType(QAudioFormat.SignedInt)
-        #else:
-            #self.audioFormat = {}
 
     def readWav(self, file, len=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -83,8 +80,6 @@ class SignalProc:
             self.data = self.data[:, 0]
         if QtMM:
             self.audioFormat.setChannelCount(1)
-        #else:
-            #self.audioFormat['channelCount'] = 1
 
         # force float type
         if self.data.dtype != 'float':
@@ -98,9 +93,11 @@ class SignalProc:
         if QtMM:
             self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
             self.audioFormat.setSampleRate(self.sampleRate)
-        #else:
-            #self.audioFormat['sampleSize'] = wavobj.sampwidth * 8
-            #self.audioFormat['sampleRate'] = self.sampleRate
+            # Only 8-bit WAVs are unsigned:
+            if wavobj.sampwidth==1:
+                self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
+            else:
+                self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -111,8 +108,6 @@ class SignalProc:
         if not silent:
             if QtMM:
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-            #else:
-                #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat['channelCount'], self.audioFormat['sampleRate'], self.audioFormat['sampleSize']))
 
     def readBmp(self, file, len=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
