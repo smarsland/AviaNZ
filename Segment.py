@@ -38,6 +38,7 @@ import wavio
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
 import skimage.measure as skm
+import tensorflow as tf
 
 
 class Segment(list):
@@ -1540,7 +1541,7 @@ class PostProcess:
             featuress = featuress.astype('float32')
             # predict with CNN
             if np.shape(featuress)[0] > 0:
-                probs = self.CNNmodel.predict(featuress)
+                probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))
             else:
                 probs = 0
             print("probabilities: ", probs)

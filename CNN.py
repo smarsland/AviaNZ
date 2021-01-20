@@ -29,8 +29,6 @@ from skimage.transform import resize
 import json, os
 import numpy as np
 import math
-import gc
-from time import gmtime, strftime
 
 import SignalProc
 import WaveletSegment
