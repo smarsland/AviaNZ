@@ -92,9 +92,8 @@ class AviaNZ_batchProcess():
         # This is the function that does the work.
         # Chooses the filters and sampling regime to use.
         # Then works through the directory list, and processes each file.
-        if hasattr(self,'ui'):
-            self.species = self.ui.species
-            self.dirName = self.ui.dirName
+
+        # REQUIRES: species, dirName, and wind must be set on self
 
         if "Any sound" in self.species:
             self.method = "Default"
@@ -118,8 +117,7 @@ class AviaNZ_batchProcess():
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
             if len(samplerate)>1:
-                print("ERROR: multiple sample rates found in selected recognisers, change selection")
-                return(1)
+                raise ValueError("ERROR: multiple sample rates found in selected recognisers, change selection")
 
             # convert list to string
             speciesStr = " & ".join(self.species)
@@ -143,7 +141,6 @@ class AviaNZ_batchProcess():
         else:
             timeWindow_s = self.ui.w_timeStart.time().hour() * 3600 + self.ui.w_timeStart.time().minute() * 60 + self.ui.w_timeStart.time().second()
             timeWindow_e = self.ui.w_timeEnd.time().hour() * 3600 + self.ui.w_timeEnd.time().minute() * 60 + self.ui.w_timeEnd.time().second()
-            self.wind = self.ui.w_wind.isChecked()
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
@@ -159,12 +156,21 @@ class AviaNZ_batchProcess():
                 filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
                 text = "Previous analysis found in this folder (analysed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
                 if not self.CLI:
-                    confirmedResume = self.ui.check_msg("Resume previous batch analysis?", text)
+                    # this is super noodly but it assumes that self.CLI always means
+                    # that this class was extended with the Qt-specific things.
+                    self.mutex.lock()
+                    self.need_msg.emit("Resume previous batch analysis?", text)
+                    self.ui.msgClosed.wait(self.mutex)
+                    self.mutex.unlock()
+                    confirmedResume = self.ui.msg_response
 
-                    if confirmedResume:
+                    if confirmedResume==0:
                         self.filesDone = filesExistAndDone
-                    else:
+                    elif confirmedResume==1:
                         self.filesDone = []
+                    else:  # (cancel/Esc)
+                        print("Analysis cancelled")
+                        raise GentleExitException
                 else:
                     confirmedResume = input(text)
                     if confirmedResume.lower() == 'yes' or confirmedResume.lower() == 'y':
@@ -197,7 +203,11 @@ class AviaNZ_batchProcess():
             text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
 
             if not self.CLI:
-                confirmedLaunch = self.ui.check_msg("Launch batch analysis",text)
+                self.mutex.lock()
+                self.need_msg.emit("Launch batch analysis",text)
+                self.ui.msgClosed.wait(self.mutex)
+                self.mutex.unlock()
+                confirmedLaunch = self.ui.msg_response==0
             else:
                 confirmedLaunch = input(text)
                 print(confirmedLaunch.lower(),)
@@ -208,7 +218,7 @@ class AviaNZ_batchProcess():
 
             if not confirmedLaunch:
                 print("Analysis cancelled")
-                return(2)
+                raise GentleExitException
 
             # update log: delete everything (by opening in overwrite mode),
             # reprint old headers,
@@ -224,6 +234,7 @@ class AviaNZ_batchProcess():
             settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
 
         if not self.CLI and not self.testmode:
+            # TODO convert this to signal? This seems to work anyway somehow?
             # clean up the UI before entering the long loop
             self.ui.clean_UI(total,cnt)
 
@@ -274,7 +285,6 @@ class AviaNZ_batchProcess():
                         f = None
                     recorder = os.path.split(self.dirName)[-1]
                     print(recorder)
-                    #print(f,self.dirName)
                     if f is not None:
                         # Find a line that contains GPS (lat, long),
                         # And read the two numbers after it
@@ -292,8 +302,7 @@ class AviaNZ_batchProcess():
                                 x = y[-2].split(",")
                                 easting = x[-2]
                                 northing = y[-1]
-                    #print(easting,northing)
-                        
+
                     import Dialogs
                     exportResults = Dialogs.ExportBats(self.config['operator'],easting,northing,recorder)
                     exportResults.show()
@@ -316,8 +325,6 @@ class AviaNZ_batchProcess():
 
             # END of processing and exporting. Final cleanup
             self.log.file.close()
-            if not self.CLI:
-                self.ui.endproc(total)
 
         print("Processed all %d files" % total)
         return(0)
@@ -392,13 +399,11 @@ class AviaNZ_batchProcess():
             if self.method == "Intermittent sampling":
                 try:
                     self.addRegularSegments()
-                except Exception as e:
-                    e = "Encountered error:\n" + traceback.format_exc()
-                    print("ERROR: ", e)
-                    if not self.CLI:
-                        self.ui.error_fileproc(total,e)
+                except Exception:
+                    estr = "Encountered error:\n" + traceback.format_exc()
+                    print("ERROR: ", estr)
                     self.log.file.close()
-                    return(1)
+                    raise
             else:
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
@@ -413,12 +418,10 @@ class AviaNZ_batchProcess():
                     print("Segmenting...")
                     self.detectFile(speciesStr, filters)
                 except Exception:
-                    e = "Encountered error:\n" + traceback.format_exc()
-                    print("ERROR: ", e)
-                    if not self.CLI and not self.testmode:
-                        self.ui.error_fileproc(total,e)
+                    estr = "Encountered error:\n" + traceback.format_exc()
+                    print("ERROR: ", estr)
                     self.log.file.close()
-                    return(1)
+                    raise
 
                 print('Segments in this file: ', self.segments)
 
@@ -432,10 +435,12 @@ class AviaNZ_batchProcess():
             if not self.testmode:
                 self.log.appendFile(filename)
                 if not self.CLI:
-                    response = self.ui.update_progress(cnt,total+1,progrtext)
-                    if response==2:
+                    self.ui.update_progress(cnt,total+1,progrtext)
+                    # TODO sprinkle more of these checks
+                    if self.ui.dlg.wasCanceled():
                         print("Analysis cancelled")
                         self.log.file.close()
+                        raise GentleExitException
             # track how long it took to process one file:
             processingTime = time.time() - processingTimeStart
             print("File processed in", processingTime)
@@ -527,6 +532,12 @@ class AviaNZ_batchProcess():
                 self.makeSegments(post.segments)
                 del self.seg
                 gc.collect()
+                # After each page, check for interrupts:
+                if not self.CLI:
+                    if self.ui.dlg.wasCanceled():
+                        print("Analysis cancelled")
+                        self.log.file.close()
+                        raise GentleExitException
             else:
                 if self.method != "Click" and self.method != "Bats":
                     # read in the page and resample as needed
@@ -687,6 +698,13 @@ class AviaNZ_batchProcess():
                                         seg[0][1] += start/self.sampleRate
                                 # attach filter info and put on self.segments:
                                 self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+
+                            # After each subfilter is done, check for interrupts:
+                            if not self.CLI:
+                                if self.ui.dlg.wasCanceled():
+                                    print("Analysis cancelled")
+                                    self.log.file.close()
+                                    raise GentleExitException
                         else:
                             # TODO: THIS IS testmode. NOT USING ANY BAT STUFF THEN
                             # I.E. testmode not adapted to bats
@@ -1272,3 +1290,46 @@ class AviaNZ_batchProcess():
                         rec = root.split('/')[-3]
                         op = 'Moira Pryde'
                     date = '.\\'+root.split('/')[-1]
+
+
+class GentleExitException(Exception):
+    """ To allow tracking user-requested aborts, instead of using C-style returns. """
+    pass
+
+
+# TODO Move this class to _Gui.py as this one assumes no Qt
+from PyQt5.QtCore import QObject, QMutex, pyqtSignal, pyqtSlot
+
+class BatchProcessWorker(AviaNZ_batchProcess, QObject):
+    # adds QObject functionality to standard batchProc,
+    # so that it could be moved to a separate thread when multithreading.
+    finished = pyqtSignal()
+    completed = pyqtSignal()
+    stopped = pyqtSignal()
+    failed = pyqtSignal(str)
+    need_msg = pyqtSignal(str, str)
+
+    def __init__(self, *args, **kwargs):
+        # this is supposedly not OK if somebody was to ever
+        # further multiply-inherit this class.
+        AviaNZ_batchProcess.__init__(self, *args, **kwargs)
+        QObject.__init__(self)
+        self.mutex = QMutex()
+
+    @pyqtSlot()
+    def detect(self):
+        try:
+            AviaNZ_batchProcess.detect(self)
+            self.completed.emit()
+        except GentleExitException:
+            # for clean exits, such as stops via progress dialog
+            self.stopped.emit()
+        except Exception as e:
+            # we have UI, so just cleanly present the error;
+            # in other modes this will CTD
+            e = "Encountered error:\n" + traceback.format_exc()
+            self.failed.emit(e)
+        self.finished.emit()  # this is to prompt generic actions like stopping the event loop
+
+
+
