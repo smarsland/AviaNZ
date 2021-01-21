@@ -560,9 +560,8 @@ class AviaNZ_batchProcess():
                             # -- Need to check how this should interact with the testmode
                             CNNmodel = None
                             if 'CNN' in spInfo:
-                                if spInfo['CNN']['CNN_name'] in self.CNNDicts.keys():
-                                    # This list contains the model itself, plus parameters for running it
-                                    CNNmodel = self.CNNDicts[spInfo['CNN']['CNN_name']]
+                                # This list contains the model itself, plus parameters for running it
+                                CNNmodel = self.CNNDicts.get(spInfo['CNN']['CNN_name'])
 
                             if self.method=="Click":
                                 # bat-style CNN:
