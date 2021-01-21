@@ -93,15 +93,19 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     # pre-run check of config file validity
     confloader = SupportClasses.ConfigLoader()
     configschema = json.load(open("Config/config.schema"))
+    learnparschema = json.load(open("Config/learnpar.schema"))
     try:
         config = confloader.config(os.path.join(configdir, "AviaNZconfig.txt"))
         validate(instance=config, schema=configschema)
+        learnpar = confloader.learningParams(os.path.join(configdir, "LearningParams.txt"))
+        validate(instance=learnpar, schema=learnparschema)
         print("successfully validated config file")
     except Exception as e:
         print("Warning: config file failed validation with:")
         print(e)
         try:
             shutil.copy2("Config/AviaNZconfig.txt", configdir)
+            shutil.copy2("Config/LearningParams.txt", configdir)
         except Exception as e:
             print("ERROR: failed to copy essential config files")
             print(e)
