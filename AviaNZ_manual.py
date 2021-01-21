@@ -415,6 +415,7 @@ class AviaNZ(QMainWindow):
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
+        recMenu.addAction("Customise a recogniser", self.customiseFilters)
 
         # "Utilities" menu
         utilMenu = self.menuBar().addMenu("&Utilities")
@@ -4511,6 +4512,34 @@ class AviaNZ(QMainWindow):
         else:
             return
 
+    def saveRecogniser(self):
+        # nothing to worry about CNN files, they are untouched
+        if self.filterManager.saveoption == 'New' and (self.filterManager.enterFiltName.text() != '' or self.filterManager.enterFiltName.text() != '.txt'):
+            try:
+                filename = os.path.join(self.filtersDir, self.filterManager.enterFiltName.text())
+                print("Saving a new recogniser", filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.filterManager.newfilter))
+                f.close()
+                # prompt the user
+                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Saved as a new recogniser: " + self.filterManager.enterFiltName.text() + "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        elif self.filterManager.saveoption != 'New':
+            try:
+                filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text())
+                print("Updating the existing recogniser ", filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.filterManager.newfilter))
+                f.close()
+                # prompt the user
+                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        self.filterManager.close()
+
     def excel2Annotation(self):
         """ Utility function dialog: Generate AviaNZ style annotations given the start-end of calls in excel format
         """
@@ -5294,6 +5323,11 @@ class AviaNZ(QMainWindow):
 
     def manageFilters(self):
         self.filterManager = Dialogs.FilterManager(self.filtersDir)
+        self.filterManager.exec_()
+
+    def customiseFilters(self):
+        self.filterManager = Dialogs.FilterCustomise(self.filtersDir)
+        self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
         self.filterManager.exec_()
 
     def addNoiseData(self):
