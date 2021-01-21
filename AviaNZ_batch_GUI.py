@@ -60,6 +60,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.stopped.connect(self.stopped_fileproc)
         self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
         self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
+        self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
         self.batchProc.moveToThread(self.batchThread)
 
         self.msgClosed = QWaitCondition()
@@ -314,7 +315,8 @@ class AviaNZ_batchWindow(QMainWindow):
         self.dlg.update()
         self.dlg.repaint()
         QApplication.processEvents()
-        #QApplication.processEvents()
+        # ping the batch worker that dlg is ready
+        self.msgClosed.wakeAll()
 
     def error_fileproc(self,e):
         # Pops an error message with string e
