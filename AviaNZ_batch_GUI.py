@@ -20,8 +20,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
-from PyQt5.QtCore import Qt, QDir, QSize
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog
+from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition
 
 import fnmatch, gc, sys, os, json, re
 
@@ -41,6 +41,7 @@ import colourMaps
 
 import webbrowser, copy, math
 
+
 class AviaNZ_batchWindow(QMainWindow):
 
     def __init__(self, configdir=''):
@@ -48,7 +49,20 @@ class AviaNZ_batchWindow(QMainWindow):
         # and sets up the window.
         QMainWindow.__init__(self)
 
-        self.batchProc = AviaNZ_batch.AviaNZ_batchProcess(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+        # TODO: convert any communication w/ batchProc from this thread
+        # to signals, or avoid communicating entirely
+        self.batchProc = AviaNZ_batch.BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+
+        self.batchThread = QThread()
+        self.batchThread.started.connect(self.batchProc.detect)
+        self.batchProc.finished.connect(self.batchThread.quit)
+        self.batchProc.completed.connect(self.completed_fileproc)
+        self.batchProc.stopped.connect(self.stopped_fileproc)
+        self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
+        self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
+        self.batchProc.moveToThread(self.batchThread)
+
+        self.msgClosed = QWaitCondition()
 
         self.FilterDicts = self.batchProc.FilterDicts
 
@@ -265,7 +279,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.maxgap = int(self.maxgap.value())/1000
         self.batchProc.minlen = int(self.minlen.value()) / 1000
         self.batchProc.maxlen = int(self.maxlen.value()) / 1000
-        self.batchProc.detect()
+        self.batchProc.species = self.species
+        self.batchProc.dirName = self.dirName
+        self.batchProc.wind = self.w_wind.isChecked()
+        self.batchThread.start()  # a signal connected to batchProc.detect()
 
     def check_msg(self,title,text):
         msg = SupportClasses_GUI.MessagePopup("t", title, text)
@@ -274,11 +291,12 @@ class AviaNZ_batchWindow(QMainWindow):
 
         if response == QMessageBox.Cancel:
             # catch unclean (Esc) exits
-            return False
-        if response == QMessageBox.No:
-            return False
+            self.msg_response = 2
+        elif response == QMessageBox.No:
+            self.msg_response = 1
         else:
-            return True
+            self.msg_response = 0
+        self.msgClosed.wakeAll()
 
     def clean_UI(self,total,cnt):
         self.w_processButton.setEnabled(False)
@@ -290,42 +308,47 @@ class AviaNZ_batchWindow(QMainWindow):
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
         self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
-        self.dlg.open()
+        #self.dlg.open()
+        self.dlg.setWindowModality(Qt.NonModal)
         self.dlg.setValue(cnt)
         self.dlg.update()
         self.dlg.repaint()
         QApplication.processEvents()
         #QApplication.processEvents()
 
-    def error_fileproc(self,total,e):
+    def error_fileproc(self,e):
+        # Pops an error message with string e
         self.statusBar().showMessage("Analysis stopped due to error")
-        self.dlg.setValue(total+1)
+        self.dlg.setValue(self.dlg.maximum())
         msg = SupportClasses_GUI.MessagePopup("w", "Analysis error!", e)
-        msg.setStyleSheet("{color: #cc0000}")
+        msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
         msg.exec_()
         self.w_processButton.setEnabled(True)
 
-    def endproc(self,total):
-        self.statusBar().showMessage("Processed all %d files" % total)
+    def completed_fileproc(self):
+        # All files successfully processed
+        self.statusBar().showMessage("Processed all %d files" % (self.dlg.maximum()-1))
         self.w_processButton.setEnabled(True)
 
         text = "Finished processing.\nWould you like to return to the start screen?"
-        reply = self.check_msg("Finished",text)
-        if reply:
+        msg = SupportClasses_GUI.MessagePopup("t", "Finished", text)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        reply = msg.exec_()
+        if reply==QMessageBox.Yes:
             QApplication.exit(1)
         else:
             return(0)
+
+    def stopped_fileproc(self):
+        # Processing gently stopped
+        self.statusBar().showMessage("Analysis cancelled")
+        self.dlg.setValue(self.dlg.maximum())
+        self.w_processButton.setEnabled(True)
 
     def update_progress(self,cnt,total,progrtext):
         self.dlg.setValue(cnt)
         self.dlg.setLabelText("Analysed "+progrtext)
         self.dlg.update()
-        if self.dlg.wasCanceled():
-            print("Analysis cancelled")
-            self.dlg.setValue(total+1)
-            self.statusBar().showMessage("Analysis cancelled")
-            self.w_processButton.setEnabled(True)
-            return(2)
         # Refresh GUI after each file (only the ProgressDialog which is modal)
         QApplication.processEvents()
 
