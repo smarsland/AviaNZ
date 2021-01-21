@@ -234,9 +234,12 @@ class AviaNZ_batchProcess():
             settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
 
         if not self.CLI and not self.testmode:
-            # TODO convert this to signal? This seems to work anyway somehow?
             # clean up the UI before entering the long loop
-            self.ui.clean_UI(total,cnt)
+            # and wait to confirm that all the dialogs are in place
+            self.mutex.lock()
+            self.need_clean_UI.emit(total, cnt)
+            self.ui.msgClosed.wait(self.mutex)
+            self.mutex.unlock()
 
             import pyqtgraph as pg
             with pg.BusyCursor():
@@ -256,8 +259,6 @@ class AviaNZ_batchProcess():
             if not self.CLI:
                 self.ui.statusBar().showMessage("Removing old Excel files, almost done...")
                 self.ui.dlg.setLabelText("Removing old Excel files...")
-                self.ui.update()
-                self.ui.repaint()
 
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
@@ -348,7 +349,6 @@ class AviaNZ_batchProcess():
             print("*** Processing" + progrtext + " ***")
             if not self.CLI and not self.testmode:
                 self.ui.statusBar().showMessage("Processing "+progrtext)
-                self.ui.update()
 
             # if it was processed previously (stored in log)
             if filename in self.filesDone:
@@ -417,6 +417,8 @@ class AviaNZ_batchProcess():
                 try:
                     print("Segmenting...")
                     self.detectFile(speciesStr, filters)
+                except GentleExitException:
+                    raise
                 except Exception:
                     estr = "Encountered error:\n" + traceback.format_exc()
                     print("ERROR: ", estr)
@@ -1308,6 +1310,7 @@ class BatchProcessWorker(AviaNZ_batchProcess, QObject):
     stopped = pyqtSignal()
     failed = pyqtSignal(str)
     need_msg = pyqtSignal(str, str)
+    need_clean_UI = pyqtSignal(int, int)
 
     def __init__(self, *args, **kwargs):
         # this is supposedly not OK if somebody was to ever
