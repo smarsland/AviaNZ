@@ -61,6 +61,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
         self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
         self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
+        self.batchProc.need_update.connect(lambda cnt, text: self.update_progress(cnt, text))
         self.batchProc.moveToThread(self.batchThread)
 
         self.msgClosed = QWaitCondition()
@@ -291,12 +292,15 @@ class AviaNZ_batchWindow(QMainWindow):
         response = msg.exec_()
 
         if response == QMessageBox.Cancel:
-            # catch unclean (Esc) exits
+            # a fall back basically
             self.msg_response = 2
         elif response == QMessageBox.No:
+            # catches Esc as well
             self.msg_response = 1
         else:
             self.msg_response = 0
+        # to utilize Esc, need to add another standard button, and then do:
+        # msg.setEscapeButton(QMessageBox.Cancel)
         self.msgClosed.wakeAll()
 
     def clean_UI(self,total,cnt):
@@ -304,13 +308,15 @@ class AviaNZ_batchWindow(QMainWindow):
         self.update()
         self.repaint()
 
-        self.dlg = QProgressDialog("Analysing file 1 / %d. Time remaining: ? h ?? min" % total, "Cancel run", cnt, total+1, self)
+        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", cnt, total+1, self)
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
         self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
-        #self.dlg.open()
-        self.dlg.setWindowModality(Qt.NonModal)
+        self.dlg.canceled.connect(self.stopping_fileproc)
+        # should be the default, but to make sure:
+        self.dlg.setWindowModality(Qt.ApplicationModal)
+        self.dlg.open()
         self.dlg.setValue(cnt)
         self.dlg.update()
         self.dlg.repaint()
@@ -321,7 +327,8 @@ class AviaNZ_batchWindow(QMainWindow):
     def error_fileproc(self,e):
         # Pops an error message with string e
         self.statusBar().showMessage("Analysis stopped due to error")
-        self.dlg.setValue(self.dlg.maximum())
+        if hasattr(self, 'dlg'):
+            self.dlg.setValue(self.dlg.maximum())
         msg = SupportClasses_GUI.MessagePopup("w", "Analysis error!", e)
         msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
         msg.exec_()
@@ -330,6 +337,7 @@ class AviaNZ_batchWindow(QMainWindow):
     def completed_fileproc(self):
         # All files successfully processed
         self.statusBar().showMessage("Processed all %d files" % (self.dlg.maximum()-1))
+        self.dlg.setValue(self.dlg.maximum())
         self.w_processButton.setEnabled(True)
 
         text = "Finished processing.\nWould you like to return to the start screen?"
@@ -341,18 +349,39 @@ class AviaNZ_batchWindow(QMainWindow):
         else:
             return(0)
 
-    def stopped_fileproc(self):
-        # Processing gently stopped
-        self.statusBar().showMessage("Analysis cancelled")
-        self.dlg.setValue(self.dlg.maximum())
-        self.w_processButton.setEnabled(True)
+    def stopping_fileproc(self):
+        # When "cancel" is pressed on the progress dialog, it hides,
+        # but it may take a while for the worker thread to do the check and stop.
+        # This function fills this period with Busy cursor.
+        self.dlg.show()
+        self.dlg.setLabelText("Stopping...")
+        self.statusBar().showMessage("Stopping...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
 
-    def update_progress(self,cnt,total,progrtext):
+    def stopped_fileproc(self):
+        # Processing gently stopped (worker thread has now halted, and UI can continue).
+        # Process any earlier requests, in particular the "stopping" signal:
+        # NOTE: this might still lead to race condition as the "stopping" and "stopped" are
+        # emitted by two different threads. Might need to re-emit self.dlg.canceled, or bloody sleep here.
+        QApplication.processEvents()
+        self.statusBar().showMessage("Analysis cancelled")
+        if hasattr(self, 'dlg'):
+            self.dlg.hide()
+        self.w_processButton.setEnabled(True)
+        # in case there was a busy cursor
+        try:
+            QApplication.restoreOverrideCursor()
+        except Exception:
+            pass
+
+    def update_progress(self,cnt,progrtext):
         self.dlg.setValue(cnt)
-        self.dlg.setLabelText("Analysed "+progrtext)
+        self.dlg.setLabelText(progrtext)
+        self.statusBar().showMessage(progrtext)
         self.dlg.update()
         # Refresh GUI after each file (only the ProgressDialog which is modal)
-        QApplication.processEvents()
+        # TODO see if it repaints properly without this
+        # QApplication.processEvents()
 
     def center(self):
         # geometry of the main window

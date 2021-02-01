@@ -257,8 +257,7 @@ class AviaNZ_batchProcess():
 
             print("Removing old Excel files...")
             if not self.CLI:
-                self.ui.statusBar().showMessage("Removing old Excel files, almost done...")
-                self.ui.dlg.setLabelText("Removing old Excel files...")
+                self.need_update.emit(total,"Removing old Excel files, almost done...")
 
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
@@ -266,9 +265,6 @@ class AviaNZ_batchProcess():
                     if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
                         print("Removing excel file %s" % filenamef)
                         os.remove(filenamef)
-
-            if not self.CLI:
-                self.ui.dlg.setValue(total+1)
 
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
             if self.method == 'Click':
@@ -347,8 +343,6 @@ class AviaNZ_batchProcess():
             progrtext = "file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm)
 
             print("*** Processing" + progrtext + " ***")
-            if not self.CLI and not self.testmode:
-                self.ui.statusBar().showMessage("Processing "+progrtext)
 
             # if it was processed previously (stored in log)
             if filename in self.filesDone:
@@ -437,7 +431,7 @@ class AviaNZ_batchProcess():
             if not self.testmode:
                 self.log.appendFile(filename)
                 if not self.CLI:
-                    self.ui.update_progress(cnt,total+1,progrtext)
+                    self.need_update.emit(cnt,"Analysed "+progrtext)
                     # TODO sprinkle more of these checks
                     if self.ui.dlg.wasCanceled():
                         print("Analysis cancelled")
@@ -1311,6 +1305,7 @@ class BatchProcessWorker(AviaNZ_batchProcess, QObject):
     failed = pyqtSignal(str)
     need_msg = pyqtSignal(str, str)
     need_clean_UI = pyqtSignal(int, int)
+    need_update = pyqtSignal(int, str)
 
     def __init__(self, *args, **kwargs):
         # this is supposedly not OK if somebody was to ever
