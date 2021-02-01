@@ -57,6 +57,7 @@ class CNNtrain:
         self.imgsize = [self.LearningDict['imgX'], self.LearningDict['imgY']]
         self.tmpdir1 = False
         self.tmpdir2 = False
+        self.ROCdata = {}
 
         self.CLI = CLI
         if CLI:
@@ -425,6 +426,11 @@ class CNNtrain:
         else:
             fig.savefig(os.path.join(self.folderTrain2, 'validation-plots.png'))
         plt.close()
+
+        # Collate ROC daaa
+        self.ROCdata["TPR"] = self.TPRs
+        self.ROCdata["FPR"] = self.FPRs
+        self.ROCdata["thr"] = self.Thrs
 
                 # # Individual plots
                 # fig = plt.figure()
