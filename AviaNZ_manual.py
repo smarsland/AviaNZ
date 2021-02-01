@@ -416,6 +416,7 @@ class AviaNZ(QMainWindow):
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
         recMenu.addAction("Customise a recogniser", self.customiseFilters)
+        recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
 
         # "Utilities" menu
         utilMenu = self.menuBar().addMenu("&Utilities")
@@ -4383,10 +4384,18 @@ class AviaNZ(QMainWindow):
         try:
             # actually write out the filter
             filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
+            # also write ROC in to a file
+            rocfilename = self.buildRecAdvWizard.speciesData["species"] + "_ROCWF" + time.strftime("_%H-%M-%S", time.gmtime())
+            self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
+            rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
             print("Saving new recogniser to ", filename)
             f = open(filename, 'w')
             f.write(json.dumps(self.buildRecAdvWizard.speciesData))
             f.close()
+            f = open(rocfilename, 'w')
+            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
+            f.close()
+
             # prompt the user
             msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
             msg.exec_()
@@ -4398,9 +4407,16 @@ class AviaNZ(QMainWindow):
     def saveTestRecogniser(self):
         try:
             filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
+            # also write ROC in to a file
+            rocfilename = self.buildRecAdvWizard.speciesData["species"] + "_ROCWF" + time.strftime("_%H-%M-%S", time.gmtime())
+            self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
+            rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
             print("Saving new recogniser to ", filename)
             f = open(filename, 'w')
             f.write(json.dumps(self.buildRecAdvWizard.speciesData))
+            f.close()
+            f = open(rocfilename, 'w')
+            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
             f.close()
             # prompt the user
             msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
@@ -4419,6 +4435,11 @@ class AviaNZ(QMainWindow):
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+        # also write ROC in to a file
+        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
+                                                                                               time.gmtime())
+        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
+        rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
             try:
@@ -4433,6 +4454,10 @@ class AviaNZ(QMainWindow):
                 # And remove temp dirs
                 self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
                 self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+                # save ROC
+                f = open(rocfilename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
+                f.close()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
                 msg.exec_()
@@ -4467,6 +4492,11 @@ class AviaNZ(QMainWindow):
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+        # also write ROC in to a file
+        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
+                                                                                               time.gmtime())
+        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
+        rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
             try:
@@ -4481,6 +4511,10 @@ class AviaNZ(QMainWindow):
                 # And remove temp dirs
                 self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
                 self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+                # save ROC
+                f = open(rocfilename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
+                f.close()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
                 msg.exec_()
@@ -4501,6 +4535,10 @@ class AviaNZ(QMainWindow):
                 # And remove temp dirs
                 self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
                 self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+                # save ROC
+                f = open(rocfilename, 'w')
+                # f.write(json.dumps(self.buildRecAdvWizard.ROCData)) # TODO
+                f.close()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!",
                                                   "Training completed!\nProceeding to testing.")
@@ -4528,7 +4566,7 @@ class AviaNZ(QMainWindow):
                 print("ERROR: could not save recogniser because:", e)
         elif self.filterManager.saveoption != 'New':
             try:
-                filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text())
+                filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text() + '.txt')
                 print("Updating the existing recogniser ", filename)
                 f = open(filename, 'w')
                 f.write(json.dumps(self.filterManager.newfilter))
@@ -5327,7 +5365,12 @@ class AviaNZ(QMainWindow):
         self.filterManager.exec_()
 
     def customiseFilters(self):
-        self.filterManager = Dialogs.FilterCustomise(self.filtersDir)
+        self.filterManager = DialogsTraining.FilterCustomise(self.filtersDir)
+        self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
+        self.filterManager.exec_()
+
+    def customiseFiltersROC(self):
+        self.filterManager = DialogsTraining.FilterCustomiseROC(self.filtersDir)
         self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
         self.filterManager.exec_()
 

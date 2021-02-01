@@ -29,10 +29,11 @@ import time
 import platform
 import copy
 from shutil import copyfile
+import json
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -1381,6 +1382,7 @@ class BuildRecAdvWizard(QWizard):
 
             # collect parameters from training pages (except this)
             for pageId in self.wizard().trainpages[:-1]:
+                ct = self.wizard().page(pageId + 1).clust
                 minlen = float(self.field("minlen"+str(pageId)))
                 maxlen = float(self.field("maxlen"+str(pageId)))
                 maxgap = float(self.field("maxgap" + str(pageId)))
@@ -1394,7 +1396,7 @@ class BuildRecAdvWizard(QWizard):
                 fpr = float(self.field("FPR" + str(pageId)))
 
                 if tpr != -1:
-                    newSubfilt = {'calltype': self.wizard().page(pageId + 1).clust,
+                    newSubfilt = {'calltype': ct,
                                   'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh],
                                   'WaveletParams': {"thr": thr, "M": M, "nodes": nodes},
                                   'ClusterCentre': list(self.wizard().page(pageId + 1).clustercentre),
@@ -1409,6 +1411,9 @@ class BuildRecAdvWizard(QWizard):
 
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
+                # collate ROC data
+                self.wizard().ROCData[ct] = [self.wizard().page(pageId + 1).TPR.tolist()[0], self.wizard().page(pageId + 1).FPR.tolist()[0], self.wizard().page(pageId + 1).nodes[0]]
+                self.wizard().ROCData["thr"] = self.wizard().page(pageId + 1).thrList.tolist()
 
             speciesDataText = copy.deepcopy(self.wizard().speciesData)
             for f in speciesDataText["Filters"]:
@@ -1470,6 +1475,7 @@ class BuildRecAdvWizard(QWizard):
         self.addPage(self.clusterPage)
         self.trainpages = []
         self.speciesData = {}
+        self.ROCData = {}
         # then a pair of pages for each calltype will be created by redoTrainPages.
 
         # Size adjustment between pages:
@@ -1812,6 +1818,12 @@ class ROCCanvas(FigureCanvas):
         # We need to draw *and* flush
         self.figure.canvas.draw()
         self.figure.canvas.flush_events()
+
+    def Clear(self):
+        if hasattr(self, 'ax'):
+            self.figure.clf()
+            self.ax.clear()
+            # self.draw()
 
 class BuildCNNWizard(QWizard):
     # Main init of the CNN training wizard
@@ -2828,3 +2840,668 @@ class BuildCNNWizard(QWizard):
 
         self.parameterPage.setFinalPage(False)
         self.parameterPage.completeChanged.emit()
+
+class FilterCustomise(QDialog):
+    def __init__(self, filtdir, parent=None):
+        super(FilterCustomise, self).__init__(parent)
+        self.setWindowTitle("Customise a recogniser")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.filtdir = filtdir
+        self.saveoption = "New"
+        self.form = QGridLayout()
+
+        # filter dir contents
+        self.listFiles = QListWidget()
+        self.listFiles.setMinimumWidth(250)
+        self.listFiles.setMinimumHeight(275)
+        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.listFiles.itemSelectionChanged.connect(self.readFilter)
+
+        self.readContents()
+
+        # new filter name
+        self.enterFiltName = QLineEdit()
+        self.enterFiltName.setDisabled(True)
+        self.btnSave = QPushButton('Save')
+
+        class FiltValidator(QValidator):
+            def validate(self, input, pos):
+                if not input.endswith('.txt'):
+                    input = input+'.txt'
+                if input==".txt" or input=="":
+                    return(QValidator.Intermediate, input, pos)
+                if self.listFiles.findItems(input, Qt.MatchExactly):
+                    print("duplicated input", input)
+                    return(QValidator.Intermediate, input, pos)
+                else:
+                    return(QValidator.Acceptable, input, pos)
+
+        renameFiltValid = FiltValidator()
+        renameFiltValid.listFiles = self.listFiles
+        self.enterFiltName.setValidator(renameFiltValid)
+
+        # make button state respond to selection + name entry
+        self.listFiles.itemSelectionChanged.connect(self.refreshButtons)
+        self.enterFiltName.textChanged.connect(self.refreshSaveButton)
+
+        # layouts
+        self.rbtn1 = QRadioButton('New recogniser (enter name below)')
+        self.rbtn1.setChecked(True)
+        self.rbtn1.val = "New"
+        self.rbtn1.toggled.connect(self.onClicked)
+        self.rbtn2 = QRadioButton('Update existing')
+        self.rbtn2.val = "Update"
+        self.rbtn2.toggled.connect(self.onClicked)
+        self.lblsave1 = QLabel('How do you want to save new recogniser?')
+        self.lblsave2 = QLabel("Enter file name if you choose to save the recogniser as a new file (must be unique)")
+        self.lblsave2.setDisabled(True)
+
+        self.savegrid = QGridLayout()
+        self.savegrid.addWidget(QLabel(''), 0, 0)
+        self.savegrid.addWidget(self.lblsave1, 1, 0)
+        self.savegrid.addWidget(self.rbtn1, 1, 1)
+        self.savegrid.addWidget(self.rbtn2, 2, 1)
+        self.savegrid.addWidget(self.lblsave2, 3, 0)
+        self.savegrid.addWidget(self.enterFiltName, 3, 1)
+        self.savegrid.addWidget(self.btnSave, 4, 0, 1, 2)
+
+        layout = QVBoxLayout()
+        self.formbox = QHBoxLayout()
+        self.formbox.addLayout(self.form)
+        self.lblselected = QLabel("")
+        self.lblselected.setStyleSheet("QLabel { font-size:10pt; font-weight: bold; background-color: #e0e0e0}")
+        self.lblselected.setVisible(False)
+        # layout.addWidget(QLabel("Recognisers are stored in:"))
+        # layout.addWidget(labDirName)
+        lbltitle = QLabel("The following recognisers are present. Select the recogniser to customise. Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.")
+        lbltitle.setWordWrap(True)
+        layout.addWidget(lbltitle)
+        layout.addWidget(self.listFiles)
+        layout.addWidget(self.lblselected)
+        layout.addLayout(self.formbox)
+        layout.addLayout(self.savegrid)
+        layout.setSpacing(25)
+        self.setLayout(layout)
+        self.disablebuttons()
+
+    def readContents(self):
+        self.listFiles.clear()
+        cl = SupportClasses.ConfigLoader()
+        self.FilterDict = cl.filters(self.filtdir, bats=True)
+        for file in self.FilterDict:
+            item = QListWidgetItem(self.listFiles)
+            item.setText(file)
+
+    def readFilter(self):
+        self.filter = self.FilterDict[self.listFiles.currentItem().text()]
+        self.newfilter = self.FilterDict[self.listFiles.currentItem().text()]
+        self.species = self.filter['species']
+        self.calltypes = []
+        self.cleangrid()
+        self.enterFiltName.clear()
+        lblCT = QLabel('Call type')
+        lblWT = QLabel('Wavelet threshold\n(current)')
+        lblWTnew = QLabel('Wavelet threshold\n(new)')
+        lblWTnew2 = QLabel('')
+        lblCNNT = QLabel('Lower CNN threshold\n(current)')
+        lblCNNTnew = QLabel('Lower CNN threshold\n(new)')
+        lblCNNTnew2 = QLabel('')
+        lblCNNT2 = QLabel('Upper CNN threshold\n(current)')
+        lblCNNT2new = QLabel('Upper CNN threshold\n(new)')
+        lblCNNT2new2 = QLabel('')
+        lblCT.setStyleSheet("QLabel { font-weight: bold}")
+        lblWT.setStyleSheet("QLabel { font-weight: bold}")
+        lblWTnew.setStyleSheet("QLabel { font-weight: bold}")
+        lblCNNT.setStyleSheet("QLabel { font-weight: bold}")
+        lblCNNTnew.setStyleSheet("QLabel { font-weight: bold}")
+        lblCNNT2.setStyleSheet("QLabel { font-weight: bold}")
+        lblCNNT2new.setStyleSheet("QLabel { font-weight: bold}")
+        self.form.addWidget(lblCT, 0, 0)
+        self.form.addWidget(lblWT, 0, 1)
+        self.form.addWidget(lblWTnew, 0, 2)
+        self.form.addWidget(lblWTnew2, 0, 3)
+        if 'CNN' in self.filter:
+            self.form.addWidget(lblCNNT, 0, 4)
+            self.form.addWidget(lblCNNTnew, 0, 5)
+            self.form.addWidget(lblCNNTnew2, 0, 6)
+            self.form.addWidget(lblCNNT2, 0, 7)
+            self.form.addWidget(lblCNNT2new, 0, 8)
+            self.form.addWidget(lblCNNT2new2, 0, 9)
+        for i in range(len(self.filter['Filters'])):
+            self.calltypes.append(self.filter['Filters'][i]['calltype'])
+            ct = QLabel(self.filter['Filters'][i]['calltype'])
+            ct.setStyleSheet("QLabel { font-style: italic}")
+            self.form.addWidget(ct, i+1, 0)
+
+            lblcurrentWT = QLabel(str(round(self.filter['Filters'][i]['WaveletParams']['thr'], 4)))
+            lblcurrentWT.setStyleSheet("QLabel { color: #808080}")
+            self.form.addWidget(lblcurrentWT, i + 1, 1)
+            self.newWThr = QSlider(Qt.Horizontal)
+            self.newWThr.setMinimum(100)
+            self.newWThr.setMaximum(10000)
+            self.newWThr.setValue(round(self.filter['Filters'][i]['WaveletParams']['thr'], 4) * 10000)
+            self.newWThr.setTickInterval(1000)
+            self.newWThr.setTickPosition(QSlider.TicksBelow)
+            self.newWThr.valueChanged.connect(self.refreshSaveButton)
+            self.form.addWidget(self.newWThr, i + 1, 2)
+            lblnewWThr = QLabel(str(round(self.filter['Filters'][i]['WaveletParams']['thr'], 4)))
+            self.form.addWidget(lblnewWThr, i + 1, 3)
+
+            if 'CNN' in self.filter:
+                lblcurrentCNNL = QLabel(str(round(self.filter['CNN']['thr'][i][0], 4)))
+                lblcurrentCNNL.setStyleSheet("QLabel { color: #808080}")
+                self.form.addWidget(lblcurrentCNNL, i + 1, 4)
+                self.newCNNThr1 = QSlider(Qt.Horizontal)
+                self.newCNNThr1.setMinimum(100)
+                self.newCNNThr1.setMaximum(10000)
+                self.newCNNThr1.setValue(round(self.filter['CNN']['thr'][i][0], 4) * 10000)
+                self.newCNNThr1.setTickInterval(1000)
+                self.newCNNThr1.setTickPosition(QSlider.TicksBelow)
+                self.newCNNThr1.valueChanged.connect(self.refreshSaveButton)
+                self.form.addWidget(self.newCNNThr1, i + 1, 5)
+                lblnewCNNThr1 = QLabel(str(round(self.filter['CNN']['thr'][i][0], 4)))
+                self.form.addWidget(lblnewCNNThr1, i + 1, 6)
+
+                lblcurrentCNNU = QLabel(str(round(self.filter['CNN']['thr'][i][1], 4)))
+                lblcurrentCNNU.setStyleSheet("QLabel { color: #808080}")
+                self.form.addWidget(lblcurrentCNNU, i + 1, 7)
+                self.newCNNThr2 = QSlider(Qt.Horizontal)
+                self.newCNNThr2.setMinimum(100)
+                self.newCNNThr2.setMaximum(10000)
+                self.newCNNThr2.setValue(round(self.filter['CNN']['thr'][i][1], 4) * 10000)
+                self.newCNNThr2.setTickInterval(1000)
+                self.newCNNThr2.setTickPosition(QSlider.TicksBelow)
+                self.newCNNThr2.valueChanged.connect(self.refreshSaveButton)
+                self.form.addWidget(self.newCNNThr2, i + 1, 8)
+                lblnewCNNThr2 = QLabel(str(round(self.filter['CNN']['thr'][i][1], 4)))
+                self.form.addWidget(lblnewCNNThr2, i + 1, 9)
+        self.form.setSpacing(25)
+        self.enablebuttons()
+
+    def refreshButtons(self):
+        if len(self.listFiles.selectedItems()) == 0:
+            self.disablebuttons()
+        else:
+            self.lblselected.setText("Selected recogniser: " + self.listFiles.currentItem().text() + '.txt\n' + 'Species name: ' + self.species)
+            self.lblselected.setVisible(True)
+
+    def refreshSaveButton(self):
+        self.btnSave.setEnabled(False)
+        for idx in range(1, len(self.calltypes)+1):
+            if 'CNN' in self.filter:
+                pos = idx * 10
+                slider2 = self.form.itemAt(pos + 5)
+                label2 = self.form.itemAt(pos + 6)
+                slider3 = self.form.itemAt(pos + 8)
+                label3 = self.form.itemAt(pos + 9)
+                label2.widget().setText(str(slider2.widget().value() / 10000))
+                label3.widget().setText(str(slider3.widget().value() / 10000))
+                self.newfilter['CNN']['thr'][idx - 1][0] = label2.widget().text()
+                self.newfilter['CNN']['thr'][idx - 1][1] = label3.widget().text()
+            else:
+                pos = idx * 4
+            slider1 = self.form.itemAt(pos + 2)
+            label1 = self.form.itemAt(pos + 3)
+            label1.widget().setText(str(slider1.widget().value()/10000))
+            self.newfilter['Filters'][idx-1]['WaveletParams']['thr'] = label1.widget().text()
+
+        if self.saveoption == "Update" or (self.saveoption == "New" and self.enterFiltName.text() != "" and self.enterFiltName.text() != ".txt" and self.enterFiltName.text()[:-4] not in [file for file in self.FilterDict]):
+            for idx in range(1, len(self.calltypes)+1):
+                if 'CNN' in self.filter:
+                    pos = idx * 10
+                    item3 = self.form.itemAt(pos + 4)
+                    item4 = self.form.itemAt(pos + 5)
+                    item5 = self.form.itemAt(pos + 7)
+                    item6 = self.form.itemAt(pos + 8)
+                    if float(item3.widget().text()) != item4.widget().value() / 10000:
+                        self.btnSave.setEnabled(True)
+                        break
+                    if float(item5.widget().text()) != item6.widget().value() / 10000:
+                        self.btnSave.setEnabled(True)
+                        break
+                else:
+                    pos = idx * 4
+                item1 = self.form.itemAt(pos + 1)
+                item2 = self.form.itemAt(pos + 2)
+                if float(item1.widget().text()) != item2.widget().value()/10000:
+                    self.btnSave.setEnabled(True)
+                    break
+
+    def disablebuttons(self):
+        self.rbtn1.setEnabled(False)
+        self.rbtn2.setEnabled(False)
+        self.enterFiltName.setEnabled(False)
+        self.lblsave1.setEnabled(False)
+        self.lblsave2.setEnabled(False)
+        self.btnSave.setEnabled(False)
+
+    def enablebuttons(self):
+        self.rbtn1.setEnabled(True)
+        self.rbtn2.setEnabled(True)
+        self.enterFiltName.setEnabled(True)
+        self.lblsave1.setEnabled(True)
+        self.lblsave2.setEnabled(True)
+        self.btnSave.setEnabled(False)
+
+    def onClicked(self):
+        radioBtn = self.sender()
+        if radioBtn.isChecked():
+            self.saveoption = radioBtn.val
+            if radioBtn.val == 'Update':
+                self.enterFiltName.setDisabled(True)
+                self.lblsave2.setDisabled(True)
+            else:
+                self.enterFiltName.setDisabled(False)
+                self.lblsave2.setDisabled(False)
+        self.refreshSaveButton()
+
+    def cleangrid(self):
+        while self.form.count():
+            item = self.form.takeAt(0)
+            widget = item.widget()
+            widget.deleteLater()
+            widget.setParent(None)
+
+class FilterCustomiseROC(QDialog):
+    def __init__(self, filtdir, parent=None):
+        super(FilterCustomiseROC, self).__init__(parent)
+        self.setWindowTitle("Customise a recogniser (use existing ROC)")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.filtdir = filtdir
+        self.saveoption = "New"
+        self.ROCWF = False
+        self.ROCNN = False
+        self.newthr = 0
+        self.form = QGridLayout()
+
+        # filter dir contents
+        self.listFiles = QListWidget()
+        self.listFiles.setFixedWidth(300)
+        self.listFiles.setFixedHeight(450)
+        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.listFiles.itemSelectionChanged.connect(self.readFilter)
+
+        self.readContents()
+
+        # new filter name
+        self.enterFiltName = QLineEdit()
+        self.enterFiltName.setDisabled(True)
+        self.btnSave = QPushButton('Save')
+
+        class FiltValidator(QValidator):
+            def validate(self, input, pos):
+                if not input.endswith('.txt'):
+                    input = input+'.txt'
+                if input==".txt" or input=="":
+                    return(QValidator.Intermediate, input, pos)
+                if self.listFiles.findItems(input, Qt.MatchExactly):
+                    print("duplicated input", input)
+                    return(QValidator.Intermediate, input, pos)
+                else:
+                    return(QValidator.Acceptable, input, pos)
+
+        renameFiltValid = FiltValidator()
+        renameFiltValid.listFiles = self.listFiles
+        self.enterFiltName.setValidator(renameFiltValid)
+
+        self.listFiles.itemSelectionChanged.connect(self.refreshButtons)
+        self.enterFiltName.textChanged.connect(self.refreshSaveButton)
+
+        # layouts
+        self.rbtn1 = QRadioButton('New recogniser (enter name below)')
+        self.rbtn1.setChecked(True)
+        self.rbtn1.val = "New"
+        self.rbtn1.toggled.connect(self.onClicked)
+        self.rbtn2 = QRadioButton('Update existing')
+        self.rbtn2.val = "Update"
+        self.rbtn2.toggled.connect(self.onClicked)
+        self.lblsave1 = QLabel('How do you want to save new recogniser?')
+        self.lblsave2 = QLabel("Enter file name if you choose to save the recogniser as a new file (must be unique)")
+        self.lblsave2.setDisabled(True)
+
+        self.savegrid = QGridLayout()
+        self.savegrid.addWidget(QLabel(''), 0, 0)
+        self.savegrid.addWidget(self.lblsave1, 1, 0)
+        self.savegrid.addWidget(self.rbtn1, 1, 1)
+        self.savegrid.addWidget(self.rbtn2, 1, 2)
+        self.savegrid.addWidget(self.lblsave2, 3, 0, 1, 2)
+        self.savegrid.addWidget(self.enterFiltName, 3, 2)
+        self.savegrid.addWidget(self.btnSave, 4, 0, 1, 3)
+
+        self.recgrid = QGridLayout()
+        # self.recgrid.addWidget(QLabel("The following recognisers are present. Select the recogniser to customise:"), 0, 0, 1, 5)
+        self.lblselected = QLabel("")
+        self.lblselected.setStyleSheet("QLabel { font-size:10pt; font-weight: bold; background-color: #e0e0e0}")
+        self.lblselected.setMinimumWidth(600)
+        self.lblselected.setVisible(False)
+        self.cbct = QComboBox()
+        self.cbct.setVisible(False)
+        self.cbct.currentTextChanged.connect(self.loadROC)
+        self.lblctText = QLabel("")
+        self.cbmode = QComboBox()
+        self.cbmode.setVisible(False)
+        self.cbmode.currentTextChanged.connect(self.loadROC)
+        self.lblmodeText = QLabel("")
+        # self.recgrid.addWidget(self.listFiles, 1, 0, 4, 1)
+        # self.recgrid.addWidget(self.lblselected, 1, 1, 1, 4)
+        # self.recgrid.addWidget(self.lblctText, 2, 1)
+        # self.recgrid.addWidget(self.cbct, 2, 2)
+        # self.recgrid.addWidget(self.lblmodeText, 2, 3)
+        # self.recgrid.addWidget(self.cbmode, 2, 4)
+        self.recgrid.addWidget(self.lblselected, 0, 0, 1, 4)
+        self.recgrid.addWidget(self.lblctText, 1, 0)
+        self.recgrid.addWidget(self.cbct, 1, 1)
+        self.recgrid.addWidget(self.lblmodeText, 1, 2)
+        self.recgrid.addWidget(self.cbmode, 1, 3)
+
+        layout = QVBoxLayout()
+        self.formbox = QHBoxLayout()
+        self.formbox.addLayout(self.form)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.listFiles)
+        hbox.addLayout(self.recgrid)
+        lbltitle = QLabel("The following recognisers are present. Select the recogniser to customise. Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.")
+        lbltitle.setWordWrap(True)
+        layout.addWidget(lbltitle)
+        # layout.addLayout(self.recgrid)
+        layout.addLayout(hbox)
+        layout.addLayout(self.formbox)
+        layout.addLayout(self.savegrid)
+        layout.setSpacing(25)
+        self.setLayout(layout)
+        self.disablebuttons()
+
+    def readContents(self):
+        self.listFiles.clear()
+        cl = SupportClasses.ConfigLoader()
+        self.FilterDict = cl.filters(self.filtdir, bats=True)
+        for file in self.FilterDict:
+            item = QListWidgetItem(self.listFiles)
+            item.setText(file)
+
+    def readFilter(self):
+        self.filter = self.FilterDict[self.listFiles.currentItem().text()]
+        self.newfilter = copy.deepcopy(self.filter)
+        self.species = self.filter['species']
+        self.calltypes = []
+        self.newthr = 0
+        self.cleangrid()
+        self.cleanrecgrid()
+        self.enterFiltName.clear()
+        self.cbct.clear()
+        self.cbmode.clear()
+        self.lblmodeText.clear()
+        self.lblctText.clear()
+        self.cbmode.setVisible(False)
+        self.cbct.setVisible(False)
+        self.ROCWF = False
+        self.ROCNN = False
+        self.disablebuttons()
+        self.genrecgrid()
+
+        # Check if there is a saved ROC
+        if 'ROCNN' in self.filter:
+            if os.path.exists(os.path.join(self.filtdir, self.filter['ROCNN'] + '.json')):
+                self.ROCNN = True
+                self.lblmodeText.setText('Select mode')
+                self.cbmode.addItem('CNN')
+                self.cbmode.setVisible(True)
+        if 'ROCWF' in self.filter:
+            if os.path.exists(os.path.join(self.filtdir, self.filter['ROCWF'] + '.json')):
+                self.ROCWF = True
+                self.lblmodeText.setText('Select mode')
+                self.cbmode.addItem('WF')
+                self.cbmode.setVisible(True)
+
+        if self.ROCNN or self.ROCWF:
+            self.lblctText.setText('Select call type')
+            self.cbct.setVisible(True)
+
+            lblCT = QLabel('Call type')
+            lblWT = QLabel('Wavelet threshold\n(current)')
+            lblWTnew = QLabel('Wavelet threshold\n(new)')
+            lblCNNT = QLabel('Lower CNN threshold\n(current)')
+            lblCNNTnew = QLabel('Lower CNN threshold\n(new)')
+            lblCNNT2 = QLabel('Upper CNN threshold\n(current)')
+            lblCNNT2new = QLabel('Upper CNN threshold\n(new)')
+            lblCT.setStyleSheet("QLabel { font-weight: bold}")
+            lblWT.setStyleSheet("QLabel { font-weight: bold}")
+            lblWTnew.setStyleSheet("QLabel { font-weight: bold}")
+            lblCNNT.setStyleSheet("QLabel { font-weight: bold}")
+            lblCNNTnew.setStyleSheet("QLabel { font-weight: bold}")
+            lblCNNT2.setStyleSheet("QLabel { font-weight: bold}")
+            lblCNNT2new.setStyleSheet("QLabel { font-weight: bold}")
+            self.form.addWidget(lblCT, 0, 0)
+            self.form.addWidget(lblWT, 0, 1)
+            self.form.addWidget(lblWTnew, 0, 2)
+            if 'CNN' in self.filter:
+                self.form.addWidget(lblCNNT, 0, 3)
+                self.form.addWidget(lblCNNTnew, 0, 4)
+                self.form.addWidget(lblCNNT2, 0, 5)
+                self.form.addWidget(lblCNNT2new, 0, 6)
+            for i in range(len(self.filter['Filters'])):
+                self.calltypes.append(self.filter['Filters'][i]['calltype'])
+                ct = QLabel(self.filter['Filters'][i]['calltype'])
+                ct.setStyleSheet("QLabel { font-style: italic}")
+                self.form.addWidget(ct, i+1, 0)
+                self.cbct.addItem(self.filter['Filters'][i]['calltype'])
+
+                lblcurrentWT = QLabel(str(round(self.filter['Filters'][i]['WaveletParams']['thr'], 4)))
+                lblcurrentWT.setStyleSheet("QLabel { color: #808080}")
+                self.form.addWidget(lblcurrentWT, i + 1, 1)
+                self.newWThr = QLabel(str(round(self.filter['Filters'][i]['WaveletParams']['thr'], 4)))
+                self.form.addWidget(self.newWThr, i + 1, 2)
+
+                if 'CNN' in self.filter:
+                    lblcurrentCNNL = QLabel(str(round(self.filter['CNN']['thr'][i][0], 4)))
+                    lblcurrentCNNL.setStyleSheet("QLabel { color: #808080}")
+                    self.form.addWidget(lblcurrentCNNL, i + 1, 3)
+                    self.newCNNThr1 = QLabel(str(round(self.filter['CNN']['thr'][i][0], 4)))
+                    self.form.addWidget(self.newCNNThr1, i + 1, 4)
+
+                    lblcurrentCNNU = QLabel(str(round(self.filter['CNN']['thr'][i][1], 4)))
+                    lblcurrentCNNU.setStyleSheet("QLabel { color: #808080}")
+                    self.form.addWidget(lblcurrentCNNU, i + 1, 5)
+                    self.newCNNThr2 = QLabel(str(round(self.filter['CNN']['thr'][i][1], 4)))
+                    self.form.addWidget(self.newCNNThr2, i + 1, 6)
+            self.form.setSpacing(25)
+            self.enablebuttons()
+        else:
+            self.lblctText.setText('There is no ROC saved for this recogniser.\n\nYou can still change thresholds manually by choosing Recognisers -> Customise a recogniser in the menu.')
+            self.cbmode.setVisible(False)
+
+    def loadROC(self):
+        if self.cbmode.currentText() != "" and self.cbct.currentText() != "":
+            self.figCanvas = ROCCanvas(self)
+            self.figCanvas.plotme()
+            self.recgrid.addWidget(self.figCanvas, 2, 0, 1, 4)
+
+            self.marker = self.figCanvas.ax.plot([0, 1], [0, 1], marker='o', color='black', linestyle='dotted')[0]
+
+            # figure click handler
+            def onclick(event):
+                fpr_cl = event.xdata
+                tpr_cl = event.ydata
+                if tpr_cl is None or fpr_cl is None:
+                    return
+
+                if self.cbmode.currentText() == 'WF':
+                    # get M and thr for closest point
+                    distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
+                    M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
+                    self.tpr_near = self.TPR[M_min_ind, thr_min_ind]
+                    self.fpr_near = self.FPR[M_min_ind, thr_min_ind]
+                    self.marker.set_visible(False)
+                    self.figCanvas.draw()
+                    self.marker.set_xdata([fpr_cl, self.fpr_near])
+                    self.marker.set_ydata([tpr_cl, self.tpr_near])
+                    self.marker.set_visible(True)
+                    self.figCanvas.ax.draw_artist(self.marker)
+                    self.figCanvas.update()
+                elif self.cbmode.currentText() == 'CNN':
+                    # get thr for closest point
+                    distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
+                    M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
+                    self.tpr_near = self.TPR[M_min_ind, thr_min_ind]
+                    self.fpr_near = self.FPR[M_min_ind, thr_min_ind]
+                    self.marker.set_visible(False)
+                    self.figCanvas.draw()
+                    self.marker.set_xdata([fpr_cl, self.fpr_near])
+                    self.marker.set_ydata([tpr_cl, self.tpr_near])
+                    self.marker.set_visible(True)
+                    self.figCanvas.ax.draw_artist(self.marker)
+                    self.figCanvas.update()
+
+                print("fpr_cl, tpr_cl: ", self.fpr_near, self.tpr_near)
+
+                if self.cbmode.currentText() == 'WF':
+                    print('thr: ', self.thrList[thr_min_ind])
+                    print('nodes: ', self.nodes[thr_min_ind])
+                    self.newthr = round(self.thrList[thr_min_ind], 4)
+                    self.refreshSaveButton()
+                elif self.cbmode.currentText() == 'CNN':
+                    print('thr: ', self.thrList[thr_min_ind])
+                    self.newthr = round(self.thrList[thr_min_ind], 4)
+                    self.refreshSaveButton()
+
+            self.figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
+
+            if self.cbmode.currentText() == 'WF':
+                jsonfile = open(os.path.join(self.filtdir, self.filter['ROCWF'] + '.json'), 'r')
+                self.roc = json.loads(jsonfile.read())
+                jsonfile.close()
+                self.TPR = np.asarray([self.roc[self.cbct.currentText()][0]], dtype=np.float32)
+                self.FPR = np.asarray([self.roc[self.cbct.currentText()][1]], dtype=np.float32)
+                self.thrList = self.roc["thr"]
+                self.nodes = self.roc[self.cbct.currentText()][2]
+                self.figCanvas.plotmeagain(self.TPR, self.FPR)
+            elif self.cbmode.currentText() == 'CNN':
+                jsonfile = open(os.path.join(self.filtdir, self.filter['ROCNN'] + '.json'), 'r')
+                self.roc = json.loads(jsonfile.read())
+                jsonfile.close()
+                self.TPR = np.asarray([self.roc["TPR"][self.calltypes.index(self.cbct.currentText())]], dtype=np.float32)
+                self.FPR = np.asarray([self.roc["FPR"][self.calltypes.index(self.cbct.currentText())]], dtype=np.float32)
+                self.thrList = self.roc["thr"]
+                self.figCanvas.plotmeagain(self.TPR, self.FPR)
+
+    def refreshButtons(self):
+        if len(self.listFiles.selectedItems()) == 0:
+            self.disablebuttons()
+        else:
+            self.lblselected.setText(" Selected recogniser: " + self.listFiles.currentItem().text() + '.txt\t' + ' Species name: ' + self.species)
+            self.lblselected.setVisible(True)
+
+    def refreshSaveButton(self):
+        self.btnSave.setEnabled(False)
+        if self.newthr != 0:
+            for idx in range(1, len(self.calltypes)+1):
+                if 'CNN' in self.filter:
+                    pos = idx * 7
+                    if self.form.itemAt(pos).widget().text() == self.cbct.currentText() and self.cbmode.currentText() == 'CNN':
+                        label2 = self.form.itemAt(pos + 4)
+                        label3old = self.form.itemAt(pos + 5)
+                        label3 = self.form.itemAt(pos + 6)
+                        label2.widget().setText(str(self.newthr))
+                        label3.widget().setText(label3old.widget().text())
+                        # sanity check
+                        if float(label2.widget().text()) > float(label3.widget().text()):
+                            label3.widget().setText(str(1.0))
+                        self.newfilter['CNN']['thr'][idx - 1][0] = float(label2.widget().text())
+                        self.newfilter['CNN']['thr'][idx - 1][1] = float(label3.widget().text())
+                    elif self.form.itemAt(pos).widget().text() == self.cbct.currentText() and self.cbmode.currentText() == 'WF':
+                        label1 = self.form.itemAt(pos + 2)
+                        label1.widget().setText(str(self.newthr))
+                        self.newfilter['Filters'][idx - 1]['WaveletParams']['thr'] = float(label1.widget().text())
+                else:
+                    pos = idx * 3
+                    if self.form.itemAt(pos).widget().text() == self.cbct.currentText() and self.cbmode.currentText() == 'WF':
+                        label1 = self.form.itemAt(pos + 2)
+                        label1.widget().setText(str(self.newthr))
+                        self.newfilter['Filters'][idx-1]['WaveletParams']['thr'] = float(label1.widget().text())
+
+        if self.saveoption == "Update" or (self.saveoption == "New" and self.enterFiltName.text() != "" and self.enterFiltName.text() != ".txt" and self.enterFiltName.text()[:-4] not in [file for file in self.FilterDict]):
+            for idx in range(1, len(self.calltypes)+1):
+                if 'CNN' in self.filter:
+                    pos = idx * 7
+                    item3 = self.form.itemAt(pos + 3)
+                    item4 = self.form.itemAt(pos + 4)
+                    item5 = self.form.itemAt(pos + 5)
+                    item6 = self.form.itemAt(pos + 6)
+                    if item3.widget().text() != item4.widget().text():
+                        self.btnSave.setEnabled(True)
+                        break
+                    if item5.widget().text() != item6.widget().text():
+                        self.btnSave.setEnabled(True)
+                        break
+                else:
+                    pos = idx * 3
+                item1 = self.form.itemAt(pos + 1)
+                item2 = self.form.itemAt(pos + 2)
+                if item1.widget().text() != item2.widget().text():
+                    self.btnSave.setEnabled(True)
+                    break
+
+    def disablebuttons(self):
+        self.rbtn1.setEnabled(False)
+        self.rbtn2.setEnabled(False)
+        self.enterFiltName.setEnabled(False)
+        self.lblsave1.setEnabled(False)
+        self.lblsave2.setEnabled(False)
+        self.btnSave.setEnabled(False)
+
+    def enablebuttons(self):
+        self.rbtn1.setEnabled(True)
+        self.rbtn2.setEnabled(True)
+        self.enterFiltName.setEnabled(True)
+        self.lblsave1.setEnabled(True)
+        self.lblsave2.setEnabled(True)
+        self.btnSave.setEnabled(False)
+
+    def onClicked(self):
+        radioBtn = self.sender()
+        if radioBtn.isChecked():
+            self.saveoption = radioBtn.val
+            if radioBtn.val == 'Update':
+                self.enterFiltName.setDisabled(True)
+                self.lblsave2.setDisabled(True)
+            else:
+                self.enterFiltName.setDisabled(False)
+                self.lblsave2.setDisabled(False)
+        self.refreshSaveButton()
+
+    def cleangrid(self):
+        while self.form.count():
+            item = self.form.takeAt(0)
+            widget = item.widget()
+            widget.deleteLater()
+            widget.setParent(None)
+
+    def cleanrecgrid(self):
+        while self.recgrid.count():
+            item = self.recgrid.takeAt(0)
+            widget = item.widget()
+            widget.deleteLater()
+            widget.setParent(None)
+
+    def genrecgrid(self):
+        self.lblselected = QLabel("")
+        self.lblselected.setStyleSheet("QLabel { font-size:10pt; font-weight: bold; background-color: #e0e0e0}")
+        self.lblselected.setMinimumWidth(600)
+        self.lblselected.setVisible(False)
+        self.cbct = QComboBox()
+        self.cbct.setVisible(False)
+        self.cbct.currentTextChanged.connect(self.loadROC)
+        self.lblctText = QLabel("")
+        self.cbmode = QComboBox()
+        self.cbmode.setVisible(False)
+        self.cbmode.currentTextChanged.connect(self.loadROC)
+        self.lblmodeText = QLabel("")
+        self.recgrid.addWidget(self.lblselected, 0, 0, 1, 4)
+        self.recgrid.addWidget(self.lblctText, 1, 0)
+        self.recgrid.addWidget(self.cbct, 1, 1)
+        self.recgrid.addWidget(self.lblmodeText, 1, 2)
+        self.recgrid.addWidget(self.cbmode, 1, 3)
