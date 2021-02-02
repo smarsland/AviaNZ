@@ -43,8 +43,8 @@ class SplitData(QMainWindow):
         print("Starting AviaNZ WAV splitter")
         self.setWindowTitle("AviaNZ WAV splitter")
 
-        self.dirName = []
-        self.dirO = []
+        self.dirName = ""
+        self.dirO = ""
         self.indirOk = False
         self.outdirOk = False
         self.cutLen = 1
@@ -68,7 +68,7 @@ class SplitData(QMainWindow):
         label = QLabel("Select input folder with files to split:")
         self.w_browse = QPushButton(" Browse Folder")
         self.w_browse.setToolTip("Warning: files inside subfolders will not be processed!")
-        self.w_browse.setMinimumSize(170, 40)
+        self.w_browse.setMinimumSize(190, 40)
         self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.clicked.connect(self.browse)
@@ -135,6 +135,9 @@ class SplitData(QMainWindow):
         inputGrid.addWidget(self.labelWavs, 2, 0, 1, 4)
         inputGrid.addWidget(self.labelDatas, 3, 0, 1, 4)
         inputGrid.addWidget(self.labelDirs, 4, 0, 1, 4)
+        inputGrid.setColumnStretch(1, 3)
+        inputGrid.setColumnStretch(0, 0)
+        inputGrid.setColumnMinimumWidth(0, 170)        
 
         outputGroup = QGroupBox("Output")
         outputGrid = QGridLayout()
@@ -146,6 +149,9 @@ class SplitData(QMainWindow):
         outputGrid.addWidget(self.boxCutLen, 3, 0, 1, 1)
         outputGrid.addWidget(self.labelCutLen, 3, 1, 1, 3)
         outputGrid.addWidget(self.labelOut, 4, 0, 1, 4)
+        outputGrid.setColumnStretch(1, 3)
+        outputGrid.setColumnStretch(0, 0)
+        outputGrid.setColumnMinimumWidth(0, 170)
 
         ## add everything to the main layout
         grid.addWidget(inputGroup, 0, 0, 2, 4)
@@ -189,8 +195,13 @@ class SplitData(QMainWindow):
         self.w_dirO.setReadOnly(True)
 
         # Ideally, should check if output file names are free
+        samedir = self.dirO!="" and self.dirName!="" and os.path.samefile(self.dirO, self.dirName)
+        
         if not os.access(self.dirO, os.W_OK | os.X_OK):
             self.labelOut.setText("ERROR: selected output folder not writeable")
+            self.outdirOk = False
+        elif samedir:
+            self.labelOut.setText("ERROR: cannot use the same folder for input and output")
             self.outdirOk = False
         elif not QDir(self.dirO).isEmpty():
             self.labelOut.setText("Warning: selected output folder not empty")
@@ -225,11 +236,13 @@ class SplitData(QMainWindow):
 
         if not os.path.isdir(self.dirName):
             print("ERROR: directory %s doesn't exist" % self.dirName)
-            return
-
-        listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.AllDirs | QDir.NoDotAndDotDot )
-        self.listOfWavs = QDir(self.dirName).entryList(['*.wav'])
-        self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data'])
+            self.listOfWavs = []
+            self.listOfDataFiles = []
+            listOfDirs = []
+        else:
+            listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.AllDirs | QDir.NoDotAndDotDot )
+            self.listOfWavs = QDir(self.dirName).entryList(['*.wav'])
+            self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data'])
 
         # check if files have timestamps:
         haveTime = 0
@@ -291,8 +304,12 @@ class SplitData(QMainWindow):
             noData = False
 
         self.indirOk = not (noData and noWav)
-
-        if self.indirOk:
+        samedir = self.dirO!="" and self.dirName!="" and os.path.samefile(self.dirO, self.dirName)
+        
+        if samedir:
+            self.indirOk = False
+            self.labelSum.setText("ERROR: cannot use the same folder for input and output")
+        elif self.indirOk:
             self.labelSum.setText("Will split %d WAV files and %d DATA files into pieces of %d min %d s." % (len(self.listOfWavs), len(self.listOfDataFiles), self.cutLen // 60, self.cutLen % 60))
         else:
             self.labelSum.setText("Please select files to split")
