@@ -415,7 +415,6 @@ class AviaNZ(QMainWindow):
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
-        recMenu.addAction("Customise a recogniser", self.customiseFilters)
         recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
 
         # "Utilities" menu
@@ -5362,11 +5361,6 @@ class AviaNZ(QMainWindow):
 
     def manageFilters(self):
         self.filterManager = Dialogs.FilterManager(self.filtersDir)
-        self.filterManager.exec_()
-
-    def customiseFilters(self):
-        self.filterManager = DialogsTraining.FilterCustomise(self.filtersDir)
-        self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
         self.filterManager.exec_()
 
     def customiseFiltersROC(self):
