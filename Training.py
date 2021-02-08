@@ -569,6 +569,9 @@ class CNNtrain:
             modelsrc = os.path.join(self.tmpdir2.name, 'model.json')
             CNN_name = self.species + strftime("_%H-%M-%S", gmtime())
             self.currfilt["CNN"]["CNN_name"] = CNN_name
+            rocfilename = self.species + "_ROCNN" + strftime("_%H-%M-%S", gmtime())
+            self.currfilt["ROCNN"] = rocfilename
+            rocfilename = os.path.join(self.filterdir, rocfilename + '.json')
 
             modelfile = os.path.join(self.filterdir, CNN_name + '.json')
             weightsrc = self.bestweight
@@ -584,6 +587,10 @@ class CNNtrain:
             # Actually copy the model
             copyfile(modelsrc, modelfile)
             copyfile(weightsrc, weightfile)
+            # save ROC
+            f = open(rocfilename, 'w')
+            f.write(json.dumps(self.ROCdata))
+            f.close()
             # And remove temp dirs
             self.tmpdir1.cleanup()
             self.tmpdir2.cleanup()

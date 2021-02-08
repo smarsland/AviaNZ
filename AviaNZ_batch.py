@@ -193,7 +193,7 @@ class AviaNZ_batchProcess():
                 text = "Method: " + self.method + ".\nNumber of files to analyse: " + str(total) + "\n"
             else:
                 text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyse: " + str(total) + ", " + str(cnt) + " done so far.\n"
-                text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
+                # text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
             text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
             if speciesStr == "Any sound" or self.method == "Click" or self.method == "Bats":
                 text += "\nWarning: any previous annotations in these files will be deleted!\n"
@@ -633,9 +633,6 @@ class AviaNZ_batchProcess():
                                     # Normalize and rotate
                                     featuress.append([np.rot90(sgRaw_i / maxg).tolist()])
                                 featuress = np.array(featuress)
-                                # featuress = featuress.reshape(featuress.shape[0], 512, 687, 1)
-                                # featuress = featuress.reshape(featuress.shape[0], 512, 343, 1)
-                                # featuress = featuress.reshape(featuress.shape[0], 512, 34, 1)
                                 featuress = featuress.reshape(featuress.shape[0], CNNmodel[2][0], CNNmodel[2][1], 1)
                                 featuress = featuress.astype('float32')
                                 if np.shape(featuress)[0] > 0:
