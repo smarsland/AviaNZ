@@ -1541,7 +1541,19 @@ class PostProcess:
             featuress = featuress.astype('float32')
             # predict with CNN
             if np.shape(featuress)[0] > 0:
-                probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))
+                # probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))  # This might lead to OOM error, therefore show batches
+                batchsize = 5   # TODO: read from learning parameters file
+                batches = int(math.ceil(np.shape(featuress)[0] / batchsize))
+                start = 0
+                probs = np.empty(shape=[0, 3])
+                for i in range(batches):
+                    # print(min(np.shape(featuress)[0], i*batchsize))
+                    end = min(np.shape(featuress)[0], start + batchsize)
+                    print(end)
+                    p = self.CNNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
+                    print(p)
+                    probs = np.append(probs, p, axis=0)
+                    start += batchsize
             else:
                 probs = 0
             print("probabilities: ", probs)
