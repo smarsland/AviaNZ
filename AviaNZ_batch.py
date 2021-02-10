@@ -269,54 +269,52 @@ class AviaNZ_batchProcess():
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
             if self.method == 'Click':
                 self.exportToBatSearch(self.dirName)
+            elif self.method == 'Bats':
+                self.exportToBatSearch_NP(self.dirName)
+
+            if self.method=='Click' or self.method=='Bats':
                 if not self.CLI:
                     # TODO: what if you start from a different folder?
                     # I think that this is OK, but need to check -- it should (?) put a BatDB file in each folder, just like the log files.
                     # Then it's up to the user to sort them. Or maybe not?
                     # TODO: autofill some metadata if user has filled it in once?
-                    easting = None
-                    northing = None
+                    easting = ""
+                    northing = ""
                     try:
                         f = open(os.path.join(self.dirName,'log.txt'),'r')
-                    except:
-                        f = None
-                    recorder = os.path.split(self.dirName)[-1]
-                    print(recorder)
-                    if f is not None:
                         # Find a line that contains GPS (lat, long),
                         # And read the two numbers after it
                         # This version just returns the last ones
                         for line in f.readlines():
                             if 'GPS (lat,long)' in line:
-                                l = line.strip()
-                                y = l.split(",")
-                                x = l[-2].split(":")
+                                ll = line.strip()
+                                y = ll.split(",")
+                                x = ll[-2].split(":")
                                 easting = x[-1]
                                 northing = y[-1]
                             elif 'GPS:' in line:
-                                l = line.strip()
-                                y = l.split("=")
+                                ll = line.strip()
+                                y = ll.split("=")
                                 x = y[-2].split(",")
                                 easting = x[-2]
                                 northing = y[-1]
+                    except FileNotFoundError:
+                        pass
+                    except Exception as e:
+                        print("Warning: could not read GPS data, ", e)
 
-                    import Dialogs
-                    exportResults = Dialogs.ExportBats(self.config['operator'],easting,northing,recorder)
-                    exportResults.show()
-                    if exportResults.exec_() == 1:
-                        exportResults = exportResults.getValues()
-                        self.exportBatSurvey(self.dirName, exportResults)
-                else:
-                    self.exportBatSurvey(self.dirName, None)
-            elif self.method == 'Bats':
-                self.exportToBatSearch_NP(self.dirName)
-                if not self.CLI:
-                    import Dialogs
-                    exportResults = Dialogs.ExportBats(self.config['operator'])
-                    exportResults.show()
-                    if exportResults.exec_() == 1:
-                        exportResults = exportResults.getValues()
-                        self.exportBatSurvey(self.dirName, exportResults)
+                    recorder = os.path.split(self.dirName)[-1]
+
+                    # ping UI to show the survey form
+                    self.mutex.lock()
+                    self.need_bat_info.emit(self.config['operator'],easting,northing,recorder)
+                    self.ui.msgClosed.wait(self.mutex)
+                    self.mutex.unlock()
+
+                    # now, the form was either rejected, setting results to None,
+                    # or accepted:
+                    if self.ui.batFormResults is not None:
+                        self.exportBatSurvey(self.dirName, self.ui.batFormResults)
                 else:
                     self.exportBatSurvey(self.dirName, None)
 
@@ -1169,7 +1167,6 @@ class AviaNZ_batchProcess():
         import datetime as dt
         # Export an excel file for the Bat survey database
         # TODO: turn into full excel?
-        #print(responses)
         if responses is None:
             responses = ['',self.config['operator'],'','ABM','','','','','']
 
@@ -1178,18 +1175,35 @@ class AviaNZ_batchProcess():
             # Read the dates
             for d in dirs:
                 if d.isdigit():
-                    dates.append(int(d))
-                    
+                    dates.append(d)
+
         if len(dates)==0:
-            print("Error: no suitable folders found")
+            print("ERROR: no suitable folders found")
             return 0
+        else:
+            print("Dates:", dates)
 
         dates = np.array(dates)
         dates = np.unique(dates)
         dates = np.sort(dates)
 
-        start = dt.date(int(str(dates[0])[:4]),int(str(dates[0])[4:6]),int(str(dates[0])[6:]))
-        end = dt.date(int(str(dates[-1])[:4]),int(str(dates[-1])[4:6]),int(str(dates[-1])[6:]))
+        # skip unparseable strings
+        dates_formatted = []
+        for d in dates:
+            try:
+                d_f = dt.datetime.strptime(d, '%Y%m%d').date()
+                dates_formatted.append(d_f)
+            except ValueError:
+                print("Warning: directory %s does not look like a date" % d)
+
+        if len(dates_formatted)==0:
+            print("ERROR: none of the directory names were date-like")
+            return 0
+
+        # get first, last, and total number of nights present in the data
+        start = dates_formatted[0]
+        end = dates_formatted[-1]
+        totalnights = len(dates_formatted)
 
         # LT then ST
         species = np.zeros(2,dtype=int)
@@ -1215,20 +1229,23 @@ class AviaNZ_batchProcess():
                                     species[1] += 1
 
         f = open(os.path.join(dirName,'BatDB.csv'),'w')
-        
+
         f.write('Data Source,Observer,Survey method,Species,Passes,Date,Detector type,Date recorder put out,Date recorder collected,No. of nights out,Effective nights out,Notes,Eastings,Northings,Site name,Region\n')
 
         # TODO: Get effective days (how?) I think it is temperature > 7 degrees
+        line = responses[0]+','+responses[1]+','+responses[2]+','
         if species[0] > 0 and species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            line = line + 'Both species detected'+','+str(species[0]+species[1])+','
         elif species[0] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            line = line + 'Chalinolobus tuberculatus'+','+str(species[0])+','
         elif species[1] > 0:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            line = line + 'Mystacina tuberculata'+','+str(species[1])+','
         else:
-            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str((end-start).days)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+            line = line + 'No bat species detected'+','+'0'+','
+        line = line + str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str(totalnights)+','+str(totalnights)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n'
+        f.write(line)
         f.close()
-    
+
     def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):
         # This produces a csv file that looks like the one from Bat Search. 
 
@@ -1303,6 +1320,7 @@ class BatchProcessWorker(AviaNZ_batchProcess, QObject):
     need_msg = pyqtSignal(str, str)
     need_clean_UI = pyqtSignal(int, int)
     need_update = pyqtSignal(int, str)
+    need_bat_info = pyqtSignal(str, str, str, str)
 
     def __init__(self, *args, **kwargs):
         # this is supposedly not OK if somebody was to ever

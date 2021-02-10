@@ -62,6 +62,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
         self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
         self.batchProc.need_update.connect(lambda cnt, text: self.update_progress(cnt, text))
+        self.batchProc.need_bat_info.connect(lambda op,east,north,rec: self.bat_survey_form(op,east,north,rec))
         self.batchProc.moveToThread(self.batchThread)
 
         self.msgClosed = QWaitCondition()
@@ -301,6 +302,16 @@ class AviaNZ_batchWindow(QMainWindow):
             self.msg_response = 0
         # to utilize Esc, need to add another standard button, and then do:
         # msg.setEscapeButton(QMessageBox.Cancel)
+        self.msgClosed.wakeAll()
+
+    def bat_survey_form(self,operator,easting,northing,recorder):
+        exportForm = Dialogs.ExportBats(os.path.join(self.dirName, "BatDB.csv"),operator,easting,northing,recorder)
+        response = exportForm.exec_()
+        if response==1:
+            self.batFormResults = exportForm.getValues()
+        else:
+            self.batFormResults = None
+        # ping the batch worker that form was accepted or rejected
         self.msgClosed.wakeAll()
 
     def clean_UI(self,total,cnt):

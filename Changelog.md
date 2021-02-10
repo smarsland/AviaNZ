@@ -6,6 +6,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Ability to undo previously deleted segments in review
 - "One-by-one" review plot size expands to dialog size
 - BatSearch-compatible output for batmode
+- National Bat Database format output for batmode
 - Segment saving feedback now shown in status bar
 - Mouse cursor indicates current mode
 - "Jump to next annotation" buttons
@@ -19,6 +20,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Batch Review settings separated into Advanced and Simple
 - Simpler dropdown to set review certainty bounds
 - Better spectrogram type selection UI
+- Separate UI thread to keep responsiveness when batch processing
 
 ### Fixed
 - Greatly reduced CPU load for mouseover detection in spectrogram items
