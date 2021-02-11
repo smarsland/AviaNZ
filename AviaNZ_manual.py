@@ -5540,7 +5540,8 @@ class AviaNZ(QMainWindow):
         self.t.show()
         self.t.setWindowTitle('AviaNZ - Interface Settings')
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.t.setFixedSize(520, 900)
+        self.t.setFixedHeight(900)
+        self.t.setMinimumWidth(520)
 
     def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
