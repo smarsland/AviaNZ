@@ -1545,9 +1545,8 @@ class PostProcess:
                 batchsize = 5   # TODO: read from learning parameters file
                 batches = int(math.ceil(np.shape(featuress)[0] / batchsize))
                 start = 0
-                probs = np.empty(shape=[0, 3])
+                probs = np.empty(shape=[0, len(self.CNNoutputs)])
                 for i in range(batches):
-                    # print(min(np.shape(featuress)[0], i*batchsize))
                     end = min(np.shape(featuress)[0], start + batchsize)
                     print(end)
                     p = self.CNNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
