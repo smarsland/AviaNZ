@@ -2,6 +2,8 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## Unreleased
 
+## [3.2] - 2021-02-16
+
 ### Added
 - Ability to undo previously deleted segments in review
 - "One-by-one" review plot size expands to dialog size
@@ -11,11 +13,13 @@ All notable changes to AviaNZ program will be documented in this file.
 - Mouse cursor indicates current mode
 - "Jump to next annotation" buttons
 - Optional frequency masking in CNN training
+- Ability to customise existing recognisers
 - Formant marking in spectrogram
 
 ### Changed
 - Improved processing pipeline for bats
-- New CNN recogniser for bats
+- Improved CNN recogniser for bats
+- Extended morepork recogniser with CNN
 - "One-by-one" review (previously All Species) can now be run on single species
 - Batch Review settings separated into Advanced and Simple
 - Simpler dropdown to set review certainty bounds
