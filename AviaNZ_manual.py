@@ -3601,48 +3601,55 @@ class AviaNZ(QMainWindow):
 
     def annotJumper(self, maxcert):
         """ Scrolls to next annotation of no more than maxcert certainty. """
-        # Current position:
-        with pg.BusyCursor():
-            # Identify the "current" annotation: selected or whatever is on screen
-            if self.box1id > -1:
-                currx = self.segments[self.box1id][0]
-                self.deselectSegment(self.box1id)
-            else:
-                minX, maxX = self.overviewImageRegion.getRegion()
-                currx = self.convertSpectoAmpl(minX) + self.startRead
+        # (this is just a manual pg.BusyCursor)
+        QApplication.setOverrideCursor(QtGui.QCursor(Qt.WaitCursor))
+        # Identify the "current" annotation: selected or whatever is on screen
+        if self.box1id > -1:
+            currx = self.segments[self.box1id][0]
+            self.deselectSegment(self.box1id)
+        else:
+            minX, maxX = self.overviewImageRegion.getRegion()
+            currx = self.convertSpectoAmpl(minX) + self.startRead
 
-            # Find next annotation:
-            targetix = None
-            for segix in range(len(self.segments)):
-                seg = self.segments[segix]
-                if seg[0]<=currx:
-                    continue
-                # Note that the segments are not sorted by time,
-                # hence some extra mess to find the next one:
-                if targetix is not None and seg[0]>=self.segments[targetix][0]:
-                    continue
-                for lab in seg[4]:
-                    if lab["certainty"]<=maxcert:
-                        targetix = segix
-            if targetix is None:
-                print("No further annotation to jump to found")
+        # Find next annotation:
+        targetix = None
+        for segix in range(len(self.segments)):
+            seg = self.segments[segix]
+            if seg[0]<=currx:
+                continue
+            # Note that the segments are not sorted by time,
+            # hence some extra mess to find the next one:
+            if targetix is not None and seg[0]>=self.segments[targetix][0]:
+                continue
+            for lab in seg[4]:
+                if lab["certainty"]<=maxcert:
+                    targetix = segix
+        if targetix is None:
+            QApplication.restoreOverrideCursor()
+            print("No further annotation to jump to found")
+            msg = SupportClasses_GUI.MessagePopup("w", "No more annotations", "No further annotation to jump to found")
+            msg.exec_()
+            return
+
+        target = self.segments[targetix]
+
+        if target[0]>self.startRead + self.datalengthSec:
+            pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
+            pagenum = int(pagenum+1)
+            if pagenum > self.nFileSections:
+                print("Warning: annotation outside file bounds")
+                QApplication.restoreOverrideCursor()
+                msg = SupportClasses_GUI.MessagePopup("w", "No more annotations", "No further annotation to jump to found in this sound file")
+                msg.exec_()
                 return
-
-            target = self.segments[targetix]
-
-            if target[0]>self.startRead + self.datalengthSec:
-                pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
-                pagenum = int(pagenum+1)
-                if pagenum > self.nFileSections:
-                    print("Warning: annotation outside file bounds")
-                    return
-                self.moveTo5mins(pagenum)
-            newminT = target[0] - self.startRead - self.windowSize / 2  # in s
-            newminX = self.convertAmpltoSpec(newminT)  # in spec pixels
-            newmaxX = self.convertAmpltoSpec(newminT + self.windowSize)
-            # this will trigger update of the other views
-            self.overviewImageRegion.setRegion([newminX, newmaxX])
-            self.selectSegment(targetix)
+            self.moveTo5mins(pagenum)
+        newminT = target[0] - self.startRead - self.windowSize / 2  # in s
+        newminX = self.convertAmpltoSpec(newminT)  # in spec pixels
+        newmaxX = self.convertAmpltoSpec(newminT + self.windowSize)
+        # this will trigger update of the other views
+        self.overviewImageRegion.setRegion([newminX, newmaxX])
+        self.selectSegment(targetix)
+        QApplication.restoreOverrideCursor()
 
 
 # ===============
