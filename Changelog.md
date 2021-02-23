@@ -2,6 +2,23 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## Unreleased
 
+### Added
+- Changepoint segmenter in manual mode
+- Option to loop playback in both review types
+- Option to autoplay in one-by-one review
+- Saving spectrogram images without axes (in developer mode)
+- Call comparator as a separate script, clock-adjustment only
+
+### Changed
+- Training will now include subdirectories when searching for data
+- Filter format extended to allow setting segmenter
+- Shorter pages (5 mins) for low sampling rate files in batch mode
+
+### Fixed
+- Post-processing harmonised between batch mode, testing, testing with CNN
+- Segmenting in manual mode now only overwrites the current page segments
+- Problems when undoing segmentation in multi-page files
+
 ## [3.2] - 2021-02-16
 
 ### Added
