@@ -4893,9 +4893,9 @@ class AviaNZ(QMainWindow):
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
-                if settings["species_cc"] != 'Choose species...':
+                if filtname != 'Choose species...':
                     # need to load template/s
-                    newSegments = self.findMatches(float(str(settings["CCThr1"])), settings["species_cc"])
+                    newSegments = self.findMatches(float(str(settings["CCThr1"])), filtname)
                 else:
                     newSegments = self.findMatches(float(str(settings["CCThr1"])))
             else:
@@ -4972,14 +4972,16 @@ class AviaNZ(QMainWindow):
                         self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
-            elif alg=='Cross-Correlation' and settings["species_cc"] != 'Choose species...':
+            elif alg=='Cross-Correlation' and filtname != 'Choose species...':
+                # TODO: this has not been updated for a while
+                filtspecies = self.FilterDicts[filtname]["species"]
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
                     y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
-                                [{"species": settings["species_cc"].title(), "certainty": seg[1]}], index=-1)
+                                [{"species": filtspecies, "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             else:
                 for seg in newSegments:

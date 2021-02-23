@@ -36,7 +36,6 @@ import math
 import numpy as np
 import os, json
 import re
-import sys
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
 
