@@ -240,6 +240,7 @@ class WaveletFunctions:
         flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
         # this tree will store non-downsampled coefs for reconstruction
         self.tree = [self.data]
+
         if mode != 'symmetric':
             print("ERROR: only symmetric WP mode implemented so far")
             return
@@ -363,6 +364,58 @@ class WaveletFunctions:
                 print("ERROR: unrecognised change", change)
         return adjnodes
 
+    def extractE(self, node, winsize, wpantialias=True):
+        """ Extracts mean energies of node over windows of size winsize (s).
+            Winsize will be adjusted to obtain integer number of WCs in this node.
+            wpantialias - True for antialiased (non-decimated) tree
+            Returns:
+              np array of length nwins = datalength/winsize
+              actual window size (in s) that was used
+        """
+        # ratio of current WC size to data ("how many samples went into one WC")
+        dsratio = 2**math.floor(math.log2(node+1))
+        # (theoretical) sampling rate at this node ("how many WCs go into one second")
+        nodefs = self.treefs / dsratio
+
+        # or WCperWindow = math.ceil(WCperWindowFull / dsratio)
+        WCperWindow = math.ceil(winsize * nodefs)
+        print("Node %d: %d WCs per window" %(node, WCperWindow))
+
+        # realized window size in s - may differ from the requested one if it is not a multiple of 2^j samples
+        realwindow = WCperWindow / nodefs
+
+        # or nwindows = math.floor(datalengthSec / realwindow)
+        nwindows = math.floor(len(self.tree[node])/2 / WCperWindow)
+        maxnumwcs = nwindows * WCperWindow
+
+        # Sanity check for empty node:
+        if nwindows <= 0:
+            print("ERROR: data length %d shorter than window size %d s" %(len(self.tree[node]), winsize))
+            return
+
+        # WC from test node(s), trimmed to non-padded size
+        # NOTE: could take the center part w/2:l-w/2 instead of 0:l-w/2 to avoid any
+        #  datapoints that were added during padding
+        if wpantialias:
+            C = self.tree[node][0:maxnumwcs*2:2]
+        else:
+            C = self.tree[node][0:maxnumwcs]
+
+        # Sanity check for all zero cases:
+        if not any(C):
+            print("Warning: tree empty at node %d" % node)
+            return np.ndarray()
+
+        # Might be useful to track any DC offset
+        print("Global mean = %.2f" % np.mean(C))
+
+        # convert into a matrix (seconds x wcs in sec), and get the energy of each row (second)
+        E = (C**2).reshape((nwindows, WCperWindow)).mean(axis=1)
+
+        # cleanup
+        C = None
+        del C
+        return E, realwindow
 
     def reconstructWP2(self, node, antialias=False, antialiasFilter=False):
         """ Inverse of WaveletPacket: returns the signal from a single node.

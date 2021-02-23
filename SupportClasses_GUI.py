@@ -696,15 +696,15 @@ class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
-    def __init__(self, format):
+    def __init__(self, format, loop=False):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
         self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
         self.tempin = QBuffer()
-        self.startpos = 0
-        self.timeoffset = 0
+        self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
         self.keepSlider = False
+        self.loop = loop
         #self.format = format
         # set small buffer (10 ms) and use processed time
         self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
@@ -715,6 +715,9 @@ class ControllableAudio(QAudioOutput):
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
         if self.state() == QAudio.IdleState:
+            if self.loop:
+                self.restart()
+                return
             # give some time for GUI to catch up and stop
             sleepCycles = 0
             while(self.state() != QAudio.StoppedState and sleepCycles < 30):
@@ -816,6 +819,12 @@ class ControllableAudio(QAudioOutput):
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
+        self.sttime = time.time() - self.timeoffset/1000
+        self.start(self.tempin)
+
+    def restart(self):
+        # self.timeoffset = ? does this need to be fixed?
+        self.tempin.seek(0)
         self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
@@ -971,7 +980,7 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, guidecol=None, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -1012,6 +1021,7 @@ class PicButton(QAbstractButton):
         # playback things
         self.media_obj = ControllableAudio(format)
         self.media_obj.notify.connect(self.endListener)
+        self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
 
@@ -1138,7 +1148,10 @@ class PicButton(QAbstractButton):
     def endListener(self):
         timeel = self.media_obj.elapsedUSecs() // 1000
         if timeel > self.duration:
-            self.stopPlayback()
+            if self.media_obj.loop:
+                self.media_obj.restart()
+            else:
+                self.stopPlayback()
 
     def stopPlayback(self):
         self.media_obj.pressedStop()

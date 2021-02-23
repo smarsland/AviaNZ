@@ -770,6 +770,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.chunksizeBox.setValue(10)
         self.chunksizeBox.setEnabled(False)
 
+        # playback settings - TODO find a better place maybe?
+        self.loopBox = QCheckBox("Loop playback")
+        self.autoplayBox = QCheckBox("Autoplay (One-by-One only)")
+
         # Advanced Settings Layout
         self.d_settings.addWidget(self.toggleSettingsBtn, row=0, col=2, colspan=2, rowspan=1)
         self.d_settings.addWidget(QLabel("Skip if certainty above:"), row=1, col=0, colspan=2, rowspan=1)
@@ -790,6 +794,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.addWidget(self.chunksizeAuto, row=5, col=0, colspan=2, rowspan=1)
         self.d_settings.addWidget(self.chunksizeManual, row=6, col=0, colspan=2, rowspan=1)
         self.d_settings.addWidget(self.chunksizeBox, row=6, col=2)
+
+        self.d_settings.addWidget(self.loopBox, row=7, col=0, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.autoplayBox, row=8, col=0, colspan=2, rowspan=1)
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -1167,10 +1174,14 @@ class AviaNZ_reviewAll(QMainWindow):
             # (they will update self.segments and store corrections)
             if reviewAll:
                 _ = self.segments.orderTime()
+                # TODO: maybe this should be an option for both modes
+                # print("Splitting", self.species)
+                # self.segments.splitLongSeg(species=self.species, maxlen=3.0)
                 filesuccess = self.review_all(filename, sTime)
             else:
                 filesuccess = self.review_single(filename, sTime)
 
+            # TODO sort out how to do this if we want to fix the split in a filter
             # merge back any split segments, plus ANY overlaps within calltypes
             # (NOTE: applied to either review type to get identical results)
             todelete = self.segments.mergeSplitSeg()
@@ -1341,7 +1352,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
                                                            guidefreq=guides, guidecol=self.config['guidecol'],
-                                                           filename=self.filename)
+                                                           loop=self.loopBox.isChecked(), filename=self.filename)
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog2.resize(self.dialogSize)
             self.humanClassifyDialog2.move(self.dialogPos)
@@ -1517,7 +1528,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1673,7 +1684,7 @@ class AviaNZ_reviewAll(QMainWindow):
         for i in reversed(range(len(self.segments))):
             print(self.segments[i][4],self.origSeg[i][4])
             if self.segments[i][4] == self.origSeg[i][4]:
-                print("Segment matches")
+                # print("Segment matches")
                 del self.origSeg[i]
             else:
                 oldlabel = self.origSeg[i][4]

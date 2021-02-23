@@ -828,7 +828,7 @@ class Segmentation(QDialog):
         if DOC:
             self.algs.addItems(["Wavelets", "FIR", "Median Clipping"])
         else:
-            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
@@ -880,7 +880,7 @@ class Segmentation(QDialog):
         self.medThr = QDoubleSpinBox()
         self.medThr.setRange(0.2,6)
         self.medThr.setSingleStep(1)
-        self.medThr.setDecimals(1)
+        self.medThr.setDecimals(2)
         self.medThr.setValue(3)
 
         # set min seg size for median clipping
@@ -923,11 +923,9 @@ class Segmentation(QDialog):
         #Box.addWidget(self.Onsetslabel)
 
         self.medlabel = QLabel("Set median threshold")
-        Box.addWidget(self.medlabel)
         self.medlabel.show()
 
         self.eclabel = QLabel("Set energy curve threshold")
-        Box.addWidget(self.eclabel)
         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
 
         self.specieslabel = QLabel("Species")
@@ -943,7 +941,9 @@ class Segmentation(QDialog):
 
         spp = list(species.keys())
         spp.insert(0, "Choose species...")
+        self.filters = species
         self.species.addItems(spp)
+        self.species.currentTextChanged.connect(self.filterChange)
 
         Box.addWidget(self.specieslabel)
         Box.addWidget(self.species)
@@ -955,10 +955,12 @@ class Segmentation(QDialog):
         Box.addWidget(self.HarmaThr2)
         Box.addWidget(self.PowerThr)
 
+        Box.addWidget(self.medlabel)
         Box.addWidget(self.medThr)
         Box.addWidget(self.medSizeText)
         Box.addWidget(self.medSize)
 
+        Box.addWidget(self.eclabel)
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
         Box.addWidget(self.ecThr)
@@ -985,6 +987,24 @@ class Segmentation(QDialog):
         self.medSize.setValue(1000)
         self.medSize.valueChanged.connect(self.medSizeChange)
 
+        # Parameter selectors for changepoint methods
+        self.chp2l = QCheckBox("Use 2-level detector")
+        self.chp2l.setChecked(True)
+
+        self.chpalpha = QDoubleSpinBox()
+        self.chpalpha.setRange(0.1, 20)
+        self.chpalpha.setValue(3)
+
+        self.chpwin = QDoubleSpinBox()
+        self.chpwin.setDecimals(3)
+        self.chpwin.setRange(0.005, 3)
+        self.chpwin.setValue(0.5)
+
+        self.maxlen = QDoubleSpinBox()
+        self.maxlen.setDecimals(3)
+        self.maxlen.setRange(0.05, 100)
+        self.maxlen.setValue(10)
+
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
@@ -1004,6 +1024,12 @@ class Segmentation(QDialog):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
+        self.chpLayout = QFormLayout()
+        self.chpLayout.addRow(self.chp2l)
+        self.chpLayout.addRow("Alpha:", self.chpalpha)
+        self.chpLayout.addRow("Window size (s):", self.chpwin)
+        self.chpLayout.addRow("Max length (s):", self.maxlen)
+
         self.wind = QCheckBox("Remove wind")
         self.rain = QCheckBox("Remove rain")
         Box.addWidget(self.wind)
@@ -1012,6 +1038,7 @@ class Segmentation(QDialog):
         Box.addWidget(self.maxgap)
         Box.addWidget(self.minlenlbl)
         Box.addWidget(self.minlen)
+        Box.addLayout(self.chpLayout)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -1020,7 +1047,13 @@ class Segmentation(QDialog):
         # Now put everything into the frame,
         # hide and reopen the default
         for w in range(Box.count()):
-            Box.itemAt(w).widget().hide()
+            item = Box.itemAt(w)
+            if item.widget() is not None:
+                item.widget().hide()
+            else:
+                # it is a layout, so loop again:
+                for ww in range(item.layout().count()):
+                    item.layout().itemAt(ww).widget().hide()
         self.setLayout(Box)
         self.algs.show()
         self.undo.show()
@@ -1034,7 +1067,13 @@ class Segmentation(QDialog):
         # This does the hiding and showing of the options as the algorithm changes
         # hide and reopen the default
         for w in range(self.layout().count()):
-            self.layout().itemAt(w).widget().hide()
+            item = self.layout().itemAt(w)
+            if item.widget() is not None:
+                item.widget().hide()
+            else:
+                # it is a layout, so loop again:
+                for ww in range(item.layout().count()):
+                    item.layout().itemAt(ww).widget().hide()
         self.algs.show()
         self.wind.show()
         # self.rain.show()
@@ -1085,13 +1124,25 @@ class Segmentation(QDialog):
             self.specieslabel_cc.show()
             self.species_cc.show()
         else:
-            #"Wavelets"
+            #"Wavelets" or "WV Changepoint"
             self.specieslabel.show()
             self.species.show()
+            if alg == "WV Changepoint":
+                for ww in range(self.chpLayout.count()):
+                    self.chpLayout.itemAt(ww).widget().show()
+                self.wind.hide()
             self.maxgaplbl.hide()
             self.maxgap.hide()
             self.minlenlbl.hide()
             self.minlen.hide()
+
+    def filterChange(self, species):
+        """ Override UI with parameters from the requested filter. """
+        subfilt = self.filters[species]["Filters"][0]
+        self.chpalpha.setValue(subfilt["WaveletParams"]["thr"])
+        self.medThr.setValue(subfilt["WaveletParams"]["thr"])
+        self.chpwin.setValue(subfilt["WaveletParams"]["win"])
+        self.maxlen.setValue(subfilt["TimeRange"][1])
 
     def medSizeChange(self,value):
         self.medSizeText.setText("Minimum length: %s ms" % value)
@@ -1104,7 +1155,12 @@ class Segmentation(QDialog):
 
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
-        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked(), int(self.maxgap.value())/1000, int(self.minlen.value())/1000]
+        settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
+                    "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
+                    "CCThr1": self.CCThr1.text(), "filtname": self.species.currentText(), "species_cc": self.species_cc.currentText(), "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
+                    "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
+                    "chp2l": self.chp2l.isChecked()}
+        return(str(self.algs.currentText()), settings)
 
 #======
 class Denoise(QDialog):
@@ -1417,7 +1473,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1604,6 +1660,8 @@ class HumanClassify1(QDialog):
         # Audio playback object
         self.media_obj2 = SupportClasses_GUI.ControllableAudio(audioFormat)
         self.media_obj2.notify.connect(self.endListener)
+        self.media_obj2.loop = loop
+        self.autoplay = autoplay
 
         # The layouts
         birds1Layout = QVBoxLayout()
@@ -1776,7 +1834,10 @@ class HumanClassify1(QDialog):
         Also hijacked to move the playback bar."""
         time = self.media_obj2.elapsedUSecs() // 1000
         if time > self.duration:
-            self.stopPlayback()
+            if self.media_obj2.loop:
+                self.media_obj2.restart()
+            else:
+                self.stopPlayback()
         else:
             barx = time / 1000 * self.sampleRate / self.incr
             self.bar.setValue(barx)
@@ -1995,6 +2056,9 @@ class HumanClassify1(QDialog):
 
         # Determine if we can review call types based on selected annotations
         self.checkCallTypes()
+
+        if self.autoplay:
+            self.playSeg()
 
     def checkCallTypes(self):
         # parses current annotations to determine if call type review allowed
@@ -2272,10 +2336,11 @@ class HumanClassify2(QDialog):
         4. name of the species that we are reviewing
         5-10. spec color parameters
         11-12. guide positions for batmode
-        13. Filename - just for setting the window title
+        13. Loop playback or not?
+        14. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2330,6 +2395,8 @@ class HumanClassify2(QDialog):
         if not haveaudio:
             self.volSlider.setEnabled(False)
             self.volIcon.setEnabled(False)
+
+        self.loop = loop
 
         # Brightness and contrast sliders - need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -2510,7 +2577,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol, loop=self.loop)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:

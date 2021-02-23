@@ -25,7 +25,7 @@ import sys, os, json, platform, re, shutil
 from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QToolBar
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -183,9 +183,11 @@ class AviaNZ(QMainWindow):
                 firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
                 while firstFile == '':
                     msg = SupportClasses_GUI.MessagePopup("w", "Select Sound File", "Choose a sound file to proceed.\nDo you want to continue?")
-                    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    msg.setStandardButtons(QMessageBox.No)
+                    msg.addButton("Choose a file", QMessageBox.YesRole)
+                    msg.button(QMessageBox.No).setText("Exit")
                     reply = msg.exec_()
-                    if reply == QMessageBox.Yes:
+                    if reply == 0:
                         firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
                     else:
                         sys.exit()
@@ -398,20 +400,22 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
-            actionMenu.addAction("Export segments to Excel",self.exportSeg)
-            actionMenu.addSeparator()
 
         actionMenu.addSeparator()
         self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
 
         actionMenu.addSeparator()
 
+        if not self.DOC:
+            actionMenu.addAction("Export spectrogram image", self.saveImageRaw)
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
         extrarecMenu = recMenu.addMenu("Train an automated recogniser")
         extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
+        if not self.DOC:
+            extrarecMenu.addAction("Train a changepoint recogniser", self.buildChpRecogniser)
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
@@ -2724,12 +2728,12 @@ class AviaNZ(QMainWindow):
 
         # mark this as the current segment
         if index>-1:
-            self.box1id = index
+            box1id = index
         else:
-            self.box1id = len(self.segments) - 1
+            box1id = len(self.listLabels) - 1
 
         # update its displayed label
-        self.updateText(self.box1id)
+        self.updateText(box1id)
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
@@ -2877,7 +2881,7 @@ class AviaNZ(QMainWindow):
                 self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
-                self.selectSegment(self.box1id)
+                self.selectSegment(len(self.segments)-1)
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
@@ -3049,7 +3053,7 @@ class AviaNZ(QMainWindow):
                 self.p_spec.setFocus()
 
                 # select the new segment/box
-                self.selectSegment(self.box1id)
+                self.selectSegment(len(self.segments)-1)
 
             # if this is the first click:
             else:
@@ -3365,7 +3369,6 @@ class AviaNZ(QMainWindow):
         """ When the user sets or changes the name in a segment, update the text label.
             Only requires the segment ID, or defaults to the selected one, and
             will read the label from it."""
-
         if segID is None:
             segID = self.box1id
         seg = self.segments[segID]
@@ -3728,7 +3731,7 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
-            xs = np.arange(0, int(self.datalengthSec)+0.5, 0.25)
+            xs = np.arange(0, self.datalengthSec, 0.25)
             Esep = np.zeros(( numNodes, len(xs) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
@@ -3764,6 +3767,11 @@ class AviaNZ(QMainWindow):
                 meanC = np.mean(C)
                 sdC = np.std(C)
 
+                # For our new detection: print energy of the quietest second
+                trimmedlength = math.floor(self.datalengthSec)*spInfo['SampleRate']
+                persecE = np.reshape(E[0:trimmedlength], (math.floor(self.datalengthSec), spInfo['SampleRate'])).mean(axis=1)
+                print("Node %i: mean %f, SD %f, range %f - %f" % (node, meanC, sdC, min(persecE), max(persecE)))
+
                 # get true freqs of this band
                 freqmin, freqmax = WF.getWCFreq(node, spInfo['SampleRate'])
                 # convert freqs to spec Y units
@@ -3787,7 +3795,7 @@ class AviaNZ(QMainWindow):
 
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
-                        diagCall = pg.ROI((specs*xs[w], (freqmin+freqmax)/2),
+                        diagCall = pg.ROI((specs*xs[w], freqmin),
                                           (specs*0.25, freqmax-freqmin),
                                           pen=plotcol, movable=False)
                         self.diagnosticCalls.append(diagCall)
@@ -3797,7 +3805,7 @@ class AviaNZ(QMainWindow):
                 self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen(plotcol, width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
-                r = r + 1 
+                r = r + 1
 
             ### DENOISE: add line of wind strength
             # self.p_plot.addItem(pg.PlotDataItem(np.arange(int(self.datalengthSec))+0.5, np.log(windMaxE),
@@ -4365,15 +4373,26 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
-    def buildRecogniser(self):
-        """Listener for 'Build a recogniser' - Advanced mode
-           This mode expects to have more engagement with the user, the user can give sensible names to the clusters
-           and adjust some parameters based on user's expertise on the particular species.
+    def buildChpRecogniser(self):
+        """ Train a changepoint detector.
+            Currently, takes nodes from a selected wavelet filter,
+            and only trains alpha, length etc.
+        """
+        self.saveSegments()
+        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
+        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.activateWindow()
+        self.buildRecAdvWizard.exec_()
+        # reread filters list with the new one
+        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
+    def buildRecogniser(self):
+        """Listener for 'Build a recogniser'
            All training and file I/O are done in Dialogs.py currently.
         """
         self.saveSegments()
-        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config)
+        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
         self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
         self.buildRecAdvWizard.activateWindow()
@@ -4780,18 +4799,19 @@ class AviaNZ(QMainWindow):
             self.segmentDialog = Dialogs.Segmentation(maxampl)
 
         opstartingtime = time.time()
-        print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+        print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.localtime()))
         # for undoing:
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, species_cc, wind, rain, maxgap, minlen] = self.segmentDialog.getValues()
+        # settings is a dict with parameters for various possible methods
+        alg, settings = self.segmentDialog.getValues()
         with pg.BusyCursor():
-            filtname = str(filtname)
+            filtname = str(settings["filtname"])
             self.statusLeft.setText('Segmenting...')
             # Delete old segments:
             # only this species, if using species-specific methods:
-            if alg == 'Wavelets':
+            if alg == 'Wavelets' or alg == 'WV Changepoint':
                 if filtname == 'Choose species...':
                     msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec_()
@@ -4807,7 +4827,10 @@ class AviaNZ(QMainWindow):
 
                 todelete = []
                 # deleting from the end, because deleteSegments shifts IDs:
-                for si in oldsegs:
+                for si in reversed(oldsegs):
+                    # DO NOT delete segments in other pages
+                    if self.listRectanglesa1[si] is None:
+                        continue
                     # clear these species from overview colors
                     self.refreshOverviewWith(self.segments[si], delete=True)
                     # remove all labels for the current species
@@ -4820,51 +4843,64 @@ class AviaNZ(QMainWindow):
                         self.updateText(si)
                         self.updateColour(si)
                 # reverse loop to allow deleting segments
-                for dl in reversed(todelete):
+                for dl in todelete:
                     self.deleteSegment(dl)
             else:
                 self.removeSegments()
 
             # NON-SPECIFIC methods here (produce "Don't Know"):
-            if str(alg) == 'Default':
+            if alg == 'Default':
                 newSegments = self.seg.bestSegments()
-            elif str(alg) == 'Median Clipping':
-                newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
+            elif alg == 'Median Clipping':
+                newSegments = self.seg.medianClip(settings["medThr"], minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
                 # will also remove too short segments (medSize is set in ms because sliders limited to int)
                 # print("before length", newSegments)
                 # newSegments = self.seg.deleteShort(newSegments, minlength=medSize/1000)
-            elif str(alg) == 'Harma':
-                newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
+            elif alg == 'Harma':
+                newSegments = self.seg.Harma(float(str(settings["HarmaThr1"])),float(str(settings["HarmaThr2"])),minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'Power':
-                newSegments = self.seg.segmentByPower(float(str(PowerThr)))
+            elif alg == 'Power':
+                newSegments = self.seg.segmentByPower(float(str(settings["PowerThr"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'Onsets':
+            elif alg == 'Onsets':
                 newSegments = self.seg.onsets()
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'Fundamental Frequency':
-                newSegments, pitch, times = self.seg.yin(int(str(minfreq)), int(str(minperiods)), float(str(Yinthr)),
-                                                         int(str(window)), returnSegs=True)
+            elif alg == 'Fundamental Frequency':
+                newSegments, pitch, times = self.seg.yin(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
+                                                         int(str(settings["FFwindow"])), returnSegs=True)
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'FIR':
-                newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
+            elif alg == 'FIR':
+                newSegments = self.seg.segmentByFIR(float(str(settings["FIRThr1"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
-            elif str(alg) == 'Wavelets':
+            elif alg == 'Wavelets':
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 newSegments = ws.waveletSegment(0, wpmode="new")
+            elif alg == 'WV Changepoint':
+                print("Changepoint detection requested")
+                speciesData = self.FilterDicts[filtname]
+                # this will produce a list of lists (over subfilters)
+                ws = WaveletSegment.WaveletSegment(speciesData)
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                # using all passed params:
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
+                # Or if no params are passed, they will be read from the filter file TimeRange:
+                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 
             # TODO: make sure cross corr outputs lists of lists
-            elif str(alg) == 'Cross-Correlation':
-                if species_cc != 'Choose species...':
+            elif alg == 'Cross-Correlation':
+                if settings["species_cc"] != 'Choose species...':
                     # need to load template/s
-                    newSegments = self.findMatches(float(str(CCThr1)), species_cc)
+                    newSegments = self.findMatches(float(str(settings["CCThr1"])), settings["species_cc"])
                 else:
-                    newSegments = self.findMatches(float(str(CCThr1)))
+                    newSegments = self.findMatches(float(str(settings["CCThr1"])))
+            else:
+                print("ERROR: unrecognised algorithm", alg)
+                return
 
             # Post-process
             # 1. Delete windy segments
@@ -4872,22 +4908,7 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            if str(alg) != 'Wavelets':
-                print('Segments detected: ', len(newSegments))
-                print(newSegments)
-                print('Post-processing...')
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
-                                           segments=newSegments, subfilter={})
-                if wind:
-                    post.wind()
-                    print('After wind segments: ', len(post.segments))
-                if rain:
-                    post.rainClick()
-                    print('After rain segments: ', len(post.segments))
-                post.joinGaps(maxgap=maxgap)
-                post.deleteShort(minlength=minlen)
-                newSegments = post.segments
-            else:
+            if alg == 'Wavelets' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print(newSegments)
                 print('Post-processing...')
@@ -4896,35 +4917,53 @@ class AviaNZ(QMainWindow):
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
+                    subfilter = speciesData['Filters'][filtix]
                     CNNmodel = None
                     if 'CNN' in speciesData:
                         CNNmodel = self.CNNDicts.get(speciesData['CNN']['CNN_name'])
-                    
+
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                    if wind and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):
+                                               subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
+                    if settings["wind"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
                         print('Post-processing with CNN')
                         post.CNN()
                         print('After CNN: segments: ', len(post.segments))
-                    if rain:
+                    if settings["rain"]:
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))
-                    if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
-                        if speciesData['Filters'][filtix]['F0']:
+                    if 'F0' in subfilter and 'F0Range' in subfilter:
+                        if subfilter['F0']:
                             print("Checking for fundamental frequency...")
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
-                    post.joinGaps(maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
-                    post.deleteShort(minlength=speciesData['Filters'][filtix]['TimeRange'][0])
+                    if alg=='Wavelets':
+                        post.joinGaps(maxgap=subfilter['TimeRange'][3])
+                    if subfilter['TimeRange'][0]>0:
+                        post.deleteShort(minlength=subfilter['TimeRange'][0])
+
                     newSegments[filtix] = post.segments
+            else:
+                print('Segments detected: ', len(newSegments))
+                print('Post-processing...')
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
+                                           segments=newSegments, subfilter={})
+                if settings["wind"]:
+                    post.wind()
+                    print('After wind segments: ', len(post.segments))
+                if settings["rain"]:
+                    post.rainClick()
+                    print('After rain segments: ', len(post.segments))
+                post.joinGaps(maxgap=settings["maxgap"])
+                post.deleteShort(minlength=settings["minlen"])
+                newSegments = post.segments
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
-            if str(alg)=='Wavelets':
+            if alg=='Wavelets' or alg=='WV Changepoint':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
@@ -4933,14 +4972,14 @@ class AviaNZ(QMainWindow):
                         self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
-            elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
+            elif alg=='Cross-Correlation' and settings["species_cc"] != 'Choose species...':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
                     y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
-                                [{"species": species_cc.title(), "certainty": seg[1]}], index=-1)
+                                [{"species": settings["species_cc"].title(), "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             else:
                 for seg in newSegments:
@@ -4962,9 +5001,12 @@ class AviaNZ(QMainWindow):
             return
 
         self.removeSegments()
+        # This recreates the previous segments (from all pages):
+        self.segments = copy.deepcopy(self.prevSegments)
+        # So here we only need to show them:
         for seg in self.prevSegments:
-            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], index=-1, coordsAbsolute=True)
-            self.segmentsToSave = True
+            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], saveSeg=False, coordsAbsolute=True)
+        self.segmentsToSave = True
 
     def exportSeg(self):
         # First, deal with older xls if present:
@@ -5312,8 +5354,12 @@ class AviaNZ(QMainWindow):
 
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
-            print("Stopped at %d ms" % eltime)
-            self.stopPlayback()
+            # TODO: allow the user set looping somehow?
+            if self.media_obj.loop:
+                self.media_obj.restart()
+            else:
+                print("Stopped at %d ms" % eltime)
+                self.stopPlayback()
         else:
             self.playSlider.setValue(eltime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
@@ -5324,7 +5370,7 @@ class AviaNZ(QMainWindow):
         Controls the slider, text timer, and listens for playback finish.
         Very similar to previous, but slightly easier just to reproduce the code.
         """
-        eltime = self.media_slow.processedUSecs() // 1000 // self.slowSpeed + self.media_slow.timeoffset // self.slowSpeed
+        eltime = (self.media_slow.processedUSecs() // 1000 + self.media_slow.timeoffset) // self.slowSpeed
         bufsize = 0.02
 
         # listener for playback finish. Note small buffer for catching up
@@ -5422,6 +5468,11 @@ class AviaNZ(QMainWindow):
         except Exception as e:
             print("Warning: failed to save image")
             print(e)
+
+    def saveImageRaw(self):
+        imageFile = self.filename[:-4] + '.png'
+        print("Exporting raw spectrogram to file %s" % imageFile)
+        self.specPlot.save(imageFile)
 
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.

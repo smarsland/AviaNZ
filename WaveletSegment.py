@@ -27,6 +27,7 @@ import time, os, math, csv, gc
 import SignalProc
 import Segment
 from ext import ce_denoise as ce
+from ext import ce_detect
 
 
 class WaveletSegment:
@@ -151,6 +152,40 @@ class WaveletSegment:
         print("Wavelet segmenting completed in", time.time() - opst)
         return detected_allsubf
 
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None):
+        """ Main analysis wrapper, similar to waveletSegment,
+            but uses changepoint detection for postprocessing.
+            Args:
+            1. filtnum: index of the current filter in self.spInfo (which is a list of filters...)
+            2. alg: 1 - standard epidemic detector, 2 - nuisance-signal detector
+            3. alpha: penalty strength for the detector
+            4. window: wavelets will be merged in groups of this size (s) before analysis
+            5. maxlen: maximum allowed length (s) of signal segments
+              3-5 can be None, in which case they are retrieved from self.spInfo.
+            Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
+        """
+        opst = time.time()
+
+        # No resampling here. Will read nodes from self.spInfo, which may already be adjusted
+
+        ### find segments with each subfilter separately
+        detected_allsubf = []
+        for subfilter in self.spInfo[filtnum]["Filters"]:
+            print("Identifying calls using subfilter", subfilter["calltype"])
+            goodnodes = subfilter['WaveletParams']["nodes"]
+            if alpha is None:
+                alpha = subfilter["WaveletParams"]["thr"]
+            if window is None:
+                window = subfilter["WaveletParams"]["win"]
+            if maxlen is None:
+                maxlen = subfilter["TimeRange"][1]
+
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg)
+
+            detected_allsubf.append(detected)
+        print("WV changepoint segmenting completed in", time.time() - opst)
+        return detected_allsubf
+
     def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
                              inc=None):
         """ Entry point to use during training, called from DialogsTraining.py.
@@ -245,6 +280,101 @@ class WaveletSegment:
 
         return res
 
+    def waveletSegment_trainChp(self, dirName, thrList, usernodes, window, maxlen):
+        """ Entry point to use during training, called from DialogsTraining.py.
+            Switches between various training methods, orders data loading etc.,
+            then just passes the arguments to the right training method and returns the results.
+
+            Input: path to directory with wav & wav.data files.
+            thrList: list of possible alphas to test.
+            window: window length in sec (for averaging energies in detection).
+            usernodes: developer parameter to force a list of nodes
+            maxlen: maximum signal length in sec.
+            Return: tuple of arrays (nodes, tp, fp, tn, fn)
+        """
+        # 1. read wavs and annotations into self.annotation, self.audioList
+        # NOTE: the window and inc correspond to the ground truth resolution
+        self.filenames = []
+        self.loadDirectory(dirName=dirName, denoise=False, window=1, inc=1, impMask=False)
+        if len(self.annotation) == 0:
+            print("ERROR: no files loaded!")
+            return
+
+        # 2. find top nodes for each file (self.nodeCorrs)
+        self.nodeCorrs = []
+        self.bestNodes = []
+        self.worstNodes = []
+        allMaxEs = []
+        allSigma2s = []
+        allWindows = []
+
+        if len(self.spInfo["Filters"])>1:
+            print("ERROR: must provide only 1 subfilter at a time!")
+            return
+        else:
+            subfilter = self.spInfo["Filters"][0]
+
+        # 2a. prefilter audio to species freq range
+        for filenum in range(len(self.audioList)):
+            self.audioList[filenum] = self.sp.ButterworthBandpass(self.audioList[filenum],
+                                            self.spInfo['SampleRate'],
+                                            low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
+
+        # TODO somehow choose nodes
+        self.bestNodes = usernodes
+        # 2b. actually compute correlations
+        # for filenum in range(len(self.audioList)):
+        #     print("Computing wavelet node correlations in file", filenum+1)
+        #     currWCs = self.computeWaveletEnergy(self.audioList[filenum], self.spInfo['SampleRate'], nlevels=5, wpmode="new", window=window, inc=inc)
+        #     # Compute all WC-annot correlations
+        #     nodeCorr = self.compute_r(self.annotation[filenum], currWCs)
+        #     self.nodeCorrs.append(nodeCorr)
+        #     # find best nodes
+        #     bestnodes, worstnodes = self.listTopNodes(filenum)
+        #     self.bestNodes.append(bestnodes)
+        #     self.worstNodes.append(worstnodes)
+        #     print("Adding to negative nodes", worstnodes)
+
+        # 3. generate WPs for each file and store the max energies
+        for filenum in range(len(self.audioList)):
+            print("Extracting energies from file", filenum+1)
+            data = self.audioList[filenum]
+
+            self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+
+            # Generate a full 5 level wavelet packet decomposition
+            self.WF.WaveletPacket(self.bestNodes, mode='symmetric', antialias=False)
+
+            # extract energy over requested size windows. returns a list of N vectors
+            # (the length of vectors may differ slightly, b/c different level nodes may have
+            #  different number of windows due to rounding)
+            allNodeEs = []
+            allNodeSigma2s = []
+            allNodeWindows = []
+            # collect the E, bg sigma2, and window size of these nodes
+            for node in self.bestNodes:
+                nodeE, noderealwindow = self.WF.extractE(node, window, wpantialias=True)
+                nodesigma2 = np.percentile(nodeE, 10)
+                allNodeSigma2s.append(nodesigma2)
+                allNodeWindows.append(noderealwindow)
+                # NOTE: we're providing points on the original scale (non-squared) for the C part
+                nodeE = np.sqrt(nodeE)
+                allNodeEs.append(nodeE)
+            # put all collected params into a list over files
+            allMaxEs.append(allNodeEs)
+            allSigma2s.append(allNodeSigma2s)
+            allWindows.append(allNodeWindows)
+
+        # allMaxEs now is a list of [files][N][T] ndarrays
+        # allSigma2s, allWindows now are lists of [files][N] floats.
+
+        # 4. mark calls and learn threshold
+        # NOTE: window and inc are annotation parameters here,
+        # which don't have to match the wavelet detection resolution
+        res = self.gridSearchChp(allMaxEs, allSigma2s, allWindows, thrList, maxlen, Awindow=1, Ainc=1)
+
+        return res
+
     def waveletSegment_cnn(self, dirName, filter):
         """ Wrapper for segmentation to be used when generating cnn data.
             Should be identical to processing the files in batch mode,
@@ -272,9 +402,8 @@ class WaveletSegment:
         resol = 1.0
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[
-                                                                                                        :-4] + '-res' + str(
-                        float(resol)) + 'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and \
+                        file[:-4] + '-res' + str(float(resol)) + 'sec.txt' in files:
                     filenames.append(os.path.join(root, file))
         if len(filenames) < 1:
             print("ERROR: no suitable files")
@@ -305,6 +434,7 @@ class WaveletSegment:
                 self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filter], wpmode="new")
 
                 # segmentation, same as in batch mode. returns [[sub-filter1 segments]]
+                # TODO this isn't updated with the new changepoint method
                 detected_segs = self.waveletSegment(0, wpmode="new")
                 if len(filter["Filters"]) > 1:
                     out = []
@@ -709,6 +839,74 @@ class WaveletSegment:
         gc.collect()
         return detected
 
+    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1):
+        """
+        For wavelet TESTING and general SEGMENTATION using changepoint detection
+        (non-reconstructing)
+        Args:
+        wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
+        nodelist - will reconstruct signal and run detections on each of these nodes separately
+        subfilter - used to pass thr, M, and other parameters
+        alpha - penalty strength for the detector
+        maxlen - maximum allowed signal segment length, in s
+        window - energy will be calculated over these windows, in s
+        alg - standard (1) or with nuisance segments (2)
+
+        Return: ndarray of 1/0 annotations for each of T windows
+        """
+        # thr = subfilter['WaveletParams']['thr']
+
+        # Compute the number of samples in a window -- species specific
+        detected = np.empty((0,3))
+        for node in nodelist:
+            # adjusts the winsize to realwindow, b/c it needs to correspond
+            # to an integer number of WCs at this node,
+            # and returns E: vector of average energy in each realwindow
+            E, realwindow = wf.extractE(node, window, wpantialias=True)
+
+            # Convert max segment length from s to realized windows
+            # (segments exceeding this length will be marked as 'n')
+            realmaxlen = math.ceil(maxlen / realwindow)
+
+            sigma2 = np.percentile(E, 10)
+            print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
+
+            # sqrt because the detector squares the data itself (sign not important)
+            E = np.sqrt(E)
+
+            # C = np.log(C) #?
+
+            # analyze by our algorithms.
+            # returns a matrix of n x [s, e, type]
+            # type is an int corresponding to 'n'=NUIS, 's'=SEG, 'o'=SEGonNUIS
+            if alg==1:
+                segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
+            else:
+                segm1 = ce_detect.launchDetector2(E, sigma2, realmaxlen, alpha=alpha).astype('float')
+
+            for seg in segm1:
+                print(seg, round(np.mean(E[int(seg[0]):int(seg[1])]**2)))
+
+            # convert from the window scale into actual seconds
+            segm1[:,:2] = segm1[:,:2] * realwindow
+
+            detected = np.vstack((detected, np.asarray(segm1)))
+
+        # keep only S and their positions:
+        if np.shape(detected)[0]>0:
+            detected = detected[np.logical_or(detected[:,2]==ord('s'), detected[:,2]==ord('o')), 0:2]
+
+        # now, need to go over the segments and find any overlapping ones (i.e. combine across nodes).
+        # NOTE: will sort them
+        s = Segment.Segmenter()
+        outsegs = s.checkSegmentOverlap(detected)
+        print("After merge:", outsegs)
+
+        E = None
+        del E
+        gc.collect()
+        return outsegs
+
     def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
         """ Take list of energy peaks of dimensions:
             [files] [MListxTxN ndarrays],
@@ -876,6 +1074,184 @@ class WaveletSegment:
                     finalnodes2[i][j] = finalnodes[i][j]
         return finalnodes2, tpa, fpa, tna, fna
 
+    def gridSearchChp(self, E, bgsigma2s, Ewindows, thrList, maxlen, Awindow=1, Ainc=None):
+        """ Take list of energy peaks of dimensions:
+            [files][N][ndarrays of length T],
+            perform grid search over the values of alpha in the thrList,
+            do a stepwise search for best nodes for detecting calls.
+            Uses changepoint detection to detect peaks (alg 2).
+            It requires a global bg parameter, taken from bgsigma2s, a list of [files][N]
+            And real window size in s, taken from Ewindows, a list of [files][N]
+
+            Awindow, Ainc - annotation resolution parameters
+            Output structure:
+            1. list of [nodes] over thr
+            2-5. 2d np arrays of TP/FP/TN/FN
+        """
+        if Ainc!=Awindow:
+            print("ERROR: only non-overlapping annotations (inc=window) supported currently")
+        shape = (1, len(thrList))  # 1 is for backward compatibility with multiple Ms
+        tpa = np.zeros(shape)
+        fpa = np.zeros(shape)
+        tna = np.zeros(shape)
+        fna = np.zeros(shape)
+        finalnodes = []
+        # top_nodes = []
+
+        nodesToTest = self.bestNodes
+        segmenter = Segment.Segmenter()  # for segment postproc functions
+
+        # Grid search over thr x Files
+        for indext in range(len(thrList)):
+            # Accumulate nodes for the set of files for this M and thr
+            finalnodesMT = []
+            detected_all = []
+            annot_all = []
+            # loop over files:
+            for indexF in range(len(E)):
+                # Best nodes found within this file:
+                finalnodesF = []
+                # bestBetaScore = 0
+                # bestRecall = 0
+
+                Efile = E[indexF]
+                # load the annotations for this file
+                if (Ainc is not None and Ainc!=1) or Awindow!=1:
+                    annot = self.annotation2[indexF]
+                else:
+                    annot = self.annotation[indexF]
+
+                # # In addition to the correlation, re-order nodes according to fB. The order of nodes seems really
+                # # important.
+                # thisfile_fBs = []
+                # for nodenum in range(len(nodesToTest)):
+                #     detect_onenode = Efile[nodenum] > thrList[indext]
+                #     if window != 1 or inc is not None:
+                #         if inc is None:
+                #             inc2 = window
+                #         else:
+                #             inc2 = inc
+                #         # detected length is equal to the number of windows.
+                #         N = len(annot)
+                #         detect_ann = np.zeros(N)
+                #         start = 0
+                #         # map detect_onenode to non-standard annotation windows
+                #         for i in range(len(detect_onenode)):
+                #             if detect_onenode[i] == 1:
+                #                 end = int(min(math.ceil(start + 1), N))
+                #                 detect_ann[int(math.floor(start)):end] = 1
+                #             start += inc2
+                #         detect_onenode = detect_ann
+
+                #     thisnode_fB, _, _, _, _, _ = self.fBetaScore(annot, detect_onenode)
+                #     if thisnode_fB:
+                #         thisfile_fBs.append(thisnode_fB)
+                #     else:
+                #         thisfile_fBs.append(0.0)
+                # thisfile_node_ix = np.argsort(np.array(thisfile_fBs)).tolist()[::-1]
+                # print('thisfile_fBs:%s, nodes:%s' % (str(thisfile_fBs), str(nodesToTest)))
+
+                # ### STEPWISE SEARCH for best node combination:
+                # # (try to detect using thr, add node if it improves F2)
+                # print("Starting stepwise search. Possible nodes:", list(np.array(nodesToTest)[thisfile_node_ix]))
+                # TODO the length of detections needn't match the length of annotations currently.
+                # not really an error but maybe it should.
+                detect_best = np.zeros(len(annot))
+                segm_best = np.empty((0,2))
+                for nodenum in range(len(nodesToTest)):
+                    print("Testing node ", nodesToTest[nodenum])
+
+                    alpha = thrList[indext]
+                    sigma2 = bgsigma2s[indexF][nodenum]
+                    realwindow = Ewindows[indexF][nodenum]
+                    # Convert max segment length from s to realized windows
+                    # (segments exceeding this length will be marked as 'n')
+                    realmaxlen = math.ceil(maxlen / realwindow)
+                    segm1 = ce_detect.launchDetector2(Efile[nodenum], sigma2, realmaxlen, alpha=alpha).astype('float')
+                    # convert from the window scale into actual seconds
+                    segm1[:,:2] = segm1[:,:2] * realwindow
+
+                    # keep only S and their positions:
+                    if np.shape(segm1)[0]>0:
+                        segm1 = segm1[np.logical_or(segm1[:,2]==ord('s'), segm1[:,2]==ord('o')), 0:2]
+
+                    # What do we detect if we add this node to currently best detections?
+                    if np.shape(segm1)[0]>0:
+                        segm_candidate = np.vstack((segm_best, segm1))
+                        segm_candidate = segmenter.checkSegmentOverlap(segm_candidate)  # will also sort them
+                    else:
+                        # no new detections
+                        segm_candidate = segm_best
+
+                    # convert segments into 1/0 at the annotation resolution!
+                    detect_candidate = np.zeros(len(annot))
+                    for seg in segm_candidate:
+                        start = math.floor(seg[0]/Awindow)
+                        end = math.ceil(seg[1]/Awindow)
+                        detect_candidate[start:end] = 1
+
+                    # TODO If this node improved fB,
+                    # store it and update fB, recall, best detections, and optimum nodes
+                    segm_best = segm_candidate
+                    detect_best = detect_candidate
+                    finalnodesF.append(nodesToTest[nodenum])
+                    # fB, recall, tp, fp, tn, fn = self.fBetaScore(annot, detect_candidate)
+                    # if fB is not None and fB > bestBetaScore:
+                    #     bestBetaScore = fB
+                    #     bestRecall = recall
+                    #     segm_best = segm_candidate
+                    #     detect_best = detect_candidate
+                    #     finalnodesF.append(nodesToTest[nodenum])
+                    # # Adding more nodes will not reduce FPs, so this is sufficient to stop:
+                    # # Stopping a bit earlier to have fewer nodes and fewer FPs:
+                    # if bestBetaScore == 0.95 or bestRecall == 0.95:
+                    #     break
+
+                # Store the best nodes for this file
+                finalnodesMT.extend(finalnodesF)
+                print("Iteration f %d/%d complete" % (indexF + 1, len(self.audioList)))
+
+                # # fill top node lists
+                # if np.sum(annot) > 0:
+                #     top_nodes.extend(nodesToTest[0:2])
+
+                # Memory cleanup:
+                gc.collect()
+
+                # build long vectors of detections and annotations
+                detected_all.extend(detect_best)
+                annot_all.extend(annot)
+
+            # One iteration done, store results
+            finalnodesMT = list(set(finalnodesMT))
+            finalnodes.append(finalnodesMT)
+            # Get the measures with the selected node set for this threshold and M over the set of files
+            fB, recall, tp, fp, tn, fn = self.fBetaScore(annot_all, detected_all)
+            tpa[0, indext] = tp
+            fpa[0, indext] = fp
+            tna[0, indext] = tn
+            fna[0, indext] = fn
+            print("Iteration t %d/%d complete\t thr=%f\n---------------- " % (indext + 1, len(thrList), thrList[indext]))
+
+        # # remove duplicates
+        # negative_nodes = np.unique(self.worstNodes)
+        # # Remove any top nodes from negative list
+        # negative_nodes = [i for i in negative_nodes if i not in top_nodes]
+        # # Convert negative correlated nodes
+        # negative_nodes = [n + 1 for n in negative_nodes]
+        # # Remove any negatively correlated nodes
+        # print("Final nodes before neg. node removal:", finalnodes)
+        # print("Negative nodes:", negative_nodes)
+        # finalnodes2 = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in finalnodes]
+        # # Sanity check
+        # for i in range(len(finalnodes2)):
+        #     for j in range(len(finalnodes2[i])):
+        #         if len(finalnodes2[i][j]) == 0:
+        #             finalnodes2[i][j] = finalnodes[i][j]
+        # nest again for compatibility with multiple Ms:
+        finalnodes2 = [finalnodes]
+        return finalnodes2, tpa, fpa, tna, fna
+
 
     def listTopNodes(self, filenum):
         """ Selects top 10 or so nodes to be tested for this file,
@@ -945,12 +1321,13 @@ class WaveletSegment:
         gc.collect()
         return denoisedData
 
-    def loadDirectory(self, dirName, denoise, window=1, inc=None):
+    def loadDirectory(self, dirName, denoise, window=1, inc=None, impMask=True):
         """
             Finds and reads wavs from directory dirName.
             Denoise arg is passed to preprocessing.
             wpmode selects WP decomposition function ("new"-our but not AA'd, "aa"-our AA'd)
             Used in training to load an entire dir of wavs into memory.
+            impMask: impulse masking on audiodata. Off for changepoints to avoid distorting the mean
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
@@ -972,7 +1349,7 @@ class WaveletSegment:
                     self.filenames.append(wavFile)
 
                     # adds to self.annotation array, also sets self.sp data and sampleRate
-                    succ = self.loadData(wavFile)
+                    succ = self.loadData(wavFile, impMask=impMask)
                     if not succ:
                         print("ERROR: failed to load file", wavFile)
                         return
@@ -1001,7 +1378,7 @@ class WaveletSegment:
         totalblocks = sum([len(a) for a in self.annotation])
         print("Directory loaded. %d/%d presence blocks found.\n" % (totalcalls, totalblocks))
 
-    def loadData(self, filename):
+    def loadData(self, filename, impMask=True):
         """ Loads a single WAV file and corresponding 0/1 annotations.
             Input: filename - wav file name
             Output: fills self.annotation, sets self.sp data, samplerate
@@ -1019,7 +1396,8 @@ class WaveletSegment:
         n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
         # Do impulse masking by default
-        self.sp.data = self.sp.impMask()
+        if impMask:
+            self.sp.data = self.sp.impMask()
 
         fileAnnotations = []
         # Get the segmentation from the txt file

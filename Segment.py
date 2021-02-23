@@ -501,8 +501,7 @@ class SegmentList(list):
         return(lenMin, lenMax, fLow, fHigh)
 
     def exportGT(self, filename, species, window=1, inc=None):
-        """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file,
-            and returns other parameters for populating the training dialogs.
+        """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file
         filename - current wav file name.
         species - string, will export the annotations for it.
         Window and inc defined as in waveletSegment.
@@ -618,8 +617,9 @@ class Segmenter:
         return segs
 
     def mergeSegments(self, segs1, segs2=None):
-        """ Given two segmentations of the same file, return the merged set of them:
-        [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
+        """ Given two segmentations of the same file, join them,
+        and if one wasn't empty, merge any overlapping segments.
+        format: [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
         Can take in one or two lists. """
         if segs1 == [] and segs2 == []:
             return []
@@ -630,17 +630,9 @@ class Segmenter:
 
         if segs2 is not None:
             segs1.extend(segs2)
-        segs1.sort(key=lambda seg: seg[0])
-        out = [segs1[0]]
-        for curr in segs1:
-            lastout = out[-1]
-            if curr[0] < lastout[1]:
-                lastout[1] = max(lastout[1], curr[1])
-            else:
-                # note that segments that only touch ([1,2][2,3])
-                # will not be merged
-                out.append(curr)
+        out = self.checkSegmentOverlap(segs1)
         return out
+
 
     def convert01(self, presabs, window=1):
         """ Turns a list of presence/absence [0 1 1 1]
@@ -707,6 +699,7 @@ class Segmenter:
     ##  MERGING ALGORITHMS: do the same with very small settings variations
     def checkSegmentOverlap(self, segments):
         """ Merges overlapping segments.
+            Does not merge if the segments only touch.
             Operates on start-end list [[1,3], [2,4]] -> [[1,4]]
         """
         # Needs to be python array, not np array
@@ -758,6 +751,7 @@ class Segmenter:
 
     def checkSegmentOverlap3(self, segments):
         """ Merges overlapping segments.
+            Does not merge if the segments only touch.
             Identical to above, but operates on list of 3-element segments:
             [[[1,3], 50], [[2,5], 70]] -> [[[1,5], 60]]
             Currently, certainties are just averaged over the number of segs.
@@ -983,6 +977,7 @@ class Segmenter:
             for j in range(np.shape(sg)[1]):
                 if (sg[i, j] > thr * rowmedians[i]) and (sg[i, j] > thr * colmedians[j]):
                     clipped[i, j] = 1
+        print("Found", np.sum(clipped), "pixels")
 
         # This is the stencil for the closing and dilation. It's a 5x5 diamond. Can also use a 3x3 diamond
         diamond = np.zeros((5,5),dtype=int)
