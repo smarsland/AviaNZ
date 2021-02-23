@@ -929,7 +929,8 @@ class Segmentation(QDialog):
         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
 
         self.specieslabel = QLabel("Species")
-        self.species=QComboBox()
+        self.species_wv = QComboBox()
+        self.species_chp = QComboBox()
 
         # extra hiding step - less widgets to draw on initial load
         for w in range(Box.count()):
@@ -939,14 +940,22 @@ class Segmentation(QDialog):
         self.species_cc = QComboBox()
         self.species_cc.addItems(["Choose species...", "Bittern"])
 
-        spp = list(species.keys())
-        spp.insert(0, "Choose species...")
+        # parse the provided filter list into wavelet and changepoint boxes
         self.filters = species
-        self.species.addItems(spp)
-        self.species.currentTextChanged.connect(self.filterChange)
+        spp_chp = ["Choose species..."]
+        spp_wv = ["Choose species..."]
+        for key, item in species.items():
+            if item.get("method")=="chp":
+                spp_chp.append(key)
+            else:
+                spp_wv.append(key)
+        self.species_wv.addItems(spp_wv)
+        self.species_chp.addItems(spp_chp)
+        self.species_chp.currentTextChanged.connect(self.filterChange)
 
         Box.addWidget(self.specieslabel)
-        Box.addWidget(self.species)
+        Box.addWidget(self.species_wv)
+        Box.addWidget(self.species_chp)
 
         Box.addWidget(self.specieslabel_cc)
         Box.addWidget(self.species_cc)
@@ -1126,11 +1135,15 @@ class Segmentation(QDialog):
         else:
             #"Wavelets" or "WV Changepoint"
             self.specieslabel.show()
-            self.species.show()
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
                     self.chpLayout.itemAt(ww).widget().show()
                 self.wind.hide()
+                self.species_wv.hide()
+                self.species_chp.show()
+            else:
+                self.species_chp.hide()
+                self.species_wv.show()
             self.maxgaplbl.hide()
             self.maxgap.hide()
             self.minlenlbl.hide()
@@ -1155,12 +1168,21 @@ class Segmentation(QDialog):
 
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
+        alg = self.algs.currentText()
+        if alg=="Wavelets":
+            filtname = self.species_wv.currentText()
+        elif alg=="WV Changepoint":
+            filtname = self.species_chp.currentText()
+        elif alg=="Cross-Correlation":
+            filtname = self.species_cc.currentText()
+        else:
+            filtname = None
         settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
-                    "CCThr1": self.CCThr1.text(), "filtname": self.species.currentText(), "species_cc": self.species_cc.currentText(), "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
+                    "CCThr1": self.CCThr1.text(), "filtname": filtname, "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
                     "chp2l": self.chp2l.isChecked()}
-        return(str(self.algs.currentText()), settings)
+        return(alg, settings)
 
 #======
 class Denoise(QDialog):
