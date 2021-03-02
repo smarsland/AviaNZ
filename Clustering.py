@@ -645,7 +645,7 @@ class Clustering:
             # Compute the features of each syllable in this segment
             for syl in record[2]:
                 audiodata = self.loadFile(filename=record[0], duration=syl[1] - syl[0], offset=syl[0], fs=fs,
-                                          denoise=denoise, f1=f1, f2=f2)
+                                          denoise=denoise, f1=f1, f2=f2, silent=True)
                 audiodata = audiodata.tolist()
                 if syl[1] - syl[0] < duration:
                     # Zero padding both ends to have fixed duration
@@ -678,7 +678,7 @@ class Clustering:
         return np.mean(fc, axis=0)
 
 
-    def loadFile(self, filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
+    def loadFile(self, filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0, silent=False):
         """
         Read audio file and preprocess as required.
         """
@@ -686,7 +686,7 @@ class Clustering:
             duration = None
 
         sp = SignalProc.SignalProc(256, 128)
-        sp.readWav(filename, duration, offset)
+        sp.readWav(filename, duration, offset, silent=silent)
         sp.resample(fs)
         sampleRate = sp.sampleRate
         audiodata = sp.data

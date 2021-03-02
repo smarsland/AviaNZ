@@ -22,13 +22,14 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import math
-import scipy.fftpack as fft
+# import scipy.fftpack as fft
 from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
 import Wavelet
 import SignalProc
+
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
@@ -407,7 +408,7 @@ class WaveletFunctions:
             return np.ndarray()
 
         # Might be useful to track any DC offset
-        print("Global mean = %.2f" % np.mean(C))
+        print("DC offset = %.3f" % np.mean(C))
 
         # convert into a matrix (seconds x wcs in sec), and get the energy of each row (second)
         E = (C**2).reshape((nwindows, WCperWindow)).mean(axis=1)

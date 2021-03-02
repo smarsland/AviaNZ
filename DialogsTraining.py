@@ -33,7 +33,7 @@ import json
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -986,8 +986,6 @@ class BuildRecAdvWizard(QWizard):
                 self.maxgap = QLineEdit(self)
                 form1_step4.addRow('Max gap between syllables (sec)', self.maxgap)
             elif method=="chp":
-                self.usernodes = QLineEdit(self)
-                form1_step4.addRow('Enter nodes (comma-sep.)', self.usernodes)
                 self.chpwin = QLineEdit(self)
                 form1_step4.addRow('Window size (sec)', self.chpwin)
                 self.minlen = QLineEdit(self)
@@ -1264,7 +1262,6 @@ class BuildRecAdvWizard(QWizard):
                 minlen = float(self.field("minlen"+str(self.pageId)))
                 maxlen = float(self.field("maxlen"+str(self.pageId)))
                 chpwin = float(self.field("chpwin"+str(self.pageId)))
-                usernodes = list(map(int, self.field("usernodes"+str(self.pageId)).split(',')))
                 self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
@@ -1291,7 +1288,12 @@ class BuildRecAdvWizard(QWizard):
                             # and recalculate the stats for that cluster.
 
                             # exports 0/1 annotations
-                            pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
+                            if self.method=="wv":
+                                pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
+                            elif self.method=="chp":
+                                print("Exporting GT with window", chpwin)
+                                pageSegs.exportGT(wavFile, self.field("species"), window=chpwin, inc=None)
+
 
             # calculate cluster centres
             # (self.segments is already selected to be this cluster only)
@@ -1312,8 +1314,6 @@ class BuildRecAdvWizard(QWizard):
                     # options for training are:
                     #  recold - no antialias, recaa - partial AA, recaafull - full AA
                     #  Window and inc - in seconds
-                    window = 1
-                    inc = None
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.field("trainDir"),
                                                                     self.thrList, self.MList,
                                                                     d=False, rf=True,
@@ -1323,7 +1323,7 @@ class BuildRecAdvWizard(QWizard):
                     numthr = 9
                     self.thrList = np.geomspace(0.03, 10, num=numthr)
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainChp(self.field("trainDir"),
-                                                                    self.thrList, usernodes,
+                                                                    self.thrList,
                                                                     maxlen=maxlen, window=chpwin)
 
                 print("Filtered nodes: ", self.nodes)
@@ -1609,8 +1609,6 @@ class BuildRecAdvWizard(QWizard):
                 page4.registerField("maxlen"+str(pageid), page4.maxlen)
                 page4.registerField("fLow"+str(pageid), page4.fLow)
                 page4.registerField("fHigh"+str(pageid), page4.fHigh)
-                # These are for user input to be passed between pages 4 and 5:
-                page4.registerField("usernodes"+str(pageid), page4.usernodes)
 
                 # note: pageid is the same for both page fields
                 page5.registerField("bestThr"+str(pageid)+"*", page5.bestThr)
