@@ -6,7 +6,7 @@ cdef extern from "detector.h":
 cdef extern from "detector.h":
     int alg1_var(double xs[], size_t n, size_t maxlb, double mu0, double penalty, int outstarts[], int outends[], char outtypes[]);
 cdef extern from "detector.h":
-    int alg2_var(double xs[], size_t nn, size_t maxlb, double sigma0, double penalty_s, double penalty_n, int outstarts[], int outends[], char outtypes[]);
+    int alg2_var(double xs[], size_t nn, size_t maxlb, double sigma0, double penalty_s, double penalty_n, int outstarts[], int outends[], char outtypes[], size_t printing);
 
 
 def launchDetector1(xs, int maxlookback, float alpha):
@@ -33,11 +33,14 @@ def launchDetector1(xs, int maxlookback, float alpha):
     # print(outt)
     outnum = outt.tolist().index(0)
     # print(outnum)
-    # NOTE: a segment s:e is reported as a list [s,e+1,...]
+    # NOTE: detector.c outputs 0-indexed window positions, inclusive.
+    # This conversion here makes the interval [s,e).
+    # true timestamp can be obtained simply by multiply it by window size
     res = np.vstack((outst[:outnum], oute[:outnum]+1, outt[:outnum]))
     return(res.T)
 
-def launchDetector2(xs, float sigma2, int maxlookback, float alpha):
+def launchDetector2(xs, float sigma2, int maxlookback, float alpha, int printing=1):
+    # printing=1 means that more details will be printed, 0="silent"
     xs = np.asarray(xs, dtype='float64')
     print("using %d datapoints" % len(xs))
 
@@ -54,7 +57,7 @@ def launchDetector2(xs, float sigma2, int maxlookback, float alpha):
     cdef np.ndarray[int] outst = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[int] oute = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[np.uint8_t] outt = np.zeros(n, dtype='uint8')
-    succ = alg2_var(<double*> np.PyArray_DATA(xs), n, maxlookback, csigma2, penalty, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
+    succ = alg2_var(<double*> np.PyArray_DATA(xs), n, maxlookback, csigma2, penalty, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt), printing)
     if succ>0:
         print("ERROR: C detector failure")
         return
@@ -62,6 +65,8 @@ def launchDetector2(xs, float sigma2, int maxlookback, float alpha):
     # print(oute)
     # print(outt)
     outnum = outt.tolist().index(0)
-    # NOTE: a segment s:e is reported as a list [s,e+1,...]
+    # NOTE: detector.c outputs 0-indexed window positions, inclusive.
+    # This conversion here makes the interval [s,e).
+    # true timestamp can be obtained simply by multiply it by window size
     res = np.vstack((outst[:outnum], oute[:outnum]+1, outt[:outnum]))
     return(res.T)

@@ -328,7 +328,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
 }
 
 
-int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigma0, const double penalty_s, const double penalty_n, int outstarts[], int outends[], char outtypes[]){
+int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigma0, const double penalty_s, const double penalty_n, int outstarts[], int outends[], char outtypes[], const size_t printing){
     // xs, nn: centered data (nn points)
     // sigma0: sigma^2_0, given
     // output: segments (list of starts and ends and types)
@@ -596,7 +596,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         possiblestarts_n[numpossiblestarts_n++] = tt;
         // printf("After pruning nuisance starts, %zu remain\n", numpossiblestarts_n);
     }
-    printf("Final cost: %.3f\n", F[nn-1]);
+    // printf("Final cost: %.3f\n", F[nn-1]);
 
     free(detwts);
     free(detFs);
@@ -606,7 +606,9 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
 
     // extract changepoints
     size_t i = nn-1;
-    printf("Detected segments:\n");
+    if(printing){
+         printf("Detected segments:\n");
+    }
     size_t outnum = 0;
     while(i>0){
         if(chps[i].start>0){
@@ -616,8 +618,10 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
             // no need to store the type since it can be recreated from length
             char thischptype = i-chps[i].start<=maxlb ? 's' : 'n';
             outtypes[outnum] = thischptype;
-            printf("* %zu. %zu-%zu %s \n", outnum, chps[i].start, i, thischptype=='s'?"SIG":"NUIS");
-            printf("* est. theta: %.4f\n", estsigma(x2s, chps[i].start, i));
+            if(printing){
+                printf("* %zu. %zu-%zu %s   \t\t", outnum, chps[i].start, i, thischptype=='s'?"SIG ":"NUIS");
+                printf("   * theta: %.2f\n", estsigma(x2s, chps[i].start, i));
+            }
             outnum++;
 
             // just in case
@@ -632,8 +636,10 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                 size_t i2det = chps[i].start*nn;
                 while(i2>chps[i].start){
                     if(detchps[i2det + i2].start>0){
-                        printf("* %zu. %zu-%zu %s \n", outnum, detchps[i2det + i2].start, i2, "SIG on NUIS");
-                        printf("* est. theta: %.4f\n", estsigma(x2s, detchps[i2det + i2].start, i2));
+                        if(printing){
+                            printf("* %zu. %zu-%zu %s \t", outnum, detchps[i2det + i2].start, i2, "SIG on NUIS");
+                            printf("   * theta: %.2f\n", estsigma(x2s, detchps[i2det + i2].start, i2));
+                        }
                         outstarts[outnum] = (int) detchps[i2det + i2].start;
                         outends[outnum] = (int) i2;
                         outtypes[outnum] = 'o';
