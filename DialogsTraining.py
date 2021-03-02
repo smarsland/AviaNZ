@@ -1165,6 +1165,7 @@ class BuildRecAdvWizard(QWizard):
                 self.saveStat.setVisible(True)
                 for itemnum in range(self.filtSummary.count()):
                     self.filtSummary.itemAt(itemnum).widget().show()
+                self.completeChanged.emit()
 
             self.figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
 
