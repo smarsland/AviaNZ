@@ -305,6 +305,9 @@ class WaveletSegment:
             print("ERROR: no files loaded!")
             return
 
+        nwins = [len(annot) for annot in self.annotation]
+
+        # --------------------
         # 2. determine what nodes can be meaningfully tested, given freq limits
         nodeList = []
         freqrange = subfilter['FreqRange']
@@ -321,18 +324,50 @@ class WaveletSegment:
                 nodeList.append(node)
         # nodeList now stores ROOTED numbers of nodes, to match WF.tree (which has tree[0] = data)
 
-        nwins = [len(annot) for annot in self.annotation]
-
-        # TODO include or not?
-        # 2a. get node correlations:
+        # --------------------
+        # 3. extract node energies for all files and get node correlations:
+        # TODO see what can go to loadData
         opstartingtime = time.time()
         print("--- Starting correlation stage ---")
+        # TODO convert to a matrix maybe?
+        allEs = []
+        allwindows = np.zeros((62, len(self.audioList)))
         nodeCorrs = np.zeros((62, len(self.audioList)))
         for indexF in range(len(self.audioList)):
             print("-- Computing wavelet correlations in file %d / %d --" %(indexF+1, len(self.audioList)))
-            currWCs = self.computeWaveletEnergy(self.audioList[indexF], self.spInfo['SampleRate'], 5, "new", window=window, inc=window)
+            filenwins = nwins[indexF]
+            # foffs = sum(nwins[:indexF])  # start of this file's pieces in allEs
+
+            # extract energies
+            currWCs = np.zeros((62, filenwins))
+            # Generate a full 5 level wavelet packet decomposition
+            # (this will not be downsampled. antialias=False means no post-filtering)
+            self.WF = WaveletFunctions.WaveletFunctions(data=self.audioList[indexF], wavelet=self.wavelet, maxLevel=5, samplerate=self.spInfo['SampleRate'])
+            self.WF.WaveletPacket(nodeList, mode='symmetric', antialias=False)
+            for node in nodeList:
+                nodeE, noderealwindow = self.WF.extractE(node, window, wpantialias=True)
+                allwindows[node-1, indexF] = noderealwindow
+                # the wavelet energies may in theory have one more or less windows than annots
+                # b/c they adjust the window size to use integer number of WCs.
+                # If they differ by <=1, we allow that and just equalize them:
+                if filenwins==len(nodeE)+1:
+                    currWCs[node-1,:-1] = nodeE
+                    # last element will be 0 by initialization
+                elif filenwins==len(nodeE)-1:
+                    # drop last WC
+                    currWCs[node-1,:] = nodeE[:-1]
+                elif np.abs(filenwins-len(nodeE))>1:
+                    print("ERROR: lengths of annotations and energies differ:", filenwins, len(nodeE))
+                    return
+                else:
+                    currWCs[node-1,:] = nodeE
+
+            allEs.append(currWCs)
+            # note that currWCs and nodeCorrs are UNROOTED
+
             # Compute all WC-annot correlations for this file
             nodeCorrs[:,indexF] = self.compute_r(self.annotation[indexF], currWCs) * len(self.annotation[indexF])
+
         # get a single "correlation" value for each node:
         # Note: averaged correlation is not the same as calculating correlation over
         # all files, but should be meaningful enough for this.
@@ -347,8 +382,8 @@ class WaveletSegment:
         print("Before filtering: ", nodeList)
         nodeList = [node for node in nodeList if node in bestnodes]
 
-        # 3. run the detector for each setting (node x thr x filepieces)
-        # TODO move this to loadData again
+        # --------------------
+        # 4. run the detector for each setting (node x thr x filepieces)
         opstartingtime = time.time()
         print("--- Starting detection stage ---")
         alldetections = np.zeros((len(nodeList), len(thrList), sum(nwins)))
@@ -358,21 +393,16 @@ class WaveletSegment:
             # audio = self.sp.ButterworthBandpass(self.audioList[filenum],
             #                                     self.spInfo['SampleRate'],
             #                                     low=freqrange[0], high=freqrange[1])
-            audio = self.audioList[indexF]
             filenwins = nwins[indexF]
             foffs = sum(nwins[:indexF])  # start of this file's pieces in alldetections
-
-            # Generate a full 5 level wavelet packet decomposition
-            self.WF = WaveletFunctions.WaveletFunctions(data=audio, wavelet=self.wavelet, maxLevel=5, samplerate=self.spInfo['SampleRate'])
-            # (this will not be downsmpled. antialias=False means no post-filtering)
-            self.WF.WaveletPacket(nodeList, mode='symmetric', antialias=False)
 
             for indexn in range(len(nodeList)):
                 node = nodeList[indexn]
                 print("Analysing node", node)
                 # extract node from file num, and average over windows of set size
                 # (wpantialias=True specifies the non-downsampled WP)
-                nodeE, noderealwindow = self.WF.extractE(node, window, wpantialias=True)
+                nodeE = allEs[indexF][node-1,:]
+                noderealwindow = allwindows[node-1, indexF]
                 nodesigma2 = np.percentile(nodeE, 10)
                 # NOTE: we're providing points on the original scale (non-squared) for the C part
                 nodeE = np.sqrt(nodeE)
@@ -410,7 +440,8 @@ class WaveletSegment:
         # for Fbeta score, concat 0/1 annotations over all files into a long vector:
         allannots = np.concatenate(self.annotation)
 
-        # 4. find top nodes by Fbeta-score, for each thr
+        # --------------------
+        # 5. find top nodes by Fbeta-score, for each thr
         # enumerate all possible subsets of up to k nodes:
         opstartingtime = time.time()
         print("--- Starting best-subset search ---")
@@ -422,6 +453,7 @@ class WaveletSegment:
         subsetfbs = np.zeros((len(ksubsets), len(thrList)))
 
         NODEPEN = 0.01
+        total_positives = np.count_nonzero(allannots)   # precalculated for speed
         for indext in range(len(thrList)):
             # Best-subset part
             # find the best set of k nodes to start with:
@@ -430,12 +462,9 @@ class WaveletSegment:
                 # evaluate F1 score of this nodeset over all files
                 # (each nodeset is a list of indices to nodes in nodeList)
                 nodeset = list(ksubsets[nodeset_ix])
-                print("evaluating subset", [nodeList[nn] for nn in nodeset])
-                # TODO could also use logical_or and cast back to 0/1 here
-                detect_allnodes = np.maximum.reduce(alldetections[nodeset, indext, :])
-                fB, recall, tp, fp, tn, fn = self.fBetaScore(allannots, detect_allnodes)
-                if fB is None:
-                    fB = 0
+                # print("evaluating subset", [nodeList[nn] for nn in nodeset])
+                detect_allnodes = np.logical_or.reduce(alldetections[nodeset, indext, :])
+                fB = self.fBetaScore_fast(allannots, detect_allnodes, total_positives)
                 # Add a penalty for the number of nodes
                 subsetfbs[nodeset_ix, indext] = fB - len(nodeset)*NODEPEN
         print("Best-subset search completed in", time.time() - opstartingtime)
@@ -482,6 +511,8 @@ class WaveletSegment:
                 # Add a penalty for the number of nodes
                 if bestfB is not None:
                     bestfB = bestfB - NODEPEN*len(top_subset_nodes)
+                else:
+                    bestfB = 0
 
                 print("starting nodes", top_subset_nodes)
                 print("starting fb", bestfB, "recall", bestRecall)
@@ -519,7 +550,7 @@ class WaveletSegment:
                     if bestfB >= 0.95 or bestRecall >= 0.95:
                         break
                 # store this if this is the best initialisation
-                if bestfB is not None and bestfB>fB_out:
+                if bestfB>fB_out:
                     fB_out = bestfB
                     nodes_out = top_subset_nodes
                     tp_out = tp
@@ -670,6 +701,20 @@ class WaveletSegment:
             coefs[:,t] = E
         return coefs
 
+    def fBetaScore_fast(self, annotation, predicted, T, beta=2):
+        """ Computes the beta scores given two sets of predictions.
+            Simplified by dropping printouts and some safety checks.
+            (Assumes logical or int 1/0 input.)
+            Outputs 0 when the score is undefined. """
+        TP = np.count_nonzero(annotation & predicted)
+        # T = np.count_nonzero(annotation)   # precalculated and passed in for speed
+        P = np.count_nonzero(predicted)
+        if T==0 or P==0 or TP==0:
+            return 0
+        recall = float(TP) / T  # TruePositive/#True
+        precision = float(TP) / P  # TruePositive/#Positive
+        fB = ((1. + beta ** 2) * recall * precision) / (recall + beta ** 2 * precision)
+        return fB
 
     def fBetaScore(self, annotation, predicted, beta=2):
         """ Computes the beta scores given two sets of predictions """
@@ -721,8 +766,12 @@ class WaveletSegment:
 
         r = np.zeros(np.shape(waveletCoefs)[0])
         for node in range(len(r)):
-            r[node] = (np.mean(waveletCoefs[(node, w1)]) - np.mean(waveletCoefs[(node, w0)])) / np.std(
-                waveletCoefs[node, :]) * np.sqrt(len(w0) * len(w1)) / len(annotation)
+            # for safety e.g. when an array was filled with a const and SD=0
+            if np.all(waveletCoefs[node,:]==waveletCoefs[node,0]):
+                r[node] = 0
+                continue
+
+            r[node] = (np.mean(waveletCoefs[(node, w1)]) - np.mean(waveletCoefs[(node, w0)])) / np.std(waveletCoefs[node, :]) * np.sqrt(len(w0) * len(w1)) / len(annotation)
 
         return r
 
