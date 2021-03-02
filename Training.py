@@ -504,7 +504,7 @@ class CNNtrain:
         self.TNs = []
         self.FNs = []
 
-        # Predict and temp plot (just for me)
+        # Predict and temp plot
         pre = model.predict(testimages)
         ctprob = [[] for i in range(len(self.calltypes) + 1)]
         for i in range(len(targets)):
