@@ -2,6 +2,9 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+- Minor UI bugs in recogniser training wizard
+
 ## [3.2] - 2021-02-16
 
 ### Added
