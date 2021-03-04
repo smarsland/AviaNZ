@@ -1310,7 +1310,7 @@ class BuildRecAdvWizard(QWizard):
             super(BuildRecAdvWizard.WLastPage, self).__init__(parent)
             self.setTitle('Save recogniser')
             self.setSubTitle('If you are happy with the overall call detection summary, save the recogniser. \n You should now test it.')
-            self.setMinimumSize(400, 500)
+            self.setMinimumSize(430, 300)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1319,13 +1319,13 @@ class BuildRecAdvWizard(QWizard):
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
             space = QLabel()
-            space.setFixedHeight(25)
+            space.setFixedHeight(20)
             spaceH = QLabel()
             spaceH.setFixedWidth(30)
 
             self.lblFilter = QLabel('')
             self.lblFilter.setWordWrap(True)
-            self.lblFilter.setStyleSheet("QLabel { color : #808080; border: 1px solid black }")
+            self.lblFilter.setStyleSheet("QLabel { color : #808080; }")
 
             # filter dir listbox
             self.listFiles = QListWidget()
@@ -1360,12 +1360,17 @@ class BuildRecAdvWizard(QWizard):
             vboxHead = QFormLayout()
             vboxHead.addRow("Training data:", self.lblTrainDir)
             vboxHead.addRow("Target species:", self.lblSpecies)
+            
+            scrollFilter = QScrollArea()
+            scrollFilter.setWidgetResizable(True)
+            scrollFilter.setWidget(self.lblFilter)
+            scrollFilter.setMinimumHeight(30)
 
             layout = QVBoxLayout()
             layout.addLayout(vboxHead)
             layout.addWidget(space)
             layout.addWidget(QLabel("The following recogniser was produced:"))
-            layout.addWidget(self.lblFilter)
+            layout.addWidget(scrollFilter)
             layout.addWidget(QLabel("Currently available recognisers"))
             layout.addWidget(self.listFiles)
             layout.addWidget(space)
