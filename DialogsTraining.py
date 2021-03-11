@@ -2545,6 +2545,8 @@ class BuildCNNWizard(QWizard):
             self.FPR = self.cnntrain.FPRs[self.ct]
             self.Precision = self.cnntrain.Precisions[self.ct]
             self.Acc = self.cnntrain.Accs[self.ct]
+            print('ROC page, TPR: ', self.TPR)
+            print('ROC page, FPR: ', self.FPR)
 
             # This is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
