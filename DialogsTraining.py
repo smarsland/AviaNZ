@@ -2017,6 +2017,8 @@ class BuildCNNWizard(QWizard):
             self.msgadir.setStyleSheet("QLabel { color : #808080; }")
             self.warnnoannt2 = QLabel("")
             self.warnnoannt2.setStyleSheet("QLabel { color : #800000; }")
+            self.imgDirwarn = QLabel('')
+            self.imgDirwarn.setStyleSheet("QLabel { color : #800000; }")
 
             self.msgrecfilter = QLabel("")
             self.msgrecfilter.setStyleSheet("QLabel { color : #808080; }")
@@ -2068,6 +2070,7 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.msgrecfs, 17, 2)
             layout.addWidget(self.msgrecfrange, 18, 2)
             layout.addWidget(self.warnLabel, 19, 2)
+            layout.addWidget(self.imgDirwarn, 20, 2)
             self.setLayout(layout)
 
         def initializePage(self):
@@ -2171,7 +2174,7 @@ class BuildCNNWizard(QWizard):
                 return True
 
         def cleanupPage(self):
-            pass
+            self.imgDirwarn.setText('')
             self.msgmdir.setText('')
             self.msgadir.setText('')
             self.warnnoannt1.setText('')
@@ -2291,9 +2294,6 @@ class BuildCNNWizard(QWizard):
             self.flowLayout.addWidget(self.img3)
             layout2.addLayout(self.flowLayout)
 
-            self.imgDirwarn = QLabel('')
-            self.imgDirwarn.setStyleSheet("QLabel { color : #800000; }")
-
             self.cbAutoThr = QCheckBox("Tick if you want AviaNZ to decide threshold/s")
             self.cbAutoThr.setStyleSheet("QCheckBox { font-weight: bold; }")
             self.cbAutoThr.toggled.connect(self.onClicked)
@@ -2301,7 +2301,6 @@ class BuildCNNWizard(QWizard):
             layout1 = QVBoxLayout()
             layout1.addLayout(layout0)
             layout1.addLayout(layout2)
-            layout1.addWidget(self.imgDirwarn)
             layout1.addWidget(self.cbAutoThr)
             self.setLayout(layout1)
             self.setButtonText(QWizard.NextButton, 'Generate CNN images and Train>')
@@ -2494,7 +2493,6 @@ class BuildCNNWizard(QWizard):
             self.showimg(self.indx)
 
         def cleanupPage(self):
-            self.imgDirwarn.setText('')
             self.img1.setText('')
             self.img2.setText('')
             self.img3.setText('')
@@ -2545,6 +2543,8 @@ class BuildCNNWizard(QWizard):
             self.FPR = self.cnntrain.FPRs[self.ct]
             self.Precision = self.cnntrain.Precisions[self.ct]
             self.Acc = self.cnntrain.Accs[self.ct]
+            print('ROC page, TPR: ', self.TPR)
+            print('ROC page, FPR: ', self.FPR)
 
             # This is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
