@@ -343,7 +343,7 @@ class AviaNZ(QMainWindow):
             self.showDiagnosticCNN = specMenu.addAction("Show CNN training diagnostics", self.showDiagnosticDialogCNN)
             self.extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Wind adjustment", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
                 em = self.extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -2290,6 +2290,89 @@ class AviaNZ(QMainWindow):
             self.plotExtra.setLookupTable(lut)
             self.plotExtra.setImage(r.T)
             self.plotaxis.setLabel('Frequency bin')
+
+        # plot estimated wind and signal levels for a pre-set node
+        if self.extra == "Wind adjustment":
+            # resample and generate WP w/ all nodes for the current page
+            if self.sampleRate != 16000:
+                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+            else:
+                datatoplot = self.audiodata
+            WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=16000)
+            WF.WaveletPacket(range(31, 63))
+            # list all the node frequency centers
+            node_freqs = [sum(WF.getWCFreq(n, 16000))/2 for n in range(31, 63)]
+
+            xs = np.arange(0, self.datalengthSec, 0.25)
+            datalen = len(xs)
+
+            # extract energies from each leaf node
+            Es = np.zeros((datalen, 32))
+            i = 0
+            for node in range(31, 63):
+                E, _ = WF.extractE(node, 0.25)
+                Es[:,i] = E[:datalen]
+                i += 1
+                print("node %d extracted" % node)
+
+            # extract unadjusted signal energy
+            tgt_node = 45-31
+            Es = np.log(Es)
+            sig_lvl = Es[:,tgt_node]
+
+            # estimate wind level in each window
+            wind_lvl = np.zeros(len(xs))
+            wind_lvlR = np.zeros(len(xs))
+            wind_lvlC = np.zeros(len(xs))
+            from scipy.stats import linregress, theilslopes
+
+            def calc_wind(energies, nodecenters, tgt):
+                # fits an adjustment model based on energies, nodecenters,
+                # excluding tgt node.
+                regy = np.delete(energies, tgt)
+                regx = np.delete(nodecenters, tgt)
+                # remove two highest nodes as they have filtering artefacts
+                freqmask = np.where(regx<7500)
+                regy = regy[freqmask]
+                regx = np.log(regx[freqmask])
+                slope, inter, r, p, se = linregress(regx, regy)
+                print("Regression results:", slope, inter, r, p, se)
+                pred = np.log(nodecenters[tgt])*slope + inter
+
+                # Robust reg
+                # huber = RANSACRegressor().fit(regx[:,np.newaxis], regy)
+                # predR = huber.predict(np.asarray([np.log(nodecenters[tgt])])[:,np.newaxis])
+                slope, inter, cilo, ciup = theilslopes(regy, regx)
+                predR = np.log(nodecenters[tgt])*slope + inter
+
+                # Cubic fit
+                pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
+                predC = pol(np.log(nodecenters[tgt]))
+                return pred, predR, predC
+
+            for w in range(len(xs)):
+                wind_lvl[w], wind_lvlR[w], wind_lvlC[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
+
+            print("nodemeans", np.mean(Es, axis=0))
+            self.p_legend = pg.LegendItem()
+            self.p_legend.setParentItem(self.p_plot)
+            self.plotExtra = pg.PlotDataItem(xs, sig_lvl)
+            self.plotExtra.setPen(fn.mkPen(color='k', width=2))
+            self.p_legend.addItem(self.plotExtra, 'node')
+            self.plotExtra2 = pg.PlotDataItem(xs, wind_lvl)
+            self.plotExtra2.setPen(fn.mkPen(color='r', width=2))
+            self.p_legend.addItem(self.plotExtra2, 'ols')
+            self.plotExtra3 = pg.PlotDataItem(xs, wind_lvlR)
+            self.plotExtra3.setPen(fn.mkPen(color='g', width=2))
+            self.p_legend.addItem(self.plotExtra3, 'theil')
+            self.plotExtra4 = pg.PlotDataItem(xs, wind_lvlC)
+            self.plotExtra4.setPen(fn.mkPen(color='b', width=2))
+            self.p_legend.addItem(self.plotExtra4, 'cubic')
+            self.plotaxis.setLabel('Log mean power')
+            self.p_plot.addItem(self.plotExtra)
+            self.p_plot.addItem(self.plotExtra2)
+            self.p_plot.addItem(self.plotExtra3)
+            self.p_plot.addItem(self.plotExtra4)
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":

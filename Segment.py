@@ -1534,6 +1534,7 @@ class PostProcess:
             featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
             # featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 3)
             featuress = featuress.astype('float32')
+
             # predict with CNN
             if np.shape(featuress)[0] > 0:
                 # probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))  # This might lead to OOM error, therefore show batches
@@ -1546,6 +1547,7 @@ class PostProcess:
                     print(end)
                     p = self.CNNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
                     print(p)
+
                     probs = np.append(probs, p, axis=0)
                     start += batchsize
             else:
