@@ -1138,7 +1138,6 @@ class Segmentation(QDialog):
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
                     self.chpLayout.itemAt(ww).widget().show()
-                self.wind.hide()
                 self.species_wv.hide()
                 self.species_chp.show()
             else:
