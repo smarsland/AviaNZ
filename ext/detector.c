@@ -77,31 +77,31 @@ void findmincost(const double cs[], const double Fs[], const size_t starts[], co
 // main loop over data - for change in VARIANCE
 int alg1_var(double xs[], const size_t n, const size_t maxlb, const double mu0, const double penalty, int outstarts[], int outends[], char outtypes[]){
     // center and square x
-    double x2s[n];
+    double *x2s  = malloc(n * sizeof(double));
     for(size_t i=0; i<n; i++){
         xs[i] = (xs[i]-mu0);
         x2s[i] = xs[i]*xs[i];
     }
     // precompute segment costs
     // TODO add an initialization marker to spot cache misses
-    double cs[n];
+    double *cs = malloc(n * sizeof(double));
     double len;
     double m2;
 
     // output: estimate sequence
-    double wts[n];
+    double *wts = malloc(n * sizeof(double));
     wts[0] = x2s[0];
 
     // output: segments (list of starts and ends)
     // Could replace with two bare size_t[]
-    struct ChpList chps[n];
+    struct ChpList *chps = malloc(n * sizeof(struct ChpList));
 
     // output: history of best costs
-    double F[n];
+    double *F = malloc(n * sizeof(double));
     F[0] = 0;
 
     // acceptable start positions to keep track of pruning
-    size_t possiblestarts[n];
+    size_t *possiblestarts = malloc(n * sizeof(size_t));
     possiblestarts[0] = 0;
     for(size_t i=1; i<n-1; i++){
         possiblestarts[i] = 0;
@@ -111,8 +111,8 @@ int alg1_var(double xs[], const size_t n, const size_t maxlb, const double mu0, 
 
     // main DP loop:
     double bgcost;
-    double segcosts[n];
-    size_t bgsizes[n];
+    double *segcosts = malloc(n * sizeof(double));
+    size_t *bgsizes = malloc(n * sizeof(size_t));
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
         // printf("----Cycle %zu/%zu----\n", t+1, n);
@@ -177,6 +177,13 @@ int alg1_var(double xs[], const size_t n, const size_t maxlb, const double mu0, 
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
     printf("Final cost: %.2f, final wt: %.4f\n", F[n-1], wts[n-1]);
+    free(x2s);
+    free(cs);
+    free(wts);
+    free(F);
+    free(possiblestarts);
+    free(segcosts);
+    free(bgsizes);
 
     // extract changepoints
     size_t i = n-1;
@@ -201,6 +208,7 @@ int alg1_var(double xs[], const size_t n, const size_t maxlb, const double mu0, 
             i--;
         }
     }
+    free(chps);
     return 0;
 }
 
@@ -213,25 +221,25 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     }
     // precomputed segment costs
     // TODO add an initialization marker to spot cache misses
-    double cs[n];
+    double *cs = malloc(n * sizeof(double));
     double len;
     double m;
     double m2;
 
     // output: estimate sequence
-    double wts[n];
+    double *wts = malloc(n * sizeof(double));
     wts[0] = xs[0];
 
     // output: segments (list of starts and ends)
     // Could replace with two bare size_t[]
-    struct ChpList chps[n];
+    struct ChpList *chps = malloc(n * sizeof(struct ChpList));
 
     // output: history of best costs
-    double F[n];
+    double *F = malloc(n * sizeof(double));
     F[0] = 0;
 
     // acceptable start positions to keep track of pruning
-    size_t possiblestarts[n];
+    size_t *possiblestarts = malloc(n * sizeof(size_t));
     possiblestarts[0] = 0;
     for(size_t i=1; i<n-1; i++){
         possiblestarts[i] = 0;
@@ -241,8 +249,8 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
 
     // main DP loop:
     double bgcost;
-    double segcosts[n];
-    size_t bgsizes[n];
+    double *segcosts = malloc(n * sizeof(double));
+    size_t *bgsizes = malloc(n * sizeof(size_t));
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
         // printf("----Cycle %zu/%zu----\n", t+1, n);
@@ -308,7 +316,13 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
     printf("Final cost: %.2f, final wt: %.4f\n", F[n-1], wts[n-1]);
-
+    free(cs);
+    free(wts);
+    free(F);
+    free(possiblestarts);
+    free(segcosts);
+    free(bgsizes);
+    
     // extract changepoints
     size_t i = n-1;
     printf("Detected segments:\n");
@@ -324,6 +338,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
             i--;
         }
     }
+    free(chps);
     return 0;
 }
 
@@ -332,15 +347,15 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     // xs, nn: centered data (nn points)
     // sigma0: sigma^2_0, given
     // output: segments (list of starts and ends and types)
-    struct ChpList chps[nn];
+    struct ChpList *chps = malloc(nn * sizeof(struct ChpList));
 
     // square x
-    double x2s[nn];
+    double *x2s = malloc(nn * sizeof(double));
     for(size_t i=0; i<nn; i++){
         x2s[i] = xs[i]*xs[i];
     }
 
-    double F[nn];
+    double *F  = malloc(nn * sizeof(double));
     F[0] = 0;
 
     // arrays of outputs and parameters for each detector
@@ -370,7 +385,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     }
 
     // other detector-specific values
-    size_t detnumpostarts[nn];
+    size_t *detnumpostarts = malloc(nn * sizeof(size_t));
     for(size_t i=0; i<nn; i++){
         detnumpostarts[i] = 0;
     }
@@ -378,11 +393,11 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     // for precomputing costs
     double m2;
     double len;
-    double cs[nn];
-    double vars[nn];
+    double *cs = malloc(nn * sizeof(double));
+    double *vars = malloc(nn * sizeof(double));
 
     // acceptable start positions (for S) to keep track of pruning
-    size_t possiblestarts[nn];
+    size_t *possiblestarts = malloc(nn * sizeof(size_t));
     possiblestarts[0] = 0;
     for(size_t i=1; i<nn-1; i++){
         possiblestarts[i] = 0;
@@ -390,7 +405,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     size_t numpossiblestarts = 1;
 
     // acceptable start positions (for N)
-    size_t possiblestarts_n[nn];
+    size_t *possiblestarts_n = malloc(nn * sizeof(size_t));
     possiblestarts_n[0] = 0;
     for(size_t i=1; i<nn-1; i++){
         possiblestarts_n[i] = 0;
@@ -402,7 +417,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
 
     // main DP loop
     double bgcost;
-    double segcosts[nn];
+    double *segcosts = malloc(nn * sizeof(double));
     for(size_t tt=1; tt<nn; tt++){
         // printf("----Cycle %zu/%zu----\n", tt+1, nn);
         // precompute costs for all possible segments ending here at t
@@ -603,6 +618,14 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     free(detsegcosts);
     free(detbgsizes);
     free(detpostarts);
+    free(detnumpostarts);
+    free(x2s);
+    free(F);
+    free(cs);
+    free(vars);
+    free(segcosts);
+    free(possiblestarts);
+    free(possiblestarts_n);
 
     // extract changepoints
     size_t i = nn-1;
@@ -663,6 +686,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         }
     }
     free(detchps);
+    free(chps);
     return 0;
 }
 
