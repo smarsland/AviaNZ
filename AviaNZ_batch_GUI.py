@@ -319,7 +319,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.update()
         self.repaint()
 
-        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", cnt, total+1, self)
+        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", 0, total+1, self)
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")

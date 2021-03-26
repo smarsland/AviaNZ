@@ -62,7 +62,8 @@ class Log(object):
         # On init, we parse the existing log to see if appending is possible.
         # Actual append/create happens later.
         self.possibleAppend = False
-        self.file = path
+        self.filepath = path
+        # self.file will be an IO stram opened by the main launcher
         self.species = species
         self.settings = ','.join(map(str, settings))
         self.oldAnalyses = []
@@ -118,10 +119,23 @@ class Log(object):
 
     def appendFile(self, filename):
         print('Appending %s to log' % filename)
+        # convert to path relative to the log file directory
+        if os.path.isabs(filename):
+            filename = os.path.relpath(filename, os.path.dirname(self.filepath))
+
         # attach file path to end of log
         self.file.write(filename)
         self.file.write("\n")
         self.file.flush()
+
+    def getDoneFiles(self, possiblefiles):
+        """ Selects files that are stored in this log from possiblefiles.
+            Assumes possiblefiles stores absolute paths. """
+        currdir = os.path.dirname(self.filepath)
+        done_abs = [os.path.normpath(os.path.join(currdir, f)) for f in self.filesDone if not os.path.isabs(f)]
+        # assuming relative paths on both lists:
+        out = set(done_abs).intersection(set(possiblefiles))
+        return(out)
 
     def appendHeader(self, header, species, settings):
         if header is None:

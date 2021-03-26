@@ -154,7 +154,7 @@ class AviaNZ_batchProcess():
 
             # Ask for RESUME CONFIRMATION here
             if self.log.possibleAppend:
-                filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
+                filesExistAndDone = self.log.getDoneFiles(allwavs)
                 text = "Previous analysis found in this folder (analysed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
                 if not self.CLI:
                     # this is super noodly but it assumes that self.CLI always means
@@ -225,7 +225,7 @@ class AviaNZ_batchProcess():
             # reprint old headers,
             # print current header (or old if resuming),
             # print old file list if resuming.
-            self.log.file = open(self.log.file, 'w')
+            self.log.file = open(self.log.filepath, 'w')
             if speciesStr not in ["Any sound", "Intermittent sampling"]:
                 self.log.reprintOld()
                 # else single-sp runs should be deleted anyway
@@ -347,6 +347,7 @@ class AviaNZ_batchProcess():
             if filename in self.filesDone:
                 # skip the processing:
                 print("File %s processed previously, skipping" % filename)
+                self.log.appendFile(filename)
                 continue
 
             # check if file not empty
