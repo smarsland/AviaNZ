@@ -2353,7 +2353,6 @@ class AviaNZ(QMainWindow):
             for w in range(len(xs)):
                 wind_lvl[w], wind_lvlR[w], wind_lvlC[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
 
-            print("nodemeans", np.mean(Es, axis=0))
             self.p_legend = pg.LegendItem()
             self.p_legend.setParentItem(self.p_plot)
             self.plotExtra = pg.PlotDataItem(xs, sig_lvl)
@@ -4889,6 +4888,9 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
         # settings is a dict with parameters for various possible methods
         alg, settings = self.segmentDialog.getValues()
+
+        OLD_WIND_REMOVER = False
+
         with pg.BusyCursor():
             filtname = str(settings["filtname"])
             self.statusLeft.setText('Segmenting...')
@@ -4961,14 +4963,24 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
-                newSegments = ws.waveletSegment(0, wpmode="new")
+
+                # TODO New style wind denoising
+                if settings["wind"] and not OLD_WIND_REMOVER:
+                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
+                    # TODO
+                    newSegments = ws.waveletSegment(0, wpmode="new")
+                else:
+                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                    newSegments = ws.waveletSegment(0, wpmode="new")
             elif alg == 'WV Changepoint':
                 print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                if settings["wind"] and not OLD_WIND_REMOVER:
+                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
+                else:
+                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 # using all passed params:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
                 # Or if no params are passed, they will be read from the filter file TimeRange:
@@ -5008,7 +5020,7 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if settings["wind"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
+                    if OLD_WIND_REMOVER and settings["wind"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:

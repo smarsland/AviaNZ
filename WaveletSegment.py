@@ -44,14 +44,15 @@ class WaveletSegment:
 
         self.sp = SignalProc.SignalProc(256, 128)
 
-    def readBatch(self, data, sampleRate, d, spInfo, wpmode="new"):
+    def readBatch(self, data, sampleRate, d, spInfo, wpmode="new", wind=False):
         """ File (or page) loading for batch mode. Must be followed by self.waveletSegment.
             Args:
             1. data to be segmented, ndarray
             2. sampleRate of the data, int
             3. d - turn on denoising before calling?
             4. spInfo - List of filters to determine which nodes are needed & target sample rate
-            5. wpmode: old/new/aa to indicate no/partial/full antialias
+            5. wpmode - old/new/aa to indicate no/partial/full antialias
+            6. wind - if True, will produce a WP with all nodes to be used in de-winding
         """
         if data is None or data == [] or len(data) == 0:
             print("ERROR: data must be provided for WS")
@@ -106,9 +107,12 @@ class WaveletSegment:
 
         # Find out which nodes will be needed:
         allnodes = []
+        if wind:
+            allnodes = list(range(31, 63))
         for filt in self.spInfo:
             for subfilter in filt["Filters"]:
                 allnodes.extend(subfilter["WaveletParams"]["nodes"])
+        allnodes = list(set(allnodes))
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
         self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
@@ -1067,6 +1071,54 @@ class WaveletSegment:
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
+
+        if wind:
+            from scipy.stats import theilslopes
+
+            datalen = math.ceil(len(wf.tree[0])/window)
+
+            # identify wind nodes, and calculate
+            # regression x - node freq centers
+            wind_nodes = []
+            nodecenters = []
+            for node in range(31, 63):  # only use leaf nodes when estimating wind
+                if node in nodelist:  # skip target nodes, obviously
+                    continue
+                nodecenter = sum(wf.getWCFreq(node, wf.treefs))/2
+                if nodecenter>=7500:  # skip high freqs when estimating wind
+                    continue
+                wind_nodes.append(node)
+                nodecenters.append(nodecenter)
+
+            # extract energies from all nodes and calculate wind levels
+            # in each target node, over all time windows
+            windE = np.zeros((datalen, len(wind_nodes)))
+            for node_ix in range(len(wind_nodes)):
+                node = wind_nodes[node_ix]
+
+                # Regression y - node WC powers
+                windE[:, node_ix], windwindow = wf.extractE(node, window)
+                if windwindow!=window:
+                    print("ERROR: window sizes %f and %f do not match at node %d", windwindow, window, node)
+                    raise
+                # TODO figure out how to unify windows
+                # Otherwise can't initialize the time dim of the array
+
+            # regx, regy now have all nodes in the same order
+
+            # for each window, interpolate wind energy in each target node:
+            pred = np.zeros((datalen, len(nodelist)))  # TODO figure out datalen
+            freqmask = np.where(nodecenters<7500)
+            nodecenters = np.log(nodecenters)
+            regx = nodecenters[freqmask]  # NOTE that here and further centers are in log(freq)!
+            tgtnodecenters = np.log([sum(wf.getWCFreq(node, wf.treefs))/2 for node in nodelist])
+            windE = np.log(windE[:, freqmask])
+            for w in range(datalen):
+                for node_ix in range(len(nodelist)):
+                    regy = windE[w, freqmask]
+                    slope, inter, cilo, ciup = theilslopes(regy, regx)
+                    pred[w, node_ix] = tgtnodecenters[node_ix] * slope + inter
+
         # Compute the number of samples in a window -- species specific
         detected = np.empty((0,3))
         for node in nodelist:
@@ -1076,9 +1128,20 @@ class WaveletSegment:
             # Returns E: vector of energies
             E, realwindow = wf.extractE(node, window, wpantialias=True)
 
+            # TODO currently throws an error if realized window doesn't match
+            # over all the wavelets. Should somehow adapt the other parts to allow that
+            if realwindow!=window:
+                print("ERROR: chosen window size does not correspond to integer num of WCs at node %d. Dealing with this is not implemented currently." % node)
+                raise
+
             # Convert max segment length from s to realized windows
             # (segments exceeding this length will be marked as 'n')
             realmaxlen = math.ceil(maxlen / realwindow)
+
+            if wind:
+                # TODO retrieve and adjust for the predicted wind strength
+                pred[:, node_ix]
+                # TODO cast this to right size windows smh?
 
             # Estimate of the global background for this file/page
             sigma2 = np.percentile(E, 10)
