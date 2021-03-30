@@ -27,7 +27,7 @@ import os, gc, re, json, tempfile
 from shutil import copyfile
 from shutil import disk_usage
 
-from keras_preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import model_from_json
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
