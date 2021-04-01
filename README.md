@@ -1,5 +1,12 @@
 Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
 
+#### This version accompanies the publication "Sound event detection in long-term recordings using changepoints"
+
+Majority of the analyses in the publication are reproducible using this version of AviaNZ (`python AviaNZ.py`).
+Code for the remaining analyses (processing of annotations into images and SCR model fitting) is in the directory `_analysis-scripts/`. Please follow the instructions in the .R files there. For mapping, some additional data will need to be downloaded manually from Land Information New Zealand (linz.govt.nz).
+
+------
+
 This software enables you to: 
 * review and listen to wav files from acoustic field recorders, 
 * segment and annotate the recordings, 
