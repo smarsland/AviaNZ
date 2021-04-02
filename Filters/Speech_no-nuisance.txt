@@ -1,0 +1,2 @@
+{"species": "Speech", "SampleRate": 16000, "method": "chp", "Filters": [{"calltype": "ct1", "TimeRange": [0, 10.0, 0.0, 0.0], "FreqRange": [0, 1000], "WaveletParams": {"thr": 1.0, "nodes": [7], "win": 0.05}}
+]}

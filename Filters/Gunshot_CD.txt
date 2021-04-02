@@ -1,0 +1,1 @@
+{"species": "Gunshot", "SampleRate": 16000, "method": "chp", "Filters": [{"calltype": "ct1", "TimeRange": [0, 1.02, 0.0, 0.0], "FreqRange": [1000, 5000], "WaveletParams": {"thr": 1.0, "nodes": [9], "win": 0.05}}]}
