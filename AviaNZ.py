@@ -47,8 +47,20 @@ import sys
 @click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
+    # adapt path to allow this to be launched from wherever
+    import sys, os
+    if getattr(sys, 'frozen', False):
+        appdir = sys._MEIPASS
+    else:
+        appdir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(appdir)
+
+    # print("Using python at", sys.path)
+    # print(os.environ)
+    # print("Version", sys.version)
+
     try:
-        import platform, os, json, shutil
+        import platform, json, shutil
         from jsonschema import validate
         import SupportClasses
     except Exception as e:
@@ -81,15 +93,19 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     # pre-run check of config file validity
     confloader = SupportClasses.ConfigLoader()
     configschema = json.load(open("Config/config.schema"))
+    learnparschema = json.load(open("Config/learnpar.schema"))
     try:
         config = confloader.config(os.path.join(configdir, "AviaNZconfig.txt"))
         validate(instance=config, schema=configschema)
+        learnpar = confloader.learningParams(os.path.join(configdir, "LearningParams.txt"))
+        validate(instance=learnpar, schema=learnparschema)
         print("successfully validated config file")
     except Exception as e:
         print("Warning: config file failed validation with:")
         print(e)
         try:
             shutil.copy2("Config/AviaNZconfig.txt", configdir)
+            shutil.copy2("Config/LearningParams.txt", configdir)
         except Exception as e:
             print("ERROR: failed to copy essential config files")
             print(e)

@@ -20,8 +20,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
-from PyQt5.QtCore import Qt, QDir, QSize
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog
+from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition
 
 import fnmatch, gc, sys, os, json, re
 
@@ -41,6 +41,7 @@ import colourMaps
 
 import webbrowser, copy, math
 
+
 class AviaNZ_batchWindow(QMainWindow):
 
     def __init__(self, configdir=''):
@@ -48,7 +49,23 @@ class AviaNZ_batchWindow(QMainWindow):
         # and sets up the window.
         QMainWindow.__init__(self)
 
-        self.batchProc = AviaNZ_batch.AviaNZ_batchProcess(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+        # TODO: convert any communication w/ batchProc from this thread
+        # to signals, or avoid communicating entirely
+        self.batchProc = AviaNZ_batch.BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+
+        self.batchThread = QThread()
+        self.batchThread.started.connect(self.batchProc.detect)
+        self.batchProc.finished.connect(self.batchThread.quit)
+        self.batchProc.completed.connect(self.completed_fileproc)
+        self.batchProc.stopped.connect(self.stopped_fileproc)
+        self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
+        self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
+        self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
+        self.batchProc.need_update.connect(lambda cnt, text: self.update_progress(cnt, text))
+        self.batchProc.need_bat_info.connect(lambda op,east,north,rec: self.bat_survey_form(op,east,north,rec))
+        self.batchProc.moveToThread(self.batchThread)
+
+        self.msgClosed = QWaitCondition()
 
         self.FilterDicts = self.batchProc.FilterDicts
 
@@ -262,7 +279,13 @@ class AviaNZ_batchWindow(QMainWindow):
         self.species = list(self.species)
         print("Recogniser:", self.species)
 
-        self.batchProc.detect()
+        self.batchProc.maxgap = int(self.maxgap.value())/1000
+        self.batchProc.minlen = int(self.minlen.value()) / 1000
+        self.batchProc.maxlen = int(self.maxlen.value()) / 1000
+        self.batchProc.species = self.species
+        self.batchProc.dirName = self.dirName
+        self.batchProc.wind = self.w_wind.isChecked()
+        self.batchThread.start()  # a signal connected to batchProc.detect()
 
     def check_msg(self,title,text):
         msg = SupportClasses_GUI.MessagePopup("t", title, text)
@@ -270,61 +293,106 @@ class AviaNZ_batchWindow(QMainWindow):
         response = msg.exec_()
 
         if response == QMessageBox.Cancel:
-            # catch unclean (Esc) exits
-            return False
-        if response == QMessageBox.No:
-            return False
+            # a fall back basically
+            self.msg_response = 2
+        elif response == QMessageBox.No:
+            # catches Esc as well
+            self.msg_response = 1
         else:
-            return True
+            self.msg_response = 0
+        # to utilize Esc, need to add another standard button, and then do:
+        # msg.setEscapeButton(QMessageBox.Cancel)
+        self.msgClosed.wakeAll()
+
+    def bat_survey_form(self,operator,easting,northing,recorder):
+        exportForm = Dialogs.ExportBats(os.path.join(self.dirName, "BatDB.csv"),operator,easting,northing,recorder)
+        response = exportForm.exec_()
+        if response==1:
+            self.batFormResults = exportForm.getValues()
+        else:
+            self.batFormResults = None
+        # ping the batch worker that form was accepted or rejected
+        self.msgClosed.wakeAll()
 
     def clean_UI(self,total,cnt):
         self.w_processButton.setEnabled(False)
         self.update()
         self.repaint()
 
-        self.dlg = QProgressDialog("Analysing file 1 / %d. Time remaining: ? h ?? min" % total, "Cancel run", cnt, total+1, self)
+        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", cnt, total+1, self)
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
         self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
+        self.dlg.canceled.connect(self.stopping_fileproc)
+        # should be the default, but to make sure:
+        self.dlg.setWindowModality(Qt.ApplicationModal)
         self.dlg.open()
         self.dlg.setValue(cnt)
         self.dlg.update()
         self.dlg.repaint()
         QApplication.processEvents()
-        #QApplication.processEvents()
+        # ping the batch worker that dlg is ready
+        self.msgClosed.wakeAll()
 
-    def error_fileproc(self,total,e):
+    def error_fileproc(self,e):
+        # Pops an error message with string e
         self.statusBar().showMessage("Analysis stopped due to error")
-        self.dlg.setValue(total+1)
+        if hasattr(self, 'dlg'):
+            self.dlg.setValue(self.dlg.maximum())
         msg = SupportClasses_GUI.MessagePopup("w", "Analysis error!", e)
-        msg.setStyleSheet("{color: #cc0000}")
+        msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
         msg.exec_()
         self.w_processButton.setEnabled(True)
 
-    def endproc(self,total):
-        self.statusBar().showMessage("Processed all %d files" % total)
+    def completed_fileproc(self):
+        # All files successfully processed
+        self.statusBar().showMessage("Processed all %d files" % (self.dlg.maximum()-1))
+        self.dlg.setValue(self.dlg.maximum())
         self.w_processButton.setEnabled(True)
 
         text = "Finished processing.\nWould you like to return to the start screen?"
-        reply = self.check_msg("Finished",text)
-        if reply:
+        msg = SupportClasses_GUI.MessagePopup("t", "Finished", text)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        reply = msg.exec_()
+        if reply==QMessageBox.Yes:
             QApplication.exit(1)
         else:
             return(0)
 
-    def update_progress(self,cnt,total,progrtext):
-        self.dlg.setValue(cnt)
-        self.dlg.setLabelText("Analysed "+progrtext)
-        self.dlg.update()
-        if self.dlg.wasCanceled():
-            print("Analysis cancelled")
-            self.dlg.setValue(total+1)
-            self.statusBar().showMessage("Analysis cancelled")
-            self.w_processButton.setEnabled(True)
-            return(2)
-        # Refresh GUI after each file (only the ProgressDialog which is modal)
+    def stopping_fileproc(self):
+        # When "cancel" is pressed on the progress dialog, it hides,
+        # but it may take a while for the worker thread to do the check and stop.
+        # This function fills this period with Busy cursor.
+        self.dlg.show()
+        self.dlg.setLabelText("Stopping...")
+        self.statusBar().showMessage("Stopping...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
+    def stopped_fileproc(self):
+        # Processing gently stopped (worker thread has now halted, and UI can continue).
+        # Process any earlier requests, in particular the "stopping" signal:
+        # NOTE: this might still lead to race condition as the "stopping" and "stopped" are
+        # emitted by two different threads. Might need to re-emit self.dlg.canceled, or bloody sleep here.
         QApplication.processEvents()
+        self.statusBar().showMessage("Analysis cancelled")
+        if hasattr(self, 'dlg'):
+            self.dlg.hide()
+        self.w_processButton.setEnabled(True)
+        # in case there was a busy cursor
+        try:
+            QApplication.restoreOverrideCursor()
+        except Exception:
+            pass
+
+    def update_progress(self,cnt,progrtext):
+        self.dlg.setValue(cnt)
+        self.dlg.setLabelText(progrtext)
+        self.statusBar().showMessage(progrtext)
+        self.dlg.update()
+        # Refresh GUI after each file (only the ProgressDialog which is modal)
+        # TODO see if it repaints properly without this
+        # QApplication.processEvents()
 
     def center(self):
         # geometry of the main window
@@ -439,7 +507,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.addSp.hide()
             self.warning.show()
 
-        if currname=="NZ Bats":
+        if currname == "NZ Bats" or currname == "NZ Bats_NP":
             self.addSp.setEnabled(False)
             self.addSp.setToolTip("Bat recognisers cannot be combined with others")
             self.w_wind.setChecked(False)
@@ -1102,7 +1170,9 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_all(filename, sTime)
             else:
                 filesuccess = self.review_single(filename, sTime)
+
             # merge back any split segments, plus ANY overlaps within calltypes
+            # (NOTE: applied to either review type to get identical results)
             todelete = self.segments.mergeSplitSeg()
             for dl in todelete:
                 del self.segments[dl]
@@ -1112,6 +1182,12 @@ class AviaNZ_reviewAll(QMainWindow):
             if filesuccess == 0:
                 print("Review stopped")
                 break
+
+            if reviewAll:
+                # save changes and corrections (on nice exit only):
+                if self.config['saveCorrections']:
+                    self.saveCorrections()
+                self.finishDeleting()
 
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
@@ -1149,9 +1225,6 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            if self.config['saveCorrections']:
-                self.saveCorrections()
-            self.finishDeleting()
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1257,8 +1330,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.loadFile(filename, species=self.species, chunksize=chunksize)
 
-        if self.batmode:
-            guides = [20000, 36000, 50000, 60000]
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+            guides = self.config['guidepos']
         else:
             guides = None
 
@@ -1267,7 +1340,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
-                                                           guidefreq=guides,
+                                                           guidefreq=guides, guidecol=self.config['guidecol'],
                                                            filename=self.filename)
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog2.resize(self.dialogSize)
@@ -1444,7 +1517,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.dialogPlotAspect, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1462,12 +1535,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()
-            return(0)
 
-        if self.config['saveCorrections']:
-            self.saveCorrections()
-        self.finishDeleting()
-        return(1)
+        return(success)
 
     def loadFile(self, filename, species=None, chunksize=None):
         """ Needs to generate spectrograms and audiodatas
@@ -1601,7 +1670,6 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of file loading
 
     def saveCorrections(self):
-        print("here")
         for i in reversed(range(len(self.segments))):
             print(self.segments[i][4],self.origSeg[i][4])
             if self.segments[i][4] == self.origSeg[i][4]:
@@ -1650,8 +1718,8 @@ class AviaNZ_reviewAll(QMainWindow):
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
 
-            if self.batmode:
-                guides = [sp.convertFreqtoY(f) for f in [20000, 36000, 50000, 60000]]
+            if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
             else:
                 guides = None
 
@@ -1845,7 +1913,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def finishDeleting(self):
         # Does the work of deleting segments
-        segsToSave = False
+        # segsToSave = False
 
         # Loop over segments
         for seg in reversed(self.segments):
@@ -1859,12 +1927,13 @@ class AviaNZ_reviewAll(QMainWindow):
             if todel:
                 print("Removing",seg)
                 self.segments.remove(seg)
-                segsToSave = True
+        # TODO check: I believe this is not needed as it is done in the main loop anyway
+        #        segsToSave = True
 
-        if segsToSave:
-            cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save segments!")
+        #if segsToSave:
+        #    cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
+        #    if cleanexit != 1:
+        #        print("Warning: could not save segments!")
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)

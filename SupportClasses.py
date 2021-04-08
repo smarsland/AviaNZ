@@ -239,8 +239,15 @@ class ConfigLoader(object):
                         model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
                         print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
-                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                        if 'fRange' in filt["CNN"]:
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                                                     filt["CNN"]["output"],
+                                                     filt["CNN"]["windowInc"], filt["CNN"]["thr"], True,
+                                                     filt["CNN"]["fRange"]]
+                        else:
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                                                     filt["CNN"]["output"], filt["CNN"]["windowInc"],
+                                                     filt["CNN"]["thr"], False]
                     except Exception as e:
                         print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         print(e)

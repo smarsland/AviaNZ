@@ -38,6 +38,7 @@ import wavio
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
 import skimage.measure as skm
+import tensorflow as tf
 
 
 class Segment(list):
@@ -684,60 +685,6 @@ class Segmenter:
                 out.append(seg)
         return out
 
-    def joinGaps(self, segments, maxgap=3):
-        """ Merges segments within maxgap units.
-            Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
-        """
-        # Needs to be python array, not np array
-        # Sort by increasing start times
-        if isinstance(segments, np.ndarray):
-            segments = segments.tolist()
-        segments = sorted(segments)
-
-        out = []
-        i = 0
-        if len(segments)==0:
-            return out
-        while i < len(segments):
-            start = segments[i][0]
-            end = segments[i][1]
-            while i+1 < len(segments) and segments[i+1][0]-end <= maxgap:
-                end = max(segments[i+1][1], end)
-                i += 1
-            out.append([start, end])
-            i += 1
-        return out
-
-    def joinGaps3(self, segments, maxgap=3):
-        """ Merges segments within maxgap units.
-            Operates on list of 3-element segments:
-            [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
-            Currently, certainties are just averaged over the number of segs.
-        """
-        # Needs to be python array, not np array
-        # Sort by increasing start times
-        if isinstance(segments, np.ndarray):
-            segments = segments.tolist()
-        segments.sort(key=lambda seg: seg[0][0])
-        # sorted() appears to work fine as well
-
-        out = []
-        i = 0
-        if len(segments)==0:
-            return out
-
-        while i < len(segments):
-            start = segments[i][0][0]
-            end = segments[i][0][1]
-            cert = [segments[i][1]]
-            while i + 1 < len(segments) and segments[i + 1][0][0] - end <= maxgap:
-                end = max(segments[i+1][0][1], end)
-                i += 1
-                cert.append(segments[i][1])
-            out.append([[start, end], np.mean(cert)])
-            i += 1
-        return out
-
     def splitLong3(self, segments, maxlen=10):
         """
         Splits long segments (> maxlen) evenly
@@ -757,6 +704,7 @@ class Segmenter:
                 out.append(seg)
         return out
 
+    ##  MERGING ALGORITHMS: do the same with very small settings variations
     def checkSegmentOverlap(self, segments):
         """ Merges overlapping segments.
             Operates on start-end list [[1,3], [2,4]] -> [[1,4]]
@@ -768,48 +716,101 @@ class Segmenter:
         segments = sorted(segments)
         segments = np.array(segments)
 
-        newsegs = []
-        s = 0
-        # Loop over segs until the start value of 1 is not inside the end value of the previous
-        while s<len(segments):
-            i = s
-            end = segments[i,1]
-            while i < len(segments)-1 and segments[i+1,0] < end:
+        # Loop over segs until the start value of next segment
+        #  is not inside the end value of the previous
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0]
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0]-end < 0:
+                # there is overlap, so merge
                 i += 1
-                end = max(end, segments[i,1])
-            newsegs.append([segments[s,0],end])
-            s = i+1
+                end = max(end, segments[i][1])
+            # no more overlap, so store the current:
+            out.append([start, end])
+            i += 1
+        return out
 
-        return newsegs
+    def joinGaps(self, segments, maxgap=3):
+        """ Merges segments within maxgap units.
+            Identical to above, except merges touching segments, and allows a gap.
+            Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
+        """
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        if len(segments)==0:
+            return []
+
+        segments.sort(key=lambda seg: seg[0])
+
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0]
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0]-end <= maxgap:
+                i += 1
+                end = max(end, segments[i][1])
+            out.append([start, end])
+            i += 1
+        return out
 
     def checkSegmentOverlap3(self, segments):
-        """ Merges overllaping segments.
-            Operates on list of 3-element segments:
+        """ Merges overlapping segments.
+            Identical to above, but operates on list of 3-element segments:
             [[[1,3], 50], [[2,5], 70]] -> [[[1,5], 60]]
             Currently, certainties are just averaged over the number of segs.
         """
-        # Needs to be python array, not np array
-        # Sort by increasing start times
         if isinstance(segments, np.ndarray):
             segments = segments.tolist()
-        segments = sorted(segments)
-        segments = np.array(segments)
+        if len(segments)==0:
+            return []
 
-        newsegs = []
-        s = 0
-        # Loop over segs until the start value of 1 is not inside the end value of the previous
-        while s < len(segments):
-            i = s
+        segments.sort(key=lambda seg: seg[0][0])
+        # sorted() appears to work fine as well
+
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0][0]
             end = segments[i][0][1]
             cert = [segments[i][1]]
-            while i < len(segments) - 1 and segments[i + 1][0][0] < end:
+            while i+1 < len(segments) and segments[i+1][0][0]-end < 0:
                 i += 1
                 end = max(end, segments[i][0][1])
                 cert.append(segments[i][1])
-            newsegs.append([[segments[s][0][0], end], np.mean(cert)])
-            s = i + 1
+            out.append([[start, end], np.mean(cert)])
+            i += 1
+        return out
 
-        return newsegs
+    def joinGaps3(self, segments, maxgap=3):
+        """ Merges segments within maxgap units.
+            Operates on list of 3-element segments:
+            [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
+            Identical to above, except merges touching segments, and allows a gap.
+            Currently, certainties are just averaged over the number of segs.
+        """
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        if len(segments)==0:
+            return []
+
+        segments.sort(key=lambda seg: seg[0][0])
+
+        out = []
+        i = 0
+        while i < len(segments):
+            start = segments[i][0][0]
+            end = segments[i][0][1]
+            cert = [segments[i][1]]
+            while i+1 < len(segments) and segments[i+1][0][0]-end <= maxgap:
+                i += 1
+                end = max(end, segments[i][0][1])
+                cert.append(segments[i][1])
+            out.append([[start, end], np.mean(cert)])
+            i += 1
+        return out
 
     def segmentByFIR(self, threshold):
         """ Segmentation using FIR envelope.
@@ -1217,6 +1218,11 @@ class PostProcess:
             self.CNNoutputs = CNNmodel[3]
             self.CNNwindowInc = CNNmodel[4]
             self.CNNthrs = CNNmodel[5]
+            if CNNmodel[6]:
+                self.CNNfMask = True
+                self.CNNfRange = CNNmodel[7]
+            else:
+                self.CNNfMask = False
             self.tgtsampleRate = tgtsampleRate
         else:
             self.CNNmodel = None
@@ -1284,8 +1290,8 @@ class PostProcess:
         sp.data = data
         sp.sampleRate = fs
         _ = sp.spectrogram()
-        f1 = 90 - 50    # TODO: hardcoded for bittern testing
-        f2 = 250 + 100
+        f1 = self.CNNfRange[0]
+        f2 = self.CNNfRange[1]
         # Mask out of band elements
         bin_width = fs / 2 / np.shape(sp.sg)[1]
         lb = int(np.ceil(f1 / bin_width))
@@ -1399,7 +1405,7 @@ class PostProcess:
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
-            # print('\n--- Segment', seg)
+            print('\n--- Segment', seg)
             if seg[0][1] - seg[0][0] > max(self.syllen, 1):
                 n = 5
             else:
@@ -1501,6 +1507,7 @@ class PostProcess:
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
+            print('\n--- Segment', seg)
             # expand the segment if its too small
             callength = max(self.CNNwindow, self.maxLen/2)
             if callength >= seg[0][1] - seg[0][0]:
@@ -1522,7 +1529,10 @@ class PostProcess:
             sp.sampleRate = self.sampleRate
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
-            featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            if self.CNNfMask:
+                featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            else:
+                featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             # featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             featuress = np.array(featuress)
@@ -1531,9 +1541,21 @@ class PostProcess:
             featuress = featuress.astype('float32')
             # predict with CNN
             if np.shape(featuress)[0] > 0:
-                probs = self.CNNmodel.predict(featuress)
+                # probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))  # This might lead to OOM error, therefore show batches
+                batchsize = 5   # TODO: read from learning parameters file
+                batches = int(math.ceil(np.shape(featuress)[0] / batchsize))
+                start = 0
+                probs = np.empty(shape=[0, len(self.CNNoutputs)])
+                for i in range(batches):
+                    end = min(np.shape(featuress)[0], start + batchsize)
+                    print(end)
+                    p = self.CNNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
+                    print(p)
+                    probs = np.append(probs, p, axis=0)
+                    start += batchsize
             else:
                 probs = 0
+            print("probabilities: ", probs)
 
             if isinstance(probs, int):
                 # Zero images from this segment, very unlikely to be a true seg.

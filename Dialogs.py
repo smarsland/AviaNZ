@@ -1417,7 +1417,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, plotAspect=2, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1469,13 +1469,11 @@ class HumanClassify1(QDialog):
         self.pPlot.addItem(self.line2)
 
         # prepare guides for marking true segment boundaries
-        self.guidelines = [0]*4
-        self.guidelines[0] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
-        self.guidelines[1] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[2] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[3] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
-        for g in self.guidelines:
-            self.pPlot.addItem(g)
+
+        self.guidelines = [0]*len(guidecols)
+        for gi in range(len(guidecols)):
+            self.guidelines[gi] = pg.InfiniteLine(angle=0, pen={'color': guidecols[gi], 'width': 2})
+            self.pPlot.addItem(self.guidelines[gi])
 
         # time texts to go along these two lines
         self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1.10))
@@ -2277,7 +2275,7 @@ class HumanClassify2(QDialog):
         13. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2328,6 +2326,7 @@ class HumanClassify2(QDialog):
 
         # batmode customizations:
         self.guidefreq = guidefreq
+        self.guidecol = guidecol
         if not haveaudio:
             self.volSlider.setEnabled(False)
             self.volIcon.setEnabled(False)
@@ -2511,7 +2510,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2871,6 +2870,13 @@ class FilterManager(QDialog):
         fn = self.listFiles.currentItem().text()
         currfilt = self.FilterDict[fn]
         sources.append(os.path.join(self.filtdir, fn + '.txt'))
+
+        # ROCs
+        if "ROCWF" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["ROCWF"] + ".json"))
+        if "ROCNN" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["ROCNN"] + ".json"))
+
         if "CNN" in currfilt:
             sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".h5"))
             # bat filters do not have jsons:
@@ -2916,7 +2922,12 @@ class FilterManager(QDialog):
                 if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(
                         subfilt["TimeRange"]) < 4:
                     raise ValueError("Subfilter JSON format wrong (details), skipping")
-            if  "CNN" in filt:
+            # wavelet ROC if exists
+            JSONsource = os.path.join(os.path.dirname(source), filt["ROCWF"] + ".json")
+            if os.path.isfile(JSONsource):
+                sources.append(JSONsource)
+                targets.append(os.path.join(self.filtdir, filt["ROCWF"] + ".json"))
+            if "CNN" in filt:
                 sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".h5"))
                 targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".h5"))
                 # bat filters do not have jsons:
@@ -2924,6 +2935,11 @@ class FilterManager(QDialog):
                 if os.path.isfile(JSONsource):
                     sources.append(JSONsource)
                     targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".json"))
+                # CNN ROC if exists
+                JSONsource = os.path.join(os.path.dirname(source), filt["ROCNN"] + ".json")
+                if os.path.isfile(JSONsource):
+                    sources.append(JSONsource)
+                    targets.append(os.path.join(self.filtdir, filt["ROCNN"] + ".json"))
         except Exception as e:
             print("Could not load filter:", source, e)
             return
@@ -2958,17 +2974,23 @@ class FilterManager(QDialog):
             print(e)
             return
 
-
     def upload(self):
         # Also export corresponding NN files if any
         fn = self.listFiles.currentItem().text()
         currfilt = self.FilterDict[fn]
         sources = []
         sources.append(fn + '.txt')
+
+        # ROCs
+        if "ROCWF" in currfilt:
+            sources.append(currfilt["ROCWF"] + ".json")
+        if "ROCNN" in currfilt:
+            sources.append(currfilt["ROCNN"] + ".json")
+
         if "CNN" in currfilt:
             sources.append(currfilt["CNN"]["CNN_name"] + ".h5")
             # bat filters do not have jsons:
-            if os.path.isfile(currfilt["CNN"]["CNN_name"] + ".json"):
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
                 sources.append(currfilt["CNN"]["CNN_name"] + ".json")
 
         target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
@@ -3149,89 +3171,74 @@ class Cluster(QDialog):
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 class ExportBats(QDialog):
-    def __init__(self,observer):
+    def __init__(self,filename,observer,easting="",northing="",recorder=""):
         QDialog.__init__(self)
         self.setWindowTitle('Export Results?')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
-        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.csv, you will need to email it yourself\nFields with a * are mandatory)\n')
-        l2 = QLabel('*Data source (e.g., your community group): ')
+        l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved as '+filename+'.\nYou will need to email this file yourself.\nFields with a * are mandatory)\n')
+
+        forml = QFormLayout()
         self.data = QLineEdit(self)
-        hbox1 = QHBoxLayout()
-        hbox1.addWidget(l2)
-        hbox1.addWidget(self.data)
-        l3 = QLabel('*Your name: ')
+        forml.addRow('* Data source:\n(e.g., your community group)', self.data)
         self.observer = QLineEdit(self)
         self.observer.setText(observer)
-        hbox2 = QHBoxLayout()
-        hbox2.addWidget(l3)
-        hbox2.addWidget(self.observer)
-        l4a = QLabel('Method: ')
+        forml.addRow('* Your name: ', self.observer)
         self.method = QLineEdit(self)
-        l4 = QLabel('Detector Type: ')
+        forml.addRow('Method: ', self.method)
         self.detector = QLineEdit(self)
         self.detector.setText('ABM')
-        hbox3 = QHBoxLayout()
-        hbox3.addWidget(l4a)
-        hbox3.addWidget(self.method)
-        hbox3.addWidget(l4)
-        hbox3.addWidget(self.detector)
-        l5 = QLabel('Any notes: ')
+        forml.addRow('Detector Type: ', self.detector)
         self.notes = QLineEdit(self)
-        hbox4 = QHBoxLayout()
-        hbox4.addWidget(l5)
-        hbox4.addWidget(self.notes)
-        l7 = QLabel('*Easting: ')
-        self.easting = QLineEdit(self)
-        l8 = QLabel('*Northing: ')
-        self.northing = QLineEdit(self)
-        hbox6 = QHBoxLayout()
-        hbox6.addWidget(l7)
-        hbox6.addWidget(self.easting)
-        hbox6.addWidget(l8)
-        hbox6.addWidget(self.northing)
-        l6 = QLabel('*Site where data collected: ')
-        self.site = QLineEdit(self)
-        l9 = QLabel('Region where data collected: ')
-        self.region = QLineEdit(self)
-        hbox7 = QHBoxLayout()
-        hbox7.addWidget(l6)
-        hbox7.addWidget(self.site)
-        hbox7.addWidget(l9)
-        hbox7.addWidget(self.region)
+        forml.addRow('Any notes: ', self.notes)
 
+        self.easting = QLineEdit(self)
+        self.easting.setText(easting)
+        self.easting.setValidator(QIntValidator())
+        self.northing = QLineEdit(self)
+        self.northing.setText(northing)
+        self.northing.setValidator(QIntValidator())
+        forml.addRow('* Easting: ', self.easting)
+        forml.addRow('* Northing: ', self.northing)
+        self.site = QLineEdit(self)
+        self.site.setText(recorder)
+        forml.addRow('* Site where data collected: ', self.site)
+        self.region = QLineEdit(self)
+        forml.addRow('Region where data collected: ', self.region)
+
+        # mandatory fields emit signal to check if "Accept" should be enabled
+        self.data.textEdited.connect(self.checkInputs)
+        self.observer.textEdited.connect(self.checkInputs)
+        self.easting.textEdited.connect(self.checkInputs)
+        self.northing.textEdited.connect(self.checkInputs)
+        self.site.textEdited.connect(self.checkInputs)
+
+        # buttons
         hbox9 = QHBoxLayout()
-        yes = QPushButton('Yes')
-        no = QPushButton('No')
-        yes.clicked.connect(self.returnYes)
-        no.clicked.connect(self.returnNo)
-        hbox9.addWidget(yes)
+        self.yesbtn = QPushButton('Export')
+        no = QPushButton('Skip')
+        self.yesbtn.clicked.connect(self.accept)
+        no.clicked.connect(self.reject)
+        hbox9.addWidget(self.yesbtn)
+        self.yesbtn.setEnabled(False)
+        self.yesbtn.setToolTip("You need to fill in the mandatory fields")
         hbox9.addWidget(no)
 
         vbox = QVBoxLayout()
         vbox.addWidget(l1)
-        vbox.addLayout(hbox1)
-        vbox.addLayout(hbox2)
-        vbox.addLayout(hbox3)
-        vbox.addLayout(hbox4)
-        vbox.addLayout(hbox7)
-        vbox.addLayout(hbox6)
+        vbox.addLayout(forml)
         vbox.addLayout(hbox9)
 
         self.setLayout(vbox)
 
-    def returnYes(self):
-        if len(self.data.text()) > 0 and len(self.observer.text()) > 0 and len(self.easting.text()) > 0 and len(self.northing.text()) > 0 and len(self.site.text())>0:
-            self.accept()
+    def checkInputs(self):
+        allgood = len(self.data.text()) > 0 and len(self.observer.text()) > 0 and len(self.easting.text()) > 0 and len(self.northing.text()) > 0 and len(self.site.text())>0
+        if allgood:
+            self.yesbtn.setEnabled(True)
         else:
-            msg = SupportClasses_GUI.MessagePopup("t", "Mandatory fields missing", "You need at least a data source, name, easting, northing, and site name")
-            msg.exec_()
-            
-
-    def returnNo(self):
-        self.reject()
+            self.yesbtn.setEnabled(False)
+            self.yesbtn.setToolTip("You need to fill in the mandatory fields")
 
     def getValues(self):
         return [self.data.text(), self.observer.text(),self.method.text(),self.detector.text(),self.notes.text(), self.easting.text(),self.northing.text(), self.site.text(), self.region.text()]
-

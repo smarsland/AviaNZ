@@ -410,6 +410,7 @@ class AviaNZ(QMainWindow):
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
+        recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
 
         # "Utilities" menu
         utilMenu = self.menuBar().addMenu("&Utilities")
@@ -554,12 +555,12 @@ class AviaNZ(QMainWindow):
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
-        self.prev5mins.setMinimumSize(35, 25)
+        self.prev5mins.setMinimumSize(35, 30)
         self.prev5mins.setToolTip("Previous page")
         self.prev5mins.clicked.connect(self.movePrev5mins)
         self.next5mins=QToolButton()
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
-        self.next5mins.setMinimumSize(35, 25)
+        self.next5mins.setMinimumSize(35, 30)
         self.next5mins.setToolTip("Next page")
         self.next5mins.clicked.connect(self.moveNext5mins)
         self.placeInFileLabel2 = QLabel('Page')
@@ -573,11 +574,20 @@ class AviaNZ(QMainWindow):
 
         # "Find next annotation" buttons
         self.annotJumpLabel = QLabel("Jump to next mark:")
-        self.annotJumpBtns = QToolBar()
-        self.annotJumpG = self.annotJumpBtns.addAction(QIcon('img/findnext-g.png'), "Any label")
-        self.annotJumpG.triggered.connect(lambda: self.annotJumper(100))
-        self.annotJumpY = self.annotJumpBtns.addAction(QIcon('img/findnext-y.png'), "Uncertain label")
-        self.annotJumpY.triggered.connect(lambda: self.annotJumper(99))
+        self.annotJumpG = QToolButton()
+        self.annotJumpG.setIcon(QIcon('img/findnext-g.png'))
+        self.annotJumpG.setToolTip("Any label")
+        # self.annotJumpG.setAutoRaise(True)
+        self.annotJumpG.setMinimumSize(35,30)
+        self.annotJumpG.setIconSize(QtCore.QSize(20, 17))
+        self.annotJumpG.clicked.connect(lambda: self.annotJumper(100))
+        self.annotJumpY = QToolButton()
+        self.annotJumpY.setIcon(QIcon('img/findnext-y.png'))
+        self.annotJumpY.setToolTip("Uncertain label")
+        # self.annotJumpY.setAutoRaise(True)
+        self.annotJumpY.setMinimumSize(35,30)
+        self.annotJumpY.setIconSize(QtCore.QSize(20, 17))
+        self.annotJumpY.clicked.connect(lambda: self.annotJumper(99))
 
         # position everything in the dock
         self.w_overview.layout.addLayout(fileInfo, 0, 0, 1, 3)
@@ -594,7 +604,8 @@ class AviaNZ(QMainWindow):
         placeInFileBox.addWidget(self.placeInFileLabel)
         placeInFileBox.addStretch(4)
         placeInFileBox.addWidget(self.annotJumpLabel)
-        placeInFileBox.addWidget(self.annotJumpBtns)
+        placeInFileBox.addWidget(self.annotJumpG)
+        placeInFileBox.addWidget(self.annotJumpY)
         placeInFileBox.addStretch(4)
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
@@ -660,11 +671,9 @@ class AviaNZ(QMainWindow):
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         # guides that can be used in batmode
-        self.guidelines = [0]*4
-        self.guidelines[0] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
-        self.guidelines[1] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[2] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (239,189,124), 'width': 2})
-        self.guidelines[3] = pg.InfiniteLine(angle=0, movable=False, pen={'color': (255,232,140), 'width': 2})
+        self.guidelines = [0]*len(self.config['guidecol'])
+        for gi in range(len(self.config['guidecol'])):
+            self.guidelines[gi] = pg.InfiniteLine(angle=0, movable=False, pen={'color': self.config['guidecol'][gi], 'width': 2})
 
         # The print out at the bottom of the spectrogram with data in
         # Note: widgets cannot be directly added to GraphicsLayout, so need to convert
@@ -1004,6 +1013,7 @@ class AviaNZ(QMainWindow):
             self.showDiagnosticTick.setEnabled(not self.batmode)
             self.extraMenu.setEnabled(not self.batmode)
             self.setExtraPlot("none")
+            self.showFormant.setEnabled(not self.batmode)
 
         self.showInvSpec.setVisible(self.batmode)
         self.showFundamental.setEnabled(not self.batmode)
@@ -1375,9 +1385,6 @@ class AviaNZ(QMainWindow):
             self.filename = os.path.join(self.SoundFileDir, fileNameOld)
             self.listLoadFile(fileNameOld)
 
-        #self.fillFileList(self.SoundFileDir, current)
-        self.listFiles.setCurrentItem(current)
-
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
         Does the safety checks for file existence etc.
@@ -1444,6 +1451,8 @@ class AviaNZ(QMainWindow):
         # if a file was clicked, open it
         if not os.path.isdir(fullcurrent):
             self.loadFile(fullcurrent)
+
+        # self.listFiles.setCurrentItem(current)
 
         return(0)
 
@@ -1915,6 +1924,19 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(self.formantPlot)
             self.statusLeft.setText("Ready")
 
+    def drawGuidelines(self):
+        # Frequency guides for bat mode
+        print("Updating guidelines...")
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+            for gi in range(len(self.guidelines)):
+                self.guidelines[gi].setValue(self.convertFreqtoY(self.config['guidepos'][gi]))
+                self.guidelines[gi].setPen(color=self.config['guidecol'][gi], width=2)
+                self.p_spec.addItem(self.guidelines[gi], ignoreBounds=True)
+        else:
+            # easy way to hide
+            for g in self.guidelines:
+                g.setValue(-1000)
+
     # def showCQT(self):
     #     cqt = self.sp.comp_cqt()
     #     print(np.shape(cqt),np.shape(self.sg))
@@ -2115,18 +2137,7 @@ class AviaNZ(QMainWindow):
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
 
-        # Frequency guides for bat mode
-        if self.batmode:
-            self.guidelines[0].setValue(self.convertFreqtoY(20000))
-            self.guidelines[1].setValue(self.convertFreqtoY(36000))
-            self.guidelines[2].setValue(self.convertFreqtoY(50000))
-            self.guidelines[3].setValue(self.convertFreqtoY(60000))
-            for g in self.guidelines:
-                self.p_spec.addItem(g, ignoreBounds=True)
-        else:
-            # easy way to hide
-            for g in self.guidelines:
-                g.setValue(-1000)
+        self.drawGuidelines()
 
         if self.zooniverse:
             offset=6
@@ -3585,48 +3596,55 @@ class AviaNZ(QMainWindow):
 
     def annotJumper(self, maxcert):
         """ Scrolls to next annotation of no more than maxcert certainty. """
-        # Current position:
-        with pg.BusyCursor():
-            # Identify the "current" annotation: selected or whatever is on screen
-            if self.box1id > -1:
-                currx = self.segments[self.box1id][0]
-                self.deselectSegment(self.box1id)
-            else:
-                minX, maxX = self.overviewImageRegion.getRegion()
-                currx = self.convertSpectoAmpl(minX) + self.startRead
+        # (this is just a manual pg.BusyCursor)
+        QApplication.setOverrideCursor(QtGui.QCursor(Qt.WaitCursor))
+        # Identify the "current" annotation: selected or whatever is on screen
+        if self.box1id > -1:
+            currx = self.segments[self.box1id][0]
+            self.deselectSegment(self.box1id)
+        else:
+            minX, maxX = self.overviewImageRegion.getRegion()
+            currx = self.convertSpectoAmpl(minX) + self.startRead
 
-            # Find next annotation:
-            targetix = None
-            for segix in range(len(self.segments)):
-                seg = self.segments[segix]
-                if seg[0]<=currx:
-                    continue
-                # Note that the segments are not sorted by time,
-                # hence some extra mess to find the next one:
-                if targetix is not None and seg[0]>=self.segments[targetix][0]:
-                    continue
-                for lab in seg[4]:
-                    if lab["certainty"]<=maxcert:
-                        targetix = segix
-            if targetix is None:
-                print("No further annotation to jump to found")
+        # Find next annotation:
+        targetix = None
+        for segix in range(len(self.segments)):
+            seg = self.segments[segix]
+            if seg[0]<=currx:
+                continue
+            # Note that the segments are not sorted by time,
+            # hence some extra mess to find the next one:
+            if targetix is not None and seg[0]>=self.segments[targetix][0]:
+                continue
+            for lab in seg[4]:
+                if lab["certainty"]<=maxcert:
+                    targetix = segix
+        if targetix is None:
+            QApplication.restoreOverrideCursor()
+            print("No further annotation to jump to found")
+            msg = SupportClasses_GUI.MessagePopup("w", "No more annotations", "No further annotation to jump to found")
+            msg.exec_()
+            return
+
+        target = self.segments[targetix]
+
+        if target[0]>self.startRead + self.datalengthSec:
+            pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
+            pagenum = int(pagenum+1)
+            if pagenum > self.nFileSections:
+                print("Warning: annotation outside file bounds")
+                QApplication.restoreOverrideCursor()
+                msg = SupportClasses_GUI.MessagePopup("w", "No more annotations", "No further annotation to jump to found in this sound file")
+                msg.exec_()
                 return
-
-            target = self.segments[targetix]
-
-            if target[0]>self.startRead + self.datalengthSec:
-                pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
-                pagenum = int(pagenum+1)
-                if pagenum > self.nFileSections:
-                    print("Warning: annotation outside file bounds")
-                    return
-                self.moveTo5mins(pagenum)
-            newminT = target[0] - self.startRead - self.windowSize / 2  # in s
-            newminX = self.convertAmpltoSpec(newminT)  # in spec pixels
-            newmaxX = self.convertAmpltoSpec(newminT + self.windowSize)
-            # this will trigger update of the other views
-            self.overviewImageRegion.setRegion([newminX, newmaxX])
-            self.selectSegment(targetix)
+            self.moveTo5mins(pagenum)
+        newminT = target[0] - self.startRead - self.windowSize / 2  # in s
+        newminX = self.convertAmpltoSpec(newminT)  # in spec pixels
+        newmaxX = self.convertAmpltoSpec(newminT + self.windowSize)
+        # this will trigger update of the other views
+        self.overviewImageRegion.setRegion([newminX, newmaxX])
+        self.selectSegment(targetix)
+        QApplication.restoreOverrideCursor()
 
 
 # ===============
@@ -4430,10 +4448,18 @@ class AviaNZ(QMainWindow):
         try:
             # actually write out the filter
             filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
+            # also write ROC in to a file
+            rocfilename = self.buildRecAdvWizard.speciesData["species"] + "_ROCWF" + time.strftime("_%H-%M-%S", time.gmtime())
+            self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
+            rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
             print("Saving new recogniser to ", filename)
             f = open(filename, 'w')
             f.write(json.dumps(self.buildRecAdvWizard.speciesData))
             f.close()
+            f = open(rocfilename, 'w')
+            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
+            f.close()
+
             # prompt the user
             msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
             msg.exec_()
@@ -4445,9 +4471,16 @@ class AviaNZ(QMainWindow):
     def saveTestRecogniser(self):
         try:
             filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
+            # also write ROC in to a file
+            rocfilename = self.buildRecAdvWizard.speciesData["species"] + "_ROCWF" + time.strftime("_%H-%M-%S", time.gmtime())
+            self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
+            rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
             print("Saving new recogniser to ", filename)
             f = open(filename, 'w')
             f.write(json.dumps(self.buildRecAdvWizard.speciesData))
+            f.close()
+            f = open(rocfilename, 'w')
+            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
             f.close()
             # prompt the user
             msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
@@ -4466,6 +4499,11 @@ class AviaNZ(QMainWindow):
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+        # also write ROC in to a file
+        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
+                                                                                               time.gmtime())
+        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
+        rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
             try:
@@ -4480,6 +4518,10 @@ class AviaNZ(QMainWindow):
                 # And remove temp dirs
                 self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
                 self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+                # save ROC
+                f = open(rocfilename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
+                f.close()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
                 msg.exec_()
@@ -4514,6 +4556,11 @@ class AviaNZ(QMainWindow):
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+        # also write ROC in to a file
+        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
+                                                                                               time.gmtime())
+        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
+        rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
             try:
@@ -4528,6 +4575,10 @@ class AviaNZ(QMainWindow):
                 # And remove temp dirs
                 self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
                 self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+                # save ROC
+                f = open(rocfilename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
+                f.close()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
                 msg.exec_()
@@ -4548,6 +4599,10 @@ class AviaNZ(QMainWindow):
                 # And remove temp dirs
                 self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
                 self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+                # save ROC
+                f = open(rocfilename, 'w')
+                # f.write(json.dumps(self.buildRecAdvWizard.ROCData)) # TODO
+                f.close()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!",
                                                   "Training completed!\nProceeding to testing.")
@@ -4558,6 +4613,34 @@ class AviaNZ(QMainWindow):
                 print("ERROR: could not save recogniser because:", e)
         else:
             return
+
+    def saveRecogniser(self):
+        # nothing to worry about CNN files, they are untouched
+        if self.filterManager.saveoption == 'New' and (self.filterManager.enterFiltName.text() != '' or self.filterManager.enterFiltName.text() != '.txt'):
+            try:
+                filename = os.path.join(self.filtersDir, self.filterManager.enterFiltName.text())
+                print("Saving a new recogniser", filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.filterManager.newfilter))
+                f.close()
+                # prompt the user
+                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Saved as a new recogniser: " + self.filterManager.enterFiltName.text() + "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        elif self.filterManager.saveoption != 'New':
+            try:
+                filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text() + '.txt')
+                print("Updating the existing recogniser ", filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.filterManager.newfilter))
+                f.close()
+                # prompt the user
+                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        self.filterManager.close()
 
     def excel2Annotation(self):
         """ Utility function dialog: Generate AviaNZ style annotations given the start-end of calls in excel format
@@ -4839,6 +4922,7 @@ class AviaNZ(QMainWindow):
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
             if str(alg) != 'Wavelets':
                 print('Segments detected: ', len(newSegments))
+                print(newSegments)
                 print('Post-processing...')
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
@@ -4853,6 +4937,7 @@ class AviaNZ(QMainWindow):
                 newSegments = post.segments
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
+                print(newSegments)
                 print('Post-processing...')
                 # load target CNN model if exists
                 self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtname])
@@ -4860,8 +4945,9 @@ class AviaNZ(QMainWindow):
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
                     CNNmodel = None
-                    if filtname in self.CNNDicts.keys():
-                        CNNmodel = self.CNNDicts[filtname]
+                    if 'CNN' in speciesData:
+                        CNNmodel = self.CNNDicts.get(speciesData['CNN']['CNN_name'])
+                    
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
@@ -5342,6 +5428,11 @@ class AviaNZ(QMainWindow):
         self.filterManager = Dialogs.FilterManager(self.filtersDir)
         self.filterManager.exec_()
 
+    def customiseFiltersROC(self):
+        self.filterManager = DialogsTraining.FilterCustomiseROC(self.filtersDir)
+        self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
+        self.filterManager.exec_()
+
     def addNoiseData(self):
         """ Listener for the adding metadata about noise action """
         # this field isn't required and may not be present at all
@@ -5437,6 +5528,19 @@ class AviaNZ(QMainWindow):
                     {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'],
                      'tip': "Currently selected segment"},
                 ]},
+                {'name': 'Guidelines', 'type': 'group', 'children': [
+                    {'name': 'Show frequency guides', 'type': 'list', 'values':
+                        {'Always': 'always', 'For bats only': 'bat', 'Never': 'never'},
+                        'value': self.config['guidelinesOn']},
+                    {'name': 'Guideline 1 frequency', 'type': 'float', 'value': self.config['guidepos'][0]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 1 colour', 'type': 'color', 'value': self.config['guidecol'][0]},
+                    {'name': 'Guideline 2 frequency', 'type': 'float', 'value': self.config['guidepos'][1]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 2 colour', 'type': 'color', 'value': self.config['guidecol'][1]},
+                    {'name': 'Guideline 3 frequency', 'type': 'float', 'value': self.config['guidepos'][2]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 3 colour', 'type': 'color', 'value': self.config['guidecol'][2]},
+                    {'name': 'Guideline 4 frequency', 'type': 'float', 'value': self.config['guidepos'][3]/1000, 'limits': (0, 1000), 'suffix': ' kHz'},
+                    {'name': 'Guideline 4 colour', 'type': 'color', 'value': self.config['guidecol'][3]},
+                ]},
                 {'name': 'Check-ignore protocol', 'type': 'group', 'children': [
                     {'name': 'Show check-ignore marks', 'type': 'bool', 'value': self.config['protocolOn']},
                     {'name': 'Length of checking zone', 'type': 'float', 'value': self.config['protocolSize'],
@@ -5488,13 +5592,18 @@ class AviaNZ(QMainWindow):
         self.t.show()
         self.t.setWindowTitle('AviaNZ - Interface Settings')
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.t.setFixedSize(520, 900)
+        self.t.setFixedHeight(900)
+        self.t.setMinimumWidth(520)
 
     def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
         """
         # first save the annotations
         self.saveSegments()
+
+        # some regexes to parse guideline settings
+        rgx_guide_pos = re.compile(r"Annotation.Guidelines.Guideline ([0-9]) frequency")
+        rgx_guide_col = re.compile(r"Annotation.Guidelines.Guideline ([0-9]) colour")
 
         for param, change, data in changes:
             path = self.p.childPath(param)
@@ -5588,6 +5697,18 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], self.config['ColourSelected'][3])
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
+            elif childName=='Annotation.Guidelines.Show frequency guides':
+                self.config['guidelinesOn'] = data
+                self.drawGuidelines()
+            elif rgx_guide_pos.match(childName): # childName=='Annotation.Guidelines.Guideline 1 frequency':
+                guideid = int(rgx_guide_pos.search(childName).group(1))-1
+                self.config['guidepos'][guideid] = float(data)*1000
+                self.drawGuidelines()
+            elif rgx_guide_col.match(childName): # childName=='Annotation.Guidelines.Guideline 1 colour':
+                guideid = int(rgx_guide_col.search(childName).group(1))-1
+                print(data)
+                self.config['guidecol'][guideid] = data
+                self.drawGuidelines()
             elif childName=='Annotation.Check-ignore protocol.Show check-ignore marks':
                 self.config['protocolOn'] = data
                 self.drawProtocolMarks()
