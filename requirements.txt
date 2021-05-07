@@ -8,18 +8,20 @@
 
 click==7.0
 Cython==0.29.21
+h5py==2.10.0
 jsonschema==3.1.1
 librosa==0.8.0
-numpy==1.16.2
+numpy==1.18.5  # scikit-image overwrites this w/ a newer version
 openpyxl==2.5.5
 pyFFTW==0.12.0
-PyQt5==5.13.1
-git+git://github.com/pyqtgraph/pyqtgraph@2203933#egg=pyqtgraph
-scikit-image==0.15.0
-scipy==1.4.1
-setuptools==41.0.1
+PyQt5==5.15.4
+pyqtgraph==0.11.1
+scikit-image==0.18.0
+six==1.15.0
+scipy==1.5.0
+setuptools==56.1.0
 spectrum==0.7.5
-tensorflow==2.3
+tensorflow==2.3.2
 
 ## These dependencies are important, but should be installed by the main packages:
 # joblib==0.13.2

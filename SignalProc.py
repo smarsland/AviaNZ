@@ -1158,3 +1158,110 @@ class SignalProc:
             t += 1
         return res
 
+    def generateFeaturesCNN(self, seglen, real_spec_width, frame_size, frame_hop=None, CNNfRange=None):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (spectrogram for each frame)
+        seglen: length of this segment (self.data), in s
+        frame_size: length of each frame, in s
+        real_spec_width: number of spectrogram columns in each frame
+            (slightly differs from expected b/c of boundary effects,
+             so passing w/ a precalculated adjustment)
+        frame_hop: hop between frames, in s, or None to not overlap
+            (i.e. hop by 1 frame_size)
+        CNNfRange: frequency list [f1, f2], if not None, sets
+            spectrogram pixels outside f1:f2 to 0
+        '''
+        # determine the number of frames:
+        if frame_hop is None:
+            n = seglen // frame_size
+            frame_hop = frame_size
+        else:
+            n = (seglen-frame_size) // frame_hop + 1
+        n = int(n)
+
+        _ = self.spectrogram()
+
+        # Mask out of band elements
+        spec_height = np.shape(self.sg)[1]
+        if CNNfRange is not None:
+            bin_width = self.sampleRate / 2 / spec_height
+            lb = int(np.ceil(CNNfRange[0] / bin_width))
+            ub = int(np.floor(CNNfRange[1] / bin_width))
+            self.sg[:, 0:lb] = 0.0
+            self.sg[:, ub:] = 0.0
+
+        # extract each frame:
+        featuress = np.empty((n, spec_height, real_spec_width, 1), dtype=np.float32)
+        for i in range(n):
+            sgstart = int(frame_hop * i * self.sampleRate / self.incr)
+            sgend = sgstart + real_spec_width
+            # Skip the last bits if they don't comprise a full frame:
+            if sgend > np.shape(self.sg)[0]:
+                print("Warning: dropping frame at", sgend, n)
+                # Alternatively could adjust:
+                # sgstart = np.shape(sp.sg)[0] - real_spec_width
+                # sgend = np.shape(sp.sg)[0]
+                break
+            sgRaw = self.sg[sgstart:sgend, :, np.newaxis]
+
+            # Standardize/rescale here.
+            # NOTE the resulting features are on linear scale, not dB
+            maxg = np.max(sgRaw)
+            featuress[i, :, :, :] = np.rot90(sgRaw / maxg)
+
+        # NOTE using i to account for possible loop break
+        # this may be needed for dealing w/ boundary issues
+        # which is maybe possible if the spec window is larger than the
+        # CNN frame size, or due to inconsistent rounding
+        featuress = featuress[:i, :, :, :]
+        return featuress
+
+    def generateFeaturesCNN2(self, seglen, real_spec_width, frame_size, frame_hop=None):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (currently the spectrogram)
+        '''
+        # determine the number of frames:
+        if frame_hop is None:
+            n = seglen // frame_size
+            frame_hop = frame_size
+        else:
+            n = (seglen-frame_size) // frame_hop + 1
+        n = int(n)
+
+        sgRaw1 = self.spectrogram(window='Hann')
+        sgRaw2 = self.spectrogram(window='Hamming')
+        sgRaw3 = self.spectrogram(window='Welch')
+
+        spec_height = np.shape(self.sg)[1]
+
+        # extract each frame:
+        featuress = np.empty((n, spec_height, real_spec_width, 3))
+
+        for i in range(n):
+            sgstart = int(frame_hop * i * self.sampleRate / self.incr)
+            sgend = sgstart + real_spec_width
+            # Skip the last bits if they don't comprise a full frame:
+            if sgend > np.shape(self.sg)[0]:
+                print("Warning: dropping frame at", sgend, n)
+                # Alternatively could adjust:
+                # sgstart = np.shape(sp.sg)[0] - real_spec_width
+                # sgend = np.shape(sp.sg)[0]
+                break
+
+            # Standardize/rescale here.
+            # NOTE the resulting features are on linear scale, not dB
+            sgRaw_i = np.empty((real_spec_width, spec_height, 3), dtype=np.float32)
+            sgRaw_i[:, :, 0] = sgRaw1[sgstart:sgend, :] / np.max(sgRaw1[sgstart:sgend, :])
+            sgRaw_i[:, :, 1] = sgRaw2[sgstart:sgend, :] / np.max(sgRaw2[sgstart:sgend, :])
+            sgRaw_i[:, :, 2] = sgRaw3[sgstart:sgend, :] / np.max(sgRaw3[sgstart:sgend, :])
+            featuress[i, :, :, :] = np.rot90(sgRaw_i)
+
+        # NOTE using i to account for possible loop break
+        # this may be needed for dealing w/ boundary issues
+        # which is maybe possible if the spec window is larger than the
+        # CNN frame size
+        featuress = featuress[:i, :, :, :]
+        return featuress
+
