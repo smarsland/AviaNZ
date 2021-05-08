@@ -639,7 +639,8 @@ class Segmenter:
             into a list of start-end segments [[1,4]].
             Can use non-1 s units of pres/abs.
         """
-        presabs = np.squeeze(presabs)
+        # squeeze any extra axes except axis 0 (don't make scalars)
+        presabs = np.reshape(presabs, (np.shape(presabs)[0]))
         out = []
         t = 0
         while t < len(presabs):
@@ -1278,17 +1279,17 @@ class PostProcess:
             seg = self.segments[ix]
             print('\n--- Segment', seg)
             # expand the segment if it's smaller than 1 frame
-            callength = max(self.CNNwindow, self.maxLen/2)
+            mincalllength = self.CNNwindow
             duration = seg[0][1] - seg[0][0]
-            if callength >= duration:
-                extend_by = (callength-duration)/2 + 0.005
+            if mincalllength >= duration:
+                extend_by = (mincalllength-duration)/2 + 0.005
                 seg[0][0] -= extend_by
                 seg[0][1] += extend_by
                 if seg[0][0] < 0:
                     seg[0][0] = 0
-                    seg[0][1] = callength + 0.01
+                    seg[0][1] = mincalllength + 0.01
                 elif seg[0][1]*self.sampleRate > len(self.audioData):
-                    seg[0][0] = len(self.audioData)/self.sampleRate - callength - 0.01
+                    seg[0][0] = len(self.audioData)/self.sampleRate - mincalllength - 0.01
                     seg[0][1] = len(self.audioData)/self.sampleRate
                 duration = seg[0][1] - seg[0][0]
 
