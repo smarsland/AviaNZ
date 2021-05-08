@@ -1202,6 +1202,7 @@ class SignalProc:
                 # Alternatively could adjust:
                 # sgstart = np.shape(sp.sg)[0] - real_spec_width
                 # sgend = np.shape(sp.sg)[0]
+                i = i-1
                 break
             sgRaw = self.sg[sgstart:sgend, :, np.newaxis]
 
@@ -1214,7 +1215,7 @@ class SignalProc:
         # this may be needed for dealing w/ boundary issues
         # which is maybe possible if the spec window is larger than the
         # CNN frame size, or due to inconsistent rounding
-        featuress = featuress[:i, :, :, :]
+        featuress = featuress[:(i+1), :, :, :]
         return featuress
 
     def generateFeaturesCNN2(self, seglen, real_spec_width, frame_size, frame_hop=None):
