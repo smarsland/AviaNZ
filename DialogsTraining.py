@@ -438,10 +438,7 @@ class BuildRecAdvWizard(QWizard):
                             if label["species"] == self.field("species") and "calltype" in label:
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                                if seg[2] == seg[3] == 0:
-                                    syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), f1=seg[2], f2=seg[3], denoise=False, minlen=0.2)
-                                else:
-                                    syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), f1=0, f2=0, denoise=False, minlen=0.2)
+                                syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), denoise=False, minlen=0.2)
                                 CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                                 duration.append(seg[1]-seg[0])
             return CTsegments, len(self.clusters), np.median(duration)

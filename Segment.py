@@ -1252,29 +1252,6 @@ class PostProcess:
 
         return certainty
 
-    def getSubSegs(self, probs, ctkey, seg):
-        '''
-        Fine tune a segment - during CNN.
-        Get predicted probability matrix on overlapped images of the segment and find sub-segments.
-        :param probs: probability matrix
-        :param ctkey: call type key
-        :param seg: parent segment
-        :return: sub-segments
-        '''
-        binaryout = np.zeros((np.shape(probs)[0]))
-        for i in range(len(binaryout)):
-            if self.getCertainty(probs[i], ctkey) > 0:
-                binaryout[i] = 1
-        segmenter = Segmenter()
-        if len(binaryout) == 1:
-            binaryout = np.append(binaryout, 0)
-        subsegs = segmenter.convert01(binaryout)
-        # subsegs = segmenter.convert01(binaryout, self.CNNhop)
-        for i in range(len(subsegs)):
-            subsegs[i] = [[subsegs[i][0] * self.CNNhop + seg[0][0], (subsegs[i][1] + 1) * self.CNNhop + seg[0][0]], seg[1]]
-        subsegs = segmenter.checkSegmentOverlap3(subsegs)
-        return subsegs
-
     def CNN(self):
         """
         Post-proc with CNN model, self.segments get updated
@@ -1287,7 +1264,15 @@ class PostProcess:
             return
         ctkey = int(list(self.CNNoutputs.keys())[list(self.CNNoutputs.values()).index(self.calltype)])
         print('call type: ', self.calltype)
-        ctnewseg = []
+
+        batchsize = 5   # TODO: read from learning parameters file
+
+        # spectrograms of pre-cut segs are tiny bit shorter than expected
+        # based on the segment length, because spectrogram does not use
+        # the last bin: it uses len(data)-window bins
+        # so when extracting pieces of a premade spec, we adjust to this
+        # length for comparability:
+        specFrameWidth = len(range(0, int(self.CNNwindow * self.tgtsampleRate - self.CNNwindowInc[0]), self.CNNwindowInc[1]))
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
@@ -1318,13 +1303,6 @@ class PostProcess:
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
-            # spectrograms of pre-cut segs are tiny bit shorter than expected
-            # based on the segment length, because spectrogram does not use
-            # the last bin: it uses len(data)-window bins
-            # so when extracting pieces of a premade spec, we adjust to this
-            # length for comparability:
-            specFrameWidth = len(range(0, int(self.CNNwindow * sp.sampleRate - sp.window_width), sp.incr))
-
             featuress = sp.generateFeaturesCNN(seglen=duration, real_spec_width=specFrameWidth, frame_size=self.CNNwindow, frame_hop=self.CNNhop, CNNfRange=self.CNNfRange)
             featuress = featuress.astype('float32')
 
@@ -1337,17 +1315,12 @@ class PostProcess:
             # predict with CNN
             if numframes > 0:
                 # probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))  # This might lead to OOM error, therefore show batches
-                batchsize = 5   # TODO: read from learning parameters file
-                batches = math.ceil(numframes / batchsize)
-                start = 0
                 probs = np.empty((numframes, len(self.CNNoutputs)))
-                for i in range(batches):
+                for start in range(0, numframes, batchsize):
                     end = min(numframes, start + batchsize)
                     p = self.CNNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
                     probs[start:end, :] = p
-                    start += batchsize
 
-                print("batch", probs)
                 # convert probs to certainties for each frame
                 if self.activelength(probs[:, ctkey], self.CNNthrs[ctkey][-1]) >= self.subfilter['TimeRange'][0]:
                     certainty = 90
@@ -1367,13 +1340,7 @@ class PostProcess:
             else:
                 print('Not deleted by CNN')
                 self.segments[ix][-1] = certainty
-                subsegs = self.getSubSegs(probs, ctkey, seg)
-                if subsegs != []:
-                    print("Replaced with sub-segments:", subsegs)
-                    del self.segments[ix]
-                    ctnewseg.extend(subsegs[::-1])
 
-        self.segments.extend(ctnewseg[::-1])
         print("Segments remaining after CNN: ", len(self.segments))
 
     def activelength(self, probs, thr):
@@ -1382,8 +1349,6 @@ class PostProcess:
         """
         binaryout = np.asarray(probs>=thr, dtype=int)
         segmenter = Segmenter()
-        if len(binaryout) == 1:
-            binaryout = np.append(binaryout, 0)
         subsegs = segmenter.convert01(binaryout)
         lengths = [seg[1]-seg[0] for seg in subsegs]
         if lengths:
