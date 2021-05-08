@@ -527,7 +527,7 @@ class Clustering:
                         # Now find syllables within each segment, median clipping
                         for segix in thisSpSegs:
                             seg = segments[segix]
-                            syls = self.findSyllablesSeg(os.path.join(root, file), seg, fs, f1, f2, denoise, minlen)
+                            syls = self.findSyllablesSeg(os.path.join(root, file), seg, fs, denoise, minlen)
                             for syl in syls:
                                 dataset.append([os.path.join(root, file), seg, syl])
         elif os.path.isfile(dirname):
@@ -542,12 +542,12 @@ class Clustering:
                 # Now find syllables within each segment, median clipping
                 for segix in thisSpSegs:
                     seg = segments[segix]
-                    syls = self.findSyllablesSeg(dirname, seg, fs, f1, f2, denoise, minlen)
+                    syls = self.findSyllablesSeg(dirname, seg, fs, denoise, minlen)
                     for syl in syls:
                         dataset.append([dirname, seg, syl])
         return dataset
 
-    def findSyllablesSeg(self, file, seg, fs, f1, f2, denoise, minlen):
+    def findSyllablesSeg(self, file, seg, fs, denoise, minlen):
         """ Find syllables in the segment using median clipping - single segment
         :return: syllables list
         """
@@ -560,11 +560,15 @@ class Clustering:
         sp.sampleRate = fs
         _ = sp.spectrogram()
         # Show only the segment frequencies to the median clipping and avoid overlapping noise - better than filtering when loading audiodata (it could make aliasing effect)
-        linear = np.linspace(0, fs / 2, sp.window_width/2)
-        # ind_flow = (np.abs(linear - f1)).argmin()
-        # ind_fhigh = (np.abs(linear - f2)).argmin()
+        linear = np.linspace(0, fs / 2, int(sp.window_width/2))
+        # check segment type to determine if upper freq bound is OK
+        if seg[3]==0:
+            print("Warning: auto-detecting freq bound for full-height segments")
+            fhigh = fs//2
+        else:
+            fhigh = seg[3]
         ind_flow = (np.abs(linear - seg[2])).argmin()
-        ind_fhigh = (np.abs(linear - seg[3])).argmin()
+        ind_fhigh = (np.abs(linear - fhigh)).argmin()
         sp.sg = sp.sg[:, ind_flow:ind_fhigh]
 
         segment = Segment.Segmenter(sp, fs)
