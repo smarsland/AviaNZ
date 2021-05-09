@@ -4734,7 +4734,7 @@ class AviaNZ(QMainWindow):
                 #print(dst,root,dirs)
                 os.mkdir(os.path.join(dst,root[l+1:],d))
             for f in files:
-                if f[-5:].lower() == '.data' or 'corrections' in f:
+                if f[-5:].lower() == '.data' or 'corrections' in f or 'BatData' in f or 'BatPasses' in f:
                     shutil.copy2(os.path.join(root, f),os.path.join(dst,root[l+1:]))
         self.backupAnnotationDialog.close()
         
