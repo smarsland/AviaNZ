@@ -66,6 +66,9 @@ class AviaNZ_batchProcess():
         elif mode=="test":
             self.CLI = False
             self.testmode = True
+        elif mode=="export":
+            self.CLI = False
+            self.testmode=False
         else:
             print("ERROR: unrecognized mode ", mode)
             return
@@ -1065,14 +1068,17 @@ class AviaNZ_batchProcess():
         return label
 
     def outputBatPasses(self,dirName,savefile='BatPasses.csv'):
+        # A bit ad hoc for now. Assumes that the directory structure ends with 'Bat detname date/date/'
+        if not hasattr(self, 'sp'):
+            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
         start = "Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n"
         output = start
         dt=0.002909090909090909
         if not os.path.isdir(dirName):
-            print("Folder doesn't exist")
-            return 0
+           print("Folder doesn't exist")
+           return 0
+        tally = 0
         for root, dirs, files in os.walk(dirName, topdown=True):
-            tally = 0
             nfiles = len(files)
             if nfiles > 0:
                 for count in range(nfiles):
@@ -1083,14 +1089,15 @@ class AviaNZ_batchProcess():
                         if len(segments)>0:
                             # Get the length of the clicks from the spectrogram
                             fn = filename[:-5]
-                            print(fn,os.path.join(root, fn))
+                            #print(fn,os.path.join(root, fn))
                             self.sp.readBmp(os.path.join(root, fn), rotate=False,silent=True)
-                            res = self.ClickSearch(self.sp.sg,self.sp.sampleRate,virginia=False)
+                            self.sampleRate = self.sp.sampleRate
+                            res = self.ClickSearch(self.sp.sg,None,virginia=False)
                             if res is not None:
                                 length = "{:.2f}".format((res[1]-res[0])*dt)
                             else:
                                 length = str(0)
-                            print("Length "+length)
+                            #print("Length "+length)
                             seg = segments[0]
                             #print(seg)
                             c = [lab["certainty"] for lab in seg[4]]
@@ -1105,31 +1112,30 @@ class AviaNZ_batchProcess():
                         else:
                             length = "0"
                             label = ''
-                        print("label "+label)
+                        #print("label "+label)
 
                         # DOC format
                         # night comes from the directory
                         night = root[-2:]+"/"+root[-4:-2]+"/"+root[-6:-4]
-                        print("night "+night)
+                        folder = root.split("/")[-2]
+                        detname = folder.split(" ")[-2]
+                        #print(detname,folder)
+                        #print("night "+night)
                         #night = filename[6:8]+"/"+filename[4:6]+"/"+filename[2:4]
-                        # detector name comes from directory
-                        # need to set stop to be the right point
-                        stop = 8
-                        detname = root[4:stop]
                         # time comes from file
                         time = filename[9:11]+":"+filename[11:13]+":"+filename[13:15]
-                        print("time "+time)
+                        #print("time "+time)
                         
-                        output+= str(tally)+","+night+",,"+detname+","+label+","+time+","+length+",\n"
+                        output+= str(tally)+","+night+",,,"+detname+","+label+","+time+","+length+",\n"
                         tally += 1
-                # Now write the file if necessary
-                if output != start:
-                    file = open(os.path.join(root, savefile), 'w')
-                    print("writing to", os.path.join(root, savefile))
-                    file.write(output)
-                    file.write("\n")
-                    file.close()
-                    output = start
+        # Now write the file if necessary
+        if output != start:
+            file = open(os.path.join(dirName, savefile), 'w')
+            print("writing to", os.path.join(dirName, savefile))
+            file.write(output)
+            file.write("\n")
+            file.close()
+            output = start
 
     def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
         # Write out a file that can be used for BatSearch import
