@@ -152,8 +152,13 @@ class CNNtrain:
         self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
         # Dir1 - manually annotated
         # Find noise segments if the user is confident about full annotation
-        if self.annotatedAll:
+        if self.annotatedAll=="All":
             self.noisedata1 = self.DataGen.findNoisesegments(self.folderTrain1)
+            print('----noise data1:')
+            for x in self.noisedata1:
+                self.traindata.append(x)
+        if self.annotatedAll=="All-nowt":
+            self.noisedata1 = self.DataGen.findAllsegments(self.folderTrain1)
             print('----noise data1:')
             for x in self.noisedata1:
                 self.traindata.append(x)
