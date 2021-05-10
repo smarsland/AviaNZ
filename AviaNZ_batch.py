@@ -403,7 +403,7 @@ class AviaNZ_batchProcess():
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
                 # no impulse masking for bats or changepoints (as it distorts the means)
-                impMask = self.method!="Click" and "chp" not in [sf.get("method") for sf in filters]
+                impMask = self.method!="Click" and self.method!="Bats" and "chp" not in [sf.get("method") for sf in filters]
                 self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
 
                 # initialize empty segmenter
@@ -690,7 +690,7 @@ class AviaNZ_batchProcess():
                                 if len(label) > 0:
                                     # Convert the annotation into a full segment in self.segments
                                     thisPageStart = start / self.sampleRate
-                                    self.makeSegments([thisPageStart, thisPageLen, label])
+                                    self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
                             else:
                                 # bird-style CNN and other processing:
                                 postsegs = self.postProcFull(thisPageSegs, spInfo, filtix, start, end, CNNmodel)
