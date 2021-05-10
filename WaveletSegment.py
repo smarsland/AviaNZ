@@ -157,7 +157,7 @@ class WaveletSegment:
         print("--- Wavelet segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None):
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, wind=False):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
@@ -167,6 +167,7 @@ class WaveletSegment:
             4. window: wavelets will be merged in groups of this size (s) before analysis
             5. maxlen: maximum allowed length (s) of signal segments
               3-5 can be None, in which case they are retrieved from self.spInfo.
+            6. adjust for wind?
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -185,7 +186,7 @@ class WaveletSegment:
             if maxlen is None:
                 maxlen = subfilter["TimeRange"][1]
 
-            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg)
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg, wind=wind)
 
             detected_allsubf.append(detected)
         print("--- WV changepoint segmenting completed in %.3f s ---" % (time.time() - opst))
@@ -1056,7 +1057,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1):
+    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1, wind=False):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
@@ -1068,27 +1069,32 @@ class WaveletSegment:
         maxlen - maximum allowed signal segment length, in s
         window - energy will be calculated over these windows, in s
         alg - standard (1) or with nuisance segments (2)
+        wind - adjust for wind?
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
 
         if wind:
+            # Estimate wind adjustment levels for each window x target node.
             from scipy.stats import theilslopes
 
-            datalen = math.ceil(len(wf.tree[0])/window)
+            datalen = math.ceil(len(wf.tree[0])/wf.treefs/window)
 
             # identify wind nodes, and calculate
             # regression x - node freq centers
             wind_nodes = []
-            nodecenters = []
+            windnodecenters = []
             for node in range(31, 63):  # only use leaf nodes when estimating wind
                 if node in nodelist:  # skip target nodes, obviously
                     continue
+                # target node can be 1 level higher than this node, so check for that too
+                if (node-1)//2 in nodelist:
+                    continue
                 nodecenter = sum(wf.getWCFreq(node, wf.treefs))/2
-                if nodecenter>=7500:  # skip high freqs when estimating wind
+                if nodecenter>=5500:  # skip high freqs when estimating wind
                     continue
                 wind_nodes.append(node)
-                nodecenters.append(nodecenter)
+                windnodecenters.append(nodecenter)
 
             # extract energies from all nodes and calculate wind levels
             # in each target node, over all time windows
@@ -1098,30 +1104,68 @@ class WaveletSegment:
 
                 # Regression y - node WC powers
                 windE[:, node_ix], windwindow = wf.extractE(node, window)
+                # TODO if the requested window size corresponds to non-int number of WCs
+                # for one node, but not for another (at a different level),
+                # it is difficult to map wind noise estimates to all target nodes.
+                # Should fix that.
+                # Currently just throw an error preemptively
                 if windwindow!=window:
                     print("ERROR: window sizes %f and %f do not match at node %d", windwindow, window, node)
                     raise
-                # TODO figure out how to unify windows
-                # Otherwise can't initialize the time dim of the array
 
-            # regx, regy now have all nodes in the same order
+            # For oversubtraction, roughly estimate background level
+            # from 10% quietest frames in each node:
+            oversubalpha = 1.2
+            print("Will oversubtract with alpha=", oversubalpha)
+            rootE, _ = wf.extractE(0, window, wpantialias=False)
+            numframes = round(0.1*len(rootE))
+            quietframes = np.argpartition(rootE, numframes)[:numframes]
+            bgpow = np.zeros(len(nodelist))   # TODO optimize all this
+            for node_ix in range(len(nodelist)):
+                E, _ = wf.extractE(nodelist[node_ix], window, wpantialias=True)
+                bgpow[node_ix] = np.mean(np.log(E[quietframes]))
 
-            # for each window, interpolate wind energy in each target node:
-            pred = np.zeros((datalen, len(nodelist)))  # TODO figure out datalen
-            freqmask = np.where(nodecenters<7500)
-            nodecenters = np.log(nodecenters)
-            regx = nodecenters[freqmask]  # NOTE that here and further centers are in log(freq)!
+
+            # for each window, interpolate wind (log) energy in each target node:
+            pred = np.zeros((datalen, len(nodelist)))
+            regx = np.log(windnodecenters)  # NOTE that here and further centers are in log(freq)!
             tgtnodecenters = np.log([sum(wf.getWCFreq(node, wf.treefs))/2 for node in nodelist])
-            windE = np.log(windE[:, freqmask])
+            windE = np.log(windE)
             for w in range(datalen):
+                regy = windE[w, :]
+                # slope, inter, cilo, ciup = theilslopes(regy, regx)
+                # print("Regression results: beta %.4f, alpha %.4f" %(slope, inter))
+                pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
                 for node_ix in range(len(nodelist)):
-                    regy = windE[w, freqmask]
-                    slope, inter, cilo, ciup = theilslopes(regy, regx)
-                    pred[w, node_ix] = tgtnodecenters[node_ix] * slope + inter
+                    # for higher level nodes, need to (linearly) average the nearest predictions:
+                    if nodelist[node_ix] in range(15, 31):
+                        delta = wf.treefs/128   # half width of a leaf node band = Fs/2/numnodes/2
+                        f1 = np.exp(tgtnodecenters[node_ix]) - delta
+                        f2 = np.exp(tgtnodecenters[node_ix]) + delta
+                        # pred[w, node_ix] = inter + np.log((f1**slope + f2**slope)/2)
+                        pred1 = pol(np.log(f1))
+                        pred2 = pol(np.log(f2))
+                        # oversubtraction:
+                        pred1 = (pred1 - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
+                        pred2 = (pred2 - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
+                        pred[w, node_ix] = np.log((np.exp(pred1) + np.exp(pred2))/2)
+                    else:
+                        # pred[w, node_ix] = tgtnodecenters[node_ix] * slope + inter
+                        # Basic cubic fit:
+                        pred[w, node_ix] = pol(tgtnodecenters[node_ix])
+                        # Oversubtraction:
+                        pred[w, node_ix] = (pred[w, node_ix] - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
+                print("Predictions (log): ", pred[w,:])
+            # TODO would probably be faster to predict all nodes and then average
+            # to obtain upper level nodes, but difficult to keep track of nodes then.
+
+            # convert back to (linear) energies:
+            pred = np.exp(pred)
 
         # Compute the number of samples in a window -- species specific
         detected = np.empty((0,3))
-        for node in nodelist:
+        for node_ix in range(len(nodelist)):
+            node = nodelist[node_ix]
             # Extracts energies (i.e. integral of square magnitudes) over windows.
             # Window size will be adjusted to realwindow (in s), b/c it needs to
             # correspond to an integer number of WCs at this node,
@@ -1138,18 +1182,22 @@ class WaveletSegment:
             # (segments exceeding this length will be marked as 'n')
             realmaxlen = math.ceil(maxlen / realwindow)
 
-            if wind:
-                # TODO retrieve and adjust for the predicted wind strength
-                pred[:, node_ix]
-                # TODO cast this to right size windows smh?
-
             # Estimate of the global background for this file/page
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
 
+            if wind:
+                # retrieve and adjust for the predicted wind strength
+                print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))
+                # TODO a minimum is set here to avoid log 0. think about this
+                print("raw E:", E[250:350])
+                E = np.maximum(sigma2, E - pred[:, node_ix] + sigma2)
+                print("est wind:", pred[250:350, node_ix])
+                print("E: ", E[250:350]-sigma2)
+
             # sqrt because the detector squares the data itself (sign not important)
             # Note that no transformation is applied otherwise (i.e. linear, not log scale)
-            E = np.sqrt(E)
+            E = np.sqrt(E/sigma2)
 
             # analyze by our algorithms.
             # returns a matrix of n x [s, e, type]
@@ -1157,7 +1205,7 @@ class WaveletSegment:
             if alg==1:
                 segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
             else:
-                segm1 = ce_detect.launchDetector2(E, sigma2, realmaxlen, alpha=alpha).astype('float')
+                segm1 = ce_detect.launchDetector2(E, 1, realmaxlen, alpha=alpha).astype('float')  # replaced sigma2 w/ 1
 
             # here's how you would extract segment means:
             # for seg in segm1:

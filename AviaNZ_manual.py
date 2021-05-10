@@ -1620,13 +1620,12 @@ class AviaNZ(QMainWindow):
                 # sgRaw was already normalized to 0-1 when loading
                 # with 1 being loudest
                 sgRaw = self.sp.sg
-                self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
+                self.setSpectrogram(sgRaw)
             else:
                 # Get the data for the main spectrogram
                 #sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
                 sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                self.setSpectrogram(sgRaw)
 
             # ANNOTATIONS: init empty list
             self.segments = Segment.SegmentList()
@@ -2303,55 +2302,122 @@ class AviaNZ(QMainWindow):
             # list all the node frequency centers
             node_freqs = [sum(WF.getWCFreq(n, 16000))/2 for n in range(31, 63)]
 
-            xs = np.arange(0, self.datalengthSec, 0.25)
+            xs = np.arange(0, self.datalengthSec, 0.5)
             datalen = len(xs)
 
             # extract energies from each leaf node
             Es = np.zeros((datalen, 32))
             i = 0
             for node in range(31, 63):
-                E, _ = WF.extractE(node, 0.25)
+                E, _ = WF.extractE(node, 0.5)
                 Es[:,i] = E[:datalen]
                 i += 1
                 print("node %d extracted" % node)
 
             # extract unadjusted signal energy
-            tgt_node = 45-31
+            tgt_node = 44-31
             Es = np.log(Es)
+            # TODO CHECKING
+            # Es = Es - np.quantile(Es, 0.10, axis=0)
             sig_lvl = Es[:,tgt_node]
 
             # estimate wind level in each window
             wind_lvl = np.zeros(len(xs))
             wind_lvlR = np.zeros(len(xs))
             wind_lvlC = np.zeros(len(xs))
+            wind_lvlCO = np.zeros(len(xs))
             from scipy.stats import linregress, theilslopes
+            from sklearn.linear_model import RANSACRegressor
+            from scipy.optimize import least_squares
+
+            # select 10 % frames with lowest overall energy:
+            # (note that root node does not need downsampling)
+            bgpow, _ = WF.extractE(0, 0.5, wpantialias=False)
+            numframes = round(0.1*len(bgpow))
+            quietframes = np.argpartition(bgpow, numframes)[:numframes]
+            # From these, determine "background level" for the target nodes:
+            bgpow = np.mean(sig_lvl[quietframes])
+
+            oversubalpha = 1.2
+
+            class PolyRegression(object):
+                def __init__(self, coeffs=None):
+                    self.pol = coeffs
+
+                def fit(self, X, y):
+                    # self.pol = np.polynomial.polynomial.Polynomial.fit(X, y, 3)
+                    self.pol = np.polyfit(np.squeeze(X), y, 3)
+
+                def predict(self, X):
+                    pp = np.poly1d(self.pol)
+                    return(pp(np.squeeze(X)))
+
+                def score(self, X, y):
+                    sc = np.mean((y - self.predict(X))**2)
+                    return(sc)
+
+                def get_params(self, deep=False):
+                    return({'coeffs': self.pol})
+
+                def set_params(self, coeffs=None, random_state=None):
+                    self.pol = coeffs
 
             def calc_wind(energies, nodecenters, tgt):
                 # fits an adjustment model based on energies, nodecenters,
                 # excluding tgt node.
                 regy = np.delete(energies, tgt)
+                regy = np.delete(regy, 46-31)
+                regy = np.delete(regy, 45-31)
                 regx = np.delete(nodecenters, tgt)
+                regx = np.delete(regx, 46-31)
+                regx = np.delete(regx, 45-31)
                 # remove two highest nodes as they have filtering artefacts
-                freqmask = np.where(regx<7500)
+                freqmask = np.where(regx<5500)
                 regy = regy[freqmask]
                 regx = np.log(regx[freqmask])
                 slope, inter, r, p, se = linregress(regx, regy)
-                print("Regression results:", slope, inter, r, p, se)
+                # print("Regression results:", slope, inter, r, p, se)
                 pred = np.log(nodecenters[tgt])*slope + inter
 
                 # Robust reg
-                # huber = RANSACRegressor().fit(regx[:,np.newaxis], regy)
+                # huber = RANSACRegressor(PolyRegression()).fit(regx[:,np.newaxis], regy)
                 # predR = huber.predict(np.asarray([np.log(nodecenters[tgt])])[:,np.newaxis])
-                slope, inter, cilo, ciup = theilslopes(regy, regx)
-                predR = np.log(nodecenters[tgt])*slope + inter
+                def predict(beta, x):
+                    return(beta[0] + beta[1]*x + beta[2]*(x**2) + beta[3]*(x**3))
+
+                # def residfunc(beta):
+                #     return(regy - predict(beta, regx))
+
+                # fit = least_squares(residfunc, [1,1,1,1], loss='soft_l1')
+                # print(fit)
+                # predR = predict(fit.x, np.log(nodecenters[tgt]))
+                # print(predR)
+
+                from statsmodels.regression.quantile_regression import QuantReg
+
+                regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
+
+                res = QuantReg(regy, regx_poly).fit(q=0.2)
+                predR = predict(res.params, np.log(nodecenters[tgt])) + 0.3
+                print(predR)
+
+                # Theil-Sen linear
+                # slope, inter, cilo, ciup = theilslopes(regy, regx)
+                # predR = np.log(nodecenters[tgt])*slope + inter
 
                 # Cubic fit
                 pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
                 predC = pol(np.log(nodecenters[tgt]))
-                return pred, predR, predC
+                print("cub", predC)
+
+                # oversubtracted cubic
+                predCO = (predC - bgpow)*oversubalpha + bgpow
+                return pred, predR, predC, predCO
 
             for w in range(len(xs)):
-                wind_lvl[w], wind_lvlR[w], wind_lvlC[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
+                wind_lvl[w], wind_lvlR[w], wind_lvlC[w], wind_lvlCO[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
+            print("tgt", sig_lvl)
+            print("wind poly", wind_lvlC)
 
             self.p_legend = pg.LegendItem()
             self.p_legend.setParentItem(self.p_plot)
@@ -2362,16 +2428,20 @@ class AviaNZ(QMainWindow):
             self.plotExtra2.setPen(fn.mkPen(color='r', width=2))
             self.p_legend.addItem(self.plotExtra2, 'ols')
             self.plotExtra3 = pg.PlotDataItem(xs, wind_lvlR)
-            self.plotExtra3.setPen(fn.mkPen(color='g', width=2))
-            self.p_legend.addItem(self.plotExtra3, 'theil')
+            self.plotExtra3.setPen(fn.mkPen(color=(0, 200, 0), width=2))
+            self.p_legend.addItem(self.plotExtra3, 'robust')
             self.plotExtra4 = pg.PlotDataItem(xs, wind_lvlC)
             self.plotExtra4.setPen(fn.mkPen(color='b', width=2))
             self.p_legend.addItem(self.plotExtra4, 'cubic')
+            self.plotExtra5 = pg.PlotDataItem(xs, wind_lvlCO)
+            self.plotExtra5.setPen(fn.mkPen(color=(80,30,255), width=2))
+            self.p_legend.addItem(self.plotExtra5, 'cub-over')
             self.plotaxis.setLabel('Log mean power')
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)
             self.p_plot.addItem(self.plotExtra4)
+            self.p_plot.addItem(self.plotExtra5)
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":
@@ -3555,6 +3625,24 @@ class AviaNZ(QMainWindow):
         self.config['invertColourMap'] = self.invertcm.isChecked()
         self.setColourLevels()
 
+    def setSpectrogram(self, sg):
+        """ Normalizes the provided raw spectrogram (ndarray), puts it on self,
+            and precalculates some cached properties from it.
+            Does NOT update graphics - only internal objects.
+        """
+        # normalize, log, convert to db
+        if self.batmode:
+            # NOTE batmode assumes spectrogram was already normalized to 0-1
+            sgNorm = np.abs(np.where(sg==0, -30.0, 10.0 * np.log10(sg)))
+        else:
+            # Standardizes to 1-Inf
+            rawmin = max(np.min(sg), 1e-9)
+            # 10log10 (sg/min(sg))
+            sgNorm = np.abs(np.where(sg==0, 0.0, 10.0 * (np.log10(sg) - np.log10(rawmin))  ))
+        self.sgMinimum = np.min(sgNorm)
+        self.sgMaximum = np.max(sgNorm)
+        self.sg = sgNorm
+
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
@@ -3562,8 +3650,8 @@ class AviaNZ(QMainWindow):
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
+        minsg = self.sgMinimum
+        maxsg = self.sgMaximum
 
         if self.config['invertColourMap']:
             self.config['brightness'] = self.brightnessSlider.value()
@@ -4019,8 +4107,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
                 sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+                self.setSpectrogram(sgRaw)
 
                 # If the size of the spectrogram has changed, need to update the positions of things
                 if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
@@ -4177,8 +4264,7 @@ class AviaNZ(QMainWindow):
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            maxsg = max(np.min(sgRaw), 1e-9)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            self.setSpectrogram(sgRaw)
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4241,8 +4327,7 @@ class AviaNZ(QMainWindow):
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            maxsg = max(np.min(sgRaw), 1e-9)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            self.setSpectrogram(sgRaw)
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4302,8 +4387,7 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            maxsg = max(np.min(sgRaw), 1e-9)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            self.setSpectrogram(sgRaw)
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
@@ -4329,8 +4413,7 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.data = self.audiodata
                     sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                    maxsg = max(np.min(sgRaw), 1e-9)
-                    self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                    self.setSpectrogram(sgRaw)
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
                         self.audiodata)
@@ -4982,7 +5065,7 @@ class AviaNZ(QMainWindow):
                 else:
                     ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=(settings["wind"] and not OLD_WIND_REMOVER))
                 # Or if no params are passed, they will be read from the filter file TimeRange:
                 # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 

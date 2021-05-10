@@ -365,13 +365,17 @@ def reconstruct(np.ndarray data, int node, np.ndarray wv_rec_hi, np.ndarray wv_r
     else:
         data = np.convolve(data, wv_rec_lo, 'same')
     # cut ends because the WP process produces too long WC vectors
-    data = data[wv_hi_len//2-1 : -(wv_lo_len//2-1)]
+    # data = data[wv_hi_len//2 : -wv_lo_len//2]
 
     # and then proceed with standard upsampling o convolution, J-1 times
     node = (node - 1)//2
     lvl = lvl - 1
+    extlen = (wv_hi_len+wv_lo_len)//8
 
     while lvl != 0:
+        # extend the ends symmetrically
+        data = np.concatenate((data[extlen::-1], data, data[-1:-extlen:-1]))
+
         # allocate mem for upsampled output
         data_len = len(data)
         if node % 2 == 0:

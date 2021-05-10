@@ -272,7 +272,7 @@ class WaveletFunctions:
                 data = data[0::2]
 
             # symmetric mode
-            data = np.concatenate((data[0:flen:-1], data, data[-flen:]))
+            data = np.concatenate((data[flen::-1], data, data[-1:-flen:-1]))
             # zero-padding mode
             # data = np.concatenate((np.zeros(8), tree[node], np.zeros(8)))
 
@@ -281,7 +281,7 @@ class WaveletFunctions:
             if childa in nodes:
                 # fftconvolve seems slower and the caching results in high RAM usage
                 # nexta = signal.fftconvolve(data, wavelet.dec_lo, 'same')[1:-1]
-                nexta = np.convolve(data, wavelet.dec_lo, 'same')[1:-1]
+                nexta = np.convolve(data, wavelet.dec_lo, 'same')[flen:-flen]
                 # antialias A_j+1
                 if antialias:
                     if antialiasFilter:
@@ -298,7 +298,7 @@ class WaveletFunctions:
                 self.tree.append(np.array([]))
 
             if childd in nodes:
-                nextd = np.convolve(data, wavelet.dec_hi, 'same')[1:-1]
+                nextd = np.convolve(data, wavelet.dec_hi, 'same')[flen:-flen]
                 # antialias D_j+1
                 if antialias:
                     if antialiasFilter:
@@ -386,7 +386,10 @@ class WaveletFunctions:
         realwindow = WCperWindow / nodefs
 
         # or nwindows = math.floor(datalengthSec / realwindow)
-        nwindows = math.floor(len(self.tree[node])/2 / WCperWindow)
+        if wpantialias:
+            nwindows = math.floor(len(self.tree[node])/2 / WCperWindow)
+        else:
+            nwindows = math.floor(len(self.tree[node]) / WCperWindow)
         maxnumwcs = nwindows * WCperWindow
 
         # Sanity check for empty node:
