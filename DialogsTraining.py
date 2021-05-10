@@ -1952,7 +1952,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Select data')
             self.setSubTitle('Choose the recogniser that you want to extend with CNN, then select training data.')
 
-            self.setMinimumSize(300, 200)
+            self.setMinimumSize(300, 600)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1997,6 +1997,9 @@ class BuildCNNWizard(QWizard):
             self.rbtn2 = QRadioButton('Annotated all calls')
             self.rbtn2.annt = "All"
             self.rbtn2.toggled.connect(self.onClicked)
+            self.rbtn3 = QRadioButton('Annotated all calls, do not run wavelets')
+            self.rbtn3.annt = "All-nowt"
+            self.rbtn3.toggled.connect(self.onClicked)
 
             space = QLabel()
             space.setFixedHeight(10)
@@ -2020,6 +2023,7 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(QLabel('How is your manual annotation?'), 8, 0)
             layout.addWidget(self.rbtn1, 9, 0)
             layout.addWidget(self.rbtn2, 10, 0)
+            layout.addWidget(self.rbtn3, 11, 0)
             layout.addWidget(space, 3, 2)
             self.setLayout(layout)
 
@@ -2053,7 +2057,7 @@ class BuildCNNWizard(QWizard):
 
         def isComplete(self):
             if self.speciesCombo.currentText() != "Choose recogniser..." and (self.trainDirName1.text() or self.trainDirName2.text()):
-                self.cnntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.rbtn2.isChecked())
+                self.cnntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.anntlevel)
                 return True
             else:
                 return False
@@ -2195,7 +2199,7 @@ class BuildCNNWizard(QWizard):
             if self.field("trainDir2"):
                 self.msgadir.setText("\n<b>Auto processed and reviewed:</b> %s" % (self.field("trainDir2")))
 
-            # Get training data 
+            # Get training data
             with pg.BusyCursor():
                 self.cnntrain.genSegmentDataset(self.hasant1)
 
@@ -2211,13 +2215,13 @@ class BuildCNNWizard(QWizard):
             self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.cnntrain.trainN[-1]))
 
             # We need at least some number of segments from each class to proceed
-            if min(self.cnntrain.trainN) < self.LearningDict['minPerClass']:    
+            if min(self.cnntrain.trainN) < self.LearningDict['minPerClass']:
                 print('Warning: Need at least %d segments from each class to train CNN' % self.LearningDict['minPerClass'])
                 self.warnseg.setText('<b>Warning: Need at least %d segments from each class to train CNN\n\n</b>' % self.LearningDict['minPerClass'])
 
             if not self.cnntrain.correction and self.wizard().browsedataPage.anntlevel == 'Some':
                 self.warnoise.setText('Warning: No segments found for Noise class\n(no correction segments/fully (manual) annotations)')
-            
+
             freeGB,totalbytes = self.cnntrain.checkDisk()
 
             if freeGB < 10:
@@ -2242,7 +2246,6 @@ class BuildCNNWizard(QWizard):
                 return True
 
         def cleanupPage(self):
-            pass
             self.msgmdir.setText('')
             self.msgadir.setText('')
             self.warnnoannt1.setText('')
@@ -2258,10 +2261,7 @@ class BuildCNNWizard(QWizard):
             self.msgrecfs.setText('')
 
         def isComplete(self):
-            if (self.hasant1 or self.hasant2) and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']:
-                return True
-            else:
-                return False
+            return (self.hasant1 or self.hasant2) and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']
 
     # page 3 - set parameters, generate data and train
     class WPageParameters(QWizardPage):

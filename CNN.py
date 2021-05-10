@@ -33,7 +33,6 @@ import math
 import SignalProc
 import WaveletSegment
 import Segment
-import WaveletFunctions
 import SupportClasses
 import librosa
 import wavio
@@ -455,10 +454,10 @@ class GenerateData:
 
     def findNoisesegments(self, dirName):
         ''' dirName got manually annotated GT.data
+        Generates auto segments by running wavelet detection
         Find noise segments by diff of auto segments and GT.data
         :returns noise segments [[filename, seg, label], ...]
         '''
-
         manSegNum = 0
         window = 1
         inc = None
@@ -494,30 +493,62 @@ class GenerateData:
                 if os.path.isfile(wavFile + '.data'):
                     segments = Segment.SegmentList()
                     segments.parseJSON(wavFile + '.data')
-                    sppSegments = segments.getSpecies(self.species)
+                    sppSegments = [segments[i] for i in segments.getSpecies(self.species)]
                 for segAuto in item[1]:
                     overlappedwithGT = False
-                    for ind in sppSegments:
-                        segGT = segments[ind]
+                    for segGT in sppSegments:
                         if self.Overlap(segGT, segAuto):
                             overlappedwithGT = True
                             break
-                        else:
-                            continue
                     if not overlappedwithGT:
                         noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
         return noiseSegments
 
+    def findAllsegments(self, dirName):
+        ''' dirName got manually annotated GT.data
+        Generates noise segments as the complement to GT segments
+        (i.e. every not marked second is used as noise)
+        :returns noise segments [[filename, seg, label], ...]
+        '''
+        manSegNum = 0
+        window = 1
+        inc = None
+        noiseSegments = []
+        segmenter = Segment.Segmenter()
+        print('Generating GT...')
+        for root, dirs, files in os.walk(dirName):
+            for file in files:
+                wavFile = os.path.join(root, file)
+                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                    # Generate GT files from annotations in dir1
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(wavFile + '.data')
+                    sppSegments = segments.getSpecies(self.species)
+                    manSegNum += len(sppSegments)
+
+                    # Currently, we ignore call types here and just
+                    # look for all calls for the target species.
+                    segments.exportGT(wavFile, self.species, window=window, inc=inc)
+
+                    print('Determining noise...')
+                    autoseg = Segment.SegmentList()
+                    for sec in range(math.floor(segments.metadata["Duration"])-1):
+                        autoseg.addSegment([sec, sec+1, 0, 0, []])
+                    autoSegments = segmenter.joinGaps(autoseg, maxgap=0)
+
+                    print("autoSeg, file", wavFile, autoSegments)
+                    for segAuto in autoSegments:
+                        noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
+
+        if manSegNum == 0:
+            print("ERROR: no segments for species %s found" % self.species)
+            return
+
+        return noiseSegments
+
     def Overlap(self, segGT, seg):
         # return True if the two segments, segGT and seg overlap
-        if segGT[1] >= seg[0] >= segGT[0]:
-            return True
-        elif segGT[1] >= seg[1] >= segGT[0]:
-            return True
-        elif segGT[1] <= seg[1] and segGT[0] >= seg[0]:
-            return True
-        else:
-            return False
+        return seg[0]<=segGT[1] and seg[1]>=segGT[0]
 
     def getImgCount(self, dirName, dataset, hop):
         '''
@@ -556,7 +587,9 @@ class GenerateData:
 
     def generateFeatures(self, dirName, dataset, hop):
         '''
-        Read the segment library and generate features, training
+        Read the segment library and generate features, training.
+        Similar to SignalProc.generateFeaturesCNN, except this one saves images
+            to disk instead of returning them.
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop:
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
@@ -566,6 +599,8 @@ class GenerateData:
         eps = 0.0005
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
         N = [0 for i in range(len(self.calltypes) + 1)]
+        sp = SignalProc.SignalProc(self.windowwidth, self.inc)
+        sp.sampleRate = self.fs
 
         for record in dataset:
             # Compute features, also consider tiny segments because this would be the case for song birds.
@@ -590,48 +625,42 @@ class GenerateData:
             else:
                 n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
             print('* hop:', hop, 'n:', n, 'label:', record[-1])
+
             try:
-                audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
+                # load file
+                sp.readWav(record[0], len=duration, off=record[1][0])
+                sp.resample(self.fs)
+                sgRaw = sp.spectrogram()
+                # Could bandpass here if relevant:
+                # if f1 != 0 and f2 != 0:
+                #     audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
             except Exception as e:
                 print("Warning: failed to load audio because:", e)
                 continue
+
             N[record[-1]] += n
-            sp = SignalProc.SignalProc(self.windowwidth, self.inc)
-            sp.data = audiodata
-            sp.sampleRate = self.fs
-            sgRaw = sp.spectrogram(self.windowwidth, self.inc)
+
+            # Frequency masking
+            bin_width = self.fs / 2 / np.shape(sgRaw)[1]
+            lb = int(np.ceil(self.f1 / bin_width))
+            ub = int(np.floor(self.f2 / bin_width))
+            sgRaw[:, 0:lb] = 0.0
+            sgRaw[:, ub:] = 0.0
 
             for i in range(int(n)):
-                print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '************************************')
-                # start = int(hop * i * fs)
-                # end = int(hop * i * fs + length * fs)
-                # if end > len(audiodata):
-                #     end = len(audiodata)
-                #     start = int(len(audiodata) - length * fs)
-                # audiodata_i = audiodata[start: end]
-                # audiodata_i = audiodata_i.tolist()
-                # featuresa.append([audiodata_i, record[-1]])
-
+                print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '**')
                 # Sgram images
                 sgstart = int(hop * i * self.fs / sp.incr)
                 sgend = sgstart + specFrameSize
                 if sgend > np.shape(sgRaw)[0]:
+                    # Adjusting the final frame to be full width
                     sgend = np.shape(sgRaw)[0]
                     sgstart = np.shape(sgRaw)[0] - specFrameSize
-                if sgstart < 0:
-                    continue
                 sgRaw_i = sgRaw[sgstart:sgend, :]
-                # Frequency masking
-                bin_width = self.fs / 2 / np.shape(sgRaw_i)[1]
-                lb = int(np.ceil(self.f1 / bin_width))
-                ub = int(np.floor(self.f2 / bin_width))
-                sgRaw_i[:, 0:lb] = 0.0
-                sgRaw_i[:, ub:] = 0.0
 
-                maxg = np.max(sgRaw_i)
                 # Normalize and rotate
+                maxg = np.max(sgRaw_i)
                 sgRaw_i = np.rot90(sgRaw_i / maxg)
-                print(np.shape(sgRaw_i))
 
                 # Save train data: individual images as npy
                 np.save(os.path.join(dirName, str(record[-1]),
@@ -641,30 +670,6 @@ class GenerateData:
 
         print('\n\nCompleted feature extraction')
         return specFrameSize, N
-
-    def loadFile(self, filename, duration=0.0, offset=0, fs=0, denoise=False, f1=0, f2=0):
-        """
-        Read audio file and preprocess as required.
-        """
-        if duration == 0:
-            duration = None
-
-        sp = SignalProc.SignalProc(256, 128)
-        sp.readWav(filename, duration, offset)
-        sp.resample(fs)
-        sampleRate = sp.sampleRate
-        audiodata = sp.data
-
-        # # pre-process
-        if denoise:
-            WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=10, samplerate=fs)
-            audiodata = WF.waveletDenoise(thresholdType='soft', maxLevel=10)
-
-        if f1 != 0 and f2 != 0:
-            # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
-            audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
-
-        return audiodata
 
 
 class CustomGenerator(tf.keras.utils.Sequence):
