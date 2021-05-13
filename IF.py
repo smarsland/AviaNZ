@@ -34,15 +34,17 @@
 #######################################
 
 #######################TODO: 
-# 1) check definition of class
-# 2)check use of classes
-# 3)check PenalFunction
-# 4) Review use of matlab function_handle => we need something more efficient
+# X 1) check definition of class ok
+# 2)check use of classes 
+# X 3)check PenalFunction => PenalFunction is a dictionary with elements '1' and '2' done
+# X 4) Review use of matlab function_handle => we need something more efficient
 # 5) check indexing
+# 6) Check all find
 
 
 import numpy as np
 import math
+import types
 
 class ecinfo:
     #reproduce homonimous structure in the original code
@@ -60,6 +62,32 @@ class ec_class:
         self.pamp=pamp
         self.idr=idr
 
+class wopt:
+    #reproduce homonimous structure in the original code
+    def __init__(self, TFRname,sampleRate,Wavelet_type,f0,fmin,fmax):
+        wopt.TFRname=TFRname
+        if TFRname=='WT':
+            wopt.wp=wp; #parameters of the wavelet
+            
+            #wopt.PadLR={padleft,padright}; I don't thinkwe need it 
+        else:
+            wp.fwt = func2str(wp.fwt)
+            #varargout{2} = wp;
+
+        
+        wopt.fs=sampleRate;
+        wopt.Wavelet=Wavelet_type;
+        wopt.f0=f0;
+        wopt.fmin=fmin;
+        wopt.fmax=fmax;
+        #wopt.nv=nv; wopt.nvsim=nvsim;
+        #wopt.Padding=PadMode;
+        #wopt.RelTol=RelTol;
+        #wopt.Preprocess=Preprocess;
+        #wopt.Plot=PlotMode;
+        #wopt.Display=DispMode;
+        #wopt.CutEdges=CutEdges;
+
 
 class IF:
     def __init__(self,method=2,NormMode='off',DispMode='on', PlotMode='off', PathOpt='on'):
@@ -76,7 +104,7 @@ class IF:
         self.Skel=[]
         self.PathOpt=PathOpt
         #AmpFunc=@(x)log(x
-        PenalFunc={[],[]}
+        PenalFunc={'1':[],'2':[]}
         MaxIter=20
 
 
@@ -145,19 +173,19 @@ class IF:
             #Determine the frequency resolution
             #MATLAB diff difference between adjacent elements along first array dim
          
-        if np.min(freq)<=0 or np.std(np.diff(freq,1,0))<np.std(np.diff(log(freq1,1,0))):
+        if np.amin(freq)<=0 or np.std(np.diff(freq,1,0))<np.std(np.diff(log(freq1,1,0))):
             fres=1
             fstep=np.mean(np.diff(freq,1,0))
-            dfreq[:,0]=freq[0]-freq[-1:] 
-            dfreq[:,1]=freq[-1]-freq[-1:]
+            dfreq[:,0]=freq[0]-freq[-1:0:-1] 
+            dfreq[:,1]=freq[-1]-freq[-1::-1]
         else:
             fres=2
             fstep=np.mean(np.diff(log(freq,1,0)))
-            dfreq[:,0]=log(freq[0])-log(freq[-1:0])
-            dfreq[:,1]=log(freq[-1])-log(freq[-1:])
+            dfreq[:,0]=log(freq[0])-log(freq[-1:0:-1])
+            dfreq[:,1]=log(freq[-1])-log(freq[-1::-1])
 
         #Assign numerical parameters
-        if type(wopt) is dict:
+        if isclass(wopt):
             fs=wopt.fs
             DT=(wopt.wp.t2h-wopt.wp.t1h)
 
@@ -172,9 +200,9 @@ class IF:
                 DD=DF
 
         else:
-            fs=wopt(1)
+            fs=wopt[0]
             if method==1 or method==3:
-                DD=wopt(2)
+                DD=wopt[1]
 
         #//////////////////////////////////////////////////////////////////////////
         # TFR=abs(TFR) not needed. We already take absolute value in signalProc
@@ -192,11 +220,11 @@ class IF:
             #Construct matrices of ridge indices, frequencies and amplitudes:
             #[Ip],[Fp],[Qp], respectively; [Np] - number of peaks at each time.
             if Skel:
-                Np=Skel.Np
-                Ip=Skel.mt
-                Fp=Skel.nu
-                Qp=Skel.qm
-                Mp=np.maximum(Np)
+                Np=Skel[0]
+                Ip=Skel[1]
+                Fp=Skel[2]
+                Qp=Skel[3]
+                Mp=np.amax(Np)
             else:
                 if DispMode.lower!='off' and DispMode.lower!='notify':
                     print('Locating the amplitude peaks in TFR... ')
@@ -206,19 +234,19 @@ class IF:
                 #separate frequency and time indices of the peaks
                 idf=idft[:,0]
                 idt=idft[:,1]
-                idf=idf-1 #do we need it?
+                #idf=idf-1 #do we need it?
                 idb=np.argwhere(idf==1 or idf==NF)
                 #remove the border peaks
                 idft[idb]=[] 
                 idf[idb]=[]
                 idt[idb]=[]; 
                 dind=[0, np.ravel_multi_index(np.argwhere(np.diff(idt)>0),np.shape(np.argwhere(np.diff(idt)>0))),length(idt)]
-                Mp=np.maximum([np.maximum(np.diff(dind)),2])
+                Mp=np.amax([np.amax(np.diff(dind)),2])
                 Np=np.zeros((1,L))
                 idn=np.zeros((length(idt),1))
-                for dn in range(length(dind)-1):
+                for dn in range(length(dind)):
                     ii=np.arange(dind[dn]+1,dind[dn+1]+1,1)
-                    idn[ii]=np.arange(0,length[ii],1) #changef 1 in 0
+                    idn[ii]=np.arange(0,length[ii]+1,1) #changef 1 in 0
                     Np[idt(ii[0])]=length[ii]
                 idnt=np.unravel_index(idn[:],idt[:],[Mp,L])
                 #Quadratic interpolation to better locate the peaks
@@ -249,16 +277,15 @@ class IF:
                 #Display
                 if DispMode.lower!='off':
                     if DispMode.lower!='notify':
-                        print('(number of ridges:', np.round(np.mean(Np[tn1:tn2])), ' +- ',np.round(np.std(Np[tn1:tn2])), ' from ',np.minimum(Np),' to ',np.maximum(Np),')\n')
+                        print('(number of ridges:', np.round(np.mean(Np[tn1:tn2+1])), ' +- ',np.round(np.std(Np[tn1:tn2+1])), ' from ',np.minimum(Np),' to ',np.maximum(Np),')\n')
 
-                    idp=np.argwhere(Np[tn1:tn2]==0)
+                    idp=np.argwhere(Np[tn1:tn2+1]==0)
                     idb=np.ravel_multi_index(idp, np.shape(Np))
                     NB=length(idb);
                     if NB>0:
                        print('Warning: At ', NB, ' times there are no peaks (using border points instead).\n')
                 #If there are no peaks, assign border points
-                idp=np.argwhere(Np[tn1:tn2]==0)
-                idb=np.ravel_multi_index(idp, np.shape(Np)) 
+                idb=np.ravel_multi_index(np.argwhere(Np[tn1:tn2+1]==0), np.shape(Np)) 
                 idb=tn1-1+idb
                 NB=length(idb)
                 if NB>0:
@@ -325,7 +352,7 @@ class IF:
             eind[eind>NF]=NF;
     
             #Extract the indices of the peaks
-            for tn in range[tn1:tn2+1]:
+            for tn in range(tn1,tn2+1):
                 cind=eind[tn]
                 cs=np.abs[TFR[:,tn]]
         
@@ -333,10 +360,10 @@ class IF:
                 cpeak=cind
                 if cind>1 and cind<NF:
                     if cs[cind+1]==cs[cind-1] or submethod==2:
-                        cpeak1=cind-1+np.flatnonzero(cs[ind:-1]>=cs[cind-1:-2] and cs[cind:-1]>cs[cind+1:-1])[0]#check
-                        cpeak1=np.minimum([cpeak1,NF])
-                        cpeak2=cind+1-np.flatnonzero(cs[cind:1:-1]>=cs[cind+1:2:-1] and cs[cind:2:-1]>cs[cind-1:0:-1])[0]#check
-                        cpeak2=np.maximum([cpeak2,1])
+                        cpeak1=cind-1+np.flatnonzero(cs[cind:-1]>=cs[cind-1:-2] and cs[cind:-1]>cs[cind+1:])[0]#check
+                        cpeak1=np.amin([cpeak1,NF])
+                        cpeak2=cind+1-np.flatnonzero(cs[cind:1:-1]>=cs[cind+1:2:-1] and cs[cind:1:-1]>cs[cind-1::-1])[0]#check
+                        cpeak2=np.amax([cpeak2,1])
                         if cs[cpeak1]>0 and cs[cpeak2]>0:
                             if cpeak1-cind==cind-cpeak2:
                                 if cs[cpeak1]>cs[cpeak2]:
@@ -354,23 +381,23 @@ class IF:
                            cpeak=cpeak1
 
                     elif cs[cind+1]>cs[cind-1]:
-                        cpeak=cind-1+np.flatnonzero(cs[cind:-1]>=cs[cind-1:-1] and cs[cind:-1]>cs[cind+1:-1])[0]#check
-                        cpeak=np.minimum([cpeak,NF])
+                        cpeak=cind-1+np.flatnonzero(cs[cind:-1]>=cs[cind-1:-1] and cs[cind:-1]>cs[cind+1:])[0]#check
+                        cpeak=np.amin([cpeak,NF])
                     elif cs[cind+1]<cs[cind-1]:
-                        cpeak=cind+1-np.flatnonzero(cs[cind:1:-1]>cs[cind-1:0:-1] and cs[cind:1:-1]>=cs[cind+1:3:-1])[0]#check
-                        cpeak=np.maximum([cpeak,1])
+                        cpeak=cind+1-np.flatnonzero(cs[cind:0:-1]>cs[cind-1::-1] and cs[cind:0:-1]>=cs[cind+1:1:-1])[0]#check
+                        cpeak=np.amax([cpeak,1])
                 elif cind==1:
                     if cs[1]<cs[0]:
                        cpeak=cind
                     else:
-                        cpeak=1+np.flatnonzero(cs[cind+1:-1]>=cs[cind:-2] and cs[cind+1:-1]>cs[cind+2:-1])[0]#check
-                        cpeak=np.minimum([cpeak,NF]);
+                        cpeak=1+np.flatnonzero(cs[cind+1:-1]>=cs[cind:-2] and cs[cind+1:-1]>cs[cind+2:])[0]#check
+                        cpeak=np.amin([cpeak,NF]);
                 elif cind==NF:
                     if cs[NF-1]<cs[NF]:
                        cpeak=cind;
                     else:
-                        cpeak=NF-np.flatnonzero(cs[cind-1:1:-1]>cs[cind-2:0:-1] and cs[cind-1:1:-1]>=cs[cind:2:-1])[0]#check
-                        cpeak=np.maximum([cpeak,1])
+                        cpeak=NF-np.flatnonzero(cs[cind-1:0:-1]>cs[cind-2:0:-1] and cs[cind-1::-1]>=cs[cind:1:-1])[0]#check
+                        cpeak=np.amax([cpeak,1])
 
                 tfsupp[0,tn]=cpeak;
         
@@ -378,19 +405,19 @@ class IF:
                 iup=[]
                 idown=[]
                 if cpeak<NF-1:
-                   iup=cpeak+np.flatnonzero(cs[cpeak+1:-1]<=cs[cpeak:-2] and cs[cpeak+1:-1]<cs[cpeak+2:-1])[0]
+                   iup=cpeak+np.flatnonzero(cs[cpeak+1:-1]<=cs[cpeak:-2] and cs[cpeak+1:-1]<cs[cpeak+2:])[0]
 
                 if cpeak>2:
-                   idown=cpeak-np.flatnonzero(cs[cpeak-1:1:-1]<=cs[cpeak:2:-1] and cs[cpeak-1:1:-1]<cs[cpeak-2:0:-1])[0]#check
-                iup=np.minimum([iup,NF])
-                idown=np.maximum([idown,1])
+                   idown=cpeak-np.flatnonzero(cs[cpeak-1:0:-1]<=cs[cpeak:1:-1] and cs[cpeak-1:0:-1]<cs[cpeak-2::-1])[0]#check
+                iup=np.amin([iup,NF])
+                idown=np.amax([idown,1])
                 tfsupp[1,tn]=idown
                 tfsupp[2,tn]=iup
     
             #Transform to frequencies
             pind=tfsupp[0,:]
             tfsupp[:,tn1:tn2+1]=freq[tfsupp[:,tn1:tn2+1]]
-            pamp[tn1:tn2+1]=np.abs(TFR[ravel_multi_index([pind[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(TFR))]) #check
+            pamp[tn1:tn2+1]=np.abs(TFR[np.ravel_multi_index([pind[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(TFR))]) #check
     
             # NOT NEEDED?
             ##Optional output arguments
@@ -418,7 +445,7 @@ class IF:
             #if ~isempty(strfind(PlotMode,'on')), plotfinal(tfsupp,TFR,freq,fs,DispMode,PlotMode); end
             #if nargout>2, varargout{2}=Skel; end
     
-            return ec, Skel
+            return tfsupp,ecinfo, ec, Skel
 
         #--------------------------- Global Maximum -------------------------------
         if method.lower=='max' or length(pars)==2:
@@ -434,14 +461,14 @@ class IF:
                     TFR=TFR*(nfunc[:]*ones((1,L)))
 
                 for tn in range(tn1,tn2+1):
-                   [pamp[tn],pind[tn]]=np.maximum(abs(TFR[:,tn]))
-                tfsupp[1,tn1:tn2+1]=freq[pind[tn1:tn2+1]]
+                   [pamp[tn],pind[tn]]=np.amax(abs(TFR[:,tn]))
+                tfsupp[0,tn1:tn2+1]=freq[pind[tn1:tn2+1]]
                 if NormMode.lower=='on':
                     TFR=TFR/(nfunc[:]*ones((1,L)))
                     pamp[tn1:tn2+1]=pamp[tn1:tn2+1]/(nfunc[pind[tn1:tn2+1]].T)
             else:
                 for tn in range(tn1,tn2+1):
-                   [pamp[tn],idr[tn]]=np.maximum(Wp[0:Np[tn],tn])
+                   [pamp[tn],idr[tn]]=np.amax(Wp[0:Np[tn]+1,tn])
                 
                 lid=ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Fp)) 
                 tfsupp[0,tn1:tn2+1]=Fp[lid]
@@ -480,7 +507,7 @@ class IF:
             #Main part
             for tn in range(timax+1,tn2+1):
                idr[tn]=np.argmin(np.abs(Ip[0:Np[tn],tn]-idr[tn-1]))
-            for tn in range(timax-1,tn1,-1):
+            for tn in range(timax-1,tn1-1,-1):
                idr[tn]=np.argmin(np.abs(Ip[0:Np[tn],tn]-idr[tn+1]))
             lid=np.ravel_multi_index(idr[tn1:tn2],np.arange(tn1,tn2+1),np.shape(Fp))
             tfsupp[0,tn1:tn2+1]=Fp[lid]
@@ -508,18 +535,27 @@ class IF:
             if DispMode.lower!='off' and DispMode.lower!='notify':
                 print('Extracting the curve by I scheme.\n')
             #Define the functionals
-            if not PenalFunc[1]:
-                def logw1(x):
-                    return (x)-pars(1)*abs(fs*x/DD)
+            #if not PenalFunc[1]:
+            #    def logw1(x):
+            #        return (x)-pars(1)*abs(fs*x/DD)
+            #else:
+            #   def logw1(x):
+            #       return (x)*PenalFunc[1][fs*x,DD]
+            #if not PenalFunc[2]:
+            #   def logw2(x):
+            #       return []
+            #else:
+            #   def logw2(x):
+            #       return (x)*PenalFunc[2][x,DF]
+
+            if not PenalFunc['1']:
+                logw1= lambda x, pars,fs, DD: (x)-pars(1)*abs(fs*x/DD)
             else:
-               def logw1(x):
-                   return (x)*PenalFunc[1][fs*x,DD]
-            if not PenalFunc[2]:
-               def logw2(x):
-                   return []
+               logw1= lambda x, PenalFunc, fs, DD: (x)*PenalFunc['1'][fs*x,DD] #check
+            if not PenalFunc['2']:
+               logw2= lambda x: []
             else:
-               def logw2(x):
-                   return (x)*PenalFunc[2][x,DF]
+               logw2=lambda x, PenalFunc: (x)*PenalFunc['2'][x,DF] #check
             #Main part
             if PathOpt.lower=='on':
                 idr=pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode) #check
@@ -527,7 +563,7 @@ class IF:
                [idr,timax,fimax]=onestepopt(Np,Ip,Fp,Wp,logw1,logw2,freq,DispMode)
             lid=np.ravel_multi_index(idr[tn1:tn2+1],np.arange[tn1:tn2+1], np.shape(Fp))
             tfsupp[0,tn1:tn2+1]=Fp[lid]
-            pind[tn1:tn2]=np.round(Ip[lid])
+            pind[tn1:tn2+1]=np.round(Ip[lid])
             pamp[tn1:tn2+1]=Qp[lid]
 
             #Assign the output structure and display, if needed
@@ -607,18 +643,14 @@ class IF:
                    smv[0]=10^(-32)/fs
                 if smv[1]<=0:
                     smv[1]=10^(-16)
-                if not PenalFunc[1]:
-                   def logw1(x):
-                       return (x)-pars[1]*abs((x-mv(1))/smv(1))
+                if not PenalFunc['1']:
+                   logw1= lambda x, pars, mv, smv: (x)-pars[1]*abs((x-mv(1))/smv(1))
                 else:
-                   def logw1(x):
-                       return (x)*PenalFunc[1][x,mv(1),smv(1)] 
-                if not PenalFunc[2]:
-                   def logw2(x):
-                       return (x)-pars[1]*abs((x-mv[2])/smv[1]) 
+                   logw1= lambda x,PenalFunc, mv, smv: (x)*PenalFunc['1'][x,mv(1),smv(1)] 
+                if not PenalFunc['2']:
+                   logw2 = lambda x, pars, mv, smv: (x)-pars[1]*abs((x-mv[2])/smv[1]) 
                 else:
-                   def logw2(x):
-                       return (x)*PenalFunc[2][x,mv[2],smv[1]]
+                   logw2 = lambda x, PenalFunc, mv, smv: (x)*PenalFunc['2'][x,mv[2],smv[1]]
                 #Calculate all
                 pind0=pind;
                 if PathOpt.lower=='on':
@@ -719,9 +751,9 @@ class IF:
             if cpeak<NF-1:
                iup=cpeak+np.ravel_multi_index(np.nonzero(cs[cpeak+1:-1]<=cs[cpeak:-2] and cs[cpeak+1:-1]<cs[cpeak+2:]))[0]
             if cpeak>2: 
-                idown=cpeak-np.ravel_multi_index(np.nonzero(cs[cpeak-1:0:-1]<=cs[cpeak:2:-1] and cs[cpeak-1:1:-1]<cs[cpeak-2:0:-1]))
-            iup=np.minimum(iup,NF) 
-            idown=np.maximum(idown,1)
+                idown=cpeak-np.ravel_multi_index(np.nonzero(cs[cpeak-1:0:-1]<=cs[cpeak:1:-1] and cs[cpeak-1:0:-1]<cs[cpeak-2::-1]))
+            iup=np.amin(iup,NF) 
+            idown=np.amax(idown,1)
             tfsupp[1,tn]=idown
             tfsupp[2,tn]=iup
  
@@ -745,7 +777,7 @@ class IF:
         #==========================================================================
 
         #==================== Path optimization algorithm =========================
-    def pathopt(Np,Ip,Fp,Wp,logw1,freq,DispMode):
+    def pathopt(Np,Ip,Fp,Wp,logw1, logw2,freq,DispMode):
         #maybe logw1 and logw2 not neeeded
         [Mp,L]=np.shape(Fp)
         NF=length(freq)
@@ -756,25 +788,29 @@ class IF:
 
             ##TO DO
         #Weighting functions
-        #if ~isa(logw1,'function_handle')
-        #    if isempty(logw1)
-        #        logw1=zeros(2*NF+1,L);
-        #    else
-        #        logw1=[2*logw1(1)-logw1(2);logw1(:);2*logw1(end)-logw1(end-1)];
+        if not isinstance(logw1, types.LambdaType):
+            if logw1==[]:
+                logw1=np.zeros((2*NF+1,L))
+            else:
+                logw1=[[2*logw1[0]-logw1[1]],[logw1[:]],[2*logw1[-1]-logw1[-2]]] #from here
         #    end
         #end
-        #if ~isa(logw2,'function_handle')
-        #    if isempty(logw2)
-        #        W2=zeros(Mp,L);
-        #    else
-        #        logw2=[2*logw2(1)-logw2(2);logw2(:);2*logw2(end)-logw2(end-1);NaN;NaN];
-        #        ci=Ip; ci(isnan(ci))=NF+2; cm=ci-floor(ci); ci=floor(ci);
-        #        W2=(1-cm).*logw2(ci+1)+cm.*logw2(ci+2); clear ci cm;
-        #    end
-        #else
-        #    W2=logw2(Fp);
-        #end
-        #W2=Wp+W2;
+        if not isinstance(logw2, types.LambdaType):
+            if logw2==[]:
+                W2=np.zeros((Mp,L))
+            else:
+                logw2=[[2*logw2[0]-logw2[1]],[logw2[:]],[2*logw2[-1]-logw2[-2]],[NaN],[NaN]]
+                ci=Ip
+                ci[np.isnan(ci)]=NF+2
+                cm=ci-np.floor(ci)
+                ci=np.floor(ci);
+                W2=(1-cm)*logw2[ci+1]+cm*logw2[ci+2]
+                del ci, cm
+            
+        else:
+            W2=logw2(Fp)
+        
+        W2=Wp+W2;
 
         #The algorithm by itself
         q=np.zeros((Mp,L))*NaN 
@@ -846,25 +882,28 @@ class IF:
 
            ##TO DO
         #%Weighting functions
-        #if ~isa(logw1,'function_handle')
-        #    if isempty(logw1)
-        #        logw1=zeros(2*NF+1,L);
-        #    else
-        #        logw1=[2*logw1(1)-logw1(2);logw1(:);2*logw1(end)-logw1(end-1)];
-        #    end
-        #end
-        #if ~isa(logw2,'function_handle')
-        #    if isempty(logw2)
-        #        W2=zeros(Mp,L);
-        #    else
-        #        logw2=[2*logw2(1)-logw2(2);logw2(:);2*logw2(end)-logw2(end-1);NaN;NaN];
-        #        ci=Ip; ci(isnan(ci))=NF+2; cm=ci-floor(ci); ci=floor(ci);
-        #        W2=(1-cm).*logw2(ci+1)+cm.*logw2(ci+2); clear ci cm;
-        #    end
-        #else
-        #    W2=logw2(Fp);
-        #end
-        #W2=Wp+W2;
+        if not isinstance(logw1, types.LambdaType):
+            if logw1==[]:
+                logw1=np.zeros((2*NF+1,L))
+            else:
+                logw1=[[2*logw1[0]-logw1[1]],[logw1[:]],[2*logw1[-1]-logw1[-2]]]
+
+        if not isinstance(logw2, types.LambdaType):
+            if logw2==[]:
+                W2=np.zeros((Mp,L))
+            else:
+                logw2=[[2*logw2[0]-logw2[1]],[logw2[:]],[2*logw2[-1]-logw2[-2]],[NaN],[NaN]];
+                ci=Ip
+                ci[np.isnan(ci)]=NF+2
+                cm=ci-np.floor(ci)
+                ci=np.floor(ci)
+                W2=(1-cm)*logw2[ci+1]+cm*logw2[ci+2]
+                del ci, cm
+            
+        else:
+            W2=logw2(Fp)
+        
+        W2=Wp+W2
 
         #The algorithm by itself
         imax=np.argmax(W2[:])
@@ -873,25 +912,31 @@ class IF:
         idid[timax]=fimax
 
         #TO DO
-        #if isa(logw1,'function_handle')
-        #    for tn=timax+1:tn2
-        #        cf=Fp(1:Np(tn),tn)-Fp(idid(tn-1),tn-1);
-        #        CW1=logw1(cf); [~,idid(tn)]=max(W2(1:Np(tn),tn)+CW1);
-        #    end
-        #    for tn=timax-1:-1:tn1
-        #        cf=-Fp(1:Np(tn),tn)+Fp(idid(tn+1),tn+1);
-        #        CW1=logw1(cf); [~,idid(tn)]=max(W2(1:Np(tn),tn)+CW1);
-        #    end
-        #else
-        #    for tn=timax+1:tn2
-        #        ci=NF+Ip(1:Np(tn),tn)-Ip(idid(tn-1),tn-1); cm=ci-floor(ci); ci=floor(ci);
-        #        CW1=(1-cm).*logw1(ci+1)+cm.*logw1(ci+2); [~,idid(tn)]=max(W2(1:Np(tn),tn)+CW1);
-        #    end
-        #    for tn=timax-1:-1:tn1
-        #        ci=NF-Ip(1:Np(tn),tn)+Ip(idid(tn+1),tn+1); cm=ci-floor(ci); ci=floor(ci);
-        #        CW1=(1-cm).*logw1(ci+1)+cm.*logw1(ci+2); [~,idid(tn)]=max(W2(1:Np(tn),tn)+CW1);
-        #    end
-        #end
+        if isinstance(logw1, types.LambdaType):
+            for tn in range(timax+1,tn2+1):
+                cf=Fp[1:Np[tn],tn]-Fp[idid[tn-1],tn-1]
+                CW1=logw1(cf)
+                idid[tn]=np.unravel_index(np.argmax(W2[0:Np[tn]+1,tn]+CW1),np.shape(W2))[1]
+            for tn in range(timax-1,tn1-1,-1):
+                cf=-Fp[0:Np[tn]+1,tn]+Fp[idid[tn+1],tn+1]
+                CW1=logw1(cf)
+                idid[tn]=np.unravel_index(np.argmax(W2[0:Np[tn]+1,tn]+CW1),np.shape(W2))[1]
+            
+        else:
+            for tn in range(timax+1,tn2+1):
+                ci=NF+Ip[0:Np[tn]+1,tn]-Ip[idid[tn-1],tn-1]
+                cm=ci-np.floor(ci)
+                ci=np.floor(ci);
+                CW1=(1-cm)*logw1[ci+1]+cm*logw1[ci+2]
+                idid[tn]=np.unravel_index(np.argmax(W2[0:Np(tn)+1,tn]+CW1),np.shape(W2))
+            
+            for tn in range(timax-1,tn-1,-1):
+                ci=NF-Ip[0:Np(tn)+1,tn]+Ip[idid[tn+1],tn+1]
+                cm=ci-np.floor(ci)
+                ci=np.floor[ci]
+                CW1=(1-cm)*logw1[ci+1]+cm*logw1[ci+2] 
+                idid[tn]=np.unravel_index(np.argmax(W2[0:Np[tn]+1,tn]+CW1),np.shape(W2))
+     
 
         ##if nargout>1, 
         #varargout{1}=timax
