@@ -1040,8 +1040,10 @@ class Segmentation(QDialog):
         self.chpLayout.addRow("Max length (s):", self.maxlen)
 
         self.wind = QCheckBox("Remove wind")
+        self.windold = QCheckBox("Remove wind, old method")
         self.rain = QCheckBox("Remove rain")
         Box.addWidget(self.wind)
+        Box.addWidget(self.windold)
         Box.addWidget(self.rain)
         Box.addWidget(self.maxgaplbl)
         Box.addWidget(self.maxgap)
@@ -1084,6 +1086,7 @@ class Segmentation(QDialog):
                 for ww in range(item.layout().count()):
                     item.layout().itemAt(ww).widget().hide()
         self.algs.show()
+        self.windold.show()
         self.wind.show()
         # self.rain.show()
         self.minlenlbl.show()
@@ -1178,7 +1181,7 @@ class Segmentation(QDialog):
             filtname = None
         settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
-                    "CCThr1": self.CCThr1.text(), "filtname": filtname, "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
+                    "CCThr1": self.CCThr1.text(), "filtname": filtname, "wind": self.wind.isChecked(), "windold": self.windold.isChecked(), "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
                     "chp2l": self.chp2l.isChecked()}
         return(alg, settings)

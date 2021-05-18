@@ -420,9 +420,8 @@ class Clustering:
         '''
         allnodes = range(1, 2 ** (nlevels + 1) - 1)
         inband = []
-        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=fs)
         for i in allnodes:
-            flow, fhigh = WF.getWCFreq(i, fs)
+            flow, fhigh = WaveletFunctions.getWCFreq(i, fs)
             if flow < f2 and fhigh > f1:
                 inband.append(i-1)
 

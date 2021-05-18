@@ -30,6 +30,78 @@ import time
 import Wavelet
 import SignalProc
 
+# A pair of helper functions that are often useful:
+def graycode(n):
+    """ Returns a MODIFIED Gray permutation of n -
+        which corresponds to the frequency band of position n.
+        Input and output are integer ranks indicating position within level."""
+    # convert number to binary repr string:
+    n = bin(n)[2:]
+    out = ''
+    # never flip first bit
+    toflip = False
+    while n!='':
+        # store leftmost bit or its complement to output
+        if toflip:
+            out = out + str(1-int(n[0]))
+        else:
+            out = out + n[0]
+        # strip leftmost bit
+        n = n[1:]
+        # if this bit was 1, flip next bit
+        toflip = bool(out[-1]=='1')
+
+    return(int(out, 2))
+
+def getWCFreq(node, sampleRate):
+    """ Gets true frequencies of a wavelet node, based on sampling rate sampleRate."""
+    # find node's scale
+    lvl = math.floor(math.log2(node+1))
+    # position of node in its level (0-based)
+    nodepos = node - (2**lvl - 1)
+    # Gray-permute node positions (cause wp is not in natural order)
+    nodepos = graycode(nodepos)
+    # get number of nodes in this level
+    numnodes = 2**lvl
+
+    freqmin = nodepos*sampleRate/2/numnodes
+    freqmax = (nodepos+1)*sampleRate/2/numnodes
+    return((freqmin, freqmax))
+
+def adjustNodes(nodes, change):
+    """ Fast remapping of node numbers which can be used
+        instead of resampling by 2x.
+        Change: "down2" or "up2", indicating what kind of
+        resampling should be emulated this way.
+    """
+    adjnodes = []
+    for node in nodes:
+        lvl = math.floor(math.log2(node+1))
+        numnodes = 2**lvl
+        nodepos = node - (2**lvl - 1)
+
+        # if you want the lower half subtree ("downsampling")
+        if change=="down2":
+            # remove nodes that are on the right side of the tree
+            # (the only case when numnodes is odd is lvl=0 and that needs to go as well)
+            if nodepos >= numnodes // 2:
+                continue
+
+            # else, renumber starting with a level lower
+            node = 2**(lvl-1) - 1 + nodepos
+            if node<0:
+                print("Warning: weird node produced, skipping:", node)
+            else:
+                adjnodes.append(node)
+        # if you want to change coords to one level higher ("upsampling")
+        elif change=="up2":
+            # renumber starting with a level higher
+            node = 2**(lvl+1) - 1 + nodepos
+            adjnodes.append(node)
+        else:
+            print("ERROR: unrecognised change", change)
+    return adjnodes
+
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
@@ -169,31 +241,6 @@ class WaveletFunctions:
 
         return listleaves
 
-    def graycode(self, n):
-        """ Returns a MODIFIED Gray permutation of n -
-            which corresponds to the frequency band of position n.
-            Input and output are integer ranks indicating position within level."""
-        # convert number to binary repr string:
-        n = bin(n)[2:]
-        out = ''
-        # never flip first bit
-        toflip = False
-        while n!='':
-            # store leftmost bit or its complement to output
-            if toflip:
-                out = out + str(1-int(n[0]))
-            else:
-                out = out + n[0]
-            # strip leftmost bit
-            n = n[1:]
-            # if this bit was 1, flip next bit
-            if out[-1]=='1':
-                toflip = True
-            else:
-                toflip = False
-
-        return(int(out, 2))
-
     # from memory_profiler import profile
     # fp = open('memory_profiler_wp.log', 'w+')
     # @profile(stream=fp)
@@ -320,51 +367,6 @@ class WaveletFunctions:
 
         # Note: no return value, as it sets a tree on the WF object.
 
-    def getWCFreq(self, node, sampleRate):
-        """ Gets true frequencies of a wavelet node, based on sampling rate sampleRate."""
-
-        # find node's scale
-        lvl = math.floor(math.log2(node+1))
-        # position of node in its level (0-based)
-        nodepos = node - (2**lvl - 1)
-        # Gray-permute node positions (cause wp is not in natural order)
-        nodepos = self.graycode(nodepos)
-        # get number of nodes in this level
-        numnodes = 2**lvl
-
-        freqmin = nodepos*sampleRate/2/numnodes
-        freqmax = (nodepos+1)*sampleRate/2/numnodes
-        return((freqmin, freqmax))
-
-    def adjustNodes(self, nodes, change):
-        adjnodes = []
-        for node in nodes:
-            lvl = math.floor(math.log2(node+1))
-            numnodes = 2**lvl
-            nodepos = node - (2**lvl - 1)
-
-            # if you want the lower half subtree ("downsampling")
-            if change=="down2":
-                # remove nodes that are on the right side of the tree
-                # (the only case when numnodes is odd is lvl=0 and that needs to go as well)
-                if nodepos >= numnodes // 2:
-                    continue
-
-                # else, renumber starting with a level lower
-                node = 2**(lvl-1) - 1 + nodepos
-                if node<0:
-                    print("Warning: weird node produced, skipping:", node)
-                else:
-                    adjnodes.append(node)
-            # if you want to change coords to one level higher ("upsampling")
-            elif change=="up2":
-                # renumber starting with a level higher
-                node = 2**(lvl+1) - 1 + nodepos
-                adjnodes.append(node)
-            else:
-                print("ERROR: unrecognised change", change)
-        return adjnodes
-
     def extractE(self, node, winsize, wpantialias=True):
         """ Extracts mean energies of node over windows of size winsize (s).
             Winsize will be adjusted to obtain integer number of WCs in this node.
@@ -437,7 +439,7 @@ class WaveletFunctions:
         # position of node in its level (0-based)
         nodepos = node - (2**lvl - 1)
         # Gray-permute node positions (cause wp is not in natural order)
-        nodepos = self.graycode(nodepos)
+        nodepos = graycode(nodepos)
         # positive freq is split into bands 0:1/2^lvl, 1:2/2^lvl,...
         # same for negative freq, so in total 2^lvl * 2 bands.
         numnodes = 2**(lvl+1)
