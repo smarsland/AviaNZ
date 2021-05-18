@@ -2268,15 +2268,13 @@ class AviaNZ(QMainWindow):
             w1 = np.where(annotation == 1)[0]
 
             r = np.zeros((64, np.shape(e)[1]))
-            # dummy parameters b/c we're only using this for WF.graycode
-            WF = WaveletFunctions.WaveletFunctions(data=[0], wavelet='dmey2', maxLevel=5, samplerate=1)
             for count in range(62):
                 # just compute_r from WaveletSegment
                 corr = (np.mean(e[count, w1]) - np.mean(e[count,w0]))/np.std(e[count, :]) * np.sqrt(len(w0)*len(w1))/len(annotation)
                 # map a long vector of rs to different image areas
                 level = int(math.log(count+2, 2))
                 node = count+2 - 2**level
-                node = WF.graycode(node)
+                node = WaveletFunctions.graycode(node)
                 r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
             r[:, 0] = np.linspace(np.min(r), np.max(r), num=64)
             # propagate along x
@@ -2300,7 +2298,7 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=16000)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
-            node_freqs = [sum(WF.getWCFreq(n, 16000))/2 for n in range(31, 63)]
+            node_freqs = [sum(WaveletFunctions.getWCFreq(n, 16000))/2 for n in range(31, 63)]
 
             xs = np.arange(0, self.datalengthSec, 0.5)
             datalen = len(xs)
@@ -2315,7 +2313,7 @@ class AviaNZ(QMainWindow):
                 print("node %d extracted" % node)
 
             # extract unadjusted signal energy
-            tgt_node = 44-31
+            tgt_node = 45-31
             Es = np.log(Es)
             # TODO CHECKING
             # Es = Es - np.quantile(Es, 0.10, axis=0)
@@ -3831,6 +3829,8 @@ class AviaNZ(QMainWindow):
     def showDiagnosticDialog(self):
         """ Create the dialog to set diagnostic plot parameters.
         """
+        print(self.p_spec.scene(), "SCENE")
+        print(self.p_spec.addedItems)
         if not hasattr(self, 'diagnosticDialog'):
             self.diagnosticDialog = Dialogs.Diagnostic(self.FilterDicts)
             self.diagnosticDialog.activate.clicked.connect(self.setDiagnostic)
@@ -3857,10 +3857,19 @@ class AviaNZ(QMainWindow):
             self.p_plot.clear()
             if hasattr(self, "p_legend"):
                 self.p_legend.scene().removeItem(self.p_legend)
-            if hasattr(self, "diagnosticCalls"):
-                for c in self.diagnosticCalls:
-                    self.p_spec.removeItem(c)
+            # if hasattr(self, "diagnosticCalls"):
+            #     for c in self.diagnosticCalls:
+            #         self.p_spec.removeItem(c)
+            # TODO this is not a good way to clear call marks, but fast.
+            # Undo this at some point.
             self.d_plot.hide()
+            if len(self.diagnosticCalls)>0:
+                p_spec_new = SupportClasses_GUI.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['specMouseAction']==3, thisIsAmpl=False)
+                p_spec_new.addItem(self.specPlot)
+                self.w_spec.removeItem(self.p_spec)
+                del self.p_spec
+                self.p_spec = p_spec_new
+                self.w_spec.addItem(self.p_spec,row=0,col=1)
         except Exception as e:
             print(e)
         self.diagnosticCalls = []
@@ -3943,7 +3952,7 @@ class AviaNZ(QMainWindow):
                 print("Node %i: mean %f, SD %f, range %f - %f" % (node, meanC, sdC, min(persecE), max(persecE)))
 
                 # get true freqs of this band
-                freqmin, freqmax = WF.getWCFreq(node, spInfo['SampleRate'])
+                freqmin, freqmax = WaveletFunctions.getWCFreq(node, spInfo['SampleRate'])
                 # convert freqs to spec Y units
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
@@ -4972,8 +4981,6 @@ class AviaNZ(QMainWindow):
         # settings is a dict with parameters for various possible methods
         alg, settings = self.segmentDialog.getValues()
 
-        OLD_WIND_REMOVER = False
-
         with pg.BusyCursor():
             filtname = str(settings["filtname"])
             self.statusLeft.setText('Segmenting...')
@@ -5048,7 +5055,7 @@ class AviaNZ(QMainWindow):
                 ws = WaveletSegment.WaveletSegment(speciesData)
 
                 # TODO New style wind denoising
-                if settings["wind"] and not OLD_WIND_REMOVER:
+                if settings["wind"]:
                     ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
                     # TODO
                     newSegments = ws.waveletSegment(0, wpmode="new")
@@ -5060,12 +5067,12 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                if settings["wind"] and not OLD_WIND_REMOVER:
+                if settings["wind"]:
                     ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
                 else:
                     ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=(settings["wind"] and not OLD_WIND_REMOVER))
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=settings["wind"])
                 # Or if no params are passed, they will be read from the filter file TimeRange:
                 # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 
@@ -5103,7 +5110,7 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if OLD_WIND_REMOVER and settings["wind"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
+                    if settings["windold"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
@@ -5129,7 +5136,7 @@ class AviaNZ(QMainWindow):
                 print('Post-processing...')
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
-                if settings["wind"]:
+                if settings["windold"]:
                     post.wind()
                     print('After wind segments: ', len(post.segments))
                 if settings["rain"]:

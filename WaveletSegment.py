@@ -78,28 +78,25 @@ class WaveletSegment:
         # in batch mode, it's worth trying some tricks to avoid resampling
         if fsOut == 2*sampleRate:
             print("Adjusting nodes for upsampling to", fsOut)
-            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
             for filter in self.spInfo:
                 for subfilter in filter["Filters"]:
-                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
             # Don't want to resample again, so fsTarget = fsIn
             fsOut = sampleRate
         elif fsOut == 4*sampleRate:
             print("Adjusting nodes for upsampling to", fsOut)
             # same. Wouldn't recommend repeating for larger ratios than 4x
-            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
             for filter in self.spInfo:
                 for subfilter in filter["Filters"]:
-                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
+                    downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
             # Don't want to resample again, so fsTarget = fsIn
             fsOut = sampleRate
         # Could also similarly "downsample" by adding an extra convolution, but it's way slower
         # elif sampleRate == 2*fsOut:
         #     # don't actually downsample audio, just "upsample" the nodes needed
-        #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
         #     for subfilter in self.spInfo["Filters"]:
-        #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+        #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
         #     print("upsampled nodes")
         #     self.spInfo["SampleRate"] = sampleRate
 
@@ -186,13 +183,13 @@ class WaveletSegment:
             if maxlen is None:
                 maxlen = subfilter["TimeRange"][1]
 
-            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg, wind=wind)
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, alpha=alpha, window=window, maxlen=maxlen, alg=alg, wind=wind)
 
             detected_allsubf.append(detected)
         print("--- WV changepoint segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
+    def waveletSegment_train(self, dirName, thrList, MList, d=False, learnMode='recaa', window=1,
                              inc=None):
         """ Entry point to use during training, called from DialogsTraining.py.
             Switches between various training methods, orders data loading etc.,
@@ -282,7 +279,7 @@ class WaveletSegment:
         # self.maxEs now is a list of [files][M][TxN] ndarrays
 
         # 4. mark calls and learn threshold
-        res = self.gridSearch(self.maxEs, thrList, MList, rf, learnMode, window, inc)
+        res = self.gridSearch(self.maxEs, thrList, MList, learnMode, window, inc)
 
         return res
 
@@ -317,13 +314,12 @@ class WaveletSegment:
         nodeList = []
         freqrange = subfilter['FreqRange']
 
-        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet=self.wavelet, maxLevel=1, samplerate=self.spInfo["SampleRate"])
         # levels: 0-1, 2-5, 6-13, 14-29, 30-61 (unrooted tree)
         # so this will take the last three levels:
         for node_un in range(14, 62):
             # corresponding node in a rooted tree (as used by WF)
             node = node_un + 1
-            nodefrl, nodefru = WF.getWCFreq(node, self.spInfo["SampleRate"])
+            nodefrl, nodefru = WaveletFunctions.getWCFreq(node, self.spInfo["SampleRate"])
             if nodefrl < freqrange[1] and nodefru > freqrange[0]:
                 # node has some overlap with the target range, so can be tested
                 nodeList.append(node)
@@ -707,7 +703,7 @@ class WaveletSegment:
         return coefs
 
     def fBetaScore_fast(self, annotation, predicted, T, beta=2):
-        """ Computes the beta scores given two sets of predictions.
+        """ Computes the beta scores given two sets of redictions.
             Simplified by dropping printouts and some safety checks.
             (Assumes logical or int 1/0 input.)
             Outputs 0 when the score is undefined. """
@@ -1057,14 +1053,13 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1, wind=False):
+    def detectCallsChp(self, wf, nodelist, alpha, maxlen, window=1, alg=1, wind=False):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
         Args:
         wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
         nodelist - will reconstruct signal and run detections on each of these nodes separately
-        subfilter - used to pass thr, M, and other parameters
         alpha - penalty strength for the detector
         maxlen - maximum allowed signal segment length, in s
         window - energy will be calculated over these windows, in s
@@ -1075,6 +1070,7 @@ class WaveletSegment:
         """
 
         if wind:
+            print("identifying wind nodes...")
             # Estimate wind adjustment levels for each window x target node.
             from scipy.stats import theilslopes
 
@@ -1090,7 +1086,7 @@ class WaveletSegment:
                 # target node can be 1 level higher than this node, so check for that too
                 if (node-1)//2 in nodelist:
                     continue
-                nodecenter = sum(wf.getWCFreq(node, wf.treefs))/2
+                nodecenter = sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2
                 if nodecenter>=5500:  # skip high freqs when estimating wind
                     continue
                 wind_nodes.append(node)
@@ -1098,6 +1094,7 @@ class WaveletSegment:
 
             # extract energies from all nodes and calculate wind levels
             # in each target node, over all time windows
+            print("extracting wind node energy...")
             windE = np.zeros((datalen, len(wind_nodes)))
             for node_ix in range(len(wind_nodes)):
                 node = wind_nodes[node_ix]
@@ -1129,7 +1126,7 @@ class WaveletSegment:
             # for each window, interpolate wind (log) energy in each target node:
             pred = np.zeros((datalen, len(nodelist)))
             regx = np.log(windnodecenters)  # NOTE that here and further centers are in log(freq)!
-            tgtnodecenters = np.log([sum(wf.getWCFreq(node, wf.treefs))/2 for node in nodelist])
+            tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
             windE = np.log(windE)
             for w in range(datalen):
                 regy = windE[w, :]
@@ -1155,7 +1152,7 @@ class WaveletSegment:
                         pred[w, node_ix] = pol(tgtnodecenters[node_ix])
                         # Oversubtraction:
                         pred[w, node_ix] = (pred[w, node_ix] - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
-                print("Predictions (log): ", pred[w,:])
+                # print("Predictions (log): ", pred[w,:])
             # TODO would probably be faster to predict all nodes and then average
             # to obtain upper level nodes, but difficult to keep track of nodes then.
 
@@ -1190,9 +1187,9 @@ class WaveletSegment:
                 # retrieve and adjust for the predicted wind strength
                 print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))
                 # TODO a minimum is set here to avoid log 0. think about this
-                print("raw E:", E[250:350])
+                # print("raw E:", E[250:350])
                 E = np.maximum(sigma2, E - pred[:, node_ix] + sigma2)
-                print("est wind:", pred[250:350, node_ix])
+                # print("est wind:", pred[250:350, node_ix])
                 print("E: ", E[250:350]-sigma2)
 
             # sqrt because the detector squares the data itself (sign not important)
@@ -1231,7 +1228,7 @@ class WaveletSegment:
         gc.collect()
         return outsegs
 
-    def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
+    def gridSearch(self, E, thrList, MList, learnMode=None, window=1, inc=None):
         """ Take list of energy peaks of dimensions:
             [files] [MListxTxN ndarrays],
             perform grid search over thr and M parameters,
@@ -1410,14 +1407,13 @@ class WaveletSegment:
         bestnodes = []
 
         # filter nodes that are outside target species freq range
-        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet=self.wavelet, maxLevel=1, samplerate=self.spInfo["SampleRate"])
         freqrange = [subf["FreqRange"] for subf in self.spInfo["Filters"]]
         freqrange = (np.min(freqrange), np.max(freqrange))
 
         # avoid low-level nodes
         low_level_nodes = list(range(14))
         for item in nodes1:
-            itemfrl, itemfru = WF.getWCFreq(item, self.spInfo["SampleRate"])
+            itemfrl, itemfru = WaveletFunctions.getWCFreq(item, self.spInfo["SampleRate"])
             if item not in low_level_nodes and itemfrl < freqrange[1] and itemfru > freqrange[0]:
                 bestnodes.append(item)
 

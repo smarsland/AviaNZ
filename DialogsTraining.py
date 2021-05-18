@@ -1316,7 +1316,7 @@ class BuildRecAdvWizard(QWizard):
                     #  Window and inc - in seconds
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.field("trainDir"),
                                                                     self.thrList, self.MList,
-                                                                    d=False, rf=True,
+                                                                    d=False,
                                                                     learnMode="recaa", window=window, inc=inc)
                 elif self.method=="chp":
                     # Note: using energies averaged over window size set before
@@ -1337,10 +1337,9 @@ class BuildRecAdvWizard(QWizard):
                 self.figCanvas.plotmeagain(self.TPR, self.FPR)
 
         def getFrqBands(self, nodes):
-            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=self.field("fs"))
             fRanges = []
             for node in nodes:
-                f1, f2 = WF.getWCFreq(node, self.field("fs"))
+                f1, f2 = WaveletFunctions.getWCFreq(node, self.field("fs"))
                 print(node, f1, f2)
                 fRanges.append([f1, f2])
             return fRanges
