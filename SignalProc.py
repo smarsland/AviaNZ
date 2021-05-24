@@ -312,7 +312,7 @@ class SignalProc:
         #return self.sg.T
         if sgType is None:
             sgType = 'Standard'
-
+        
         if window_width is None:
             window_width = self.window_width
         if incr is None:
@@ -401,7 +401,7 @@ class SignalProc:
             times = np.tile(np.arange(0, (len(self.data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
-            self.sg = np.absolute(self.sg[:, :window_width //2]) + 0.1
+            self.sg = np.absolute(self.sg[:, :window_width //2]) #+ 0.1
 
             print("SG range:", np.min(self.sg),np.max(self.sg))
         else:
@@ -441,6 +441,8 @@ class SignalProc:
             del ft
             gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
+
+        print(np.max(self.sg),window_width)
         return self.sg
 
     def scalogram(self,wavelet='morl'):
