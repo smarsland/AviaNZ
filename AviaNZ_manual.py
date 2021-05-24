@@ -32,6 +32,7 @@ from PyQt5.QtMultimedia import QAudio
 import wavio
 import numpy as np
 from scipy.ndimage.filters import median_filter
+from scipy.stats import boxcox
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -130,6 +131,8 @@ class AviaNZ(QMainWindow):
         self.batmode = False
         # TODO: put in config?
         self.sgType = 'Standard'
+        self.sgNorm = 'Log'
+        self.sgOffset = 1**(-7)
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
@@ -1620,13 +1623,20 @@ class AviaNZ(QMainWindow):
                 # sgRaw was already normalized to 0-1 when loading
                 # with 1 being loudest
                 sgRaw = self.sp.sg
+                #self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
                 self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
             else:
                 # Get the data for the main spectrogram
-                #sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
                 sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                if self.sgNorm=='Box-Cox':
+                    size = np.shape(sgRaw)
+                    sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
+                    sgRaw,lam = boxcox(sgRaw)
+                    self.sg = np.reshape(sgRaw,size)
+                else:
+                    maxsg = max(np.min(sgRaw), 1e-9)
+                    self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
+                    #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
             # ANNOTATIONS: init empty list
             self.segments = Segment.SegmentList()
@@ -3915,7 +3925,7 @@ class AviaNZ(QMainWindow):
         """ Create spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.batmode)
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNorm, self.batmode)
             self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
         # first save the annotations
         self.saveSegments()
@@ -3925,7 +3935,7 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.windowType, self.sgType,self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq] = self.spectrogramDialog.getValues()
+        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq] = self.spectrogramDialog.getValues()
         if (minFreq >= maxFreq):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec_()
@@ -3937,8 +3947,16 @@ class AviaNZ(QMainWindow):
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
                 sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+
+                if self.sgNorm=='Box-Cox':
+                    size = np.shape(sgRaw)
+                    sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
+                    sgRaw,lam = boxcox(sgRaw)
+                    self.sg = np.reshape(sgRaw,size)
+                else:
+                    maxsg = max(np.min(sgRaw), 1e-9)
+                    self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
+                    #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
                 # If the size of the spectrogram has changed, need to update the positions of things
                 if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
@@ -4095,8 +4113,15 @@ class AviaNZ(QMainWindow):
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            maxsg = max(np.min(sgRaw), 1e-9)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            if self.sgNorm=='Box-Cox':
+                size = np.shape(sgRaw)
+                sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
+                sgRaw,lam = boxcox(sgRaw)
+                self.sg = np.reshape(sgRaw,size)
+            else:
+                maxsg = max(np.min(sgRaw), 1e-9)
+                self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
+                #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4159,8 +4184,15 @@ class AviaNZ(QMainWindow):
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            maxsg = max(np.min(sgRaw), 1e-9)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            if self.sgNorm=='Box-Cox':
+                size = np.shape(sgRaw)
+                sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
+                sgRaw,lam = boxcox(sgRaw)
+                self.sg = np.reshape(sgRaw,size)
+            else:
+                maxsg = max(np.min(sgRaw), 1e-9)
+                self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
+                #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4220,8 +4252,15 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            maxsg = max(np.min(sgRaw), 1e-9)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            if self.sgNorm=='Box-Cox':
+                size = np.shape(sgRaw)
+                sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
+                sgRaw,lam = boxcox(sgRaw)
+                self.sg = np.reshape(sgRaw,size)
+            else:
+                maxsg = max(np.min(sgRaw), 1e-9)
+                self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
+                #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
@@ -4247,8 +4286,15 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.data = self.audiodata
                     sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                    maxsg = max(np.min(sgRaw), 1e-9)
-                    self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                    if self.sgNorm=='Box-Cox':
+                        size = np.shape(sgRaw)
+                        sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
+                        sgRaw,lam = boxcox(sgRaw)
+                        self.sg = np.reshape(sgRaw,size)
+                    else:
+                        maxsg = max(np.min(sgRaw), 1e-9)
+                        self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
+                        #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
                         self.audiodata)
