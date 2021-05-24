@@ -150,6 +150,7 @@ class AviaNZ_batchProcess():
                 settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
             else:
                 settings = [self.method, timeWindow_s, timeWindow_e, self.config["protocolSize"], self.config["protocolInterval"]]
+            print(self.method, settings)
             self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
             # Ask for RESUME CONFIRMATION here
@@ -514,7 +515,7 @@ class AviaNZ_batchProcess():
                     self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
                 self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
-                _ = self.sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True)
+                _ = self.sp.spectrogram(window='Hann', sgType='Standard', sgNorm='Log', mean_normalise=True, onesided=True)
                 self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)

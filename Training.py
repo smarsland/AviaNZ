@@ -1,6 +1,4 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for training CNNs
 
 # Version 3.0 14/09/20
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
@@ -21,7 +19,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# The separated code for CNN training
+# Holds most of the code for training CNNs
 
 import os, gc, re, json, tempfile
 from shutil import copyfile
@@ -48,6 +46,10 @@ import wavio
 class CNNtrain:
 
     def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
+        # Two important things: 
+        # 1. LearningParams.txt, which a dictionary of parameters *** including spectrogram parameters
+        # 2. CLI: whether it runs off the command line, which makes picking the ROC curve parameters hard
+        # Qn: what is imgWidth? Why not a learning param?
 
         self.filterdir = filterdir
         self.configdir =configdir
@@ -76,33 +78,43 @@ class CNNtrain:
             self.imgWidth = imgWidth
 
     def setP1(self, folderTrain1, folderTrain2, recogniser, annotationLevel):
+        # This is a function that the Wizard calls to set parameters
         self.folderTrain1 = folderTrain1
         self.folderTrain2 = folderTrain2
         self.filterName = recogniser
         self.annotatedAll = annotationLevel
 
     def setP6(self, recogniser):
+        # This is a function that the Wizard calls to set parameters
         self.newFilterName = recogniser
             
     def cliTrain(self):
-        # This proceeds very much like the wizard 
+        # This is the main training function for CLI-based learning.
+        # It proceeds very much like the wizard 
             
+        # Get info from wavelet filter
         self.readFilter()
+
         # Load data
         # Note: no error checking in the CLI version
         # Find segments belong to each class in the training data
         self.genSegmentDataset(hasAnnotation=True)
 
+        # Check on memory space
         self.checkDisk()
+
+        # OK, WTF?
         self.windowWidth = self.imgsize[0] * self.LearningDict['windowScaling']
         self.windowInc = int(np.ceil(self.imgWidth * self.fs / (self.imgsize[1] - 1)) )
 
         # Train
         self.train()
 
+        # Save the output
         self.saveFilter()
 
     def readFilter(self):
+        # Read the current (wavelet) filter and get the details
         if self.filterName.lower().endswith('.txt'):
             self.currfilt = self.FilterDict[self.filterName[:-4]]
         else:
@@ -148,10 +160,12 @@ class CNNtrain:
         return freeGB, totalbytes/1024/1024/1024
 
     def genSegmentDataset(self, hasAnnotation):
+        # Prepares segments for input to the learners
         self.traindata = []
         self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
-        # Dir1 - manually annotated
-        # Find noise segments if the user is confident about full annotation
+
+        # For manually annotated data where the user is confident about full annotation, 
+        # choose anything else in the spectrograms as noise examples
         if self.annotatedAll=="All":
             self.noisedata1 = self.DataGen.findNoisesegments(self.folderTrain1)
             print('----noise data1:')
@@ -171,8 +185,7 @@ class CNNtrain:
                 for x in ctdata:
                     self.traindata.append(x)
 
-        # Dir2 - auto reviewed
-        # Get noise segments from .corrections
+        # For wavelet outputs that have been manually verified get noise segments from .corrections
         if os.path.isdir(self.folderTrain2):
             for root, dirs, files in os.walk(str(self.folderTrain2)):
                 for file in files:
@@ -239,7 +252,7 @@ class CNNtrain:
         self.trainN = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
     def genImgDataset(self, hop):
-        ''' Generate training images'''
+        ''' Generate training images  for each calltype and noise'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
         self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
@@ -254,10 +267,8 @@ class CNNtrain:
         except:
             pass
         self.tmpdir1 = tempfile.TemporaryDirectory(prefix='CNN_')
-        # self.tmpdir1 = tempfile.TemporaryDirectory(prefix='CNN_', dir="/local/tmp/juodakjuli/cnntmp")
         print('Temporary img dir:', self.tmpdir1.name)
         self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
-        # self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_', dir="/local/tmp/juodakjuli/cnntmp")
         print('Temporary model dir:', self.tmpdir2.name)
 
         # Find train segments belong to each class
@@ -635,6 +646,7 @@ class CNNtrain:
 
 
 class CNNtest:
+    # Test a previously-trained CNN
 
     def __init__(self,testDir,currfilt,filtname,configdir,filterdir,CLI=False):
         """ currfilt: the recognizer to be used (dict) """

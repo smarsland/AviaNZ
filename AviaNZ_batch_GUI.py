@@ -503,7 +503,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.warning.show()
         else:
             self.boxPost.hide()
-            self.boxTime.hide()
+            self.boxTime.show()
             self.addSp.hide()
             self.warning.show()
 
@@ -1638,7 +1638,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.data = sp.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
-                            _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True,need_even=False)
+                            _ = sp.spectrogram(window='Hann', sgType='Standard', sgNorm='Log',mean_normalise=True, onesided=True,need_even=False)
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
