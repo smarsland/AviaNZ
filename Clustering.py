@@ -560,7 +560,7 @@ class Clustering:
         sp.sampleRate = fs
         _ = sp.spectrogram()
         # Show only the segment frequencies to the median clipping and avoid overlapping noise - better than filtering when loading audiodata (it could make aliasing effect)
-        linear = np.linspace(0, fs / 2, sp.window_width/2)
+        linear = np.linspace(0, fs / 2, int(sp.window_width/2))
         # ind_flow = (np.abs(linear - f1)).argmin()
         # ind_fhigh = (np.abs(linear - f2)).argmin()
         ind_flow = (np.abs(linear - seg[2])).argmin()

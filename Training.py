@@ -61,6 +61,7 @@ class CNNtrain:
         self.tmpdir2 = False
 
         self.CLI = CLI
+# Version 3.0 14/09/20
         if CLI:
             self.filterName = recogniser
             self.folderTrain1 = folderTrain1
@@ -706,7 +707,8 @@ class CNNtest:
                         file + '.tmpdata' in files and file[:-4] + '-res' + str(float(self.window)) + 'sec.txt' in files:
                     # Extract all segments and back-convert to 0/1:
                     _, duration, _, _ = wavio.readFmt(wavFile)
-                    det01 = np.zeros(int(duration))
+                    duration = math.ceil(duration)
+                    det01 = np.zeros(duration)
 
                     for i in range(len(self.calltypes)):
                         if CNN:
@@ -781,7 +783,8 @@ class CNNtest:
         if d[-1] == []:
             d = d[:-1]
         if len(d) != length:
-            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
+            print("ERROR: annotation length %d does not match file duration %f!" % (len(d), length))
+            print("file", filename)
             self.annotation = []
             return False
 

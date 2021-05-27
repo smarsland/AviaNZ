@@ -884,7 +884,7 @@ class Segmentation(QDialog):
         self.Fundwindow.setValue(1000)
 
         self.medThr = QDoubleSpinBox()
-        self.medThr.setRange(0.2,6)
+        self.medThr.setRange(0.2,9.0)
         self.medThr.setSingleStep(1)
         self.medThr.setDecimals(2)
         self.medThr.setValue(3)

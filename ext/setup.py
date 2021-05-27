@@ -10,7 +10,8 @@ extensions = [
     Extension("SplitLauncher",
         sources=["SplitLauncher.pyx", "SplitWav.c"]),
     Extension("ce_detect",
-        sources=["ce_detect.pyx", "detector.c"])
+        sources=["ce_detect.pyx", "detector.c"],
+        include_dirs=[numpy.get_include()])
 ]
 
 setup(

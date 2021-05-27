@@ -791,7 +791,7 @@ class WaveletSegment:
             if len(C) > duration:
                 C = C[:duration]
 
-            C = np.abs(C)
+            C = np.abs(C) + 0.01
             N = len(C)
 
             # Compute threshold using mean & sd from non-call sections
@@ -987,6 +987,13 @@ class WaveletSegment:
             # Convert max segment length from s to realized windows
             # (segments exceeding this length will be marked as 'n')
             realmaxlen = math.ceil(maxlen / realwindow)
+
+            if np.max(E)==0:
+                print("ERROR: all points appear to be 0")
+                raise
+            if np.max(E)>1e7:
+                E = E / 1e4  # rescale to avoid potential overflows
+            E = E + 1e-5  # add epsilon in case there is a quiet period (which would break variance detection)
 
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))

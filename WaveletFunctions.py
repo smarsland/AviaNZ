@@ -237,7 +237,7 @@ class WaveletFunctions:
         wavelet = self.wavelet
 
         # filter length for extension modes
-        flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
+        flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))//2
         # this tree will store non-downsampled coefs for reconstruction
         self.tree = [self.data]
 
@@ -271,7 +271,7 @@ class WaveletFunctions:
                 data = data[0::2]
 
             # symmetric mode
-            data = np.concatenate((data[0:flen:-1], data, data[-flen:]))
+            data = np.concatenate((data[flen::-1], data, data[-flen:]))
             # zero-padding mode
             # data = np.concatenate((np.zeros(8), tree[node], np.zeros(8)))
 
@@ -373,7 +373,8 @@ class WaveletFunctions:
               actual window size (in s) that was used
         """
         # ratio of current WC size to data ("how many samples went into one WC")
-        dsratio = 2**math.floor(math.log2(node+1))
+        level = math.floor(math.log2(node+1))
+        dsratio = 2**level
         # (theoretical) sampling rate at this node ("how many WCs go into one second")
         nodefs = self.treefs / dsratio
 
@@ -384,8 +385,13 @@ class WaveletFunctions:
         # realized window size in s - may differ from the requested one if it is not a multiple of 2^j samples
         realwindow = WCperWindow / nodefs
 
+        # starting point adjustment for padding:
+        # (introduced b/c WaveletPacket does not trim ends after padding)
+        flen = 102  # hardcoded for our dmey2 wavelet for now
+        padlen = (flen//4-1) * level
+
         # or nwindows = math.floor(datalengthSec / realwindow)
-        nwindows = math.floor(len(self.tree[node])/2 / WCperWindow)
+        nwindows = math.floor((len(self.tree[node])-padlen) / 2 / WCperWindow)
         maxnumwcs = nwindows * WCperWindow
 
         # Sanity check for empty node:
@@ -394,12 +400,10 @@ class WaveletFunctions:
             return
 
         # WC from test node(s), trimmed to non-padded size
-        # NOTE: could take the center part w/2:l-w/2 instead of 0:l-w/2 to avoid any
-        #  datapoints that were added during padding
         if wpantialias:
-            C = self.tree[node][0:maxnumwcs*2:2]
+            C = self.tree[node][padlen:maxnumwcs*2+padlen:2]
         else:
-            C = self.tree[node][0:maxnumwcs]
+            C = self.tree[node][padlen:maxnumwcs+padlen]
 
         # Sanity check for all zero cases:
         if not any(C):

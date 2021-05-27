@@ -82,6 +82,7 @@ def launchDetector2(xs, float sigma2, int maxlookback, float alpha):
     cdef int n = len(xs)
     cdef double penalty = 1.1*alpha*np.log(n)
 
+    assert np.min(xs)>0, "ERROR: all datapoints must be strictly > 0 for variance detection"
     if n>10000:
         print("ERROR: n=%d exceeds max permitted series size" % n)
         return

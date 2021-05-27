@@ -1320,7 +1320,7 @@ class BuildRecAdvWizard(QWizard):
                 ws = WaveletSegment.WaveletSegment(self.wizard().speciesData)
                 if self.method=="wv":
                     # returns 2d lists of nodes over M x thr, or stats over M x thr
-                    numthr = 50
+                    numthr = 20
                     self.thrList = np.linspace(0.2, 1, num=numthr)
                     self.MList = np.linspace(avgslen, avgslen, num=1)
                     # options for training are:
@@ -1341,7 +1341,7 @@ class BuildRecAdvWizard(QWizard):
                                                                     maxlen=maxlen, window=chpwin)
                 elif self.method=="mc":
                     numthr = 9
-                    self.thrList = np.geomspace(1, 12, num=numthr)
+                    self.thrList = np.geomspace(1, 15, num=numthr)
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainMC(self.field("trainDir"),
                                                                     self.thrList, usernodes)
 
@@ -1750,7 +1750,7 @@ class TestRecWizard(QWizard):
 
         def initializePage(self):
             filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
-            self.species.addItems(filternames)
+            self.species.addItems(sorted(filternames))
             if self.initialFilter is not None:
                 self.species.setCurrentText(self.initialFilter)
 
