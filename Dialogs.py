@@ -2965,6 +2965,13 @@ class FilterManager(QDialog):
         fn = self.listFiles.currentItem().text()
         currfilt = self.FilterDict[fn]
         sources.append(os.path.join(self.filtdir, fn + '.txt'))
+
+        # ROCs
+        if "ROCWF" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["ROCWF"] + ".json"))
+        if "ROCNN" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["ROCNN"] + ".json"))
+
         if "CNN" in currfilt:
             sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".h5"))
             # bat filters do not have jsons:
@@ -3010,6 +3017,11 @@ class FilterManager(QDialog):
                 if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(
                         subfilt["TimeRange"]) < 4:
                     raise ValueError("Subfilter JSON format wrong (details), skipping")
+            # wavelet ROC if exists
+            JSONsource = os.path.join(os.path.dirname(source), filt["ROCWF"] + ".json")
+            if os.path.isfile(JSONsource):
+                sources.append(JSONsource)
+                targets.append(os.path.join(self.filtdir, filt["ROCWF"] + ".json"))
             if "CNN" in filt:
                 sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".h5"))
                 targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".h5"))
@@ -3018,6 +3030,11 @@ class FilterManager(QDialog):
                 if os.path.isfile(JSONsource):
                     sources.append(JSONsource)
                     targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".json"))
+                # CNN ROC if exists
+                JSONsource = os.path.join(os.path.dirname(source), filt["ROCNN"] + ".json")
+                if os.path.isfile(JSONsource):
+                    sources.append(JSONsource)
+                    targets.append(os.path.join(self.filtdir, filt["ROCNN"] + ".json"))
         except Exception as e:
             print("Could not load filter:", source, e)
             return
@@ -3058,10 +3075,17 @@ class FilterManager(QDialog):
         currfilt = self.FilterDict[fn]
         sources = []
         sources.append(fn + '.txt')
+
+        # ROCs
+        if "ROCWF" in currfilt:
+            sources.append(currfilt["ROCWF"] + ".json")
+        if "ROCNN" in currfilt:
+            sources.append(currfilt["ROCNN"] + ".json")
+
         if "CNN" in currfilt:
             sources.append(currfilt["CNN"]["CNN_name"] + ".h5")
             # bat filters do not have jsons:
-            if os.path.isfile(currfilt["CNN"]["CNN_name"] + ".json"):
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
                 sources.append(currfilt["CNN"]["CNN_name"] + ".json")
 
         target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
