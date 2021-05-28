@@ -13,11 +13,16 @@ All notable changes to AviaNZ program will be documented in this file.
 - Training will now include subdirectories when searching for data
 - Filter format extended to allow setting segmenter
 - Shorter pages (5 mins) for low sampling rate files in batch mode
+- CNNs no longer redefine segment boundaries, only accept/reject
+- reduced extension length when applying CNNs to short segments
+- various changes to CNN training
 
 ### Fixed
+- Faster CNN classification
 - Post-processing harmonised between batch mode, testing, testing with CNN
 - Segmenting in manual mode now only overwrites the current page segments
 - Problems when undoing segmentation in multi-page files
+- Minor UI bugs in recogniser training wizard
 
 ## [3.2] - 2021-02-16
 

@@ -25,7 +25,7 @@ import os, gc, re, json, tempfile
 from shutil import copyfile
 from shutil import disk_usage
 
-from keras_preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import model_from_json
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
@@ -378,6 +378,7 @@ class CNNtrain:
         model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'],
                       metrics=self.LearningDict['metrics'])
         # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        print('Loaded CNN model from ', self.tmpdir2.name)
 
         TPs = [0 for i in range(len(self.calltypes) + 1)]
         FPs = [0 for i in range(len(self.calltypes) + 1)]
@@ -388,6 +389,15 @@ class CNNtrain:
         # N = len(filenames)
         N = len(X_val_filenames)
         y_val = np.argmax(y_val, axis=1)
+        print('Validation data: ', N)
+        if os.path.isdir(self.tmpdir2.name):
+            print('Model directory exists')
+        else:
+            print('Model directory DOES NOT exist')
+        if os.path.isdir(self.tmpdir1.name):
+            print('Img directory exists')
+        else:
+            print('Img directory DOES NOT exist')
         
         for i in range(int(np.ceil(N / self.LearningDict['batchsize_ROC']))):
             # imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
@@ -409,6 +419,8 @@ class CNNtrain:
                     TNs[ct] = [TNs[ct][i] + res[3][i] for i in range(len(TNs[ct]))]
                     FNs[ct] = [FNs[ct][i] + res[4][i] for i in range(len(FNs[ct]))]
         self.Thrs = res[0]
+        print('Thrs: ', self.Thrs)
+        print('validation TPs[0]: ', TPs[0])
 
         self.TPRs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
         self.FPRs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
@@ -441,31 +453,18 @@ class CNNtrain:
         fig.suptitle('Human')
         if self.folderTrain1:
             fig.savefig(os.path.join(self.folderTrain1, 'validation-plots.png'))
+            print('Validation plot is saved: ', os.path.join(self.folderTrain1, 'validation-plots.png'))
         else:
             fig.savefig(os.path.join(self.folderTrain2, 'validation-plots.png'))
+            print('Validation plot is saved: ', os.path.join(self.folderTrain2, 'validation-plots.png'))
         plt.close()
 
         # Collate ROC daaa
         self.ROCdata["TPR"] = self.TPRs
         self.ROCdata["FPR"] = self.FPRs
         self.ROCdata["thr"] = self.Thrs
-
-                # # Individual plots
-                # fig = plt.figure()
-                # ax = plt.axes()
-                # ax.plot(CTps[ct][i], 'k')
-                # ax.plot(CTps[ct][i], 'bo')
-                # plt.xlabel('Number of samples')
-                # plt.ylabel('Probability')
-                # if ct == len(self.calltypes):
-                #     plt.title('Class: Noise')
-                # else:
-                #     plt.title('Class: ' + str(self.calltypes[ct]))
-                # if self.folderTrain1:
-                #     fig.savefig(os.path.join(self.folderTrain1, str(ct) + '-' + str(i) + '.png'))
-                # else:
-                #     fig.savefig(os.path.join(self.folderTrain2, str(ct) + '-' + str(i) + '.png'))
-                # plt.close()
+        print('TPR: ', self.ROCdata["TPR"])
+        print('FPR: ', self.ROCdata["FPR"])
 
         # 4. Auto select the upper threshold (fpr = 0)
         for ct in range(len(self.calltypes)):
@@ -522,7 +521,7 @@ class CNNtrain:
         self.TNs = []
         self.FNs = []
 
-        # Predict and temp plot (just for me)
+        # Predict and temp plot
         pre = model.predict(testimages)
         ctprob = [[] for i in range(len(self.calltypes) + 1)]
         for i in range(len(targets)):
@@ -622,12 +621,12 @@ class CNNtrain:
         CNNdic["optimizer"] = self.LearningDict['optimizer']
         CNNdic["windowInc"] = [self.windowWidth,self.windowInc]
         CNNdic["win"] = [self.imgWidth,self.imgWidth/5]     # TODO: remove hop
-        CNNdic["inputdim"] = self.imgsize
+        CNNdic["inputdim"] = [int(self.imgsize[0]), int(self.imgsize[1])]
         if self.f1 == 0 and self.f2 == self.fs/2:
             print('no frequency masking used')
         else:
             print('frequency masking used', self.f1, self.f2)
-            CNNdic["fRange"] = [self.f1, self.f2]
+            CNNdic["fRange"] = [int(self.f1), int(self.f2)]
         output = {}
         thr = []
         for ct in range(len(self.calltypes)):

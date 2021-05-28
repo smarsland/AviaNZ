@@ -85,7 +85,7 @@ class CNN:
         return new_images
 
     def genBatchNoise2(self, audios, noise_pool, n):
-        ''' Generate a batch of n new images
+        ''' Generate a batch of n new images, add audios -> generate images
         :param images: a set of original images
         :param noise_pool: noise pool images
         :param n: number of new images to generate
@@ -303,6 +303,24 @@ class CNN:
         for root, dirs, files in os.walk(dirName):
             for file in files:
                 if file.endswith('.npy'):
+                    filenames.append(os.path.join(root, file))
+                    lbl = file.split('_')[0]
+                    labels.append(int(lbl))
+
+        # One hot vector representation of the labels
+        labels = tf.keras.utils.to_categorical(np.array(labels), len(self.calltypes) + 1)
+
+        return filenames, labels
+
+    def getOriginalImglist(self, dirName):
+        ''' Returns only the original image filenames and labels in dirName:
+        '''
+        filenames = []
+        labels = []
+
+        for root, dirs, files in os.walk(dirName):
+            for file in files:
+                if file.endswith('.npy') and '_aug' not in file:
                     filenames.append(os.path.join(root, file))
                     lbl = file.split('_')[0]
                     labels.append(int(lbl))
