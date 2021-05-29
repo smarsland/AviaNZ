@@ -12,6 +12,7 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Changed
 - Training will now include subdirectories when searching for data
 - Filter format extended to allow setting segmenter
+- Better UI for adding species in review, search function
 - Shorter pages (5 mins) for low sampling rate files in batch mode
 - CNNs no longer redefine segment boundaries, only accept/reject
 - reduced extension length when applying CNNs to short segments
@@ -23,6 +24,8 @@ All notable changes to AviaNZ program will be documented in this file.
 - Segmenting in manual mode now only overwrites the current page segments
 - Problems when undoing segmentation in multi-page files
 - Minor UI bugs in recogniser training wizard
+- Long species list now triggers button reordering in review
+- better edge case handling when adding species in review
 
 ## [3.2] - 2021-02-16
 

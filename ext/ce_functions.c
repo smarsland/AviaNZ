@@ -101,7 +101,7 @@ int ce_thresnode2(double *in_array, size_t size, double threshold, int type)
 // Main loop for "energy curve" - expanding envelope around waveform
 void ce_energycurve(double *arrE, double *arrC, size_t N, int M)
 {
-	for(int i=M+1; i<N-M; i++){
+	for(size_t i=M+1; i<N-M; i++){
 		arrE[i] = arrE[i-1] - arrC[i - M - 1] + arrC[i + M];
 	}
 	// Normalize for M
@@ -223,9 +223,9 @@ void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau,
  *  The upsampling is performed by splitting filters to even and odd elements
  *  and performing 2 convolutions.
 */
-int upsampling_convolution_valid_sf(const double * const input, const int N,
-		const double * const filter, const int F,
-		double * const output, const int O){
+int upsampling_convolution_valid_sf(const double * const input, const size_t N,
+		const double * const filter, const size_t F,
+		double * const output, const size_t O){
 
 	size_t o, i;
 

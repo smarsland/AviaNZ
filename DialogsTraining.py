@@ -819,9 +819,8 @@ class BuildRecAdvWizard(QWizard):
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
                 incr = 256 * sp.sampleRate // self.field("fs")
-                sgRaw = sp.spectrogram(window='Hann', sgType='Standard',sgNorm='Log',incr=incr, mean_normalise=True, onesided=True, need_even=False)
-                maxsg = np.min(sgRaw)
-                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
+                self.sg = sp.normalizedSpec("Log")
                 self.setColourMap()
 
                 # buffer the image to largest spec size, so that the resulting buttons would have equal scale

@@ -49,7 +49,6 @@ class AviaNZ_batchProcess():
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
-        self.saveConfig = True
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
@@ -214,7 +213,7 @@ class AviaNZ_batchProcess():
                 self.mutex.unlock()
                 confirmedLaunch = self.ui.msg_response==0
             else:
-                confirmedLaunch = input(text)
+                confirmedLaunch = input(text+"[y/n]")
                 print(confirmedLaunch.lower(),)
                 if confirmedLaunch.lower() == 'yes' or confirmedLaunch.lower() == 'y':
                     confirmedLaunch = True
@@ -372,7 +371,7 @@ class AviaNZ_batchProcess():
                     continue
 
             # test the selected time window if it is a doc recording
-            DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
+            DOCRecording = re.search(r'(\d{6})_(\d{6})', os.path.basename(filename))
             if DOCRecording:
                 startTime = DOCRecording.group(2)
                 sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
@@ -521,7 +520,7 @@ class AviaNZ_batchProcess():
                     self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
                 self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
-                _ = self.sp.spectrogram(window='Hann', sgType='Standard', sgNorm='Log', mean_normalise=True, onesided=True)
+                _ = self.sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True)
                 self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
@@ -537,6 +536,7 @@ class AviaNZ_batchProcess():
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 if self.wind:
                     post.wind()
+                # TODO CLI mode does not initialize these values and will break
                 post.joinGaps(self.maxgap)
                 post.deleteShort(self.minlen)
                 # avoid extra long segments (for Isabel)
@@ -639,6 +639,7 @@ class AviaNZ_batchProcess():
                                     # do not create any segments
                                     print("Nothing detected")
                             elif self.method == "Bats":     # Let's do it here - PostProc class is not supporting bats
+                                # TODO review this a bit - my code checker shows errors
                                 model = CNNmodel[0]
                                 if thisPageLen < CNNmodel[1][0]:
                                     continue
@@ -1474,44 +1475,4 @@ class AviaNZ_batchProcess():
 class GentleExitException(Exception):
     """ To allow tracking user-requested aborts, instead of using C-style returns. """
     pass
-
-
-# TODO Move this class to _Gui.py as this one assumes no Qt
-from PyQt5.QtCore import QObject, QMutex, pyqtSignal, pyqtSlot
-
-class BatchProcessWorker(AviaNZ_batchProcess, QObject):
-    # adds QObject functionality to standard batchProc,
-    # so that it could be moved to a separate thread when multithreading.
-    finished = pyqtSignal()
-    completed = pyqtSignal()
-    stopped = pyqtSignal()
-    failed = pyqtSignal(str)
-    need_msg = pyqtSignal(str, str)
-    need_clean_UI = pyqtSignal(int, int)
-    need_update = pyqtSignal(int, str)
-    need_bat_info = pyqtSignal(str, str, str, str)
-
-    def __init__(self, *args, **kwargs):
-        # this is supposedly not OK if somebody was to ever
-        # further multiply-inherit this class.
-        AviaNZ_batchProcess.__init__(self, *args, **kwargs)
-        QObject.__init__(self)
-        self.mutex = QMutex()
-
-    @pyqtSlot()
-    def detect(self):
-        try:
-            AviaNZ_batchProcess.detect(self)
-            self.completed.emit()
-        except GentleExitException:
-            # for clean exits, such as stops via progress dialog
-            self.stopped.emit()
-        except Exception as e:
-            # we have UI, so just cleanly present the error;
-            # in other modes this will CTD
-            e = "Encountered error:\n" + traceback.format_exc()
-            self.failed.emit(e)
-        self.finished.emit()  # this is to prompt generic actions like stopping the event loop
-
-
 
