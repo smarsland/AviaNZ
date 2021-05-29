@@ -32,7 +32,6 @@ from PyQt5.QtMultimedia import QAudio
 import wavio
 import numpy as np
 from scipy.ndimage.filters import median_filter
-from scipy.stats import boxcox
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -132,7 +131,6 @@ class AviaNZ(QMainWindow):
         # TODO: put in config?
         self.sgType = 'Standard'
         self.sgNorm = 'Log'
-        self.sgOffset = 1**(-7)
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
@@ -1153,6 +1151,24 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
+        def parse_item(item):
+            # Determine certainty
+            # Add ? marks if Ctrl menu is called
+            if unsure and item != "Don't Know":
+                cert = 50
+                item = item+'?'
+            elif item == "Don't Know":
+                cert = 0
+            else:
+                cert = 100
+
+            # Transform > marks
+            pos = item.find('>')
+            if pos > -1:
+                item = item[:pos] + ' (' + item[pos+1:] + ')'
+
+            return item, cert
+
         if self.viewCallType:
             if not hasattr(self, 'segments') or self.box1id<0:
                 return
@@ -1198,24 +1214,11 @@ class AviaNZ(QMainWindow):
                 # create menu items and mark them
                 # (we assume that bat list is always short enough to fit in one column)
                 for item in self.batList:
-                    # Add ? marks if Ctrl menu is called
-                    itemorig = item
-                    if unsure and item != "Don't Know":
-                        cert = 50
-                        item = item+'?'
-                    elif item == "Don't Know":
-                        cert = 0
-                    else:
-                        cert = 100
+                    item_parsed, cert = parse_item(item)
 
-                    # Transform > marks
-                    pos = item.find('>')
-                    if pos > -1:
-                        item = item[:pos] + ' (' + item[pos+1:] + ')'
-
-                    bird = self.menuBirdList.addAction(item)
+                    bird = self.menuBirdList.addAction(item_parsed)
                     bird.setCheckable(True)
-                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
+                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
                         bird.setChecked(True)
                     self.menuBirdList.addAction(bird)
             else:
@@ -1231,46 +1234,20 @@ class AviaNZ(QMainWindow):
 
                 # create menu items and mark them
                 for item in self.shortBirdList[:15]:
-                    # Add ? marks if Ctrl menu is called
-                    itemorig = item
-                    if unsure and item != "Don't Know":
-                        cert = 50
-                        item = item+'?'
-                    elif item == "Don't Know":
-                        cert = 0
-                    else:
-                        cert = 100
+                    item_parsed, cert = parse_item(item)
 
-                    # Transform > marks
-                    pos = item.find('>')
-                    if pos > -1:
-                        item = item[:pos] + ' (' + item[pos+1:] + ')'
-
-                    bird = self.menuBirdList.addAction(item)
+                    bird = self.menuBirdList.addAction(item_parsed)
                     bird.setCheckable(True)
-                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
+                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
                         bird.setChecked(True)
                     self.menuBirdList.addAction(bird)
                 self.menuBirdList.addMenu(self.menuBird2)
                 for item in self.shortBirdList[15:]:
-                    itemorig = item
-                    # Add ? marks if Ctrl menu is called
-                    if unsure and item != "Don't Know" and item != "Other":
-                        cert = 50
-                        item = item+'?'
-                    elif item == "Don't Know":
-                        cert = 0
-                    else:
-                        cert = 100
+                    item_parsed, cert = parse_item(item)
 
-                    # Transform > marks
-                    pos = item.find('>')
-                    if pos > -1:
-                        item = item[:pos] + ' (' + item[pos+1:] + ')'
-
-                    bird = self.menuBird2.addAction(item)
+                    bird = self.menuBird2.addAction(item_parsed)
                     bird.setCheckable(True)
-                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
+                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
                         bird.setChecked(True)
                     self.menuBird2.addAction(bird)
 
@@ -1628,15 +1605,7 @@ class AviaNZ(QMainWindow):
             else:
                 # Get the data for the main spectrogram
                 sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                if self.sgNorm=='Box-Cox':
-                    size = np.shape(sgRaw)
-                    sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
-                    sgRaw,lam = boxcox(sgRaw)
-                    self.sg = np.reshape(sgRaw,size)
-                else:
-                    maxsg = max(np.min(sgRaw), 1e-9)
-                    self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
-                    #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                self.sg = self.sp.normalizedSpec(self.sgNorm)
 
             # ANNOTATIONS: init empty list
             self.segments = Segment.SegmentList()
@@ -3946,17 +3915,9 @@ class AviaNZ(QMainWindow):
                 print("Warning: only spectrogram freq. range can be changed in BMP mode")
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
-                sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
 
-                if self.sgNorm=='Box-Cox':
-                    size = np.shape(sgRaw)
-                    sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
-                    sgRaw,lam = boxcox(sgRaw)
-                    self.sg = np.reshape(sgRaw,size)
-                else:
-                    maxsg = max(np.min(sgRaw), 1e-9)
-                    self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
-                    #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                self.sg = self.sp.normalizedSpec(self.sgNorm)
 
                 # If the size of the spectrogram has changed, need to update the positions of things
                 if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
@@ -4112,16 +4073,8 @@ class AviaNZ(QMainWindow):
             self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
 
             # recalculate spectrogram
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            if self.sgNorm=='Box-Cox':
-                size = np.shape(sgRaw)
-                sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
-                sgRaw,lam = boxcox(sgRaw)
-                self.sg = np.reshape(sgRaw,size)
-            else:
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
-                #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            self.sg = self.sp.normalizedSpec(self.sgNorm)
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4183,16 +4136,8 @@ class AviaNZ(QMainWindow):
             self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
 
             # recalculate spectrogram
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            if self.sgNorm=='Box-Cox':
-                size = np.shape(sgRaw)
-                sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
-                sgRaw,lam = boxcox(sgRaw)
-                self.sg = np.reshape(sgRaw,size)
-            else:
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
-                #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            self.sg = self.sp.normalizedSpec(self.sgNorm)
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4251,16 +4196,8 @@ class AviaNZ(QMainWindow):
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            if self.sgNorm=='Box-Cox':
-                size = np.shape(sgRaw)
-                sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
-                sgRaw,lam = boxcox(sgRaw)
-                self.sg = np.reshape(sgRaw,size)
-            else:
-                maxsg = max(np.min(sgRaw), 1e-9)
-                self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
-                #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            self.sg = self.sp.normalizedSpec(self.sgNorm)
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
@@ -4285,16 +4222,9 @@ class AviaNZ(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.data = self.audiodata
-                    sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                    if self.sgNorm=='Box-Cox':
-                        size = np.shape(sgRaw)
-                        sgRaw = np.abs(np.ndarray.flatten(sgRaw+self.sgOffset))
-                        sgRaw,lam = boxcox(sgRaw)
-                        self.sg = np.reshape(sgRaw,size)
-                    else:
-                        maxsg = max(np.min(sgRaw), 1e-9)
-                        self.sg = np.abs(10.0 * np.log10((sgRaw+self.sgOffset) / maxsg))
-                        #self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                    _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                    self.sg = self.sp.normalizedSpec(self.sgNorm)
+
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
                         self.audiodata)

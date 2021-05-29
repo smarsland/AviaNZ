@@ -23,6 +23,7 @@
 import numpy as np
 import scipy.signal as signal
 import scipy.fftpack as fft
+from scipy.stats import boxcox
 import wavio
 import librosa
 import copy
@@ -312,7 +313,7 @@ class SignalProc:
         #return self.sg.T
         if sgType is None:
             sgType = 'Standard'
-        
+
         if window_width is None:
             window_width = self.window_width
         if incr is None:
@@ -444,6 +445,27 @@ class SignalProc:
 
         print(np.max(self.sg),window_width)
         return self.sg
+
+    def normalizedSpec(self, tr="Log"):
+        """ Assumes the spectrogram was precomputed.
+            Converts it to a scale appropriate for plotting
+            (tr="Log" or tr="Box-Cox" to set the transform).
+        """
+        LOG_OFFSET = 1e-7
+        if tr=="Log":
+            sg = self.sg + LOG_OFFSET
+            minsg = np.min(sg)
+            sg = 10*(np.log10(self.sg + LOG_OFFSET)-np.log10(minsg))
+            sg = np.abs(sg)
+            return sg
+        elif tr=="Box-Cox":
+            size = np.shape(self.sg)
+            sg = self.sg + LOG_OFFSET
+            sg = np.abs(sg.flatten())
+            sg, lam = boxcox(sg)
+            return np.reshape(sg, size)
+        else:
+            print("ERROR: unrecognized transformation", tr)
 
     def scalogram(self,wavelet='morl'):
         # Compute the wavelet scalogram
