@@ -4,6 +4,7 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Added
 - Changepoint segmenter in manual mode
+- Pre-built GPU support for CNN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
 - Saving spectrogram images without axes (in developer mode)
