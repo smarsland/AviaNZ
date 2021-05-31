@@ -1986,6 +1986,7 @@ class HumanClassify1(QDialog):
         # "other" button
         self.birdbtns[-1].setChecked(False)
         self.birds3.setEnabled(False)
+        self.repaint()
 
     def setSegNumbers(self, accepted, deleted, total):
         #print(accepted,deleted,total)
@@ -2142,6 +2143,7 @@ class HumanClassify1(QDialog):
                     else:
                         self.birdbtns[29].setChecked(True)
                         self.birds3.setEnabled(True)
+                        self.update()
 
                     # mark this species in the long list box
                     if lsp not in self.longBirdList:
@@ -2250,6 +2252,8 @@ class HumanClassify1(QDialog):
     def tickOtherClicked(self, checked):
         # just toggle the long list box
         self.birds3.setEnabled(checked)
+        self.update()   # for Mac updating
+        self.repaint()
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -2300,6 +2304,8 @@ class HumanClassify1(QDialog):
 
         # enable/disable CT mode button
         self.checkCallTypes()
+        self.update()   # for Mac updating
+        self.repaint()
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -2318,6 +2324,8 @@ class HumanClassify1(QDialog):
 
         # enable/disable CT mode button
         self.checkCallTypes()
+        self.update()   # for Mac updating
+        self.repaint()
 
     def radioCtClicked(self):
         # Listener for when the user selects a call type
@@ -2328,6 +2336,8 @@ class HumanClassify1(QDialog):
                 print("Call type selected:", btn.text())
                 self.ctLabel.setText(btn.text())
                 break
+        self.update()   # for Mac updating
+        self.repaint()
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds.
@@ -2406,6 +2416,8 @@ class HumanClassify1(QDialog):
 
         # enable/disable CT mode button
         self.checkCallTypes()
+        self.update()   # for Mac updating
+        self.repaint()
 
     def birdTextEntered(self, species):
         # receives signal that a new bird was added
@@ -2414,6 +2426,8 @@ class HumanClassify1(QDialog):
         # TODO: does not know about adding the '>' marker.
         self.longBirdList.append(species)
         self.saveBirdList = True
+        self.update()   # for Mac updating
+        self.repaint()
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
