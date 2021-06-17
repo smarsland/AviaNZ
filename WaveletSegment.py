@@ -141,12 +141,17 @@ class WaveletSegment:
             print("Identifying calls using subfilter", subfilter["calltype"])
             goodnodes = subfilter['WaveletParams']["nodes"]
 
-            detected = self.detectCalls(self.WF, nodelist=goodnodes, subfilter=subfilter, rf=True, aa=wpmode!="old")
+            if "wv_win" in subfilter:
+                window = float(subfilter["wv_win"])
+            else:
+                window = 1
+
+            detected = self.detectCalls(self.WF, nodelist=goodnodes, subfilter=subfilter, rf=True, aa=wpmode!="old", window=window)
 
             # merge neighbours in order to convert the detections into segments
             # note: detected np[0 1 1 1] becomes [[1,3]]
             segmenter = Segment.Segmenter()
-            detected = segmenter.convert01(detected)
+            detected = segmenter.convert01(detected, window=window)
             detected = segmenter.joinGaps(detected, maxgap=0)
             detected_allsubf.append(detected)
         print("Wavelet segmenting completed in", time.time() - opst)
@@ -889,9 +894,6 @@ class WaveletSegment:
 
             C = np.abs(C)
             N = len(C)
-            # Virginia: number of segments = number of centers of length inc
-            # nw=int(np.ceil(N / inc_sr))
-            # detected = np.zeros(nw)
 
             if len(C) > 2*M+1:
                 # Compute the energy curve (a la Jinnai et al. 2012)
@@ -916,7 +918,6 @@ class WaveletSegment:
             #center = int(math.ceil(inc_sr/2)) #keeped if neede in future
             start = 0
             for j in range(nw):
-                #start = max(0, center - win_sr2) keeped if needed in future
                 end = min(N, start + win_sr)
                 # max/ mean/median
                 # detected[j, count] = np.any(E[start:end] > threshold)
@@ -931,7 +932,7 @@ class WaveletSegment:
                 # # median
                 # if np.median(E[start:end]) > threshold:
                 #     detected[j, count] = 1
-                start += inc_sr  # Virginia: corrected
+                start += inc_sr
             count += 1
 
         detected = np.max(detected, axis=1)
@@ -939,18 +940,16 @@ class WaveletSegment:
         # Virginia: caution. Annotation are 1-sec segments and also detections
         # Otherwise no comparison make sense
         # So I have to put them on a one second scale
-
-        if window != 1 or inc != window:
-            N = int(math.ceil(duration/ samplerate))  # numbers of seconds
-            detect_ann = np.zeros(N)
-            start = 0
-            # follow the windows checking in what second they start or end
-            for i in range(nw):
-                if detected[i]==1:
-                    end= min(math.ceil(start + 1), N)
-                    detect_ann[int(math.floor(start)):end] = 1
-                start += inc
-            detected = detect_ann
+        # if window != 1 or inc != window:
+        #     detect_ann = np.zeros(nw)
+        #     start = 0
+        #     # follow the windows checking in what second they start or end
+        #     for i in range(nw):
+        #         if detected[i]==1:
+        #             end = min(math.ceil(start + 1), N)
+        #             detect_ann[int(math.floor(start)):end] = 1
+        #         start += inc
+        #     detected = detect_ann
 
         C = None
         E = None
