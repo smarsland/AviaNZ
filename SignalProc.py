@@ -159,7 +159,7 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
-        print(np.shape(img2))
+        #print(np.shape(img2))
         # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
@@ -167,7 +167,7 @@ class SignalProc:
         img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
         if repeat:
             img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
-        print(np.shape(img2))
+        #print(np.shape(img2))
 
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples

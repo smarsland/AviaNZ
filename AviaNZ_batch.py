@@ -66,6 +66,9 @@ class AviaNZ_batchProcess():
         elif mode=="test":
             self.CLI = False
             self.testmode = True
+        elif mode=="export":
+            self.CLI = False
+            self.testmode=False
         else:
             print("ERROR: unrecognized mode ", mode)
             return
@@ -269,8 +272,11 @@ class AviaNZ_batchProcess():
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
             if self.method == 'Click':
                 self.exportToBatSearch(self.dirName)
+                self.outputBatPasses(self.dirName)
             elif self.method == 'Bats':
-                self.exportToBatSearch_NP(self.dirName)
+                self.exportToBatSearch(self.dirName,threshold1=100,threshold2=None)
+                self.outputBatPasses(self.dirName)
+                #self.exportToBatSearch_NP(self.dirName)
 
             if self.method=='Click' or self.method=='Bats':
                 if not self.CLI:
@@ -816,7 +822,7 @@ class AviaNZ_batchProcess():
             del self.sp
         gc.collect()
 
-    def ClickSearch(self, imspec, file):
+    def ClickSearch(self, imspec, file,virginia=True):
         """
         searches for clicks in the provided imspec, saves dataset
         returns click_label, dataset and count of detections
@@ -833,6 +839,8 @@ class AviaNZ_batchProcess():
 
         imspec: unrotated spectrogram (rows=time)
         file: NOTE originally was basename, now full filename
+
+        The virginia flag is because I've (SM) added the other functionality, which just finds the first and last clicks to get the time
         """
         featuress = []
         count = 0
@@ -862,42 +870,78 @@ class AviaNZ_batchProcess():
         # clicks is an array which elements are equal to 1 only where the sum is bigger
         # than the mean, otherwise are equal to 0
         clicks = mean_spec>thr_spec
-        clicks_indices = np.nonzero(clicks)
-        # check: if I have found somenthing
-        if np.shape(clicks_indices)[1]==0:
-            click_label='None'
-            return click_label, featuress, count
-            # not saving spectrograms
+        
+        if virginia:
+            clicks_indices = np.nonzero(clicks)
+            # check: if I have found somenthing
+            if np.shape(clicks_indices)[1]==0:
+                click_label='None'
+                return click_label, featuress, count
+                # not saving spectrograms
 
-        # Discarding segments too long or too short and saving spectrogram images
-        click_start=clicks_indices[0][0]
-        click_end=clicks_indices[0][0]
-        for i in range(1,np.shape(clicks_indices)[1]):
-            if clicks_indices[0][i]==click_end+1:
-                click_end=clicks_indices[0][i]
-            else:
-                if click_end-click_start+1>up_len:
-                    clicks[click_start:click_end+1] = False
+            # Discarding segments too long or too short and saving spectrogram images
+            click_start=clicks_indices[0][0]
+            click_end=clicks_indices[0][0]
+            for i in range(1,np.shape(clicks_indices)[1]):
+                if clicks_indices[0][i]==click_end+1:
+                    click_end=clicks_indices[0][i]
                 else:
-                    # savedataset
-                    featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
-                # update
-                click_start=clicks_indices[0][i]
-                click_end=clicks_indices[0][i]
+                    if click_end-click_start+1>up_len:
+                        clicks[click_start:click_end+1] = False
+                    else:
+                        # savedataset
+                        featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+                    # update
+                    click_start=clicks_indices[0][i]
+                    click_end=clicks_indices[0][i]
 
-        # checking last loop with end
-        if click_end-click_start+1>up_len:
-            clicks[click_start:click_end+1] = False
+            # checking last loop with end
+            if click_end-click_start+1>up_len:
+                clicks[click_start:click_end+1] = False
+            else:
+                featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+
+            # Assigning: click label
+            if np.any(clicks):
+                click_label='Click'
+            else:
+                click_label='None'
+
+            return click_label, featuress, count
         else:
-            featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+            inds = np.where(clicks>0)[0]
+            if (len(inds)) > 0:
+                # Have found something, now find first that isn't too long
+                flag = False
+                start = inds[0]
+                while flag:
+                    i=1
+                    while inds[i]-inds[i-1] == 1:
+                        i+=1
+                    end = i
+                    if end-start<up_len:
+                        flag=True
+                    else:
+                        start = inds[end+1]
 
-        # Assigning: click label
-        if np.any(clicks):
-            click_label='Click'
-        else:
-            click_label='None'
+                first = start
 
-        return click_label, featuress, count
+                # And last that isn't too long
+                flag = False
+                end = inds[-1]
+                while flag:
+                    i=len(inds)-1
+                    while inds[i]-inds[i-1] == 1:
+                        i-=1
+                    start = i
+                    if end-start<up_len:
+                        flag=True
+                    else:
+                        end = inds[start-1]
+                last = end
+                return [first,last]
+            else:
+                return None
 
     def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, dt=None):
         """
@@ -1023,6 +1067,76 @@ class AviaNZ_batchProcess():
 
         return label
 
+    def outputBatPasses(self,dirName,savefile='BatPasses.csv'):
+        # A bit ad hoc for now. Assumes that the directory structure ends with 'Bat detname date/date/'
+        if not hasattr(self, 'sp'):
+            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+        start = "Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n"
+        output = start
+        dt=0.002909090909090909
+        if not os.path.isdir(dirName):
+           print("Folder doesn't exist")
+           return 0
+        tally = 0
+        for root, dirs, files in os.walk(dirName, topdown=True):
+            nfiles = len(files)
+            if nfiles > 0:
+                for count in range(nfiles):
+                    filename = files[count]
+                    if filename.endswith('.data'):
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, filename))
+                        if len(segments)>0:
+                            # Get the length of the clicks from the spectrogram
+                            fn = filename[:-5]
+                            #print(fn,os.path.join(root, fn))
+                            self.sp.readBmp(os.path.join(root, fn), rotate=False,silent=True)
+                            self.sampleRate = self.sp.sampleRate
+                            res = self.ClickSearch(self.sp.sg,None,virginia=False)
+                            if res is not None:
+                                length = "{:.2f}".format((res[1]-res[0])*dt)
+                            else:
+                                length = str(0)
+                            #print("Length "+length)
+                            seg = segments[0]
+                            #print(seg)
+                            c = [lab["certainty"] for lab in seg[4]]
+                            s = [lab["species"] for lab in seg[4]]
+                            if len(c)>1:
+                                label = 'L,S'
+                            else:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'L'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'S'
+                        else:
+                            length = "0"
+                            label = ''
+                        #print("label "+label)
+
+                        # DOC format
+                        # night comes from the directory
+                        night = root[-2:]+"/"+root[-4:-2]+"/"+root[-6:-4]
+                        folder = root.split("/")[-2]
+                        detname = folder.split(" ")[-2]
+                        #print(detname,folder)
+                        #print("night "+night)
+                        #night = filename[6:8]+"/"+filename[4:6]+"/"+filename[2:4]
+                        # time comes from file
+                        time = filename[9:11]+":"+filename[11:13]+":"+filename[13:15]
+                        #print("time "+time)
+                        
+                        output+= str(tally)+","+night+",,,"+detname+","+label+","+time+","+length+",\n"
+                        tally += 1
+        # Now write the file if necessary
+        if output != start:
+            file = open(os.path.join(dirName, savefile), 'w')
+            print("writing to", os.path.join(dirName, savefile))
+            file.write(output)
+            file.write("\n")
+            file.close()
+            output = start
+
     def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
         # Write out a file that can be used for BatSearch import
         # For now, looks like the xml file used there
@@ -1054,12 +1168,18 @@ class AviaNZ_batchProcess():
                             if len(c)>1:
                                 label = 'Both'
                             else:
-                                if c[0]>threshold1:
+                                if c[0]>=threshold1:
                                     if s[0] == 'Long-tailed bat':
                                         label = 'Long Tail'
                                     elif s[0] == 'Short-tailed bat':
                                         label = 'Short Tail'
-                                elif c[0]>threshold2:
+                                elif threshold2 is not None:
+                                    if c[0]>threshold2:
+                                        if s[0] == 'Long-tailed bat':
+                                            label = 'Possible LT'
+                                        elif s[0] == 'Short-tailed bat':
+                                            label = 'Possible ST'
+                                elif threshold2 is None:
                                     if s[0] == 'Long-tailed bat':
                                         label = 'Possible LT'
                                     elif s[0] == 'Short-tailed bat':
