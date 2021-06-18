@@ -1,2 +1,0 @@
-{"species": "Kiwi (Nth Is Brown)", "SampleRate": 16000, "method": "chp", "Filters": [{"calltype": "Male", "TimeRange": [0, 1.0, 0.0, 0.0], "FreqRange": [900, 6000], "WaveletParams": {"thr": 1.0, "nodes": [17, 43, 36, 44], "win": 0.05}}
-]}

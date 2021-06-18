@@ -1,1 +1,0 @@
-{"species": "Bats", "SampleRate": 176000, "method": "chp", "Filters": [{"calltype": "ct1", "TimeRange": [0, 0.06, 0.0, 0.0], "FreqRange": [8000, 66000], "WaveletParams": {"thr": 1.0, "nodes": [19, 21], "win": 0.005} }]}

@@ -378,7 +378,8 @@ class AviaNZ_batchProcess():
                     print("ERROR: ", e)
                     if not self.CLI and not self.testmode:
                         self.ui.error_fileproc(total,e)
-                    self.log.file.close()
+                    if not self.testmode:
+                        self.log.file.close()
                     return(1)
 
                 print('Segments in this file: ', self.segments)
@@ -634,6 +635,14 @@ class AviaNZ_batchProcess():
         if "PostResolution" in subfilter:
             post.joinGaps(subfilter["PostResolution"])
             post.splitLong(subfilter["PostResolution"])
+
+        # TEMP: apply MFCC classifier
+        if "MFCCclass" in subfilter:
+            # (just dropping certainty here, to pass only seg times)
+            postsegs = [seg[0] for seg in post.segments]
+            class_res = post.classifyMFCC(postsegs)
+            print("MFCC classification results:", class_res)
+            post.segments = [post.segments[ix] for ix in np.where(class_res)[0]]
 
         # adjust segment starts for 15min "pages"
         if start != 0:

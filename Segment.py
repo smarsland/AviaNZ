@@ -999,13 +999,14 @@ class Segmenter:
             if blobs[i].filled_area > minSegment and blobs[i].minor_axis_length > minaxislength:
                 keep.append(i)
 
-        list = []
+        out = []
         blobs = [blobs[i] for i in keep]
 
         # convert bounding box pixels to milliseconds:
         for l in blobs:
-            list.append([float(l.bbox[0] * self.incr / self.fs), float(l.bbox[2] * self.incr / self.fs)])
-        return list
+            newseg = [float(l.bbox[0] * self.incr / self.fs), float(l.bbox[2] * self.incr / self.fs)]
+            out.append(newseg)
+        return out
 
     def checkSegmentOverlapCentroids(self, blobs, minSegment=50):
         # Delete overlapping boxes by computing the centroids and picking out overlaps
@@ -1230,6 +1231,75 @@ class PostProcess:
             self.minLen = 0.25
             self.fLow = 0
             self.fHigh = 0
+
+    def generateMFCC(self, data, fs):
+        """ Take data and extract MFCCs """
+        print("Extracting MFCCs...")
+        N_MFCC = 24
+        # Extract MFCCs
+        mfcc = librosa.feature.mfcc(y=np.asarray(data), sr=fs, n_mfcc=N_MFCC)
+
+        # Extract ZCR
+        zcr = librosa.feature.zero_crossing_rate(y=np.asarray(data))
+        mfcc[0,:] = zcr
+
+        # (creates a matrix features x timewindows)
+        # scale each feature ("per-channel")
+        import sklearn
+        mfcc = sklearn.preprocessing.scale(mfcc, axis=1)
+        print(np.shape(mfcc))
+
+        # Calculate all pairwise interactions
+        mfccints = np.zeros((N_MFCC*(N_MFCC-1)//2, np.shape(mfcc)[1]))
+        pairix = 0
+        for i in range(N_MFCC):
+            for j in range(i+1, N_MFCC):
+                mfccints[pairix,:] = mfcc[i,:]*mfcc[j,:]
+                pairix += 1
+
+        # combine first-order terms & interactions
+        mfcc = np.vstack((mfcc, mfccints))
+        mfcc = spi.uniform_filter1d(mfcc, 3)
+        return mfcc
+
+    def classifyMFCC(self, segments):
+        # import the model
+        mfccmodel = np.loadtxt("Filters/model-mfcc.txt")
+        #print("Loaded model:", mfccmodel)
+
+        MFCC_SAMPLERATE = 16000
+        if self.sampleRate != MFCC_SAMPLERATE:
+            print("Resampling from", self.sampleRate, "to", MFCC_SAMPLERATE)
+            data = librosa.core.audio.resample(self.audioData, self.sampleRate, MFCC_SAMPLERATE, res_type='kaiser_best')
+        else:
+            data = self.audioData
+
+        # generate MFCCs for the whole file
+        mfcc = self.generateMFCC(data, MFCC_SAMPLERATE)
+
+        # reverse-engineer the length of each mfcc window in seconds
+        n_wins = np.shape(mfcc)[1]
+        win_size = len(data)/MFCC_SAMPLERATE/n_wins
+        print("window size:", win_size)
+
+        # extract the MFCCs of each segment and classify
+        seg_preds = np.zeros((len(segments)))
+        i = 0
+        for seg in segments:
+            print(seg[0], seg[1])
+            seg_mfcc = mfcc[:,math.floor(seg[0]/win_size):math.ceil(seg[1]/win_size)]
+            # attach the intercept column
+            seg_mfcc = np.insert(seg_mfcc, 0, values=1, axis=0)
+            # get predictions for each column
+            pred = np.matmul(mfccmodel, seg_mfcc)
+            print("Segment predictions:", pred)
+            # if at least 10% predictions are positive, declare a call:
+            if np.quantile(pred, 0.90)>0 and len(np.where(pred>0)[0])>2:
+            # Alternatively:
+            # if np.mean(pred)>0 and len(np.where(pred>0)[0])>2:
+                seg_preds[i] = 1
+            i += 1
+        return seg_preds
 
     def generateFeaturesCNN(self, seg, data, fs, overlap=True):
         '''

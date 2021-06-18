@@ -343,7 +343,7 @@ class AviaNZ(QMainWindow):
             self.showDiagnosticCNN = specMenu.addAction("Show CNN training diagnostics", self.showDiagnosticDialogCNN)
             self.extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old", "MFCC spectrogram"]:
                 em = self.extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -1581,7 +1581,10 @@ class AviaNZ(QMainWindow):
             print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
 
             if name is not None:  # i.e. starting a new file, not next section
-                if self.datalength != self.sp.fileLength:
+                # if loaded length is smaller than total length.
+                # Note that we allow an error margin of 1 frame b/c
+                # wav headers can be slightly off sometimes
+                if self.datalength < self.sp.fileLength-1:
                     self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalength))
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(True)
@@ -2090,7 +2093,12 @@ class AviaNZ(QMainWindow):
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         if "Filtered spectrogram" in self.extra:
             self.p_plot.setXRange(minX, maxX, padding=0)
+        elif "MFCC spectrogram" in self.extra:
+            widthReductFactor = self.sampleRate/16000
+            print("setting range to", minX/widthReductFactor, maxX/widthReductFactor)
+            self.p_plot.setXRange(minX/widthReductFactor, maxX/widthReductFactor, padding=0)
         elif self.extra=="Wavelet scalogram":
+            self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
             self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
@@ -2332,6 +2340,64 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)
+
+        # plot MFCCs in a "spectrogram":
+        if self.extra == "MFCC spectrogram":
+            N_MFCC = 24
+            with pg.BusyCursor():
+                if self.sampleRate != 16000:
+                    audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+                else:
+                    audiodata = self.audiodata
+                print("Calculating MFCCs...")
+                mfcc = librosa.feature.mfcc(y=audiodata, sr=16000, n_mfcc=N_MFCC)
+                zcr = librosa.feature.zero_crossing_rate(y=audiodata)
+                mfcc[0,:] = zcr
+                print(np.shape(mfcc))
+
+            # Scale per-channel
+            import sklearn
+            import scipy.ndimage as spi
+            mfcc = sklearn.preprocessing.scale(mfcc, axis=1)
+            tempsp = mfcc.T - np.min(mfcc) + 1
+            tempsp = 10.0 * np.log10(tempsp)
+
+            # import the model
+            mfccmodel = np.loadtxt("Filters/model-mfcc.txt")
+            # print("Loaded model:", mfccmodel)
+
+            # mfcc shape is (24, ntimewindows)
+            # Create the pairwise interactions matrix
+            mfccints = np.zeros((N_MFCC*(N_MFCC-1)//2, np.shape(mfcc)[1]))
+            pairix = 0
+            for i in range(N_MFCC):
+                for j in range(i+1, N_MFCC):
+                    mfccints[pairix,:] = mfcc[i,:]*mfcc[j,:]
+                    pairix += 1
+
+            # add intercept
+            mfcc = np.vstack((np.ones(np.shape(mfcc)[1]), mfcc, mfccints))
+            #mfcc = spi.uniform_filter1d(mfcc, 3)
+            pred = np.matmul(mfccmodel, mfcc)
+
+            # Plot the features
+            positivePreds = np.where(pred>0)[0]
+            self.plotExtra = pg.ImageItem()
+            self.p_plot.addItem(self.plotExtra)
+            pos, colour, mode = colourMaps.colourMaps("Inferno")
+            cmap = pg.ColorMap(pos, colour,mode)
+            lut = cmap.getLookupTable(0.0, 1.0, 256)
+            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setImage(tempsp)
+            # create points for predicted calls
+            # (pred>0 is thr=0.5 on response scale)
+            self.plotExtra3 = pg.ScatterPlotItem(x=positivePreds, y=np.zeros(len(positivePreds)), symbol='s')
+            self.plotExtra3.setBrush(fn.mkBrush('r'))
+            self.p_plot.addItem(self.plotExtra3)
+
+            # Do the predictions for each segment
+            post = Segment.PostProcess(self.configdir, audiodata, 16000)
+            print("segment decisions:", post.classifyMFCC(self.segments))
 
         # plot spectrogram of only the filtered band:
         if self.extra == "Filtered spectrogram, new + AA" or self.extra == "Filtered spectrogram, new" or self.extra == "Filtered spectrogram, old":
@@ -3715,7 +3781,7 @@ class AviaNZ(QMainWindow):
                 C = WF.reconstructWP2(node, aaType != -2, True)
                 C = self.sp.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
 
-                C = np.abs(C)
+                C = np.abs(C) + 0.01
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
                 E = C
                 C = np.log(C)
