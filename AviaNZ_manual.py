@@ -415,8 +415,7 @@ class AviaNZ(QMainWindow):
         recMenu = self.menuBar().addMenu("&Recognisers")
         extrarecMenu = recMenu.addMenu("Train an automated recogniser")
         extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
-        if not self.DOC:
-            extrarecMenu.addAction("Train a changepoint recogniser", self.buildChpRecogniser)
+        extrarecMenu.addAction("Train a changepoint recogniser", self.buildChpRecogniser)
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
