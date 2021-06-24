@@ -536,7 +536,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
             // printf("- Current wt: %f, F(t): %.2f\n", detwts[t2det + tt], detFs[t2det + tt]);
             // printf("- total number of possible det. starts: %zu, last: %zu\n", detnumpostarts[t2+1], detpostarts[t2det + detnumpostarts[t2+1]-1]);
             if(detwts[t2det+tt]==9999){
-                printf("ERROR: fatal cache miss\n");
+                printf("ERROR: fatal cache miss in cycle %zu\n", tt);
                 return 1;
             }
 

@@ -1713,7 +1713,7 @@ class TestRecWizard(QWizard):
 
         def initializePage(self):
             filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
-            self.species.addItems(filternames)
+            self.species.addItems(sorted(filternames))
             if self.initialFilter is not None:
                 self.species.setCurrentText(self.initialFilter)
 
