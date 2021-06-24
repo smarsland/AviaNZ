@@ -1005,13 +1005,13 @@ class Segmenter:
             if blobs[i].filled_area > minSegment and blobs[i].minor_axis_length > minaxislength:
                 keep.append(i)
 
-        list = []
+        out = []
         blobs = [blobs[i] for i in keep]
 
         # convert bounding box pixels to milliseconds:
         for l in blobs:
-            list.append([float(l.bbox[0] * self.incr / self.fs), float(l.bbox[2] * self.incr / self.fs)])
-        return list
+            out.append([float(l.bbox[0] * self.incr / self.fs), float(l.bbox[2] * self.incr / self.fs)])
+        return out
 
     def checkSegmentOverlapCentroids(self, blobs, minSegment=50):
         # Delete overlapping boxes by computing the centroids and picking out overlaps

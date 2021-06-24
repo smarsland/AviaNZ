@@ -109,10 +109,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.speCombos = [self.w_spe1]
 
         # populate this box (always show all filters here)
-        spp = list(self.FilterDicts.keys())
-        self.w_spe1.addItems(spp)
+        spp = sorted(list(self.FilterDicts.keys()))
         self.w_spe1.addItem("Any sound")
         self.w_spe1.addItem("Any sound (Intermittent sampling)")
+        self.w_spe1.addItems(spp)
         self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)

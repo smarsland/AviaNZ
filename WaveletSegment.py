@@ -153,7 +153,7 @@ class WaveletSegment:
         print("--- Wavelet segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None):
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, silent=True):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
@@ -163,11 +163,17 @@ class WaveletSegment:
             4. window: wavelets will be merged in groups of this size (s) before analysis
             5. maxlen: maximum allowed length (s) of signal segments
               3-5 can be None, in which case they are retrieved from self.spInfo.
+            6. silent: silent (True) or verbose (False) mode
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
 
-        # No resampling here. Will read nodes from self.spInfo, which may already be adjusted
+        if silent:
+            printing=0
+        else:
+            printing=1
+
+        # No resampling here. Will read nodes from self.spInfo, which may already be adjusted.
 
         ### find segments with each subfilter separately
         detected_allsubf = []
@@ -181,7 +187,7 @@ class WaveletSegment:
             if maxlen is None:
                 maxlen = subfilter["TimeRange"][1]
 
-            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg)
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg, printing=printing)
 
             detected_allsubf.append(detected)
         print("--- WV changepoint segmenting completed in %.3f s ---" % (time.time() - opst))
@@ -1052,7 +1058,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1):
+    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1, printing=1):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
@@ -1064,6 +1070,7 @@ class WaveletSegment:
         maxlen - maximum allowed signal segment length, in s
         window - energy will be calculated over these windows, in s
         alg - standard (1) or with nuisance segments (2)
+        printing - run silent (0) or verbose (1)
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
@@ -1080,6 +1087,11 @@ class WaveletSegment:
             # (segments exceeding this length will be marked as 'n')
             realmaxlen = math.ceil(maxlen / realwindow)
 
+            if np.max(E)>1e7:
+                E = E / 1e4 # rescale to avoid potential overflows
+            if np.max(E)>1e-2:  # (checking so that the hardcoded epsilon would be relatively small)
+                E = E + 1e-5 # add epsilon in case there is a short quiet period
+
             # Estimate of the global background for this file/page
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
@@ -1094,7 +1106,7 @@ class WaveletSegment:
             if alg==1:
                 segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
             else:
-                segm1 = ce_detect.launchDetector2(E, sigma2, realmaxlen, alpha=alpha).astype('float')
+                segm1 = ce_detect.launchDetector2(E, sigma2, realmaxlen, alpha=alpha, printing=printing).astype('float')
 
             # here's how you would extract segment means:
             # for seg in segm1:

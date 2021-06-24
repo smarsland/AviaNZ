@@ -832,7 +832,7 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         if DOC:
-            self.algs.addItems(["Wavelets", "FIR", "Median Clipping"])
+            self.algs.addItems(["Wavelets", "WV Changepoint", "FIR", "Median Clipping"])
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
@@ -948,13 +948,17 @@ class Segmentation(QDialog):
 
         # parse the provided filter list into wavelet and changepoint boxes
         self.filters = species
-        spp_chp = ["Choose species..."]
-        spp_wv = ["Choose species..."]
+        spp_chp = []
+        spp_wv = []
         for key, item in species.items():
             if item.get("method")=="chp":
                 spp_chp.append(key)
             else:
                 spp_wv.append(key)
+        spp_chp = sorted(spp_chp)
+        spp_wv = sorted(spp_wv)
+        spp_chp.insert(0, "Choose species...")
+        spp_wv.insert(0, "Choose species...")
         self.species_wv.addItems(spp_wv)
         self.species_chp.addItems(spp_chp)
         self.species_chp.currentTextChanged.connect(self.filterChange)
@@ -1132,8 +1136,6 @@ class Segmentation(QDialog):
         elif alg == "FIR":
             self.FIRThr1text.show()
             self.FIRThr1.show()
-        #elif alg == "Best":
-        #    pass
         elif alg == "Cross-Correlation":
             self.CCThr1.show()
             self.specieslabel_cc.show()

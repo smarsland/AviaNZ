@@ -3933,9 +3933,9 @@ class AviaNZ(QMainWindow):
                     self.spectrogramDialog.low.setValue(minFreq)
                     self.spectrogramDialog.high.setValue(maxFreq)
 
-            self.redoFreqAxis(minFreq,maxFreq)
+        self.redoFreqAxis(minFreq,maxFreq)
 
-            self.statusLeft.setText("Ready")
+        self.statusLeft.setText("Ready")
 
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
@@ -4863,7 +4863,7 @@ class AviaNZ(QMainWindow):
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1)
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, silent=False)
                 # Or if no params are passed, they will be read from the filter file TimeRange:
                 # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 
