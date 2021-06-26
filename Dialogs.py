@@ -3447,3 +3447,32 @@ class ExportBats(QDialog):
 
     def getValues(self):
         return [self.data.text(), self.observer.text(),self.method.text(),self.detector.text(),self.notes.text(), self.easting.text(),self.northing.text(), self.site.text(), self.region.text()]
+
+class Shapes(QDialog):
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Shape analysis')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+
+        # if len(segments) == 0:
+        #     print("No segments to analyse!")
+        #     return
+
+        # self.sampleRate = sampleRate
+        # self.config = config
+        # self.segments = segments
+
+        self.detectorCombo = QComboBox()
+        self.detectorCombo.addItems(['stupidShaper', 'fundFreqShaper'])
+
+        self.activate = QPushButton('Detect shapes in segments')
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(QLabel("Choose shape detection method"))
+        vbox.addWidget(self.detectorCombo)
+        vbox.addWidget(self.activate)
+        self.setLayout(vbox)
+
+    def getValues(self):
+        return self.detectorCombo.currentText()

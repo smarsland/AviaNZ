@@ -49,6 +49,7 @@ import WaveletSegment
 import WaveletFunctions
 import Clustering
 import colourMaps
+import Shapes
 
 import librosa
 import webbrowser, copy, math
@@ -400,6 +401,7 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
+            actionMenu.addAction("Analyse shapes", self.showShapesDialog)
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
 
         actionMenu.addSeparator()
@@ -3987,6 +3989,55 @@ class AviaNZ(QMainWindow):
 
         csv.close()
 
+    def detectShapes(self):
+        method = self.shapesDialog.getValues()
+        allshapes = []
+        specxunit = self.convertSpectoAmpl(1)
+        specyunit = self.sampleRate//2 / np.shape(self.sg)[1]
+        with pg.BusyCursor():
+            for segm in self.segments:
+                segshape = None
+                if method=="stupidShaper":
+                    # placeholder method:
+                    segshape = Shapes.stupidShaper(segm, specxunit, specyunit)
+                elif method=="fundFreqShaper":
+                    # Fundamental frequency:
+                    data = self.audiodata[int(segm[0]*self.sampleRate):int(segm[1]*self.sampleRate)]
+                    W = 4*self.config['incr']
+                    segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sampleRate)
+                allshapes.append(segshape)
+
+        if len(allshapes)!=len(self.segments):
+            print("ERROR: something went wrong in shape analysis, produced %d shapes", len(allshapes))
+            return
+
+        # print, plot or export the results
+        # clear any old plots:
+        if not hasattr(self, 'shapePlots'):
+            self.shapePlots = []
+        for sh in self.shapePlots:
+            self.p_spec.removeItem(sh)
+        self.shapePlots = []
+
+        # TODO hide invalid values (0/-1?)
+        # TODO not sure if this will work when spec sp.minFreqShow>0
+        for shape in allshapes:
+            # Convert coordinates to Hz/s and back to spec y/x, b/c
+            # spacing used to calculate the shape may differ from current spec pixel size.
+            numy = len(shape.y)
+            seqx = [self.convertAmpltoSpec(x*shape.tunit + shape.tstart) for x in range(numy)]
+            seqy = [self.convertFreqtoY(y*shape.yunit + shape.ystart) for y in shape.y]
+            self.shapePlots.append(pg.PlotDataItem())
+            self.shapePlots[-1].setData(seqx, seqy, pen=pg.mkPen('r', width=2))
+            self.p_spec.addItem(self.shapePlots[-1])
+
+    def showShapesDialog(self):
+        """ Create the shape analysis dialog. """
+        self.shapesDialog = Dialogs.Shapes()
+        self.shapesDialog.show()
+        self.shapesDialog.activateWindow()
+        self.shapesDialog.activate.clicked.connect(self.detectShapes)
+
     def showDenoiseDialog(self):
         """ Create the denoising dialog when the relevant button is pressed.
         """
@@ -4842,8 +4893,8 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.onsets()
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             elif alg == 'Fundamental Frequency':
-                newSegments, pitch, times = self.seg.yin(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
-                                                         int(str(settings["FFwindow"])), returnSegs=True)
+                newSegments = self.seg.yinSegs(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
+                                                         int(str(settings["FFwindow"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             elif alg == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(settings["FIRThr1"])))
