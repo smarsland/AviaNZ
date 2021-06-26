@@ -894,8 +894,24 @@ class SignalProc:
         return x, y
 
     def drawFundFreq(self, seg):
-        # produces marks of fundamental freq to be drawn on the spectrogram.
-        pitch, starts, _, W = seg.yin()
+        """ Produces marks of fundamental freq to be drawn on the spectrogram.
+            Return is a list of (x, y) segments w/ x,y - lists in spec coords
+        """
+        import Shapes
+        # Estimate fund freq, using windows of 2 spec FFT lengths (4 columns)
+        # to make life easier:
+        Wsamples = 4*self.incr
+        # No set minfreq cutoff here, but warn of the lower limit for
+        # reliable estimation (i.e max period such that 3 periods
+        # fit in the F0 window):
+        minReliableFreq = self.sampleRate / (Wsamples/3)
+        print("Warning: F0 estimation below %d Hz will be unreliable" % minReliableFreq)
+        # returns pitch in Hz for each window of Wsamples/2
+        # over the entire data provided (so full page here)
+        thr = 0.5
+        pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.sampleRate)
+        pitch = pitchshape.y  # pitch is a shape with y in Hz
+
         # find out which marks should be visible
         ind = np.logical_and(pitch > self.minFreqShow+50, pitch < self.maxFreqShow)
         if not np.any(ind):
@@ -912,15 +928,18 @@ class SignalProc:
 
         yadjfact = 2/self.sampleRate*np.shape(self.sg)[1]
 
-        # then map starts from samples to spec windows
-        starts = starts / self.incr
+        # then create the x sequence (in spec coordinates)
+        starts = np.arange(len(pitch)) * pitchshape.tunit + pitchshape.tstart # in seconds
+        # (pitchshape.tstart should always be 0 here as it used full data)
+        starts = starts * self.sampleRate / self.incr  # in spec columns
+
         # then convert segments back to positions in each array:
         out = []
         for s in segs:
             # convert [s, e] to [s s+1 ... e-1 e]
-            i = np.arange(s[0], s[1])
+            ixs = np.arange(s[0], s[1])
             # retrieve all pitch and start positions corresponding to this segment
-            pitchSeg = pitch[i]
+            pitchSeg = pitch[ixs]
             # Adjust pitch marks to the visible freq range on the spec
             y = ((pitchSeg-self.minFreqShow)*yadjfact).astype('int')
             # smooth the pitch lines
@@ -935,9 +954,9 @@ class SignalProc:
             while y[trime]==0 and trime>len(y)-medfiltsize//2:
                 trime -= 1
             y = y[trimst:trime]
-            i = i[trimst:trime]
+            ixs = ixs[trimst:trime]
 
-            out.append((starts[i], y))
+            out.append((starts[ixs], y))
         return out
 
     def drawFormants(self,ncoeff=None):

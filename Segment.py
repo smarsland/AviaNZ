@@ -21,8 +21,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import SignalProc
-import WaveletFunctions
 import SupportClasses
+import Shapes
 
 import numpy as np
 import scipy.ndimage as spi
@@ -613,7 +613,7 @@ class Segmenter:
         """
         segs1 = self.segmentByFIR(FIRthr)
         segs2 = self.medianClip(medianClipthr)
-        segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
+        segs3 = self.yinSegs(100, thr=yinthr)
         segs1 = self.mergeSegments(segs1, segs2)
         segs = self.mergeSegments(segs1, segs3)
         # mergeSegments also sorts, so not needed:
@@ -1065,56 +1065,36 @@ class Segmenter:
             segments.append([times[onsets[i]],times[onsets[i]]+0.2])
         return segments
 
-    def yin(self, minfreq=100, minperiods=3, thr=0.5, W=1000, returnSegs=False):
+    def yinSegs(self, minfreq=100, minperiods=3, thr=0.5, W=1000):
         """ Segmentation by computing the fundamental frequency.
-        Uses the Yin algorithm of de Cheveigne and Kawahara (2002)
+            Uses the Yin algorithm of de Cheveigne and Kawahara (2002).
+            Args:
+            minfreq: lowest freq (Hz) to consider as plausible.
+            thr: the threshold for accepting F0,
+              necessarily higher than the 0.1 in the paper.
+            W: the window in samples used.
         """
-        if self.data.dtype == 'int16':
-            data = self.data.astype(float)/32768.0
-        else:
-            data = self.data
-
-        # The threshold is necessarily higher than the 0.1 in the paper
-
         # Window width W should be at least 3*period.
         # A sample rate of 16000 and a min fundamental frequency of 100Hz would then therefore suggest reasonably short windows
         minwin = float(self.fs) / minfreq * minperiods
-        if minwin > W:
+        if W < minwin:
             print("Extending window width to ", minwin)
-            W = minwin
+            W = int(minwin)
 
-        # Make life easier, and make W be a function of the spectrogram window width
-        W = int(round(W/self.window_width)*self.window_width)
-        # work on a copy of the main data, just to be safer
-        data2 = np.zeros(len(data))
-        data2[:] = data[:]
+        # returns pitch in Hz for each window of Wsamples/2.
+        # As this uses the full self.data, it is up to caller to adjust times
+        # to real seconds if self.data only contained e.g. a segment
+        shape = Shapes.fundFreqShaper(self.data, W, thr, self.fs)
 
-        # Now, compute squared diffs between signal and shifted signal
-        # (Yin fund freq estimator)
-        # over all tau<W, for each start position.
-        # (starts are shifted by half a window size), i.e.:
-        starts = range(0, len(data) - 2 * W, W // 2)
+        pitch = shape.y
+        if len(pitch)==0:
+            return np.array([])
+        units = shape.tunit
 
-        # Will return pitch as self.fs/besttau for each window
-        if len(data2) <= 2*W:
-            print("ERROR: data too short for F0: must be %d, is %d" % (2*W, len(data2)))
-            if returnSegs:
-                return np.array([]), np.array([]), np.array([])
-            else:
-                return np.array([]), np.array([]), minfreq, W
-        pitch = ce.FundFreqYin(data2, W, thr, self.fs)
-
-        if returnSegs:
-            ind = pitch > minfreq
-            # ffreq is calculated over windows of size W
-            # 1/len(pitch) maps is to 0-1
-            # * np.shape(sg) maps it to spec windows
-            # * self.incr/self.fs maps it to actual seconds
-            units = self.incr/self.fs * np.shape(self.sg)[0] / len(pitch)
-            segs = self.convert01(ind, units)
-            return segs, pitch, np.array(starts)
-        else:
-            return pitch, np.array(starts), minfreq, W
+        # drop any pitch under minfreq
+        ind = pitch > minfreq
+        segs = self.convert01(ind, units)
+        return segs
 
     def findCCMatches(self, seg, sg, thr):
         """ Cross-correlation. Takes a segment and looks for others that match it to within thr.
@@ -1511,6 +1491,11 @@ class PostProcess:
         '''
         Check for fundamental frequency of the segments, discard the segments that do not indicate the species.
         '''
+        # F0 detection parameters:
+        Wsamples = 1024
+        minfreq = 100
+        thr = 0.5
+
         for segix in reversed(range(len(self.segments))):
             seg = self.segments[segix][0]
 
@@ -1526,45 +1511,30 @@ class PostProcess:
                 sp.data = self.audioData
                 sp.sampleRate = self.sampleRate
 
-            # denoise before fundamental frq. extraction
-            # data = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)
-            # sp.data = data
-            # sp.sampleRate = self.sampleRate
-            _ = sp.spectrogram(mean_normalise=True, onesided=True) 
+            # TODO: could denoise before fundamental frq. extraction
 
-            segment = Segmenter(sp, fs=sp.sampleRate)
-            pitch, y, minfreq, W = segment.yin(minfreq=100)
+            # Ensure window width W is at least 3*period:
+            # (generally fine for 100 Hz minfreq = 0.3 s minwin)
+            minwin = 3 * sp.sampleRate / minfreq
+            if Wsamples < minwin:
+                print("Extending window width to ", minwin)
+                Wsamples = int(minwin)
+
+            # returns pitch in Hz for each window of Wsamples/2.
+            pitch = Shapes.fundFreqShaper(sp.data, Wsamples, thr, sp.sampleRate)
+            pitch = pitch.y
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]
 
             if pitch.size == 0:
                 print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                 del self.segments[segix]
-            elif pitch.size == 1:
-                if (pitch < self.F0[0]) or (pitch > self.F0[1]):
-                    print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
+            else:
+                meanF0 = np.mean(pitch)
+                if (meanF0 < self.F0[0]) or (meanF0 > self.F0[1]):
+                    print('segment* ', seg, meanF0, pitch, ' *-- fundamental freq is out of range, could be noise')
                     del self.segments[segix]
-            elif (np.mean(pitch) < self.F0[0]) or (np.mean(pitch) > self.F0[1]):
-                print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
-                del self.segments[segix]
         print("Segments remaining after fundamental frequency: ", len(self.segments))
-
-    def denoise_filter(self, level=5, d=False, f=False, f1=0, f2=0):
-        """ Wavelet denoise and band-pass filter for fundamental frquency
-        """
-        # TODO: only used in fundamental frq calculation. Remove when sorting out FF.
-        if d:
-            wf = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet='dmey2', maxLevel=level, samplerate=self.sampleRate)
-            denoisedData = wf.waveletDenoise(thresholdType="soft", maxLevel=level)
-        else:
-            denoisedData=self.audioData
-
-        if f:
-            filteredDenoisedData = self.sp.bandpassFilter(denoisedData, self.sampleRate, start=f1, end=f2)
-        else:
-            filteredDenoisedData = denoisedData
-
-        return filteredDenoisedData
 
     # The following are just wrappers for easier parsing of 3-element segment lists:
     # Segmenter class still has its own joinGaps etc which operate on 2-element lists
