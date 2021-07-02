@@ -4005,6 +4005,9 @@ class AviaNZ(QMainWindow):
                     data = self.audiodata[int(segm[0]*self.sampleRate):int(segm[1]*self.sampleRate)]
                     W = 4*self.config['incr']
                     segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sampleRate)
+                    # shape.tstart is relative to segment start (0)
+                    # so we also need to add the segment start
+                    segshape.tstart += segm[0]
                 allshapes.append(segshape)
 
         if len(allshapes)!=len(self.segments):
@@ -4019,14 +4022,21 @@ class AviaNZ(QMainWindow):
             self.p_spec.removeItem(sh)
         self.shapePlots = []
 
-        # TODO hide invalid values (0/-1?)
+        # NOTE: this skips -1 and values below minFreqShow and connects
+        # the reamining dots. Might not be what you want.
         # TODO not sure if this will work when spec sp.minFreqShow>0
         for shape in allshapes:
             # Convert coordinates to Hz/s and back to spec y/x, b/c
             # spacing used to calculate the shape may differ from current spec pixel size.
             numy = len(shape.y)
             seqx = [self.convertAmpltoSpec(x*shape.tunit + shape.tstart) for x in range(numy)]
-            seqy = [self.convertFreqtoY(y*shape.yunit + shape.ystart) for y in shape.y]
+            seqfreqs = shape.y*shape.yunit + shape.ystart  # convert to Hz
+            # Hide any below minFreqShow
+            visible = seqfreqs>=self.sp.minFreqShow
+            seqfreqs = seqfreqs[visible]
+            seqx = np.asarray(seqx)[visible]
+            seqy = [self.convertFreqtoY(y) for y in seqfreqs]
+
             self.shapePlots.append(pg.PlotDataItem())
             self.shapePlots[-1].setData(seqx, seqy, pen=pg.mkPen('r', width=2))
             self.p_spec.addItem(self.shapePlots[-1])
