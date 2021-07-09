@@ -38,7 +38,8 @@ freqarr=np.arange(5/32,5+5/32,5/32)
 print(freqarr)
 print(np.shape(freqarr))
 wopt=[10,1]
-tfsupp,ecinfo, Skel=IF.ecurve(TFR,freqarr,wopt);
+tfsupp,ecinfo, Skel=IF.ecurve(TFR,freqarr,wopt)
+iamp,iphi,ifreq = IF.rectfr(tfsupp,TFR,freqarr,wopt)
 
 
 #freqarr=np.arange(np.shape(TFR)[0], step=10/fs)

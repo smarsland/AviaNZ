@@ -235,17 +235,7 @@ class IF:
         idr=np.zeros((L))*NaN 
         #dfreq=np.zeros((NF-1,2))
 
-        #check how to do this in Python
-        #if nargout>1
-        #ec=struct;
-        #ec.Method=method; ec.Param=pars; ec.Display=DispMode; ec.Plot=PlotMode;
-        #ec.Skel=Skel; ec.PathOpt=PathOpt; ec.AmpFunc=AmpFunc;
-        #end
-
         ec_info=ec_class(self.method, self.pars, self.PathOpt)
-
-        #ecinfo={'Method':self.method, 'Param':self.pars, 'Display':self.DispMode, 'Skel':self.Skel, 'PathOpt':self.PathOpt}
-
 
             #Determine the frequency resolution
             #MATLAB diff difference between adjacent elements along first array dim
@@ -656,15 +646,7 @@ class IF:
                 print('tfsupp[0,idz]', np.shape(tfsupp[0,idz]))
                 print('idnz',np.shape(idnz))
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
- 
-            #if nargout>1, ec.pfreq=tfsupp(1,:); ec.pind=pind; ec.pamp=pamp; ec.idr=idr; end
-            #if ~isempty(strfind(DispMode,'plot')) && strcmpi(method,'max')
-            #    scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
-            #    ax=axes('Position',[0.1,0.1,0.8,0.8],'FontSize',16); hold all;
-            #    title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-            #    plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Global Maximum curve');
-            #    legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
-         
+
             #INSERT EC OUTPUT
             ec_info.pfreq=tfsupp[1,:]
             ec_info.pind=pind
@@ -696,35 +678,12 @@ class IF:
             ec_info.pind=pind
             ec_info.pamp=pamp
             ec_info.idr=idr
-            
-            #if ~isempty(strfind(DispMode,'plot'))
-            #    scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
-            #    ax=axes('Position',[0.1,0.1,0.8,0.8],'FontSize',16); hold all;
-            #    title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-            #    plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Nearest Neighbour curve');
-            #    plot(ax(1),(timax-1)/fs,Fp(fimax,timax),'ob','LineWidth',2,'MarkerSize',8,'MarkerFaceColor','r',...
-            #        'DisplayName','Starting point (overall maximum of TFR amplitude)');
-            #    legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
-            
 
         #----------------------------- Method I -----------------------------------
         if len(self.pars)==1:
             if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
                 print('Extracting the curve by I scheme.\n')
             #Define the functionals
-            #if not PenalFunc[1]:
-            #    def logw1(x):
-            #        return (x)-pars(1)*abs(fs*x/DD)
-            #else:
-            #   def logw1(x):
-            #       return (x)*PenalFunc[1][fs*x,DD]
-            #if not PenalFunc[2]:
-            #   def logw2(x):
-            #       return []
-            #else:
-            #   def logw2(x):
-            #       return (x)*PenalFunc[2][x,DF]
-
             if not self.PenalFunc['1']:
                 logw1= lambda x: (x)-self.pars(1)*abs(fs*x/DD)
             else:
@@ -744,25 +703,10 @@ class IF:
             pamp[tn1:tn2+1]=Qp[lid]
 
             #Assign the output structure and display, if needed
-        #    if nargout>1, 
-            ec=ec_class(pfreq=tfsupp[0,:], pind=pind, pamp=pamp, idr=idr)
-        #    ec.pfreq=tfsupp[0,:]
-        #    ec.pind=pind
-        #    ec.pamp=pamp
-        #    ec.idr=idr
-        ##    if ~isempty(strfind(DispMode,'plot'))
-        #        scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
-        #        ax=axes('Position',[0.1,0.1,0.8,0.8],'FontSize',16); hold all;
-        #        title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-        #        plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Extracted frequency profile');
-        #        if ~strcmpi(PathOpt,'on')
-        #            plot(ax(1),(timax-1)/fs,Fp(fimax,timax),'ob','LineWidth',2,'MarkerSize',8,'MarkerFaceColor','r',...
-        #                'DisplayName','Starting point (overall maximum of local functional)');
-        #        end
-        #        legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
-        #    end
-        #end
-
+            ec_info.pfreq=tfsupp[0,:]
+            ec_info.pind=pind
+            ec_info.pamp=pamp
+            ec_info.idr=idr
 
         #----------------------------- Method II ----------------------------------
         if len(self.pars)==2 and self.method==2:
@@ -819,9 +763,8 @@ class IF:
             itn=0
             allpind=np.zeros((10,L))
             allpind[0,:]=pind
-            #ec=ec_class(mv=mv,rdiff=rdiff) #hope that this will work. #HERE
-            ec.mv=mv
-            ec.rdiff=rdiff
+            ec_info.mv=mv
+            ec_info.rdiff=rdiff
             while rdiff!=0:
                 #Define the functionals
                 smv=np.array([mv[1],mv[3]]) #to avoid underflow
@@ -871,28 +814,12 @@ class IF:
                 mv[3]=ss2[int(self.Round(0.75*CL))-1]-ss2[int(self.Round(0.25*CL))-1]
                 #Update the information structure, if needed
                 
-                ec.pfreq=np.vstack((ec.pfreq,tfsupp[0,:]))
-                ec.pind=np.vstack((ec.pind,pind))
-                ec.pamp=np.vstack((ec.pamp,pamp))
-                ec.idr=np.vstack((ec.idr,idr))
-                ec.mv=np.vstack((ec.mv,mv))
-                ec.rdiff=np.vstack((ec.rdiff, rdiff))
-                
-                ##Display, if needed
-                #if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify')
-                #    fprintf('%0.2f%%; ',100*rdiff);
-                #    if ~isempty(strfind(DispMode,'plot'))
-                #        line0=plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'DisplayName',sprintf('Iteration %d (discrepancy %0.2f%%)',itn,100*rdiff));
-                #        set(line1,'XData',0:itn,'YData',[get(line1,'YData'),fs*mv(1)]);
-                #        set(line2,'XData',0:itn,'YData',[get(line2,'YData'),fs*mv(2)]);
-                #        set(line3,'XData',0:itn,'YData',[get(line3,'YData'),mv(3)]);
-                #        set(line4,'XData',0:itn,'YData',[get(line4,'YData'),mv(4)]);
-                #        if ~strcmpi(PathOpt,'on'),
-                #            mpt=plot(ax(1),(timax-1)/fs,Fp(fimax,timax),'ok','LineWidth',2,'MarkerSize',8,'MarkerFaceColor','w',...
-                #                'DisplayName',['Starting point (iteration ',num2str(itn),')']);
-                #        end
-                #    end
-                #end
+                ec_info.pfreq=np.vstack((ec_info.pfreq,tfsupp[0,:]))
+                ec_info.pind=np.vstack((ec_info.pind,pind))
+                ec_info.pamp=np.vstack((ec_info.pamp,pamp))
+                ec_info.idr=np.vstack((ec_info.idr,idr))
+                ec_info.mv=np.vstack((ec_info.mv,mv))
+                ec_info.rdiff=np.vstack((ec_info.rdiff, rdiff))
 
                 #Stop if maximum number of iterations has been reached
                 if itn>self.MaxIter and rdiff!=0:
@@ -917,24 +844,6 @@ class IF:
   
             if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
                print('\n')
-        #    if ~isempty(strfind(DispMode,'plot'))
-        #        set(line0,'Color','k','LineWidth',2);
-        #        if ~strcmpi(PathOpt,'on'), set(mpt,'Color',b,'MarkerFaceColor','k'); end
-        #        if fres==2 %change plot if the resolution is logarithmic
-        #            set(line1,'YData',exp(get(line1,'YData')),'DisplayName','exp(m[d\log\omega_p/dt])');
-        #            set(line2,'YData',exp(get(line2,'YData'))-1,'DisplayName','exp(s[d\log\omega_p/dt])-1');
-        #            set(line3,'YData',exp(get(line3,'YData')),'DisplayName','exp(m[\log\omega_p])/2\pi');
-        #            set(line4,'YData',exp(get(line4,'YData'))-1,'DisplayName','exp(s[\log\omega_p])-1');
-        #            set(ax(2:3),'YScale','log'); ylabel(ax(2),'Frequency Ratio'); ylabel(ax(3),'Frequency (Hz)');
-        #            title(ax(2),'$e^{{\rm m}[d\log\omega_p/dt]}$ (solid), $e^{{\rm s}[d\log\omega_p/dt]}-1$ (dashed)','interpreter','Latex','FontSize',20);
-        #            title(ax(3),'$e^{{\rm m}[\log\omega_p]}/2\pi$ (solid), $e^{{\rm s}[\log\omega_p]}-1$ (dashed)','interpreter','Latex','FontSize',20);
-        #            iline=[get(line1,'YData'),get(line2,'YData')]; set(ax(2),'YLim',[0.75*min(iline),1.5*max(iline)]);
-        #            iline=[get(line3,'YData'),get(line4,'YData')]; set(ax(3),'YLim',[0.75*min(iline),1.5*max(iline)]);
-        #        end
-        #    end
-    
-        #end
-        #varargout[1]=ec #check
 
         #//////////////////////////////////////////////////////////////////////////
         #Extract the time-frequency support around the ridge points
@@ -963,19 +872,16 @@ class IF:
         #Final display
         if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
             print('Curve extracted: ridge frequency ',np.mean(tfsupp[0,:]),'+-',np.std(tfsupp[0,:]),' Hz, lower support ', np.mean(tfsupp[1,:]),'+-',np.std(tfsupp[1,:]) ,' Hz, upper support ',np.mean(tfsupp[2,:]),'+-',np.std(tfsupp[2,:]),' Hz.\n')
-        
 
-        ##Plot (if needed)
-        #if ~isempty(strfind(PlotMode,'on')), plotfinal(tfsupp,TFR,freq,fs,DispMode,PlotMode,nfunc); end
-
-        #end
 
         self.Skel['Np']=Np
         self.Skel['mt']=Ip
         self.Skel['nu']=Fp
         self.Skel['qn']=Qp
 
-        return tfsupp,ecinfo,self.Skel
+       #not summing up for some of ec-info output
+
+        return tfsupp,ec_info,self.Skel
 
         #==========================================================================
         #========================= Support functions ==============================
@@ -1063,30 +969,6 @@ class IF:
 
         return idid
 
-        #%Plot if needed
-        #%{
-        #if ~isempty(strfind(DispMode,'plot+'))
-        #    figure; axes('FontSize',16,'Box','on'); hold all;
-        #    rlines=zeros(Np(tn2),1);
-        #    for pn=1:Np(tn2)
-        #        cridges=zeros(L,1)*NaN; cridges(tn2)=pn;
-        #        for tn=tn2-1:-1:tn1
-        #            cridges(tn)=q(cridges(tn+1),tn+1);
-        #        end
-        #        lind=sub2ind(size(Ip),cridges(tn1:tn2),(tn1:tn2)');
-        #        cridges=[ones(tn1-1,1)*NaN;Ip(lind);ones(L-tn2,1)*NaN];
-        #        crfreq=[ones(tn1-1,1);freq(cridges(tn1:tn2));ones(L-tn2,1)];
-        #        rlines(pn)=plot((0:L-1)/fs,crfreq,'DisplayName',['U=',num2str(U(pn,tn2))]);
-        #    end
-        #    [~,imax]=max(U(:,tn2)); uistack(rlines(imax),'top');
-        #    set(rlines(imax),'Color','k','LineWidth',2);
-        #    title('Path to each of the last peaks maximizing the given functional');
-        #    ylabel('Frequency (Hz)'); xlabel('Time (s)');
-        #end
-        #%}
-
-        
-
         #================== One-step optimization algorithm =======================
     def onestepopt(self,Np,Ip,Fp,Wp,freq):
 
@@ -1165,102 +1047,6 @@ class IF:
 
         return idid, timax, fimax
 
-        #========================= Plotting function ==============================
-        #function plotfinal(tfsupp,TFR,freq,fs,DispMode,PlotMode,varargin)
-
-        #[NF,L]=size(TFR); fres=1; if min(freq)>0 && std(diff(freq))>std(diff(log(freq))), fres=2; end
-        #nfunc=ones(NF,1); if nargin>6 && ~isempty(varargin{1}), nfunc=varargin{1}; end
-        #XX=(0:(L-1))/fs; YY=freq; ZZ=abs(TFR).*(nfunc(:)*ones(1,L)); scrsz=get(0,'ScreenSize');
-
-        #MYL=round(scrsz(3)); MXL=round(scrsz(4)); %maximum number of points seen in plots
-        #if isempty(strfind(lower(PlotMode),'wr')) && (size(ZZ,1)>MYL || size(ZZ,2)>MXL)
-        #    if ~strcmpi(DispMode,'off') && ~strcmpi(DispMode,'notify')
-        #        fprintf('Plotting: TFR contains more data points (%d x %d) than pixels in the plot, so for a\n',size(ZZ,1),size(ZZ,2));
-        #        fprintf('          better performance its resampled version (%d x %d) will be displayed instead.\n',min([MYL,size(ZZ,1)]),min([MXL,size(ZZ,2)]));
-        #    end
-        #    XI=XX; YI=YY;
-        #    if size(ZZ,2)>MXL, XI=linspace(XX(1),XX(end),MXL); end
-        #    if fres==1
-        #        if size(ZZ,1)>MYL, YI=linspace(YY(1),YY(end),MYL); end
-        #        ZZ=aminterp(XX,YY,ZZ,XI,YI,'max');
-        #    else
-        #        if size(ZZ,1)>MYL, YI=exp(linspace(log(YY(1)),log(YY(end)),MYL)); end
-        #        ZZ=aminterp(XX,log(YY),ZZ,XI,log(YI),'max');
-        #    end
-        #    XX=XI(:); YY=YI(:);
-        #end
-
-        #figure('Position',[scrsz(3)/6,scrsz(4)/4,2*scrsz(3)/3,2*scrsz(4)/3]);
-        #ax0=axes('Position',[0.1,0.15,0.8,0.7],'NextPlot','Add','FontSize',18,...
-        #    'XLim',[XX(1),XX(end)],'YLim',[YY(1),YY(end)],'Layer','top','Box','on');
-        #xlabel('Time (s)'); ylabel('Frequency (Hz)');
-        #title({'TFR amplitude', '(black: extracted peaks; gray: their supports)'});
-        #if fres==2, set(gca,'YScale','log'); end
-        #pc=pcolor(XX,YY,ZZ); set(pc,'LineStyle','none');
-        #plot((0:(L-1))/fs,tfsupp(1,:),'Color','k','LineWidth',2);
-        #plot((0:(L-1))/fs,tfsupp(2,:),'Color',[0.5,0.5,0.5],'LineWidth',2);
-        #plot((0:(L-1))/fs,tfsupp(3,:),'Color',[0.5,0.5,0.5],'LineWidth',2);
-        #if ~isempty(find(nfunc~=1,1))
-        #    set(ax0,'Position',[0.1,0.15,0.65,0.7]);
-        #    title(ax0,{'Normalized TFR amplitude', '(black: extracted peaks; gray: their supports)'});
-        #    axes('Position',[0.8,0.15,0.175,0.7],'FontSize',18,'XLim',[0,1.25],'YLim',[freq(1),freq(end)],'Box','on');
-        #    hold all; plot(nfunc,freq,'-k','LineWidth',2); title({'Normalization','function'});
-        #    set(gca,'XTick',[0,0.5,1],'YTickLabel',{}); if fres==2, set(gca,'YScale','log'); end
-        #end
-
-        #end
-
-        #%=============== Interpolation function for plotting ======================
-        #% ZI=aminterp(X,Y,Z,XI,YI,method)
-        #% - the same as interp2, but uses different interpolation types,
-        #% maximum-based ([method]='max') or average-based ([method]='avg'), where
-        #% [ZI] at each point [XI,YI] represents maximum or average among values of
-        #% [Z] corresponding to the respective quadrant in [X,Y]-space which
-        #% includes point [XI,YI];
-        #% X,Y,XI,YI are all linearly spaced vectors, and the lengths of XI,YI
-        #% should be the same or smaller than that of X,Y; Z should be real,
-        #% ideally positive; X and Y correspond to the 2 and 1 dimension of Z, as
-        #% always.
-        #%--------------------------------------------------------------------------
-        #function ZI = aminterp(X,Y,Z,XI,YI,method)
-
-        #%Interpolation over X
-        #ZI=zeros(size(Z,1),length(XI))*NaN;
-        #xstep=mean(diff(XI));
-        #xind=1+floor((1/2)+(X-XI(1))/xstep); xind=xind(:);
-        #xpnt=[0;find(xind(2:end)>xind(1:end-1));length(xind)];
-        #if strcmpi(method,'max')
-        #    for xn=1:length(xpnt)-1
-        #        xid1=xpnt(xn)+1; xid2=xpnt(xn+1);
-        #        ZI(:,xind(xid1))=max(Z(:,xid1:xid2),[],2);
-        #    end
-        #else
-        #    for xn=1:length(xpnt)-1
-        #        xid1=xpnt(xn)+1; xid2=xpnt(xn+1);
-        #        ZI(:,xind(xid1))=mean(Z(:,xid1:xid2),2);
-        #    end
-        #end
-
-        #Z=ZI;
-
-        #%Interpolation over Y
-        #ZI=zeros(length(YI),size(Z,2))*NaN;
-        #ystep=mean(diff(YI));
-        #yind=1+floor((1/2)+(Y-YI(1))/ystep); yind=yind(:);
-        #ypnt=[0;find(yind(2:end)>yind(1:end-1));length(yind)];
-        #if strcmpi(method,'max')
-        #    for yn=1:length(ypnt)-1
-        #        yid1=ypnt(yn)+1; yid2=ypnt(yn+1);
-        #        ZI(yind(yid1),:)=max(Z(yid1:yid2,:),[],1);
-        #    end
-        #else
-        #    for yn=1:length(ypnt)-1
-        #        yid1=ypnt(yn)+1; yid2=ypnt(yn+1);
-        #        ZI(yind(yid1),:)=mean(Z(yid1:yid2,:),1);
-        #    end
-        #end
-
-        #end
 
         #================= Normalization of the noise peaks =======================
     def tfrnormalize(self,TFR,freq):
@@ -1306,7 +1092,7 @@ class IF:
         return nfunc
     
         
-    def rectfr(self,tfsupp,TFR,freq,wopt,method):
+    def rectfr(self,tfsupp,TFR,freq,wopt):
 
         #% - returns the component's amplitude [iamp], phase [iphi] and frequency
         #%   [ifreq] as reconstructed from its extracted time-frequency support
