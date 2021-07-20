@@ -71,7 +71,7 @@ class ec_class:
         self.eind=[]
 
 class Wp:
-    def __init__(self, window_length, SampleRate, window_name='Hann', f0=1):
+    def __init__(self, window_length=64, SampleRate=16000, window_name='Hann'):
         #%wp - structure with wavelet parameters containing fields:
         #%     xi1,xi2 - wavelet full support in the frequency domain;
         #%     ompeak,tpeak - wavelet peak frequency and peak time
@@ -80,12 +80,14 @@ class Wp:
         #%     C,D - coefficients needed for reconstruction
         #[fwt] and [twf] - window function in frequency and time
 
+        #f0=window_length
+
         #logw1= lambda x, pars,fs, DD: (x)-pars(1)*abs(fs*x/DD)
         Wp.fwtmax=[]; Wp.twfmax=[]; Wp.C=[]; Wp.omg=[];
         Wp.xi1=-np.Inf; Wp.xi2=np.Inf; Wp.ompeak=[];
         Wp.t1=-np.Inf; Wp.t2=np.Inf; Wp.tpeak=[];
         if window_name=='Hann':
-            q=4.4*f0;
+            q=4.4*window_length;
             Wp.twf=lambda t: (1+np.cos(2*np.pi*t/q))/2
             Wp.t1=-q/2
             Wp.t2=q/2;
@@ -95,16 +97,16 @@ class Wp:
             Wp.omg=0
             Wp.tpeak=0;
 
-        Wp.xi1=np.amin(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
-        Wp.xi2=np.amax(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
+        #Wp.xi1=np.amin(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
+        #Wp.xi2=np.amax(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
 
 
         
-        Wp.fwtmax=Wp.fwt(Wp.ompeak)
-        if np.isnan(Wp.fwtmax):
-            Wp.fwtmax=Wp.fwt(Wp.ompeak+10**(-14))
+        #Wp.fwtmax=Wp.fwt(Wp.ompeak)
+        #if np.isnan(Wp.fwtmax):
+            #Wp.fwtmax=Wp.fwt(Wp.ompeak+10**(-14))
 
-        Wp.twfmax=Wp.twf(np.arange(window_length))
+        #Wp.twfmax=Wp.twf(np.arange(window_length))
 
         #DT=(wopt.wp.t2h-wopt.wp.t1h)
 
@@ -116,7 +118,7 @@ class Wp:
 
 class Wopt:
     #reproduce homonimous structure in the original code
-    def __init__(self,sampleRate,fmin,fmax,wp,TFRname='FT',window_type='Hann'):
+    def __init__(self,sampleRate,wp,fmin,fmax,TFRname='FT',window_type='Hann'):
         Wopt.TFRname=TFRname
         #if TFRname=='WT':
         #    wopt.wp=wp; #parameters of the wavelet
@@ -221,7 +223,7 @@ class IF:
 
 
         [NF,L]=np.shape(TFR)
-        print('Skel',self.Skel)
+        #print('Skel',self.Skel)
         NaN=math.nan
 
         #inizialization
@@ -250,9 +252,9 @@ class IF:
             dfreq=np.append(dfreq,freq[-1,0]-freq[-1::-1,0])
         else:
             fres=2
-            fstep=np.mean(np.diff(log(freq,1,0)))
-            dfreq[:,0]=log(freq[0])-log(freq[-1:0:-1])
-            dfreq[:,1]=log(freq[-1])-log(freq[-1::-1])
+            fstep=np.mean(np.diff(np.log(freq,1,0)))
+            dfreq=np.log(freq[0,0])-np.log(freq[-1:0:-1,0])
+            dfreq=np.append(dfreq,np.log(freq[-1,0])-np.log(freq[-1::-1,0]))
 
         #Assign numerical parameters
         if isinstance(wopt, Wopt):
@@ -345,8 +347,8 @@ class IF:
                 idn=np.zeros((len(idt),1))
                 for dn in range(len(dind)-1):
                     ii=np.arange(dind[dn]+1,dind[dn+1]+1,1) #ii are indeces first +1 not needed
-                    print('dn',dn)
-                    print('ii',ii)
+                    #print('dn',dn)
+                    #print('ii',ii)
                     idn[ii]=np.reshape(np.arange(0,len(ii),1),np.shape(idn[ii])) #changef 1 in 0
                     Np[0,idt[ii[0]]]=len(ii)
                 idn = idn.astype('int')
@@ -399,23 +401,23 @@ class IF:
                     if self.DispMode.lower!='notify':
                         print('(number of ridges:', self.Round(np.mean(Np[tn1:tn2+1])), ' +- ',self.Round(np.std(Np[tn1:tn2+1])), ' from ',np.amin(Np),' to ',np.amax(Np),')\n')
 
-                    idp=np.argwhere(Np[tn1:tn2+1]==0)
+                    idb=np.argwhere(Np[tn1:tn2+1]==0)
                     NB=len(idb);
                     if NB>0:
-                        idb = np.ravel_multi_index(idp, np.shape(Np)) #if empty this make no sense
+                        #idp = np.ravel_multi_index(idb, np.shape(Np),order='F') #if empty this make no sense
                         print('Warning: At ', NB, ' times there are no peaks (using border points instead).\n')
                 #If there are no peaks, assign border points
                 idb=np.argwhere(Np[tn1:tn2+1]==0)
                 NB=len(idb)
                 if NB>0:
-                    idb = np.ravel_multi_index(idb, np.shape(Np))
+                    idb = idb[:,1]
                     idb = tn1 - 1 + idb
-                    G4=np.abs(TFR[[0,1,NF-1,NF],idb]) #check
+                    G4=np.abs(TFR[np.ix_([0,1,NF-2,NF-1],idb)]) #check
                 for bn in range(NB):
                     tn=idb[bn]
-                    cn=1
+                    cn=0
                     cg=G4[:,bn]
-                    if cg[0]>cg[1] or cg[3]>cg[4]:
+                    if cg[0]>cg[1] or cg[2]>cg[3]:
                         if cg[0]>cg[1]: 
                             Ip[cn,tn]=1
                             Qp[cn,tn]=cg[0]
@@ -433,7 +435,7 @@ class IF:
                         cn=cn+2
 
                     del G4
-                    Np[tn]=cn-1
+                    Np[0,tn]=cn-1
                 
                 del idb, NB
             #if nargout>2, varargout{2}={Np,Ip,Fp,Qp}; end probably not needed
@@ -594,7 +596,7 @@ class IF:
             if sflag==0:
                 if self.NormMode.lower=='on':
                     nfunc=tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
-                    TFR=TFR*(nfunc[:]@ones((1,L))) #this should be a vector moltiplication (not element-wise)
+                    TFR=TFR*(nfunc[:]@np.ones((1,L))) #this should be a vector moltiplication (not element-wise)
 
                 for tn in range(tn1,tn2):#from tn2+1
                     #print('tn=', tn)
@@ -606,16 +608,21 @@ class IF:
                     ##pamp[tn],pind[tn]=np.unravel_index(np.argmax(abs(TFR[:,tn])),(np.shape(TFR[:,tn]),1))
                 pind=pind.astype('int')
                 #print(pind)
-                print(np.shape(tfsupp[0,tn1:tn2+1]),np.shape(freq[pind[tn1:tn2+1]]))
-                print(freq[pind[tn1:tn2+1]])
+                #print(np.shape(tfsupp[0,tn1:tn2+1]),np.shape(freq[pind[tn1:tn2+1]]))
+                #print(freq[pind[tn1:tn2+1]])
                 tfsupp[0][tn1:tn2+1]=freq[pind[tn1:tn2+1]][0]
                 if self.NormMode.lower=='on':
-                    TFR=TFR/(nfunc[:]@ones((1,L)))
+                    TFR=TFR/(nfunc[:]@np.ones((1,L)))
                     pamp[tn1:tn2+1]=pamp[tn1:tn2+1]/(nfunc[pind[tn1:tn2+1]].T)
             else:
                 for tn in range(tn1,tn2+1):#from tn2+1
-                    pamp[tn]=np.amax(Wp[0:Np[0,tn],tn])
-                    idr[tn]=np.argmax(Wp[0:Np[0,tn],tn])
+                    #print('tn',tn)
+                    if Np[0,tn]!=0:
+                        pamp[tn]=np.amax(Wp[0:Np[0,tn],tn])
+                        idr[tn]=np.argmax(Wp[0:Np[0,tn],tn])
+                    else:
+                        pamp[tn] = np.amax(Wp[0, tn])
+                        idr[tn] = np.argmax(Wp[0, tn])
                    #[pamp[tn],idr[tn]]=np.unravel_index(np.argmax(Wp[0:Np[tn]+1,tn]), np.shape(Wp[0:Np[tn]+1,tn]))
 
                     # sanitycheck
@@ -628,7 +635,7 @@ class IF:
             #idz=tn1-1+np.flatnonzero(pamp[tn1:tn2+1 ]==0 or np.isnan(pamp[tn1:tn2+1]))
 
             idz=np.where((pamp[tn1:tn2+1 ]==0) |( np.isnan(pamp[tn1:tn2+1]))) #-1 seems to be not needed
-            print(np.shape(idz))
+            #print(np.shape(idz))
             if np.shape(idz)[1]!=0:
                 idz = idz[0]
                 idz+=tn1-1
@@ -642,9 +649,9 @@ class IF:
                 #print('idnz',np.shape(idnz))
                 pind[idz]=np.interp(idz,idnz,pind[idnz]) #'linear' in the function no equivalent of 'extrap'
                 pind[idz]=self.Round(pind[idz])
-                print('check shapes')
-                print('tfsupp[0,idz]', np.shape(tfsupp[0,idz]))
-                print('idnz',np.shape(idnz))
+                #print('check shapes')
+                #print('tfsupp[0,idz]', np.shape(tfsupp[0,idz]))
+                #print('idnz',np.shape(idnz))
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
 
             #INSERT EC OUTPUT
@@ -737,7 +744,7 @@ class IF:
                     print(mv[2],'+-',mv[3],' hz; frequency differences: ',mv[0],'+-',mv[1] ,'hz.\n')
                 else:
                     print(['maximums frequencies (log-median*/range ratio): ']);
-                    fprintf(exp(mv[2]),'*/',exp(mv[3]), 'hz; frequency ratios:',exp(mv[0]),'*/',exp(mv[1]),'\n')
+                    print(exp(mv[2]),'*/',exp(mv[3]), 'hz; frequency ratios:',exp(mv[0]),'*/',exp(mv[1]),'\n')
                 print('extracting the curve by ii scheme: iteration discrepancy - ');
             #    if ~isempty(strfind(DispMode,'plot'))
             #        scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
@@ -761,7 +768,7 @@ class IF:
             #Iterate
             rdiff=NaN
             itn=0
-            allpind=np.zeros((10,L))
+            allpind=np.zeros((self.MaxIter,L))
             allpind[0,:]=pind
             ec_info.mv=mv
             ec_info.rdiff=rdiff
@@ -794,11 +801,11 @@ class IF:
                 pind[tn1:tn2+1]=self.Round(Ip.flatten('F')[lid])
                 pamp[tn1:tn2+1]=Qp.flatten('F')[lid]
                 rdiff=len(np.ravel_multi_index(np.nonzero(pind[tn1:tn2+1]-pind0[tn1:tn2+1]!=0),np.shape(pind),order='F'))/(tn2-tn1+1)
-                itn=itn+1;
+
                 #Update the medians/ranges
                 pf=tfsupp[0,tn1:tn2+1] 
                 if fres==2:
-                   pf=log(pf)
+                   pf=np.log(pf)
                 dpf=np.diff(pf,1,0)
                 #update
                 mv[0]=np.median(dpf)
@@ -822,7 +829,7 @@ class IF:
                 ec_info.rdiff=np.vstack((ec_info.rdiff, rdiff))
 
                 #Stop if maximum number of iterations has been reached
-                if itn>self.MaxIter and rdiff!=0:
+                if itn>self.MaxIter-1 and rdiff!=0:
                     if self.DispMode.lower!='off':
                         if self.DispMode.lower!='notify':
                            print('\n')
@@ -834,14 +841,15 @@ class IF:
                 gg=math.inf
                 if rdiff!=0 and itn>2:
                     for kn in range(1,itn):
-                       gg=np.amin([gg,len(np.ravel_multi_index(np.nonzero(pind[tn1:tn2+1]-allpind[kn,tn1:tn2+1]!=0)))])
+                       gg=np.amin([gg,len(np.ravel_multi_index(np.nonzero(pind[tn1:tn2+1]-allpind[kn,tn1:tn2+1]!=0),np.shape(pind)))])
                 
                 if gg==0:
                     if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
                         print('converged to a cycle, terminating iteration.')
                     
                     break
-  
+
+                itn = itn + 1
             if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
                print('\n')
 
@@ -850,14 +858,28 @@ class IF:
         for tn in range(tn1,tn2+1):
             cs=np.abs(TFR[:,tn]) 
             cpeak=int(pind[tn])
-            iup=[]
-            idown=[]
+            iup=NF-1
+            idown=0
             if cpeak<NF-1:
                 #diff=-2 makes sense but check::fixed thinking that it is an index
-               iup=cpeak+np.ravel_multi_index(np.nonzero((cs[cpeak+1:-1]<=cs[cpeak:-2]) & (cs[cpeak+1:-1]<cs[cpeak+2:])),np.shape(cs),order='F')[0]+1
+                ind_aid=np.nonzero((cs[cpeak+1:-1]<=cs[cpeak:-2]) & (cs[cpeak+1:-1]<cs[cpeak+2:]))
+                if np.any(ind_aid):
+                    iup=cpeak+np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]+1
+                #else:
+                #    iup=NF-1
+                del ind_aid
             if cpeak>2:
+
                 #this is the same:fixed thinking that it is an index
-                idown=cpeak-np.ravel_multi_index(np.nonzero((cs[cpeak-1:0:-1]<=cs[cpeak:1:-1]) & (cs[cpeak-1:0:-1]<cs[cpeak-2::-1])),np.shape(cs),order='F')[0]-1
+                ind_aid=np.nonzero((cs[cpeak-1:0:-1]<=cs[cpeak:1:-1]) & (cs[cpeak-1:0:-1]<cs[cpeak-2::-1]))
+                #print('ind_aid',ind_aid)
+                if np.any(ind_aid):
+                    idown=cpeak-np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]-1
+                #else:
+                #    idown=0
+                del ind_aid
+            #print('tn', tn)
+            #print('idown',idown)
             iup=np.amin([iup,NF-1])
             idown=np.amax([idown,0])
             tfsupp[1,tn]=idown
@@ -1092,7 +1114,7 @@ class IF:
         return nfunc
     
         
-    def rectfr(self,tfsupp,TFR,freq,wopt):
+    def rectfr(self,tfsupp,TFR,freq,wopt,method=1):
 
         #% - returns the component's amplitude [iamp], phase [iphi] and frequency
         #%   [ifreq] as reconstructed from its extracted time-frequency support
@@ -1140,22 +1162,21 @@ class IF:
         freq=freq[:] 
         fs=wopt.fs
         wp=wopt.wp #note wopt class, wp class as well
-        method=1;
+        #method=self.method
 
         #If called from Python, the 'fwt' field is a string.
         #check this in another way
-        try:
-            wp.fwt = lambda : wp.fwt
-        except:
-            print('ERROR')
-        end
-
-        if method.lower=='direct':
-            method=1
-        elif method=='ridge':
-            method=2
-        else:
-            method==0
+        #try:
+        #    wp.fwt = lambda : wp.fwt
+        #except:
+        #    print('ERROR')
+        if isinstance(method, str):
+            if method.lower=='direct':
+                method=1
+            elif method=='ridge':
+                method=2
+            else:
+                method==0
 
         #% If called from Python, reconstruct complex array.
         #% (MATLAB doesn't allow complex arrays to be passed.)
@@ -1174,13 +1195,18 @@ class IF:
         if method==1 or method==2:
            NR=1
         NC=len(idt)
-        mm=np.ones((NR,NC))*math.nan
-        ifreq=mm
-        iamp=mm
-        iphi=mm
-        asig=mm
-        tn1=np.argwhere( not np.isnan(tfsupp[0,:]))[0] 
-        tn2=np.argwhere(not isnan(tfsupp[0,:]))[-1]
+        #mm=np.ones((NR,NC))*math.nan
+        #ifreq=mm #why all of them are linked to i freq?
+        #iamp=mm
+        #iphi=mm
+        #asig=mm
+        ifreq=np.ones((NR,NC))*math.nan
+        iamp=np.ones((NR,NC))*math.nan
+        iphi=np.ones((NR,NC))*math.nan
+        asig=np.ones((NR,NC))*math.nan
+        tn1 = np.argwhere(np.isnan(tfsupp[0,:]) == False)[0]
+        tn2 = np.argwhere(np.isnan(tfsupp[0,:]) == False)[-1]
+
 
         #%Determine the frequency resolution and transform [tfsupp] to indices
         if freq[0]<=0 or np.std(np.diff(freq,1,0))<np.std(freq[1:]/freq[0:-1]):
@@ -1304,17 +1330,21 @@ class IF:
         
         #%Return extracted time-frequency support if requested
         #if nargout>3, varargout{1}=tfsupp*NaN; varargout{1}(:,tn1:tn2)=freq(tfsupp(:,tn1:tn2)); end
-        rtfsupp[:,tn1:tn2+1]=freq[tfsupp[:,tn1:tn2+1]]
+        tfsupp=tfsupp.astype('int')
+        tn1=int(tn1)
+        tn2=int(tn2)
+        #rtfsupp=tfsupp*np.nan
+        #rtfsupp[:,tn1:tn2+1]=freq[tfsupp[:,tn1:tn2+1]]
         #%==================================WFT=====================================
-        if fres.lower=='linear':
+        if fres.lower()=='linear':
     
             #Direct reconstruction-------------------------------------------------
             if method==0 or method==1:
                 for tn in range(tn1,tn2+1):
-                    ii=np.arange(tfsupp[1,tn],tfsupp[2,tn])
+                    ii=np.arange(tfsupp[1,tn],tfsupp[2,tn]+1)
                     xn=idt[tn] 
-                    cs=TFR[ii,xn]
-                    if np.isfinite(omg):
+                    cs=TFR[ii-1,xn-1]
+                    if not np.isfinite(omg):
                         if xn>idt[tn1] and xn<idt[tn2]:
                             cw=np.angle(TFR[ii,xn+1])-np.angle(TFR[ii,xn-1]) #np.angle -> phase angle
                             cw[cw<0]=cw[cw<0]+2*np.pi
@@ -1330,11 +1360,11 @@ class IF:
                         cw=cw/(2*np.pi)
                     
             
-                    if cs[np.isnan(cs)]==[] or not np.isfinite(cs):
-                        casig=(1/C)*np.sum(cs*2*np.pi*fstep) 
+                    if np.shape(cs[(np.isnan(cs))| np.isfinite(cs)==False])[0]==0:
+                        casig=(1/C)*np.sum(cs*2*np.pi*fstep)
                         asig[0,tn]=casig
                         if np.isfinite(omg):
-                            ifreq[0,tn]=-omg+(1/C)*np.sum(freq[ii]*cs*(2*np.pi*fstep))/casig
+                            ifreq[0,tn]=-omg+(1/C)*np.sum(freq[ii-1]*cs*(2*np.pi*fstep))/casig
                         else:
                             ifreq[0,tn]=(1/C)*np.sum(cw*cs*(2*pi*fstep))/casig
 
@@ -1465,10 +1495,10 @@ class IF:
         iamp=np.abs(asig)
         iphi=np.angle(asig);
         #%Unwrap phases at the end
-        for sn in range(1,np.shape(iphi)[0]+1):
+        for sn in range(0,np.shape(iphi)[0]):
             iphi[sn,:]=np.unwrap(iphi[sn,:]) #should be equivalent to MATLAB inwrap
 
-        return iamp,iphi,ifreq,rtfsupp
+        return iamp,iphi,ifreq
       
 
                 
