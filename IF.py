@@ -1,8 +1,9 @@
-
 #23/03/2021
 #Author: Virginia Listanti
 
-# Extraxct ridge curve from sound file
+#This class contains all the functions and the structs needed to extract istantaneous frequency (IF) from a TFR
+
+
 # This code is taken from Iatsenko et al.
 
 # -------------------------------Copyright----------------------------------
@@ -26,33 +27,9 @@
 #  {preprint - arXiv:1310.7276}
 
 
-################ Notes
-
-#ind2sub => numpy.unravel_index
-#sub2ind => numpy.ravel_multi_index
-
-#######################################
-
-#######################TODO: 
-# X 1) check definition of class ok
-# 2)check use of classes 
-# X 3)check PenalFunction => PenalFunction is a dictionary with elements '1' and '2' done
-# X 4) Review use of matlab function_handle => we need something more efficient
-# X 5) check indexing
-# 6) Check all find -> ravel_multi_index(np.nonzero
-# 7) argmax -> np.ravel_index(np.argmax
-
-
 import numpy as np
 import math
 import types
-import scipy.fftpack as fft
-
-#class ecinfo:
-#    #reproduce homonimous structure in the original code
-#    def __init__(self,info1=[], info2=[]):
-#        self.info1=info1
-#        self.info2=info2
 
 class ec_class:
     #reproduce homonimous structure in the original code
@@ -72,6 +49,10 @@ class ec_class:
 
 class Wp:
     def __init__(self, window_length=64, SampleRate=16000, window_name='Hann'):
+        #NEEDS REVIEW
+        #Struct with window parametes
+        # reproduce homonimous structure in the original code
+        #Description from original code
         #%wp - structure with wavelet parameters containing fields:
         #%     xi1,xi2 - wavelet full support in the frequency domain;
         #%     ompeak,tpeak - wavelet peak frequency and peak time
@@ -80,9 +61,7 @@ class Wp:
         #%     C,D - coefficients needed for reconstruction
         #[fwt] and [twf] - window function in frequency and time
 
-        #f0=window_length
 
-        #logw1= lambda x, pars,fs, DD: (x)-pars(1)*abs(fs*x/DD)
         Wp.fwtmax=[]; Wp.twfmax=[]; Wp.C=[]; Wp.omg=[];
         Wp.xi1=-np.Inf; Wp.xi2=np.Inf; Wp.ompeak=[];
         Wp.t1=-np.Inf; Wp.t2=np.Inf; Wp.tpeak=[];
@@ -97,19 +76,14 @@ class Wp:
             Wp.omg=0
             Wp.tpeak=0;
 
+        #Needs Review
         #Wp.xi1=np.amin(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
         #Wp.xi2=np.amax(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
-
-
-        
         #Wp.fwtmax=Wp.fwt(Wp.ompeak)
         #if np.isnan(Wp.fwtmax):
             #Wp.fwtmax=Wp.fwt(Wp.ompeak+10**(-14))
-
         #Wp.twfmax=Wp.twf(np.arange(window_length))
-
         #DT=(wopt.wp.t2h-wopt.wp.t1h)
-
         #if fres==1:
         #    DF=(wopt.wp.xi2h-wopt.wp.xi1h)/2/pi
         #else: 
@@ -117,36 +91,26 @@ class Wp:
 
 
 class Wopt:
-    #reproduce homonimous structure in the original code
     def __init__(self,sampleRate,wp,fmin,fmax,TFRname='FT',window_type='Hann'):
-        Wopt.TFRname=TFRname
-        #if TFRname=='WT':
-        #    wopt.wp=wp; #parameters of the wavelet
-            
-        #    #wopt.PadLR={padleft,padright}; I don't thinkwe need it 
-        #else:
-        #    wp.fwt = func2str(wp.fwt)
-        #    #varargout{2} = wp;
+        # Reproduce homonimous structure in the original code
+        # Window optimal paramters
+        # TFRname => Name of TFR (kept if needed to change in future)
+        # fs=> sampleRate
+        # window => window type
+        # fmin/fmax= min and max freq to evaluate IF (kept if needed in future)
+        # wp => window parametes. Struct.
 
+        Wopt.TFRname=TFRname
         Wopt.fs=sampleRate
         Wopt.window=window_type
         #wopt.f0=f0;
-        Wopt.fmin=fmin;
-        Wopt.fmax=fmax;
+        Wopt.fmin=fmin
+        Wopt.fmax=fmax
         Wopt.wp=wp
-        #wopt.nv=nv; wopt.nvsim=nvsim;
-        #wopt.Padding=PadMode;
-        #wopt.RelTol=RelTol;
-        #wopt.Preprocess=Preprocess;
-        #wopt.Plot=PlotMode;
-        #wopt.Display=DispMode;
-        #wopt.CutEdges=CutEdges;
-
-
-
 
 class IF:
     def __init__(self,method=2,NormMode='off',DispMode='on', PathOpt='on'):
+        #Parameters needed in the finctions
         self.method=method
         if self.method==1:
             self.pars=1
@@ -156,11 +120,8 @@ class IF:
             self.pars=[]
         self.NormMode=NormMode
         self.DispMode=DispMode
-        #self.PlotMode=PlotMode not needed
-        #self.Skel={'Np':[],'mt':[],'nu':[],'qn':[]}
         self.Skel=[]
         self.PathOpt=PathOpt
-        #AmpFunc=@(x)log(x
         self.PenalFunc={'1':[],'2':[]}
         self.MaxIter=20
 
@@ -172,7 +133,8 @@ class IF:
 
 
     def ecurve(self,TFR,freq,wopt):
-   
+
+      #From original code
        # extracts the curve (i.e. the sequence of the amplitude ridge points)
        # and its full support (the widest region of unimodal TFR amplitude
        # around them) from the given time-frequency representation [TFR] of the
@@ -185,8 +147,8 @@ class IF:
        #        support lower bounds (referred as \omega_-(t)/2/pi in [1]) - in the second row,
        #        the upper bounds (referred as \omega_+(t)/2/pi in [1]) - in the third row.
        # ecinfo: structurecontains all the relevant information about the process of curve extraction.
-       #         Is it a class?
-       # Skel: 4x1 cell (returns empty matrix [] if 'Method' property is not 1,2,3 or 'nearest')
+       #
+       # Skel: 4x1 dictionary (returns empty matrix [] if 'Method' property is not 1,2,3 or 'nearest')
        #      - contains the number of peaks N_p(t) in [Skel{1}], -> Skel['Np']
        #       their frequency indices m(t) in [Skel{2}], -> Skel['mt']
        #        the corresponding frequencies \nu_m(t)/2\pi in [Skel{3}], -> Skel['nu']
@@ -207,35 +169,23 @@ class IF:
         #%      frequency - df/dt (in Hz/s) - for the WFT, or of the log-frequency
         #%      - d\log(f)/dt - for the WT; (method 2) the minimal distinguishable
         #%      frequency difference (in Hz) for WFT, or log-difference for WT.
- 
-
 
         [NF,L]=np.shape(TFR)
-        #print('Skel',self.Skel)
-        NaN=math.nan
 
         #inizialization
-
         freq=np.reshape(freq,(NF,1)) #reshape freq as a column vector.
-
-        #this vectors were inizialized multiplying by NaN. I don't think it is necessary
-        tfsupp=np.zeros((3,L))*NaN
-        pind=np.zeros((L))*NaN 
-        pamp=np.zeros((L))*NaN 
-        idr=np.zeros((L))*NaN 
+        tfsupp=np.zeros((3,L))*math.nan
+        pind=np.zeros((L))*math.nan
+        pamp=np.zeros((L))*math.nan
+        idr=np.zeros((L))*math.nan
         #dfreq=np.zeros((NF-1,2))
-
         ec_info=ec_class(self.method, self.pars, self.PathOpt)
 
-            #Determine the frequency resolution
-            #MATLAB diff difference between adjacent elements along first array dim
-         
+        #Determine the frequency resolution
+        #MATLAB diff difference between adjacent elements along first array dim
         if np.amin(freq)<=0 or np.std(np.diff(freq,1,0))<np.std(np.diff(np.log(freq),1,0)):
             fres=1
             fstep=np.mean(np.diff(freq,1,0))
-            #print(np.shape(freq),np.shape(dfreq))
-            #dfreq[:,0]=freq[0,0]-freq[-1:0:-1,0] #different shape in original
-            #dfreq[:,1]=freq[-1,0]-freq[-2::-1,0]
             dfreq=freq[0,0]-freq[-1:0:-1,0]
             dfreq=np.append(dfreq,freq[-1,0]-freq[-1::-1,0])
         else:
@@ -265,44 +215,23 @@ class IF:
                 DD=wopt[1]
 
         #//////////////////////////////////////////////////////////////////////////
-        # TFR=abs(TFR) not needed. We already take absolute value in signalProc
-        #convert to absolute values, since we need only them; also improves computational speed as TFR is no more complex and is positive
-
         nfunc=np.ones((NF,1))
-        #if np.isnan(TFR[-1,:]).any():
-        #    tn1=np.argwhere(np.isnan(TFR[-1,:]))[0] #find first index where TFR is NAN of last line:
-        #else:
-        #    tn1=0
-        #if np.isnan(TFR[-1,:]).any():
-        #    tn2=np.argwhere(np.isnan(TFR[-1,:]))[-1] #find last index where TFR is NAN of last line
-        #else:
-        #    tn2=L
 
         tn1 = np.argwhere(np.isnan(TFR[-1, :])==False)[0]
         tn2 = np.argwhere(np.isnan(TFR[-1, :])==False)[-1]
-
        # correct tn1 and tn2 type
         tn1 = int(tn1)
         tn2 = int(tn2)
 
-
         sflag=0;
 
-        # Np=np.zeros((1,L))
-        # Ip=np.zeros((1,L))
-        # Fp=np.zeros((1,L))
-        # Qp=np.zeros((1,L))
-        # Wp=np.zeros((1,L))
-
-        
-
-        if (isinstance(self.method,str) and self.method.lower!='max') or isinstance(self.method,int): #if not frequency-based or maximum-based extraction
+      # if not frequency-based or maximum-based extraction
+        if (isinstance(self.method,str) and self.method.lower!='max') or isinstance(self.method,int):
             sflag=1
             #----------------------------------------------------------------------
             #Construct matrices of ridge indices, frequencies and amplitudes:
             #[Ip],[Fp],[Qp], respectively; [Np] - number of peaks at each time.
             if self.Skel:
-                # self.Skel={'Np':[],'mt':[],'nu':[],'qn':[]}
                 Np=self.Skel['Np']
                 Ip=self.Skel['mt']
                 Fp=self.Skel['nu']
@@ -315,11 +244,9 @@ class IF:
 
                 #find indices of the peaks 
                 idft=1+np.argwhere((TFR.flatten('F')[1:-1]>=TFR.flatten('F')[0:-2]) & (TFR.flatten('F')[1:-1]>TFR.flatten('F')[2:])) #flatten TFR
-                #idft = 1 + np.flatnonzero((TFR.flatten('F')[1:-1] >= TFR.flatten('F')[0:-2]) & (TFR.flatten('F')[1:-1] > TFR.flatten('F')[2:]))
+
                 #separate frequency and time indices of the peaks
                 [idf,idt]=np.unravel_index(idft,np.shape(TFR),'F')
-                #idf=idft[:,0]
-                #idt=idft[:,1]
                 idf=idf-1 #do we need it?
                 idb=np.argwhere((idf==0) | (idf==NF-1))[:,0]
                 #remove the border peaks
@@ -329,14 +256,11 @@ class IF:
                 dind=-1 #to make consistent the for loop
                 dind=np.append(dind, np.argwhere(np.diff(idt,1,0)>0))
                 dind = np.append(dind, len(idt)-1)#added-1
-                #dind=[0, np.argwhere(np.diff(idt,1,0)>0),len(idt)]
                 Mp=np.amax([np.amax(np.diff(dind,1,0)),2])
                 Np=np.zeros((1,L))
                 idn=np.zeros((len(idt),1))
                 for dn in range(len(dind)-1):
                     ii=np.arange(dind[dn]+1,dind[dn+1]+1,1) #ii are indeces first +1 not needed
-                    #print('dn',dn)
-                    #print('ii',ii)
                     idn[ii]=np.reshape(np.arange(0,len(ii),1),np.shape(idn[ii])) #changef 1 in 0
                     Np[0,idt[ii[0]]]=len(ii)
                 idn = idn.astype('int')
@@ -350,12 +274,12 @@ class IF:
                 a2 = np.reshape(a2, (1, len(a2)))
                 a3=TFR.flatten('F')[idft+1]
                 a3 = np.reshape(a3, (1, len(a3)))
-                dp=(1/2)*(a1-a3)/(a1-2*a2+a3) #check if this operation is working
+                dp=(1/2)*(a1-a3)/(a1-2*a2+a3)
                 #Assign all
                 idf=np.reshape(idf,(1,len(idf)))
-                Ip=np.ones((Mp,L))*NaN
-                Fp=np.ones((Mp,L))*NaN
-                Qp=np.ones((Mp,L))*NaN
+                Ip=np.ones((Mp,L))*math.nan
+                Fp=np.ones((Mp,L))*math.nan
+                Qp=np.ones((Mp,L))*math.nan
                 Ip_copy=Ip.flatten('F')
                 Ip_copy[idnt]=idf+dp
                 #seems to work. we could need a + 1
@@ -390,9 +314,8 @@ class IF:
                         print('(number of ridges:', self.Round(np.mean(Np[tn1:tn2+1])), ' +- ',self.Round(np.std(Np[tn1:tn2+1])), ' from ',np.amin(Np),' to ',np.amax(Np),')\n')
 
                     idb=np.argwhere(Np[tn1:tn2+1]==0)
-                    NB=len(idb);
+                    NB=len(idb)
                     if NB>0:
-                        #idp = np.ravel_multi_index(idb, np.shape(Np),order='F') #if empty this make no sense
                         print('Warning: At ', NB, ' times there are no peaks (using border points instead).\n')
                 #If there are no peaks, assign border points
                 idb=np.argwhere(Np[tn1:tn2+1]==0)
@@ -426,15 +349,10 @@ class IF:
                     Np[0,tn]=cn-1
                 
                 del idb, NB
-            #if nargout>2, varargout{2}={Np,Ip,Fp,Qp}; end probably not needed
-            #substituted with updated skel
+
             self.Skel={'np':Np,'mt':Ip,'nu':Fp,'qn':Qp}
-            #self.Skel['np']=Np
-            #self.Skel['mt']=Ip
-            #self.Skel['nu']=Fp
-            #self.Skel['qn']=Qp
             if self.NormMode.lower=='on':
-               nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq) #defined later
+               nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
             ci=Ip
             ci[np.isnan(ci)]=NF+2-1 #added -1
             cm=ci-np.floor(ci)
@@ -442,8 +360,8 @@ class IF:
             ci = ci.astype('int')
             nfunc=np.insert(nfunc,0,nfunc[0])
             nfunc=np.append(nfunc,nfunc[-1])
-            nfunc=np.append(nfunc,NaN)
-            nfunc = np.append(nfunc, NaN)
+            nfunc=np.append(nfunc,math.nan)
+            nfunc = np.append(nfunc, math.nan)
             #nfunc=[, nfunc[:], nfunc[-1], NaN,NaN]
             Rp=(1-cm)*nfunc[ci+1]+cm*nfunc[ci+2]
             Wp=self.AmpFunc(Qp*Rp)
@@ -472,7 +390,7 @@ class IF:
                eind=1+np.floor(0.5+np.log(efreq/freq[0])/fstep)
             eind=np.array(eind)
             eind[eind<1]=1
-            eind[eind>NF]=NF;
+            eind[eind>NF]=NF
     
             #Extract the indices of the peaks
             for tn in range(tn1,tn2+1):
@@ -541,10 +459,8 @@ class IF:
             pind=tfsupp[0,:]
             tfsupp[:,tn1:tn2+1]=freq[tfsupp[:,tn1:tn2+1]]
             pamp[tn1:tn2+1]=np.abs(TFR[np.ravel_multi_index([pind[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(TFR))]) #check
-    
-            # NOT NEEDED?
-            ##Optional output arguments
-            #if nargout>1
+
+            #define ec_info
             ec_info = ec_class(self.method, self.pars, self.PathOpt)
             ec_info.efreq=efreq
             ec_info.eind=eind
@@ -571,17 +487,9 @@ class IF:
                     TFR=TFR*(nfunc[:]@np.ones((1,L))) #this should be a vector moltiplication (not element-wise)
 
                 for tn in range(tn1,tn2):#from tn2+1
-                    #print('tn=', tn)
-                    #print(np.shape(TFR[:,tn]))
-                    #print(np.argmax(abs(TFR[:,tn])))
-                    #print('pamp', np.shape(pamp))
                     pamp[tn]=np.amax(abs(TFR[:,tn]))
                     pind[tn]=np.argmax(abs(TFR[:,tn]))
-                    ##pamp[tn],pind[tn]=np.unravel_index(np.argmax(abs(TFR[:,tn])),(np.shape(TFR[:,tn]),1))
                 pind=pind.astype('int')
-                #print(pind)
-                #print(np.shape(tfsupp[0,tn1:tn2+1]),np.shape(freq[pind[tn1:tn2+1]]))
-                #print(freq[pind[tn1:tn2+1]])
                 tfsupp[0][tn1:tn2+1]=freq[pind[tn1:tn2+1]][0]
                 if self.NormMode.lower=='on':
                     TFR=TFR/(nfunc[:]@np.ones((1,L)))
@@ -595,35 +503,21 @@ class IF:
                     else:
                         pamp[tn] = np.amax(Wp[0, tn])
                         idr[tn] = np.argmax(Wp[0, tn])
-                   #[pamp[tn],idr[tn]]=np.unravel_index(np.argmax(Wp[0:Np[tn]+1,tn]), np.shape(Wp[0:Np[tn]+1,tn]))
-
-                    # sanitycheck
+                # sanitycheck
                 idr = idr.astype('int')
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Fp),order='F')
                 tfsupp[0,tn1:tn2+1]=Fp.flatten('F')[lid]
                 pind[tn1:tn2+1]=self.Round(Ip.flatten('F')[lid])
                 pamp[tn1:tn2+1]=Qp.flatten('F')[lid]
-            
-            #idz=tn1-1+np.flatnonzero(pamp[tn1:tn2+1 ]==0 or np.isnan(pamp[tn1:tn2+1]))
 
             idz=np.where((pamp[tn1:tn2+1 ]==0) |( np.isnan(pamp[tn1:tn2+1]))) #-1 seems to be not needed
-            #print(np.shape(idz))
             if np.shape(idz)[1]!=0:
                 idz = idz[0]
                 idz+=tn1-1
                 idnz=np.arange(tn1,tn2) #+1 omitted
-                #print(np.shape(idnz))
-                #print(np.isin(idnz,idz)) #always true
-                #print(np.argwhere(np.isin(idnz,idz)==False))
                 idnz=idnz[np.argwhere(np.isin(idnz,idz)==False)] # =>np.in1d #this is problematic!
-                #print('check shapes')
-                #print('pind[idz]=', np.shape(pind[idz]))
-                #print('idnz',np.shape(idnz))
                 pind[idz]=np.interp(idz,idnz,pind[idnz]) #'linear' in the function no equivalent of 'extrap'
                 pind[idz]=self.Round(pind[idz])
-                #print('check shapes')
-                #print('tfsupp[0,idz]', np.shape(tfsupp[0,idz]))
-                #print('idnz',np.shape(idnz))
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
 
             #INSERT EC OUTPUT
@@ -635,7 +529,7 @@ class IF:
         #------------------------- Nearest neighbour ------------------------------
         if (type(self.method) =='char') and self.method.lower=='nearest':
             #Display, if needed
-            imax=np.argmax(Wp.flatten('F'));
+            imax=np.argmax(Wp.flatten('F'))
             [fimax,timax]=np.unravel_index(imax,(Mp,L),'F')
             idr[timax]=fimax
             if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
@@ -652,7 +546,6 @@ class IF:
             pind[tn1:tn2+1]=self.Round(Ip[lid])
             pamp[tn1:tn2+1]=Qp[lid]
             #Assign the output structure and display, if needed
-            #if nargout>1
             ec_info.pfreq=tfsupp[0,:]
             ec_info.pind=pind
             ec_info.pamp=pamp
@@ -690,13 +583,12 @@ class IF:
         #----------------------------- Method II ----------------------------------
         if len(self.pars)==2 and self.method==2:
             #Initialize the parameters
-            #from here
             pf=tfsupp[0,tn1:tn2+1]
             if fres==2:
                pf=np.log(pf)
             #change pf shape?
             dpf=np.diff(pf,1,0)
-            mv=[np.median(dpf),0,np.median(pf),0];
+            mv=[np.median(dpf),0,np.median(pf),0]
             mv=np.median(dpf)
             mv=np.append(mv,0)
             mv=np.append(mv,np.median(pf))
@@ -720,7 +612,7 @@ class IF:
                 print('extracting the curve by ii scheme: iteration discrepancy - ')
 
             #Iterate
-            rdiff=NaN
+            rdiff=math.nan
             itn=0
             allpind=np.zeros((self.MaxIter,L))
             allpind[0,:]=pind
@@ -744,12 +636,13 @@ class IF:
                 #Calculate all
                 pind0=np.zeros(np.shape(pind))
                 pind0[:]=pind[:]
-                #pathopt(self, Np, Ip, Fp, Wp, logw1, logw2, freq):
+
                 if self.PathOpt.lower()=='on':
                    idr=self.pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq) #check
                 else:
                     
                    idr, timax, fimax=self.onestepopt(Np,Ip,Fp,Wp,freq) #check
+
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Fp),order='F')
                 tfsupp[0,tn1:tn2+1]=Fp.flatten('F')[lid]
                 pind[tn1:tn2+1]=self.Round(Ip.flatten('F')[lid])
@@ -766,15 +659,14 @@ class IF:
                 mv[1]=0
                 mv[2]=np.median(pf)
                 mv[3]=0
-                #mv=[np.median(dpf),0,np.median(pf),0]
                 ss1=np.sort(dpf)
                 CL=len(ss1)
                 mv[1]=ss1[int(self.Round(0.75*CL))-1]-ss1[int(self.Round(0.25*CL))-1]
                 ss2=np.sort(pf)
                 CL=len(ss2)
                 mv[3]=ss2[int(self.Round(0.75*CL))-1]-ss2[int(self.Round(0.25*CL))-1]
+
                 #Update the information structure, if needed
-                
                 ec_info.pfreq=np.vstack((ec_info.pfreq,tfsupp[0,:]))
                 ec_info.pind=np.vstack((ec_info.pind,pind))
                 ec_info.pamp=np.vstack((ec_info.pamp,pamp))
@@ -815,25 +707,15 @@ class IF:
             iup=NF-1
             idown=0
             if cpeak<NF-1:
-                #diff=-2 makes sense but check::fixed thinking that it is an index
                 ind_aid=np.nonzero((cs[cpeak+1:-1]<=cs[cpeak:-2]) & (cs[cpeak+1:-1]<cs[cpeak+2:]))
                 if np.any(ind_aid):
                     iup=cpeak+np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]+1
-                #else:
-                #    iup=NF-1
                 del ind_aid
             if cpeak>2:
-
-                #this is the same:fixed thinking that it is an index
                 ind_aid=np.nonzero((cs[cpeak-1:0:-1]<=cs[cpeak:1:-1]) & (cs[cpeak-1:0:-1]<cs[cpeak-2::-1]))
-                #print('ind_aid',ind_aid)
                 if np.any(ind_aid):
                     idown=cpeak-np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]-1
-                #else:
-                #    idown=0
                 del ind_aid
-            #print('tn', tn)
-            #print('idown',idown)
             iup=np.amin([iup,NF-1])
             idown=np.amax([idown,0])
             tfsupp[1,tn]=idown
@@ -849,14 +731,12 @@ class IF:
         if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
             print('Curve extracted: ridge frequency ',np.mean(tfsupp[0,:]),'+-',np.std(tfsupp[0,:]),' Hz, lower support ', np.mean(tfsupp[1,:]),'+-',np.std(tfsupp[1,:]) ,' Hz, upper support ',np.mean(tfsupp[2,:]),'+-',np.std(tfsupp[2,:]),' Hz.\n')
 
-
         self.Skel['Np']=Np
         self.Skel['mt']=Ip
         self.Skel['nu']=Fp
         self.Skel['qn']=Qp
 
        #not summing up for some of ec-info output
-
         return tfsupp,ec_info,self.Skel
 
         #==========================================================================
@@ -865,8 +745,8 @@ class IF:
 
         #==================== Path optimization algorithm =========================
     def pathopt(self,Np,Ip,Fp,Wp,logw1, logw2,freq):
-        #maybe logw1 and logw2 not neeeded
-        DispMode=self.DispMode
+        #Path optimization algorithms from peaks
+
         #safety check
         Np=Np.astype('int')
         [Mp,L]=np.shape(Fp)
@@ -884,8 +764,7 @@ class IF:
                 logw1=np.zeros((2*NF+1,L))
             else:
                 logw1=[[2*logw1[0]-logw1[1]],[logw1[:]],[2*logw1[-1]-logw1[-2]]] #from here
-        #    end
-        #end
+
         if not isinstance(logw2, types.LambdaType):
             if logw2==[]:
                 W2=np.zeros((Mp,L))*np.nan
@@ -900,24 +779,19 @@ class IF:
             
         else:
             W2=logw2(Fp)
-            #small differences
         
-        W2=Wp+W2;
+        W2=Wp+W2
 
         #The algorithm by itself
         q=np.zeros((Mp,L))*np.nan
         U=np.zeros((Mp,L))*np.nan
         q[0:Np[0,tn1]+1,tn1]=0
         U[0:Np[0,tn1]+1,tn1]=W2[0:Np[0,tn1]+1,tn1]
-        #small rounding errors
 
-
-        #TODO: THIS
         if isinstance(logw1, types.LambdaType):
             for tn in range(tn1+1,tn2+1):
                 cf=np.reshape(Fp[0:Np[0,tn],tn],(len(Fp[0:Np[0,tn],tn]),1))@np.ones((1,Np[0,tn-1]))-np.ones((Np[0,tn],1))@np.reshape(Fp[0:Np[0,tn-1],tn-1],(1,len(Fp[0:Np[0,tn-1],tn-1])))
                 CW1=logw1(cf);
-                #small rounding errors
                 aid_matrix=np.reshape(W2[0:Np[0,tn],tn],(len(W2[0:Np[0,tn],tn]),1))@np.ones((1,Np[0,tn-1]))+CW1+np.ones((Np[0,tn],1))@np.reshape(U[0:Np[0,tn-1],tn-1],(1,len(U[0:Np[0,tn-1],tn-1])))
                 q[0:Np[0,tn],tn]=np.argmax(aid_matrix,1)
                 U[0:Np[0,tn],tn]=np.amax(aid_matrix,1)#max along  rows
@@ -934,7 +808,6 @@ class IF:
                    CW1=(1-cm)*logw1(ci+1).T+cm*logw1(ci+2).T
                 [U[0:Np[tn]+1,tn],q[0:Np[tn]+1,tn]]=np.amax(W2[0:Np[tn]+1,tn]*np.ones((1,Np[tn-1]))+CW1+np.ones((Np[tn],1))*U[0:Np[tn-1]+1,tn-1].T,1)#max along  rows
         #sanity check
-        #U has some decibal difference
         q=q.astype('int')
         #Recover the indices
         idid=np.zeros((1,L))*(math.nan)
@@ -949,19 +822,16 @@ class IF:
 
 
     def onestepopt(self,Np,Ip,Fp,Wp,logw1,logw2,freq):
+    #Other optimization algorithm step by step optimizaion
 
-         #maybe logw1 and logw2 not neeeded
-        DispMode=self.DispMode
         [Mp,L]=np.shape(Fp)
         NF=len(freq)
         tn1=np.ravel_multi_index(np.nonzero(Np>0),np.shape(Np))[0]
         tn2=np.ravel_multi_index(np.nonzero(Np>0),np.shape(Np))[-1]
+
         if np.amin(freq)>0 and np.std(np.diff(freq,1,0))>np.std(np.diff(np.log(freq),1,0)):
            Fp=np.log(Fp)
 
-
-           ##TO DO
-        #%Weighting functions
         if not isinstance(logw1, types.LambdaType):
             if logw1==[]:
                 logw1=np.zeros((2*NF+1,L))
@@ -991,7 +861,6 @@ class IF:
         idid=np.zeros((1,L))*np.nan
         idid[timax]=fimax
 
-        #TO DO
         if isinstance(logw1, types.LambdaType):
             for tn in range(timax+1,tn2+1):
                 cf=Fp[1:Np[tn],tn]-Fp[idid[tn-1],tn-1]
@@ -1006,7 +875,7 @@ class IF:
             for tn in range(timax+1,tn2+1):
                 ci=NF+Ip[0:Np[tn]+1,tn]-Ip[idid[tn-1],tn-1]
                 cm=ci-np.floor(ci)
-                ci=np.floor(ci);
+                ci=np.floor(ci)
                 CW1=(1-cm)*logw1[ci+1]+cm*logw1[ci+2]
                 idid[tn]=np.unravel_index(np.argmax(W2[0:Np(tn)+1,tn]+CW1),np.shape(W2),'F')
             
@@ -1016,12 +885,6 @@ class IF:
                 ci=np.floor[ci]
                 CW1=(1-cm)*logw1[ci+1]+cm*logw1[ci+2] 
                 idid[tn]=np.unravel_index(np.argmax(W2[0:Np[tn]+1,tn]+CW1),np.shape(W2),'F')
-     
-
-        ##if nargout>1, 
-        #varargout{1}=timax
-        ##if nargout>2, 
-        #varargout{2}=fimax
 
         return idid, timax, fimax
 
@@ -1043,7 +906,7 @@ class IF:
         ii=np.ravel_multi_index(np.nonzero(np.isfinite(gg))) 
         gg=gg-np.median(gg[ii])
         zz=np.sort(np.abs(gg[ii]))
-        zz=zz(self.Round(0.25*len(zz)))
+        zz=zz[self.Round(0.25*len(zz))]
         rw=np.exp(-np.abs(gg)/zz/2)
         rw=np.ones((NF,1))
 
@@ -1071,7 +934,9 @@ class IF:
     
         
     def rectfr(self,tfsupp,TFR,freq,wopt,method=1):
+        #Reconstuct signal components  from tfsupport
 
+        #Description from original code
         #% - returns the component's amplitude [iamp], phase [iphi] and frequency
         #%   [ifreq] as reconstructed from its extracted time-frequency support
         #%   [tfsupp] in the signal's WFT/WT [TFR] (determines whether TFR is WFT
@@ -1117,15 +982,8 @@ class IF:
         [NF,L]=np.shape(TFR)
         freq=freq[:] 
         fs=wopt.fs
-        wp=wopt.wp #note wopt class, wp class as well
-        #method=self.method
+        wp=wopt.wp
 
-        #If called from Python, the 'fwt' field is a string.
-        #check this in another way
-        #try:
-        #    wp.fwt = lambda : wp.fwt
-        #except:
-        #    print('ERROR')
         if isinstance(method, str):
             if method.lower=='direct':
                 method=1
@@ -1134,35 +992,23 @@ class IF:
             else:
                 method==0
 
-        #% If called from Python, reconstruct complex array.
-        #% (MATLAB doesn't allow complex arrays to be passed.)
-        # This should not be necessary 
-        #if nargin > 5 && ~isempty(varargin{2})
-        #    TFR = complex(TFR, varargin{2});
-        #end
-
         idt=np.arange(1,L+1) #check what is the use of idt
         if isinstance(tfsupp,dict):
            idt=tfsupp['2']
            tfsupp=tfsupp['1']
 
-        #%define component parameters and find time-limits
+        # define component parameters and find time-limits
         NR=2
         if method==1 or method==2:
            NR=1
         NC=len(idt)
-        #mm=np.ones((NR,NC))*math.nan
-        #ifreq=mm #why all of them are linked to i freq?
-        #iamp=mm
-        #iphi=mm
-        #asig=mm
+
         ifreq=np.ones((NR,NC))*math.nan
         iamp=np.ones((NR,NC))*math.nan
         iphi=np.ones((NR,NC))*math.nan
         asig=np.ones((NR,NC))*math.nan
         tn1 = np.argwhere(np.isnan(tfsupp[0,:]) == False)[0]
         tn2 = np.argwhere(np.isnan(tfsupp[0,:]) == False)[-1]
-
 
         #%Determine the frequency resolution and transform [tfsupp] to indices
         if freq[0]<=0 or np.std(np.diff(freq,1,0))<np.std(freq[1:]/freq[0:-1]):
@@ -1171,12 +1017,12 @@ class IF:
             tfsupp=1+np.floor((1/2)+(tfsupp-freq[0])/fstep)
         else:
             fres='log'
-            fstep=np.mean(np.diff(np.log(freq),0,1));
+            fstep=np.mean(np.diff(np.log(freq),0,1))
             tfsupp=1+np.floor((1/2)+(np.log(tfsupp)-np.log(freq[0]))/fstep)
        
             #cut-off
         tfsupp[tfsupp<1]=1
-        tfsupp[tfsupp>NF]=NF;
+        tfsupp[tfsupp>NF]=NF
 
         #Define variables to not use cells or structures
         C=wp.C
@@ -1188,7 +1034,7 @@ class IF:
            D=wp.D
         if not isinstance(wp.fwt, dict):
            fwt=wp.fwt
-           nflag=0;
+           nflag=0
         else:
             nflag=1
             Lf=len(wp.fwt['2'])
@@ -1200,7 +1046,6 @@ class IF:
                 fwt=np.interp(fxi,wp.fwt['2'],wp.fwt['1']) #this is linear interpolation, not using splines #TODO
             
             wstep=np.mean(np.diff(fxi,1,0))
-        
 
         #If only the frequency profile is specified, extract the full time-frequency support
         if np.amin(np.shape(tfsupp))==1:
@@ -1214,15 +1059,15 @@ class IF:
                 #Ridge point
                 cpeak=cind
                 if cind>1 and cind<NF:
-                    if cs[cind+1]==cs[cind-1]: #from here 14/5
+                    if cs[cind+1]==cs[cind-1]:
                         cpeak1=cind-1+np.ravel_multi_index(np.nonzero((cs[cind:-1]>=cs[cind-1:-2] and cs[cind:-1]>cs[cind+1:])), np.shape(cs))[0]
                         cpeak1=np.amin([cpeak1,NF])
                         cpeak2=cind+1-np.ravel_multi_index(np.nonzero(cs[cind:0:-1]>=cs[cind+1:1:-1] and cs[cind:0:-1]>cs[cind-1:0:-1],np.shape(cs)))[0] 
-                        cpeak2=np.amax([cpeak2,1]);
+                        cpeak2=np.amax([cpeak2,1])
                         if cs[cpeak1]>0 and cs[cpeak2]>0:
                             if cpeak1-cind==cind-cpeak2:
                                 if cs[cpeak1]>cs[cpeak2]: 
-                                    cpeak=cpeak1;
+                                    cpeak=cpeak1
                                 else:
                                    cpeak=cpeak2
                             elif cpeak1-cind<cind-cpeak2:
@@ -1255,8 +1100,8 @@ class IF:
                     else:
                         cpeak=NF-np.ravel_multi_index(np.nonzero(cs[cind-1:0:-1]>cs[cind-2::-1] and cs[cind-1:0:-1]>=cs[cind:1:-1],np.shape(cs)))[0] 
                         cpeak=np.max([cpeak,1])
-                    
-                
+
+
                 tfsupp[0,tn]=cpeak
         
                 #Boundaries of time-frequency support
@@ -1270,8 +1115,7 @@ class IF:
                 idown=np.amax([idown,1])
                 tfsupp[1,tn]=idown
                 tfsupp[2,tn]=iup
-            
-        
+
         #%If only the boundaries of the frequency profile are specified, extract the peaks
         if np.amin(np.shape(tfsupp))==2:
             pind=np.zeros((1,L))*math.nan
@@ -1279,18 +1123,16 @@ class IF:
                 ii=np.arange(tfsupp[0,tn],tfsupp[1,tn]) 
                 xn=idt[tn] 
                 cs=np.abs(TFR[ii,xn])
-                mid=np.unravel_index(np.argmax(cs), np.shape(cs))[1] #CHeck
+                mid=np.unravel_index(np.argmax(cs), np.shape(cs))[1]
                 pind[tn]=ii[mid]
             
             tfsupp=[[pind],[tfsupp]]
         
         #%Return extracted time-frequency support if requested
-        #if nargout>3, varargout{1}=tfsupp*NaN; varargout{1}(:,tn1:tn2)=freq(tfsupp(:,tn1:tn2)); end
         tfsupp=tfsupp.astype('int')
         tn1=int(tn1)
         tn2=int(tn2)
-        #rtfsupp=tfsupp*np.nan
-        #rtfsupp[:,tn1:tn2+1]=freq[tfsupp[:,tn1:tn2+1]]
+
         #%==================================WFT=====================================
         if fres.lower()=='linear':
     
@@ -1304,13 +1146,13 @@ class IF:
                         if xn>idt[tn1] and xn<idt[tn2]:
                             cw=np.angle(TFR[ii,xn+1])-np.angle(TFR[ii,xn-1]) #np.angle -> phase angle
                             cw[cw<0]=cw[cw<0]+2*np.pi
-                            cw=cw*fs/2; 
+                            cw=cw*fs/2
                         elif xn==1: 
                             cw=np.angle(TFR[ii,xn+1])-np.angle(cs)
                             cw[cw<0]=cw[cw<0]+2*np.pi
                             cw=cw*fs
                         else: 
-                            cw=np.angle(cs)-np.angle(TFR[ii,xn-1]); 
+                            cw=np.angle(cs)-np.angle(TFR[ii,xn-1])
                             cw[cw<0]=cw[cw<0]+2*np.pi
                             cw=cw*fs 
                         cw=cw/(2*np.pi)
@@ -1325,8 +1167,7 @@ class IF:
                             ifreq[0,tn]=(1/C)*np.sum(cw*cs*(2*np.pi*fstep))/casig
 
                 ifreq[0,:]=np.real(ifreq[0,:]) #real part
-            
-    
+
             #%Ridge reconstruction--------------------------------------------------
             if method==0 or method==2:
                 rm=2
