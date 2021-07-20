@@ -164,18 +164,6 @@ class IF:
         self.PenalFunc={'1':[],'2':[]}
         self.MaxIter=20
 
-    #class ec_class:
-    ##reproduce homonimous structure in the original code
-    #    def __init__(self,efreq=[], eind=[], pfreq=[],pind=[], pamp=[], idr=[], mv=[], rdiff=[]):
-    #        self.efreq=efreq 
-    #        self.eind=eind
-    #        self.pfreq=pfreq
-    #        self.pind=pind
-    #        self.pamp=pamp
-    #        self.idr=idr
-    #        self.mv=mv
-    #        ec.rdiff=rdiff
-
     def AmpFunc(self,x):
         return np.log(x)
 
@@ -264,7 +252,7 @@ class IF:
             if fres==1:
                 DF=(wopt.wp.xi2-wopt.wp.xi1)/2/np.pi
             else: 
-                DF=log(wopt.wp.xi2/wopt.wp.xi1)
+                DF=np.log(wopt.wp.xi2/wopt.wp.xi1)
 
             if self.method==1:
                 DD=DF/DT
@@ -446,7 +434,7 @@ class IF:
             #self.Skel['nu']=Fp
             #self.Skel['qn']=Qp
             if self.NormMode.lower=='on':
-               nfunc=tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq) #defined later
+               nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq) #defined later
             ci=Ip
             ci[np.isnan(ci)]=NF+2-1 #added -1
             cm=ci-np.floor(ci)
@@ -463,7 +451,7 @@ class IF:
     
         elif isinstance(self.method,str) and len(self.method)>3 :#frequency-based extraction
             if len(self.method)!=L:
-                error('The specified frequency profile ("Method" property) should be of the same length as signal.')
+                print('The specified frequency profile ("Method" property) should be of the same length as signal.')
 
             efreq=self.method
             submethod=1
@@ -481,7 +469,7 @@ class IF:
             if fres==1:
                eind=1+np.floor(0.5+(efreq-freq[0])/fstep)
             else:
-               eind=1+np.floor(0.5+log(efreq/freq[0])/fstep)
+               eind=1+np.floor(0.5+np.log(efreq/freq[0])/fstep)
             eind=np.array(eind)
             eind[eind<1]=1
             eind[eind>NF]=NF;
@@ -557,31 +545,15 @@ class IF:
             # NOT NEEDED?
             ##Optional output arguments
             #if nargout>1
+            ec_info = ec_class(self.method, self.pars, self.PathOpt)
             ec_info.efreq=efreq
             ec_info.eind=eind
             ec_info.pfreq=tfsupp[0,:]
             ec_info.pind=pind
-            ec.pamp=pamp
-            ec.idr=idr
+            ec_info.pamp=pamp
+            ec_info.idr=idr
 
-            #Plotting (if needed) #SKIP
-            #if ~isempty(strfind(DispMode,'plot'))
-            #    scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
-            #    ax=axes('Position',[0.1,0.1,0.8,0.8],'FontSize',16); hold all;
-            #    title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-            #    plot(ax(1),(0:L-1)/fs,efreq,'--','Color',[0.5,0.5,0.5],'LineWidth',2,'DisplayName','Specified frequency profile');
-            #    plot(ax(1),(0:L-1)/fs,tfsupp(1,:),'-k','LineWidth',2,'DisplayName','Extracted frequency profile');
-            #    legend(ax(1),'show'); if fres==2, set(ax(1),'YScale','log'); end
-            #end
-            #if ~isempty(strfind(PlotMode,'on')), plotfinal(tfsupp,TFR,freq,fs,DispMode,PlotMode); end
-            #if nargout>2, varargout{2}=Skel; end
-
-            self.Skel['Np']=Np
-            self.Skel['mt']=Ip
-            self.Skel['nu']=Fp
-            self.Skel['qn']=Qp
-    
-            return tfsupp,ecinfo, self.Skel
+            return tfsupp,ec_info, self.Skel
 
         #--------------------------- Global Maximum -------------------------------
         #sanitycheck
@@ -592,10 +564,10 @@ class IF:
                    print('Extracting the curve by Global Maximum scheme.\n')
                 else:
                    print('Extracting positions of global maximums (needed to estimate initial parameters).\n')
-    
+
             if sflag==0:
                 if self.NormMode.lower=='on':
-                    nfunc=tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
+                    nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
                     TFR=TFR*(nfunc[:]@np.ones((1,L))) #this should be a vector moltiplication (not element-wise)
 
                 for tn in range(tn1,tn2):#from tn2+1
@@ -700,10 +672,10 @@ class IF:
             else:
                logw2=lambda x: (x)*self.PenalFunc['2'][x,DF] #check
             #Main part
-            if PathOpt.lower=='on':
-                idr=pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq,self.DispMode) #check
+            if self.PathOpt.lower=='on':
+                idr=self.pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq) #check
             else:
-               [idr,timax,fimax]=onestepopt(Np,Ip,Fp,Wp,logw1,logw2,freq,self.DispMode)
+               [idr,timax,fimax]=self.onestepopt(Np,Ip,Fp,Wp,logw1,logw2,freq)
             lid=np.ravel_multi_index(idr[tn1:tn2+1],np.arange[tn1:tn2+1], np.shape(Fp))
             tfsupp[0,tn1:tn2+1]=Fp[lid]
             pind[tn1:tn2+1]=self.Round(Ip[lid])
@@ -743,28 +715,10 @@ class IF:
                     print(['maximums frequencies (median+-range): '])
                     print(mv[2],'+-',mv[3],' hz; frequency differences: ',mv[0],'+-',mv[1] ,'hz.\n')
                 else:
-                    print(['maximums frequencies (log-median*/range ratio): ']);
-                    print(exp(mv[2]),'*/',exp(mv[3]), 'hz; frequency ratios:',exp(mv[0]),'*/',exp(mv[1]),'\n')
-                print('extracting the curve by ii scheme: iteration discrepancy - ');
-            #    if ~isempty(strfind(DispMode,'plot'))
-            #        scrsz=get(0,'ScreenSize'); figure('Position',[scrsz(3)/4,scrsz(4)/8,2*scrsz(3)/3,2*scrsz(4)/3]);
-            #        ax=zeros(3,1);
-            #        ax(1)=axes('Position',[0.1,0.6,0.8,0.3],'FontSize',16); hold all;
-            #        if fres==2, set(ax(1),'YScale','log'); end
-            #        ax(2)=axes('Position',[0.1,0.1,0.35,0.35],'FontSize',16); hold all;
-            #        ax(3)=axes('Position',[0.55,0.1,0.35,0.35],'FontSize',16); hold all;
-            #        title(ax(1),'Ridge curve \omega_p(t)/2\pi'); ylabel(ax(1),'Frequency (Hz)'); xlabel(ax(1),'Time (s)');
-            #        ylabel(ax(2),'Frequency (Hz)'); ylabel(ax(3),'Frequency (Hz)'); xlabel(ax(3),'Iteration number'); xlabel(ax(2),'Iteration number');
-            #        title(ax(2),'${\rm m}[d\omega_p/dt]/2\pi$ (solid), ${\rm s}[d\omega_p/dt]/2\pi$ (dashed)','interpreter','Latex','FontSize',20);
-            #        title(ax(3),'${\rm m}[\omega_p]/2\pi$ (solid), ${\rm s}[\omega_p]/2\pi$ (dashed)','interpreter','Latex','FontSize',20);
-            #        line0=plot(ax(1),(0:L-1)/fs,tfsupp(1,:),':','Color',[0.5,0.5,0.5],'DisplayName','Global Maximum ridges');
-            #        line1=plot(ax(2),0,fs*mv(1),'-sk','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','m[d\omega_p/dt]/2\pi');
-            #        line2=plot(ax(2),0,fs*mv(2),'--ok','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','s[d\omega_p/dt]/2\pi');
-            #        line3=plot(ax(3),0,mv(3),'-sk','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','m[\omega_p]/2\pi');
-            #        line4=plot(ax(3),0,mv(4),'--ok','LineWidth',2,'MarkerSize',6,'MarkerFaceColor','k','DisplayName','s[\omega_p]/2\pi');
-            #    end
-            #end
-    
+                    print(['maximums frequencies (log-median*/range ratio): '])
+                    print(np.exp(mv[2]),'*/',np.exp(mv[3]), 'hz; frequency ratios:',np.exp(mv[0]),'*/',np.exp(mv[1]),'\n')
+                print('extracting the curve by ii scheme: iteration discrepancy - ')
+
             #Iterate
             rdiff=NaN
             itn=0
@@ -934,9 +888,9 @@ class IF:
         #end
         if not isinstance(logw2, types.LambdaType):
             if logw2==[]:
-                W2=np.zeros((Mp,L))*NaN
+                W2=np.zeros((Mp,L))*np.nan
             else:
-                logw2=[[2*logw2[0]-logw2[1]],[logw2[:]],[2*logw2[-1]-logw2[-2]],[NaN],[NaN]]
+                logw2=[[2*logw2[0]-logw2[1]],[logw2[:]],[2*logw2[-1]-logw2[-2]],[np.nan],[np.nan]]
                 ci=Ip
                 ci[np.isnan(ci)]=NF+2
                 cm=ci-np.floor(ci)
@@ -992,7 +946,9 @@ class IF:
         return idid
 
         #================== One-step optimization algorithm =======================
-    def onestepopt(self,Np,Ip,Fp,Wp,freq):
+
+
+    def onestepopt(self,Np,Ip,Fp,Wp,logw1,logw2,freq):
 
          #maybe logw1 and logw2 not neeeded
         DispMode=self.DispMode
@@ -1016,7 +972,7 @@ class IF:
             if logw2==[]:
                 W2=np.zeros((Mp,L))
             else:
-                logw2=[[2*logw2[0]-logw2[1]],[logw2[:]],[2*logw2[-1]-logw2[-2]],[NaN],[NaN]];
+                logw2=[[2*logw2[0]-logw2[1]],[logw2[:]],[2*logw2[-1]-logw2[-2]],[np.nan],[np.nan]];
                 ci=Ip
                 ci[np.isnan(ci)]=NF+2
                 cm=ci-np.floor(ci)
@@ -1032,7 +988,7 @@ class IF:
         #The algorithm by itself
         imax=np.argmax(W2.flatten('F')[:])
         fimax,timax=np.unravel_index(imax,[Mp,L],'F') #determine the starting point
-        idid=np.zeros((1,L))*NaN
+        idid=np.zeros((1,L))*np.nan
         idid[timax]=fimax
 
         #TO DO
@@ -1095,10 +1051,10 @@ class IF:
         Y=mm
         ii=np.ravel_multi_index(np.nonzero(freq>0 and Y>0))
         CN=len(ii)
-        Y=rw[ii]*log(Y[ii])
+        Y=rw[ii]*np.log(Y[ii])
         X=np.log(freq[ii])
         FM=(rw[ii]@np.ones((1,2)))@[np.ones((CN,1)),X[:]]
-        b=pinv[FM]*Y[:]
+        b=np.linalg.pinv[FM]*Y[:]
 
         #Construct the normalization function
         nfunc=freq[freq>0]**b[1] 
@@ -1216,7 +1172,7 @@ class IF:
         else:
             fres='log'
             fstep=np.mean(np.diff(np.log(freq),0,1));
-            tfsupp=1+floor((1/2)+(np.log(tfsupp)-np.log(freq[0]))/fstep)
+            tfsupp=1+np.floor((1/2)+(np.log(tfsupp)-np.log(freq[0]))/fstep)
        
             #cut-off
         tfsupp[tfsupp<1]=1
@@ -1366,7 +1322,7 @@ class IF:
                         if np.isfinite(omg):
                             ifreq[0,tn]=-omg+(1/C)*np.sum(freq[ii-1]*cs*(2*np.pi*fstep))/casig
                         else:
-                            ifreq[0,tn]=(1/C)*np.sum(cw*cs*(2*pi*fstep))/casig
+                            ifreq[0,tn]=(1/C)*np.sum(cw*cs*(2*np.pi*fstep))/casig
 
                 ifreq[0,:]=np.real(ifreq[0,:]) #real part
             
@@ -1384,7 +1340,7 @@ class IF:
                     else:
                        cs=TFR[ipeak,xn]
                 
-                    if isfinite(cs[0]):
+                    if np.isfinite(cs[0]):
                         ifreq[rm,tn]=freq[ipeak]-ompeak/2/np.pi
                         if ipeak>1 and ipeak<NF: #%quadratic interpolation
                             a1=np.abs(cs[1]) 
@@ -1440,7 +1396,7 @@ class IF:
                         cw=cw/(2*np.pi)
                     
             
-                    if isempty(cs[np.isnan(cs)] or not np.isfinite(cs)):
+                    if not np.any(cs[np.isnan(cs)]) or not np.isfinite(cs):
                         casig=(1/C)*np.sum(cs*fstep)
                         asig[0,tn]=casig
                         if np.isfinite(D):
@@ -1464,7 +1420,7 @@ class IF:
                     else:
                        cs=TFR[ipeak,xn]
             
-                    if isfinite(cs[0]):
+                    if np.isfinite(cs[0]):
                         ifreq[rm,tn]=freq[ipeak]
                         if ipeak>1 and ipeak<NF: #%quadratic interpolation
                             a1=np.abs(cs[1])
