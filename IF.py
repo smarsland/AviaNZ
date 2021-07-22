@@ -62,19 +62,27 @@ class Wp:
         #[fwt] and [twf] - window function in frequency and time
 
 
-        Wp.fwtmax=[]; Wp.twfmax=[]; Wp.C=[]; Wp.omg=[];
-        Wp.xi1=-np.Inf; Wp.xi2=np.Inf; Wp.ompeak=[];
-        Wp.t1=-np.Inf; Wp.t2=np.Inf; Wp.tpeak=[];
+        Wp.fwtmax=[]; Wp.twfmax=[]; Wp.C=[]; Wp.omg=[]
+        Wp.xi1=-np.Inf; Wp.xi2=np.Inf; Wp.ompeak=[]
+        Wp.t1=-np.Inf; Wp.t2=np.Inf; Wp.tpeak=[]
         if window_name=='Hann':
-            q=4.4*window_length;
+            q=4.4*window_length
             Wp.twf=lambda t: (1+np.cos(2*np.pi*t/q))/2
             Wp.t1=-q/2
-            Wp.t2=q/2;
+            Wp.t2=q/2
             Wp.fwt= lambda xi:(-(2*np.pi/q)**2)*np.sin(xi*q/2)/(xi*(xi**2-(2*np.pi/q)**2))
             Wp.ompeak=0
             Wp.C=np.pi*Wp.twf(0)
             Wp.omg=0
-            Wp.tpeak=0;
+            Wp.tpeak=0
+
+
+        ct = (CT / CL) * (-(CNq - 2):CNq-2).T
+        ct = [ct - CT / CL / 2, ct(end) + CT / CL / 2]
+        wp.t1h = ct [0]
+        wp.t2h = ct[-1]
+        wp.t1h = ss[1, 0]
+        wp.t2h = ss[1, 1]
 
         #Needs Review
         #Wp.xi1=np.amin(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
@@ -223,7 +231,7 @@ class IF:
         tn1 = int(tn1)
         tn2 = int(tn2)
 
-        sflag=0;
+        sflag=0
 
       # if not frequency-based or maximum-based extraction
         if (isinstance(self.method,str) and self.method.lower!='max') or isinstance(self.method,int):
