@@ -120,7 +120,8 @@ class AviaNZ(QMainWindow):
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
         self.SegmentRects = []
-        self.segmentPlots=[]
+        self.segmentPlots = []
+        self.shapePlots = []
         self.box1id = -1
 
         self.started = False
@@ -129,9 +130,15 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = False
         self.viewCallType = False
         self.batmode = False
+
+        # Spectrogram default settings
         # TODO: put in config?
+        self.sgOneSided = True
+        self.sgMeanNormalise = True
+        self.sgEqualLoudness = False
         self.sgType = 'Standard'
         self.sgNorm = 'Log'
+        self.windowType = 'Hann'
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
@@ -154,11 +161,6 @@ class AviaNZ(QMainWindow):
 
         # For preventing callbacks involving overview panel
         self.updateRequestedByOverview = False
-
-        # Spectrogram
-        self.sgOneSided = True
-        self.sgMeanNormalise = True
-        self.sgEqualLoudness = False
 
         # working directory
         if not os.path.isdir(self.SoundFileDir):
@@ -1323,6 +1325,13 @@ class AviaNZ(QMainWindow):
         for r in self.segmentPlots:
             self.p_spec.removeItem(r)
         self.segmentPlots=[]
+
+        # Remove any shape marks
+        for sh in self.shapePlots:
+            try:
+                self.p_spec.removeItem(sh)
+            except Exception:
+                pass
 
         # Remove spectral derivatives
         self.showSpectral.setChecked(False)
@@ -3994,6 +4003,13 @@ class AviaNZ(QMainWindow):
         allshapes = []
         specxunit = self.convertSpectoAmpl(1)
         specyunit = self.sampleRate//2 / np.shape(self.sg)[1]
+        if self.batmode:
+            incr = 512
+        else:
+            incr = self.config['incr']
+
+        # TODO TODO not tested for bats at all,
+        # no idea what here may be adapting
         with pg.BusyCursor():
             for segm in self.segments:
                 segshape = None
@@ -4003,8 +4019,17 @@ class AviaNZ(QMainWindow):
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
                     data = self.audiodata[int(segm[0]*self.sampleRate):int(segm[1]*self.sampleRate)]
-                    W = 4*self.config['incr']
+                    W = 4*incr
                     segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sampleRate)
+                    # shape.tstart is relative to segment start (0)
+                    # so we also need to add the segment start
+                    segshape.tstart += segm[0]
+                elif method=="instantShaper":
+                    # instantaneous frequency
+                    spstart = math.floor(self.convertAmpltoSpec(segm[0]))
+                    spend = math.ceil(self.convertAmpltoSpec(segm[1]))
+                    sg = self.sp.sg[spstart:spend]
+                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.windowType)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segm[0]
@@ -4016,8 +4041,6 @@ class AviaNZ(QMainWindow):
 
         # print, plot or export the results
         # clear any old plots:
-        if not hasattr(self, 'shapePlots'):
-            self.shapePlots = []
         for sh in self.shapePlots:
             self.p_spec.removeItem(sh)
         self.shapePlots = []
