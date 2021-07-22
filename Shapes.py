@@ -23,6 +23,7 @@
 import math
 import numpy as np
 from ext import ce_denoise
+import IF as IFreq
 
 class Shape():
     """ Container for storing a shape.
@@ -92,3 +93,51 @@ def fundFreqShaper(data, Wsamples, thr, fs):
 
     shape = Shape(y=pitch, tstart=0, tend=len(data)/fs, tunit=(Wsamples//2)/fs, yunit=1, ystart=0)
     return shape
+
+def instantShaper(TFR, fs, incr, window):
+    """ Args:
+        TFR: matrix with spectrogram. Note: #columns=time, #rows=freq
+        fs: sampling rate of the data used for this
+        incr: increment used to create this spectrogram
+        window: window type used to create this spectrogram. Only
+            accepts "Hann" currently.
+        freqarray: array with discretized frequencies
+        wopt: parameters needed byt the function. At the momenth this is fixed but need review
+    """
+    IF = IFreq.IF()
+
+    # check if window is Hann
+    if window!="Hann":
+        print("ERROR: only Hann window is implemented for this shaper.\nPlease change the spectrogram parameters to use this window, and rerun this command.")
+        return
+        # TODO ensure this empty return is ok
+
+    # REMEMBER: we need to transpose
+    # TFR=sp.spectrogram(window_width,incr,window)
+    TFR = TFR.T
+    fstep = (fs/2)/np.shape(TFR)[0]  # spec row size in Hz
+    freqarr = np.arange(fstep,fs/2+fstep,fstep)
+    wopt = [fs,1] #this neeeds review
+    tfsupp, _, _ = IF.ecurve(TFR,freqarr,wopt) # <= This is the function we need
+
+    #TO Do: Define wopt (this requires REVIEW)
+    # update wopt and wp
+    wp = IFreq.Wp(incr,fs)
+    wopt = IFreq.Wopt(fs,wp,0,fs/2)
+
+    # function to reconstruct official Instantaneous Frequency
+    #NOTE: at the moment this seems to not be needed
+    _,_,ifreq = IF.rectfr(tfsupp,TFR,freqarr,wopt)
+    # TODO why does it return ifreq as nested [[array]]?
+
+    # ax[0].imshow(np.flipud(TFR), extent=[0, np.shape(TFR)[1], 0, np.shape(TFR)[0]], aspect='auto')
+    # x = np.array(range(np.shape(TFR)[1]))
+    # ax[0].plot(x, (ifreq / fstep).T, linewidth=1, color='red')
+    # ax[0].plot(x, tfsupp[0, :] / fstep, linewidth=1, color='w')
+    # ax[1].imshow(np.flipud(TFR), extent=[0, np.shape(TFR)[1], 0, np.shape(TFR)[0]], aspect='auto')
+    # ax[2].plot(ifreq, color='red')
+    # ax[2].plot(tfsupp[0, :], color='green')
+
+    shape = Shape(y=ifreq[0], tstart=0, tend=np.shape(TFR)[1]*incr/fs, tunit=incr/fs, yunit=1, ystart=0)
+    return shape
+

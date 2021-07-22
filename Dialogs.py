@@ -3464,7 +3464,7 @@ class Shapes(QDialog):
         # self.segments = segments
 
         self.detectorCombo = QComboBox()
-        self.detectorCombo.addItems(['stupidShaper', 'fundFreqShaper'])
+        self.detectorCombo.addItems(['stupidShaper', 'fundFreqShaper', 'instantShaper'])
 
         self.activate = QPushButton('Detect shapes in segments')
 
