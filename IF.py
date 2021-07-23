@@ -77,12 +77,12 @@ class Wp:
             Wp.tpeak=0
 
 
-        ct = (CT / CL) * (-(CNq - 2):CNq-2).T
-        ct = [ct - CT / CL / 2, ct(end) + CT / CL / 2]
-        wp.t1h = ct [0]
-        wp.t2h = ct[-1]
-        wp.t1h = ss[1, 0]
-        wp.t2h = ss[1, 1]
+        #ct = (CT / CL) * (-(CNq - 2):CNq-2).T
+        #ct = [ct - CT / CL / 2, ct(end) + CT / CL / 2]
+        #wp.t1h = ct [0]
+        #wp.t2h = ct[-1]
+        #wp.t1h = ss[1, 0]
+        #wp.t2h = ss[1, 1]
 
         #Needs Review
         #Wp.xi1=np.amin(Wp.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
@@ -234,7 +234,7 @@ class IF:
         sflag=0
 
       # if not frequency-based or maximum-based extraction
-        if (isinstance(self.method,str) and self.method.lower!='max') or isinstance(self.method,int):
+        if (isinstance(self.method,str) and self.method.lower()!='max') or isinstance(self.method,int):
             sflag=1
             #----------------------------------------------------------------------
             #Construct matrices of ridge indices, frequencies and amplitudes:
@@ -246,7 +246,7 @@ class IF:
                 Qp=self.Skel['qn']
                 Mp=np.amax(Np)
             else:
-                if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+                if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
                     print('Locating the amplitude peaks in TFR... ')
                 TFR=np.vstack((np.zeros((1,L)),TFR,np.zeros((1,L)))) #pad TFR with zeros
 
@@ -317,8 +317,8 @@ class IF:
                 del idft, idf, idt, idn, dind, idnt, a1, a2, a3, dp
 
                 #Display
-                if self.DispMode.lower!='off':
-                    if self.DispMode.lower!='notify':
+                if self.DispMode.lower()!='off':
+                    if self.DispMode.lower()!='notify':
                         print('(number of ridges:', self.Round(np.mean(Np[tn1:tn2+1])), ' +- ',self.Round(np.std(Np[tn1:tn2+1])), ' from ',np.amin(Np),' to ',np.amax(Np),')\n')
 
                     idb=np.argwhere(Np[tn1:tn2+1]==0)
@@ -359,7 +359,7 @@ class IF:
                 del idb, NB
 
             self.Skel={'np':Np,'mt':Ip,'nu':Fp,'qn':Qp}
-            if self.NormMode.lower=='on':
+            if self.NormMode.lower()=='on':
                nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
             ci=Ip
             ci[np.isnan(ci)]=NF+2-1 #added -1
@@ -384,7 +384,7 @@ class IF:
             if np.amax(np.abs(efreq.imag))>0:
                submethod=2
                efreq=efreq.imag
-            if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+            if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
                 if submethod==1:
                    print('Extracting the ridge curve lying in the same TFR supports as the specified frequency profile.\n')
                 else:
@@ -482,15 +482,15 @@ class IF:
         #--------------------------- Global Maximum -------------------------------
         #sanitycheck
         Np=Np.astype('int')
-        if (type(self.method) == 'char' and self.method.lower=='max') or len(self.pars)==2:
-            if self.DispMode.lower!='off' and self.DispMode!='notify':
+        if (type(self.method) == 'char' and self.method.lower()=='max') or len(self.pars)==2:
+            if self.DispMode.lower()!='off' and self.DispMode!='notify':
                 if sflag==0:
                    print('Extracting the curve by Global Maximum scheme.\n')
                 else:
                    print('Extracting positions of global maximums (needed to estimate initial parameters).\n')
 
             if sflag==0:
-                if self.NormMode.lower=='on':
+                if self.NormMode.lower()=='on':
                     nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
                     TFR=TFR*(nfunc[:]@np.ones((1,L))) #this should be a vector moltiplication (not element-wise)
 
@@ -499,7 +499,7 @@ class IF:
                     pind[tn]=np.argmax(abs(TFR[:,tn]))
                 pind=pind.astype('int')
                 tfsupp[0][tn1:tn2+1]=freq[pind[tn1:tn2+1]][0]
-                if self.NormMode.lower=='on':
+                if self.NormMode.lower()=='on':
                     TFR=TFR/(nfunc[:]@np.ones((1,L)))
                     pamp[tn1:tn2+1]=pamp[tn1:tn2+1]/(nfunc[pind[tn1:tn2+1]].T)
             else:
@@ -535,12 +535,12 @@ class IF:
             ec_info.idr=idr
 
         #------------------------- Nearest neighbour ------------------------------
-        if (type(self.method) =='char') and self.method.lower=='nearest':
+        if (type(self.method) =='char') and self.method.lower()=='nearest':
             #Display, if needed
             imax=np.argmax(Wp.flatten('F'))
             [fimax,timax]=np.unravel_index(imax,(Mp,L),'F')
             idr[timax]=fimax
-            if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+            if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
                 print('Extracting the curve by Nearest Neighbour scheme.\n')
                 print('The highest peak was found at time ', (timax-1)/fs,  ' s and frequency', Fp(fimax,timax), ' Hz (indices ', timax,' and ',Ip(fimax,timax),' respectively).\n')
                 print('Tracing the curve forward and backward from point of maximum.\n')
@@ -561,7 +561,7 @@ class IF:
 
         #----------------------------- Method I -----------------------------------
         if len(self.pars)==1:
-            if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+            if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
                 print('Extracting the curve by I scheme.\n')
             #Define the functionals
             if not self.PenalFunc['1']:
@@ -573,7 +573,7 @@ class IF:
             else:
                logw2=lambda x: (x)*self.PenalFunc['2'][x,DF] #check
             #Main part
-            if self.PathOpt.lower=='on':
+            if self.PathOpt.lower()=='on':
                 idr=self.pathopt(Np,Ip,Fp,Wp,logw1,logw2,freq) #check
             else:
                [idr,timax,fimax]=self.onestepopt(Np,Ip,Fp,Wp,logw1,logw2,freq)
@@ -610,7 +610,7 @@ class IF:
             mv[3]=ss2[np.int(self.Round(0.75*CL))-1]-ss2[np.int(self.Round(0.25*CL))-1]
 
             #Display, if needed
-            if self.DispMode.lower!='off' and self.DispMode!='notify':
+            if self.DispMode.lower()!='off' and self.DispMode()!='notify':
                 if fres==1:
                     print(['maximums frequencies (median+-range): '])
                     print(mv[2],'+-',mv[3],' hz; frequency differences: ',mv[0],'+-',mv[1] ,'hz.\n')
@@ -684,8 +684,8 @@ class IF:
 
                 #Stop if maximum number of iterations has been reached
                 if itn>self.MaxIter-1 and rdiff!=0:
-                    if self.DispMode.lower!='off':
-                        if self.DispMode.lower!='notify':
+                    if self.DispMode.lower()!='off':
+                        if self.DispMode.lower()!='notify':
                            print('\n')
                         print('WARNING! Did not fully converge in %d iterations (current ''MaxIter''). Using the last estimate.',self.MaxIter);
                     break
@@ -698,13 +698,13 @@ class IF:
                        gg=np.amin([gg,len(np.ravel_multi_index(np.nonzero(pind[tn1:tn2+1]-allpind[kn,tn1:tn2+1]!=0),np.shape(pind)))])
                 
                 if gg==0:
-                    if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+                    if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
                         print('converged to a cycle, terminating iteration.')
                     
                     break
 
                 itn = itn + 1
-            if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+            if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
                print('\n')
 
         #//////////////////////////////////////////////////////////////////////////
@@ -736,7 +736,7 @@ class IF:
         #//////////////////////////////////////////////////////////////////////////
 
         #Final display
-        if self.DispMode.lower!='off' and self.DispMode.lower!='notify':
+        if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
             print('Curve extracted: ridge frequency ',np.mean(tfsupp[0,:]),'+-',np.std(tfsupp[0,:]),' Hz, lower support ', np.mean(tfsupp[1,:]),'+-',np.std(tfsupp[1,:]) ,' Hz, upper support ',np.mean(tfsupp[2,:]),'+-',np.std(tfsupp[2,:]),' Hz.\n')
 
         self.Skel['Np']=Np
@@ -993,9 +993,9 @@ class IF:
         wp=wopt.wp
 
         if isinstance(method, str):
-            if method.lower=='direct':
+            if method.lower()=='direct':
                 method=1
-            elif method=='ridge':
+            elif method.lower()=='ridge':
                 method=2
             else:
                 method==0
@@ -1046,7 +1046,7 @@ class IF:
         else:
             nflag=1
             Lf=len(wp.fwt['2'])
-            if fres.lower=='linear':
+            if fres.lower()=='linear':
                fxi=wp.fwt['2'] 
                fwt=wp.fwt['1']
             else:
@@ -1221,7 +1221,7 @@ class IF:
                         asig[rm,tn]=casig
   
         #%===================================WT=====================================
-        if fres.lower=='log':
+        if fres.lower()=='log':
     
             #%Direct reconstruction-------------------------------------------------
             if method==0 or method==1:
