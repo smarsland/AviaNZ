@@ -4009,7 +4009,8 @@ class AviaNZ(QMainWindow):
             incr = self.config['incr']
 
         # TODO TODO not tested for bats at all,
-        # no idea what here may be adapting
+        # no idea what here may need adapting
+        # (specifically b/c they have a spec that starts at >0)
         with pg.BusyCursor():
             for segm in self.segments:
                 segshape = None
@@ -4029,6 +4030,12 @@ class AviaNZ(QMainWindow):
                     spstart = math.floor(self.convertAmpltoSpec(segm[0]))
                     spend = math.ceil(self.convertAmpltoSpec(segm[1]))
                     sg = self.sp.sg[spstart:spend]
+                    # mask freqs outside the currently marked segment
+                    if segm[3]>0:
+                        markedylow = math.floor(self.convertFreqtoY(segm[2]))
+                        markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
+                        sg[:,:markedylow] = 0
+                        sg[:,markedyupp:] = 0
                     segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.windowType)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
