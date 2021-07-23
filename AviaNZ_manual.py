@@ -4029,7 +4029,7 @@ class AviaNZ(QMainWindow):
                     # instantaneous frequency
                     spstart = math.floor(self.convertAmpltoSpec(segm[0]))
                     spend = math.ceil(self.convertAmpltoSpec(segm[1]))
-                    sg = self.sp.sg[spstart:spend]
+                    sg = np.copy(self.sp.sg[spstart:spend,:])
                     # mask freqs outside the currently marked segment
                     if segm[3]>0:
                         markedylow = math.floor(self.convertFreqtoY(segm[2]))
