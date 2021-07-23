@@ -4011,24 +4011,36 @@ class AviaNZ(QMainWindow):
         # TODO TODO not tested for bats at all,
         # no idea what here may need adapting
         # (specifically b/c they have a spec that starts at >0)
+        # NOTE: resulting shape.tstart will be relative to the current page
         with pg.BusyCursor():
             for segm in self.segments:
                 segshape = None
+                # convert from absolute to relative-to-page times
+                segRelativeStart = segm[0]-self.startRead
+                segRelativeEnd = segm[1]-self.startRead
+
+                # skip if they are not in this page:
+                if segRelativeEnd<0 or segRelativeStart>self.datalengthSec:
+                    print("skipping out of page segment", segm[0], "-", segm[1])
+                    allshapes.append(segshape)
+                    continue
+
                 if method=="stupidShaper":
                     # placeholder method:
-                    segshape = Shapes.stupidShaper(segm, specxunit, specyunit)
+                    adjusted_segm = [segRelativeStart, segRelativeEnd, segm[2], segm[3], segm[4]]
+                    segshape = Shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
-                    data = self.audiodata[int(segm[0]*self.sampleRate):int(segm[1]*self.sampleRate)]
+                    data = self.audiodata[int(segRelativeStart*self.sampleRate):int(segRelativeEnd*self.sampleRate)]
                     W = 4*incr
                     segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sampleRate)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
-                    segshape.tstart += segm[0]
+                    segshape.tstart += segRelativeStart
                 elif method=="instantShaper":
                     # instantaneous frequency
-                    spstart = math.floor(self.convertAmpltoSpec(segm[0]))
-                    spend = math.ceil(self.convertAmpltoSpec(segm[1]))
+                    spstart = math.floor(self.convertAmpltoSpec(segRelativeStart))
+                    spend = math.ceil(self.convertAmpltoSpec(segRelativeEnd))
                     sg = np.copy(self.sp.sg[spstart:spend,:])
                     # mask freqs outside the currently marked segment
                     if segm[3]>0:
@@ -4039,7 +4051,7 @@ class AviaNZ(QMainWindow):
                     segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.windowType)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
-                    segshape.tstart += segm[0]
+                    segshape.tstart += segRelativeStart
                 allshapes.append(segshape)
 
         if len(allshapes)!=len(self.segments):
@@ -4049,13 +4061,18 @@ class AviaNZ(QMainWindow):
         # print, plot or export the results
         # clear any old plots:
         for sh in self.shapePlots:
-            self.p_spec.removeItem(sh)
+            try:
+                self.p_spec.removeItem(sh)
+            except Exception:
+                pass
         self.shapePlots = []
 
         # NOTE: this skips -1 and values below minFreqShow and connects
         # the reamining dots. Might not be what you want.
         # TODO not sure if this will work when spec sp.minFreqShow>0
         for shape in allshapes:
+            if shape is None:
+                continue
             # Convert coordinates to Hz/s and back to spec y/x, b/c
             # spacing used to calculate the shape may differ from current spec pixel size.
             numy = len(shape.y)
