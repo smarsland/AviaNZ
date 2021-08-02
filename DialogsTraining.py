@@ -1262,6 +1262,14 @@ class BuildRecAdvWizard(QWizard):
                 minlen = float(self.field("minlen"+str(self.pageId)))
                 maxlen = float(self.field("maxlen"+str(self.pageId)))
                 chpwin = float(self.field("chpwin"+str(self.pageId)))
+                # Important: chpwin is rounded to nearest multiple of 32/Fs
+                # to ensure that this window corresponds to integer number of wavelet coefs.
+                # Not reading from the field to avoid rounding errors.
+                # But any change here must be reflected in the training as well!
+                MINCHPWIN = 32/self.wizard().speciesData['SampleRate']
+                chpwin = round(chpwin/MINCHPWIN)*MINCHPWIN
+                print("Changepoint window was rounded to", chpwin)
+
                 self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
@@ -1463,6 +1471,13 @@ class BuildRecAdvWizard(QWizard):
                     fHigh = int(self.field("fHigh"+str(pageId)))
                     thr = float(self.field("bestThr"+str(pageId)))
                     nodes = eval(self.field("bestNodes"+str(pageId)))
+
+                    # Important: chpwin is rounded to nearest multiple of 32/Fs
+                    # to ensure that this window corresponds to integer number of wavelet coefs.
+                    # Not reading from the field to avoid rounding errors.
+                    # But any change here must be reflected in the training as well!
+                    MINCHPWIN = 32/self.wizard().speciesData['SampleRate']
+                    chpwin = round(chpwin/MINCHPWIN)*MINCHPWIN
 
                     newSubfilt = {'calltype': ct, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "nodes": nodes, "win": chpwin}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
                 else:

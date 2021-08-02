@@ -159,6 +159,7 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
 
         int timestamp;
         struct tm timestruc;
+        struct tm validated_timestruc;
         char timestr[17];
 
 	setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
@@ -173,17 +174,18 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
                 printf("timestamp detected\n");
                 timestamp = 1;
                 strptime2(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc);
+
                 outfilestem[strlen(outfilestem)-15] = '\0';
 
-                // dealing wiht DST: just enforce original hour
-                // i.e. recorders don't update their clocks,
-                // so just make sure the output time is continuous.
-                int orighour = (&timestruc)->tm_hour;
-                mktime(&timestruc);
-                if ((&timestruc)->tm_hour != orighour){
-                        printf("adjusting hour to %d for DST\n", orighour);
-                        (&timestruc)->tm_hour = orighour;
-                }
+                // dealing wiht DST:
+		// mktime will validate DST which we don't want
+                // (i.e. recorders don't update their clocks,
+                // so we just want to output a continuous clock.)
+		// So enforce original time, and just copy over
+		// whatever DST mktime wants.
+		validated_timestruc = timestruc;
+		mktime(&validated_timestruc);
+		(&timestruc)->tm_isdst = (&validated_timestruc)->tm_isdst;
         }
 
         int f;
@@ -193,6 +195,7 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
                 if (timestamp==0){
                         sprintf(outfilename, "%s_%d.wav", outfilestem, f);
                 } else {
+			// mktime wraps the manually made second increments into valid clock values
                         mktime(&timestruc);
                         strftime(timestr, 17, "%Y%m%d_%H%M%S", &timestruc);
                         sprintf(outfilename, "%s%s.wav", outfilestem, timestr);
