@@ -2315,18 +2315,12 @@ class AviaNZ(QMainWindow):
             # extract unadjusted signal energy
             tgt_node = 45-31
             Es = np.log(Es)
-            # TODO CHECKING
-            # Es = Es - np.quantile(Es, 0.10, axis=0)
             sig_lvl = Es[:,tgt_node]
 
             # estimate wind level in each window
-            wind_lvl = np.zeros(len(xs))
             wind_lvlR = np.zeros(len(xs))
             wind_lvlC = np.zeros(len(xs))
             wind_lvlCO = np.zeros(len(xs))
-            from scipy.stats import linregress, theilslopes
-            from sklearn.linear_model import RANSACRegressor
-            from scipy.optimize import least_squares
 
             # select 10 % frames with lowest overall energy:
             # (note that root node does not need downsampling)
@@ -2370,26 +2364,17 @@ class AviaNZ(QMainWindow):
                 regx = np.delete(regx, 46-31)
                 regx = np.delete(regx, 45-31)
                 # remove two highest nodes as they have filtering artefacts
-                freqmask = np.where(regx<5500)
+                # TODO ideally this should drop extreme nodes for any SR
+                freqmask = np.where(np.logical_and(regx<6000, regx>150))
+
                 regy = regy[freqmask]
                 regx = np.log(regx[freqmask])
-                slope, inter, r, p, se = linregress(regx, regy)
-                # print("Regression results:", slope, inter, r, p, se)
-                pred = np.log(nodecenters[tgt])*slope + inter
 
                 # Robust reg
-                # huber = RANSACRegressor(PolyRegression()).fit(regx[:,np.newaxis], regy)
-                # predR = huber.predict(np.asarray([np.log(nodecenters[tgt])])[:,np.newaxis])
                 def predict(beta, x):
                     return(beta[0] + beta[1]*x + beta[2]*(x**2) + beta[3]*(x**3))
-
                 # def residfunc(beta):
                 #     return(regy - predict(beta, regx))
-
-                # fit = least_squares(residfunc, [1,1,1,1], loss='soft_l1')
-                # print(fit)
-                # predR = predict(fit.x, np.log(nodecenters[tgt]))
-                # print(predR)
 
                 from statsmodels.regression.quantile_regression import QuantReg
 
@@ -2410,10 +2395,10 @@ class AviaNZ(QMainWindow):
 
                 # oversubtracted cubic
                 predCO = (predC - bgpow)*oversubalpha + bgpow
-                return pred, predR, predC, predCO
+                return predR, predC, predCO
 
             for w in range(len(xs)):
-                wind_lvl[w], wind_lvlR[w], wind_lvlC[w], wind_lvlCO[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
+                wind_lvlR[w], wind_lvlC[w], wind_lvlCO[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
             print("tgt", sig_lvl)
             print("wind poly", wind_lvlC)
 
@@ -2422,24 +2407,20 @@ class AviaNZ(QMainWindow):
             self.plotExtra = pg.PlotDataItem(xs, sig_lvl)
             self.plotExtra.setPen(fn.mkPen(color='k', width=2))
             self.p_legend.addItem(self.plotExtra, 'node')
-            self.plotExtra2 = pg.PlotDataItem(xs, wind_lvl)
+            self.plotExtra2 = pg.PlotDataItem(xs, wind_lvlC)
             self.plotExtra2.setPen(fn.mkPen(color='r', width=2))
-            self.p_legend.addItem(self.plotExtra2, 'ols')
+            self.p_legend.addItem(self.plotExtra2, 'cubic')
             self.plotExtra3 = pg.PlotDataItem(xs, wind_lvlR)
             self.plotExtra3.setPen(fn.mkPen(color=(0, 200, 0), width=2))
             self.p_legend.addItem(self.plotExtra3, 'robust')
-            self.plotExtra4 = pg.PlotDataItem(xs, wind_lvlC)
-            self.plotExtra4.setPen(fn.mkPen(color='b', width=2))
-            self.p_legend.addItem(self.plotExtra4, 'cubic')
-            self.plotExtra5 = pg.PlotDataItem(xs, wind_lvlCO)
-            self.plotExtra5.setPen(fn.mkPen(color=(80,30,255), width=2))
-            self.p_legend.addItem(self.plotExtra5, 'cub-over')
+            self.plotExtra4 = pg.PlotDataItem(xs, wind_lvlCO)
+            self.plotExtra4.setPen(fn.mkPen(color=(80,30,255), width=2))
+            self.p_legend.addItem(self.plotExtra4, 'cub-over')
             self.plotaxis.setLabel('Log mean power')
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)
             self.p_plot.addItem(self.plotExtra4)
-            self.p_plot.addItem(self.plotExtra5)
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":
@@ -3891,6 +3872,7 @@ class AviaNZ(QMainWindow):
             spSubf = spInfo["Filters"][0]
             print("Using subfilter", spSubf["calltype"])
             # spInfo = json.load(open(os.path.join(self.filtersDir, filter + '.txt')))
+            WINSIZE = 0.5
 
             # clear plot box and add legend
             self.clearDiagnostic()
@@ -3910,7 +3892,7 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
-            xs = np.arange(0, self.datalengthSec, 0.25)
+            xs = np.arange(0, self.datalengthSec, WINSIZE)
             Esep = np.zeros(( numNodes, len(xs) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
@@ -3963,8 +3945,8 @@ class AviaNZ(QMainWindow):
                 # get max (or mean) E for each second
                 # and normalize, so that we don't need to hardcode thr
                 for w in range(len(xs)):
-                    start = int(w*0.25*spInfo['SampleRate'])
-                    end = int((w+1)*0.25*spInfo['SampleRate'])
+                    start = int(w*WINSIZE*spInfo['SampleRate'])
+                    end = int((w+1)*WINSIZE*spInfo['SampleRate'])
                     maxE = np.mean(E[start:end])
                     ### DENOISE:
                     # based on wind strength in this second, calculate estimated |wind| in this node
@@ -3975,7 +3957,7 @@ class AviaNZ(QMainWindow):
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
                         diagCall = pg.ROI((specs*xs[w], freqmin),
-                                          (specs*0.25, freqmax-freqmin),
+                                          (specs*WINSIZE, freqmax-freqmin),
                                           pen=plotcol, movable=False)
                         self.diagnosticCalls.append(diagCall)
                         self.p_spec.addItem(diagCall)

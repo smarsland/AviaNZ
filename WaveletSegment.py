@@ -76,29 +76,34 @@ class WaveletSegment:
         self.spInfo = copy.deepcopy(spInfo)
 
         # in batch mode, it's worth trying some tricks to avoid resampling
-        if fsOut == 2*sampleRate:
-            print("Adjusting nodes for upsampling to", fsOut)
-            for filter in self.spInfo:
-                for subfilter in filter["Filters"]:
-                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-            # Don't want to resample again, so fsTarget = fsIn
-            fsOut = sampleRate
-        elif fsOut == 4*sampleRate:
-            print("Adjusting nodes for upsampling to", fsOut)
-            # same. Wouldn't recommend repeating for larger ratios than 4x
-            for filter in self.spInfo:
-                for subfilter in filter["Filters"]:
-                    downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
-            # Don't want to resample again, so fsTarget = fsIn
-            fsOut = sampleRate
-        # Could also similarly "downsample" by adding an extra convolution, but it's way slower
-        # elif sampleRate == 2*fsOut:
-        #     # don't actually downsample audio, just "upsample" the nodes needed
-        #     for subfilter in self.spInfo["Filters"]:
-        #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
-        #     print("upsampled nodes")
-        #     self.spInfo["SampleRate"] = sampleRate
+        # However, wind adjustments are tested and hardcoded for
+        # 5th level nodes, and would break after this
+        # (5th lvl effectively becomes 6th lvl then).
+        # TODO this might be worth addressing at some point.
+        if not wind:
+            if fsOut == 2*sampleRate:
+                print("Adjusting nodes for upsampling to", fsOut)
+                for filter in self.spInfo:
+                    for subfilter in filter["Filters"]:
+                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                # Don't want to resample again, so fsTarget = fsIn
+                fsOut = sampleRate
+            elif fsOut == 4*sampleRate:
+                print("Adjusting nodes for upsampling to", fsOut)
+                # same. Wouldn't recommend repeating for larger ratios than 4x
+                for filter in self.spInfo:
+                    for subfilter in filter["Filters"]:
+                        downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
+                # Don't want to resample again, so fsTarget = fsIn
+                fsOut = sampleRate
+            # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+            # elif sampleRate == 2*fsOut:
+            #     # don't actually downsample audio, just "upsample" the nodes needed
+            #     for subfilter in self.spInfo["Filters"]:
+            #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+            #     print("upsampled nodes")
+            #     self.spInfo["SampleRate"] = sampleRate
 
         denoisedData = self.preprocess(data, sampleRate, fsOut, d=d, fastRes=True)
 
@@ -299,6 +304,14 @@ class WaveletSegment:
             return
         else:
             subfilter = self.spInfo["Filters"][0]
+
+        # verify that the provided window will result in an integer
+        # number of WCs at any level <=5
+        estWCperWindow = math.ceil(window * self.spInfo['SampleRate']/32)
+        estrealwindow = estWCperWindow / self.spInfo['SampleRate']*32
+        if estrealwindow!=window:
+            print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
+            return
 
         # 1. read wavs and annotations into self.annotation, self.audioList
         self.filenames = []
@@ -1069,10 +1082,27 @@ class WaveletSegment:
         Return: ndarray of 1/0 annotations for each of T windows
         """
 
+        # Verify that the provided window will result in an integer
+        # number of WCs at any level <=5.
+        # This isn't necessary for detection, but makes life easier.
+        # Currently, only needed if using wind adjustment
+        # with nodes at different levels (not clear how to adjust then).
+        # (I.e. for any filters w/ any 4th lvl nodes, as wind adj is
+        # hardcoded to use 5th lvl nodes anyway).
         if wind:
-            print("identifying wind nodes...")
+            # all nodes will be needed for wind adjustment
+            dsratio = 2**5
+            # for not-wind: dsratio = 2**math.floor(math.log2(max(nodelist)+1))
+            nodefs = wf.treefs/dsratio
+            estWCperWindow = math.ceil(window * nodefs)
+            estrealwindow = estWCperWindow / nodefs
+            if estrealwindow!=window:
+                print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
+                raise
+
+        if wind:
             # Estimate wind adjustment levels for each window x target node.
-            from scipy.stats import theilslopes
+            print("identifying wind nodes...")
 
             datalen = math.ceil(len(wf.tree[0])/wf.treefs/window)
 
@@ -1092,32 +1122,22 @@ class WaveletSegment:
                 wind_nodes.append(node)
                 windnodecenters.append(nodecenter)
 
-            # extract energies from all nodes and calculate wind levels
-            # in each target node, over all time windows
+            # Regression y: extract energies from all nodes
             print("extracting wind node energy...")
             windE = np.zeros((datalen, len(wind_nodes)))
             for node_ix in range(len(wind_nodes)):
                 node = wind_nodes[node_ix]
-
-                # Regression y - node WC powers
-                windE[:, node_ix], windwindow = wf.extractE(node, window)
-                # TODO if the requested window size corresponds to non-int number of WCs
-                # for one node, but not for another (at a different level),
-                # it is difficult to map wind noise estimates to all target nodes.
-                # Should fix that.
-                # Currently just throw an error preemptively
-                if windwindow!=window:
-                    print("ERROR: window sizes %f and %f do not match at node %d", windwindow, window, node)
-                    raise
+                windE[:, node_ix], _ = wf.extractE(node, window)
 
             # For oversubtraction, roughly estimate background level
             # from 10% quietest frames in each node:
-            oversubalpha = 1.2
-            print("Will oversubtract with alpha=", oversubalpha)
+            # TODO optimize all this to avoid re-extracting same nodes
+            OVERSUBALPHA = 1.0
+            print("Will oversubtract with alpha=", OVERSUBALPHA)
             rootE, _ = wf.extractE(0, window, wpantialias=False)
             numframes = round(0.1*len(rootE))
             quietframes = np.argpartition(rootE, numframes)[:numframes]
-            bgpow = np.zeros(len(nodelist))   # TODO optimize all this
+            bgpow = np.zeros(len(nodelist))
             for node_ix in range(len(nodelist)):
                 E, _ = wf.extractE(nodelist[node_ix], window, wpantialias=True)
                 bgpow[node_ix] = np.mean(np.log(E[quietframes]))
@@ -1130,7 +1150,6 @@ class WaveletSegment:
             windE = np.log(windE)
             for w in range(datalen):
                 regy = windE[w, :]
-                # slope, inter, cilo, ciup = theilslopes(regy, regx)
                 # print("Regression results: beta %.4f, alpha %.4f" %(slope, inter))
                 pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
                 for node_ix in range(len(nodelist)):
@@ -1139,19 +1158,17 @@ class WaveletSegment:
                         delta = wf.treefs/128   # half width of a leaf node band = Fs/2/numnodes/2
                         f1 = np.exp(tgtnodecenters[node_ix]) - delta
                         f2 = np.exp(tgtnodecenters[node_ix]) + delta
-                        # pred[w, node_ix] = inter + np.log((f1**slope + f2**slope)/2)
                         pred1 = pol(np.log(f1))
                         pred2 = pol(np.log(f2))
                         # oversubtraction:
-                        pred1 = (pred1 - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
-                        pred2 = (pred2 - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
+                        pred1 = (pred1 - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
+                        pred2 = (pred2 - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
                         pred[w, node_ix] = np.log((np.exp(pred1) + np.exp(pred2))/2)
                     else:
-                        # pred[w, node_ix] = tgtnodecenters[node_ix] * slope + inter
                         # Basic cubic fit:
                         pred[w, node_ix] = pol(tgtnodecenters[node_ix])
                         # Oversubtraction:
-                        pred[w, node_ix] = (pred[w, node_ix] - bgpow[node_ix])*oversubalpha + bgpow[node_ix]
+                        pred[w, node_ix] = (pred[w, node_ix] - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
                 # print("Predictions (log): ", pred[w,:])
             # TODO would probably be faster to predict all nodes and then average
             # to obtain upper level nodes, but difficult to keep track of nodes then.
@@ -1169,12 +1186,6 @@ class WaveletSegment:
             # Returns E: vector of energies
             E, realwindow = wf.extractE(node, window, wpantialias=True)
 
-            # TODO currently throws an error if realized window doesn't match
-            # over all the wavelets. Should somehow adapt the other parts to allow that
-            if realwindow!=window:
-                print("ERROR: chosen window size does not correspond to integer num of WCs at node %d. Dealing with this is not implemented currently." % node)
-                raise
-
             # Convert max segment length from s to realized windows
             # (segments exceeding this length will be marked as 'n')
             realmaxlen = math.ceil(maxlen / realwindow)
@@ -1188,7 +1199,10 @@ class WaveletSegment:
                 print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))
                 # TODO a minimum is set here to avoid log 0. think about this
                 # print("raw E:", E[250:350])
-                E = np.maximum(sigma2, E - pred[:, node_ix] + sigma2)
+                # ---- LINEAR??
+                # E = np.maximum(sigma2, E - pred[:, node_ix] + sigma2)
+                # ---- LOG SP SUB
+                E = sigma2 * np.maximum(1, E / pred[:, node_ix])
                 # print("est wind:", pred[250:350, node_ix])
                 print("E: ", E[250:350]-sigma2)
 
