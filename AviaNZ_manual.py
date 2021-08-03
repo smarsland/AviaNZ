@@ -2290,30 +2290,34 @@ class AviaNZ(QMainWindow):
 
         # plot estimated wind and signal levels for a pre-set node
         if self.extra == "Wind adjustment":
+            TGTSAMPLERATE = 4000
+            minchpwin = 32/TGTSAMPLERATE
+            chpwin = round(0.5/minchpwin)*minchpwin
+            print("Will use window of", chpwin, "s")
             # resample and generate WP w/ all nodes for the current page
-            if self.sampleRate != 16000:
-                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+            if self.sampleRate != TGTSAMPLERATE:
+                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, TGTSAMPLERATE)
             else:
                 datatoplot = self.audiodata
-            WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=16000)
+            WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
-            node_freqs = [sum(WaveletFunctions.getWCFreq(n, 16000))/2 for n in range(31, 63)]
+            node_freqs = [sum(WaveletFunctions.getWCFreq(n, TGTSAMPLERATE))/2 for n in range(31, 63)]
 
-            xs = np.arange(0, self.datalengthSec, 0.5)
+            xs = np.arange(0, self.datalengthSec, chpwin)
             datalen = len(xs)
 
             # extract energies from each leaf node
             Es = np.zeros((datalen, 32))
             i = 0
             for node in range(31, 63):
-                E, _ = WF.extractE(node, 0.5)
+                E, _ = WF.extractE(node, chpwin)
                 Es[:,i] = E[:datalen]
                 i += 1
                 print("node %d extracted" % node)
 
             # extract unadjusted signal energy
-            tgt_node = 45-31
+            tgt_node = 34-31
             Es = np.log(Es)
             sig_lvl = Es[:,tgt_node]
 
@@ -2324,7 +2328,7 @@ class AviaNZ(QMainWindow):
 
             # select 10 % frames with lowest overall energy:
             # (note that root node does not need downsampling)
-            bgpow, _ = WF.extractE(0, 0.5, wpantialias=False)
+            bgpow, _ = WF.extractE(0, chpwin, wpantialias=False)
             numframes = round(0.1*len(bgpow))
             quietframes = np.argpartition(bgpow, numframes)[:numframes]
             # From these, determine "background level" for the target nodes:
@@ -2358,14 +2362,17 @@ class AviaNZ(QMainWindow):
                 # fits an adjustment model based on energies, nodecenters,
                 # excluding tgt node.
                 regy = np.delete(energies, tgt)
-                regy = np.delete(regy, 46-31)
-                regy = np.delete(regy, 45-31)
+                # regy = np.delete(regy, 46-31)
                 regx = np.delete(nodecenters, tgt)
-                regx = np.delete(regx, 46-31)
-                regx = np.delete(regx, 45-31)
-                # remove two highest nodes as they have filtering artefacts
-                # TODO ideally this should drop extreme nodes for any SR
-                freqmask = np.where(np.logical_and(regx<6000, regx>150))
+                # regx = np.delete(regx, 46-31)
+
+                # remove two extreme nodes as they have filtering artifacts
+                regx = np.delete(regx, 16)
+                regx = np.delete(regx, 0)
+                regy = np.delete(regy, 16)
+                regy = np.delete(regy, 0)
+                # Drop nodes that are too high outside wind freq range
+                freqmask = np.where(regx<6000)
 
                 regy = regy[freqmask]
                 regx = np.log(regx[freqmask])
@@ -5054,7 +5061,8 @@ class AviaNZ(QMainWindow):
                 else:
                     ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=settings["wind"])
+                wind = int(settings["wind"]) # TODO enable 0/1/2 methods. for now uses only 0=none or 1=OLS interp
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=wind)
                 # Or if no params are passed, they will be read from the filter file TimeRange:
                 # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
 
