@@ -51,7 +51,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
         # TODO: convert any communication w/ batchProc from this thread
         # to signals, or avoid communicating entirely
-        self.batchProc = AviaNZ_batch.BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+        self.batchProc = AviaNZ_batch.BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=0)
 
         self.batchThread = QThread()
         self.batchThread.started.connect(self.batchProc.detect)
@@ -122,7 +122,8 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_timeEnd = QTimeEdit()
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
-        self.w_wind = QCheckBox("Add wind filter")
+        self.w_wind = QComboBox()
+        self.w_wind.addItems(["No wind filter", "Simple wind filter", "Robust wind filter"])
 
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
@@ -284,7 +285,8 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.maxlen = int(self.maxlen.value()) / 1000
         self.batchProc.species = self.species
         self.batchProc.dirName = self.dirName
-        self.batchProc.wind = self.w_wind.isChecked()
+        self.batchProc.wind = self.w_wind.currentIndex()
+        print("Wind set to", self.batchProc.wind)
         self.batchThread.start()  # a signal connected to batchProc.detect()
 
     def check_msg(self,title,text):
@@ -510,7 +512,7 @@ class AviaNZ_batchWindow(QMainWindow):
         if currname == "NZ Bats" or currname == "NZ Bats_NP":
             self.addSp.setEnabled(False)
             self.addSp.setToolTip("Bat recognisers cannot be combined with others")
-            self.w_wind.setChecked(False)
+            self.w_wind.setCurrentIndex(0)
             self.w_wind.setEnabled(False)
             self.w_wind.setToolTip("Filter not applicable to bats")
         else:

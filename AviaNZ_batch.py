@@ -42,7 +42,7 @@ class AviaNZ_batchProcess():
     # Also called by the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=0):
         # read config and filters from user location
         # recogniser - filter file name without ".txt"
         self.configdir = configdir
@@ -469,17 +469,6 @@ class AviaNZ_batchProcess():
         post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
         self.makeSegments(self.segments, post.segments)
 
-    def useWindF(self, flow, fhigh):
-        """
-        Check if the wind filter is appropriate for this species/call type.
-        Return true if wind filter target band 50-500 Hz does not overlap with flow-fhigh Hz.
-        """
-        if 50 < fhigh and 500 > flow:
-            print('Skipping wind filter...')
-            return False
-        else:
-            return True
-
     def detectFile(self, speciesStr, filters):
         """ Actual worker for a file in the detection loop.
             Does not return anything - for use with external try/catch
@@ -527,7 +516,7 @@ class AviaNZ_batchProcess():
                 # minlen = int(self.minlen.value())/1000
                 # maxlen = int(self.maxlen.value())/1000
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
-                if self.wind:
+                if self.wind>0:
                     post.wind()
                 post.joinGaps(self.maxgap)
                 post.deleteShort(self.minlen)
@@ -552,7 +541,7 @@ class AviaNZ_batchProcess():
             else:
                 if self.method != "Click" and self.method != "Bats":
                     # read in the page and resample as needed
-                    self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
+                    self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
 
                 data_test = []
                 click_label = 'None'
@@ -570,8 +559,8 @@ class AviaNZ_batchProcess():
                             # note: using 'recaa' mode = partial antialias
                             thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
                         elif filters[speciesix]["method"]=="chp":
-                            # note that only allowing alg 2 now
-                            thisPageSegs = self.ws.waveletSegmentChp(speciesix, alg=2)
+                            # note that only allowing alg2 = nuisance-robust chp detection
+                            thisPageSegs = self.ws.waveletSegmentChp(speciesix, alg=2, wind=self.wind)
                         else:
                             print("ERROR: unrecognized method", filters[speciesix]["method"])
                             raise Exception
@@ -719,7 +708,7 @@ class AviaNZ_batchProcess():
                             self.makeSegments(self.segments, postsegs, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
     def postProcFull(self, segments, spInfo, filtix, start, end, CNNmodel):
-        """ Full bird-style postprocessing (CNN, wind, joinGaps...)
+        """ Full bird-style postprocessing (CNN, joinGaps...)
             segments: list of segments over calltypes
             start, end: start and end of this page, in samples
             CNNmodel: None or a CNN
@@ -730,11 +719,6 @@ class AviaNZ_batchProcess():
                             segments=segments[filtix], subfilter=subfilter,
                             CNNmodel=CNNmodel, cert=50)
         print("Segments detected after WF: ", len(segments[filtix]))
-
-        # Wind detection. Only do for standard wavelet filter currently:
-        if "method" not in spInfo or spInfo["method"]=="wv":
-            if self.wind and self.useWindF(subfilter['FreqRange'][0],subfilter['FreqRange'][1]):
-                post.wind()
 
         if CNNmodel:
             print('Post-processing with CNN')
@@ -752,6 +736,12 @@ class AviaNZ_batchProcess():
         # delete short segments, if requested:
         if subfilter['TimeRange'][0]>0:
             post.deleteShort(minlength=subfilter['TimeRange'][0])
+
+
+        # TODO TMP: split and rejoin pieces to match changepoints paper
+        if "PostResolution" in subfilter:
+            post.joinGaps(subfilter["PostResolution"])
+            post.splitLong(subfilter["PostResolution"])
 
         # adjust segment starts for 15min "pages"
         if start != 0:

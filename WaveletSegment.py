@@ -159,7 +159,7 @@ class WaveletSegment:
         print("--- Wavelet segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, wind=False):
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, wind=0):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
@@ -169,7 +169,7 @@ class WaveletSegment:
             4. window: wavelets will be merged in groups of this size (s) before analysis
             5. maxlen: maximum allowed length (s) of signal segments
               3-5 can be None, in which case they are retrieved from self.spInfo.
-            6. adjust for wind?
+            6. adjust for wind? 0=no, 1=interpolate by OLS, 2=interpolate by quantreg
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -1066,7 +1066,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, alpha, maxlen, window=1, alg=1, wind=False):
+    def detectCallsChp(self, wf, nodelist, alpha, maxlen, window=1, alg=1, wind=0):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
@@ -1077,7 +1077,7 @@ class WaveletSegment:
         maxlen - maximum allowed signal segment length, in s
         window - energy will be calculated over these windows, in s
         alg - standard (1) or with nuisance segments (2)
-        wind - adjust for wind?
+        wind - adjust for wind? 0=no, 1=interpolate by OLS, 2=interpolate by QR
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
@@ -1100,14 +1100,11 @@ class WaveletSegment:
                 print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
                 raise
 
+        # Estimate wind adjustment levels for each window x target node.
         if wind:
-            # Estimate wind adjustment levels for each window x target node.
-            print("identifying wind nodes...")
-
-            datalen = math.ceil(len(wf.tree[0])/wf.treefs/window)
-
             # identify wind nodes, and calculate
             # regression x - node freq centers
+            print("identifying wind nodes...")
             wind_nodes = []
             windnodecenters = []
             for node in range(31, 63):  # only use leaf nodes when estimating wind
@@ -1116,14 +1113,17 @@ class WaveletSegment:
                 # target node can be 1 level higher than this node, so check for that too
                 if (node-1)//2 in nodelist:
                     continue
+                if node==31 or node==47:  # skip extreme nodes with filtering artifacts
+                    continue
                 nodecenter = sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2
-                if nodecenter>=5500:  # skip high freqs when estimating wind
+                if nodecenter>=6000:  # skip high freqs when estimating wind
                     continue
                 wind_nodes.append(node)
                 windnodecenters.append(nodecenter)
 
             # Regression y: extract energies from all nodes
             print("extracting wind node energy...")
+            datalen = math.floor(len(wf.tree[0])/wf.treefs/window)
             windE = np.zeros((datalen, len(wind_nodes)))
             for node_ix in range(len(wind_nodes)):
                 node = wind_nodes[node_ix]
@@ -1142,6 +1142,7 @@ class WaveletSegment:
                 E, _ = wf.extractE(nodelist[node_ix], window, wpantialias=True)
                 bgpow[node_ix] = np.mean(np.log(E[quietframes]))
 
+            # TODO add different regr types for wind==1 and 2 here
 
             # for each window, interpolate wind (log) energy in each target node:
             pred = np.zeros((datalen, len(nodelist)))
@@ -1195,20 +1196,18 @@ class WaveletSegment:
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
 
             if wind:
+                # ---- LOG SP SUB ----
                 # retrieve and adjust for the predicted wind strength
                 print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))
-                # TODO a minimum is set here to avoid log 0. think about this
-                # print("raw E:", E[250:350])
-                # ---- LINEAR??
-                # E = np.maximum(sigma2, E - pred[:, node_ix] + sigma2)
-                # ---- LOG SP SUB
-                E = sigma2 * np.maximum(1, E / pred[:, node_ix])
-                # print("est wind:", pred[250:350, node_ix])
-                print("E: ", E[250:350]-sigma2)
+                E = np.maximum(1, E / pred[:, node_ix])
+                # This implicitly normalizes to sigma2=1
+            else:
+                # just normalize, same as passing sigma2 to the detectors
+                E = E / sigma2
 
             # sqrt because the detector squares the data itself (sign not important)
             # Note that no transformation is applied otherwise (i.e. linear, not log scale)
-            E = np.sqrt(E/sigma2)
+            E = np.sqrt(E)
 
             # analyze by our algorithms.
             # returns a matrix of n x [s, e, type]
