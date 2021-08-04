@@ -250,6 +250,77 @@ class SignalProc:
         else:
             return (f-self.minFreqShow) * sgy / (self.maxFreqShow - self.minFreqShow)
 
+    # SRM: TO TEST **
+    def convertHztoMel(self,f):
+        return 1125*np.log(1+f/700)
+        #return 2595*np.log10(1+f/700)
+
+    def convertMeltoHz(self,m):
+        return 700*(np.exp(m/1125)-1)
+        #return 700*(10**(m/2595)-1)
+
+    def convertHztoBark(self,f):
+        # TODO: Currently doesn't work on arrays
+        b = (26.81*f)/(1960+f) -0.53
+        if b<2:
+            b += 0.15/(2-b)
+        elif b>20.1:
+            b += 0.22*(b-20.1)
+        #inds = np.where(b<2)
+        #print(inds)
+        #b[inds] += 0.15/(2-b[inds])
+        #inds = np.where(b>20.1)
+        #b[inds] += 0.22*(b[inds]-20.1)
+        return b
+
+    def convertBarktoHz(self,b):
+        inds = np.where(b<2)
+        b[inds] = (b[inds]-0.3)/0.85
+        inds = np.where(b>20.1)
+        b[inds] = (b[inds]+4.422)/1.22
+        return 1960*((b+0.53)/(26.28-b))
+
+    def mel_filter(self,filter='mel',nfilters=40,minfreq=0,maxfreq=None,normalise=True):
+        # Transform the spectrogram to mel or bark scale
+        if maxfreq is None:
+            maxfreq = self.sampleRate/2
+        print(filter,nfilters,minfreq,maxfreq,normalise)
+
+        if filter=='mel':
+            filter_points = np.linspace(self.convertHztoMel(minfreq), self.convertHztoMel(maxfreq), nfilters + 2)  
+            bins = self.convertMeltoHz(filter_points)
+        elif filter=='bark':
+            filter_points = np.linspace(self.convertHztoBark(minfreq), self.convertHztoBark(maxfreq), nfilters + 2)  
+            bins = self.convertBarktoHz(filter_points)
+        else:
+            print("ERROR: filter not known",filter)
+            return(1)
+
+        nfft = np.shape(self.sg)[1]
+        freq_points = np.linspace(minfreq,maxfreq,nfft)
+
+        filterbank = np.zeros((nfft,nfilters))
+        for m in range(nfilters):
+            # Find points in first and second halves of the triangle
+            inds1 = np.where((freq_points>=bins[m]) & (freq_points<=bins[m+1]))
+            inds2 = np.where((freq_points>=bins[m+1]) & (freq_points<=bins[m+2]))
+            # Compute their contributions
+            filterbank[inds1,m] = (freq_points[inds1] - bins[m]) / (bins[m+1] - bins[m])   
+            filterbank[inds2,m] = (bins[m+2] - freq_points[inds2]) / (bins[m+2] - bins[m+1])             
+
+        if normalise:
+            # Normalise to unit area if desired
+            norm = filterbank.sum(axis=0)
+            norm = np.where(norm==0,1,norm)
+            filterbank /= norm
+
+        return filterbank
+
+    def convertToMel(self,filter='mel',nfilters=40,minfreq=0,maxfreq=None,normalise=True):
+        filterbank = self.mel_filter(filter,nfilters,minfreq,maxfreq,normalise)
+        self.sg = np.dot(self.sg,filterbank)
+    # ====
+
     def setWidth(self,window_width,incr):
         # Does what it says. Called when the user modifies the spectrogram parameters
         self.window_width = window_width
@@ -295,7 +366,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType=None,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -311,9 +382,6 @@ class SignalProc:
         #log_S = librosa.amplitude_to_db(S, ref=np.max)
         #self.sg = librosa.pcen(S * (2**31))
         #return self.sg.T
-        if sgType is None:
-            sgType = 'Standard'
-
         if window_width is None:
             window_width = self.window_width
         if incr is None:
@@ -443,13 +511,18 @@ class SignalProc:
             gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
 
+        if sgScale == 'Mel Frequency':
+           self.convertToMel(filter='mel',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
+        elif sgScale == 'Bark Frequency':
+           self.convertToMel(filter='bark',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
+            
         print(np.max(self.sg),window_width)
         return self.sg
 
-    def normalizedSpec(self, tr="Log"):
+    def normalisedSpec(self, tr="Log"):
         """ Assumes the spectrogram was precomputed.
             Converts it to a scale appropriate for plotting
-            (tr="Log" or tr="Box-Cox" to set the transform).
+            (tr="Log" or Box-Cox" or "Sigmoid" or "PCEN" to set the transform).
         """
         LOG_OFFSET = 1e-7
         if tr=="Log":
@@ -464,6 +537,20 @@ class SignalProc:
             sg = np.abs(sg.flatten())
             sg, lam = boxcox(sg)
             return np.reshape(sg, size)
+        elif tr=="Sigmoid":
+            sig  = 1/(1+np.exp(1.2))
+            return self.sg**sig
+        elif tr=="PCEN":
+            # Per Channel Energy Normalisation (non-trained version) arXiv 1607.05666, arXiv 1905.08352v2
+            gain=0.8
+            bias=10
+            power=0.25
+            t=0.060
+            eps=1e-6
+            s = 1 - np.exp( -self.incr / (t*self.sampleRate))
+            M = signal.lfilter([s],[1,s-1],self.sg)
+            smooth = (eps + M)**(-gain)
+            return (self.sg*smooth+bias)**power - bias**power
         else:
             print("ERROR: unrecognized transformation", tr)
 
