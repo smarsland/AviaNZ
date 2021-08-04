@@ -1,4 +1,6 @@
 
+# coding=latin-1
+
 # SupportClasses_GUI.py
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph

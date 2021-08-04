@@ -138,6 +138,8 @@ class AviaNZ(QMainWindow):
         self.sgEqualLoudness = False
         self.sgType = 'Standard'
         self.sgNorm = 'Log'
+        self.sgScale= 'Linear'
+        self.nfilters = 128
         self.windowType = 'Hann'
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
@@ -1607,15 +1609,15 @@ class AviaNZ(QMainWindow):
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sampleRate, 60))
 
             if self.batmode:
-                # sgRaw was already normalized to 0-1 when loading
+                # sgRaw was already normalised to 0-1 when loading
                 # with 1 being loudest
                 sgRaw = self.sp.sg
                 #self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
                 self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
             else:
                 # Get the data for the main spectrogram
-                sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                self.sg = self.sp.normalizedSpec(self.sgNorm)
+                sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                self.sg = self.sp.normalisedSpec(self.sgNorm)
 
             # ANNOTATIONS: init empty list
             self.segments = Segment.SegmentList()
@@ -3904,7 +3906,7 @@ class AviaNZ(QMainWindow):
         """ Create spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNorm, self.batmode)
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNorm, self.sgScale, int(str(self.nfilters)),self.batmode)
             self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
         # first save the annotations
         self.saveSegments()
@@ -3914,7 +3916,7 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq] = self.spectrogramDialog.getValues()
+        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,self.sgScale,self.nfilters] = self.spectrogramDialog.getValues()
         if (minFreq >= maxFreq):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec_()
@@ -3925,9 +3927,9 @@ class AviaNZ(QMainWindow):
                 print("Warning: only spectrogram freq. range can be changed in BMP mode")
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
-                _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
 
-                self.sg = self.sp.normalizedSpec(self.sgNorm)
+                self.sg = self.sp.normalisedSpec(self.sgNorm)
 
                 # If the size of the spectrogram has changed, need to update the positions of things
                 if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
@@ -4156,8 +4158,8 @@ class AviaNZ(QMainWindow):
             self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
 
             # recalculate spectrogram
-            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.sg = self.sp.normalizedSpec(self.sgNorm)
+            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            self.sg = self.sp.normalisedSpec(self.sgNorm)
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4219,8 +4221,8 @@ class AviaNZ(QMainWindow):
             self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
 
             # recalculate spectrogram
-            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.sg = self.sp.normalizedSpec(self.sgNorm)
+            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            self.sg = self.sp.normalisedSpec(self.sgNorm)
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4279,8 +4281,8 @@ class AviaNZ(QMainWindow):
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
-            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.sg = self.sp.normalizedSpec(self.sgNorm)
+            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            self.sg = self.sp.normalisedSpec(self.sgNorm)
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
@@ -4305,8 +4307,8 @@ class AviaNZ(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.data = self.audiodata
-                    _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                    self.sg = self.sp.normalizedSpec(self.sgNorm)
+                    _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                    self.sg = self.sp.normalisedSpec(self.sgNorm)
 
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
@@ -5165,7 +5167,7 @@ class AviaNZ(QMainWindow):
             # TODO utilize self.sp / SignalProc more here
             sp_temp.data = data1
             sp_temp.sampleRate = sampleRate1
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             indices = self.seg.findCCMatches(sgRaw_temp,sgRaw,thr)
             # scale indices to match with self.samplerate
             indices = [i*self.sampleRate/sampleRate1 for i in indices]
@@ -5200,7 +5202,7 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             # Get the data for the spectrogram
             # TODO utilize self.sp / SignalProc more here
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
             indices = self.seg.findCCMatches(segment,sgRaw,thr)

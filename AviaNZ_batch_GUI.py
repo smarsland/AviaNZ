@@ -1612,7 +1612,7 @@ class AviaNZ_reviewAll(QMainWindow):
                         # Actual loading of the wav/bmp/spectrogram
                         if self.batmode:
                             sp.readBmp(filename, off=x1, len=x2-x1, silent=segix>1)
-                            # sgRaw was already normalized to 0-1 when loading
+                            # sgRaw was already normalised to 0-1 when loading
                             # with 1 being loudest
                             sgRaw = sp.sg
                             sp.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
@@ -1629,7 +1629,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
                             maxsg = max(np.max(sp.sg), maxsg)
-                            sp.sg = sp.normalizedSpec("Log")
+                            sp.sg = sp.normalisedSpec("Log")
 
                         # need to also store unbuffered limits in spec units
                         # (relative to start of segment)
