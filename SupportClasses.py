@@ -693,3 +693,68 @@ class ExcelIO():
                 return 0
         return 1
 
+
+# Quantile regression model
+#
+# Model parameters are estimated using iterated reweighted least squares.
+# Simplified version of statsmodels.regression.quantile_Regression
+# (removed vcov matrix estimation etc.), as well as made compatible
+# with numpy.polynomial callable API.
+#
+# Original author: Vincent Arel-Bundock
+# License: BSD-3
+# Created: 2013-03-19
+class QuantReg():
+    def __init__(self, endog, exog, q=.5, max_iter=500, p_tol=1e-5):
+        """
+        Estimate a quantile regression model using iterative reweighted least
+        squares.
+
+        Parameters
+        ----------
+        endog : array or dataframe
+            endogenous/response variable
+        exog : array or dataframe
+            exogenous/explanatory variable(s)
+        q : float
+            Quantile must be strictly between 0 and 1
+        """
+        # Very much a hardcoded normalization, knowing that X is polynomial features
+        exog = exog * np.asarray([1000, 100, 10, 1])
+
+        # Ignoring rank check as we know X were created by non-linear transf.
+        # exog_rank = np.linalg.matrix_rank(exog)
+        exog_rank = 4
+        n_iter = 0
+        xstar = exog
+
+        beta = np.ones(exog_rank)
+
+        diff = 10
+        while n_iter < max_iter and diff > p_tol:
+            n_iter += 1
+            beta0 = beta
+            xtx = np.dot(xstar.T, exog)
+            xty = np.dot(xstar.T, endog)
+            beta = np.dot(np.linalg.pinv(xtx), xty)
+            resid = endog - np.dot(exog, beta)
+
+            mask = np.abs(resid) < .000001
+            resid[mask] = ((resid[mask] >= 0) * 2 - 1) * .000001
+            resid = np.where(resid < 0, q * resid, (1-q) * resid)
+            resid = np.abs(resid)
+            xstar = exog / resid[:, np.newaxis]
+            diff = np.max(np.abs(beta - beta0))
+
+        if n_iter == max_iter:
+            print("Warning: maximum number of iterations (" + str(max_iter) + ") reached.")
+
+        # un-transform the betas to allow predicting w/o normalizing
+        self.beta = beta * np.asarray([1000, 100, 10, 1])
+
+    def __call__(self, x):
+        """ Predicts for the x value using a polynomial model and self.beta.
+            Really hardcoded to our situation - assumes that .fit() was called previously
+            and reads off model polynomial order based on beta length.
+        """
+        return sum([self.beta[i] * (x**i) for i in range(len(self.beta))])

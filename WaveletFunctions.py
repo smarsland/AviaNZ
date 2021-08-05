@@ -382,7 +382,7 @@ class WaveletFunctions:
 
         # or WCperWindow = math.ceil(WCperWindowFull / dsratio)
         WCperWindow = math.ceil(winsize * nodefs)
-        print("Node %d: %d WCs per window" %(node, WCperWindow))
+        # print("Node %d: %d WCs per window" %(node, WCperWindow))
 
         # realized window size in s - may differ from the requested one if it is not a multiple of 2^j samples
         realwindow = WCperWindow / nodefs
@@ -413,7 +413,7 @@ class WaveletFunctions:
             return np.ndarray()
 
         # Might be useful to track any DC offset
-        print("DC offset = %.3f" % np.mean(C))
+        # print("DC offset = %.3f" % np.mean(C))
 
         # convert into a matrix (seconds x wcs in sec), and get the energy of each row (second)
         E = (C**2).reshape((nwindows, WCperWindow)).mean(axis=1)

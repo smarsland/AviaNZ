@@ -2290,7 +2290,7 @@ class AviaNZ(QMainWindow):
 
         # plot estimated wind and signal levels for a pre-set node
         if self.extra == "Wind adjustment":
-            TGTSAMPLERATE = 4000
+            TGTSAMPLERATE = 16000
             minchpwin = 32/TGTSAMPLERATE
             chpwin = round(0.5/minchpwin)*minchpwin
             print("Will use window of", chpwin, "s")
@@ -2305,6 +2305,7 @@ class AviaNZ(QMainWindow):
             node_freqs = [sum(WaveletFunctions.getWCFreq(n, TGTSAMPLERATE))/2 for n in range(31, 63)]
 
             xs = np.arange(0, self.datalengthSec, chpwin)
+            # xs = xs[:-1] # TODO TMP only for bittern
             datalen = len(xs)
 
             # extract energies from each leaf node
@@ -2317,7 +2318,7 @@ class AviaNZ(QMainWindow):
                 print("node %d extracted" % node)
 
             # extract unadjusted signal energy
-            tgt_node = 34-31
+            tgt_node = 45-31
             Es = np.log(Es)
             sig_lvl = Es[:,tgt_node]
 
@@ -2336,35 +2337,13 @@ class AviaNZ(QMainWindow):
 
             oversubalpha = 1.2
 
-            class PolyRegression(object):
-                def __init__(self, coeffs=None):
-                    self.pol = coeffs
-
-                def fit(self, X, y):
-                    # self.pol = np.polynomial.polynomial.Polynomial.fit(X, y, 3)
-                    self.pol = np.polyfit(np.squeeze(X), y, 3)
-
-                def predict(self, X):
-                    pp = np.poly1d(self.pol)
-                    return(pp(np.squeeze(X)))
-
-                def score(self, X, y):
-                    sc = np.mean((y - self.predict(X))**2)
-                    return(sc)
-
-                def get_params(self, deep=False):
-                    return({'coeffs': self.pol})
-
-                def set_params(self, coeffs=None, random_state=None):
-                    self.pol = coeffs
-
             def calc_wind(energies, nodecenters, tgt):
                 # fits an adjustment model based on energies, nodecenters,
                 # excluding tgt node.
                 regy = np.delete(energies, tgt)
-                # regy = np.delete(regy, 46-31)
+                regy = np.delete(regy, 46-31)
                 regx = np.delete(nodecenters, tgt)
-                # regx = np.delete(regx, 46-31)
+                regx = np.delete(regx, 46-31)
 
                 # remove two extreme nodes as they have filtering artifacts
                 regx = np.delete(regx, 16)
@@ -2378,22 +2357,14 @@ class AviaNZ(QMainWindow):
                 regx = np.log(regx[freqmask])
 
                 # Robust reg
-                def predict(beta, x):
-                    return(beta[0] + beta[1]*x + beta[2]*(x**2) + beta[3]*(x**3))
-                # def residfunc(beta):
-                #     return(regy - predict(beta, regx))
-
-                from statsmodels.regression.quantile_regression import QuantReg
-
+                # NOTE: this is our own QuantReg reimplementation
+                # really tailored to our polynomial fit
+                # TODO see if sklearn model, to be added in v1.0, is any better
                 regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
-
-                res = QuantReg(regy, regx_poly).fit(q=0.2)
-                predR = predict(res.params, np.log(nodecenters[tgt])) + 0.3
+                from SupportClasses import QuantReg
+                pol = QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
+                predR = pol(np.log(nodecenters[tgt]))
                 print(predR)
-
-                # Theil-Sen linear
-                # slope, inter, cilo, ciup = theilslopes(regy, regx)
-                # predR = np.log(nodecenters[tgt])*slope + inter
 
                 # Cubic fit
                 pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
@@ -2406,8 +2377,6 @@ class AviaNZ(QMainWindow):
 
             for w in range(len(xs)):
                 wind_lvlR[w], wind_lvlC[w], wind_lvlCO[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
-            print("tgt", sig_lvl)
-            print("wind poly", wind_lvlC)
 
             self.p_legend = pg.LegendItem()
             self.p_legend.setParentItem(self.p_plot)
@@ -4941,17 +4910,6 @@ class AviaNZ(QMainWindow):
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
         self.segmentDialog.activate.clicked.connect(self.segment)
 
-    def useWindF(self, flow, fhigh):
-        """
-        Check if the wind filter is appropriate for this species/call type.
-        Return true if wind filter target band 50-500 Hz does not overlap with flow-fhigh Hz.
-        """
-        if 50 < fhigh and 500 > flow:
-            print('Skipping wind filter...')
-            return False
-        else:
-            return True
-
     def segment(self):
         """ Listener for the segmentation dialog. Calls the relevant segmenter.
         """
@@ -5043,7 +5001,7 @@ class AviaNZ(QMainWindow):
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
 
-                # TODO New style wind denoising
+                # TODO New style wind denoising NOT IMPLEMENTED HERE
                 if settings["wind"]:
                     ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
                     # TODO
@@ -5056,15 +5014,11 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                if settings["wind"]:
-                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
-                else:
-                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
                 # using all passed params:
-                wind = int(settings["wind"]) # TODO enable 0/1/2 methods. for now uses only 0=none or 1=OLS interp
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=wind)
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, wind=settings["wind"])
                 # Or if no params are passed, they will be read from the filter file TimeRange:
-                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
+                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1, wind=settings["wind"])
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5100,7 +5054,7 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if settings["windold"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
+                    if settings["windold"]:
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
