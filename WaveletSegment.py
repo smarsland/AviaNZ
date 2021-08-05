@@ -29,6 +29,7 @@ import Segment
 from ext import ce_denoise as ce
 from ext import ce_detect
 from itertools import combinations
+from SupportClasses import QuantReg
 
 
 class WaveletSegment:
@@ -1100,7 +1101,7 @@ class WaveletSegment:
                 print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
                 raise
 
-        # Estimate wind adjustment levels for each window x target node.
+        # Estimate wind noise levels for each window x target node.
         if wind:
             # identify wind nodes, and calculate
             # regression x - node freq centers
@@ -1142,17 +1143,34 @@ class WaveletSegment:
                 E, _ = wf.extractE(nodelist[node_ix], window, wpantialias=True)
                 bgpow[node_ix] = np.mean(np.log(E[quietframes]))
 
-            # TODO add different regr types for wind==1 and 2 here
-
             # for each window, interpolate wind (log) energy in each target node:
             pred = np.zeros((datalen, len(nodelist)))
             regx = np.log(windnodecenters)  # NOTE that here and further centers are in log(freq)!
+            qrbiasadjust = 0
+            # need to prepare polynomial features manually for non-OLS methods
+            # and also add an adjustment factor to QR, calculated assuming
+            # quantile 0.2 and roughly 0.1-0.2 s windows
+            if wind==2:
+                regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
+                # TODO ideally this should be based on the actual number of WCs in the window
+                if window<=0.1:
+                    qrbiasadjust = 0.4
+
             tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
             windE = np.log(windE)
             for w in range(datalen):
                 regy = windE[w, :]
-                # print("Regression results: beta %.4f, alpha %.4f" %(slope, inter))
-                pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
+                # ---- REGRESSION IS DONE HERE ----
+                if wind==1:
+                    pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
+                elif wind==2:
+                    # TODO sklearn will add quantreg in v1.0, see if it is any better
+                    pol = QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
+                else:
+                    print("ERROR: unrecognized wind adjustment %s" % wind)
+                    raise
+
+                # Interpolate using the fitted model:
                 for node_ix in range(len(nodelist)):
                     # for higher level nodes, need to (linearly) average the nearest predictions:
                     if nodelist[node_ix] in range(15, 31):
@@ -1166,7 +1184,7 @@ class WaveletSegment:
                         pred2 = (pred2 - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
                         pred[w, node_ix] = np.log((np.exp(pred1) + np.exp(pred2))/2)
                     else:
-                        # Basic cubic fit:
+                        # Straightforward for 5th lvl nodes
                         pred[w, node_ix] = pol(tgtnodecenters[node_ix])
                         # Oversubtraction:
                         pred[w, node_ix] = (pred[w, node_ix] - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
@@ -1175,7 +1193,7 @@ class WaveletSegment:
             # to obtain upper level nodes, but difficult to keep track of nodes then.
 
             # convert back to (linear) energies:
-            pred = np.exp(pred)
+            pred = np.exp(pred+qrbiasdjust)
 
         # Compute the number of samples in a window -- species specific
         detected = np.empty((0,3))
