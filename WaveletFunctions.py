@@ -144,7 +144,7 @@ class WaveletFunctions:
     def ShannonEntropy(self,s):
         """ Compute the Shannon entropy of data
         """
-        e = s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
+        e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
         return np.sum(e)
 
     def BestLevel(self,maxLevel=None):
@@ -157,14 +157,14 @@ class WaveletFunctions:
         allnodes = range(2 ** (maxLevel + 1) - 1)
 
         previouslevelmaxE = self.ShannonEntropy(self.data)
-        self.WaveletPacket(allnodes, 'symmetric', aaWP=False, antialiasFilter=True)
+        self.WaveletPacket(allnodes, 'symmetric', antialias=False, antialiasFilter=True)
 
         level = 1
-        currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(1,3)])
+        currentlevelmaxE = np.min([self.ShannonEntropy(self.tree[n][::2]) for n in range(1,3)])
         while currentlevelmaxE < previouslevelmaxE and level<maxLevel:
             previouslevelmaxE = currentlevelmaxE
             level += 1
-            currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(2**level-1, 2**(level+1)-1)])
+            currentlevelmaxE = np.min([self.ShannonEntropy(self.tree[n][::2]) for n in range(2**level-1, 2**(level+1)-1)])
         return level
 
     def BestTree(self,wp,threshold,costfn='threshold'):
@@ -499,7 +499,7 @@ class WaveletFunctions:
         print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, costfn %s" % (thresholdType, thrMultiplier, maxLevel, costfn))
         opstartingtime = time.time()
 
-        ADJBLOCKLEN = 0.5  # block length in s to be used when estimating adj
+        ADJBLOCKLEN = 0.15  # block length in s to be used when estimating adj
 
         if maxLevel == 0:
             self.maxLevel = self.BestLevel()
@@ -507,17 +507,17 @@ class WaveletFunctions:
         else:
             self.maxLevel = maxLevel
 
-        datalen = len(self.tree[0])
-
         # Create wavelet decomposition. Note: recommend full AA here
         allnodes = range(2 ** (self.maxLevel + 1) - 1)
         self.WaveletPacket(allnodes, 'symmetric', aaWP, antialiasFilter=True)
         print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
+        datalen = len(self.tree[0])
+
         # Determine the best basis, or use all leaves ("fixed")
         # NOTE: nodes must be sorted here, very important!
         if costfn=="fixed":
-            bestleaves = list(range(2**maxLevel-1,2**(maxLevel+1)-1))
+            bestleaves = list(range(2**self.maxLevel-1,2**(self.maxLevel+1)-1))
         else:
             # NOTE: using same MAD threshold for basis selection.
             # it isn't even needed if entropy costfn is used here
@@ -552,7 +552,7 @@ class WaveletFunctions:
             # Here we round it to obtain integer number of WCs:
             minwin = 32/self.treefs
             blocklen = round(ADJBLOCKLEN/minwin)*32  # in samples
-            blocklen_s = blocklen * self.treefs  # in s
+            blocklen_s = blocklen / self.treefs  # in s
 
             # Estimate the thr for each node x block
             numblocks = math.floor(datalen/blocklen)
@@ -582,11 +582,15 @@ class WaveletFunctions:
                     pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
                     for node_ix in range(len(wind_nodes)):
                         node = wind_nodes[node_ix]
-                        threshold[node, t] = pol(regx[node_ix])
-                # for the top node, just use the default MAD estimator
-                threshold[47, :] = np.median(np.abs(self.tree[47])) / 0.6745
+                        threshold[node-31, t] = pol(regx[node_ix])
+                # Threshold so far contains the predicted log-energies
+                # print("Using log2N", math.sqrt(2*np.log(datalen)))
+                threshold = np.sqrt(np.exp(threshold))
 
-                threshold *= thrMultiplier
+                # for the top node, just use the default MAD estimator
+                threshold[47-31, :] = np.median(np.abs(self.tree[47])) / 0.6745
+
+                threshold *= thrMultiplier #* math.sqrt(2*np.log(datalen))
             elif thrfun == "qr":
                 # Create the polynomial features manually
                 regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
@@ -595,6 +599,7 @@ class WaveletFunctions:
         else:
             print("ERROR: unknown threshold estimator ", thrfun)
             return
+        print("made thr", np.shape(threshold))
 
         # Overwrite the WPT with thresholded versions of the leaves
         exit_code = ce.ThresholdNodes2(self.tree, bestleaves, threshold, thresholdType, blocklen)
