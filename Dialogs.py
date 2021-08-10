@@ -1222,6 +1222,9 @@ class Denoise(QDialog):
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
+        self.thrests = QComboBox()
+        self.thrests.addItems(["Constant threshold", "OLS fit", "QR fit"])
+
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
         # self.wavlabel = QLabel("Wavelets")
         if not self.DOC:
@@ -1293,6 +1296,7 @@ class Denoise(QDialog):
         #self.connect(self.undo, SIGNAL('clicked()'), self.undo)
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
+        Box.addWidget(self.thrests)
 
         if not self.DOC:
             Box.addWidget(self.depthlabel)
@@ -1489,12 +1493,19 @@ class Denoise(QDialog):
                 thrType = 'soft'
             else:
                 thrType = 'hard'
-            
+
             if self.depthchoice.isChecked():
                 depth = 0 # "please auto-find best"
             else:
                 depth = int(str(self.depth.text()))
-            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked()]
+
+            if self.thrests.currentText()=="Constant threshold":
+                threst = "const"
+            elif self.thrests.currentText()=="OLS fit":
+                threst = "ols"
+            elif self.thrests.currentText()=="QR fit":
+                threst = "qr"
+            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked(), threst]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 

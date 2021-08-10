@@ -2285,7 +2285,7 @@ class AviaNZ(QMainWindow):
         if self.extra == "Wind adjustment":
             TGTSAMPLERATE = 16000
             minchpwin = 32/TGTSAMPLERATE
-            chpwin = round(0.5/minchpwin)*minchpwin
+            chpwin = round(0.25/minchpwin)*minchpwin
             print("Will use window of", chpwin, "s")
             # resample and generate WP w/ all nodes for the current page
             if self.sampleRate != TGTSAMPLERATE:
@@ -4185,8 +4185,8 @@ class AviaNZ(QMainWindow):
         """
         if self.box1id > -1:
             start, stop = self.listRectanglesa1[self.box1id].getRegion()
-            start = int(start*self.config['incr'])
-            stop = int(stop*self.config['incr'])
+            start = int(start*self.sampleRate)
+            stop = int(stop*self.sampleRate)
         else:
             print("Can't play, no segment selected")
             return
@@ -4195,14 +4195,13 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        alg = "const"
-        # or
-        # alg = "ols"
+        # alg = "const"
+        alg = "ols"
         # alg = "qr"
         thrType = "soft"
         depth = 5   # can also use 0 to autoset
         wavelet = "dmey2"
-        aaRec = False
+        aaRec = True
         aaWP = False
         thr = 2.0  # this one is difficult to set universally...
 
@@ -4219,6 +4218,7 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             # update full audiodata
+            print(start, stop)
             self.sp.data[start : stop] = denoised
             self.audiodata[start : stop] = denoised
 
@@ -4258,7 +4258,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Denoising...")
             # Note: dialog returns all possible parameters
             if not self.DOC:
-                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP] = self.denoiseDialog.getValues()
+                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP,thrfun] = self.denoiseDialog.getValues()
             else:
                 wavelet = "dmey2"
                 [alg, start, end, width] = self.denoiseDialog.getValues()
@@ -4271,10 +4271,12 @@ class AviaNZ(QMainWindow):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP)
+                    # TODO TEMP: fixed cost fn forced
+                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, thrfun=thrfun, costfn="fixed")
                 else:
                     # go with defaults
                     self.sp.data = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
+
             else:
                 # SignalProc will deal with denoising
                 self.sp.denoise(alg, start=start, end=end, width=width)

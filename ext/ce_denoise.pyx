@@ -159,10 +159,13 @@ def ThresholdNodes2(list oldtree, list bestleaves, threshold, str thrtype, int b
     # Input checks
     if blocklen!=0:
         # will split data into T time blocks
-        T = len(oldtree[0]) // blocklen + 1
+        T = len(oldtree[0]) // blocklen
+        if T<1:
+            print("ERROR: data shorter than the block size")
+            return 1
     else:
         # will keep data in a single block
-        T = len(oldtree[0]) // 16000 + 1 # let's say number of seconds
+        T = 1
 
     if np.ndim(threshold)==0:
         threshold = threshold * np.ones((N,T))
@@ -207,6 +210,8 @@ def ThresholdNodes2(list oldtree, list bestleaves, threshold, str thrtype, int b
         return 1
 
     # Main loop
+    print(bestleaves)
+    print(threshold[:,0])
     for node in range(len(oldtree)):
         if node in bestleavesset:
             # then keep & threshold (inplace)
@@ -216,7 +221,14 @@ def ThresholdNodes2(list oldtree, list bestleaves, threshold, str thrtype, int b
             if blocklen==0:
                 ce_thresnode2(<double*> np.PyArray_DATA(oldtree[node]), length, threshold[nodeix,0], thrtype_ce)
             else:
-                ce_thresnode2_block(<double*> np.PyArray_DATA(oldtree[node]), length, blocklen, <double*> np.PyArray_DATA(threshold[nodeix,:]), thrtype_ce)
+                # adjust blocklength for the wavelet downsampling
+                # (assuming last level is not downsampled)
+                if node>0:
+                    nodelvl = np.floor(np.log2(node+1))
+                    blocklen_adj = blocklen // 2**(nodelvl-1)
+                thresarray = np.ascontiguousarray(threshold[nodeix,:])
+                # ce_thresnode2(<double*> np.PyArray_DATA(oldtree[node]), length, threshold[nodeix,0], thrtype_ce)
+                ce_thresnode2_block(<double*> np.PyArray_DATA(oldtree[node]), length, blocklen_adj, <double*> np.PyArray_DATA(thresarray), thrtype_ce)
         else:
             # zero-out all the other nodes
             # NOT USED because current reconstruction already assumes all other nodes are 0.
