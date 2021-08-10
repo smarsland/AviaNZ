@@ -98,6 +98,44 @@ int ce_thresnode2(double *in_array, size_t size, double threshold, int type)
 	}
 }
 
+// Block-threshold a node in a wp tree, in place
+// using thresholds from the threshold array in pieces of blocklen samples
+int ce_thresnode2_block(double *in_array, size_t datalen, size_t blocklen, double *threshold, int type)
+{
+	if(type==2){
+		// Hard thresholding
+		for(size_t bi=0; bi*blocklen<datalen; bi++){
+			size_t endi = bi*(blocklen+1)>datalen ? datalen : bi*(blocklen+1);
+			for(size_t i=bi*blocklen; i<endi; i++){
+				if(fabs(in_array[i]) < threshold[bi]){
+					in_array[i] = 0.0;
+				} else {
+					in_array[i] = in_array[i];
+				}
+			}
+		}
+		return 0;
+	} else if(type==1){
+		// Soft thresholding
+		for(size_t bi=0; bi*blocklen<datalen; bi++){
+			size_t endi = bi*(blocklen+1)>datalen ? datalen : bi*(blocklen+1);
+			for(size_t i=bi*blocklen; i<endi; i++){
+				double tmp = fabs(in_array[i]) - threshold[bi];
+				if(tmp<0){
+					in_array[i] = 0.0;
+				} else if(in_array[i]<0){
+					in_array[i] = -tmp;
+				} else {
+					in_array[i] = tmp;
+				}
+			}
+		}
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
 // Main loop for "energy curve" - expanding envelope around waveform
 void ce_energycurve(double *arrE, double *arrC, size_t N, int M)
 {

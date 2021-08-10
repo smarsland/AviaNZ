@@ -481,21 +481,25 @@ class WaveletFunctions:
         return data
 
 
-    def waveletDenoise(self,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False, costfn='threshold', aaRec=False, aaWP=False, thrfun="c"):
+    def waveletDenoise(self,thresholdType='soft',thrMultiplier=4.5,maxLevel=5, costfn='threshold', aaRec=False, aaWP=False, thrfun="const"):
         """ Perform wavelet denoising.
         Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
         thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the root.
         Data and wavelet are taken from WF object's self.
         Args:
           1. threshold type ('soft'/'hard')
-          2-5. obvious parameters
+          2. threshold multiplier in sigmas
+          3. max level (best basis up to this depth will be chosen)
+          4. cost func for selecting best tree, or "fixed" to use maxLevel leaves
           6. antialias while reconstructing (T/F)
           7. antialias while building the WP ('full'), (T/F)
+          8. threshold estimation ("const"/"ols"/"qr")
         Return: reconstructed signal (ndarray)
         """
-
-        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, costfn))
+        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, costfn %s" % (thresholdType, thrMultiplier, maxLevel, costfn))
         opstartingtime = time.time()
+
+        ADJBLOCKLEN = 0.5  # block length in s to be used when estimating adj
 
         if maxLevel == 0:
             self.maxLevel = self.BestLevel()
@@ -503,66 +507,174 @@ class WaveletFunctions:
         else:
             self.maxLevel = maxLevel
 
-        self.thresholdMultiplier = threshold
+        datalen = len(self.tree[0])
 
-        # Create wavelet decomposition. Note: using full AA here
+        # Create wavelet decomposition. Note: recommend full AA here
         allnodes = range(2 ** (self.maxLevel + 1) - 1)
         self.WaveletPacket(allnodes, 'symmetric', aaWP, antialiasFilter=True)
         print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
-        # Get the threshold
-        det1 = self.tree[2]
-        # Note magic conversion number
-        sigma = np.median(np.abs(det1)) / 0.6745
-        threshold = self.thresholdMultiplier * sigma
-
+        # Determine the best basis, or use all leaves ("fixed")
+        # NOTE: nodes must be sorted here, very important!
+        if costfn=="fixed":
+            bestleaves = list(range(2**maxLevel-1,2**(maxLevel+1)-1))
+        else:
+            # NOTE: using same MAD threshold for basis selection.
+            # it isn't even needed if entropy costfn is used here
+            det1 = self.tree[2]
+            basisThres = thrMultiplier * np.median(np.abs(det1)) / 0.6745
+            bestleaves = ce.BestTree2(self.tree,basisThres,costfn)
+            bestleaves = list(set(bestleaves))
+            print("leaves to keep:", bestleaves)
         print("Checkpoint 2, %.5f" % (time.time() - opstartingtime))
-        # NOTE: node order is not the same
-        # NOTE: threshold isn't needed for Entropy cost fn
-        bestleaves = ce.BestTree2(self.tree,threshold,costfn)
-        print("leaves to keep:", bestleaves)
 
-        # Make a new tree with these in
-        # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
-        # the original tree, it copies the details from wp even though it wasn't asked for them.
-        # Reconstruction with the zeros is different to not reconstructing.
-
-        # Copy thresholded versions of the leaves into the new wpt
-        # NOTE: this version overwrites the provided wp
-        if thrfun == "c":
-            # constant threshold across all levels, nodes and times
-            exit_code = ce.ThresholdNodes2(self, self.tree, bestleaves, threshold, thresholdType)
-        elif thrfun == "l":
-            # threshold level-specific, constant across nodes and times
-            exit_code = ce.ThresholdNodes2(self, self.tree, bestleaves, threshold, thresholdType)
-            # TODO
+        # Estimate the threshold (for each node)
+        if thrfun == "const":
+            # Constant threshold across all levels, nodes and times.
+            # Estimate sd by MAD median of lvl 1 detail coefs.
+            # Note magic conversion number for Gaussian MAD->SD
+            det1 = self.tree[2]
+            sigma = np.median(np.abs(det1)) / 0.6745
+            threshold = thrMultiplier * sigma
+            blocklen = 0
         elif thrfun == "n":
             # threshold node-specific, constant across times
-            # Get the threshold
+            # Estimate the threshold by MAD for each node separately
             threshold = np.zeros(len(bestleaves))
-            bestleaves_sort = list(set(bestleaves))
-            # NOTE: IMPORTANT: bestleaves must be in set-order!!
-            for leavenum in range(len(bestleaves_sort)):
-                node = bestleaves_sort[leavenum]
+            for leavenum in range(len(bestleaves)):
+                node = bestleaves[leavenum]
                 det1 = self.tree[node]
-                # Note magic conversion number
                 sigma = np.median(np.abs(det1)) / 0.6745
-                threshold[leavenum] = self.thresholdMultiplier * sigma
-            exit_code = ce.ThresholdNodes2(self, self.tree, bestleaves, threshold, thresholdType)
+                threshold[leavenum] = thrMultiplier * sigma
+            blocklen = 0
+        elif thrfun == "ols" or thrfun == "qr":
+            # Thr is varying over time blocks, so need to supply block size.
+            # Here we round it to obtain integer number of WCs:
+            minwin = 32/self.treefs
+            blocklen = round(ADJBLOCKLEN/minwin)*32  # in samples
+            blocklen_s = blocklen * self.treefs  # in s
+
+            # Estimate the thr for each node x block
+            numblocks = math.floor(datalen/blocklen)
+            threshold = np.zeros((len(bestleaves), numblocks))
+
+            # Regression X: Extract log center freqs of appropriate nodes
+            # (all 5th lvl leaves except top one which has filter edge effects):
+            wind_nodes = list(range(31, 63))
+            wind_nodes.remove(47)
+            windnodecenters = [sum(getWCFreq(n, self.treefs))/2 for n in wind_nodes]
+            regx = np.log(windnodecenters)
+
+            # Regression Y: Extract log energies from the same nodes
+            print("extracting node energy...")
+            windE = np.zeros((numblocks, len(windnodecenters)))
+            for node_ix in range(len(windnodecenters)):
+                node = wind_nodes[node_ix]
+                windE[:, node_ix], _ = self.extractE(node, blocklen_s)
+            windE = np.log(windE)
+
+            # Will fit the log energies at log center freqs of each node
+            # w/ a smooth interpolator, and then retrieve the smoothed values.
+            if thrfun == "ols":
+                # Fill the thr array w/ OLS estimates
+                for t in range(numblocks):
+                    regy = windE[t, :]
+                    pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
+                    for node_ix in range(len(wind_nodes)):
+                        node = wind_nodes[node_ix]
+                        threshold[node, t] = pol(regx[node_ix])
+                # for the top node, just use the default MAD estimator
+                threshold[47, :] = np.median(np.abs(self.tree[47])) / 0.6745
+
+                threshold *= thrMultiplier
+            elif thrfun == "qr":
+                # Create the polynomial features manually
+                regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
+                # TODO estimate the thr array by QR
+                raise
         else:
-            print("ERROR: unknown threshold type ", thrfun)
+            print("ERROR: unknown threshold estimator ", thrfun)
             return
+
+        # Overwrite the WPT with thresholded versions of the leaves
+        exit_code = ce.ThresholdNodes2(self.tree, bestleaves, threshold, thresholdType, blocklen)
         if exit_code != 0:
             print("ERROR: ThresholdNodes2 exited with exit code ", exit_code)
             return
+        print("Checkpoint 3, %.5f" % (time.time() - opstartingtime))
 
         # Reconstruct the internal nodes and the data
-        print("Checkpoint 3, %.5f" % (time.time() - opstartingtime))
         data = self.tree[0]
-        new_wp = np.zeros(len(data))
+        new_signal = np.zeros(len(data))
         for i in bestleaves:
             tmp = self.reconstructWP2(i, aaRec, True)[0:len(data)]
-            new_wp = new_wp + tmp
+            new_signal = new_signal + tmp
         print("Checkpoint 4, %.5f" % (time.time() - opstartingtime))
 
-        return new_wp
+        return new_signal
+
+
+# Quantile regression model
+#
+# Model parameters are estimated using iterated reweighted least squares.
+# Simplified version of statsmodels.regression.quantile_Regression
+# (removed vcov matrix estimation etc.), as well as made compatible
+# with numpy.polynomial callable API.
+#
+# Original author: Vincent Arel-Bundock
+# License: BSD-3
+# Created: 2013-03-19
+class QuantReg():
+    def __init__(self, endog, exog, q=.5, max_iter=500, p_tol=1e-5):
+        """
+        Estimate a quantile regression model using iterative reweighted least
+        squares.
+
+        Parameters
+        ----------
+        endog : array or dataframe
+            endogenous/response variable
+        exog : array or dataframe
+            exogenous/explanatory variable(s)
+        q : float
+            Quantile must be strictly between 0 and 1
+        """
+        # Very much a hardcoded normalization, knowing that X is polynomial features
+        exog = exog * np.asarray([1000, 100, 10, 1])
+
+        # Ignoring rank check as we know X were created by non-linear transf.
+        # exog_rank = np.linalg.matrix_rank(exog)
+        exog_rank = 4
+        n_iter = 0
+        xstar = exog
+
+        beta = np.ones(exog_rank)
+
+        diff = 10
+        while n_iter < max_iter and diff > p_tol:
+            n_iter += 1
+            beta0 = beta
+            xtx = np.dot(xstar.T, exog)
+            xty = np.dot(xstar.T, endog)
+            beta = np.dot(np.linalg.pinv(xtx), xty)
+            resid = endog - np.dot(exog, beta)
+
+            mask = np.abs(resid) < .000001
+            resid[mask] = ((resid[mask] >= 0) * 2 - 1) * .000001
+            resid = np.where(resid < 0, q * resid, (1-q) * resid)
+            resid = np.abs(resid)
+            xstar = exog / resid[:, np.newaxis]
+            diff = np.max(np.abs(beta - beta0))
+
+        if n_iter == max_iter:
+            print("Warning: maximum number of iterations (" + str(max_iter) + ") reached.")
+
+        # un-transform the betas to allow predicting w/o normalizing
+        self.beta = beta * np.asarray([1000, 100, 10, 1])
+
+    def __call__(self, x):
+        """ Predicts for the x value using a polynomial model and self.beta.
+            Really hardcoded to our situation - assumes that .fit() was called previously
+            and reads off model polynomial order based on beta length.
+        """
+        return sum([self.beta[i] * (x**i) for i in range(len(self.beta))])
