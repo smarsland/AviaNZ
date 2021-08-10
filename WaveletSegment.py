@@ -29,7 +29,6 @@ import Segment
 from ext import ce_denoise as ce
 from ext import ce_detect
 from itertools import combinations
-from SupportClasses import QuantReg
 
 
 class WaveletSegment:
@@ -1165,7 +1164,7 @@ class WaveletSegment:
                     pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
                 elif wind==2:
                     # TODO sklearn will add quantreg in v1.0, see if it is any better
-                    pol = QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
+                    pol = WaveletFunctions.QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
                 else:
                     print("ERROR: unrecognized wind adjustment %s" % wind)
                     raise
@@ -1193,7 +1192,7 @@ class WaveletSegment:
             # to obtain upper level nodes, but difficult to keep track of nodes then.
 
             # convert back to (linear) energies:
-            pred = np.exp(pred+qrbiasdjust)
+            pred = np.exp(pred+qrbiasadjust)
 
         # Compute the number of samples in a window -- species specific
         detected = np.empty((0,3))

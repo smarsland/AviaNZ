@@ -1,6 +1,7 @@
 double ce_getcost(double *in_array, size_t size, double threshold, char costfn, int step);
 double ce_thresnode(double *in_array, double *out_array, size_t size, double threshold, char type);
 int ce_thresnode2(double *in_array, size_t size, double threshold, int type);
+int ce_thresnode2_block(double *in_array, size_t datalen, size_t blocklen, double *threshold, int type);
 void ce_energycurve(double *arrE, double *arrC, size_t N, int M);
 void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau, const double thr);
 // FOR WINDOWS:

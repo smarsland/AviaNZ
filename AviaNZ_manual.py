@@ -792,13 +792,6 @@ class AviaNZ(QMainWindow):
         self.quickDenButton.setToolTip("Denoise segment")
         self.quickDenButton.clicked.connect(self.denoiseSeg)
 
-        # self.quickDenNButton = QtGui.QToolButton()
-        # self.quickDenNButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
-        # self.quickDenNButton.setIconSize(QtCore.QSize(20, 20))
-        # self.quickDenNButton.setToolTip("Denoise segment, node-specific")
-        # self.quickDenNButton.clicked.connect(self.denoiseSegN)
-        # self.quickDenNButton.setEnabled(False)
-
         self.viewSpButton = QtGui.QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
         self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
@@ -2318,7 +2311,7 @@ class AviaNZ(QMainWindow):
                 print("node %d extracted" % node)
 
             # extract unadjusted signal energy
-            tgt_node = 45-31
+            tgt_node = 46-31
             Es = np.log(Es)
             sig_lvl = Es[:,tgt_node]
 
@@ -2341,9 +2334,11 @@ class AviaNZ(QMainWindow):
                 # fits an adjustment model based on energies, nodecenters,
                 # excluding tgt node.
                 regy = np.delete(energies, tgt)
-                regy = np.delete(regy, 46-31)
+                regy = np.delete(regy, 45-31)
+                regy = np.delete(regy, 44-31)
                 regx = np.delete(nodecenters, tgt)
-                regx = np.delete(regx, 46-31)
+                regx = np.delete(regx, 45-31)
+                regx = np.delete(regx, 44-31)
 
                 # remove two extreme nodes as they have filtering artifacts
                 regx = np.delete(regx, 16)
@@ -2361,15 +2356,12 @@ class AviaNZ(QMainWindow):
                 # really tailored to our polynomial fit
                 # TODO see if sklearn model, to be added in v1.0, is any better
                 regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
-                from SupportClasses import QuantReg
-                pol = QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
+                pol = WaveletFunctions.QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
                 predR = pol(np.log(nodecenters[tgt]))
-                print(predR)
 
                 # Cubic fit
                 pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
                 predC = pol(np.log(nodecenters[tgt]))
-                print("cub", predC)
 
                 # oversubtracted cubic
                 predCO = (predC - bgpow)*oversubalpha + bgpow
@@ -4191,10 +4183,10 @@ class AviaNZ(QMainWindow):
             denoises that segment, concats with rest of original DATA,
             and updates the original DATA.
         """
-
         if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-            stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+            start, stop = self.listRectanglesa1[self.box1id].getRegion()
+            start = int(start*self.config['incr'])
+            stop = int(stop*self.config['incr'])
         else:
             print("Can't play, no segment selected")
             return
@@ -4203,31 +4195,32 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        alg = "Wavelets"
+        alg = "const"
+        # or
+        # alg = "ols"
+        # alg = "qr"
         thrType = "soft"
-        depth = 6   # can also use 0 to autoset
+        depth = 5   # can also use 0 to autoset
         wavelet = "dmey2"
-        aaRec = True
-        aaWP = True
+        aaRec = False
+        aaWP = False
         thr = 2.0  # this one is difficult to set universally...
 
+        self.statusLeft.setText("Denoising...")
         with pg.BusyCursor():
             opstartingtime = time.time()
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
-            self.statusLeft.setText("Denoising...")
 
             # extract the piece of audiodata under current segment
-            denoised = self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)]
+            denoised = self.audiodata[start : stop]
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-
-            if alg == "Wavelets":
-                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun="c")
+            denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun=alg, costfn="fixed")
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             # update full audiodata
-            self.sp.data[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
-            self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
+            self.sp.data[start : stop] = denoised
+            self.audiodata[start : stop] = denoised
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
@@ -4245,72 +4238,8 @@ class AviaNZ(QMainWindow):
 
             self.setColourLevels()
 
-        print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
+            print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
         self.statusLeft.setText("Ready")
-
-    def denoiseSegN(self):
-        """ Listener for quickDenoise control button.
-            Extracts a segment from DATA between START and STOP (in ms),
-            denoises that segment, concats with rest of original DATA,
-            and updates the original DATA.
-        """
-
-        if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-            stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-        else:
-            print("Can't play, no segment selected")
-            return
-
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
-            self.stopPlayback()
-
-        # Since there is no dialog menu, settings are preset constants here:
-        alg = "Wavelets"
-        thrType = "soft"
-        depth = 6   # can also use 0 to autoset
-        wavelet = "dmey2"
-        aaRec = True
-        aaWP = True
-        thr = 2.0  # this one is difficult to set universally...
-
-        with pg.BusyCursor():
-            opstartingtime = time.time()
-            print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
-            self.statusLeft.setText("Denoising...")
-
-            # extract the piece of audiodata under current segment
-            denoised = self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)]
-            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-
-            if alg == "Wavelets":
-                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun="n")
-
-            print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
-
-            # update full audiodata
-            self.sp.data[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
-            self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
-
-            # recalculate spectrogram
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.setSpectrogram(sgRaw)
-
-            # Update the ampl image
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
-
-            # Update the spec & overview images.
-            # Does not reset to start if the freqs aren't changed
-            self.redoFreqAxis(self.sp.minFreqShow,self.sp.maxFreqShow, store=False)
-
-            if hasattr(self,'spectrogramDialog'):
-                self.spectrogramDialog.setValues(self.sp.minFreq,self.sp.maxFreq,self.sp.minFreqShow,self.sp.maxFreqShow)
-
-            self.setColourLevels()
-
-        print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
-        self.statusLeft.setText("Ready")
-
 
     def denoise(self):
         """ Listener for the denoising dialog.
