@@ -44,9 +44,9 @@ import sys
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
 @click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
-@click.option('-x', '--width', type=float, help='Width of windows for CNN')
+@click.option('-x', '--mfccthr', type=float, help='MFCC classification threshold')
 @click.argument('command', nargs=-1)
-def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
+def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, mfccthr, command):
     try:
         import platform, os, json, shutil
         from jsonschema import validate
@@ -128,7 +128,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         if batchmode:
             import AviaNZ_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recogniser=recogniser, wind=wind)
+                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recogniser=recogniser, wind=wind, MFCCthreshold=mfccthr)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")

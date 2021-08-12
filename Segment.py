@@ -1262,7 +1262,7 @@ class PostProcess:
         mfcc = spi.uniform_filter1d(mfcc, 3)
         return mfcc
 
-    def classifyMFCC(self, segments):
+    def classifyMFCC(self, segments, threshold=0):
         # import the model
         mfccmodel = np.loadtxt("Filters/model-mfcc.txt")
         #print("Loaded model:", mfccmodel)
@@ -1294,9 +1294,9 @@ class PostProcess:
             pred = np.matmul(mfccmodel, seg_mfcc)
             print("Segment predictions:", pred)
             # if at least 10% predictions are positive, declare a call:
-            if np.quantile(pred, 0.90)>0 and len(np.where(pred>0)[0])>2:
+            if np.quantile(pred, 0.90)>threshold and len(np.where(pred>0)[0])>2:
             # Alternatively:
-            # if np.mean(pred)>0 and len(np.where(pred>0)[0])>2:
+            # if np.mean(pred)>threshold and len(np.where(pred>0)[0])>2:
                 seg_preds[i] = 1
             i += 1
         return seg_preds

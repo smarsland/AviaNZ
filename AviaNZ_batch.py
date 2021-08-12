@@ -42,7 +42,7 @@ class AviaNZ_batchProcess():
     # Also called by the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False, MFCCthreshold=0):
         # read config and filters from user location
         # recogniser - filter file name without ".txt"
         self.configdir = configdir
@@ -53,6 +53,8 @@ class AviaNZ_batchProcess():
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+
+        self.MFCCthreshold = MFCCthreshold
 
         if mode=="GUI":
             self.CLI = False
@@ -640,7 +642,7 @@ class AviaNZ_batchProcess():
         if "MFCCclass" in subfilter:
             # (just dropping certainty here, to pass only seg times)
             postsegs = [seg[0] for seg in post.segments]
-            class_res = post.classifyMFCC(postsegs)
+            class_res = post.classifyMFCC(postsegs, self.MFCCthreshold)
             print("MFCC classification results:", class_res)
             post.segments = [post.segments[ix] for ix in np.where(class_res)[0]]
 

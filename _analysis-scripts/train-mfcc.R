@@ -46,7 +46,7 @@ image(mfccAll)
 cvLasso = cv.glmnet(cbind(mfccAll, interpairsAll), gtAll, alpha=1, family="binomial", maxit=2000)
 plot(cvLasso); cvLasso$lambda.1se  # around 0.0025-0.0035
 regrLasso = glmnet(cbind(mfccAll, interpairsAll), gtAll, alpha=1, maxit=3000,
-                   family="binomial", lambda=cvLasso$lambda.1se)
+                   family="binomial", lambda=cvLasso$lambda[42])
 sum(coef(regrLasso)==0)
 head(coef(regrLasso))
 
