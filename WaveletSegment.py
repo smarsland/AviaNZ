@@ -1033,7 +1033,12 @@ class WaveletSegment:
                 start += inc_sr  # Virginia: corrected
             count += 1
 
-        detected = np.max(detected, axis=1)
+        #print(nw, np.shape(detected))
+        if np.shape(detected)[1]>0:
+            detected = np.max(detected, axis=1)
+        else:
+            detected = np.zeros(nw)
+        #print(detected)
 
         # Virginia: caution. Annotation are 1-sec segments and also detections
         # Otherwise no comparison make sense
