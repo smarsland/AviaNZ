@@ -583,19 +583,23 @@ class WaveletFunctions:
                     for node_ix in range(len(wind_nodes)):
                         node = wind_nodes[node_ix]
                         threshold[node-31, t] = pol(regx[node_ix])
-                # Threshold so far contains the predicted log-energies
-                # print("Using log2N", math.sqrt(2*np.log(datalen)))
-                threshold = np.sqrt(np.exp(threshold))
-
-                # for the top node, just use the default MAD estimator
-                threshold[47-31, :] = np.median(np.abs(self.tree[47])) / 0.6745
-
-                threshold *= thrMultiplier #* math.sqrt(2*np.log(datalen))
             elif thrfun == "qr":
                 # Create the polynomial features manually
-                regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
-                # TODO estimate the thr array by QR
-                raise
+                regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
+                # Fill the thr array w/ QR estimates
+                for t in range(numblocks):
+                    regy = windE[t, :]
+                    pol = QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
+                    for node_ix in range(len(wind_nodes)):
+                        node = wind_nodes[node_ix]
+                        threshold[node-31, t] = pol(regx[node_ix])
+            # Threshold so far contains the predicted log-energies
+            threshold = np.sqrt(np.exp(threshold))
+
+            # for the top node, just use the default MAD estimator
+            threshold[47-31, :] = np.median(np.abs(self.tree[47])) / 0.6745
+
+            threshold *= thrMultiplier
         else:
             print("ERROR: unknown threshold estimator ", thrfun)
             return
