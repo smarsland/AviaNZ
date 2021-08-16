@@ -548,6 +548,7 @@ class WaveletFunctions:
                 threshold[leavenum] = thrMultiplier * sigma
             blocklen = 0
         elif thrfun == "ols" or thrfun == "qr":
+            # Estimation assuming 5th lvl decomposition.
             # Thr is varying over time blocks, so need to supply block size.
             # Here we round it to obtain integer number of WCs:
             minwin = 32/self.treefs
@@ -573,6 +574,10 @@ class WaveletFunctions:
                 windE[:, node_ix], _ = self.extractE(node, blocklen_s)
             windE = np.log(windE)
 
+            # Interpolation X (can be non-5th lvl nodes)
+            bestleafcenters = [sum(getWCFreq(n, self.treefs))/2 for n in bestleaves]
+            interpx = np.log(bestleafcenters)
+
             # Will fit the log energies at log center freqs of each node
             # w/ a smooth interpolator, and then retrieve the smoothed values.
             if thrfun == "ols":
@@ -580,9 +585,8 @@ class WaveletFunctions:
                 for t in range(numblocks):
                     regy = windE[t, :]
                     pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
-                    for node_ix in range(len(wind_nodes)):
-                        node = wind_nodes[node_ix]
-                        threshold[node-31, t] = pol(regx[node_ix])
+                    for node_ix in range(len(interpx)):
+                        threshold[node_ix, t] = pol(interpx[node_ix])
             elif thrfun == "qr":
                 # Create the polynomial features manually
                 regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
@@ -590,14 +594,24 @@ class WaveletFunctions:
                 for t in range(numblocks):
                     regy = windE[t, :]
                     pol = QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
-                    for node_ix in range(len(wind_nodes)):
-                        node = wind_nodes[node_ix]
-                        threshold[node-31, t] = pol(regx[node_ix])
+                    for node_ix in range(len(interpx)):
+                        threshold[node_ix, t] = pol(interpx[node_ix])
             # Threshold so far contains the predicted log-energies
             threshold = np.sqrt(np.exp(threshold))
 
             # for the top node, just use the default MAD estimator
-            threshold[47-31, :] = np.median(np.abs(self.tree[47])) / 0.6745
+            # b/c filtering effects cause deviations from smooth models there
+            # (hardcoded for common levels)
+            if 47 in bestleaves:
+                threshold[47-31, :] = np.median(np.abs(self.tree[47])) / 0.6745
+            elif 95 in bestleaves:
+                threshold[95-63, :] = np.median(np.abs(self.tree[95])) / 0.6745
+            elif 191 in bestleaves:
+                threshold[191-127, :] = np.median(np.abs(self.tree[191])) / 0.6745
+            elif 23 in bestleaves:
+                threshold[23-15, :] = np.median(np.abs(self.tree[23])) / 0.6745
+            elif 11 in bestleaves:
+                threshold[11-7, :] = np.median(np.abs(self.tree[11])) / 0.6745
 
             threshold *= thrMultiplier
         else:

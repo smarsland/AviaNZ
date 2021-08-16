@@ -44,9 +44,10 @@ import sys
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
 @click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
+@click.option('-n', '--denoise', type=str, help='Denoising method')
 @click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
-def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
+def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command, denoise):
     # adapt path to allow this to be launched from wherever
     import sys, os
     if getattr(sys, 'frozen', False):
@@ -166,6 +167,14 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("Testing complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for training")
+                raise
+        elif denoise:
+            import AviaNZ_batch
+            if os.path.isdir(sdir1) and os.path.isdir(sdir2):
+                avianzbatch = AviaNZ_batch.AviaNZ_batchDenoise(configdir=configdir, indir=sdir1, outdir=sdir2, method=denoise)
+                print("Analysis complete, closing AviaNZ")
+            else:
+                print("ERROR: valid input dir (-d) and output dir (-e) are essential for denoising")
                 raise
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):

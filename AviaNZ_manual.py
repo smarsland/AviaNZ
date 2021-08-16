@@ -4218,7 +4218,6 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             # update full audiodata
-            print(start, stop)
             self.sp.data[start : stop] = denoised
             self.audiodata[start : stop] = denoised
 
@@ -4329,7 +4328,10 @@ class AviaNZ(QMainWindow):
         Adds _d to the filename and saves it as a new sound file.
         """
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
+        # TODO TMP: shift invariance for dmey2 introduced for easier quant comparison
+        # (would need to shift differently for 6 & 7 lvl decomps)
+        tosave = np.concatenate((self.audiodata[92:], np.zeros(92)))
+        wavio.write(filename,tosave.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
         msg.exec_()

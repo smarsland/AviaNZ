@@ -25,6 +25,7 @@ import numpy as np
 
 import SignalProc
 import Segment
+import WaveletFunctions
 import WaveletSegment
 import SupportClasses
 import wavio
@@ -1382,4 +1383,117 @@ class BatchProcessWorker(AviaNZ_batchProcess, QObject):
         self.finished.emit()  # this is to prompt generic actions like stopping the event loop
 
 
+class AviaNZ_batchDenoise():
+    # Main class for batch denoising
+    # Assumes CLI mode
+    # Then works through the directory list, and processes each file.
+    def __init__(self, configdir, indir, outdir, method):
+        # read config and filters from user location
+        # recogniser - filter file name without ".txt"
+        configfile = os.path.join(configdir, "AviaNZconfig.txt")
+        ConfigLoader = SupportClasses.ConfigLoader()
+        self.config = ConfigLoader.config(configfile)
 
+        # LIST ALL FILES that will be processed (wavs)
+        allwavs = []
+        for root, dirs, files in os.walk(indir):
+            for filename in files:
+                if filename.lower().endswith('.wav'):
+                    allwavs.append(os.path.join(root, filename))
+        total = len(allwavs)
+
+        # work on all files
+        filesDone = []
+
+        # Ask for FINAL USER CONFIRMATION here
+        cnt = len(filesDone)
+        text = "Method: " + method + ".\nNumber of files to analyse: " + str(total) + "\n"
+        text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
+
+        confirmedLaunch = input(text)
+        print(confirmedLaunch.lower(),)
+        if confirmedLaunch.lower() == 'yes' or confirmedLaunch.lower() == 'y':
+            confirmedLaunch = True
+        else:
+            confirmedLaunch = False
+
+        if not confirmedLaunch:
+            print("Analysis cancelled")
+            raise GentleExitException
+
+        # MAIN PROCESSING starts here
+        processingTime = 0
+        cleanexit = 0
+        cnt = 0
+        # initialize needed classes
+        sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+
+        for filename in allwavs:
+            # get remaining run time in min
+            processingTimeStart = time.time()
+            hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
+            cnt = cnt+1
+            progrtext = "file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm)
+
+            print("*** Processing" + progrtext + " ***")
+
+            # check if file not empty
+            if os.stat(filename).st_size < 1000:
+                print("File %s empty, skipping" % filename)
+                continue
+
+            # check if file is formatted correctly
+            with open(filename, 'br') as f:
+                if f.read(4) != b'RIFF':
+                    print("Warning: file %s not formatted correctly, skipping" % filename)
+                    continue
+
+            # ALL SYSTEMS GO: process this file
+            # load audiodata/spectrogram and apply WF:
+            print("Loading file...")
+
+            # Read audiodata or spectrogram
+            sp.readWav(filename)
+            sampleRate = sp.sampleRate
+            audiodata = sp.data
+
+            datalength = np.shape(audiodata)[0]
+            print("Read %d samples, %f s at %d Hz" % (len(audiodata), float(datalength)/sampleRate, sampleRate))
+            WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=8, samplerate=sampleRate)
+            gc.collect()
+
+            # Main work is done here:
+            decomplvl = 7
+            try:
+                print("Denoising...")
+                if method=="const":
+                    denoised = WF.waveletDenoise("soft", 3.0, maxLevel=decomplvl, aaRec=False, aaWP=False, thrfun=method, costfn="fixed")
+                else:
+                    # thr multiplier is 1 when estimating sigma (either by OLS or QR)
+                    denoised = WF.waveletDenoise("soft", 1.0, maxLevel=decomplvl, aaRec=False, aaWP=False, thrfun=method, costfn="fixed")
+            except GentleExitException:
+                raise
+            except Exception:
+                estr = "Encountered error:\n" + traceback.format_exc()
+                print("ERROR: ", estr)
+                raise
+
+            # save denoised wav
+            outfilename = os.path.join(outdir, os.path.basename(filename))
+            print("Saving to", outfilename)
+            # phase adjustment is needed due to how the filters are aligned
+            if decomplvl==5:
+                shiftadjust = 92
+            elif decomplvl==6:
+                shiftadjust = 188
+            elif decomplvl==7:
+                shiftadjust = 380
+            tosave = np.concatenate((denoised[shiftadjust:], np.zeros(shiftadjust)))
+            wavio.write(outfilename, tosave.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
+
+            # track how long it took to process one file:
+            processingTime = time.time() - processingTimeStart
+            print("File processed in", processingTime)
+            # END of audio batch processing
+
+        print("Processed all %d files" % total)
