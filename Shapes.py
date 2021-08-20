@@ -94,17 +94,18 @@ def fundFreqShaper(data, Wsamples, thr, fs):
     shape = Shape(y=pitch, tstart=0, tend=len(data)/fs, tunit=(Wsamples//2)/fs, yunit=1, ystart=0)
     return shape
 
-def instantShaper(TFR, fs, incr, window):
+def instantShaper(TFR, fs, incr, window_lenght,window):
     """ Args:
         TFR: matrix with spectrogram. Note: #columns=time, #rows=freq
         fs: sampling rate of the data used for this
         incr: increment used to create this spectrogram
+        window_lenght: length of the window used to create this spectrogram
         window: window type used to create this spectrogram. Only
             accepts "Hann" currently.
         freqarray: array with discretized frequencies
         wopt: parameters needed byt the function. At the momenth this is fixed but need review
     """
-    IF = IFreq.IF()
+    IF = IFreq.IF(method=2)
 
     # check if window is Hann
     if window!="Hann":
@@ -117,7 +118,7 @@ def instantShaper(TFR, fs, incr, window):
     TFR = TFR.T
     fstep = (fs/2)/np.shape(TFR)[0]  # spec row size in Hz
     freqarr = np.arange(fstep,fs/2+fstep,fstep)
-    wopt = [fs,1] #this neeeds review
+    wopt = [fs,window_lenght] #this neeeds review
     tfsupp, _, _ = IF.ecurve(TFR,freqarr,wopt) # <= This is the function we need
 
     #TO Do: Define wopt (this requires REVIEW)
