@@ -42,8 +42,8 @@ class ec_class:
         self.Skel=[]
         self.efreq=[]
         self.pfreq=[]
-        self.pind=[]
-        self.pamp=[]
+        self.p_index=[]
+        self.p_amplitude=[]
         self.idr=[]
         self.mv=[]
         self.rdiff=[]
@@ -130,6 +130,7 @@ class IF:
             self.pars=[1]
         elif self.method==2:
             self.pars=[1,1]
+            #self.pars = [0.25, 1]
         else:
             self.pars=[]
         self.NormMode=NormMode
@@ -211,8 +212,8 @@ class IF:
         #inizialization
         freq=np.reshape(freq,(NF,1)) #reshape freq as a column vector.
         tfsupp=np.zeros((3,L))*math.nan
-        pind=np.zeros((L))*math.nan
-        pamp=np.zeros((L))*math.nan
+        p_index=np.zeros((L))*math.nan
+        p_amplitude=np.zeros((L))*math.nan
         idr=np.zeros((L))*math.nan
         #dfreq=np.zeros((NF-1,2))
         ec_info=ec_class(self.method, self.pars, self.PathOpt)
@@ -509,17 +510,17 @@ class IF:
                 tfsupp[2,tn]=iup
 
             #Transform to frequencies
-            pind=tfsupp[0,:]
+            p_index=tfsupp[0,:]
             tfsupp[:,tn1:tn2+1]=freq[tfsupp[:,tn1:tn2+1]]
-            pamp[tn1:tn2+1]=np.abs(TFR[np.ravel_multi_index([pind[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(TFR))]) #check
+            p_amplitude[tn1:tn2+1]=np.abs(TFR[np.ravel_multi_index([p_index[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(TFR))]) #check
 
             #define ec_info
             ec_info = ec_class(self.method, self.pars, self.PathOpt)
             ec_info.efreq=efreq
             ec_info.eind=eind
             ec_info.pfreq=tfsupp[0,:]
-            ec_info.pind=pind
-            ec_info.pamp=pamp
+            ec_info.p_index=p_index
+            ec_info.p_amplitude=p_amplitude
             ec_info.idr=idr
 
             return tfsupp,ec_info, self.Skel
@@ -540,43 +541,43 @@ class IF:
                     TFR=TFR*(nfunc[:]@np.ones((1,L))) #this should be a vector moltiplication (not element-wise)
 
                 for tn in range(tn1,tn2):#from tn2+1
-                    pamp[tn]=np.amax(abs(TFR[:,tn]))
-                    pind[tn]=np.argmax(abs(TFR[:,tn]))
-                pind=pind.astype('int')
-                tfsupp[0][tn1:tn2+1]=freq[pind[tn1:tn2+1]][0]
+                    p_amplitude[tn]=np.amax(abs(TFR[:,tn]))
+                    p_index[tn]=np.argmax(abs(TFR[:,tn]))
+                p_index=p_index.astype('int')
+                tfsupp[0][tn1:tn2+1]=freq[p_index[tn1:tn2+1]][0]
                 if self.NormMode.lower()=='on':
                     TFR=TFR/(nfunc[:]@np.ones((1,L)))
-                    pamp[tn1:tn2+1]=pamp[tn1:tn2+1]/(nfunc[pind[tn1:tn2+1]].T)
+                    p_amplitude[tn1:tn2+1]=p_amplitude[tn1:tn2+1]/(nfunc[p_index[tn1:tn2+1]].T)
             else:
                 for tn in range(tn1,tn2+1):#from tn2+1
                     #print('tn',tn)
                     if Number_peaks[0,tn]!=0:
-                        pamp[tn]=np.amax(Wp[0:Number_peaks[0,tn],tn])
+                        p_amplitude[tn]=np.amax(Wp[0:Number_peaks[0,tn],tn])
                         idr[tn]=np.argmax(Wp[0:Number_peaks[0,tn],tn])
                     else:
-                        pamp[tn] = np.amax(Wp[0, tn])
+                        p_amplitude[tn] = np.amax(Wp[0, tn])
                         idr[tn] = np.argmax(Wp[0, tn])
                 # sanitycheck
                 idr = idr.astype('int')
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Frequency_peaks),order='F')
                 tfsupp[0,tn1:tn2+1]=Frequency_peaks.flatten('F')[lid]
-                pind[tn1:tn2+1]=self.Round(Indeces_peaks.flatten('F')[lid])
-                pamp[tn1:tn2+1]=Amplitude_peaks.flatten('F')[lid]
+                p_index[tn1:tn2+1]=self.Round(Indeces_peaks.flatten('F')[lid])
+                p_amplitude[tn1:tn2+1]=Amplitude_peaks.flatten('F')[lid]
 
-            idz=np.where((pamp[tn1:tn2+1 ]==0) |( np.isnan(pamp[tn1:tn2+1]))) #-1 seems to be not needed
+            idz=np.where((p_amplitude[tn1:tn2+1 ]==0) |( np.isnan(p_amplitude[tn1:tn2+1]))) #-1 seems to be not needed
             if np.shape(idz)[1]!=0:
                 idz = idz[0]
                 idz+=tn1-1
                 idnz=np.arange(tn1,tn2) #+1 omitted
                 idnz=idnz[np.argwhere(np.isin(idnz,idz)==False)] # =>np.in1d #this is problematic!
-                pind[idz]=np.interp(idz,idnz,pind[idnz]) #'linear' in the function no equivalent of 'extrap'
-                pind[idz]=self.Round(pind[idz])
+                p_index[idz]=np.interp(idz,idnz,p_index[idnz]) #'linear' in the function no equivalent of 'extrap'
+                p_index[idz]=self.Round(p_index[idz])
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
 
             #INSERT EC OUTPUT
             ec_info.pfreq=tfsupp[1,:]
-            ec_info.pind=pind
-            ec_info.pamp=pamp
+            ec_info.p_index=p_index
+            ec_info.p_amplitude=p_amplitude
             ec_info.idr=idr
 
         #------------------------- Nearest neighbour ------------------------------
@@ -596,12 +597,12 @@ class IF:
                 idr[tn]=np.argmin(np.abs(Indeces_peaks[0:Number_peaks[tn],tn]-idr[tn+1]))
             lid=np.ravel_multi_index(idr[tn1:tn2],np.arange(tn1,tn2+1),np.shape(Frequency_peaks))
             tfsupp[0,tn1:tn2+1]=Frequency_peaks[lid]
-            pind[tn1:tn2+1]=self.Round(Indeces_peaks[lid])
-            pamp[tn1:tn2+1]=Amplitude_peaks[lid]
+            p_index[tn1:tn2+1]=self.Round(Indeces_peaks[lid])
+            p_amplitude[tn1:tn2+1]=Amplitude_peaks[lid]
             #Assign the output structure and display, if needed
             ec_info.pfreq=tfsupp[0,:]
-            ec_info.pind=pind
-            ec_info.pamp=pamp
+            ec_info.p_index=p_index
+            ec_info.p_amplitude=p_amplitude
             ec_info.idr=idr
 
         #----------------------------- Method I -----------------------------------
@@ -626,18 +627,19 @@ class IF:
                                        order='F')
 
             tfsupp[0, tn1:tn2 + 1] = Frequency_peaks.flatten('F')[lid]
-            pind[tn1:tn2 + 1] = self.Round(Indeces_peaks.flatten('F')[lid])
-            pamp[tn1:tn2 + 1] = Amplitude_peaks.flatten('F')[lid]
+            p_index[tn1:tn2 + 1] = self.Round(Indeces_peaks.flatten('F')[lid])
+            p_amplitude[tn1:tn2 + 1] = Amplitude_peaks.flatten('F')[lid]
 
             #Assign the output structure and display, if needed
             ec_info.pfreq=tfsupp[0,:]
-            ec_info.pind=pind
-            ec_info.pamp=pamp
+            ec_info.p_index=p_index
+            ec_info.p_amplitude=p_amplitude
             ec_info.idr=idr
 
         #----------------------------- Method II ----------------------------------
         if len(self.pars)==2 and self.method==2:
-            #Initialize the parameters
+            #Initialize the parameters for weight functions these are the median and the percentiles of the frequency
+            #support
             pf=tfsupp[0,tn1:tn2+1]
             if fres==2:
                 pf=np.log(pf)
@@ -669,8 +671,8 @@ class IF:
             #Iterate
             rdiff=math.nan
             itn=0
-            allpind=np.zeros((self.MaxIter,L))
-            allpind[0,:]=pind
+            allp_index=np.zeros((self.MaxIter,L))
+            allp_index[0,:]=p_index
             ec_info.mv=mv
             ec_info.rdiff=rdiff
             while rdiff!=0:
@@ -683,14 +685,14 @@ class IF:
                 if not self.PenalFunc['1']:
                     logw1= lambda x: -self.pars[0]*np.abs((x-mv[0])/smv[0])
                 else:
-                    logw1= lambda x: self.PenalFunc['1'][x,mv[0],smv[0]]
+                    logw1= lambda x: self.PenalFunc['1'](x,mv[0],smv[0])
                 if not self.PenalFunc['2']:
                     logw2 = lambda x: -self.pars[1]*np.abs((x-mv[2])/smv[1])
                 else:
-                    logw2 = lambda x: self.PenalFunc['2'][x,mv[2],smv[1]]
+                    logw2 = lambda x: self.PenalFunc['2'](x,mv[2],smv[1])
                 #Calculate all
-                pind0=np.zeros(np.shape(pind))
-                pind0[:]=pind[:]
+                p_index0=np.zeros(np.shape(p_index))
+                p_index0[:]=p_index[:]
 
                 if self.PathOpt.lower()=='on':
                     idr=self.pathopt(Number_peaks,Indeces_peaks,Frequency_peaks,Wp,logw1,logw2,freq) #check
@@ -699,9 +701,9 @@ class IF:
 
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Frequency_peaks),order='F')
                 tfsupp[0,tn1:tn2+1]=Frequency_peaks.flatten('F')[lid]
-                pind[tn1:tn2+1]=self.Round(Indeces_peaks.flatten('F')[lid])
-                pamp[tn1:tn2+1]=Amplitude_peaks.flatten('F')[lid]
-                rdiff=len(np.ravel_multi_index(np.nonzero(pind[tn1:tn2+1]-pind0[tn1:tn2+1]!=0),np.shape(pind),order='F'))/(tn2-tn1+1)
+                p_index[tn1:tn2+1]=self.Round(Indeces_peaks.flatten('F')[lid])
+                p_amplitude[tn1:tn2+1]=Amplitude_peaks.flatten('F')[lid]
+                rdiff=len(np.ravel_multi_index(np.nonzero(p_index[tn1:tn2+1]-p_index0[tn1:tn2+1]!=0),np.shape(p_index),order='F'))/(tn2-tn1+1)
 
                 #Update the medians/ranges
                 pf=tfsupp[0,tn1:tn2+1]
@@ -722,8 +724,8 @@ class IF:
 
                 #Update the information structure, if needed
                 ec_info.pfreq=np.vstack((ec_info.pfreq,tfsupp[0,:]))
-                ec_info.pind=np.vstack((ec_info.pind,pind))
-                ec_info.pamp=np.vstack((ec_info.pamp,pamp))
+                ec_info.p_index=np.vstack((ec_info.p_index,p_index))
+                ec_info.p_amplitude=np.vstack((ec_info.p_amplitude,p_amplitude))
                 ec_info.idr=np.vstack((ec_info.idr,idr))
                 ec_info.mv=np.vstack((ec_info.mv,mv))
                 ec_info.rdiff=np.vstack((ec_info.rdiff, rdiff))
@@ -737,11 +739,11 @@ class IF:
                     break
 
                 #Just in case, check for ``cycling'' (does not seem to occur in practice)
-                allpind[itn,:]=pind
+                allp_index[itn,:]=p_index
                 gg=math.inf
                 if rdiff!=0 and itn>2:
                     for kn in range(1,itn):
-                        gg=np.amin([gg,len(np.ravel_multi_index(np.nonzero(pind[tn1:tn2+1]-allpind[kn,tn1:tn2+1]!=0),np.shape(pind)))])
+                        gg=np.amin([gg,len(np.ravel_multi_index(np.nonzero(p_index[tn1:tn2+1]-allp_index[kn,tn1:tn2+1]!=0),np.shape(p_index)))])
 
                 if gg==0:
                     if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
@@ -756,7 +758,7 @@ class IF:
         #Extract the time-frequency support around the ridge points
         for tn in range(tn1,tn2+1):
             cs=np.abs(TFR[:,tn])
-            cpeak=int(pind[tn])
+            cpeak=int(p_index[tn])
             iup=NF-1
             idown=0
             if cpeak<NF-1:
@@ -1167,15 +1169,15 @@ class IF:
 
         #%If only the boundaries of the frequency profile are specified, extract the peaks
         if np.amin(np.shape(tfsupp))==2:
-            pind=np.zeros((1,L))*math.nan
+            p_index=np.zeros((1,L))*math.nan
             for tn in range(tn1,tn2+1):
                 ii=np.arange(tfsupp[0,tn],tfsupp[1,tn])
                 xn=idt[tn]
                 cs=np.abs(TFR[ii,xn])
                 mid=np.unravel_index(np.argmax(cs), np.shape(cs))[1]
-                pind[tn]=ii[mid]
+                p_index[tn]=ii[mid]
 
-            tfsupp=[[pind],[tfsupp]]
+            tfsupp=[[p_index],[tfsupp]]
 
         #%Return extracted time-frequency support if requested
         tfsupp=tfsupp.astype('int')

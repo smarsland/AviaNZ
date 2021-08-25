@@ -4039,8 +4039,9 @@ class AviaNZ(QMainWindow):
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
-                elif method=="instantShaper":
+                elif method=="instantShaper1":
                     # instantaneous frequency
+                    IFmethod=1
                     spstart = math.floor(self.convertAmpltoSpec(segRelativeStart))
                     spend = math.ceil(self.convertAmpltoSpec(segRelativeEnd))
                     sg = np.copy(self.sp.sg[spstart:spend,:])
@@ -4050,7 +4051,24 @@ class AviaNZ(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType)
+                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod)
+                    # shape.tstart is relative to segment start (0)
+                    # so we also need to add the segment start
+                    segshape.tstart += segRelativeStart
+
+                elif method=="instantShaper2":
+                    # instantaneous frequency
+                    IFmethod=2
+                    spstart = math.floor(self.convertAmpltoSpec(segRelativeStart))
+                    spend = math.ceil(self.convertAmpltoSpec(segRelativeEnd))
+                    sg = np.copy(self.sp.sg[spstart:spend,:])
+                    # mask freqs outside the currently marked segment
+                    if segm[3]>0:
+                        markedylow = math.floor(self.convertFreqtoY(segm[2]))
+                        markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
+                        sg[:,:markedylow] = 0
+                        sg[:,markedyupp:] = 0
+                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType,IFmethod)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
