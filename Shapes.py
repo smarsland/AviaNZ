@@ -94,7 +94,7 @@ def fundFreqShaper(data, Wsamples, thr, fs):
     shape = Shape(y=pitch, tstart=0, tend=len(data)/fs, tunit=(Wsamples//2)/fs, yunit=1, ystart=0)
     return shape
 
-def instantShaper(TFR, fs, incr, window_lenght,window):
+def instantShaper(TFR, fs, incr, window_lenght,window, IFmethod):
     """ Args:
         TFR: matrix with spectrogram. Note: #columns=time, #rows=freq
         fs: sampling rate of the data used for this
@@ -104,14 +104,16 @@ def instantShaper(TFR, fs, incr, window_lenght,window):
             accepts "Hann" currently.
         freqarray: array with discretized frequencies
         wopt: parameters needed byt the function. At the momenth this is fixed but need review
+        Now working with Scheme I and II from Iatsenko
     """
-    IF = IFreq.IF(method=2)
+    IF = IFreq.IF(method=IFmethod)
 
+    if IFmethod==1:
     # check if window is Hann
-    if window!="Hann":
-        print("ERROR: only Hann window is implemented for this shaper.\nPlease change the spectrogram parameters to use this window, and rerun this command.")
-        return
-        # TODO ensure this empty return is ok
+        if window!="Hann":
+            print("ERROR: only Hann window is implemented for this shaper.\nPlease change the spectrogram parameters to use this window, and rerun this command.")
+            return
+            # TODO ensure this empty return is ok
 
     # REMEMBER: we need to transpose
     # TFR=sp.spectrogram(window_width,incr,window)
