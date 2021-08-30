@@ -123,16 +123,19 @@ class Wopt:
         self.wp=wp
 
 class IF:
-    def __init__(self,method=2,NormMode='off',DispMode='on', PathOpt='on'):
+    def __init__(self,method=2, pars=[], NormMode='off',DispMode='on', PathOpt='on'):
         #Parameters needed in the finctions
         self.method=method
-        if self.method==1:
-            self.pars=[1]
-        elif self.method==2:
-            self.pars=[1,1]
-            #self.pars = [0.25, 1]
+        if pars==[]:
+            if self.method==1:
+                self.pars=[1]
+            elif self.method==2:
+                self.pars=[1,1]
+                #self.pars = [0.25, 1]
+            else:
+                self.pars=[]
         else:
-            self.pars=[]
+            self.pars=pars
         self.NormMode=NormMode
         self.DispMode=DispMode
         self.Skel=[]

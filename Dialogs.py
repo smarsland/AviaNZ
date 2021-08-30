@@ -3475,14 +3475,93 @@ class Shapes(QDialog):
 
         self.detectorCombo = QComboBox()
         self.detectorCombo.addItems(['stupidShaper', 'fundFreqShaper', 'instantShaper1', 'instantShaper2'])
+        self.detectorCombo.currentIndexChanged[str].connect(self.changeBoxes)
 
         self.activate = QPushButton('Detect shapes in segments')
 
         vbox = QVBoxLayout()
         vbox.addWidget(QLabel("Choose shape detection method"))
         vbox.addWidget(self.detectorCombo)
+
+        #add parameter selection for instan frequency methods
+
+        self.IF1alpha = QDoubleSpinBox()
+        self.IF1alpha.setRange(0.0, 2.0)
+        self.IF1alpha.setSingleStep(0.05)
+        self.IF1alpha.setValue(1)
+
+        self.IF2alpha = QDoubleSpinBox()
+        self.IF2alpha.setRange(0.0, 2.0)
+        self.IF2alpha.setSingleStep(0.05)
+        self.IF2alpha.setValue(1)
+
+        self.IF2beta = QDoubleSpinBox()
+        self.IF2beta.setRange(0.0, 2.0)
+        self.IF2beta.setSingleStep(0.05)
+        self.IF2beta.setValue(1)
+
+        self.IF1Layout = QFormLayout()
+        self.IF1Layout.addRow("Alpha:", self.IF1alpha)
+
+        self.IF2Layout = QFormLayout()
+        self.IF2Layout.addRow("Alpha:", self.IF2alpha)
+        self.IF2Layout.addRow("Beta:", self.IF2beta)
+
+
+        vbox.addLayout(self.IF1Layout)
+        vbox.addLayout(self.IF2Layout)
         vbox.addWidget(self.activate)
+
+        # Now put everything into the frame,
+        # hide and reopen the default
+        for w in range(vbox.count()):
+            item = vbox.itemAt(w)
+            if item.widget() is not None:
+                item.widget().hide()
+            else:
+                # it is a layout, so loop again:
+                for ww in range(item.layout().count()):
+                    item.layout().itemAt(ww).widget().hide()
         self.setLayout(vbox)
+        self.detectorCombo.show()
+        self.activate.show()
+
+    def changeBoxes(self, method):
+     # This does the hiding and showing of the options as the algorithm changes
+             # hide and reopen the default
+
+        print('method', method)
+        for w in range(self.layout().count()):
+            item = self.layout().itemAt(w)
+            if item.widget() is not None:
+                item.widget().hide()
+            else:
+            # it is a layout, so loop again:
+                for ww in range(item.layout().count()):
+                    item.layout().itemAt(ww).widget().hide()
+        self.detectorCombo.show()
+        self.activate.show()
+
+        if method == "instantShaper1":
+                for ww in range(self.IF1Layout.count()):
+                    self.IF1Layout.itemAt(ww).widget().show()
+
+        elif method == "instantShaper2":
+            for ww in range(self.IF2Layout.count()):
+                self.IF2Layout.itemAt(ww).widget().show()
+
+
+
 
     def getValues(self):
-        return self.detectorCombo.currentText()
+        # TODO: check: self.medSize.value() is not used, should we keep it?
+        method = self.detectorCombo.currentText()
+        if method=="instantShaper1":
+            pars = [self.IF1alpha.value()]
+        elif method=="instantShaper2":
+            pars = [self.IF2alpha.value(),self.IF2beta.value()]
+        else:
+            pars=[]
+        print('pars', pars)
+        return(method, pars)
+
