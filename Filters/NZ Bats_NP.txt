@@ -1,0 +1,18 @@
+{"species": "NZ Bats",
+
+"SampleRate": 176000,
+
+"Filters": [{"calltype": "Bat", 
+        "TimeRange": [0.0, 900.0, 0.0, 0.0],
+        "FreqRange": [0, 88000],
+        "WaveletParams": {"thr": 0.0, "M": 0.0, "nodes": []},
+        "Feature": ""
+        }],
+"CNN": {"CNN_name": "NZBats_NP",
+        "loss": "binary_crossentropy",
+        "optimizer": "adam",
+        "win": [1, 0.25],
+        "inputdim": [64, 343],
+        "output": {"0": "LT", "1": "ST", "2": "Noise"},
+        "windowInc":[512, 188],
+        "thr":[[0.35, 1], [0.2, 0.9]]}}

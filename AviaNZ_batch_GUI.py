@@ -20,19 +20,20 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
-from PyQt5.QtCore import Qt, QDir, QSize
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog
+from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
 
 import numpy as np
 import wavio
+import traceback
 
 from pyqtgraph.Qt import QtGui
 from pyqtgraph.dockarea import *
 import pyqtgraph as pg
 
-import AviaNZ_batch
+from AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
 import SignalProc
 import Segment
 import SupportClasses, SupportClasses_GUI
@@ -41,6 +42,7 @@ import colourMaps
 
 import webbrowser, copy, math
 
+
 class AviaNZ_batchWindow(QMainWindow):
 
     def __init__(self, configdir=''):
@@ -48,7 +50,23 @@ class AviaNZ_batchWindow(QMainWindow):
         # and sets up the window.
         QMainWindow.__init__(self)
 
-        self.batchProc = AviaNZ_batch.AviaNZ_batchProcess(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+        # TODO: convert any communication w/ batchProc from this thread
+        # to signals, or avoid communicating entirely
+        self.batchProc = BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
+
+        self.batchThread = QThread()
+        self.batchThread.started.connect(self.batchProc.detect)
+        self.batchProc.finished.connect(self.batchThread.quit)
+        self.batchProc.completed.connect(self.completed_fileproc)
+        self.batchProc.stopped.connect(self.stopped_fileproc)
+        self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
+        self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
+        self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
+        self.batchProc.need_update.connect(lambda cnt, text: self.update_progress(cnt, text))
+        self.batchProc.need_bat_info.connect(lambda op,east,north,rec: self.bat_survey_form(op,east,north,rec))
+        self.batchProc.moveToThread(self.batchThread)
+
+        self.msgClosed = QWaitCondition()
 
         self.FilterDicts = self.batchProc.FilterDicts
 
@@ -91,10 +109,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.speCombos = [self.w_spe1]
 
         # populate this box (always show all filters here)
-        spp = list(self.FilterDicts.keys())
-        self.w_spe1.addItems(spp)
+        spp = sorted(list(self.FilterDicts.keys()))
         self.w_spe1.addItem("Any sound")
         self.w_spe1.addItem("Any sound (Intermittent sampling)")
+        self.w_spe1.addItems(spp)
         self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
@@ -262,7 +280,13 @@ class AviaNZ_batchWindow(QMainWindow):
         self.species = list(self.species)
         print("Recogniser:", self.species)
 
-        self.batchProc.detect()
+        self.batchProc.maxgap = int(self.maxgap.value())/1000
+        self.batchProc.minlen = int(self.minlen.value()) / 1000
+        self.batchProc.maxlen = int(self.maxlen.value()) / 1000
+        self.batchProc.species = self.species
+        self.batchProc.dirName = self.dirName
+        self.batchProc.wind = self.w_wind.isChecked()
+        self.batchThread.start()  # a signal connected to batchProc.detect()
 
     def check_msg(self,title,text):
         msg = SupportClasses_GUI.MessagePopup("t", title, text)
@@ -270,61 +294,106 @@ class AviaNZ_batchWindow(QMainWindow):
         response = msg.exec_()
 
         if response == QMessageBox.Cancel:
-            # catch unclean (Esc) exits
-            return False
-        if response == QMessageBox.No:
-            return False
+            # a fall back basically
+            self.msg_response = 2
+        elif response == QMessageBox.No:
+            # catches Esc as well
+            self.msg_response = 1
         else:
-            return True
+            self.msg_response = 0
+        # to utilize Esc, need to add another standard button, and then do:
+        # msg.setEscapeButton(QMessageBox.Cancel)
+        self.msgClosed.wakeAll()
+
+    def bat_survey_form(self,operator,easting,northing,recorder):
+        exportForm = Dialogs.ExportBats(os.path.join(self.dirName, "BatDB.csv"),operator,easting,northing,recorder)
+        response = exportForm.exec_()
+        if response==1:
+            self.batFormResults = exportForm.getValues()
+        else:
+            self.batFormResults = None
+        # ping the batch worker that form was accepted or rejected
+        self.msgClosed.wakeAll()
 
     def clean_UI(self,total,cnt):
         self.w_processButton.setEnabled(False)
         self.update()
         self.repaint()
 
-        self.dlg = QProgressDialog("Analysing file 1 / %d. Time remaining: ? h ?? min" % total, "Cancel run", cnt, total+1, self)
+        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", 0, total+1, self)
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
         self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
+        self.dlg.canceled.connect(self.stopping_fileproc)
+        # should be the default, but to make sure:
+        self.dlg.setWindowModality(Qt.ApplicationModal)
         self.dlg.open()
         self.dlg.setValue(cnt)
         self.dlg.update()
         self.dlg.repaint()
         QApplication.processEvents()
-        #QApplication.processEvents()
+        # ping the batch worker that dlg is ready
+        self.msgClosed.wakeAll()
 
-    def error_fileproc(self,total,e):
+    def error_fileproc(self,e):
+        # Pops an error message with string e
         self.statusBar().showMessage("Analysis stopped due to error")
-        self.dlg.setValue(total+1)
+        if hasattr(self, 'dlg'):
+            self.dlg.setValue(self.dlg.maximum())
         msg = SupportClasses_GUI.MessagePopup("w", "Analysis error!", e)
-        msg.setStyleSheet("{color: #cc0000}")
+        msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
         msg.exec_()
         self.w_processButton.setEnabled(True)
 
-    def endproc(self,total):
-        self.statusBar().showMessage("Processed all %d files" % total)
+    def completed_fileproc(self):
+        # All files successfully processed
+        self.statusBar().showMessage("Processed all %d files" % (self.dlg.maximum()-1))
+        self.dlg.setValue(self.dlg.maximum())
         self.w_processButton.setEnabled(True)
 
         text = "Finished processing.\nWould you like to return to the start screen?"
-        reply = self.check_msg("Finished",text)
-        if reply:
+        msg = SupportClasses_GUI.MessagePopup("t", "Finished", text)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        reply = msg.exec_()
+        if reply==QMessageBox.Yes:
             QApplication.exit(1)
         else:
             return(0)
 
-    def update_progress(self,cnt,total,progrtext):
-        self.dlg.setValue(cnt)
-        self.dlg.setLabelText("Analysed "+progrtext)
-        self.dlg.update()
-        if self.dlg.wasCanceled():
-            print("Analysis cancelled")
-            self.dlg.setValue(total+1)
-            self.statusBar().showMessage("Analysis cancelled")
-            self.w_processButton.setEnabled(True)
-            return(2)
-        # Refresh GUI after each file (only the ProgressDialog which is modal)
+    def stopping_fileproc(self):
+        # When "cancel" is pressed on the progress dialog, it hides,
+        # but it may take a while for the worker thread to do the check and stop.
+        # This function fills this period with Busy cursor.
+        self.dlg.show()
+        self.dlg.setLabelText("Stopping...")
+        self.statusBar().showMessage("Stopping...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
+    def stopped_fileproc(self):
+        # Processing gently stopped (worker thread has now halted, and UI can continue).
+        # Process any earlier requests, in particular the "stopping" signal:
+        # NOTE: this might still lead to race condition as the "stopping" and "stopped" are
+        # emitted by two different threads. Might need to re-emit self.dlg.canceled, or bloody sleep here.
         QApplication.processEvents()
+        self.statusBar().showMessage("Analysis cancelled")
+        if hasattr(self, 'dlg'):
+            self.dlg.hide()
+        self.w_processButton.setEnabled(True)
+        # in case there was a busy cursor
+        try:
+            QApplication.restoreOverrideCursor()
+        except Exception:
+            pass
+
+    def update_progress(self,cnt,progrtext):
+        self.dlg.setValue(cnt)
+        self.dlg.setLabelText(progrtext)
+        self.statusBar().showMessage(progrtext)
+        self.dlg.update()
+        # Refresh GUI after each file (only the ProgressDialog which is modal)
+        # TODO see if it repaints properly without this
+        # QApplication.processEvents()
 
     def center(self):
         # geometry of the main window
@@ -409,8 +478,8 @@ class AviaNZ_batchWindow(QMainWindow):
             currfilt = self.FilterDicts[currname]
             # (can't use AllSp with any other filter)
             # Also don't add the same name again
-            for name, filter in self.FilterDicts.items():
-                if filter["SampleRate"]==currfilt["SampleRate"] and name!=currname:
+            for name, filt in self.FilterDicts.items():
+                if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname:
                     spp.append(name)
             self.minlen.hide()
             self.minlenlbl.hide()
@@ -435,11 +504,11 @@ class AviaNZ_batchWindow(QMainWindow):
             self.warning.show()
         else:
             self.boxPost.hide()
-            self.boxTime.hide()
+            self.boxTime.show()
             self.addSp.hide()
             self.warning.show()
 
-        if currname=="NZ Bats":
+        if currname == "NZ Bats" or currname == "NZ Bats_NP":
             self.addSp.setEnabled(False)
             self.addSp.setToolTip("Bat recognisers cannot be combined with others")
             self.w_wind.setChecked(False)
@@ -459,7 +528,7 @@ class AviaNZ_batchWindow(QMainWindow):
             box.setCurrentIndex(-1)
             box.setCurrentText("")
 
-            box.addItems(spp)
+            box.addItems(sorted(spp))
 
     def fillFileList(self, fileName=None):
         """ Populates the list of files for the file listbox.
@@ -482,7 +551,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # Need name of file
         if type(current) is QListWidgetItem:
             current = current.text()
-            current = re.sub('\/.*', '', current)
+            current = re.sub(r'\/.*', '', current)
 
         self.previousFile = current
 
@@ -504,6 +573,42 @@ class AviaNZ_batchWindow(QMainWindow):
                 self.listFiles.setCurrentItem(index[0])
         return(0)
 
+
+class BatchProcessWorker(AviaNZ_batchProcess, QObject):
+    # adds QObject functionality to standard batchProc,
+    # so that it could be moved to a separate thread when multithreading.
+    finished = pyqtSignal()
+    completed = pyqtSignal()
+    stopped = pyqtSignal()
+    failed = pyqtSignal(str)
+    need_msg = pyqtSignal(str, str)
+    need_clean_UI = pyqtSignal(int, int)
+    need_update = pyqtSignal(int, str)
+    need_bat_info = pyqtSignal(str, str, str, str)
+
+    def __init__(self, *args, **kwargs):
+        # this is supposedly not OK if somebody was to ever
+        # further multiply-inherit this class.
+        AviaNZ_batchProcess.__init__(self, *args, **kwargs)
+        QObject.__init__(self)
+        self.mutex = QMutex()
+
+    @pyqtSlot()
+    def detect(self):
+        try:
+            AviaNZ_batchProcess.detect(self)
+            self.completed.emit()
+        except GentleExitException:
+            # for clean exits, such as stops via progress dialog
+            self.stopped.emit()
+        except Exception as e:
+            # we have UI, so just cleanly present the error;
+            # in other modes this will CTD
+            e = "Encountered error:\n" + traceback.format_exc()
+            self.failed.emit(e)
+        self.finished.emit()  # this is to prompt generic actions like stopping the event loop
+
+
 class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
     # Should call HumanClassify1 somehow
@@ -520,7 +625,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
-        self.saveConfig = True
 
         # For some calltype functionality, a list of current filters is needed
         filtersDir = os.path.join(configdir, self.config['FiltersDir'])
@@ -702,6 +806,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.chunksizeBox.setValue(10)
         self.chunksizeBox.setEnabled(False)
 
+        # playback settings - TODO find a better place maybe?
+        self.loopBox = QCheckBox("Loop playback")
+        self.autoplayBox = QCheckBox("Autoplay (One-by-One only)")
+
         # Advanced Settings Layout
         self.d_settings.addWidget(self.toggleSettingsBtn, row=0, col=2, colspan=2, rowspan=1)
         self.d_settings.addWidget(QLabel("Skip if certainty above:"), row=1, col=0, colspan=2, rowspan=1)
@@ -722,6 +830,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.addWidget(self.chunksizeAuto, row=5, col=0, colspan=2, rowspan=1)
         self.d_settings.addWidget(self.chunksizeManual, row=6, col=0, colspan=2, rowspan=1)
         self.d_settings.addWidget(self.chunksizeBox, row=6, col=2)
+
+        self.d_settings.addWidget(self.loopBox, row=7, col=0, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.autoplayBox, row=8, col=0, colspan=2, rowspan=1)
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -960,7 +1071,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Need name of file
         if type(current) is QListWidgetItem:
             current = current.text()
-            current = re.sub('\/.*', '', current)
+            current = re.sub(r'\/.*', '', current)
 
         self.previousFile = current
 
@@ -991,7 +1102,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if self.species == "All species":
             msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
             msg.exec_()
-        else: 
+        else:
             self.review(False)
 
     def review(self,reviewAll):
@@ -1039,12 +1150,8 @@ class AviaNZ_reviewAll(QMainWindow):
             self.update()
             self.repaint()
 
-            if not os.path.isfile(filename + '.data'):
-                print("Warning: .data file lost for file", filename)
-                continue
-
             if os.stat(filename).st_size < 1000:
-                print("File %s empty, skipping" % filename)
+                print("Warning: file %s empty, skipping" % filename)
                 continue
 
             # check if file is formatted correctly
@@ -1063,14 +1170,6 @@ class AviaNZ_reviewAll(QMainWindow):
             else:
                 print("Warning: file %s format not recognised " % filename)
                 continue
-
-            # detect timestamp
-            DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
-            if DOCRecording:
-                startTime = DOCRecording.group(2)
-                sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-            else:
-                sTime = 0
 
             # load segments
             with pg.BusyCursor():
@@ -1094,15 +1193,32 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = 1
                 continue
 
+            # Split segments into chunks if requested
+            if self.chunksizeManual.isChecked():
+                chunksize = self.chunksizeBox.value()
+                self.segments.splitLongSeg(species=self.species, maxlen=chunksize)
+            else:
+                # leave all (chunksize = max segment length)
+                chunksize = 0
+                thisspsegs = self.segments.getSpecies(self.species)
+                for si in thisspsegs:
+                    seg = self.segments[si]
+                    chunksize = max(chunksize, seg[1]-seg[0])
+                print("Auto-setting view size to:", chunksize)
+
+            _ = self.segments.orderTime()
+
             # file has >=1 segments to review,
             # so call the right dialog:
             # (they will update self.segments and store corrections)
             if reviewAll:
-                _ = self.segments.orderTime()
-                filesuccess = self.review_all(filename, sTime)
+                filesuccess = self.review_all(filename)
             else:
-                filesuccess = self.review_single(filename, sTime)
+                filesuccess = self.review_single(filename, chunksize)
+
+            # TODO sort out how to do this if we want to fix the split in a filter
             # merge back any split segments, plus ANY overlaps within calltypes
+            # (NOTE: applied to either review type to get identical results)
             todelete = self.segments.mergeSplitSeg()
             for dl in todelete:
                 del self.segments[dl]
@@ -1112,6 +1228,12 @@ class AviaNZ_reviewAll(QMainWindow):
             if filesuccess == 0:
                 print("Review stopped")
                 break
+
+            if reviewAll:
+                # save changes and corrections (on nice exit only):
+                if self.config['saveCorrections']:
+                    self.saveCorrections()
+                self.finishDeleting()
 
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
@@ -1149,9 +1271,6 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            if self.config['saveCorrections']:
-                self.saveCorrections()
-            self.finishDeleting()
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1235,30 +1354,15 @@ class AviaNZ_reviewAll(QMainWindow):
             msg = SupportClasses_GUI.MessagePopup("d", "Excel output produced", msgtext)
         msg.exec_()
 
-    def review_single(self, filename, sTime):
-        """ Initializes single species dialog, based on self.species
-            (thus we don't need the small species choice dialog here).
+    def review_single(self, filename, chunksize):
+        """ Initializes single species dialog, based on self.species.
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
-        # Split segments into chunks of requested size, or leave all if using max len
-        if self.chunksizeManual.isChecked():
-            chunksize = self.chunksizeBox.value()
-            self.segments.splitLongSeg(species=self.species, maxlen=chunksize)
-        else:
-            chunksize = 0
-            thisspsegs = self.segments.getSpecies(self.species)
-            for si in thisspsegs:
-                seg = self.segments[si]
-                chunksize = max(chunksize, seg[1]-seg[0])
-            print("Auto-setting chunk size to:", chunksize)
-
-        _ = self.segments.orderTime()
-
         self.loadFile(filename, species=self.species, chunksize=chunksize)
 
-        if self.batmode:
-            guides = [20000, 36000, 50000, 60000]
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+            guides = self.config['guidepos']
         else:
             guides = None
 
@@ -1267,8 +1371,8 @@ class AviaNZ_reviewAll(QMainWindow):
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
-                                                           guidefreq=guides,
-                                                           filename=self.filename)
+                                                           guidefreq=guides, guidecol=self.config['guidecol'],
+                                                           loop=self.loopBox.isChecked(), filename=self.filename)
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog2.resize(self.dialogSize)
             self.humanClassifyDialog2.move(self.dialogPos)
@@ -1282,37 +1386,8 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             return(1)
 
-    def mergeSplitSeg(self):
-        # After segments are split, put them back if all are still there
-        # Really simple -- assumes they are in order
-        # SRM
-        todelete = []
-        last = [0,0,0,0,0]
-        count=0
-        for seg in self.segments:
-            #print(math.isclose(seg[0],last[1]))
-            # Merge the two segments if they abut and have the same species
-            print(seg, seg[0], last[4])
-            if math.isclose(seg[0],last[1]) and seg[4] == last[4]:
-                last[1] = seg[1]
-                todelete.append(count)
-            else:
-                last = seg
-            count+=1
-
-        print(todelete)
-        for dl in reversed(todelete):
-            del self.segments[dl]
-
-        print(self.segments)
-
-    def species2clean(self, species):
-        """ Returns True when the species name got a special character"""
-        search = re.compile(r'[^A-Za-z0-9()-]').search
-        return bool(search(species))
-
     def cleanSpecies(self):
-        """ Returns cleaned species name"""
+        """ Returns species name with any special characters removed"""
         return re.sub(r'[^A-Za-z0-9()-]', "_", self.species)
 
     def saveCorrectJSON(self, file, outputErrors, mode, reviewer=""):
@@ -1352,7 +1427,6 @@ class AviaNZ_reviewAll(QMainWindow):
         return 1
 
     def humanClassifyClose2(self):
-        self.segmentsToSave = True
         todelete = []
         # initialize correction file. All "downgraded" segments will be stored
         outputErrors = []
@@ -1390,10 +1464,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Save the errors in a file
         if self.config['saveCorrections'] and len(outputErrors) > 0:
-            if self.species2clean(self.species):
-                speciesClean = self.cleanSpecies()
-            else:
-                speciesClean = self.species
+            speciesClean = self.cleanSpecies()
             cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections_' + speciesClean), outputErrors, mode=2, reviewer=self.reviewer)
             if cleanexit != 1:
                 print("Warning: could not save correction file!")
@@ -1405,13 +1476,11 @@ class AviaNZ_reviewAll(QMainWindow):
         # done - the segments will be saved by the main loop
         return
 
-    def review_all(self, filename, sTime, minLen=5):
+    def review_all(self, filename):
         """ Initializes all species dialog.
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
-        # For equivalence with review_single
-        _ = self.segments.orderTime()
         if self.config['saveCorrections']:
             self.origSeg = copy.deepcopy(self.segments)
 
@@ -1444,7 +1513,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.dialogPlotAspect, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1462,16 +1531,13 @@ class AviaNZ_reviewAll(QMainWindow):
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()
-            return(0)
 
-        if self.config['saveCorrections']:
-            self.saveCorrections()
-        self.finishDeleting()
-        return(1)
+        return(success)
 
     def loadFile(self, filename, species=None, chunksize=None):
-        """ Needs to generate spectrograms and audiodatas
+        """ Generates spectrograms and audiodatas
             for each segment in self.segments.
+            If chunksize is set, will buffer appropriately.
             The SignalProcs containing these are loaded into self.sps.
         """
         with pg.BusyCursor():
@@ -1546,7 +1612,7 @@ class AviaNZ_reviewAll(QMainWindow):
                         # Actual loading of the wav/bmp/spectrogram
                         if self.batmode:
                             sp.readBmp(filename, off=x1, len=x2-x1, silent=segix>1)
-                            # sgRaw was already normalized to 0-1 when loading
+                            # sgRaw was already normalised to 0-1 when loading
                             # with 1 being loudest
                             sgRaw = sp.sg
                             sp.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
@@ -1555,16 +1621,15 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            # sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
                             sp.data = sp.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
-                            _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True,need_even=False)
+                            _ = sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True,need_even=False)
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
                             maxsg = max(np.max(sp.sg), maxsg)
-                            sp.sg = np.abs(np.where(sp.sg==0, 0.0, 10.0 * np.log10(sp.sg/minsg)))
+                            sp.sg = sp.normalisedSpec("Log")
 
                         # need to also store unbuffered limits in spec units
                         # (relative to start of segment)
@@ -1602,11 +1667,9 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of file loading
 
     def saveCorrections(self):
-        print("here")
         for i in reversed(range(len(self.segments))):
-            print(self.segments[i][4],self.origSeg[i][4])
             if self.segments[i][4] == self.origSeg[i][4]:
-                print("Segment matches")
+                # print("Segment matches")
                 del self.origSeg[i]
             else:
                 oldlabel = self.origSeg[i][4]
@@ -1651,8 +1714,8 @@ class AviaNZ_reviewAll(QMainWindow):
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
 
-            if self.batmode:
-                guides = [sp.convertFreqtoY(f) for f in [20000, 36000, 50000, 60000]]
+            if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
             else:
                 guides = None
 
@@ -1687,24 +1750,21 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Go to next image, keeping this one as it was found
             (so any changes made to it will be discarded, and cert kept) """
         self.humanClassifyDialog1.stopPlayback()
-        self.segmentsToSave = True
         currSeg = self.segments[self.indices2show[self.box1id]]
 
-        label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
+        label, saveConfig, calltype = self.humanClassifyDialog1.getValues()
 
-        # deal with manual bird entries under "Other"
-        if len(checkText) > 0:
-            if checkText in self.longBirdList:
-                pass
-            else:
-                self.longBirdList.append(checkText)
-                self.longBirdList = sorted(self.longBirdList, key=str.lower)
-                self.longBirdList.remove('Unidentifiable')
-                self.longBirdList.append('Unidentifiable')
-                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+        # update the stored bird list if any new birds were added
+        # (such changes will set saveConfig to True).
+        if saveConfig:
+            self.longBirdList = self.humanClassifyDialog1.longBirdList
+            self.longBirdList = sorted(self.longBirdList, key=str.lower)
+            self.longBirdList.remove('Unidentifiable')
+            self.longBirdList.append('Unidentifiable')
+            self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+            self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
 
         # update the actual segment.
-        #print("working on ", self.box1id, currSeg)
         deleting=False
         if label != [lab["species"] for lab in currSeg[4]]:
             # if any species names were changed,
@@ -1752,28 +1812,24 @@ class AviaNZ_reviewAll(QMainWindow):
             #self.updateCallType(self.box1id, calltype)
 
         self.returned = False
-        self.humanClassifyDialog1.tbox.setText('')
-        self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         self.humanClassifyDialog1.stopPlayback()
-        self.segmentsToSave = True
         currSeg = self.segments[self.indices2show[self.box1id]]
 
-        label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
+        label, saveConfig, calltype = self.humanClassifyDialog1.getValues()
 
-        # deal with manual bird entries under "Other"
-        if len(checkText) > 0:
-            if checkText in self.longBirdList:
-                pass
-            else:
-                self.longBirdList.append(checkText)
-                self.longBirdList = sorted(self.longBirdList, key=str.lower)
-                self.longBirdList.remove('Unidentifiable')
-                self.longBirdList.append('Unidentifiable')
-                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+        # update the stored bird list if any new birds were added
+        # (such changes will set saveConfig to True).
+        if saveConfig:
+            self.longBirdList = self.humanClassifyDialog1.longBirdList
+            self.longBirdList = sorted(self.longBirdList, key=str.lower)
+            self.longBirdList.remove('Unidentifiable')
+            self.longBirdList.append('Unidentifiable')
+            self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+            self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
 
         # update the actual segment.
         deleting = False
@@ -1820,8 +1876,6 @@ class AviaNZ_reviewAll(QMainWindow):
             self.updateCallType(self.indices2show[self.box1id], calltype)
 
         self.returned = False
-        self.humanClassifyDialog1.tbox.setText('')
-        self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
 
     def humanClassifyDelete1New(self):
@@ -1834,38 +1888,21 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segments[self.indices2show[self.box1id]][4] = newlabel
         self.segsDeleted+=1
 
-        #id = self.box1id
-        #del self.segments[id]
-        #del self.sps[id]
-        # self.indicestoshow then becomes incorrect, but we don't use that in here anyway
-
-        #self.box1id = id-1
         self.returned = False
-        self.segmentsToSave = True
         self.humanClassifyNextImage1()
 
     def finishDeleting(self):
-        # Does the work of deleting segments
-        segsToSave = False
-
-        # Loop over segments
+        # Does the actual work of deleting segments.
+        # Loop over segments, delete any that are marked for this
         for seg in reversed(self.segments):
             todel = False
-            # Delete if any say to delete (correct? Or just remove if it is in a list with others?)
             for lab in seg[4]:
                 if lab["species"] == "-To Be Deleted-":
                     todel = True
                     break
-
             if todel:
                 print("Removing",seg)
                 self.segments.remove(seg)
-                segsToSave = True
-
-        if segsToSave:
-            cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save segments!")
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)

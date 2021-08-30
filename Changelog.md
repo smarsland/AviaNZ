@@ -3,22 +3,61 @@ All notable changes to AviaNZ program will be documented in this file.
 ## Unreleased
 
 ### Added
+- Changepoint segmenter in manual mode
+- Pre-built GPU support for CNN in compiled versions
+- Option to loop playback in both review types
+- Option to autoplay in one-by-one review
+- Saving spectrogram images without axes (in developer mode)
+- Call comparator as a separate script, clock-adjustment only
+
+### Changed
+- Training will now include subdirectories when searching for data
+- Filter format extended to allow setting segmenter
+- Better UI for adding species in review, search function
+- Shorter pages (5 mins) for low sampling rate files in batch mode
+- CNNs no longer redefine segment boundaries, only accept/reject
+- reduced extension length when applying CNNs to short segments
+- various changes to CNN training
+
+### Fixed
+- Faster CNN classification
+- Post-processing harmonised between batch mode, testing, testing with CNN
+- Segmenting in manual mode now only overwrites the current page segments
+- Problems when undoing segmentation in multi-page files
+- Minor UI bugs in recogniser training wizard
+- Long species list now triggers button reordering in review
+- better edge case handling when adding species in review
+
+## [3.2] - 2021-02-16
+
+### Added
 - Ability to undo previously deleted segments in review
 - "One-by-one" review plot size expands to dialog size
 - BatSearch-compatible output for batmode
+- National Bat Database format output for batmode
 - Segment saving feedback now shown in status bar
 - Mouse cursor indicates current mode
+- "Jump to next annotation" buttons
+- Optional frequency masking in CNN training
+- Ability to customise existing recognisers
+- Formant marking in spectrogram
 
 ### Changed
+- Improved processing pipeline for bats
+- Improved CNN recogniser for bats
+- Extended morepork recogniser with CNN
 - "One-by-one" review (previously All Species) can now be run on single species
 - Batch Review settings separated into Advanced and Simple
 - Simpler dropdown to set review certainty bounds
 - Better spectrogram type selection UI
+- Separate UI thread to keep responsiveness when batch processing
 
 ### Fixed
 - Greatly reduced CPU load for mouseover detection in spectrogram items
 - Batch settings are appropriately greyed out and provide tooltips
 - 8-bit WAV playback was not working
+- Bugs in non-specific batch processing
+- Cleaned up gap-merging algorithms, could have caused bugs in edge cases
 
 ## [3.1] - 2020-10-09
 

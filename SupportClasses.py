@@ -36,7 +36,6 @@ import math
 import numpy as np
 import os, json
 import re
-import sys
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
 
@@ -63,7 +62,8 @@ class Log(object):
         # On init, we parse the existing log to see if appending is possible.
         # Actual append/create happens later.
         self.possibleAppend = False
-        self.file = path
+        self.filepath = path
+        # self.file will be an IO stram opened by the main launcher
         self.species = species
         self.settings = ','.join(map(str, settings))
         self.oldAnalyses = []
@@ -119,10 +119,23 @@ class Log(object):
 
     def appendFile(self, filename):
         print('Appending %s to log' % filename)
+        # convert to path relative to the log file directory
+        if os.path.isabs(filename):
+            filename = os.path.relpath(filename, os.path.dirname(self.filepath))
+
         # attach file path to end of log
         self.file.write(filename)
         self.file.write("\n")
         self.file.flush()
+
+    def getDoneFiles(self, possiblefiles):
+        """ Selects files that are stored in this log from possiblefiles.
+            Assumes possiblefiles stores absolute paths. """
+        currdir = os.path.dirname(self.filepath)
+        done_abs = [os.path.normpath(os.path.join(currdir, f)) for f in self.filesDone if not os.path.isabs(f)]
+        # assuming relative paths on both lists:
+        out = set(done_abs).intersection(set(possiblefiles))
+        return(out)
 
     def appendHeader(self, header, species, settings):
         if header is None:
@@ -196,6 +209,9 @@ class ConfigLoader(object):
                 # skip this filter if it looks fishy:
                 if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
                     raise ValueError("Filter JSON format wrong, skipping")
+                # note that method may be empty for backwards compatibility:
+                if "method" in filt and filt["method"] not in ["wv", "chp"]:
+                    raise ValueError("Filter JSON format wrong (unrecognised method), skipping")
                 for subfilt in filt["Filters"]:
                     if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
                         raise ValueError("Subfilter JSON format wrong, skipping")
@@ -232,15 +248,28 @@ class ConfigLoader(object):
                         print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
                 else:
                     try:
+                        print(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
                         json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
                         loaded_model_json = json_file.read()
+                        print(loaded_model_json)
+                        print("**")
                         json_file.close()
                         model = model_from_json(loaded_model_json)
+                        print(model)
+                        print("***")
                         model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                        print("****")
                         print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
-                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                        if 'fRange' in filt["CNN"]:
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                                                     filt["CNN"]["output"],
+                                                     filt["CNN"]["windowInc"], filt["CNN"]["thr"], True,
+                                                     filt["CNN"]["fRange"]]
+                        else:
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                                                     filt["CNN"]["output"], filt["CNN"]["windowInc"],
+                                                     filt["CNN"]["thr"], False]
                     except Exception as e:
                         print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         print(e)

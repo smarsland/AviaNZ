@@ -8,9 +8,10 @@ extensions = [
         sources=["ce_denoise.pyx", "ce_functions.c"],
         include_dirs=[numpy.get_include()]),
     Extension("SplitLauncher",
-        sources=["SplitLauncher.pyx", "SplitWav.c"])#,
-    # Extension("ce_detect",
-    #     sources=["ce_detect.pyx", "detector.c"])
+        sources=["SplitLauncher.pyx", "SplitWav.c"]),
+    Extension("ce_detect",
+        sources=["ce_detect.pyx", "detector.c"],
+        include_dirs=[numpy.get_include()])
 ]
 
 setup(

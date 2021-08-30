@@ -1,4 +1,6 @@
 
+# coding=latin-1
+
 # SupportClasses_GUI.py
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
@@ -696,15 +698,15 @@ class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
-    def __init__(self, format):
+    def __init__(self, format, loop=False):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
         self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
         self.tempin = QBuffer()
-        self.startpos = 0
-        self.timeoffset = 0
+        self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
         self.keepSlider = False
+        self.loop = loop
         #self.format = format
         # set small buffer (10 ms) and use processed time
         self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
@@ -715,6 +717,9 @@ class ControllableAudio(QAudioOutput):
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
         if self.state() == QAudio.IdleState:
+            if self.loop:
+                self.restart()
+                return
             # give some time for GUI to catch up and stop
             sleepCycles = 0
             while(self.state() != QAudio.StoppedState and sleepCycles < 30):
@@ -816,6 +821,12 @@ class ControllableAudio(QAudioOutput):
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
+        self.sttime = time.time() - self.timeoffset/1000
+        self.start(self.tempin)
+
+    def restart(self):
+        # self.timeoffset = ? does this need to be fixed?
+        self.tempin.seek(0)
         self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
@@ -958,7 +969,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v3.1.2 (November 2020)")
+            self.setText("The AviaNZ Program, v3.3-devel (May 2021)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -971,7 +982,7 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -984,16 +995,19 @@ class PicButton(QAbstractButton):
         self.playButton = QtGui.QToolButton(self)
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.hide()
+
+        # batmode frequency guides (in Y positions 0-1)
+        self.guides = guides
+        if guides is not None:
+            self.guidelines = [0]*len(self.guides)
+            self.guidecol = [QColor(*col) for col in guidecol]
+
         # check if playback possible (e.g. batmode)
         if len(audiodata)>0:
             self.noaudio = False
             self.playButton.clicked.connect(self.playImage)
         else:
             self.noaudio = True
-            # batmode frequency guides (in Y positions 0-1)
-            if guides is not None:
-                self.guides = guides
-                self.guidelines = [0]*len(self.guides)
 
         # setImage reads some properties from self, to allow easy update
         # when color map changes
@@ -1009,6 +1023,7 @@ class PicButton(QAbstractButton):
         # playback things
         self.media_obj = ControllableAudio(format)
         self.media_obj.notify.connect(self.endListener)
+        self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
 
@@ -1047,7 +1062,7 @@ class PicButton(QAbstractButton):
             self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, self.im1.size().height())
 
             # create guides for batmode
-            if self.noaudio:
+            if self.guides is not None:
                 for i in range(len(self.guides)):
                     self.guidelines[i] = QLineF(0, self.im1.height() - self.guides[i]/heightRedFact, targwidth, self.im1.height() - self.guides[i]/heightRedFact)
 
@@ -1072,13 +1087,10 @@ class PicButton(QAbstractButton):
                 painter.drawLine(self.line1)
                 painter.drawLine(self.line2)
 
-            if self.noaudio:
-                painter.setPen(QPen(QColor(255,232,140), 2))
-                painter.drawLine(self.guidelines[0])
-                painter.drawLine(self.guidelines[3])
-                painter.setPen(QPen(QColor(239,189,124), 2))
-                painter.drawLine(self.guidelines[1])
-                painter.drawLine(self.guidelines[2])
+            if self.guides is not None:
+                for gi in range(len(self.guidelines)):
+                    painter.setPen(QPen(self.guidecol[gi], 2))
+                    painter.drawLine(self.guidelines[gi])
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
@@ -1138,7 +1150,10 @@ class PicButton(QAbstractButton):
     def endListener(self):
         timeel = self.media_obj.elapsedUSecs() // 1000
         if timeel > self.duration:
-            self.stopPlayback()
+            if self.media_obj.loop:
+                self.media_obj.restart()
+            else:
+                self.stopPlayback()
 
     def stopPlayback(self):
         self.media_obj.pressedStop()

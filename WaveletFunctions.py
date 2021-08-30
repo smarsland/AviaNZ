@@ -22,13 +22,14 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import math
-import scipy.fftpack as fft
+# import scipy.fftpack as fft
 from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
 import Wavelet
 import SignalProc
+
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
@@ -237,9 +238,10 @@ class WaveletFunctions:
         wavelet = self.wavelet
 
         # filter length for extension modes
-        flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
+        flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))//2
         # this tree will store non-downsampled coefs for reconstruction
         self.tree = [self.data]
+
         if mode != 'symmetric':
             print("ERROR: only symmetric WP mode implemented so far")
             return
@@ -270,7 +272,7 @@ class WaveletFunctions:
                 data = data[0::2]
 
             # symmetric mode
-            data = np.concatenate((data[0:flen:-1], data, data[-flen:]))
+            data = np.concatenate((data[flen::-1], data, data[-flen:]))
             # zero-padding mode
             # data = np.concatenate((np.zeros(8), tree[node], np.zeros(8)))
 
@@ -363,6 +365,64 @@ class WaveletFunctions:
                 print("ERROR: unrecognised change", change)
         return adjnodes
 
+    def extractE(self, node, winsize, wpantialias=True):
+        """ Extracts mean energies of node over windows of size winsize (s).
+            Winsize will be adjusted to obtain integer number of WCs in this node.
+            wpantialias - True for antialiased (non-decimated) tree
+            Returns:
+              np array of length nwins = datalength/winsize
+              actual window size (in s) that was used
+        """
+        # ratio of current WC size to data ("how many samples went into one WC")
+        level = math.floor(math.log2(node+1))
+        dsratio = 2**level
+        # (theoretical) sampling rate at this node ("how many WCs go into one second")
+        nodefs = self.treefs / dsratio
+
+        # or WCperWindow = math.ceil(WCperWindowFull / dsratio)
+        WCperWindow = math.ceil(winsize * nodefs)
+        print("Node %d: %d WCs per window" %(node, WCperWindow))
+
+        # realized window size in s - may differ from the requested one if it is not a multiple of 2^j samples
+        realwindow = WCperWindow / nodefs
+
+        # starting point adjustment for padding
+        # (introduced b/c WaveletPacket does not trim ends after padding)
+        # TODO possibly could adjust WaveletPacket instead
+        wavelet = self.wavelet
+        flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
+        padlen = (flen//4-1) * level
+
+        # or nwindows = math.floor(datalengthSec / realwindow)
+        nwindows = math.floor((len(self.tree[node])-padlen)/2 / WCperWindow)
+        maxnumwcs = nwindows * WCperWindow
+
+        # Sanity check for empty node:
+        if nwindows <= 0:
+            print("ERROR: data length %d shorter than window size %d s" %(len(self.tree[node]), winsize))
+            return
+
+        # WC from test node(s), trimmed to non-padded size
+        if wpantialias:
+            C = self.tree[node][padlen:maxnumwcs*2+padlen:2]
+        else:
+            C = self.tree[node][padlen:maxnumwcs+padlen]
+
+        # Sanity check for all zero cases:
+        if not any(C):
+            print("Warning: tree empty at node %d" % node)
+            return np.ndarray()
+
+        # Might be useful to track any DC offset
+        print("DC offset = %.3f" % np.mean(C))
+
+        # convert into a matrix (seconds x wcs in sec), and get the energy of each row (second)
+        E = (C**2).reshape((nwindows, WCperWindow)).mean(axis=1)
+
+        # cleanup
+        C = None
+        del C
+        return E, realwindow
 
     def reconstructWP2(self, node, antialias=False, antialiasFilter=False):
         """ Inverse of WaveletPacket: returns the signal from a single node.
