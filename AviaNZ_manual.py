@@ -4001,7 +4001,8 @@ class AviaNZ(QMainWindow):
         csv.close()
 
     def detectShapes(self):
-        method = self.shapesDialog.getValues()
+        #method = self.shapesDialog.getValues()
+        method, IFsettings = self.shapesDialog.getValues()
         allshapes = []
         specxunit = self.convertSpectoAmpl(1)
         specyunit = self.sampleRate//2 / np.shape(self.sg)[1]
@@ -4051,7 +4052,7 @@ class AviaNZ(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod)
+                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
@@ -4068,7 +4069,7 @@ class AviaNZ(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType,IFmethod)
+                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType,IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
