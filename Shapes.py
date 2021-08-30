@@ -102,20 +102,20 @@ def instantShaper(TFR, fs, incr, window_lenght,window, IFmethod, IFpars):
         window_lenght: length of the window used to create this spectrogram
         window: window type used to create this spectrogram. Only
             accepts "Hann" currently.
-        IFmethod: scheme used
-        pars: parameters for the scheme
+        IFmethod: scheme used (1 or 2)
+        IFpars: list of parameters for the scheme
         freqarray: array with discretized frequencies
         wopt: parameters needed byt the function. At the momenth this is fixed but need review
         Now working with Scheme I and II from Iatsenko
     """
-    IF = IFreq.IF(method=IFmethod, pars=IFpars)
-
     if IFmethod==1:
-    # check if window is Hann
+        # check if window is Hann
         if window!="Hann":
             print("ERROR: only Hann window is implemented for this shaper.\nPlease change the spectrogram parameters to use this window, and rerun this command.")
             return
             # TODO ensure this empty return is ok
+
+    IF = IFreq.IF(method=IFmethod, pars=IFpars)
 
     # REMEMBER: we need to transpose
     # TFR=sp.spectrogram(window_width,incr,window)
