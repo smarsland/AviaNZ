@@ -24,6 +24,8 @@ ext/*pyd
 
 .vs/
 
+.idea/
+
 # Latex
 Docs/AviaNZManual.aux
 Docs/AviaNZManual.log
