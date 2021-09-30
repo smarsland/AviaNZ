@@ -70,7 +70,7 @@ class Wp:
         # (instance attributes). Please revert if needed.
         self.fwtmax=[]
         self.twfmax=[]
-        self.C=[]
+        self.C=[] # centre of window
         self.omg=[]
         self.xi1=-np.Inf
         self.xi2=np.Inf
@@ -79,15 +79,23 @@ class Wp:
         self.t2=np.Inf
         self.tpeak=[]
         if window_name=='Hann':
-            q=4.4*window_length
-            self.twf=lambda t: (1+np.cos(2*np.pi*t/q))/2
-            self.t1=-q/2
-            self.t2=q/2
-            self.fwt= lambda xi:(-(2*np.pi/q)**2)*np.sin(xi*q/2)/(xi*(xi**2-(2*np.pi/q)**2))
+            #q=4.4*window_length
+            #self.twf=lambda t: (1+np.cos(2*np.pi*t/q))/2
+            self.twf=lambda t: 0.5 * (1 - np.cos(2 * np.pi * t / (window_length - 1)))
+            self.twfmax = np.amax(np.abs(self.twf(np.arange(window_length))))
+            #self.t1=-q/2
+            self.t1=0
+            self.t2= window_length
+            #self.t2=q/2
+            #self.fwt= lambda xi:(-(2*np.pi/q)**2)*np.sin(xi*q/2)/(xi*(xi**2-(2*np.pi/q)**2))
+            self.fwt= lambda xi: 0.5*(np.sin(np.pi*window_length*xi)/(np.pi*xi)) + 0.25*(np.sin(np.pi*window_length*(xi-(1/window_length)))/(np.pi*(xi-(1/window_length))))+0.25*(np.sin(np.pi*window_length*(xi+(1/window_length)))/(np.pi*(xi+(1/window_length))))
+            #self.fwtmax=np.amax(np.abs(self.fwt(np.arange(-4000, 4000))))
+            self.fwtmax=0
             self.ompeak=0
-            self.C=np.pi*self.twf(0)
+            self.C=np.pi*self.twf(window_length/2)
             self.omg=0
-            self.tpeak=0
+            #self.tpeak=0
+            self.tpeak = 1
 
         #Needs Review
         #self.xi1=np.amin(self.fwt(np.arange(0,window_length*SampleRate,SampleRate)))
@@ -213,6 +221,7 @@ class IF:
         #%      - d\log(f)/dt - for the WT; (method 2) the minimal distinguishable
         #%      frequency difference (in Hz) for WFT, or log-difference for WT.
 
+        TFR=np.abs(TFR)
         [NF,L]=np.shape(TFR)
 
         #inizialization
@@ -555,7 +564,6 @@ class IF:
                     p_amplitude[tn1:tn2+1]=p_amplitude[tn1:tn2+1]/(nfunc[p_index[tn1:tn2+1]].T)
             else:
                 for tn in range(tn1,tn2+1):#from tn2+1
-                    #print('tn',tn)
                     if Number_peaks[0,tn]!=0:
                         p_amplitude[tn]=np.amax(Wp[0:Number_peaks[0,tn],tn])
                         idr[tn]=np.argmax(Wp[0:Number_peaks[0,tn],tn])
@@ -1046,7 +1054,7 @@ class IF:
             else:
                 method=0
 
-        idt=np.arange(1,L+1) #check what is the use of idt
+        idt=np.arange(0,L) #temporal indeces
         if isinstance(tfsupp,dict):
             idt=tfsupp['2']
             tfsupp=tfsupp['1']
@@ -1056,7 +1064,7 @@ class IF:
         if method==1 or method==2:
             NR=1
 
-        NC=len(idt)
+        NC=len(idt) #probably not needed
 
         ifreq=np.ones((NR,NC))*math.nan
         iamp=np.ones((NR,NC))*math.nan
@@ -1069,14 +1077,15 @@ class IF:
         if freq[0]<=0 or np.std(np.diff(freq,1,0))<np.std(freq[1:]/freq[0:-1]):
             fres='linear'
             fstep=np.mean(np.diff(freq,1,0))
-            tfsupp=1+np.floor((1/2)+(tfsupp-freq[0])/fstep)
+            #tfsupp=1+np.floor((1/2)+(tfsupp-freq[0])/fstep)
+            tfsupp=np.floor((tfsupp-wopt.fmin)/fstep) -1
         else:
             fres='log'
             fstep=np.mean(np.diff(np.log(freq),0,1))
             tfsupp=1+np.floor((1/2)+(np.log(tfsupp)-np.log(freq[0]))/fstep)
-            #cut-off
-        tfsupp[tfsupp<1]=1
-        tfsupp[tfsupp>NF]=NF
+        #cut-off for indeces
+        tfsupp[tfsupp<0]=0
+        tfsupp[tfsupp>NF-1]=NF-1
 
         #Define variables to not use cells or structures
         C=wp.C
@@ -1220,11 +1229,11 @@ class IF:
 
             #%Ridge reconstruction--------------------------------------------------
             if method==0 or method==2:
-                rm=2
+                rm=1
                 if method==2:
-                    rm=1
+                    rm=0
                 for tn in range(tn1,tn2+1):
-                    ipeak=tfsupp[1,tn]
+                    ipeak=tfsupp[0,tn]
                     xn=idt[tn]
                     if ipeak>1 and ipeak<NF:
                         cs=TFR[[[ipeak],[ipeak-1],[ipeak+1]],xn]
@@ -1242,9 +1251,9 @@ class IF:
                                 ifreq[rm,tn]=ifreq[rm,tn]+p*fstep
                         ximax=2*np.pi*(freq[ipeak]-ifreq[rm,tn])
                         if nflag==0: #%if window FT is known in analytic form
-                            cmax=fwt[ximax]
+                            cmax=fwt(ximax)
                             if np.isnan(cmax):
-                                cmax=fwt[ximax+10**(-14)]
+                                cmax=fwt(ximax+10**(-14))
                             if np.isnan(cmax):
                                 cmax=fwtmax
                         else: #%if window FT is numerically estimated

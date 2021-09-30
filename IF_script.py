@@ -84,7 +84,7 @@ for f in os.listdir(main_dir):
 
         ########################## update wopt and wp
 
-        wp=IFreq.Wp(incr,fs)
+        wp=IFreq.Wp(incr,fs,'Hann')
         wopt=IFreq.Wopt(fs,wp,0,fs/2)
 
         # function to reconstruct official Instantaneous Frequency
