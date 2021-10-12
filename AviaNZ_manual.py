@@ -2133,44 +2133,72 @@ class AviaNZ(QMainWindow):
 
         # Sort out the spectrogram frequency axis
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
+
+        # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
+        # I'm doing the first for now.
+        # TODO: Bark has an arbitrary *1000 in. And need to sort out the units
+
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
-
         self.drawGuidelines()
 
         if self.zooniverse:
+
+            labels = [0,int(FreqRange//4000),int(FreqRange//2000),int(3*FreqRange//4000),int(FreqRange//1000)]
+            if self.sgScale == 'Mel Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoMel(labels[i])
+            elif self.sgScale == 'Bark Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoBark(labels[i])
+        
             offset=6
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[0])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
             self.label1 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label1)
             self.label1.setPos(0,0+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//4000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[1])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//4000))
             self.label2 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label2)
             self.label2.setPos(0,SpecRange/4+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//2000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[2])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//2000))
             self.label3 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label3)
             self.label3.setPos(0,SpecRange/2+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(3*FreqRange//4000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[3])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(3*FreqRange//4000))
             self.label4 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label4)
             self.label4.setPos(0,3*SpecRange/4+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//1000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[4])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//1000))
             self.label5 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label5)
             self.label5.setPos(0,SpecRange+offset)
         else:
-            self.specaxis.setTicks([[(0,round(self.sp.minFreqShow/1000, 2)),
-                                 (SpecRange/4,round(self.sp.minFreqShow/1000+FreqRange/4000, 2)),
-                                 (SpecRange/2,round(self.sp.minFreqShow/1000+FreqRange/2000, 2)),
-                                 (3*SpecRange/4,round(self.sp.minFreqShow/1000+3*FreqRange/4000, 2)),
-                                 (SpecRange,round(self.sp.minFreqShow/1000+FreqRange/1000, 2))]])
+            labels = [self.sp.minFreqShow, self.sp.minFreqShow+FreqRange/4, self.sp.minFreqShow+FreqRange/2, self.sp.minFreqShow+3*FreqRange/4, self.sp.minFreqShow+FreqRange]
+
+            if self.sgScale == 'Mel Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoMel(labels[i])
+            elif self.sgScale == 'Bark Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoBark(labels[i])*1000
+       
+            self.specaxis.setTicks([[(0,round(labels[0]/1000,2)),(SpecRange/4,round(labels[1]/1000,2)),(SpecRange/2,round(labels[2]/1000,2)),(3*SpecRange/4,round(labels[3]/1000,2)),(SpecRange,round(labels[4]/1000,2))]])
+            #self.specaxis.setTicks([[(0,round(self.sp.minFreqShow/1000, 2)),
+                                 #(SpecRange/4,round(self.sp.minFreqShow/1000+FreqRange/4000, 2)),
+                                 #(SpecRange/2,round(self.sp.minFreqShow/1000+FreqRange/2000, 2)),
+                                 #(3*SpecRange/4,round(self.sp.minFreqShow/1000+3*FreqRange/4000, 2)),
+                                 #(SpecRange,round(self.sp.minFreqShow/1000+FreqRange/1000, 2))]])
             self.specaxis.setLabel('kHz')
 
         self.updateOverview()
@@ -3916,7 +3944,13 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,self.sgScale,self.nfilters] = self.spectrogramDialog.getValues()
+        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,sgScale,self.nfilters] = self.spectrogramDialog.getValues()
+        if self.sgScale != sgScale:
+            self.sgScale = sgScale
+            changedY = True
+        else:  
+            changedY = False
+
         if (minFreq >= maxFreq):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec_()
@@ -3945,7 +3979,7 @@ class AviaNZ(QMainWindow):
                     self.spectrogramDialog.low.setValue(minFreq)
                     self.spectrogramDialog.high.setValue(maxFreq)
 
-        self.redoFreqAxis(minFreq,maxFreq)
+        self.redoFreqAxis(minFreq,maxFreq,changedY=changedY)
 
         self.statusLeft.setText("Ready")
 
@@ -4391,17 +4425,16 @@ class AviaNZ(QMainWindow):
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
-    def redoFreqAxis(self,start,end, store=True):
+    def redoFreqAxis(self,start,end, store=True,changedY=False):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
             On the same go updates spectrogram and overview plots.
                 store: boolean, indicates whether changes should be stored in the config
         """
-        changedY = (start!=self.sp.minFreqShow or end!=self.sp.maxFreqShow)
+        changedY = (start!=self.sp.minFreqShow or end!=self.sp.maxFreqShow or changedY)
         # Lots of updating can be avoided if the Y freqs aren't changing:
         if changedY:
             self.sp.minFreqShow = max(start,self.sp.minFreq)
             self.sp.maxFreqShow = min(end,self.sp.maxFreq)
-            changedY = True
 
             if store:
                 if self.batmode:
