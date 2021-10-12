@@ -1463,7 +1463,7 @@ class AviaNZ_batchDenoise():
             gc.collect()
 
             # Main work is done here:
-            decomplvl = 7
+            decomplvl = 5
             try:
                 print("Denoising...")
                 if method=="const":

@@ -4,29 +4,27 @@ set -e
 # Script for mixing signal and noise examples and different SNRs.
 
 # Need this input:
-# 3 bg levels (windy at low - mid - hi SNR)
-# probs ~ 5 windy ex files needed
-
-# signal handheld - clean soundscape - noisy soundscape
-# probs ~ 5 of each class
-# but in all cases 5 min duration to get "purer" examples
+# windy background examples in denoising/noise/
+# clean soundscapes in denoising/signal/richss/
+# xeno-canto examples in denoising/sources/ , self-downloaded
 
 # -----------------------------------------------------------
 
-ROOTDIR=~/Documents/kiwis/wind/denoising
-AVIANZDIR=$(dirname "$0")
+# Set these two as needed:
+ROOTDIR=~/Documents/kiwis/wind/deposited/denoising  # path containing input wavs. will also store output
+AVIANZDIR=~/Documents/gitrep/birdscape/  # path containing AviaNZ.py
 cd ${ROOTDIR}
+
+# These dirs will contain the input files:
+# (relative to ROOTDIR which is current working dir)
+HANDHELD=signal/handheld/
+NOISYSS=signal/richss/
+NOISEDIR=noise/
+
 # Output dirs:
 mkdir -p mixed/
 mkdir -p mixed/handheld/
-mkdir -p mixed/cleanss/
 mkdir -p mixed/richss/
-
-# These dirs will contain the input files:
-HANDHELD=signal/handheld/
-CLEANSS=signal/cleanss/
-NOISYSS=signal/richss/
-NOISEDIR=noise/
 
 # 0. Download xeno-canto examples to the sources/ directory:
 HHSOURCES=sources/
@@ -37,36 +35,36 @@ HHSOURCES=sources/
 # XC492916
 # XC561864
 
-# # 1. Convert xeno-canto examples to appropriate format wavs:
-# # (also changes names to avoid spaces!)
-# ffmpeg -i "${HHSOURCES}XC101551 - Marsh Warbler - Acrocephalus palustris.mp3" \
-# 	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC101551.wav
-# ffmpeg -i "${HHSOURCES}XC121079 - Blackish-headed Spinetail - Synallaxis tithys.mp3" \
-# 	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC121079.wav
-# ffmpeg -i "${HHSOURCES}XC30184 - Common Nightingale - Luscinia megarhynchos.mp3" \
-# 	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC30184.wav
-# ffmpeg -i "${HHSOURCES}XC409363 - Blue-capped Ifrit - Ifrita kowaldi.mp3" \
-# 	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC409363.wav
-# ffmpeg -i "${HHSOURCES}XC492916 - Great Tit - Parus major newtoni.mp3" \
-# 	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC492916.wav
-# ffmpeg -i "${HHSOURCES}XC561864 - Wood Thrush - Hylocichla mustelina.mp3" \
-# 	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC561864.wav
-# 
-# 
-# # 2. normalize file rms levels to -28 dB
-# # (ffmpeg volume is measured relative to full scale)
-# cd ${HANDHELD}
-# for infile in $(ls XC*.wav)
-# do
-# 	# normalize
-# 	ffmpeg-normalize $infile -o n${infile} -nt rms -t -28 -v
-# 	# move the original away
-# 	mv $infile ${ROOTDIR}/${HHSOURCES}/${infile}
-# done
-# cd ${ROOTDIR}
+# 1. Convert xeno-canto examples to appropriate format wavs:
+# (also changes names to avoid spaces!)
+ffmpeg -i "${HHSOURCES}XC101551 - Marsh Warbler - Acrocephalus palustris.mp3" \
+	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC101551.wav
+ffmpeg -i "${HHSOURCES}XC121079 - Blackish-headed Spinetail - Synallaxis tithys.mp3" \
+	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC121079.wav
+ffmpeg -i "${HHSOURCES}XC30184 - Common Nightingale - Luscinia megarhynchos.mp3" \
+	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC30184.wav
+ffmpeg -i "${HHSOURCES}XC409363 - Blue-capped Ifrit - Ifrita kowaldi.mp3" \
+	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC409363.wav
+ffmpeg -i "${HHSOURCES}XC492916 - Great Tit - Parus major newtoni.mp3" \
+	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC492916.wav
+ffmpeg -i "${HHSOURCES}XC561864 - Wood Thrush - Hylocichla mustelina.mp3" \
+	-t 120 -ar 16000 -map_channel 0.0.0 ${HANDHELD}/XC561864.wav
 
 
-# 2. define mixers. each function will take files $1, $2 and output mix into $3
+# 2. normalize file rms levels to -28 dB
+# (ffmpeg volume is measured relative to full scale)
+cd ${HANDHELD}
+for infile in $(ls XC*.wav)
+do
+	# normalize
+	ffmpeg-normalize $infile -o n${infile} -nt rms -t -28 -v
+	# move the original away
+	mv $infile ${ROOTDIR}/${HHSOURCES}/${infile}
+done
+cd ${ROOTDIR}
+
+
+# 3. define mixers. each function will take files $1, $2 and output mix into $3
 mix_snr1 () {
 	echo "mixing at snr 1"  # 4:1 snr rms = 16:1 snr power = 12 dB
 	ffmpeg -i $1 -i $2 \
@@ -95,12 +93,7 @@ mix_snr3 () {
 		$3
 }
 
-# other useful ffmpeg commands:
-# ffmpeg -i STEREO.WAV -map_channel 0.0.0 MONO.WAV
-# sox -v 0.5 LOUD.WAV QUIET.WAV
-# ffmpeg -i SR.WAV -ar 16000 SR_16000.WAV
-
-# 3. Actually mix:
+# 4a. Actually mix:
 SIGDIR=${HANDHELD}
 si=1
 echo "Mixing signals from dir ${SIGDIR}"
@@ -121,22 +114,40 @@ do
 	si=$((si+1))
 done
 
-exit
-
-# TODO repeat above loop with
-SIGDIR=${CLEANSS}
+# 4b. Repeat the mixing with the other signals
 SIGDIR=${NOISYSS}
-
-# Batch denoise the files using AviaNZ,
-# with three different noise level choices
-mkdir -p denoised_const/
-mkdir -p denoised_ols/
-mkdir -p denoised_qr/
-
-cd ${AVIANZDIR}
-for METHOD in "const" "ols" "qr"
+si=1
+echo "Mixing signals from dir ${SIGDIR}"
+for SIGFILE in $(ls ${SIGDIR}/*wav)
 do
-	python3 AviaNZ.py -c -n "const" \
+	echo "Using signal example ${SIGFILE}"
+	ni=1
+	for NOISEFILE in $(ls ${NOISEDIR}/*wav)
+	do
+		echo "Using noise example ${NOISEFILE}"
+		# SNR 1,2,3 are just indices for easier parsing - the actual SNR
+		# is set inside the mix* functions
+		mix_snr1 "${NOISEFILE}" "${SIGFILE}" "mixed/richss/snr1_noise${ni}_sig${si}.wav"
+		mix_snr2 "${NOISEFILE}" "${SIGFILE}" "mixed/richss/snr2_noise${ni}_sig${si}.wav"
+		# (not using snr3 b/c this it too queit for the non-targeted signal files)
+		ni=$((ni+1))
+	done
+	si=$((si+1))
+done
+
+# 5. Batch denoise the files using AviaNZ,
+# with three different noise level choices
+cd ${AVIANZDIR}
+for METHOD in "ols" "qr" "const" 
+do
+	# for handheld signals
+	mkdir -p ${ROOTDIR}/denoised_${METHOD}/handheld/
+	python3 AviaNZ.py -c -n ${METHOD} \
 		-d "${ROOTDIR}/mixed/handheld/" \
 		-e "${ROOTDIR}/denoised_${METHOD}/handheld/"
+	# for soundscape signals
+	mkdir -p ${ROOTDIR}/denoised_${METHOD}/richss/
+	python3 AviaNZ.py -c -n ${METHOD} \
+		-d "${ROOTDIR}/mixed/richss/" \
+		-e "${ROOTDIR}/denoised_${METHOD}/richss/"
 done

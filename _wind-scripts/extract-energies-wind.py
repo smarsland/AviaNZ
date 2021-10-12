@@ -1,6 +1,11 @@
 # Small script for extracting energies or other measures from wav files
 import sys
+# set your path to AviaNZ folder here:
 sys.path.append('/home/julius/Documents/gitrep/birdscape')
+
+# set the directory containing the pilotdata set here:
+# (.energies files will also be exported there)
+DIR = '/home/julius/Documents/kiwis/wind/deposited/pilotdata/'
 
 import wavio
 import os
@@ -41,7 +46,6 @@ def rawEnergies(data, filename, nodes, wv='dmey2'):
     print(np.shape(E))
     np.savetxt(out, E, delimiter="\t")
 
-DIR = '/home/julius/Documents/kiwis/wind/pilotdata/selected/'
 for root, dirs, files in os.walk(DIR):
     for file in files:
         if re.search("_2300.*wav$", file):
@@ -50,8 +54,3 @@ for root, dirs, files in os.walk(DIR):
             wav = loadData(ff, 1*60, 0*60)  # file, len, off
             rawEnergies(wav, ff, range(1,63), 'dmey2')
             rawEnergies(wav, ff, range(1,63), 'sym8')
-
-# FILENAME = '/home/julius/Documents/audiodata/Zealandia_our/wind/ZA_20181004_203000.wav'
-# print("working on" + FILENAME)
-# wav = loadData(FILENAME, 5*60, 0*60)  # file, len, off
-# rawEnergies(wav, FILENAME, range(1,63))
