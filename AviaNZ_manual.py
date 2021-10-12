@@ -270,7 +270,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.show()
 
-            # some old leftover?
+            # TODO: some old leftover?
             # keyPressed = QtCore.Signal(int)
 
             # Save the segments every minute
@@ -634,6 +634,9 @@ class AviaNZ(QMainWindow):
         self.moveNext5minsKey = QShortcut(QKeySequence("Shift+Right"), self)
         self.moveNext5minsKey.activated.connect(self.moveNext5mins)
 
+        self.toggleLabelType = QShortcut(QKeySequence("Tab"),self)
+        self.toggleLabelType.activated.connect(self.toggleViewSp)
+
         # AMPLITUDE dock
         self.w_ampl = pg.GraphicsLayoutWidget()
         self.p_ampl = SupportClasses_GUI.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
@@ -870,7 +873,13 @@ class AviaNZ(QMainWindow):
         self.exportSoundBtn = QPushButton("  &Save sound clip")
         self.exportSoundBtn.clicked.connect(self.save_selected_sound)
         self.exportSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
-        self.exportSoundBtn.setToolTip("Export the selected sound to a file")
+        self.exportSoundBtn.setToolTip("Export the selected segment to a file")
+
+        # export selected sound
+        self.exportSlowSoundBtn = QPushButton("  Save slo&w  sound clip")
+        self.exportSlowSoundBtn.clicked.connect(self.save_selected_slow_sound)
+        self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
+        self.exportSlowSoundBtn.setToolTip("Export the selected sound to a file at different speed")
 
         # flips buttons to Disabled state
         self.refreshSegmentControls()
@@ -924,6 +933,7 @@ class AviaNZ(QMainWindow):
         segContrsBox.addWidget(self.confirmButton)
         segContrsBox.addWidget(self.deleteButton)
         segContrsBox.addWidget(self.exportSoundBtn)
+        segContrsBox.addWidget(self.exportSlowSoundBtn)
         self.w_controls.addWidget(segContrs, row=12, col=0, colspan=4)
 
         # # add spacers to control stretch - seems to be ignored though
@@ -1068,7 +1078,7 @@ class AviaNZ(QMainWindow):
             Remember to update this when segment controls change!
         """
         # basic buttons which toggle on any segment selection
-        btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn]
+        btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn, self.exportSlowSoundBtn]
         # Buttons which should be allowed in batmode
         batbtns = [self.deleteButton]
 
@@ -2136,7 +2146,6 @@ class AviaNZ(QMainWindow):
 
         # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
         # I'm doing the first for now.
-        # TODO: Bark has an arbitrary *1000 in. And need to sort out the units
 
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
@@ -2189,9 +2198,13 @@ class AviaNZ(QMainWindow):
             if self.sgScale == 'Mel Frequency':
                 for i in range(len(labels)):
                     labels[i] = self.sp.convertHztoMel(labels[i])
+                self.specaxis.setLabel('Mels')
             elif self.sgScale == 'Bark Frequency':
                 for i in range(len(labels)):
-                    labels[i] = self.sp.convertHztoBark(labels[i])*1000
+                    labels[i] = self.sp.convertHztoBark(labels[i])
+                self.specaxis.setLabel('Barks')
+            else:
+                self.specaxis.setLabel('kHz')
        
             self.specaxis.setTicks([[(0,round(labels[0]/1000,2)),(SpecRange/4,round(labels[1]/1000,2)),(SpecRange/2,round(labels[2]/1000,2)),(3*SpecRange/4,round(labels[3]/1000,2)),(SpecRange,round(labels[4]/1000,2))]])
             #self.specaxis.setTicks([[(0,round(self.sp.minFreqShow/1000, 2)),
@@ -2199,7 +2212,6 @@ class AviaNZ(QMainWindow):
                                  #(SpecRange/2,round(self.sp.minFreqShow/1000+FreqRange/2000, 2)),
                                  #(3*SpecRange/4,round(self.sp.minFreqShow/1000+3*FreqRange/4000, 2)),
                                  #(SpecRange,round(self.sp.minFreqShow/1000+FreqRange/1000, 2))]])
-            self.specaxis.setLabel('kHz')
 
         self.updateOverview()
         self.textpos = int((self.sp.maxFreqShow-self.sp.minFreqShow)/height) #+ self.config['textoffset']
@@ -4422,6 +4434,38 @@ class AviaNZ(QMainWindow):
                     filename = filename + '.wav'
                 tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
                 wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+            # update the file list box
+            self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
+
+    def save_selected_slow_sound(self, id=-1):
+        """ Listener for 'Save selected slow sound' menu item.
+        choose destination and give it a name
+        """
+        if self.box1id is None or self.box1id<0:
+            print("No box selected")
+            msg = SupportClasses_GUI.MessagePopup("w", "No segment", "No sound selected to save")
+            msg.exec_()
+            return
+        else:
+            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                x1 = self.listRectanglesa2[self.box1id].pos().x()
+                x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
+                y1 = max(self.sp.minFreq, self.segments[self.box1id][2])
+                y2 = min(self.segments[self.box1id][3], self.sp.maxFreq)
+            else:
+                x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
+                y1 = self.sp.minFreq
+                y2 = self.sp.maxFreq
+            x1 = math.floor(x1 * self.config['incr'])
+            x2 = math.floor(x2 * self.config['incr'])
+            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
+            if filename:
+                # filedialog doesn't attach extension
+                filename = str(filename)
+                if not filename.endswith('.wav'):
+                    filename = filename + '.wav'
+                tosave = self.audiodata[int(x1):int(x2)]
+                wavio.write(filename, tosave.astype('int16'), self.sampleRate//self.slowSpeed, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
