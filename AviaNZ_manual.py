@@ -270,9 +270,6 @@ class AviaNZ(QMainWindow):
             else:
                 self.show()
 
-            # TODO: some old leftover?
-            # keyPressed = QtCore.Signal(int)
-
             # Save the segments every minute
             self.timer = QTimer()
             self.timer.timeout.connect(self.saveSegments)
@@ -1584,6 +1581,7 @@ class AviaNZ(QMainWindow):
             dlg += 1
             dlg.update()
 
+            print(self.datalength,self.sampleRate)
             self.datalengthSec = self.datalength / self.sampleRate
             print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
 
@@ -1651,7 +1649,22 @@ class AviaNZ(QMainWindow):
             # Bat mode: initialize with an empty segment for the entire file
             if self.batmode and len(self.segments)==0:
                 species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
-                newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
+                # SRM: TODO: keep this? If so, needs a parameter...
+                self.useClicks = True
+                if self.useClicks:
+                    result = self.sp.clickSearch()
+                    if result is not None:
+                        start = self.convertSpectoAmpl(result[0])
+                        end = self.convertSpectoAmpl(result[1])
+                        #print(result,start,end)
+                    else:
+                        start = 0
+                        end = self.sp.fileLength / self.sampleRate
+                else:
+                    start = 0
+                    end = self.sp.fileLength / self.sampleRate
+                newSegment = Segment.Segment([start, end, 0, 0, species])
+                #newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
                 self.segments.append(newSegment)
                 self.segmentsToSave = True
                 self.refreshFileColor()
@@ -1684,7 +1697,10 @@ class AviaNZ(QMainWindow):
             self.timeaxis.setOffset(self.startRead+self.startTime)
 
             # Set the window size
-            self.windowSize = self.config['windowWidth']
+            if self.batmode:
+                self.windowSize = self.datalengthSec
+            else:
+                self.windowSize = self.config['windowWidth']
             self.timeaxis.setRange(0, self.windowSize)
             self.widthWindow.setRange(0.5, self.datalengthSec)
 
@@ -1956,6 +1972,7 @@ class AviaNZ(QMainWindow):
     def invertSpectrogram(self):
         """ Listener for the menu item that inverts the spectrogram in bat mode"""
         # TODO: Check this!
+
         with pg.BusyCursor():
             self.statusLeft.setText("Inverting...")
             print("Inverting spectrogam with window ", 1024, " and increment ",512)
@@ -2648,6 +2665,7 @@ class AviaNZ(QMainWindow):
 
         if not saveSeg:
             # check if this segment fits in the current spectrogram page
+            print("*",startpoint,endpoint,y1,y1,self.sp.minFreqShow,self.sp.maxFreqShow,self.datalengthSec)
             if endpoint < 0 or startpoint > self.datalengthSec:
                 print("Warning: a segment was not shown")
                 show = False
