@@ -270,9 +270,6 @@ class AviaNZ(QMainWindow):
             else:
                 self.show()
 
-            # some old leftover?
-            # keyPressed = QtCore.Signal(int)
-
             # Save the segments every minute
             self.timer = QTimer()
             self.timer.timeout.connect(self.saveSegments)
@@ -634,6 +631,9 @@ class AviaNZ(QMainWindow):
         self.moveNext5minsKey = QShortcut(QKeySequence("Shift+Right"), self)
         self.moveNext5minsKey.activated.connect(self.moveNext5mins)
 
+        self.toggleLabelType = QShortcut(QKeySequence("Tab"),self)
+        self.toggleLabelType.activated.connect(self.toggleViewSp)
+
         # AMPLITUDE dock
         self.w_ampl = pg.GraphicsLayoutWidget()
         self.p_ampl = SupportClasses_GUI.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
@@ -870,7 +870,13 @@ class AviaNZ(QMainWindow):
         self.exportSoundBtn = QPushButton("  &Save sound clip")
         self.exportSoundBtn.clicked.connect(self.save_selected_sound)
         self.exportSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
-        self.exportSoundBtn.setToolTip("Export the selected sound to a file")
+        self.exportSoundBtn.setToolTip("Export the selected segment to a file")
+
+        # export selected sound
+        self.exportSlowSoundBtn = QPushButton("  Save slo&w  sound clip")
+        self.exportSlowSoundBtn.clicked.connect(self.save_selected_slow_sound)
+        self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
+        self.exportSlowSoundBtn.setToolTip("Export the selected sound to a file at different speed")
 
         # flips buttons to Disabled state
         self.refreshSegmentControls()
@@ -924,6 +930,7 @@ class AviaNZ(QMainWindow):
         segContrsBox.addWidget(self.confirmButton)
         segContrsBox.addWidget(self.deleteButton)
         segContrsBox.addWidget(self.exportSoundBtn)
+        segContrsBox.addWidget(self.exportSlowSoundBtn)
         self.w_controls.addWidget(segContrs, row=12, col=0, colspan=4)
 
         # # add spacers to control stretch - seems to be ignored though
@@ -1068,7 +1075,7 @@ class AviaNZ(QMainWindow):
             Remember to update this when segment controls change!
         """
         # basic buttons which toggle on any segment selection
-        btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn]
+        btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn, self.exportSlowSoundBtn]
         # Buttons which should be allowed in batmode
         batbtns = [self.deleteButton]
 
@@ -1574,6 +1581,7 @@ class AviaNZ(QMainWindow):
             dlg += 1
             dlg.update()
 
+            print(self.datalength,self.sampleRate)
             self.datalengthSec = self.datalength / self.sampleRate
             print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
 
@@ -1639,12 +1647,29 @@ class AviaNZ(QMainWindow):
                 self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
 
             # Bat mode: initialize with an empty segment for the entire file
-            #if self.batmode and len(self.segments)==0:
-            #    species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
-            #    newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
-            #    self.segments.append(newSegment)
-            #    self.segmentsToSave = True
-            #    self.refreshFileColor()
+
+            if self.batmode and len(self.segments)==0:
+                species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
+                # SRM: TODO: keep this? If so, needs a parameter...
+                self.useClicks = True
+                if self.useClicks:
+                    result = self.sp.clickSearch()
+                    if result is not None:
+                        start = self.convertSpectoAmpl(result[0])
+                        end = self.convertSpectoAmpl(result[1])
+                        #print(result,start,end)
+                    else:
+                        start = 0
+                        end = self.sp.fileLength / self.sampleRate
+                else:
+                    start = 0
+                    end = self.sp.fileLength / self.sampleRate
+                newSegment = Segment.Segment([start, end, 0, 0, species])
+                #newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
+                self.segments.append(newSegment)
+                self.segmentsToSave = True
+                self.refreshFileColor()
+
 
             self.drawProtocolMarks()
 
@@ -1674,7 +1699,10 @@ class AviaNZ(QMainWindow):
             self.timeaxis.setOffset(self.startRead+self.startTime)
 
             # Set the window size
-            self.windowSize = self.config['windowWidth']
+            if self.batmode:
+                self.windowSize = self.datalengthSec
+            else:
+                self.windowSize = self.config['windowWidth']
             self.timeaxis.setRange(0, self.windowSize)
             self.widthWindow.setRange(0.5, self.datalengthSec)
 
@@ -1946,6 +1974,7 @@ class AviaNZ(QMainWindow):
     def invertSpectrogram(self):
         """ Listener for the menu item that inverts the spectrogram in bat mode"""
         # TODO: Check this!
+
         with pg.BusyCursor():
             self.statusLeft.setText("Inverting...")
             print("Inverting spectrogam with window ", 1024, " and increment ",512)
@@ -2133,45 +2162,75 @@ class AviaNZ(QMainWindow):
 
         # Sort out the spectrogram frequency axis
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
+
+        # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
+        # I'm doing the first for now.
+
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
-
         self.drawGuidelines()
 
         if self.zooniverse:
+
+            labels = [0,int(FreqRange//4000),int(FreqRange//2000),int(3*FreqRange//4000),int(FreqRange//1000)]
+            if self.sgScale == 'Mel Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoMel(labels[i])
+            elif self.sgScale == 'Bark Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoBark(labels[i])
+        
             offset=6
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[0])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
             self.label1 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label1)
             self.label1.setPos(0,0+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//4000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[1])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//4000))
             self.label2 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label2)
             self.label2.setPos(0,SpecRange/4+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//2000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[2])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//2000))
             self.label3 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label3)
             self.label3.setPos(0,SpecRange/2+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(3*FreqRange//4000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[3])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(3*FreqRange//4000))
             self.label4 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label4)
             self.label4.setPos(0,3*SpecRange/4+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//1000))
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(labels[4])
+            #txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//1000))
             self.label5 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label5)
             self.label5.setPos(0,SpecRange+offset)
         else:
-            self.specaxis.setTicks([[(0,round(self.sp.minFreqShow/1000, 2)),
-                                 (SpecRange/4,round(self.sp.minFreqShow/1000+FreqRange/4000, 2)),
-                                 (SpecRange/2,round(self.sp.minFreqShow/1000+FreqRange/2000, 2)),
-                                 (3*SpecRange/4,round(self.sp.minFreqShow/1000+3*FreqRange/4000, 2)),
-                                 (SpecRange,round(self.sp.minFreqShow/1000+FreqRange/1000, 2))]])
-            self.specaxis.setLabel('kHz')
+            labels = [self.sp.minFreqShow, self.sp.minFreqShow+FreqRange/4, self.sp.minFreqShow+FreqRange/2, self.sp.minFreqShow+3*FreqRange/4, self.sp.minFreqShow+FreqRange]
+
+            if self.sgScale == 'Mel Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoMel(labels[i])
+                self.specaxis.setLabel('Mels')
+            elif self.sgScale == 'Bark Frequency':
+                for i in range(len(labels)):
+                    labels[i] = self.sp.convertHztoBark(labels[i])
+                self.specaxis.setLabel('Barks')
+            else:
+                self.specaxis.setLabel('kHz')
+       
+            self.specaxis.setTicks([[(0,round(labels[0]/1000,2)),(SpecRange/4,round(labels[1]/1000,2)),(SpecRange/2,round(labels[2]/1000,2)),(3*SpecRange/4,round(labels[3]/1000,2)),(SpecRange,round(labels[4]/1000,2))]])
+            #self.specaxis.setTicks([[(0,round(self.sp.minFreqShow/1000, 2)),
+                                 #(SpecRange/4,round(self.sp.minFreqShow/1000+FreqRange/4000, 2)),
+                                 #(SpecRange/2,round(self.sp.minFreqShow/1000+FreqRange/2000, 2)),
+                                 #(3*SpecRange/4,round(self.sp.minFreqShow/1000+3*FreqRange/4000, 2)),
+                                 #(SpecRange,round(self.sp.minFreqShow/1000+FreqRange/1000, 2))]])
 
         self.updateOverview()
         self.textpos = int((self.sp.maxFreqShow-self.sp.minFreqShow)/height) #+ self.config['textoffset']
@@ -2608,6 +2667,7 @@ class AviaNZ(QMainWindow):
 
         if not saveSeg:
             # check if this segment fits in the current spectrogram page
+            print("*",startpoint,endpoint,y1,y1,self.sp.minFreqShow,self.sp.maxFreqShow,self.datalengthSec)
             if endpoint < 0 or startpoint > self.datalengthSec:
                 print("Warning: a segment was not shown")
                 show = False
@@ -3916,7 +3976,13 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,self.sgScale,self.nfilters] = self.spectrogramDialog.getValues()
+        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,sgScale,self.nfilters] = self.spectrogramDialog.getValues()
+        if self.sgScale != sgScale:
+            self.sgScale = sgScale
+            changedY = True
+        else:  
+            changedY = False
+
         if (minFreq >= maxFreq):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec_()
@@ -3945,7 +4011,7 @@ class AviaNZ(QMainWindow):
                     self.spectrogramDialog.low.setValue(minFreq)
                     self.spectrogramDialog.high.setValue(maxFreq)
 
-        self.redoFreqAxis(minFreq,maxFreq)
+        self.redoFreqAxis(minFreq,maxFreq,changedY=changedY)
 
         self.statusLeft.setText("Ready")
 
@@ -4040,9 +4106,9 @@ class AviaNZ(QMainWindow):
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
-                elif method=="instantShaper1":
+                elif method=="instantShaper1" or method=="instantShaper2":
                     # instantaneous frequency
-                    IFmethod=1
+                    IFmethod = int(method[-1])
                     spstart = math.floor(self.convertAmpltoSpec(segRelativeStart))
                     spend = math.ceil(self.convertAmpltoSpec(segRelativeEnd))
                     sg = np.copy(self.sp.sg[spstart:spend,:])
@@ -4053,23 +4119,6 @@ class AviaNZ(QMainWindow):
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
                     segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod, IFsettings)
-                    # shape.tstart is relative to segment start (0)
-                    # so we also need to add the segment start
-                    segshape.tstart += segRelativeStart
-
-                elif method=="instantShaper2":
-                    # instantaneous frequency
-                    IFmethod=2
-                    spstart = math.floor(self.convertAmpltoSpec(segRelativeStart))
-                    spend = math.ceil(self.convertAmpltoSpec(segRelativeEnd))
-                    sg = np.copy(self.sp.sg[spstart:spend,:])
-                    # mask freqs outside the currently marked segment
-                    if segm[3]>0:
-                        markedylow = math.floor(self.convertFreqtoY(segm[2]))
-                        markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
-                        sg[:,:markedylow] = 0
-                        sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType,IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
@@ -4408,17 +4457,48 @@ class AviaNZ(QMainWindow):
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
-    def redoFreqAxis(self,start,end, store=True):
+    def save_selected_slow_sound(self, id=-1):
+        """ Listener for 'Save selected slow sound' menu item.
+        choose destination and give it a name
+        """
+        if self.box1id is None or self.box1id<0:
+            print("No box selected")
+            msg = SupportClasses_GUI.MessagePopup("w", "No segment", "No sound selected to save")
+            msg.exec_()
+            return
+        else:
+            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                x1 = self.listRectanglesa2[self.box1id].pos().x()
+                x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
+                y1 = max(self.sp.minFreq, self.segments[self.box1id][2])
+                y2 = min(self.segments[self.box1id][3], self.sp.maxFreq)
+            else:
+                x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
+                y1 = self.sp.minFreq
+                y2 = self.sp.maxFreq
+            x1 = math.floor(x1 * self.config['incr'])
+            x2 = math.floor(x2 * self.config['incr'])
+            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
+            if filename:
+                # filedialog doesn't attach extension
+                filename = str(filename)
+                if not filename.endswith('.wav'):
+                    filename = filename + '.wav'
+                tosave = self.audiodata[int(x1):int(x2)]
+                wavio.write(filename, tosave.astype('int16'), self.sampleRate//self.slowSpeed, scale='dtype-limits', sampwidth=2)
+            # update the file list box
+            self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
+
+    def redoFreqAxis(self,start,end, store=True,changedY=False):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
             On the same go updates spectrogram and overview plots.
                 store: boolean, indicates whether changes should be stored in the config
         """
-        changedY = (start!=self.sp.minFreqShow or end!=self.sp.maxFreqShow)
+        changedY = (start!=self.sp.minFreqShow or end!=self.sp.maxFreqShow or changedY)
         # Lots of updating can be avoided if the Y freqs aren't changing:
         if changedY:
             self.sp.minFreqShow = max(start,self.sp.minFreq)
             self.sp.maxFreqShow = min(end,self.sp.maxFreq)
-            changedY = True
 
             if store:
                 if self.batmode:

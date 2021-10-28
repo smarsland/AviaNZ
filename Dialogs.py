@@ -3467,6 +3467,7 @@ class Shapes(QDialog):
         self.setWindowTitle('Shape analysis')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setMinimumWidth(300)
 
         # if len(segments) == 0:
         #     print("No segments to analyse!")
@@ -3530,10 +3531,8 @@ class Shapes(QDialog):
         self.activate.show()
 
     def changeBoxes(self, method):
-     # This does the hiding and showing of the options as the algorithm changes
-             # hide and reopen the default
-
-        print('method', method)
+        # This does the hiding and showing of the options as the algorithm changes
+        # hide and reopen the default
         for w in range(self.layout().count()):
             item = self.layout().itemAt(w)
             if item.widget() is not None:
@@ -3546,18 +3545,15 @@ class Shapes(QDialog):
         self.activate.show()
 
         if method == "instantShaper1":
-                for ww in range(self.IF1Layout.count()):
-                    self.IF1Layout.itemAt(ww).widget().show()
+            for ww in range(self.IF1Layout.count()):
+                self.IF1Layout.itemAt(ww).widget().show()
 
         elif method == "instantShaper2":
             for ww in range(self.IF2Layout.count()):
                 self.IF2Layout.itemAt(ww).widget().show()
 
 
-
-
     def getValues(self):
-        # TODO: check: self.medSize.value() is not used, should we keep it?
         method = self.detectorCombo.currentText()
         if method=="instantShaper1":
             pars = [self.IF1alpha.value()]
@@ -3567,4 +3563,3 @@ class Shapes(QDialog):
             pars=[]
         print('pars', pars)
         return(method, pars)
-
