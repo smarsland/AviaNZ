@@ -96,15 +96,15 @@ def Syllable_IF_fun3(t,t0,t1,t2,t3,t4,t5,f0,f1,f2,f3,f4,f5):
     return IF
 
 ######### GENERATE KIWI SYLLABLES ###########################
-# samplerate = 16000
-# T=1
-# A=1
-# phi=0
-# #A= np.iinfo(np.int16).max
-# t = np.linspace(0., T, samplerate*T,endpoint=False)
-# test_dir="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals"
-# test_fold="fake_kiwi_syllables"
-# ref_dir=test_dir+"\\"+test_fold+"\\IF_references"
+samplerate = 16000
+T=1
+A=1
+phi=0
+#A= np.iinfo(np.int16).max
+t = np.linspace(0., T, samplerate*T,endpoint=False)
+test_dir="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals"
+test_fold="fake_kiwi_syllables"
+ref_dir=test_dir+"\\"+test_fold+"\\IF_references"
 
 # ## SYLLABLE 1
 # file_id="syllable_1.wav"
@@ -387,12 +387,158 @@ def Syllable_IF_fun3(t,t0,t1,t2,t3,t4,t5,f0,f1,f2,f3,f4,f5):
 #     for i in range(len(if1)):
 #         writer.writerow({"IF":if1[i]})
 
+ ## SYLLABLE 10
+# file_id="syllable_19.wav"
+# f0=1500
+# f1=2000
+# f2=1800
+# t0=0
+# t1=0.25
+# t2=1
+# a1=(f0-f1)/((t0-t1)**2)
+# b1=-2*a1*t1
+# c1=f1+a1*t1**2
+# a2=-(f1-f2)/(t1-t2)**2
+# b2=-2*a2*t1
+# c2=f1+a2*(t1**2)
+# alpha=1000
+# eps=10
+# phi_t=np.zeros((np.shape(t)))
+# phi_t[int(t0*samplerate):int(t1*samplerate)]=phi+ 2*np.pi*((a1/3)*t[int(t0*samplerate):int(t1*samplerate)]**3+(b1/2)*t[int(t0*samplerate):int(t1*samplerate)]**2+c1*t[int(t0*samplerate):int(t1*samplerate)])
+# phi_t[int(t1*samplerate):]=phi+ 2*np.pi*((a2/3)*t[int(t1*samplerate):]**3+(b2/2)*t[int(t1*samplerate):]**2+c2*t[int(t1*samplerate):])
+# trill=2*np.pi*((eps/alpha)*(1-np.cos(alpha*t)))
+# s1=A*np.sin(phi+phi_t+trill)
+# file_name=test_dir+"\\"+test_fold+"\\"+file_id
+# wavio.write(file_name,s1, samplerate,sampwidth=2)
+# if1=Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)
+# if_t=if1+eps*np.sin(alpha*t)
+#
+# #save plot IF
+# fig_name=ref_dir+"\\"+file_id[:-4]+".png"
+# fig=plt.figure()
+# plt.plot(if_t)
+# #plt.show()
+# fig.suptitle(file_id[:-4])
+# #plt.savefig(fig_name)
+# plt.show()
+# #save IF
+# csvfilename=test_dir + '\\' + test_fold   +"\\"+file_id[:-4]+"_IF.csv"
+# fieldnames=["IF"]
+# with open(csvfilename, 'w', newline='') as csvfile:
+#     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+#     writer.writeheader()
+#     for i in range(len(if1)):
+#         writer.writerow({"IF":if1[i]})
+
+
+
+ ## SYLLABLE 11
+# file_id="syllable_11.wav"
+# f0=1500
+# f1=2000
+# f2=1800
+# t0=0
+# t1=0.5
+# t2=1
+# a1=(f0-f1)/((t0-t1)**2)
+# b1=-2*a1*t1
+# c1=f1+a1*t1**2
+# a2=-(f1-f2)/(t1-t2)**2
+# b2=-2*a2*t1
+# c2=f1+a2*(t1**2)
+# alpha=1000
+# eps=1
+# phi_t=np.zeros((np.shape(t)))
+# phi_t[int(t0*samplerate):int(t1*samplerate)]=phi+ 2*np.pi*((a1/3)*t[int(t0*samplerate):int(t1*samplerate)]**3+(b1/2)*t[int(t0*samplerate):int(t1*samplerate)]**2+c1*t[int(t0*samplerate):int(t1*samplerate)])
+# phi_t[int(t1*samplerate):]=phi+ 2*np.pi*((a2/3)*t[int(t1*samplerate):]**3+(b2/2)*t[int(t1*samplerate):]**2+c2*t[int(t1*samplerate):])
+# trill=2*np.pi*((eps/alpha)*(1-np.cos(alpha*t)))
+# s1=A*np.sin(phi+phi_t+trill)
+# file_name=test_dir+"\\"+test_fold+"\\"+file_id
+# wavio.write(file_name,s1, samplerate,sampwidth=2)
+# if1=Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)
+# if_t=if1+eps*np.sin(alpha*t)
+#
+# #save plot IF
+# fig_name=ref_dir+"\\"+file_id[:-4]+".png"
+# fig=plt.figure()
+# plt.plot(if_t)
+# #plt.show()
+# fig.suptitle(file_id[:-4])
+# #plt.savefig(fig_name)
+# plt.show()
+# #save IF
+# csvfilename=test_dir + '\\' + test_fold   +"\\"+file_id[:-4]+"_IF.csv"
+# fieldnames=["IF"]
+# with open(csvfilename, 'w', newline='') as csvfile:
+#     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+#     writer.writeheader()
+#     for i in range(len(if1)):
+#         writer.writerow({"IF":if1[i]})
+
+
+##  SYLLABLE 12
+# file_id="syllable_12.wav"
+# f0=1500
+# f1=2000
+# f2=1800
+# t0=0
+# t1=0.75
+# t2=1
+# a1=(f0-f1)/((t0-t1)**2)
+# b1=-2*a1*t1
+# c1=f1+a1*t1**2
+# a2=-(f1-f2)/(t1-t2)**2
+# b2=-2*a2*t1
+# c2=f1+a2*(t1**2)
+# alpha=1000
+# eps=1
+# phi_t=np.zeros((np.shape(t)))
+# phi_t[int(t0*samplerate):int(t1*samplerate)]=phi+ 2*np.pi*((a1/3)*t[int(t0*samplerate):int(t1*samplerate)]**3+(b1/2)*t[int(t0*samplerate):int(t1*samplerate)]**2+c1*t[int(t0*samplerate):int(t1*samplerate)])
+# phi_t[int(t1*samplerate):]=phi+ 2*np.pi*((a2/3)*t[int(t1*samplerate):]**3+(b2/2)*t[int(t1*samplerate):]**2+c2*t[int(t1*samplerate):])
+# trill=2*np.pi*((eps/alpha)*(1-np.cos(alpha*t)))
+# s1=A*np.sin(phi+phi_t+trill)
+# file_name=test_dir+"\\"+test_fold+"\\"+file_id
+# wavio.write(file_name,s1, samplerate,sampwidth=2)
+# if1=Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)
+# if_t=if1+eps*np.sin(alpha*t)
+#
+# #save plot IF
+# fig_name=ref_dir+"\\"+file_id[:-4]+".png"
+# fig=plt.figure()
+# plt.plot(if_t)
+# #plt.show()
+# fig.suptitle(file_id[:-4])
+# #plt.savefig(fig_name)
+# plt.show()
+# #save IF
+# csvfilename=test_dir + '\\' + test_fold   +"\\"+file_id[:-4]+"_IF.csv"
+# fieldnames=["IF"]
+# with open(csvfilename, 'w', newline='') as csvfile:
+#     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+#     writer.writeheader()
+#     for i in range(len(if1)):
+#         writer.writerow({"IF":if1[i]})
+
+
 
 ################################# GENERATE DATASET ###################################################
 
 # for test_subfold in os.listdir(test_dir+"\\"+test_fold):
 #     if test_subfold[0]=="I":
 #         continue
+#     if test_subfold=="syllable_1":
+#         continue
+#     if test_subfold=="syllable_2":
+#         continue
+#     if test_subfold=="syllable_3":
+#         continue
+#     if test_subfold=="syllable_4":
+#         continue
+#     if test_subfold=="syllable_5":
+#         continue
+#     if test_subfold=="syllable_6":
+#         continue
+#
 #
 #     mean=0
 #     var=1
@@ -428,7 +574,7 @@ T=1
 # phi=0
 #A= np.iinfo(np.int16).max
 t = np.linspace(0., T, samplerate*T,endpoint=False)
-Test_List=["Test_01","Test_02", "Test_03"]
+Test_List=["Test_01","Test_02"]
 # A= np.iinfo(np.int16).max
 t = np.linspace(0., T, samplerate * T, endpoint=False)
 test_dir="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\fake_kiwi_syllables"
@@ -446,6 +592,8 @@ for test_id in Test_List:
 
     for test_fold in os.listdir(test_dir):
         if test_fold[0]=="I":
+            continue
+        if test_fold=="syllable_7":
             continue
         elif test_fold=="syllable_1":
             f0=1500
@@ -495,6 +643,67 @@ for test_id in Test_List:
             t1=0.75
             t2=1
             inst_freq_fun=lambda t: Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)
+        elif test_fold=="syllable_10":
+            f0=1500
+            f1=2000
+            f2=1800
+            t0=0
+            t1=0.25
+            t2=1
+            alpha=1000
+            eps=1
+            inst_freq_fun= lambda t: Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)+eps*np.sin(alpha*t)
+        elif test_fold=="syllable_11":
+            f0=1500
+            f1=2000
+            f2=1800
+            t0=0
+            t1=0.5
+            t2=1
+            alpha=1000
+            eps=1
+            inst_freq_fun= lambda t: Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)+eps*np.sin(alpha*t)
+        elif test_fold=="syllable_12":
+            f0=1500
+            f1=2000
+            f2=1800
+            t0=0
+            t1=0.75
+            t2=1
+            alpha=1000
+            eps=1
+            inst_freq_fun= lambda t: Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)+eps*np.sin(alpha*t)
+        elif test_fold=="syllable_13":
+            f0=1500
+            f1=2000
+            f2=1800
+            t0=0
+            t1=0.25
+            t2=1
+            alpha=1000
+            eps=2
+            inst_freq_fun= lambda t: Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)+eps*np.sin(alpha*t)
+        elif test_fold == "syllable_19":
+            f0 = 1500
+            f1 = 2000
+            f2 = 1800
+            t0 = 0
+            t1 = 0.25
+            t2 = 1
+            alpha = 1000
+            eps = 10
+            inst_freq_fun = lambda t: Syllable_IF_fun2(t, t0, t1, t2, f0, f1, f2) + eps * np.sin(alpha * t)
+        elif test_fold=="syllable_22":
+            f0=1500
+            f1=2000
+            f2=1800
+            t0=0
+            t1=0.25
+            t2=1
+            alpha=100
+            eps=100
+            inst_freq_fun= lambda t: Syllable_IF_fun2(t,t0,t1,t2,f0,f1,f2)+eps*np.sin(alpha*t)
+
 
         id_file=test_fold
         os.mkdir(test_dir+'\\'+test_fold+"\\"+test_id)
@@ -672,6 +881,8 @@ for test_id in Test_List:
             # os.mkdir(level_dir)
             k=0
             for file in os.listdir(save_directory+'\\'+dir):
+                if not file.endswith('.wav'):
+                    continue
                 print('Sample ', file)
                 #w = np.random.normal(mean, var, (np.shape(t)))
                 # aid_file=level_dir + "\\sample_"+str(k)+".wav"
@@ -949,3 +1160,4 @@ for test_id in Test_List:
         ax[2,0].set_xticklabels(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7'],rotation=45)
         fig.suptitle(test_fold, fontsize=30)
         plt.savefig(fig_name)
+        del fig, fig_name
