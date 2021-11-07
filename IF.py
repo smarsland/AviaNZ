@@ -242,7 +242,7 @@ class IF:
             dfreq=np.append(dfreq,freq[-1,0]-freq[-1::-1,0])
         else:
             fres=2
-            fstep=np.mean(np.diff(np.log(freq,1,0)))
+            fstep=np.mean(np.diff(np.log(freq),1,0))
             dfreq=np.log(freq[0,0])-np.log(freq[-1:0:-1,0])
             dfreq=np.append(dfreq,np.log(freq[-1,0])-np.log(freq[-1::-1,0]))
 
@@ -364,7 +364,11 @@ class IF:
                     Frequency_peaks= np.reshape(Frequency_peaks_copy, np.shape(Frequency_peaks),'F')
                     del Frequency_peaks_copy
                 else:
-                    Frequency_peaks[idnt]=freq[idf]*np.exp(dp[:]*fstep)
+                    Frequency_peaks_copy = Frequency_peaks.flatten('F')
+                    Frequency_peaks_copy[idnt] = np.reshape(freq[idf], (np.shape(idf)[1])) *np.exp(dp[:] * fstep)
+                    Frequency_peaks = np.reshape(Frequency_peaks_copy, np.shape(Frequency_peaks), 'F')
+                    del Frequency_peaks_copy
+                    #Frequency_peaks[idnt]=freq[idf]*np.exp(dp[:]*fstep)
                 #Correct "bad" places, if present
                 idb=np.argwhere((np.isnan(dp)) | (np.abs(dp)>1) | (idf==0) | (idf==NF-1))
 
@@ -399,19 +403,19 @@ class IF:
                     cg=G4[:,bn]
                     if cg[0]>cg[1] or cg[2]>cg[3]:
                         if cg[0]>cg[1]:
-                            Indeces_peaks[cn,tn]=1
+                            Indeces_peaks[cn,tn]=0
                             Amplitude_peaks[cn,tn]=cg[0]
                             Frequency_peaks[cn,tn]=freq[0]
                             cn=cn+1
                         if cg[3]>cg[2]:
-                            Indeces_peaks[cn,tn]=NF
+                            Indeces_peaks[cn,tn]=NF-1
                             Amplitude_peaks[cn,tn]=cg[3]
-                            Frequency_peaks[cn,tn]=freq[NF]
+                            Frequency_peaks[cn,tn]=freq[NF-1]
                             cn=cn+1
                     else:
-                        Indeces_peaks[0:2,tn]=[1,NF]
+                        Indeces_peaks[0:2,tn]=[0,NF-1]
                         Amplitude_peaks[0:2,tn]=[cg[0],cg[3]]
-                        Frequency_peaks[0:2,tn]=[freq[0],freq[NF]]
+                        Frequency_peaks[0:2,tn]=[freq[0],freq[NF-1]]
                         cn=cn+2
 
                     del G4
@@ -467,10 +471,10 @@ class IF:
                 cs=np.abs(TFR[:,tn])
                 #Ridge point
                 cpeak=cind
-                if cind>1 and cind<NF:
+                if cind>0 and cind<NF:
                     if cs[cind+1]==cs[cind-1] or submethod==2:
                         cpeak1=cind-1+np.flatnonzero(cs[cind:-1]>=cs[cind-1:-2] and cs[cind:-1]>cs[cind+1:])[0]#check
-                        cpeak1=np.amin([cpeak1,NF])
+                        cpeak1=np.amin([cpeak1,NF-1])
                         cpeak2=cind+1-np.flatnonzero(cs[cind:1:-1]>=cs[cind+1:2:-1] and cs[cind:1:-1]>cs[cind-1::-1])[0]#check
                         cpeak2=np.amax([cpeak2,1])
                         if cs[cpeak1]>0 and cs[cpeak2]>0:
@@ -491,7 +495,7 @@ class IF:
 
                     elif cs[cind+1]>cs[cind-1]:
                         cpeak=cind-1+np.flatnonzero(cs[cind:-1]>=cs[cind-1:-1] and cs[cind:-1]>cs[cind+1:])[0]#check
-                        cpeak=np.amin([cpeak,NF])
+                        cpeak=np.amin([cpeak,NF-1])
                     elif cs[cind+1]<cs[cind-1]:
                         cpeak=cind+1-np.flatnonzero(cs[cind:0:-1]>cs[cind-1::-1] and cs[cind:0:-1]>=cs[cind+1:1:-1])[0]#check
                         cpeak=np.amax([cpeak,1])
@@ -500,9 +504,9 @@ class IF:
                         cpeak=cind
                     else:
                         cpeak=1+np.flatnonzero(cs[cind+1:-1]>=cs[cind:-2] and cs[cind+1:-1]>cs[cind+2:])[0]#check
-                        cpeak=np.amin([cpeak,NF])
-                elif cind==NF:
-                    if cs[NF-1]<cs[NF]:
+                        cpeak=np.amin([cpeak,NF-1])
+                elif cind==NF-1:
+                    if cs[NF-1]<cs[NF-1]:
                         cpeak=cind
                     else:
                         cpeak=NF-np.flatnonzero(cs[cind-1:0:-1]>cs[cind-2:0:-1] and cs[cind-1::-1]>=cs[cind:1:-1])[0]#check
@@ -518,7 +522,7 @@ class IF:
 
                 if cpeak>2:
                     idown=cpeak-np.flatnonzero(cs[cpeak-1:0:-1]<=cs[cpeak:1:-1] and cs[cpeak-1:0:-1]<cs[cpeak-2::-1])[0]#check
-                iup=np.amin([iup,NF])
+                iup=np.amin([iup,NF-1])
                 idown=np.amax([idown,0])
                 tfsupp[1,tn]=idown
                 tfsupp[2,tn]=iup
