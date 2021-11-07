@@ -241,7 +241,7 @@ class IF:
             dfreq=freq[0,0]-freq[-1:0:-1,0]
             dfreq=np.append(dfreq,freq[-1,0]-freq[-1::-1,0])
         else:
-            fres=2
+            fres=2 #wavelet trasform
             fstep=np.mean(np.diff(np.log(freq),1,0))
             dfreq=np.log(freq[0,0])-np.log(freq[-1:0:-1,0])
             dfreq=np.append(dfreq,np.log(freq[-1,0])-np.log(freq[-1::-1,0]))
