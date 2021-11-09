@@ -1,48 +1,52 @@
 #29/10/2021
 # Author: Virginia Listanti
 #help script for TF tests
+# For Harvey this is the script: see the comments
 
 import SignalProc
 import IF as IFreq
 import numpy as np
-from numpy.linalg import norm
-#sfrom scipy.io import loadmat, savemat
+#sfrom scipy.io import loadmat, savemat #this can be useful to make python talk with MATLAB
 import matplotlib.pyplot as plt
-import os
-from scipy import optimize
-import scipy.special as spec
-import wavio
-import csv
-from scipy.special import kl_div
 
-test_name="Standard_Mel"
+
+test_name="Standard_Mel" #change test name
+#file_name -> path of the file you want to analise (note: somwntimes windows wants the double \\
 file_name="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\exponential_downchirp\\Test_02\\exponential_downchirp_0.wav"
 
 # file_name="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\pure_tone\\Test_02\\pure_tone_0_inv.wav"
 
-#parameters
+#parameters (these are the parameters for a Fourier Transform)
 window_width=1024
 incr=512
 window= "Hann"
+
+#"callinf IF class
+#"method=2 is the second method of the paper
 IF = IFreq.IF(method=2, pars=[1, 1])
+
+#calling signal proc -> see if it change if you want to use it with wavelets
 sp = SignalProc.SignalProc(window_width, incr)
+#you need to read the wav file with signal proc
 sp.readWav(file_name)
 fs = sp.sampleRate
 
 #evaluate spectrogram
 TFR = sp.spectrogram(window_width, incr, window,sgType='Standard',sgScale='Mel Frequency',equal_loudness=False,mean_normalise=True)
 TFR = TFR.T
+#you need to call sp.scalogram
 print("Spectrogram Dim =", np.shape(TFR))
 
 #Standard freq ax
-# fstep = (fs / 2) / np.shape(TFR)[0]
-# freqarr =sp.convertHztoMel(np.arange(fstep, fs / 2 + fstep, fstep))
+#it is important to set freqarr
+fstep = (fs / 2) / np.shape(TFR)[0]
+freqarr =sp.convertHztoMel(np.arange(fstep, fs / 2 + fstep, fstep))
 
-#mel freq axis
-nfilters=40
-freqarr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs/2), nfilters + 1)
-freqarr=freqarr[1:]
-fstep=np.mean(np.diff(freqarr))
+# #mel freq axis
+# nfilters=40
+# freqarr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs/2), nfilters + 1)
+# freqarr=freqarr[1:]
+# fstep=np.mean(np.diff(freqarr))
 
 #bark freq axis
 # nfilters=40
@@ -50,10 +54,14 @@ fstep=np.mean(np.diff(freqarr))
 # freqarr=freqarr[1:]
 # fstep=np.mean(np.diff(freqarr))
 
-
+#setting parametes for ecurve
 wopt = [fs, window_width]
+#calling ecurve
 tfsupp,_,_=IF.ecurve(TFR,freqarr,wopt)
 
+
+#plotting
+# change fig_name with the path you want
 #save picture
 fig_name="C:\\Users\\Virginia\\Documents\GitHub\\Thesis\\Experiments\\TFR_test_plot"+"\\"+test_name+".jpg"
 plt.rcParams["figure.autolayout"] = True
