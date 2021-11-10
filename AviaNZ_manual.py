@@ -288,13 +288,13 @@ class AviaNZ(QMainWindow):
         openIcon = self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton)
         fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
-        fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
+        fileMenu.addAction("Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         for recentfile in self.config['RecentFiles']:
             fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
         fileMenu.addSeparator()
         fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
-        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "Quit",QApplication.quit,"Ctrl+Q")
+        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit",QApplication.quit,"Ctrl+Q")
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
@@ -323,7 +323,7 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
 
-        colMenu = specMenu.addMenu("&Choose colour map")
+        colMenu = specMenu.addMenu("Choose colour map")
         colGroup = QActionGroup(self)
         for colour in self.config['ColourList']:
             cm = colMenu.addAction(colour)
@@ -338,7 +338,7 @@ class AviaNZ(QMainWindow):
         self.invertcm.setChecked(self.config['invertColourMap'])
 
         # specMenu.addSeparator()
-        specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
+        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog)
 
         if not self.DOC:
             specMenu.addSeparator()
@@ -385,8 +385,8 @@ class AviaNZ(QMainWindow):
         specMenu.addAction("Put docks back",self.dockReplace)
 
         actionMenu = self.menuBar().addMenu("&Actions")
-        actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
-        self.addRegularAction = actionMenu.addAction("&Mark regular segments", self.addRegularSegments, "Ctrl+M")
+        actionMenu.addAction("Delete all segments", self.deleteAll, "Ctrl+D")
+        self.addRegularAction = actionMenu.addAction("Mark regular segments", self.addRegularSegments, "Ctrl+M")
 
         actionMenu.addSeparator()
         self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
@@ -412,7 +412,7 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Export spectrogram image", self.saveImageRaw)
-        actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
+        actionMenu.addAction("&Export current view as image",self.saveImage,"Ctrl+I")
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -429,11 +429,11 @@ class AviaNZ(QMainWindow):
         utilMenu.addAction("Import from Excel", self.excel2Annotation)
         utilMenu.addAction("Import from Freebird", self.tag2Annotation)
         utilMenu.addAction("Backup annotations", self.backupAnnotations)
-        utilMenu.addAction("Split WAV/DATA files", self.launchSplitter)
+        utilMenu.addAction("&Split WAV/DATA files", self.launchSplitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
-        helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
+        helpMenu.addAction("&Cheat Sheet", self.showCheatSheet)
         helpMenu.addSeparator()
         helpMenu.addAction("About", self.showAbout, "Ctrl+A")
         if platform.system() == 'Darwin':
@@ -854,7 +854,7 @@ class AviaNZ(QMainWindow):
         contrastLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
 
         # Confirm button - auto ups the certainty to 100
-        self.confirmButton = QPushButton("   &Confirm labels")
+        self.confirmButton = QPushButton("   Confirm labels")
         self.confirmButton.clicked.connect(self.confirmSegment)
         self.confirmButton.setIcon(QIcon(QPixmap('img/check-mark2.png')))
         self.confirmButton.setStyleSheet("QPushButton {padding: 3px 3px 3px 3px}")
@@ -867,16 +867,17 @@ class AviaNZ(QMainWindow):
         self.deleteButton.setStyleSheet("QPushButton {padding: 3px 3px 3px 3px}")
 
         # export selected sound
-        self.exportSoundBtn = QPushButton("  &Save sound clip")
-        self.exportSoundBtn.clicked.connect(self.save_selected_sound)
+        self.exportSoundBtn = QPushButton("  Save sound clip")
+        self.exportSoundBtn.clicked.connect(lambda _ : self.save_selected_sound())
         self.exportSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
         self.exportSoundBtn.setToolTip("Export the selected segment to a file")
 
         # export selected sound
-        self.exportSlowSoundBtn = QPushButton("  Save slo&w  sound clip")
-        self.exportSlowSoundBtn.clicked.connect(self.save_selected_slow_sound)
-        self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
-        self.exportSlowSoundBtn.setToolTip("Export the selected sound to a file at different speed")
+        if not self.DOC:
+            self.exportSlowSoundBtn = QPushButton("  Save slow sound clip")
+            self.exportSlowSoundBtn.clicked.connect(lambda _ : self.save_selected_sound(self.slowSpeed))
+            self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
+            self.exportSlowSoundBtn.setToolTip("Export the selected sound to a file at different speed")
 
         # flips buttons to Disabled state
         self.refreshSegmentControls()
@@ -930,7 +931,8 @@ class AviaNZ(QMainWindow):
         segContrsBox.addWidget(self.confirmButton)
         segContrsBox.addWidget(self.deleteButton)
         segContrsBox.addWidget(self.exportSoundBtn)
-        segContrsBox.addWidget(self.exportSlowSoundBtn)
+        if not self.DOC:
+            segContrsBox.addWidget(self.exportSlowSoundBtn)
         self.w_controls.addWidget(segContrs, row=12, col=0, colspan=4)
 
         # # add spacers to control stretch - seems to be ignored though
@@ -1075,7 +1077,10 @@ class AviaNZ(QMainWindow):
             Remember to update this when segment controls change!
         """
         # basic buttons which toggle on any segment selection
-        btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn, self.exportSlowSoundBtn]
+        if self.DOC:
+            btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn]
+        else:
+            btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn, self.exportSlowSoundBtn]
         # Buttons which should be allowed in batmode
         batbtns = [self.deleteButton]
 
@@ -4423,9 +4428,10 @@ class AviaNZ(QMainWindow):
         msg.exec_()
         return
 
-    def save_selected_sound(self, id=-1):
-        """ Listener for 'Save selected sound' menu item.
-        choose destination and give it a name
+    def save_selected_sound(self, slowdown=1):
+        """ Listener for 'Save selected (slow) sound' button.
+            Chooses destination, file name, and exports.
+            slowdown: can pass a factor >1 (<1) to save slower (faster) sound.
         """
         if self.box1id is None or self.box1id<0:
             print("No box selected")
@@ -4451,39 +4457,7 @@ class AviaNZ(QMainWindow):
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
                 tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
-                wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
-            # update the file list box
-            self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
-
-    def save_selected_slow_sound(self, id=-1):
-        """ Listener for 'Save selected slow sound' menu item.
-        choose destination and give it a name
-        """
-        if self.box1id is None or self.box1id<0:
-            print("No box selected")
-            msg = SupportClasses_GUI.MessagePopup("w", "No segment", "No sound selected to save")
-            msg.exec_()
-            return
-        else:
-            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                x1 = self.listRectanglesa2[self.box1id].pos().x()
-                x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
-                y1 = max(self.sp.minFreq, self.segments[self.box1id][2])
-                y2 = min(self.segments[self.box1id][3], self.sp.maxFreq)
-            else:
-                x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-                y1 = self.sp.minFreq
-                y2 = self.sp.maxFreq
-            x1 = math.floor(x1 * self.config['incr'])
-            x2 = math.floor(x2 * self.config['incr'])
-            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
-            if filename:
-                # filedialog doesn't attach extension
-                filename = str(filename)
-                if not filename.endswith('.wav'):
-                    filename = filename + '.wav'
-                tosave = self.audiodata[int(x1):int(x2)]
-                wavio.write(filename, tosave.astype('int16'), self.sampleRate//self.slowSpeed, scale='dtype-limits', sampwidth=2)
+                wavio.write(filename, tosave.astype('int16'), int(self.sampleRate/slowdown), scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
