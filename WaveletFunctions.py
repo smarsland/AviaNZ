@@ -375,6 +375,15 @@ class WaveletFunctions:
               np array of length nwins = datalength/winsize
               actual window size (in s) that was used
         """
+        # wpantialias=True doubles the expected number of coefficients.
+        # Turn it on when storing non-decimated WCs in a tree - 
+        # this is currently true for all packet modes but NEVER for the root node
+        # (as it's never made longer than the data length).
+        if node==0:
+            if wpantialias:
+                print("Warning: you assumed antialias for a root node, this is probably not intended and will be reset now")
+            wpantialias = False
+
         # ratio of current WC size to data ("how many samples went into one WC")
         level = math.floor(math.log2(node+1))
         dsratio = 2**level

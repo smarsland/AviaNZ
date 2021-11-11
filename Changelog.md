@@ -35,6 +35,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - ancient bugs in best basis selection for wavelet denoising
 - WAV Splitter produced bad timestamps on files starting within an hour before a DST change
 - data padding for wavelet decomposition/reconstruction was wrong length and reversed
+- Wavelet energy computation made safer and less edge-influenced
 
 ### Hidden changes (developer-mode):
 - Ridge/instantaneous freq. detection

@@ -674,7 +674,6 @@ class WaveletSegment:
         For smaller windows (controlled by window and inc args), returns the energy within each window, so the return has len/inc columns.
         The energy is the sum of the squares of the data in each node divided by the total in that level of the tree as a percentage.
         """
-
         if data is None or sampleRate is None:
             print("ERROR: data and Fs need to be specified")
             return
@@ -688,32 +687,44 @@ class WaveletSegment:
         N = int(math.ceil(len(data)/inc_sr))
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
 
+        # generate a WP on all of the data
+        WF = WaveletFunctions.WaveletFunctions(data, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
+        if wpmode == "pywt":
+            print("ERROR: pywt mode deprecated, use new or aa")
+            return
+        elif wpmode == "new":
+            allnodes = range(2 ** (nlevels + 1) - 1)
+            WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
+        elif wpmode == "aa":
+            allnodes = range(2 ** (nlevels + 1) - 1)
+            WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
+
+        # TODO this nonsense could be replaced w/ WF.extractE for consistency
+
         # for each sliding window:
-        # start is the sample start of a window
-        # end is the sample end of a window
-        # We are working with sliding windows starting from the file start
+        # start,end are its coordinates (in samples)
         start = 0
         for t in range(N):
             E = []
             end = min(len(data), start+win_sr)
-            # generate a WP
-            WF = WaveletFunctions.WaveletFunctions(data=data[start:end], wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
-            if wpmode == "pywt":
-                print("ERROR: pywt mode deprecated, use new or aa")
-                return
-            if wpmode == "new":
-                allnodes = range(2 ** (nlevels + 1) - 1)
-                WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
-            if wpmode == "aa":
-                allnodes = range(2 ** (nlevels + 1) - 1)
-                WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
 
             # Calculate energies of all nodes EXCEPT ROOT - from 1 to 2^(nlevel+1)-1
             for level in range(1, nlevels + 1):
+                # Calculate the window position in WC coordinates
+                dsratio = 2**level
+                WCperWindow = math.ceil(win_sr/dsratio)
+                if wpmode=="aa" or wpmode=="new": # account for non-downsampled tree
+                    WCperWindow = 2*WCperWindow
+                # (root would not require this, but is skipped here anyway)
+
+                startwc = t*WCperWindow
+                endwc = startwc+WCperWindow
+
+                # Extract the energy
                 lvlnodes = WF.tree[2 ** level - 1:2 ** (level + 1) - 1]
-                e = np.array([np.sum(n ** 2) for n in lvlnodes])
+                e = np.array([np.sum(n[startwc:endwc] ** 2) for n in lvlnodes])
                 if np.sum(e) > 0:
-                    e = 100.0 * e / np.sum(e)
+                    e = 100.0 * e / np.sum(e)  # normalize per-level
                 E = np.concatenate((E, e), axis=0)
 
             start += inc_sr
@@ -1567,15 +1578,15 @@ class WaveletSegment:
     def loadDirectoryChp(self, dirName, window):
         """
             Finds and reads wavs from directory dirName.
-            Denoise arg is passed to preprocessing.
-            wpmode selects WP decomposition function ("new"-our but not AA'd, "aa"-our AA'd)
             Used in training to load an entire dir of wavs into memory.
+            window: changepoint analysis window
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
         self.annotation = []
         self.audioList = []
         print(dirName)
+        print(window)
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
