@@ -158,7 +158,11 @@ def ThresholdNodes2(list oldtree, list bestleaves, threshold, str thrtype, int b
 
     # Input checks
     if blocklen!=0:
-        # will split data into T time blocks
+        # Will split data into T time blocks.
+        # TODO: using floor division, so last sub-block piece will be denoised
+        # with some random threshold. This matters very little as the blocks
+        # are small and usually divide the datalen perfectly, but should
+        # fix at some point.
         T = len(oldtree[0]) // blocklen
         if T<1:
             print("ERROR: data shorter than the block size")
@@ -210,8 +214,8 @@ def ThresholdNodes2(list oldtree, list bestleaves, threshold, str thrtype, int b
         return 1
 
     # Main loop
-    print(bestleaves)
-    print(threshold[:,0])
+    print("Bestleaves", bestleaves)
+    print("thresholds", threshold[:,0])
     for node in range(len(oldtree)):
         if node in bestleavesset:
             # then keep & threshold (inplace)
