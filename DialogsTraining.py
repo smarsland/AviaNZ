@@ -1259,6 +1259,14 @@ class BuildRecAdvWizard(QWizard):
                 minlen = float(self.field("minlen"+str(self.pageId)))
                 maxlen = float(self.field("maxlen"+str(self.pageId)))
                 chpwin = float(self.field("chpwin"+str(self.pageId)))
+                # Important: chpwin is rounded to nearest multiple of 32/Fs
+                # to ensure that this window corresponds to integer number of wavelet coefs.
+                # Not reading from the field to avoid rounding errors.
+                # But any change here must be reflected in the training as well!
+                MINCHPWIN = 32/self.wizard().speciesData['SampleRate']
+                chpwin = round(chpwin/MINCHPWIN)*MINCHPWIN
+                print("Changepoint window was rounded to", chpwin)
+
                 self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
@@ -1313,7 +1321,7 @@ class BuildRecAdvWizard(QWizard):
                     #  Window and inc - in seconds
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.field("trainDir"),
                                                                     self.thrList, self.MList,
-                                                                    d=False, rf=True,
+                                                                    d=False,
                                                                     learnMode="recaa", window=window, inc=inc)
                 elif self.method=="chp":
                     # Note: using energies averaged over window size set before
@@ -1334,10 +1342,9 @@ class BuildRecAdvWizard(QWizard):
                 self.figCanvas.plotmeagain(self.TPR, self.FPR)
 
         def getFrqBands(self, nodes):
-            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=self.field("fs"))
             fRanges = []
             for node in nodes:
-                f1, f2 = WF.getWCFreq(node, self.field("fs"))
+                f1, f2 = WaveletFunctions.getWCFreq(node, self.field("fs"))
                 print(node, f1, f2)
                 fRanges.append([f1, f2])
             return fRanges
@@ -1466,6 +1473,13 @@ class BuildRecAdvWizard(QWizard):
                     fHigh = int(self.field("fHigh"+str(pageId)))
                     thr = float(self.field("bestThr"+str(pageId)))
                     nodes = eval(self.field("bestNodes"+str(pageId)))
+
+                    # Important: chpwin is rounded to nearest multiple of 32/Fs
+                    # to ensure that this window corresponds to integer number of wavelet coefs.
+                    # Not reading from the field to avoid rounding errors.
+                    # But any change here must be reflected in the training as well!
+                    MINCHPWIN = 32/self.wizard().speciesData['SampleRate']
+                    chpwin = round(chpwin/MINCHPWIN)*MINCHPWIN
 
                     newSubfilt = {'calltype': ct, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "nodes": nodes, "win": chpwin}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
                 else:
