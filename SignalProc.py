@@ -524,13 +524,19 @@ class SignalProc:
     def normalisedSpec(self, tr="Log"):
         """ Assumes the spectrogram was precomputed.
             Converts it to a scale appropriate for plotting
-            (tr="Log" or Box-Cox" or "Sigmoid" or "PCEN" to set the transform).
+            tr: transform, "Log" or Box-Cox" or "Sigmoid" or "PCEN" or "Batmode".
+            Latter sets a non-normalised log, useful for fixed-scale bat images.
         """
         LOG_OFFSET = 1e-7
         if tr=="Log":
             sg = self.sg + LOG_OFFSET
             minsg = np.min(sg)
-            sg = 10*(np.log10(self.sg + LOG_OFFSET)-np.log10(minsg))
+            sg = 10*(np.log10(sg)-np.log10(minsg))
+            sg = np.abs(sg)
+            return sg
+        elif tr=="Batmode":
+            sg = self.sg + LOG_OFFSET
+            sg = 10*np.log10(sg)
             sg = np.abs(sg)
             return sg
         elif tr=="Box-Cox":
@@ -555,11 +561,6 @@ class SignalProc:
             return (self.sg*smooth+bias)**power - bias**power
         else:
             print("ERROR: unrecognized transformation", tr)
-
-    def scalogram(self,wavelet='morl'):
-        # Compute the wavelet scalogram
-        import pywt
-        scalogram, freqs = pywt.cwt(self.audiodata, widths, wavelet)
 
     def Stockwell(self):
         # Stockwell transform (Brown et al. version)

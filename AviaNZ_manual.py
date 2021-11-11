@@ -137,7 +137,7 @@ class AviaNZ(QMainWindow):
         self.sgMeanNormalise = True
         self.sgEqualLoudness = False
         self.sgType = 'Standard'
-        self.sgNorm = 'Log'
+        self.sgNormMode = 'Log'
         self.sgScale= 'Linear'
         self.nfilters = 128
         self.windowType = 'Hann'
@@ -346,7 +346,7 @@ class AviaNZ(QMainWindow):
             self.showDiagnosticCNN = specMenu.addAction("Show CNN training diagnostics", self.showDiagnosticDialogCNN)
             self.extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Wind adjustment", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
                 em = self.extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -797,13 +797,6 @@ class AviaNZ(QMainWindow):
         self.quickDenButton.setIconSize(QtCore.QSize(20, 20))
         self.quickDenButton.setToolTip("Denoise segment")
         self.quickDenButton.clicked.connect(self.denoiseSeg)
-
-        # self.quickDenNButton = QtGui.QToolButton()
-        # self.quickDenNButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
-        # self.quickDenNButton.setIconSize(QtCore.QSize(20, 20))
-        # self.quickDenNButton.setToolTip("Denoise segment, node-specific")
-        # self.quickDenNButton.clicked.connect(self.denoiseSegN)
-        # self.quickDenNButton.setEnabled(False)
 
         self.viewSpButton = QtGui.QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
@@ -1621,16 +1614,12 @@ class AviaNZ(QMainWindow):
             self.fileInfoSS.setText("<b>Bit depth:</b> %d" % self.sp.audioFormat.sampleSize())
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sampleRate, 60))
 
-            if self.batmode:
-                # sgRaw was already normalised to 0-1 when loading
-                # with 1 being loudest
-                sgRaw = self.sp.sg
-                #self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
-                self.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
-            else:
-                # Get the data for the main spectrogram
-                sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                self.sg = self.sp.normalisedSpec(self.sgNorm)
+            if not self.batmode:
+                # Create the main spectrogram
+                _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                # For batmode, the spectrogram is already created.
+            # Normalize the spectrogram, appropriately for the current mode and user settings
+            self.setSpectrogram()
 
             # ANNOTATIONS: init empty list
             self.segments = Segment.SegmentList()
@@ -2322,15 +2311,13 @@ class AviaNZ(QMainWindow):
             w1 = np.where(annotation == 1)[0]
 
             r = np.zeros((64, np.shape(e)[1]))
-            # dummy parameters b/c we're only using this for WF.graycode
-            WF = WaveletFunctions.WaveletFunctions(data=[0], wavelet='dmey2', maxLevel=5, samplerate=1)
             for count in range(62):
                 # just compute_r from WaveletSegment
                 corr = (np.mean(e[count, w1]) - np.mean(e[count,w0]))/np.std(e[count, :]) * np.sqrt(len(w0)*len(w1))/len(annotation)
                 # map a long vector of rs to different image areas
                 level = int(math.log(count+2, 2))
                 node = count+2 - 2**level
-                node = WF.graycode(node)
+                node = WaveletFunctions.graycode(node)
                 r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
             r[:, 0] = np.linspace(np.min(r), np.max(r), num=64)
             # propagate along x
@@ -2343,6 +2330,115 @@ class AviaNZ(QMainWindow):
             self.plotExtra.setLookupTable(lut)
             self.plotExtra.setImage(r.T)
             self.plotaxis.setLabel('Frequency bin')
+
+        # plot estimated wind and signal levels for a pre-set node
+        if self.extra == "Wind adjustment":
+            TGTSAMPLERATE = 16000
+            minchpwin = 32/TGTSAMPLERATE
+            chpwin = round(0.25/minchpwin)*minchpwin
+            print("Will use window of", chpwin, "s")
+            # resample and generate WP w/ all nodes for the current page
+            if self.sampleRate != TGTSAMPLERATE:
+                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, TGTSAMPLERATE)
+            else:
+                datatoplot = self.audiodata
+            WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
+            WF.WaveletPacket(range(31, 63))
+            # list all the node frequency centers
+            node_freqs = [sum(WaveletFunctions.getWCFreq(n, TGTSAMPLERATE))/2 for n in range(31, 63)]
+
+            xs = np.arange(0, self.datalengthSec, chpwin)
+            # xs = xs[:-1] # TODO TMP only for bittern
+            datalen = len(xs)
+
+            # extract energies from each leaf node
+            Es = np.zeros((datalen, 32))
+            i = 0
+            for node in range(31, 63):
+                E, _ = WF.extractE(node, chpwin)
+                Es[:,i] = E[:datalen]
+                i += 1
+                print("node %d extracted" % node)
+
+            # extract unadjusted signal energy
+            tgt_node = 46-31
+            Es = np.log(Es)
+            sig_lvl = Es[:,tgt_node]
+
+            # estimate wind level in each window
+            wind_lvlR = np.zeros(len(xs))
+            wind_lvlC = np.zeros(len(xs))
+            wind_lvlCO = np.zeros(len(xs))
+
+            # select 10 % frames with lowest overall energy:
+            # (note that root node does not need downsampling)
+            bgpow, _ = WF.extractE(0, chpwin, wpantialias=False)
+            numframes = round(0.1*len(bgpow))
+            quietframes = np.argpartition(bgpow, numframes)[:numframes]
+            # From these, determine "background level" for the target nodes:
+            bgpow = np.mean(sig_lvl[quietframes])
+
+            oversubalpha = 1.2
+
+            def calc_wind(energies, nodecenters, tgt):
+                # fits an adjustment model based on energies, nodecenters,
+                # excluding tgt node.
+                regy = np.delete(energies, tgt)
+                regy = np.delete(regy, 45-31)
+                regy = np.delete(regy, 44-31)
+                regx = np.delete(nodecenters, tgt)
+                regx = np.delete(regx, 45-31)
+                regx = np.delete(regx, 44-31)
+
+                # remove two extreme nodes as they have filtering artifacts
+                regx = np.delete(regx, 16)
+                regx = np.delete(regx, 0)
+                regy = np.delete(regy, 16)
+                regy = np.delete(regy, 0)
+                # Drop nodes that are too high outside wind freq range
+                freqmask = np.where(regx<6000)
+
+                regy = regy[freqmask]
+                regx = np.log(regx[freqmask])
+
+                # Robust reg
+                # NOTE: this is our own QuantReg reimplementation
+                # really tailored to our polynomial fit
+                # TODO see if sklearn model, to be added in v1.0, is any better
+                regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
+                pol = WaveletFunctions.QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
+                predR = pol(np.log(nodecenters[tgt]))
+
+                # Cubic fit
+                pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
+                predC = pol(np.log(nodecenters[tgt]))
+
+                # oversubtracted cubic
+                predCO = (predC - bgpow)*oversubalpha + bgpow
+                return predR, predC, predCO
+
+            for w in range(len(xs)):
+                wind_lvlR[w], wind_lvlC[w], wind_lvlCO[w] = calc_wind(Es[w,:], node_freqs, tgt_node)
+
+            self.p_legend = pg.LegendItem()
+            self.p_legend.setParentItem(self.p_plot)
+            self.plotExtra = pg.PlotDataItem(xs, sig_lvl)
+            self.plotExtra.setPen(fn.mkPen(color='k', width=2))
+            self.p_legend.addItem(self.plotExtra, 'node')
+            self.plotExtra2 = pg.PlotDataItem(xs, wind_lvlC)
+            self.plotExtra2.setPen(fn.mkPen(color='r', width=2))
+            self.p_legend.addItem(self.plotExtra2, 'cubic')
+            self.plotExtra3 = pg.PlotDataItem(xs, wind_lvlR)
+            self.plotExtra3.setPen(fn.mkPen(color=(0, 200, 0), width=2))
+            self.p_legend.addItem(self.plotExtra3, 'robust')
+            self.plotExtra4 = pg.PlotDataItem(xs, wind_lvlCO)
+            self.plotExtra4.setPen(fn.mkPen(color=(80,30,255), width=2))
+            self.p_legend.addItem(self.plotExtra4, 'cub-over')
+            self.plotaxis.setLabel('Log mean power')
+            self.p_plot.addItem(self.plotExtra)
+            self.p_plot.addItem(self.plotExtra2)
+            self.p_plot.addItem(self.plotExtra3)
+            self.p_plot.addItem(self.plotExtra4)
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":
@@ -3527,6 +3623,19 @@ class AviaNZ(QMainWindow):
         self.config['invertColourMap'] = self.invertcm.isChecked()
         self.setColourLevels()
 
+    def setSpectrogram(self):
+        """ Normalizes the raw spectrogram on self.sp (ndarray), puts it on self,
+            and precalculates some cached properties from it.
+            Does NOT update graphics - only internal objects.
+        """
+        if self.batmode:
+            # NOTE batmode kind of assumes spectrogram was already on 0-1 scale
+            self.sg = self.sp.normalisedSpec("Batmode")
+        else:
+            self.sg = self.sp.normalisedSpec(self.sgNormMode)
+        self.sgMinimum = np.min(self.sg)
+        self.sgMaximum = np.max(self.sg)
+
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
@@ -3534,8 +3643,8 @@ class AviaNZ(QMainWindow):
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
+        minsg = self.sgMinimum
+        maxsg = self.sgMaximum
 
         if self.config['invertColourMap']:
             self.config['brightness'] = self.brightnessSlider.value()
@@ -3745,6 +3854,16 @@ class AviaNZ(QMainWindow):
                 for c in self.diagnosticCalls:
                     self.p_spec.removeItem(c)
             self.d_plot.hide()
+            # TODO this can be very slow with many items.
+            # Uncomment and use the option below, if e.g. you are doing
+            # intense testing.
+            # if len(self.diagnosticCalls)>0:
+            #     p_spec_new = SupportClasses_GUI.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['specMouseAction']==3, thisIsAmpl=False)
+            #     p_spec_new.addItem(self.specPlot)
+            #     self.w_spec.removeItem(self.p_spec)
+            #     del self.p_spec
+            #     self.p_spec = p_spec_new
+            #     self.w_spec.addItem(self.p_spec,row=0,col=1)
         except Exception as e:
             print(e)
         self.diagnosticCalls = []
@@ -3766,6 +3885,7 @@ class AviaNZ(QMainWindow):
             spSubf = spInfo["Filters"][0]
             print("Using subfilter", spSubf["calltype"])
             # spInfo = json.load(open(os.path.join(self.filtersDir, filter + '.txt')))
+            WINSIZE = 0.5
 
             # clear plot box and add legend
             self.clearDiagnostic()
@@ -3785,7 +3905,7 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
-            xs = np.arange(0, self.datalengthSec, 0.25)
+            xs = np.arange(0, self.datalengthSec, WINSIZE)
             Esep = np.zeros(( numNodes, len(xs) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
@@ -3827,7 +3947,7 @@ class AviaNZ(QMainWindow):
                 print("Node %i: mean %f, SD %f, range %f - %f" % (node, meanC, sdC, min(persecE), max(persecE)))
 
                 # get true freqs of this band
-                freqmin, freqmax = WF.getWCFreq(node, spInfo['SampleRate'])
+                freqmin, freqmax = WaveletFunctions.getWCFreq(node, spInfo['SampleRate'])
                 # convert freqs to spec Y units
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
@@ -3838,8 +3958,8 @@ class AviaNZ(QMainWindow):
                 # get max (or mean) E for each second
                 # and normalize, so that we don't need to hardcode thr
                 for w in range(len(xs)):
-                    start = int(w*0.25*spInfo['SampleRate'])
-                    end = int((w+1)*0.25*spInfo['SampleRate'])
+                    start = int(w*WINSIZE*spInfo['SampleRate'])
+                    end = int((w+1)*WINSIZE*spInfo['SampleRate'])
                     maxE = np.mean(E[start:end])
                     ### DENOISE:
                     # based on wind strength in this second, calculate estimated |wind| in this node
@@ -3850,7 +3970,7 @@ class AviaNZ(QMainWindow):
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
                         diagCall = pg.ROI((specs*xs[w], freqmin),
-                                          (specs*0.25, freqmax-freqmin),
+                                          (specs*WINSIZE, freqmax-freqmin),
                                           pen=plotcol, movable=False)
                         self.diagnosticCalls.append(diagCall)
                         self.p_spec.addItem(diagCall)
@@ -3969,7 +4089,7 @@ class AviaNZ(QMainWindow):
         """ Create spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNorm, self.sgScale, int(str(self.nfilters)),self.batmode)
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNormMode, self.sgScale, int(str(self.nfilters)),self.batmode)
             self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
         # first save the annotations
         self.saveSegments()
@@ -3979,7 +4099,7 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.windowType, self.sgType, self.sgNorm, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,sgScale,self.nfilters] = self.spectrogramDialog.getValues()
+        [self.windowType, self.sgType, self.sgNormMode, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,sgScale,self.nfilters] = self.spectrogramDialog.getValues()
         if self.sgScale != sgScale:
             self.sgScale = sgScale
             changedY = True
@@ -3997,8 +4117,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
                 _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-
-                self.sg = self.sp.normalisedSpec(self.sgNorm)
+                self.setSpectrogram()
 
                 # If the size of the spectrogram has changed, need to update the positions of things
                 if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
@@ -4214,10 +4333,10 @@ class AviaNZ(QMainWindow):
             denoises that segment, concats with rest of original DATA,
             and updates the original DATA.
         """
-
         if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-            stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+            start, stop = self.listRectanglesa1[self.box1id].getRegion()
+            start = int(start*self.sampleRate)
+            stop = int(stop*self.sampleRate)
         else:
             print("Can't play, no segment selected")
             return
@@ -4226,35 +4345,36 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        alg = "Wavelets"
+        # alg = "const"
+        alg = "ols"
+        # alg = "qr"
         thrType = "soft"
-        depth = 6   # can also use 0 to autoset
+        depth = 5   # can also use 0 to autoset
         wavelet = "dmey2"
         aaRec = True
-        aaWP = True
+        aaWP = False
         thr = 2.0  # this one is difficult to set universally...
 
+        self.statusLeft.setText("Denoising...")
         with pg.BusyCursor():
             opstartingtime = time.time()
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
-            self.statusLeft.setText("Denoising...")
 
             # extract the piece of audiodata under current segment
-            denoised = self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)]
+            denoised = self.audiodata[start : stop]
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-
-            if alg == "Wavelets":
-                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun="c")
+            denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun=alg, costfn="fixed")
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             # update full audiodata
-            self.sp.data[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
-            self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
+            print(start, stop)
+            self.sp.data[start : stop] = denoised
+            self.audiodata[start : stop] = denoised
 
             # recalculate spectrogram
             _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.sg = self.sp.normalisedSpec(self.sgNorm)
+            self.setSpectrogram()
 
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4268,72 +4388,8 @@ class AviaNZ(QMainWindow):
 
             self.setColourLevels()
 
-        print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
+            print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
         self.statusLeft.setText("Ready")
-
-    def denoiseSegN(self):
-        """ Listener for quickDenoise control button.
-            Extracts a segment from DATA between START and STOP (in ms),
-            denoises that segment, concats with rest of original DATA,
-            and updates the original DATA.
-        """
-
-        if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-            stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-        else:
-            print("Can't play, no segment selected")
-            return
-
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
-            self.stopPlayback()
-
-        # Since there is no dialog menu, settings are preset constants here:
-        alg = "Wavelets"
-        thrType = "soft"
-        depth = 6   # can also use 0 to autoset
-        wavelet = "dmey2"
-        aaRec = True
-        aaWP = True
-        thr = 2.0  # this one is difficult to set universally...
-
-        with pg.BusyCursor():
-            opstartingtime = time.time()
-            print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
-            self.statusLeft.setText("Denoising...")
-
-            # extract the piece of audiodata under current segment
-            denoised = self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)]
-            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-
-            if alg == "Wavelets":
-                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun="n")
-
-            print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
-
-            # update full audiodata
-            self.sp.data[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
-            self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
-
-            # recalculate spectrogram
-            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.sg = self.sp.normalisedSpec(self.sgNorm)
-
-            # Update the ampl image
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
-
-            # Update the spec & overview images.
-            # Does not reset to start if the freqs aren't changed
-            self.redoFreqAxis(self.sp.minFreqShow,self.sp.maxFreqShow, store=False)
-
-            if hasattr(self,'spectrogramDialog'):
-                self.spectrogramDialog.setValues(self.sp.minFreq,self.sp.maxFreq,self.sp.minFreqShow,self.sp.maxFreqShow)
-
-            self.setColourLevels()
-
-        print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
-        self.statusLeft.setText("Ready")
-
 
     def denoise(self):
         """ Listener for the denoising dialog.
@@ -4352,7 +4408,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Denoising...")
             # Note: dialog returns all possible parameters
             if not self.DOC:
-                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP] = self.denoiseDialog.getValues()
+                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP,thrfun] = self.denoiseDialog.getValues()
             else:
                 wavelet = "dmey2"
                 [alg, start, end, width] = self.denoiseDialog.getValues()
@@ -4365,10 +4421,12 @@ class AviaNZ(QMainWindow):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP)
+                    # TODO TEMP: fixed cost fn forced
+                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, thrfun=thrfun, costfn="fixed")
                 else:
                     # go with defaults
                     self.sp.data = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
+
             else:
                 # SignalProc will deal with denoising
                 self.sp.denoise(alg, start=start, end=end, width=width)
@@ -4377,7 +4435,7 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-            self.sg = self.sp.normalisedSpec(self.sgNorm)
+            self.setSpectrogram()
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
@@ -4402,8 +4460,9 @@ class AviaNZ(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.data = self.audiodata
+
                     _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
-                    self.sg = self.sp.normalisedSpec(self.sgNorm)
+                    self.setSpectrogram()
 
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
@@ -4934,17 +4993,6 @@ class AviaNZ(QMainWindow):
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
         self.segmentDialog.activate.clicked.connect(self.segment)
 
-    def useWindF(self, flow, fhigh):
-        """
-        Check if the wind filter is appropriate for this species/call type.
-        Return true if wind filter target band 50-500 Hz does not overlap with flow-fhigh Hz.
-        """
-        if 50 < fhigh and 500 > flow:
-            print('Skipping wind filter...')
-            return False
-        else:
-            return True
-
     def segment(self):
         """ Listener for the segmentation dialog. Calls the relevant segmenter.
         """
@@ -4962,6 +5010,7 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
         # settings is a dict with parameters for various possible methods
         alg, settings = self.segmentDialog.getValues()
+
         with pg.BusyCursor():
             filtname = str(settings["filtname"])
             self.statusLeft.setText('Segmenting...')
@@ -5034,18 +5083,25 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
-                newSegments = ws.waveletSegment(0, wpmode="new")
+
+                # TODO New style wind denoising NOT IMPLEMENTED HERE
+                if settings["wind"]:
+                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
+                    # TODO
+                    newSegments = ws.waveletSegment(0, wpmode="new")
+                else:
+                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                    newSegments = ws.waveletSegment(0, wpmode="new")
             elif alg == 'WV Changepoint':
                 print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
                 # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, silent=False)
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, silent=False, wind=settings["wind"])
                 # Or if no params are passed, they will be read from the filter file TimeRange:
-                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1)
+                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1, wind=settings["wind"])
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5081,7 +5137,7 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if settings["wind"] and self.useWindF(subfilter['FreqRange'][0], subfilter['FreqRange'][1]):
+                    if settings["windold"]:
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
@@ -5107,7 +5163,7 @@ class AviaNZ(QMainWindow):
                 print('Post-processing...')
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
-                if settings["wind"]:
+                if settings["windold"]:
                     post.wind()
                     print('After wind segments: ', len(post.segments))
                 if settings["rain"]:
