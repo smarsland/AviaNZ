@@ -2766,7 +2766,6 @@ class AviaNZ(QMainWindow):
 
         if not saveSeg:
             # check if this segment fits in the current spectrogram page
-            print("*",startpoint,endpoint,y1,y1,self.sp.minFreqShow,self.sp.maxFreqShow,self.datalengthSec)
             if endpoint < 0 or startpoint > self.datalengthSec:
                 print("Warning: a segment was not shown")
                 show = False
@@ -4368,7 +4367,6 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             # update full audiodata
-            print(start, stop)
             self.sp.data[start : stop] = denoised
             self.audiodata[start : stop] = denoised
 
@@ -4421,7 +4419,8 @@ class AviaNZ(QMainWindow):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
-                    # TODO TEMP: fixed cost fn forced
+                    # TODO set costfn determines which leaves will be used, by default 'threshold' (universal threshold).
+                    # fixed = use all leaves up to selected level. 'Entropy' is also tested and possible
                     self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, thrfun=thrfun, costfn="fixed")
                 else:
                     # go with defaults

@@ -3,12 +3,13 @@ All notable changes to AviaNZ program will be documented in this file.
 ## Unreleased
 
 ### Added
+- Wind methods and GUI (TODO DETAIL)
 - Changepoint segmenter in manual mode
 - Pre-built GPU support for CNN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
-- Saving spectrogram images without axes (in developer mode)
-- Call comparator as a separate script, clock-adjustment only
+- Non-linear frequency scale spectrograms (Mel, Bark)
+- Additional spectrogram normalization options, including PCEN
 
 ### Changed
 - Training will now include subdirectories when searching for data
@@ -18,15 +19,30 @@ All notable changes to AviaNZ program will be documented in this file.
 - CNNs no longer redefine segment boundaries, only accept/reject
 - reduced extension length when applying CNNs to short segments
 - various changes to CNN training
+- Tab shortcut for species/calltype switch
+- different click detection process when training bat detectors
 
 ### Fixed
 - Faster CNN classification
 - Post-processing harmonised between batch mode, testing, testing with CNN
 - Segmenting in manual mode now only overwrites the current page segments
 - Problems when undoing segmentation in multi-page files
+- Bat BMP reading sometimes wasn't setting a parameter
+- Faster spectrogram updating in manual mode
 - Minor UI bugs in recogniser training wizard
 - Long species list now triggers button reordering in review
 - better edge case handling when adding species in review
+- ancient bugs in best basis selection for wavelet denoising
+- WAV Splitter produced bad timestamps on files starting within an hour before a DST change
+- data padding for wavelet decomposition/reconstruction was wrong length and reversed
+
+### Hidden changes (developer-mode):
+- Ridge/instantaneous freq. detection
+- Shape analysis dialog
+- Button for exporting segment sound at different speed
+- Saving spectrogram images without axes
+- Call comparator as a separate script, clock-adjustment only
+
 
 ## [3.2] - 2021-02-16
 
