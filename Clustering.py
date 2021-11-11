@@ -309,6 +309,7 @@ class Clustering:
         for data in dataset:
             lengths.append(data[2][1] - data[2][0])
         duration = np.median(lengths)
+        print("- Setting duration to", duration)
         # duration is going to be the fixed length of a syllable, if a syllable too long clip it
         for record in dataset:
             if record[2][1] - record[2][0] > duration:
@@ -319,8 +320,7 @@ class Clustering:
         # 4. Read the syllables and generate features, also zero padding short syllables
         features = []
         for record in dataset:
-            audiodata = self.loadFile(filename=record[0], duration=record[2][1] - record[2][0], offset=record[2][0],
-                                      fs=fs, denoise=denoise, f1=f1, f2=f2)
+            audiodata = self.loadFile(filename=record[0], duration=record[2][1] - record[2][0], offset=record[2][0], fs=fs, denoise=denoise, f1=f1, f2=f2, silent=True)
             audiodata = audiodata.tolist()
             if record[2][1] - record[2][0] < duration:
                 # Zero padding both ends to have fixed duration
@@ -647,8 +647,7 @@ class Clustering:
         for record in cluster:
             # Compute the features of each syllable in this segment
             for syl in record[2]:
-                audiodata = self.loadFile(filename=record[0], duration=syl[1] - syl[0], offset=syl[0], fs=fs,
-                                          denoise=denoise, f1=f1, f2=f2, silent=True)
+                audiodata = self.loadFile(filename=record[0], duration=syl[1] - syl[0], offset=syl[0], fs=fs, denoise=denoise, f1=f1, f2=f2, silent=True)
                 audiodata = audiodata.tolist()
                 if syl[1] - syl[0] < duration:
                     # Zero padding both ends to have fixed duration
