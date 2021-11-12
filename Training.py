@@ -703,7 +703,7 @@ class CNNtest:
             CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [filtname])
             if filtname in CNNDicts.keys():
                 CNNmodel = CNNDicts[filtname]
-                self.text = self.getSummary(CNN=True, CNNmodel=CNNmodel)
+                self.text = self.getSummary(CNN=True)
             else:
                 print("ERROR: Couldn't find a matching CNN!")
                 self.outfile.write("No matching CNN found!\n")
@@ -737,7 +737,7 @@ class CNNtest:
 
         return calltypeSegments
 
-    def getSummary(self, CNN=False, CNNmodel=None):
+    def getSummary(self, CNN=False):
         autoSegCTnum = [0] * len(self.calltypes)
         ws = WaveletSegment.WaveletSegment()
         TP = FP = TN = FN = 0
@@ -745,7 +745,7 @@ class CNNtest:
             for file in files:
                 wavFile = os.path.join(root, file)
                 if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and \
-                        file + '.tmpdata' in files and file[:-4] + '-res' + str(float(self.window)) + 'sec.txt' in files:
+                        file + '.tmpdata' in files and file[:-4] + '-GT.txt' in files:
                     # Extract all segments and back-convert to 0/1:
                     _, duration, _, _ = wavio.readFmt(wavFile)
                     duration = math.ceil(duration)
@@ -764,7 +764,7 @@ class CNNtest:
                             det01[math.floor(seg[0]):math.ceil(seg[1])] = 1
 
                     # get and parse the agreement metrics
-                    GT = self.loadGT(os.path.join(root, file[:-4] + '-res' + str(float(self.window)) + 'sec.txt'), duration)
+                    GT = self.loadGT(os.path.join(root, file[:-4] + '-GT.txt'), duration)
                     _, _, tp, fp, tn, fn = ws.fBetaScore(GT, det01)
                     TP += tp
                     FP += fp
@@ -824,7 +824,7 @@ class CNNtest:
         if d[-1] == []:
             d = d[:-1]
         if len(d) != length:
-            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
+            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), length))
             self.annotation = []
             return False
 

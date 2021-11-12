@@ -628,7 +628,7 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
 
     for root, dirs, files in os.walk(str(dir_src)):
         for file in files:
-            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res1.0sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
+            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-GT.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
                 opstartingtime = time.time()
                 wavFile = root + '/' + file[:-4]
                 print(wavFile)
