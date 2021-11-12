@@ -746,12 +746,6 @@ class AviaNZ_batchProcess():
         if subfilter['TimeRange'][0]>0:
             post.deleteShort(minlength=subfilter['TimeRange'][0])
 
-
-        # TODO TMP: split and rejoin pieces to match changepoints paper
-        if "PostResolution" in subfilter:
-            post.joinGaps(subfilter["PostResolution"])
-            post.splitLong(subfilter["PostResolution"])
-
         # adjust segment starts for 15min "pages"
         if start != 0:
             for seg in post.segments:

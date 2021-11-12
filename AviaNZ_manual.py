@@ -421,7 +421,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
 
-        extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
+        extrarecMenu.addAction("Extend a recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
         recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
