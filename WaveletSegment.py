@@ -44,14 +44,15 @@ class WaveletSegment:
 
         self.sp = SignalProc.SignalProc(256, 128)
 
-    def readBatch(self, data, sampleRate, d, spInfo, wpmode="new"):
+    def readBatch(self, data, sampleRate, d, spInfo, wpmode="new", wind=False):
         """ File (or page) loading for batch mode. Must be followed by self.waveletSegment.
             Args:
             1. data to be segmented, ndarray
             2. sampleRate of the data, int
             3. d - turn on denoising before calling?
             4. spInfo - List of filters to determine which nodes are needed & target sample rate
-            5. wpmode: old/new/aa to indicate no/partial/full antialias
+            5. wpmode - old/new/aa to indicate no/partial/full antialias
+            6. wind - if True, will produce a WP with all nodes to be used in de-winding
         """
         if data is None or data == [] or len(data) == 0:
             print("ERROR: data must be provided for WS")
@@ -75,40 +76,45 @@ class WaveletSegment:
         self.spInfo = copy.deepcopy(spInfo)
 
         # in batch mode, it's worth trying some tricks to avoid resampling
-        if fsOut == 2*sampleRate:
-            print("Adjusting nodes for upsampling to", fsOut)
-            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-            for filter in self.spInfo:
-                for subfilter in filter["Filters"]:
-                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-            # Don't want to resample again, so fsTarget = fsIn
-            fsOut = sampleRate
-        elif fsOut == 4*sampleRate:
-            print("Adjusting nodes for upsampling to", fsOut)
-            # same. Wouldn't recommend repeating for larger ratios than 4x
-            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-            for filter in self.spInfo:
-                for subfilter in filter["Filters"]:
-                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
-            # Don't want to resample again, so fsTarget = fsIn
-            fsOut = sampleRate
-        # Could also similarly "downsample" by adding an extra convolution, but it's way slower
-        # elif sampleRate == 2*fsOut:
-        #     # don't actually downsample audio, just "upsample" the nodes needed
-        #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-        #     for subfilter in self.spInfo["Filters"]:
-        #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
-        #     print("upsampled nodes")
-        #     self.spInfo["SampleRate"] = sampleRate
+        # However, wind adjustments are tested and hardcoded for
+        # 5th level nodes, and would break after this
+        # (5th lvl effectively becomes 6th lvl then).
+        # TODO this might be worth addressing at some point.
+        if not wind:
+            if fsOut == 2*sampleRate:
+                print("Adjusting nodes for upsampling to", fsOut)
+                for filter in self.spInfo:
+                    for subfilter in filter["Filters"]:
+                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                # Don't want to resample again, so fsTarget = fsIn
+                fsOut = sampleRate
+            elif fsOut == 4*sampleRate:
+                print("Adjusting nodes for upsampling to", fsOut)
+                # same. Wouldn't recommend repeating for larger ratios than 4x
+                for filter in self.spInfo:
+                    for subfilter in filter["Filters"]:
+                        downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
+                # Don't want to resample again, so fsTarget = fsIn
+                fsOut = sampleRate
+            # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+            # elif sampleRate == 2*fsOut:
+            #     # don't actually downsample audio, just "upsample" the nodes needed
+            #     for subfilter in self.spInfo["Filters"]:
+            #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+            #     print("upsampled nodes")
+            #     self.spInfo["SampleRate"] = sampleRate
 
         denoisedData = self.preprocess(data, sampleRate, fsOut, d=d, fastRes=True)
 
         # Find out which nodes will be needed:
         allnodes = []
+        if wind:
+            allnodes = list(range(31, 63))
         for filt in self.spInfo:
             for subfilter in filt["Filters"]:
                 allnodes.extend(subfilter["WaveletParams"]["nodes"])
+        allnodes = list(set(allnodes))
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
         self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
@@ -153,7 +159,7 @@ class WaveletSegment:
         print("--- Wavelet segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, silent=True):
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, silent=True, wind=0):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
@@ -164,6 +170,7 @@ class WaveletSegment:
             5. maxlen: maximum allowed length (s) of signal segments
               3-5 can be None, in which case they are retrieved from self.spInfo.
             6. silent: silent (True) or verbose (False) mode
+            7. adjust for wind? 0=no, 1=interpolate by OLS, 2=interpolate by quantreg
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -187,13 +194,13 @@ class WaveletSegment:
             if maxlen is None:
                 maxlen = subfilter["TimeRange"][1]
 
-            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen, alg=alg, printing=printing)
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, alpha=alpha, window=window, maxlen=maxlen, alg=alg, printing=printing, wind=wind)
 
             detected_allsubf.append(detected)
         print("--- WV changepoint segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
+    def waveletSegment_train(self, dirName, thrList, MList, d=False, learnMode='recaa', window=1,
                              inc=None):
         """ Entry point to use during training, called from DialogsTraining.py.
             Switches between various training methods, orders data loading etc.,
@@ -220,7 +227,7 @@ class WaveletSegment:
         """
         # 1. read wavs and annotations into self.annotation, self.audioList
         self.filenames = []
-        self.loadDirectory(dirName=dirName, denoise=d, window=window, inc=inc)
+        self.loadDirectory(dirName=dirName, denoise=d)
         if len(self.annotation) == 0:
             print("ERROR: no files loaded!")
             return
@@ -283,7 +290,7 @@ class WaveletSegment:
         # self.maxEs now is a list of [files][M][TxN] ndarrays
 
         # 4. mark calls and learn threshold
-        res = self.gridSearch(self.maxEs, thrList, MList, rf, learnMode, window, inc)
+        res = self.gridSearch(self.maxEs, thrList, MList, learnMode, window, inc)
 
         return res
 
@@ -304,6 +311,14 @@ class WaveletSegment:
         else:
             subfilter = self.spInfo["Filters"][0]
 
+        # verify that the provided window will result in an integer
+        # number of WCs at any level <=5
+        estWCperWindow = math.ceil(window * self.spInfo['SampleRate']/32)
+        estrealwindow = estWCperWindow / self.spInfo['SampleRate']*32
+        if estrealwindow!=window:
+            print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
+            return
+
         # 1. read wavs and annotations into self.annotation, self.audioList
         self.filenames = []
         self.loadDirectoryChp(dirName=dirName, window=window)
@@ -318,13 +333,12 @@ class WaveletSegment:
         nodeList = []
         freqrange = subfilter['FreqRange']
 
-        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet=self.wavelet, maxLevel=1, samplerate=self.spInfo["SampleRate"])
         # levels: 0-1, 2-5, 6-13, 14-29, 30-61 (unrooted tree)
         # so this will take the last three levels:
         for node_un in range(14, 62):
             # corresponding node in a rooted tree (as used by WF)
             node = node_un + 1
-            nodefrl, nodefru = WF.getWCFreq(node, self.spInfo["SampleRate"])
+            nodefrl, nodefru = WaveletFunctions.getWCFreq(node, self.spInfo["SampleRate"])
             if nodefrl < freqrange[1] and nodefru > freqrange[0]:
                 # node has some overlap with the target range, so can be tested
                 nodeList.append(node)
@@ -599,11 +613,9 @@ class WaveletSegment:
         self.annotation = []
 
         # find audio files with 0/1 annotations:
-        resol = 1.0
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and \
-                        file[:-4] + '-res' + str(float(resol)) + 'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
                     filenames.append(os.path.join(root, file))
         if len(filenames) < 1:
             print("ERROR: no suitable files")
@@ -660,7 +672,6 @@ class WaveletSegment:
         For smaller windows (controlled by window and inc args), returns the energy within each window, so the return has len/inc columns.
         The energy is the sum of the squares of the data in each node divided by the total in that level of the tree as a percentage.
         """
-
         if data is None or sampleRate is None:
             print("ERROR: data and Fs need to be specified")
             return
@@ -674,32 +685,44 @@ class WaveletSegment:
         N = int(math.ceil(len(data)/inc_sr))
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
 
+        # generate a WP on all of the data
+        WF = WaveletFunctions.WaveletFunctions(data, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
+        if wpmode == "pywt":
+            print("ERROR: pywt mode deprecated, use new or aa")
+            return
+        elif wpmode == "new":
+            allnodes = range(2 ** (nlevels + 1) - 1)
+            WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
+        elif wpmode == "aa":
+            allnodes = range(2 ** (nlevels + 1) - 1)
+            WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
+
+        # TODO this nonsense could be replaced w/ WF.extractE for consistency
+
         # for each sliding window:
-        # start is the sample start of a window
-        # end is the sample end of a window
-        # We are working with sliding windows starting from the file start
+        # start,end are its coordinates (in samples)
         start = 0
         for t in range(N):
             E = []
             end = min(len(data), start+win_sr)
-            # generate a WP
-            WF = WaveletFunctions.WaveletFunctions(data=data[start:end], wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
-            if wpmode == "pywt":
-                print("ERROR: pywt mode deprecated, use new or aa")
-                return
-            if wpmode == "new":
-                allnodes = range(2 ** (nlevels + 1) - 1)
-                WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
-            if wpmode == "aa":
-                allnodes = range(2 ** (nlevels + 1) - 1)
-                WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
 
             # Calculate energies of all nodes EXCEPT ROOT - from 1 to 2^(nlevel+1)-1
             for level in range(1, nlevels + 1):
+                # Calculate the window position in WC coordinates
+                dsratio = 2**level
+                WCperWindow = math.ceil(win_sr/dsratio)
+                if wpmode=="aa" or wpmode=="new": # account for non-downsampled tree
+                    WCperWindow = 2*WCperWindow
+                # (root would not require this, but is skipped here anyway)
+
+                startwc = t*WCperWindow
+                endwc = startwc+WCperWindow
+
+                # Extract the energy
                 lvlnodes = WF.tree[2 ** level - 1:2 ** (level + 1) - 1]
-                e = np.array([np.sum(n ** 2) for n in lvlnodes])
+                e = np.array([np.sum(n[startwc:endwc] ** 2) for n in lvlnodes])
                 if np.sum(e) > 0:
-                    e = 100.0 * e / np.sum(e)
+                    e = 100.0 * e / np.sum(e)  # normalize per-level
                 E = np.concatenate((E, e), axis=0)
 
             start += inc_sr
@@ -708,7 +731,7 @@ class WaveletSegment:
         return coefs
 
     def fBetaScore_fast(self, annotation, predicted, T, beta=2):
-        """ Computes the beta scores given two sets of predictions.
+        """ Computes the beta scores given two sets of redictions.
             Simplified by dropping printouts and some safety checks.
             (Assumes logical or int 1/0 input.)
             Outputs 0 when the score is undefined. """
@@ -767,6 +790,10 @@ class WaveletSegment:
             1. annotation - np.array of length n, where n - number of blocks (with resolution length) in file
             2. waveletCoefs - np.array of DxN, where D - number of nodes in WP (62 for lvl 5) N= number of sliding windows
         """
+        if len(annotation)!=np.shape(waveletCoefs)[1]:
+            print("ERROR: wavelet and annotation lengths must match")
+            return
+
         w0 = np.where(annotation == 0)[0]
         w1 = np.where(annotation == 1)[0]
 
@@ -835,7 +862,7 @@ class WaveletSegment:
         return newlist
 
 
-    def extractE(self, wf, nodelist, MList, rf=True, annotation=None, window=1, inc=None, aa=True):
+    def extractE(self, wf, nodelist, MList, annotation=None, window=1, inc=None, aa=True):
         """
         Regenerates the signal from each of nodes and finds max standardized E.
         Args:
@@ -1063,25 +1090,139 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1, alg=1, printing=1):
+    def detectCallsChp(self, wf, nodelist, alpha, maxlen, window=1, alg=1, printing=1, wind=0):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
         Args:
         wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
         nodelist - will reconstruct signal and run detections on each of these nodes separately
-        subfilter - used to pass thr, M, and other parameters
         alpha - penalty strength for the detector
         maxlen - maximum allowed signal segment length, in s
         window - energy will be calculated over these windows, in s
         alg - standard (1) or with nuisance segments (2)
         printing - run silent (0) or verbose (1)
+        wind - adjust for wind? 0=no, 1=interpolate by OLS, 2=interpolate by QR
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
+
+        # Verify that the provided window will result in an integer
+        # number of WCs at any level <=5.
+        # This isn't necessary for detection, but makes life easier.
+        # Currently, only needed if using wind adjustment
+        # with nodes at different levels (not clear how to adjust then).
+        # (I.e. for any filters w/ any 4th lvl nodes, as wind adj is
+        # hardcoded to use 5th lvl nodes anyway).
+        if wind:
+            # all nodes will be needed for wind adjustment
+            dsratio = 2**5
+            # for not-wind: dsratio = 2**math.floor(math.log2(max(nodelist)+1))
+            nodefs = wf.treefs/dsratio
+            estWCperWindow = math.ceil(window * nodefs)
+            estrealwindow = estWCperWindow / nodefs
+            if estrealwindow!=window:
+                print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
+                raise
+
+        # Estimate wind noise levels for each window x target node.
+        if wind:
+            # identify wind nodes, and calculate
+            # regression x - node freq centers
+            print("identifying wind nodes...")
+            wind_nodes = []
+            windnodecenters = []
+            for node in range(31, 63):  # only use leaf nodes when estimating wind
+                if node in nodelist:  # skip target nodes, obviously
+                    continue
+                # target node can be 1 level higher than this node, so check for that too
+                if (node-1)//2 in nodelist:
+                    continue
+                if node==31 or node==47:  # skip extreme nodes with filtering artifacts
+                    continue
+                nodecenter = sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2
+                if nodecenter>=6000:  # skip high freqs when estimating wind
+                    continue
+                wind_nodes.append(node)
+                windnodecenters.append(nodecenter)
+
+            # Regression y: extract energies from all nodes
+            print("extracting wind node energy...")
+            datalen = math.floor(len(wf.tree[0])/wf.treefs/window)
+            windE = np.zeros((datalen, len(wind_nodes)))
+            for node_ix in range(len(wind_nodes)):
+                node = wind_nodes[node_ix]
+                windE[:, node_ix], _ = wf.extractE(node, window)
+
+            # For oversubtraction, roughly estimate background level
+            # from 10% quietest frames in each node:
+            # TODO optimize all this to avoid re-extracting same nodes
+            OVERSUBALPHA = 1.0
+            print("Will oversubtract with alpha=", OVERSUBALPHA)
+            rootE, _ = wf.extractE(0, window, wpantialias=False)
+            numframes = round(0.1*len(rootE))
+            quietframes = np.argpartition(rootE, numframes)[:numframes]
+            bgpow = np.zeros(len(nodelist))
+            for node_ix in range(len(nodelist)):
+                E, _ = wf.extractE(nodelist[node_ix], window, wpantialias=True)
+                bgpow[node_ix] = np.mean(np.log(E[quietframes]))
+
+            # for each window, interpolate wind (log) energy in each target node:
+            pred = np.zeros((datalen, len(nodelist)))
+            regx = np.log(windnodecenters)  # NOTE that here and further centers are in log(freq)!
+            qrbiasadjust = 0
+            # need to prepare polynomial features manually for non-OLS methods
+            # and also add an adjustment factor to QR, calculated assuming
+            # quantile 0.2 and roughly 0.1-0.2 s windows
+            if wind==2:
+                regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
+                # TODO ideally this should be based on the actual number of WCs in the window
+                if window<=0.1:
+                    qrbiasadjust = 0.4
+
+            tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
+            windE = np.log(windE)
+            for w in range(datalen):
+                regy = windE[w, :]
+                # ---- REGRESSION IS DONE HERE ----
+                if wind==1:
+                    pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
+                elif wind==2:
+                    # TODO sklearn will add quantreg in v1.0, see if it is any better
+                    pol = WaveletFunctions.QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
+                else:
+                    print("ERROR: unrecognized wind adjustment %s" % wind)
+                    raise
+
+                # Interpolate using the fitted model:
+                for node_ix in range(len(nodelist)):
+                    # for higher level nodes, need to (linearly) average the nearest predictions:
+                    if nodelist[node_ix] in range(15, 31):
+                        delta = wf.treefs/128   # half width of a leaf node band = Fs/2/numnodes/2
+                        f1 = np.exp(tgtnodecenters[node_ix]) - delta
+                        f2 = np.exp(tgtnodecenters[node_ix]) + delta
+                        pred1 = pol(np.log(f1))
+                        pred2 = pol(np.log(f2))
+                        # oversubtraction:
+                        pred1 = (pred1 - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
+                        pred2 = (pred2 - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
+                        pred[w, node_ix] = np.log((np.exp(pred1) + np.exp(pred2))/2)
+                    else:
+                        # Straightforward for 5th lvl nodes
+                        pred[w, node_ix] = pol(tgtnodecenters[node_ix])
+                        # Oversubtraction:
+                        pred[w, node_ix] = (pred[w, node_ix] - bgpow[node_ix])*OVERSUBALPHA + bgpow[node_ix]
+                # print("Predictions (log): ", pred[w,:])
+            # TODO would probably be faster to predict all nodes and then average
+            # to obtain upper level nodes, but difficult to keep track of nodes then.
+
+            # convert back to (linear) energies:
+            pred = np.exp(pred+qrbiasadjust)
+
         # Compute the number of samples in a window -- species specific
         detected = np.empty((0,3))
-        for node in nodelist:
+        for node_ix in range(len(nodelist)):
+            node = nodelist[node_ix]
             # Extracts energies (i.e. integral of square magnitudes) over windows.
             # Window size will be adjusted to realwindow (in s), b/c it needs to
             # correspond to an integer number of WCs at this node,
@@ -1101,6 +1242,16 @@ class WaveletSegment:
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
 
+            if wind:
+                # ---- LOG SP SUB ----
+                # retrieve and adjust for the predicted wind strength
+                print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))
+                E = np.maximum(1, E / pred[:, node_ix])
+                # This implicitly normalizes to sigma2=1
+            else:
+                # just normalize, same as passing sigma2 to the detectors
+                E = E / sigma2
+
             # sqrt because the detector squares the data itself (sign not important)
             # Note that no transformation is applied otherwise (i.e. linear, not log scale)
             E = np.sqrt(E)
@@ -1111,7 +1262,7 @@ class WaveletSegment:
             if alg==1:
                 segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
             else:
-                segm1 = ce_detect.launchDetector2(E, sigma2, realmaxlen, alpha=alpha, printing=printing).astype('float')
+                segm1 = ce_detect.launchDetector2(E, 1, realmaxlen, alpha=alpha, printing=printing).astype('float')
 
             # here's how you would extract segment means:
             # for seg in segm1:
@@ -1137,7 +1288,7 @@ class WaveletSegment:
         gc.collect()
         return outsegs
 
-    def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
+    def gridSearch(self, E, thrList, MList, learnMode=None, window=1, inc=None):
         """ Take list of energy peaks of dimensions:
             [files] [MListxTxN ndarrays],
             perform grid search over thr and M parameters,
@@ -1316,14 +1467,13 @@ class WaveletSegment:
         bestnodes = []
 
         # filter nodes that are outside target species freq range
-        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet=self.wavelet, maxLevel=1, samplerate=self.spInfo["SampleRate"])
         freqrange = [subf["FreqRange"] for subf in self.spInfo["Filters"]]
         freqrange = (np.min(freqrange), np.max(freqrange))
 
         # avoid low-level nodes
         low_level_nodes = list(range(14))
         for item in nodes1:
-            itemfrl, itemfru = WF.getWCFreq(item, self.spInfo["SampleRate"])
+            itemfrl, itemfru = WaveletFunctions.getWCFreq(item, self.spInfo["SampleRate"])
             if item not in low_level_nodes and itemfrl < freqrange[1] and itemfru > freqrange[0]:
                 bestnodes.append(item)
 
@@ -1370,7 +1520,7 @@ class WaveletSegment:
         gc.collect()
         return denoisedData
 
-    def loadDirectory(self, dirName, denoise, window=1, inc=None, impMask=True):
+    def loadDirectory(self, dirName, denoise, impMask=True):
         """
             Finds and reads wavs from directory dirName.
             Denoise arg is passed to preprocessing.
@@ -1380,19 +1530,19 @@ class WaveletSegment:
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
-        #Virginia: if no inc I set resol equal to window, otherwise it is equal to inc
-        if inc is None:
-            inc = window
-            resol = window
-        else:
-            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
+        # When reading annotations, it is important to know that the
+        # stored ones match the annotation set in this analysis by window and inc.
+        # One could use something like this:
+        # resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
+        # to check this match with one variable, but no good way to store it
+        # in the file, as this is a float and might need more than 2 decimals.
 
         self.annotation = []
         self.audioList = []
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file)
                     self.filenames.append(wavFile)
@@ -1430,19 +1580,18 @@ class WaveletSegment:
     def loadDirectoryChp(self, dirName, window):
         """
             Finds and reads wavs from directory dirName.
-            Denoise arg is passed to preprocessing.
-            wpmode selects WP decomposition function ("new"-our but not AA'd, "aa"-our AA'd)
             Used in training to load an entire dir of wavs into memory.
+            window: changepoint analysis window
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
         self.annotation = []
         self.audioList = []
-        print(dirName)
+        print("Loading data from dir", dirName)
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(window))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file)
                     self.filenames.append(wavFile)
@@ -1481,15 +1630,10 @@ class WaveletSegment:
             Returns True if read without errors - important to
             catch this and immediately stop the process otherwise
         """
-        # In case we want flexible-size windows again:
-        # Added resol input as basic unit for read annotation file
-        resol = 1.0
         print('\nLoading:', filename)
-        filenameAnnotation = filename[:-4] + '-res' + str(float(resol)) + 'sec.txt'
+        filenameAnnotation = filename[:-4] + '-GT.txt'
 
         self.sp.readWav(filename)
-
-        n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
         # Do impulse masking by default
         if impMask:
@@ -1502,6 +1646,11 @@ class WaveletSegment:
             d = list(reader)
         if d[-1] == []:
             d = d[:-1]
+
+        # Hardcoded resolution of the GT file:
+        # (only used for a sanity check now)
+        resol = 1.0
+        n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
         if len(d) != n:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
             self.annotation = []
@@ -1527,12 +1676,10 @@ class WaveletSegment:
             catch this and immediately stop the process otherwise
         """
         print('Loading file:', filename)
-        filenameAnnotation = filename[:-4] + '-res'+str(float(window))+'sec.txt'
+        filenameAnnotation = filename[:-4] + '-GT.txt'
 
         # Read data. No impulse masking
         self.sp.readWav(filename)
-
-        nwins = math.ceil(len(self.sp.data) / self.sp.sampleRate / window)
 
         # Get the segmentation from the txt file
         with open(filenameAnnotation) as f:
@@ -1542,6 +1689,7 @@ class WaveletSegment:
             d = d[:-1]
 
         # A sanity check as the durations will be used in F1 score
+        nwins = math.ceil(len(self.sp.data) / self.sp.sampleRate / window)
         if len(d) != nwins:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), nwins))
             self.annotation = []

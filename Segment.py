@@ -504,19 +504,19 @@ class SegmentList(list):
 
         return(lenMin, lenMax, fLow, fHigh)
 
-    def exportGT(self, filename, species, window=1, inc=None):
+    def exportGT(self, filename, species, resolution):
         """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file
         filename - current wav file name.
         species - string, will export the annotations for it.
-        Window and inc defined as in waveletSegment.
+        resolution - resolution at which to dichotomize the timestamps.
+           set this to match the analysis resolution
+           (i.e. window, inc in waveletSegment).
+           E.g. with integer parameters can use
+           resolution = math.gcd(window, inc)
         """
-        if inc is None:
-            inc = window
-        resolution = math.gcd(int(100*window), int(100*inc)) / 100
-
         # number of segments of width window at inc overlap
         duration = int(np.ceil(self.metadata["Duration"] / resolution))
-        eFile = filename[:-4] + '-res' + str(float(resolution)) + 'sec.txt'
+        eFile = filename[:-4] + '-GT.txt'
 
         # deal with empty files
         thisSpSegs = self.getSpecies(species)
@@ -533,6 +533,8 @@ class SegmentList(list):
         # fill first column with "time"
         GT[:,0] = range(1, duration+1)
         GT[:,0] = GT[:,0] * resolution
+
+        print("exporting GT with resolution", resolution)
 
         for segix in thisSpSegs:
             seg = self[segix]

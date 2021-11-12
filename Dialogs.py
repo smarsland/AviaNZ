@@ -1059,8 +1059,14 @@ class Segmentation(QDialog):
         self.chpLayout.addRow("Window size (s):", self.chpwin)
         self.chpLayout.addRow("Max length (s):", self.maxlen)
 
-        self.wind = QCheckBox("Remove wind")
+        self.wind = QComboBox()
+        # TODO ideally this would adapt to the detector choice
+        # as only CD can use the new filters
+        # (in principle new and old ones can be combined, but would anybody want that?)
+        self.wind.addItems(["No wind filter", "Simple wind filter", "Robust wind filter", "Wind segment drop in post-proc."])
         self.rain = QCheckBox("Remove rain")
+        self.windlabel = QLabel("Wind denoising")
+        Box.addWidget(self.windlabel)
         Box.addWidget(self.wind)
         Box.addWidget(self.rain)
         Box.addWidget(self.maxgaplbl)
@@ -1104,6 +1110,7 @@ class Segmentation(QDialog):
                 for ww in range(item.layout().count()):
                     item.layout().itemAt(ww).widget().hide()
         self.algs.show()
+        self.windlabel.show()
         self.wind.show()
         # self.rain.show()
         self.minlenlbl.show()
@@ -1156,7 +1163,6 @@ class Segmentation(QDialog):
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
                     self.chpLayout.itemAt(ww).widget().show()
-                self.wind.hide()
                 self.species_wv.hide()
                 self.species_chp.show()
             else:
@@ -1197,9 +1203,17 @@ class Segmentation(QDialog):
             filtname = None
         settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
-                    "CCThr1": self.CCThr1.text(), "filtname": filtname, "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
+                    "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
                     "chp2l": self.chp2l.isChecked()}
+        if self.wind.currentIndex()==3:
+            # old style wind removal requested
+            settings["wind"] = 0
+            settings["windold"] = True
+        else:
+            # either no adjustment, or OLS/QR adjustment
+            settings["wind"] = self.wind.currentIndex()
+            settings["windold"] = False
         return(alg, settings)
 
 #======
@@ -1225,6 +1239,9 @@ class Denoise(QDialog):
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
+
+        self.thrests = QComboBox()
+        self.thrests.addItems(["Constant threshold", "OLS fit", "QR fit"])
 
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
         # self.wavlabel = QLabel("Wavelets")
@@ -1297,6 +1314,7 @@ class Denoise(QDialog):
         #self.connect(self.undo, SIGNAL('clicked()'), self.undo)
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
+        Box.addWidget(self.thrests)
 
         if not self.DOC:
             Box.addWidget(self.depthlabel)
@@ -1493,12 +1511,19 @@ class Denoise(QDialog):
                 thrType = 'soft'
             else:
                 thrType = 'hard'
-            
+
             if self.depthchoice.isChecked():
                 depth = 0 # "please auto-find best"
             else:
                 depth = int(str(self.depth.text()))
-            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked()]
+
+            if self.thrests.currentText()=="Constant threshold":
+                threst = "const"
+            elif self.thrests.currentText()=="OLS fit":
+                threst = "ols"
+            elif self.thrests.currentText()=="QR fit":
+                threst = "qr"
+            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked(), threst]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 

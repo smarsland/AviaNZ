@@ -477,8 +477,6 @@ class GenerateData:
         :returns noise segments [[filename, seg, label], ...]
         '''
         manSegNum = 0
-        window = 1
-        inc = None
         noiseSegments = []
         # Generate GT files from annotations in dir1
         print('Generating GT...')
@@ -493,7 +491,7 @@ class GenerateData:
 
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, self.species, window=window, inc=inc)
+                    segments.exportGT(wavFile, self.species, resolution=1.0)
         if manSegNum == 0:
             print("ERROR: no segments for species %s found" % self.species)
             return
@@ -529,8 +527,6 @@ class GenerateData:
         :returns noise segments [[filename, seg, label], ...]
         '''
         manSegNum = 0
-        window = 1
-        inc = None
         noiseSegments = []
         segmenter = Segment.Segmenter()
         print('Generating GT...')
@@ -546,7 +542,7 @@ class GenerateData:
 
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, self.species, window=window, inc=inc)
+                    segments.exportGT(wavFile, self.species, resolution=1.0)
 
                     print('Determining noise...')
                     autoseg = Segment.SegmentList()
