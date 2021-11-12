@@ -1294,10 +1294,9 @@ class BuildRecAdvWizard(QWizard):
 
                             # exports 0/1 annotations
                             if self.method=="wv":
-                                pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
+                                pageSegs.exportGT(wavFile, self.field("species"), resolution=1.0)
                             elif self.method=="chp":
-                                print("Exporting GT with window", chpwin)
-                                pageSegs.exportGT(wavFile, self.field("species"), window=chpwin, inc=None)
+                                pageSegs.exportGT(wavFile, self.field("species"), resolution=chpwin)
 
 
             # calculate cluster centres

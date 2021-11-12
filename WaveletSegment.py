@@ -227,7 +227,7 @@ class WaveletSegment:
         """
         # 1. read wavs and annotations into self.annotation, self.audioList
         self.filenames = []
-        self.loadDirectory(dirName=dirName, denoise=d, window=window, inc=inc)
+        self.loadDirectory(dirName=dirName, denoise=d)
         if len(self.annotation) == 0:
             print("ERROR: no files loaded!")
             return
@@ -613,11 +613,9 @@ class WaveletSegment:
         self.annotation = []
 
         # find audio files with 0/1 annotations:
-        resol = 1.0
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and \
-                        file[:-4] + '-res' + str(float(resol)) + 'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
                     filenames.append(os.path.join(root, file))
         if len(filenames) < 1:
             print("ERROR: no suitable files")
@@ -792,6 +790,10 @@ class WaveletSegment:
             1. annotation - np.array of length n, where n - number of blocks (with resolution length) in file
             2. waveletCoefs - np.array of DxN, where D - number of nodes in WP (62 for lvl 5) N= number of sliding windows
         """
+        if len(annotation)!=np.shape(waveletCoefs)[1]:
+            print("ERROR: wavelet and annotation lengths must match")
+            return
+
         w0 = np.where(annotation == 0)[0]
         w1 = np.where(annotation == 1)[0]
 
@@ -860,7 +862,7 @@ class WaveletSegment:
         return newlist
 
 
-    def extractE(self, wf, nodelist, MList, rf=True, annotation=None, window=1, inc=None, aa=True):
+    def extractE(self, wf, nodelist, MList, annotation=None, window=1, inc=None, aa=True):
         """
         Regenerates the signal from each of nodes and finds max standardized E.
         Args:
@@ -1518,7 +1520,7 @@ class WaveletSegment:
         gc.collect()
         return denoisedData
 
-    def loadDirectory(self, dirName, denoise, window=1, inc=None, impMask=True):
+    def loadDirectory(self, dirName, denoise, impMask=True):
         """
             Finds and reads wavs from directory dirName.
             Denoise arg is passed to preprocessing.
@@ -1528,19 +1530,19 @@ class WaveletSegment:
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
-        #Virginia: if no inc I set resol equal to window, otherwise it is equal to inc
-        if inc is None:
-            inc = window
-            resol = window
-        else:
-            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
+        # When reading annotations, it is important to know that the
+        # stored ones match the annotation set in this analysis by window and inc.
+        # One could use something like this:
+        # resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
+        # to check this match with one variable, but no good way to store it
+        # in the file, as this is a float and might need more than 2 decimals.
 
         self.annotation = []
         self.audioList = []
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file)
                     self.filenames.append(wavFile)
@@ -1585,12 +1587,11 @@ class WaveletSegment:
         """
         self.annotation = []
         self.audioList = []
-        print(dirName)
-        print(window)
+        print("Loading data from dir", dirName)
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(window))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file)
                     self.filenames.append(wavFile)
@@ -1629,15 +1630,10 @@ class WaveletSegment:
             Returns True if read without errors - important to
             catch this and immediately stop the process otherwise
         """
-        # In case we want flexible-size windows again:
-        # Added resol input as basic unit for read annotation file
-        resol = 1.0
         print('\nLoading:', filename)
-        filenameAnnotation = filename[:-4] + '-res' + str(float(resol)) + 'sec.txt'
+        filenameAnnotation = filename[:-4] + '-GT.txt'
 
         self.sp.readWav(filename)
-
-        n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
         # Do impulse masking by default
         if impMask:
@@ -1650,6 +1646,11 @@ class WaveletSegment:
             d = list(reader)
         if d[-1] == []:
             d = d[:-1]
+
+        # Hardcoded resolution of the GT file:
+        # (only used for a sanity check now)
+        resol = 1.0
+        n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
         if len(d) != n:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
             self.annotation = []
@@ -1675,12 +1676,10 @@ class WaveletSegment:
             catch this and immediately stop the process otherwise
         """
         print('Loading file:', filename)
-        filenameAnnotation = filename[:-4] + '-res'+str(float(window))+'sec.txt'
+        filenameAnnotation = filename[:-4] + '-GT.txt'
 
         # Read data. No impulse masking
         self.sp.readWav(filename)
-
-        nwins = math.ceil(len(self.sp.data) / self.sp.sampleRate / window)
 
         # Get the segmentation from the txt file
         with open(filenameAnnotation) as f:
@@ -1690,6 +1689,7 @@ class WaveletSegment:
             d = d[:-1]
 
         # A sanity check as the durations will be used in F1 score
+        nwins = math.ceil(len(self.sp.data) / self.sp.sampleRate / window)
         if len(d) != nwins:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), nwins))
             self.annotation = []

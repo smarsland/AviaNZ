@@ -4,7 +4,7 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Added
 - Wind methods and GUI (TODO DETAIL)
-- Changepoint segmenter in manual mode
+- Changepoint segmenter
 - Pre-built GPU support for CNN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
@@ -21,6 +21,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - various changes to CNN training
 - Tab shortcut for species/calltype switch
 - different click detection process when training bat detectors
+- ground truth files no longer store resolution in the name
 
 ### Fixed
 - Faster CNN classification
