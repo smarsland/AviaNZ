@@ -372,7 +372,7 @@ class WaveletSegment:
                 # If they differ by <=1, we allow that and just equalize them:
                 if filenwins==len(nodeE)+1:
                     currWCs[node-1,:-1] = nodeE
-                    # last element will be 0 by initialization
+                    currWCs[node-1,-1] = currWCs[node-1,-2] # repeat last element
                 elif filenwins==len(nodeE)-1:
                     # drop last WC
                     currWCs[node-1,:] = nodeE[:-1]
@@ -513,9 +513,9 @@ class WaveletSegment:
             fB_out = 0
             nodes_out = []
             tp_out = 0
-            fp_out = 0
-            tn_out = 0
-            fn_out = 0
+            fp_out = 1  # init the bad stats to 1, so that nothing breaks
+            tn_out = 0  # even if the detector fails entirely
+            fn_out = 1
             for i in range(np.shape(bestix)[0]):
                 b = bestix[i]
                 top_subset_nodes = [nodeList[nix] for nix in ksubsets[b]]
@@ -589,7 +589,7 @@ class WaveletSegment:
 
         return [finalnodes], tpa, fpa, tna, fna
 
-    def waveletSegment_cnn(self, dirName, filter):
+    def waveletSegment_cnn(self, dirName, filt):
         """ Wrapper for segmentation to be used when generating cnn data.
             Should be identical to processing the files in batch mode,
             + returns annotations.
@@ -643,19 +643,21 @@ class WaveletSegment:
 
                 # read in page and resample as needed
                 # will also set self.spInfo with ADJUSTED nodes if resampling!
-                self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filter], wpmode="new")
+                self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filt], wpmode="new", wind=False)
+                # TODO not sure if wind removal should be done here.
+                # Maybe not, to generate more noise examples?
 
                 # segmentation, same as in batch mode. returns [[sub-filter1 segments]]
-                # TODO this isn't updated with the new changepoint method
-                detected_segs = self.waveletSegment(0, wpmode="new")
-                if len(filter["Filters"]) > 1:
-                    out = []
-                    for subfilterdet in detected_segs:
-                        for seg in subfilterdet:
-                            out.append(seg)
-                    detected_out.append((filename, out))
-                else:
-                    detected_out.append((filename, detected_segs[0]))
+                if "method" not in filt or filt["method"]=="wv":
+                    detected_segs = self.waveletSegment(0, wpmode="new")
+                elif filt["method"]=="chp":
+                    detected_segs = self.waveletSegmentChp(0, alg=2, wind=False)
+
+                # flatten over the call types and store
+                out = []
+                for subfilterdet in detected_segs:
+                    out.extend(subfilterdet)
+                detected_out.append((filename, out))
 
         return detected_out
 
@@ -749,15 +751,15 @@ class WaveletSegment:
         """ Computes the beta scores given two sets of predictions """
         annotation = np.array(annotation)
         predicted = np.array(predicted)
-        TP = np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0))
-        T = np.sum(annotation)
-        P = np.sum(predicted)
+        TP = float(np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0)))
+        T = float(np.sum(annotation))  # to force all divisions to float
+        P = float(np.sum(predicted))
         if T != 0:
-            recall = float(TP) / T  # TruePositive/#True
+            recall = TP / T  # TruePositive/#True
         else:
             recall = None
         if P != 0:
-            precision = float(TP) / P  # TruePositive/#Positive
+            precision = TP / P  # TruePositive/#Positive
         else:
             precision = None
         if recall is not None and precision is not None and not (recall == 0 and precision == 0):
