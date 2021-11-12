@@ -3170,7 +3170,7 @@ class FilterCustomiseROC(QDialog):
                 self.form.addWidget(lblcurrentWT, i + 1, 1)
                 self.newWThr = QSlider(Qt.Horizontal)
                 self.newWThr.setMinimum(100)
-                self.newWThr.setMaximum(10000)
+                self.newWThr.setMaximum(50000)
                 self.newWThr.setValue(round(self.filter['Filters'][i]['WaveletParams']['thr'], 4) * 10000)
                 self.newWThr.setTickInterval(1000)
                 self.newWThr.setTickPosition(QSlider.TicksBelow)

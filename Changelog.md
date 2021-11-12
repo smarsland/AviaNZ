@@ -4,7 +4,8 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Added
 - Wind methods and GUI (TODO DETAIL)
-- Changepoint segmenter
+- Changepoint segmenter (TODO DETAIL)
+- Wavelet filter replaced with changepoint detector as the default non-CNN method
 - Pre-built GPU support for CNN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
@@ -13,6 +14,7 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Changed
 - Training will now include subdirectories when searching for data
+- Node selection in training faster, more stable, and produces ROCs more closely consistent with testing/processing
 - Filter format extended to allow setting segmenter
 - Better UI for adding species in review, search function
 - Shorter pages (5 mins) for low sampling rate files in batch mode
@@ -59,6 +61,8 @@ All notable changes to AviaNZ program will be documented in this file.
 - Optional frequency masking in CNN training
 - Ability to customise existing recognisers
 - Formant marking in spectrogram
+- Dialog for adjusting thresholds of stored filters
+- Ability to adjust other filter parameters for newly-trained detectors
 
 ### Changed
 - Improved processing pipeline for bats
