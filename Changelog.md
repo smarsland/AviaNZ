@@ -24,6 +24,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Tab shortcut for species/calltype switch
 - different click detection process when training bat detectors
 - ground truth files no longer store resolution in the name
+- batch processing will not allow upsampling if using wind filter (only 2x or 4x "fake upsampling" which is implemented by node remapping)
 
 ### Fixed
 - Faster CNN classification
@@ -39,6 +40,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - WAV Splitter produced bad timestamps on files starting within an hour before a DST change
 - data padding for wavelet decomposition/reconstruction was wrong length and reversed
 - Wavelet energy computation made safer and less edge-influenced
+- missing post-processing settings in batch GUI
 
 ### Hidden changes (developer-mode):
 - Ridge/instantaneous freq. detection
