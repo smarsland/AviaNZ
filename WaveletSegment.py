@@ -76,34 +76,38 @@ class WaveletSegment:
         self.spInfo = copy.deepcopy(spInfo)
 
         # in batch mode, it's worth trying some tricks to avoid resampling
-        # However, wind adjustments are tested and hardcoded for
-        # 5th level nodes, and would break after this
-        # (5th lvl effectively becomes 6th lvl then).
-        # TODO this might be worth addressing at some point.
-        if not wind:
-            if fsOut == 2*sampleRate:
-                print("Adjusting nodes for upsampling to", fsOut)
-                for filter in self.spInfo:
-                    for subfilter in filter["Filters"]:
-                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                # Don't want to resample again, so fsTarget = fsIn
-                fsOut = sampleRate
-            elif fsOut == 4*sampleRate:
-                print("Adjusting nodes for upsampling to", fsOut)
-                # same. Wouldn't recommend repeating for larger ratios than 4x
-                for filter in self.spInfo:
-                    for subfilter in filter["Filters"]:
-                        downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
-                # Don't want to resample again, so fsTarget = fsIn
-                fsOut = sampleRate
-            # Could also similarly "downsample" by adding an extra convolution, but it's way slower
-            # elif sampleRate == 2*fsOut:
-            #     # don't actually downsample audio, just "upsample" the nodes needed
-            #     for subfilter in self.spInfo["Filters"]:
-            #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
-            #     print("upsampled nodes")
-            #     self.spInfo["SampleRate"] = sampleRate
+        if fsOut == 2*sampleRate:
+            print("Adjusting nodes for upsampling to", fsOut)
+            for filter in self.spInfo:
+                for subfilter in filter["Filters"]:
+                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+            # Don't want to resample again, so fsTarget = fsIn
+            fsOut = sampleRate
+        elif fsOut == 4*sampleRate:
+            print("Adjusting nodes for upsampling to", fsOut)
+            # same. Wouldn't recommend repeating for larger ratios than 4x
+            for filter in self.spInfo:
+                for subfilter in filter["Filters"]:
+                    downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
+            # Don't want to resample again, so fsTarget = fsIn
+            fsOut = sampleRate
+        # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+        # elif sampleRate == 2*fsOut:
+        #     # don't actually downsample audio, just "upsample" the nodes needed
+        #     for subfilter in self.spInfo["Filters"]:
+        #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+        #     print("upsampled nodes")
+        #     self.spInfo["SampleRate"] = sampleRate
+
+        # After upsampling, there will be a sharp drop in energy
+        # at the original Fs. This will really distort the polynomial
+        # fit used for wind prediction, so do not allow it.
+        # (If the nodes were adjusted by the mechanism above, the fit
+        # will use a continuous block of lower freqs and mostly be fine.)
+        if wind and fsOut>sampleRate:
+            print("ERROR: upsampling will cause problems for wind removal. Either turn off the wind filter, or retrain your recognizer to match the sampling rate of these files.")
+            return
 
         denoisedData = self.preprocess(data, sampleRate, fsOut, d=d, fastRes=True)
 
@@ -1243,8 +1247,10 @@ class WaveletSegment:
             # Estimate of the global background for this file/page
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
+            print("Start of E", E[:30])
 
             if wind:
+                print("start of wind", pred[:30])
                 # ---- LOG SP SUB ----
                 # retrieve and adjust for the predicted wind strength
                 print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))

@@ -124,7 +124,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
         self.w_wind = QComboBox()
-        self.w_wind.addItems(["No wind filter", "Simple wind filter", "Robust wind filter"])
+        self.w_wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "No wind filter"])
 
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
@@ -165,12 +165,16 @@ class AviaNZ_batchWindow(QMainWindow):
         self.d_detection.addWidget(self.w_browse, row=0, col=2)
         self.d_detection.addWidget(w_speLabel1, row=1, col=0)
 
+        self.warning = QLabel("Warning!\nThe chosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
+        self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
+
         # Filter selection group
         self.boxSp = QGroupBox("")
         self.formSp = QVBoxLayout()
         self.formSp.addWidget(w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
         self.formSp.addWidget(self.addSp)
+        self.formSp.addWidget(self.warning)
         self.boxSp.setLayout(self.formSp)
         self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=3)
 
@@ -185,11 +189,6 @@ class AviaNZ_batchWindow(QMainWindow):
         self.boxTime.setLayout(formTime)
         self.d_detection.addWidget(self.boxTime, row=2, col=0, colspan=3)
 
-        self.warning = QLabel("Warning!\nThe chosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
-        self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
-        self.d_detection.addWidget(self.warning, row=3, col=0, colspan=3)
-        self.warning.hide()
-
         # Post Proc checkbox group
         self.boxPost = QGroupBox("Post processing")
         formPost = QGridLayout()
@@ -202,13 +201,6 @@ class AviaNZ_batchWindow(QMainWindow):
         formPost.addWidget(self.maxlen, 4, 1)
         self.boxPost.setLayout(formPost)
         self.d_detection.addWidget(self.boxPost, row=4, col=0, colspan=3)
-        if len(spp) > 0:
-            self.maxgaplbl.hide()
-            self.maxgap.hide()
-            self.minlenlbl.hide()
-            self.minlen.hide()
-            self.maxlenlbl.hide()
-            self.maxlen.hide()
 
         self.d_detection.addWidget(self.w_processButton, row=6, col=2)
 
@@ -229,6 +221,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.d_detection.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
+        self.fillSpeciesBoxes()  # update the boxes to match the initial position
         self.show()
 
     def minLenChange(self, value):
@@ -478,10 +471,12 @@ class AviaNZ_batchWindow(QMainWindow):
         currname = self.w_spe1.currentText()
         if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
             currfilt = self.FilterDicts[currname]
+            currmethod = currfilt.get("method", "wv")
             # (can't use AllSp with any other filter)
-            # Also don't add the same name again
+            # Don't add different methods, samplerates, or the same name again
+            # (providing that missing method equals "wv")
             for name, filt in self.FilterDicts.items():
-                if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname:
+                if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname and filt.get("method", "wv")==currmethod:
                     spp.append(name)
             self.minlen.hide()
             self.minlenlbl.hide()
@@ -493,7 +488,11 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxTime.show()
             self.addSp.show()
             self.warning.hide()
-        elif currname != "Any sound (Intermittent sampling)":
+            if currmethod=="chp":
+                self.w_wind.show()
+            else:
+                self.w_wind.hide()
+        elif currname == "Any sound":
             self.minlen.show()
             self.minlenlbl.show()
             self.maxlen.show()
@@ -504,7 +503,8 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxTime.show()
             self.addSp.hide()
             self.warning.show()
-        else:
+            self.w_wind.hide()
+        elif currname == "Any sound (Intermittent sampling)":
             self.boxPost.hide()
             self.boxTime.show()
             self.addSp.hide()
