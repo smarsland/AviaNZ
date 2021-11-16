@@ -21,7 +21,7 @@
 
 from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -405,9 +405,9 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def browse(self):
         if self.dirName:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
         # populate file list and update rest of interface:
@@ -1011,9 +1011,9 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def browse(self):
         if self.dirName:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
 
