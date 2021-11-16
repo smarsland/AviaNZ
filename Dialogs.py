@@ -28,6 +28,7 @@ import shutil
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox # listing some explicitly to make syntax checks lighter
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
 
@@ -1615,7 +1616,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None):
+    def __init__(self, lut, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1629,8 +1630,6 @@ class HumanClassify1(QDialog):
         self.batmode = self.parent.batmode
         self.lut = lut
         self.label = []
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
         self.shortBirdList = shortBirdList
         self.longBirdList = longBirdList
@@ -2028,6 +2027,8 @@ class HumanClassify1(QDialog):
         """
         self.audiodata = audiodata
         self.sg = sg
+        self.sgMinimum = np.min(self.sg)
+        self.sgMaximum = np.max(self.sg)
         self.sampleRate = sampleRate
         self.incr = incr
         self.bar.setValue(0)
@@ -2097,10 +2098,7 @@ class HumanClassify1(QDialog):
             for i in range(len(self.guidelines)):
                 self.guidelines[i].setPos(-100)
 
-        if self.cmapInverted:
-            self.plot.setLevels([self.colourEnd, self.colourStart])
-        else:
-            self.plot.setLevels([self.colourStart, self.colourEnd])
+        self.setColourLevels()
 
         # DEAL WITH SPECIES NAMES
         # extract a string of current species names
@@ -2459,20 +2457,13 @@ class HumanClassify1(QDialog):
             self.stopPlayback()
         except Exception:
             pass
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
         if self.cmapInverted:
             brightness = self.brightnessSlider.value()
         else:
             brightness = 100-self.brightnessSlider.value()
         contrast = self.contrastSlider.value()
-
-        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
-        if self.cmapInverted:
-            self.plot.setLevels([self.colourEnd, self.colourStart])
-        else:
-            self.plot.setLevels([self.colourStart, self.colourEnd])
+        colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, brightness, contrast, self.cmapInverted)
+        self.plot.setLevels(colRange)
 
     def getValues(self):
         # Note: we are reading off the calltypes from the label
@@ -2492,13 +2483,13 @@ class HumanClassify2(QDialog):
           and this dialog will select the needed segments.
         3. indices of segments to show (i.e. the selected species and current page)
         4. name of the species that we are reviewing
-        5-10. spec color parameters
-        11-12. guide positions for batmode
-        13. Loop playback or not?
-        14. Filename - just for setting the window title
+        5-8. spec color parameters
+        9-10. guide positions and colors for batmode
+        11. Loop playback or not?
+        12. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2519,8 +2510,6 @@ class HumanClassify2(QDialog):
         haveaudio = all([len(sp.data)>0 for sp in sps if sp is not None])
 
         self.lut = lut
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
 
         # filter segments for the requested species
@@ -2713,6 +2702,8 @@ class HumanClassify2(QDialog):
         """
         self.buttons = []
         self.marked = []
+        self.minsg = 1
+        self.maxsg = 1
         for i in self.indices2show:
             # This will contain pre-made slices of spec and audio
             sp = self.sps[i]
@@ -2720,8 +2711,6 @@ class HumanClassify2(QDialog):
 
             # Seems that image is backwards?
             sp.sg = np.fliplr(sp.sg)
-            self.minsg = 1
-            self.maxsg = 1
             self.minsg = min(self.minsg, np.min(sp.sg))
             self.maxsg = max(self.maxsg, np.max(sp.sg))
 
@@ -2735,7 +2724,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol, loop=self.loop)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2746,6 +2735,7 @@ class HumanClassify2(QDialog):
             self.marked.append(False)
         # set volume and brightness on these new buttons
         self.volSliderMoved(self.volSlider.value())
+        # Now, update the colours w/ correct minsg,maxsg
         self.setColourLevels()
 
     def resizeEvent(self, ev):
@@ -2824,7 +2814,7 @@ class HumanClassify2(QDialog):
                 break
 
         self.repaint()
-        pg.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
     def volSliderMoved(self, value):
         # try/pass to avoid race situations when smth is not initialized
@@ -2945,7 +2935,7 @@ class HumanClassify2(QDialog):
             self.buttons[butNum].changePic(False)
         #self.update()
         self.repaint()
-        pg.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
@@ -2957,11 +2947,12 @@ class HumanClassify2(QDialog):
         else:
             brightness = 100-self.brightnessSlider.value()
         contrast = self.contrastSlider.value()
-        colourStart = (brightness / 100.0 * contrast / 100.0) * (self.maxsg - self.minsg) + self.minsg
-        colourEnd = (self.maxsg - self.minsg) * (1.0 - contrast / 100.0) + colourStart
+
+        colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, self.cmapInverted)
+
         for btn in self.buttons:
             btn.stopPlayback()
-            btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
+            btn.setImage(self.lut, colRange)
             btn.update()
 
 
@@ -3284,6 +3275,12 @@ class Cluster(QDialog):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
+        # Colour map
+        cmap = self.config['cmap']
+        pos, colour, mode = colourMaps.colourMaps(cmap)
+        cmap = pg.ColorMap(pos, colour,mode)
+        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+
         hboxSpecContr = QHBoxLayout()
         hboxSpecContr.addWidget(labelBr)
         hboxSpecContr.addWidget(self.brightnessSlider)
@@ -3320,17 +3317,20 @@ class Cluster(QDialog):
         self.clusters = dict(self.clusters)  # Dictionary of {ID: cluster_name}
 
         # Create the buttons for each segment
+        self.minsg = 1
+        self.maxsg = 1
         for seg in self.segments:
             sp = SignalProc.SignalProc(512, 256)
             sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
             _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             self.sg = sp.normalisedSpec("Log")
-            self.setColourMap()
 
             sg = self.sg
 
-            newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
-                                          self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+            self.minsg = min(self.minsg, np.min(sg))
+            self.maxsg = max(self.maxsg, np.max(sg))
+
+            newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)
 
@@ -3355,20 +3355,19 @@ class Cluster(QDialog):
                     c += 1
                     self.picbuttons[segix].show()
         self.flowLayout.update()
+        self.setColourLevels()
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
         brightness = self.brightnessSlider.value()
         contrast = self.contrastSlider.value()
-        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        # TODO hardcoded non-inverted map here
+        colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, False)
         for btn in self.picbuttons:
             btn.stopPlayback()
-            btn.setImage(self.lut, colourStart, colourEnd, False)
+            btn.setImage(self.lut, colRange)
             btn.update()
 
     def volSliderMoved(self, value):
@@ -3379,20 +3378,6 @@ class Cluster(QDialog):
         except Exception:
             pass
 
-    def setColourMap(self):
-        """ Listener for the menu item that chooses a colour map.
-        Loads them from the file as appropriate and sets the lookup table.
-        """
-        cmap = self.config['cmap']
-
-        pos, colour, mode = colourMaps.colourMaps(cmap)
-
-        cmap = pg.ColorMap(pos, colour,mode)
-        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
-        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 class ExportBats(QDialog):
     def __init__(self,filename,observer,easting="",northing="",recorder=""):

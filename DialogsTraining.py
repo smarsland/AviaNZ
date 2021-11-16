@@ -33,7 +33,7 @@ import json
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -254,6 +254,12 @@ class BuildRecAdvWizard(QWizard):
             self.btnDeleteSeg = QPushButton('Remove selected segment/s')
             self.btnDeleteSeg.setFixedWidth(200)
             self.btnDeleteSeg.clicked.connect(self.deleteSelectedSegs)
+
+            # Colour map
+            cmap = self.config['cmap']
+            pos, colour, mode = colourMaps.colourMaps(cmap)
+            cmap = pg.ColorMap(pos, colour,mode)
+            self.lut = cmap.getLookupTable(0.0, 1.0, 256)
 
             # page 3 layout
             layout1 = QVBoxLayout()
@@ -813,6 +819,8 @@ class BuildRecAdvWizard(QWizard):
             maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
             # Create the buttons for each segment
+            self.minsg = 1
+            self.maxsg = 1
             for seg in self.segments:
                 sp = SignalProc.SignalProc(512, 256)
                 sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
@@ -820,17 +828,17 @@ class BuildRecAdvWizard(QWizard):
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
                 incr = 256 * sp.sampleRate // self.field("fs")
                 _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
-                self.sg = sp.normalisedSpec("Log")
-                self.setColourMap()
+                sg = sp.normalisedSpec("Log")
 
                 # buffer the image to largest spec size, so that the resulting buttons would have equal scale
-                if self.sg.shape[0]<maxspecsize:
-                    padlen = int(maxspecsize - self.sg.shape[0])//2
-                    sg = np.pad(self.sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(self.sg, 0.1))
-                else:
-                    sg = self.sg
+                if sg.shape[0]<maxspecsize:
+                    padlen = int(maxspecsize - sg.shape[0])//2
+                    sg = np.pad(sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(sg, 0.1))
 
-                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+                self.minsg = min(self.minsg, np.min(sg))
+                self.maxsg = max(self.maxsg, np.max(sg))
+
+                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
@@ -905,15 +913,13 @@ class BuildRecAdvWizard(QWizard):
             """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
             Translates the brightness and contrast values into appropriate image levels.
             """
-            minsg = np.min(self.sg)
-            maxsg = np.max(self.sg)
             brightness = self.brightnessSlider.value()
             contrast = self.contrastSlider.value()
-            colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-            colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+            # TODO hardcoded colour map inversion for now
+            colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, False)
             for btn in self.picbuttons:
                 btn.stopPlayback()
-                btn.setImage(self.lut, colourStart, colourEnd, False)
+                btn.setImage(self.lut, colRange)
                 btn.update()
 
         def volSliderMoved(self, value):
@@ -923,21 +929,6 @@ class BuildRecAdvWizard(QWizard):
                     btn.media_obj.applyVolSlider(value)
             except Exception:
                 pass
-
-        def setColourMap(self):
-            """ Listener for the menu item that chooses a colour map.
-            Loads them from the file as appropriate and sets the lookup table.
-            """
-            cmap = self.config['cmap']
-
-            pos, colour, mode = colourMaps.colourMaps(cmap)
-
-            cmap = pg.ColorMap(pos, colour,mode)
-            self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-            minsg = np.min(self.sg)
-            maxsg = np.max(self.sg)
-            self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-            self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
     # page 4 - set params for training
     class WPageParams(QWizardPage):
@@ -2508,10 +2499,15 @@ class BuildCNNWizard(QWizard):
                 maxsg = np.min(sgRaw)
                 sgRaw[:, 0:lb] = 0.0
                 sgRaw[:, ub:] = 0.0
-                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-                self.setColourMap()
-                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(self.sg), self.cnntrain.sp.data, self.cnntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, self.colourStart, self.colourEnd, False,
-                                                  cluster=True)
+                sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+
+                # determine colour map
+                cmap = self.config['cmap']
+                pos, colour, mode = colourMaps.colourMaps(cmap)
+                cmap = pg.ColorMap(pos, colour, mode)
+                self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+
+                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(sg), self.cnntrain.sp.data, self.cnntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
                 if i == 0:
                     pic = QPixmap.fromImage(picbtn.im1)
                     self.img1.setPixmap(pic.scaledToHeight(175))
@@ -2534,22 +2530,6 @@ class BuildCNNWizard(QWizard):
                 self.img2.setText('')
                 self.img3.setText('')
                 self.flowLayout.update()
-
-        def setColourMap(self):
-            """ Listener for the menu item that chooses a colour map.
-            Loads them from the file as appropriate and sets the lookup table.
-            """
-            cmap = self.config['cmap']
-
-            pos, colour, mode = colourMaps.colourMaps(cmap)
-
-            cmap = pg.ColorMap(pos, colour, mode)
-            self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-            minsg = np.min(self.sg)
-            maxsg = np.max(self.sg)
-            self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (
-                        maxsg - minsg) + minsg
-            self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
         def setWindowInc(self):
             self.cnntrain.windowWidth = self.cnntrain.imgsize[0] * 2

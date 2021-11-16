@@ -706,3 +706,23 @@ def colourMaps(cmap):
         mode = None
 
     return pos,colour,mode
+
+
+def getColourRange(minsg, maxsg, bright, contr, invert):
+    """ Utility for determining a colour range:
+      a list [colStart, colEnd] which can be passed to pyqtgraph's
+      setLevels etc. to clip the data before colorizing and so create
+      contrast/brightness adjustments.
+        minsg,maxsg: range of values in the plotted image (spectrogram)
+        bright,contr: brightness and contrast, in 0-100 range.
+        invert: bool, flips the scale.
+    """
+    bright /= 100.0
+    contr /= 100.0
+    colStart = bright * contr * (maxsg-minsg) + minsg
+    colEnd = (maxsg-minsg) * (1.0 - contr) + colStart
+    if invert:
+        return [colEnd,colStart]
+    else:
+        return [colStart,colEnd]
+
