@@ -1182,8 +1182,10 @@ class WaveletSegment:
             # quantile 0.2 and roughly 0.1-0.2 s windows
             if wind==2:
                 regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
-                # TODO ideally this should be based on the actual number of WCs in the window
-                if window<=0.1:
+                # ideally this should be based on the actual number of WCs
+                # in the window and the gamma function (see paper),
+                # but generally is negligible except for v small windows and low SRs
+                if window<=0.1 and wf.treefs<16000:
                     qrbiasadjust = 0.4
 
             tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
@@ -1247,10 +1249,8 @@ class WaveletSegment:
             # Estimate of the global background for this file/page
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
-            print("Start of E", E[:30])
 
             if wind:
-                print("start of wind", pred[:30])
                 # ---- LOG SP SUB ----
                 # retrieve and adjust for the predicted wind strength
                 print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))

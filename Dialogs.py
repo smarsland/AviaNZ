@@ -1053,21 +1053,17 @@ class Segmentation(QDialog):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
+        self.wind = QComboBox()
+        self.wind.addItems(["No wind filter", "OLS wind filter", "Robust wind filter"])
+
         self.chpLayout = QFormLayout()
         self.chpLayout.addRow(self.chp2l)
         self.chpLayout.addRow("Alpha:", self.chpalpha)
         self.chpLayout.addRow("Window size (s):", self.chpwin)
         self.chpLayout.addRow("Max length (s):", self.maxlen)
+        self.chpLayout.addRow("Wind denoising:", self.wind)
 
-        self.wind = QComboBox()
-        # TODO ideally this would adapt to the detector choice
-        # as only CD can use the new filters
-        # (in principle new and old ones can be combined, but would anybody want that?)
-        self.wind.addItems(["No wind filter", "Simple wind filter", "Robust wind filter", "Wind segment drop in post-proc."])
         self.rain = QCheckBox("Remove rain")
-        self.windlabel = QLabel("Wind denoising")
-        Box.addWidget(self.windlabel)
-        Box.addWidget(self.wind)
         Box.addWidget(self.rain)
         Box.addWidget(self.maxgaplbl)
         Box.addWidget(self.maxgap)
@@ -1110,8 +1106,6 @@ class Segmentation(QDialog):
                 for ww in range(item.layout().count()):
                     item.layout().itemAt(ww).widget().hide()
         self.algs.show()
-        self.windlabel.show()
-        self.wind.show()
         # self.rain.show()
         self.minlenlbl.show()
         self.minlen.show()
@@ -1163,10 +1157,8 @@ class Segmentation(QDialog):
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
                     self.chpLayout.itemAt(ww).widget().show()
-                self.species_wv.hide()
                 self.species_chp.show()
             else:
-                self.species_chp.hide()
                 self.species_wv.show()
             self.maxgaplbl.hide()
             self.maxgap.hide()
@@ -1205,15 +1197,7 @@ class Segmentation(QDialog):
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "chp2l": self.chp2l.isChecked()}
-        if self.wind.currentIndex()==3:
-            # old style wind removal requested
-            settings["wind"] = 0
-            settings["windold"] = True
-        else:
-            # either no adjustment, or OLS/QR adjustment
-            settings["wind"] = self.wind.currentIndex()
-            settings["windold"] = False
+                    "chp2l": self.chp2l.isChecked(), "wind": self.wind.currentIndex()}
         return(alg, settings)
 
 #======

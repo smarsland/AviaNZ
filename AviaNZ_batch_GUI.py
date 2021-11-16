@@ -279,7 +279,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.maxlen = int(self.maxlen.value()) / 1000
         self.batchProc.species = self.species
         self.batchProc.dirName = self.dirName
-        self.batchProc.wind = self.w_wind.currentIndex()
+        self.batchProc.wind = (self.w_wind.currentIndex()+1)%3
+        # a bit wacky but maps: 0 (default option, OLS) -> 1
+        #                       1 (robust) -> 2
+        #                       2 (none) -> 0
         print("Wind set to", self.batchProc.wind)
         self.batchThread.start()  # a signal connected to batchProc.detect()
 

@@ -3,9 +3,10 @@ All notable changes to AviaNZ program will be documented in this file.
 ## Unreleased
 
 ### Added
-- Wind methods and GUI (TODO DETAIL)
-- Changepoint segmenter (TODO DETAIL)
-- Wavelet filter replaced with changepoint detector as the default non-CNN method
+- TODO DENOISING? What changed there?
+- TODO Syllable level detection adjustments
+- New changepoint detector replaces wavelet filter as the default non-CNN recognition method (wavelet filters still work but considered deprecated)
+- New method for wind noise removal by polynomial fitting (OLS or robust options available)
 - Pre-built GPU support for CNN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
@@ -15,6 +16,7 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Changed
 - Training will now include subdirectories when searching for data
 - Node selection in training faster, more stable, and produces ROCs more closely consistent with testing/processing
+- Wind noise removal only available for changepoint detectors now
 - Filter format extended to allow setting segmenter
 - Better UI for adding species in review, search function
 - Shorter pages (5 mins) for low sampling rate files in batch mode
