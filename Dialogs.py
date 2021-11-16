@@ -438,7 +438,7 @@ class Excel2Annotation(QDialog):
                 userDir = os.path.expanduser("~")
             else:
                 userDir, _ = os.path.split(self.txtAudio.text())
-            excelfile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
+            excelfile, _ = QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
             self.txtExcel.setText(excelfile)
             self.txtExcel.setReadOnly(True)
             # Read the excel to get the headers
@@ -467,7 +467,7 @@ class Excel2Annotation(QDialog):
                 userDir = os.path.expanduser("~")
             else:
                 userDir, _ = os.path.split(self.txtExcel.text())
-            audiofile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Audio (*.wav)")
+            audiofile, _ = QFileDialog.getOpenFileName(self, 'Open file', userDir, "Audio (*.wav)")
             self.txtAudio.setText(audiofile)
             self.txtAudio.setReadOnly(True)
         except Exception as e:
@@ -3130,7 +3130,7 @@ class FilterManager(QDialog):
         # Also import corresponding NN files if any
         sources = []
         targets = []
-        source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
+        source, _ = QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
         sources.append(source)
         targets.append(os.path.join(self.filtdir, os.path.basename(source)))
         try:
@@ -3218,7 +3218,7 @@ class FilterManager(QDialog):
             if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
                 sources.append(currfilt["CNN"]["CNN_name"] + ".json")
 
-        target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
+        target = QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
         if target != "":
             targets = []
             for src in sources:
