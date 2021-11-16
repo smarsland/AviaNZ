@@ -982,7 +982,7 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -1010,8 +1010,9 @@ class PicButton(QAbstractButton):
             self.noaudio = True
 
         # setImage reads some properties from self, to allow easy update
-        # when color map changes
-        self.setImage(lut, colStart, colEnd, cmapInv)
+        # when color map changes. Initialize with full colour scale,
+        # then we expect to call setImage soon again to update.
+        self.setImage(lut, [np.min(self.spec), np.max(self.spec)])
 
         self.buttonClicked = False
         # if not self.cluster:
@@ -1027,12 +1028,14 @@ class PicButton(QAbstractButton):
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
 
-    def setImage(self, lut, colStart, colEnd, cmapInv):
+    def setImage(self, lut, colRange):
         # takes in a piece of spectrogram and produces a pair of images
-        if cmapInv:
-            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colEnd, colStart])
-        else:
-            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
+        # colRange: list [colStart, colEnd]
+        # TODO Could be smoother to separate out setLevels
+        # from setImage here, so that colours could be adjusted without
+        # redrawing - like in other review dialogs. But this also helps
+        # to trigger repaint upon scrolling etc, esp on Macs.
+        im, alpha = fn.makeARGB(self.spec, lut=lut, levels=colRange)
         im1 = fn.makeQImage(im, alpha)
         if im1.size().width() == 0:
             print("ERROR: button not shown, likely bad spectrogram coordinates")

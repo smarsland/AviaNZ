@@ -1373,8 +1373,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Initialize the dialog for this file
         self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments, self.indices2show,
-                                                           self.species, self.lut, self.colourStart,
-                                                           self.colourEnd, self.config['invertColourMap'],
+                                                           self.species, self.lut, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
                                                            guidefreq=guides, guidecol=self.config['guidecol'],
                                                            loop=self.loopBox.isChecked(), filename=self.filename)
@@ -1518,7 +1517,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1617,10 +1616,11 @@ class AviaNZ_reviewAll(QMainWindow):
                         # Actual loading of the wav/bmp/spectrogram
                         if self.batmode:
                             sp.readBmp(filename, off=x1, len=x2-x1, silent=segix>1)
-                            # sgRaw was already normalised to 0-1 when loading
+                            # sg was already normalised to 0-1 when loading
                             # with 1 being loudest
-                            sgRaw = sp.sg
-                            sp.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
+                            sp.sg = sp.normalisedSpec("Batmode")
+                            minsg = 0
+                            maxsg = 1
                         else:
                             # segix>1 to print the format details only once for each file
                             sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
@@ -1630,11 +1630,11 @@ class AviaNZ_reviewAll(QMainWindow):
 
                             # Generate the spectrogram
                             _ = sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True,need_even=False)
+                            sp.sg = sp.normalisedSpec("Log")
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
                             maxsg = max(np.max(sp.sg), maxsg)
-                            sp.sg = sp.normalisedSpec("Log")
 
                         # need to also store unbuffered limits in spec units
                         # (relative to start of segment)
@@ -1661,8 +1661,6 @@ class AviaNZ_reviewAll(QMainWindow):
             cmap = pg.ColorMap(pos, colour,mode)
 
             self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-            self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-            self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
             self.nsegments = len(self.indices2show)
             self.segsAccepted = 0

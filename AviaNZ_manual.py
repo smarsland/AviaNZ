@@ -3644,8 +3644,6 @@ class AviaNZ(QMainWindow):
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
-        minsg = self.sgMinimum
-        maxsg = self.sgMaximum
 
         if self.config['invertColourMap']:
             self.config['brightness'] = self.brightnessSlider.value()
@@ -3654,15 +3652,10 @@ class AviaNZ(QMainWindow):
         self.config['contrast'] = self.contrastSlider.value()
         self.saveConfig = True
 
-        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
+        colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, self.config['brightness'], self.config['contrast'], self.config['invertColourMap'])
 
-        if self.config['invertColourMap']:
-            self.overviewImage.setLevels([self.colourEnd, self.colourStart])
-            self.specPlot.setLevels([self.colourEnd, self.colourStart])
-        else:
-            self.overviewImage.setLevels([self.colourStart, self.colourEnd])
-            self.specPlot.setLevels([self.colourStart, self.colourEnd])
+        self.overviewImage.setLevels(colRange)
+        self.specPlot.setLevels(colRange)
 
     def moveLeft(self):
         """ When the left button is pressed (next to the overview plot), move everything along
