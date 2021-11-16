@@ -48,6 +48,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Ridge/instantaneous freq. detection
 - Shape analysis dialog
 - Button for exporting segment sound at different speed
+- Denoising button now connected to the new denoising
 - Saving spectrogram images without axes
 - Call comparator as a separate script, clock-adjustment only
 

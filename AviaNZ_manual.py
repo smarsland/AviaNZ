@@ -24,6 +24,7 @@
 import sys, os, json, platform, re, shutil
 from shutil import copyfile
 
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
@@ -34,7 +35,6 @@ import numpy as np
 from scipy.ndimage.filters import median_filter
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import DockArea, Dock
 import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge

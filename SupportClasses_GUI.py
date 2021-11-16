@@ -24,13 +24,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton
 from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 
 import Segment

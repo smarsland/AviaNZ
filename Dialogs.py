@@ -26,12 +26,12 @@
 import os
 import shutil
 
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
 import colourMaps
