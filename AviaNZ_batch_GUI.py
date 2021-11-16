@@ -19,6 +19,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
@@ -29,8 +30,7 @@ import numpy as np
 import wavio
 import traceback
 
-from pyqtgraph.Qt import QtGui
-from pyqtgraph.dockarea import *
+from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
 from AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
@@ -40,7 +40,7 @@ import SupportClasses, SupportClasses_GUI
 import Dialogs
 import colourMaps
 
-import webbrowser, copy, math
+import webbrowser, copy
 
 
 class AviaNZ_batchWindow(QMainWindow):
@@ -50,8 +50,8 @@ class AviaNZ_batchWindow(QMainWindow):
         # and sets up the window.
         QMainWindow.__init__(self)
 
-        # TODO: convert any communication w/ batchProc from this thread
-        # to signals, or avoid communicating entirely
+        # NOTE: any communication w/ batchProc from this thread
+        # must be via signals, if at all necessary
         self.batchProc = BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=0)
 
         self.batchThread = QThread()
@@ -59,11 +59,11 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.finished.connect(self.batchThread.quit)
         self.batchProc.completed.connect(self.completed_fileproc)
         self.batchProc.stopped.connect(self.stopped_fileproc)
-        self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
-        self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
-        self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
-        self.batchProc.need_update.connect(lambda cnt, text: self.update_progress(cnt, text))
-        self.batchProc.need_bat_info.connect(lambda op,east,north,rec: self.bat_survey_form(op,east,north,rec))
+        self.batchProc.failed.connect(self.error_fileproc)
+        self.batchProc.need_msg.connect(self.check_msg)
+        self.batchProc.need_clean_UI.connect(self.clean_UI)
+        self.batchProc.need_update.connect(self.update_progress)
+        self.batchProc.need_bat_info.connect(self.bat_survey_form)
         self.batchProc.moveToThread(self.batchThread)
 
         self.msgClosed = QWaitCondition()
