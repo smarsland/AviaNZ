@@ -338,7 +338,7 @@ class AviaNZ(QMainWindow):
         self.invertcm.setChecked(self.config['invertColourMap'])
 
         # specMenu.addSeparator()
-        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog)
+        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog, "Ctrl+C")
 
         if not self.DOC:
             specMenu.addSeparator()
@@ -403,7 +403,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
             actionMenu.addAction("Analyse shapes", self.showShapesDialog)
-            actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
+            actionMenu.addAction("Cluster segments", self.classifySegments)
 
         actionMenu.addSeparator()
         self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
@@ -4346,13 +4346,11 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        # alg = "const"
-        alg = "ols"
-        # alg = "qr"
+        alg = "ols" # or qr, or const
         thrType = "soft"
-        depth = 5   # can also use 0 to autoset
+        depth = 6   # can also use 0 to autoset
         wavelet = "dmey2"
-        aaRec = True
+        aaRec = False  # True if nicer spectrogram is needed - but it's not very clean either way
         aaWP = False
         thr = 2.0  # this one is difficult to set universally...
 
@@ -4363,8 +4361,18 @@ class AviaNZ(QMainWindow):
 
             # extract the piece of audiodata under current segment
             denoised = self.audiodata[start : stop]
+
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
             denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun=alg, costfn="fixed")
+
+            # bandpass to selected zones, if it's a box
+            # TODO this could be done faster: pass to waveletDenoise and
+            # do not reconstruct from nodes outside the specified band
+            if self.segments[self.box1id][3]>0:
+                bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
+                top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
+                print("Extracting samples between %d-%d Hz" % (bottom, top))
+                denoised = self.sp.bandpassFilter(denoised, sampleRate=None, start=bottom, end=top)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -5081,18 +5089,12 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
             elif alg == 'Wavelets':
+                # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
-                # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-
-                # TODO New style wind denoising NOT IMPLEMENTED HERE
-                if settings["wind"]:
-                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
-                    # TODO
-                    newSegments = ws.waveletSegment(0, wpmode="new")
-                else:
-                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
-                    newSegments = ws.waveletSegment(0, wpmode="new")
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                newSegments = ws.waveletSegment(0, wpmode="new")
+                # this will produce a list of lists (over subfilters)
             elif alg == 'WV Changepoint':
                 print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
@@ -5101,8 +5103,6 @@ class AviaNZ(QMainWindow):
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
                 # using all passed params:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, silent=False, wind=settings["wind"])
-                # Or if no params are passed, they will be read from the filter file TimeRange:
-                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1, wind=settings["wind"])
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5138,9 +5138,10 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if settings["windold"]:
-                        post.wind()
-                        print('After wind: segments: ', len(post.segments))
+                    # Deprecated wind filter:
+                    # if settings["windold"]:
+                    #     post.wind()
+                    #     print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
                         print('Post-processing with CNN')
                         post.CNN()
@@ -5164,9 +5165,9 @@ class AviaNZ(QMainWindow):
                 print('Post-processing...')
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
-                if settings["windold"]:
-                    post.wind()
-                    print('After wind segments: ', len(post.segments))
+                # if settings["windold"]:
+                #     post.wind()
+                #     print('After wind segments: ', len(post.segments))
                 if settings["rain"]:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))

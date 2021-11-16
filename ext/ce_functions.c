@@ -102,7 +102,7 @@ int ce_thresnode2(double *in_array, size_t size, double threshold, int type)
 // using thresholds from the threshold array in pieces of blocklen samples
 int ce_thresnode2_block(double *in_array, size_t datalen, size_t blocklen, double *threshold, int type)
 {
-	printf("C args: inarray %.f, datalen %d, blocklen %d, thresh %.f, type %d\n", in_array[0], datalen, blocklen, threshold[0], type);
+	// printf("C args: inarray %.f, datalen %d, blocklen %d, thresh %.f, type %d\n", in_array[0], datalen, blocklen, threshold[0], type);
 	if(type==2){
 		// Hard thresholding
 		for(size_t bi=0; bi*blocklen<datalen; bi++){

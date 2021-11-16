@@ -504,7 +504,7 @@ class WaveletFunctions:
           8. threshold estimation ("const"/"ols"/"qr")
         Return: reconstructed signal (ndarray)
         """
-        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, costfn %s" % (thresholdType, thrMultiplier, maxLevel, costfn))
+        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, costfn %s, thrfun %s" % (thresholdType, thrMultiplier, maxLevel, costfn, thrfun))
         opstartingtime = time.time()
 
         ADJBLOCKLEN = 0.15  # block length in s to be used when estimating adj
@@ -577,6 +577,7 @@ class WaveletFunctions:
             print("extracting node energy...")
             windE = np.zeros((numblocks, len(windnodecenters)))
             for node_ix in range(len(windnodecenters)):
+                node = wind_nodes[node_ix]
                 windE[:, node_ix], _ = self.extractE(node, blocklen_s)
             windE = np.log(windE)
 
@@ -616,10 +617,10 @@ class WaveletFunctions:
         else:
             print("ERROR: unknown threshold estimator ", thrfun)
             return
-        print("made thr", np.shape(threshold))
+        print("thr shape", np.shape(threshold))
 
         # Overwrite the WPT with thresholded versions of the leaves
-        exit_code = ce.ThresholdNodes2(self.tree, bestleaves, threshold, thresholdType, blocklen)
+        exit_code = ce.ThresholdNodes2(self.tree, bestleaves, threshold=threshold, thrtype=thresholdType, blocklen=blocklen)
         if exit_code != 0:
             print("ERROR: ThresholdNodes2 exited with exit code ", exit_code)
             return
