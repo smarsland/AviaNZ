@@ -218,35 +218,12 @@ class BuildRecAdvWizard(QWizard):
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
 
-            # Volume control
-            self.volSlider = QSlider(Qt.Horizontal)
-            self.volSlider.valueChanged.connect(self.volSliderMoved)
-            self.volSlider.setRange(0, 100)
-            self.volSlider.setValue(50)
-            volIcon = QLabel()
-            volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
-
-            # Brightness, and contrast sliders
-            labelBr = QLabel()
-            labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-            labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.brightnessSlider = QSlider(Qt.Horizontal)
-            self.brightnessSlider.setMinimum(0)
-            self.brightnessSlider.setMaximum(100)
-            self.brightnessSlider.setValue(20)
-            self.brightnessSlider.setTickInterval(1)
-            self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-            labelCo = QLabel()
-            labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-            labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.contrastSlider = QSlider(Qt.Horizontal)
-            self.contrastSlider.setMinimum(0)
-            self.contrastSlider.setMaximum(100)
-            self.contrastSlider.setValue(20)
-            self.contrastSlider.setTickInterval(1)
-            self.contrastSlider.valueChanged.connect(self.setColourLevels)
+            # Volume, brightness and contrast sliders.
+            # Config values are overwritten with fixed bright/contr/no inversion.
+            self.specControls = SupportClasses_GUI.BrightContrVol(80, 20, False)
+            self.specControls.colChanged.connect(self.setColourLevels)
+            self.specControls.volChanged.connect(self.volSliderMoved)
+            self.specControls.layout().setContentsMargins(20, 0, 20, 10)
 
             self.btnCreateNewCluster = QPushButton('Create cluster')
             self.btnCreateNewCluster.setFixedWidth(150)
@@ -256,44 +233,22 @@ class BuildRecAdvWizard(QWizard):
             self.btnDeleteSeg.clicked.connect(self.deleteSelectedSegs)
 
             # Colour map
-            cmap = self.config['cmap']
-            pos, colour, mode = colourMaps.colourMaps(cmap)
-            cmap = pg.ColorMap(pos, colour,mode)
-            self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+            self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
             # page 3 layout
             layout1 = QVBoxLayout()
             layout1.addWidget(instr)
             layout1.addWidget(self.lblSpecies)
-            hboxSpecContr = QHBoxLayout()
-            hboxSpecContr.addWidget(volIcon)
-            hboxSpecContr.addWidget(self.volSlider)
-            hboxSpecContr.addWidget(labelBr)
-            hboxSpecContr.addWidget(self.brightnessSlider)
-            hboxSpecContr.addWidget(labelCo)
-            hboxSpecContr.addWidget(self.contrastSlider)
-            hboxSpecContr.setContentsMargins(20, 0, 20, 10)
-
-            hboxSpecContr.setStretch(0, 1)
-            hboxSpecContr.setStretch(1, 3)
-            hboxSpecContr.setStretch(2, 1)
-            hboxSpecContr.setStretch(3, 3)
-            hboxSpecContr.setStretch(4, 1)
-            hboxSpecContr.setStretch(5, 3)
-            hboxSpecContr.addStretch(2)
 
             hboxBtns2 = QHBoxLayout()
             hboxBtns2.addWidget(self.btnCreateNewCluster)
             hboxBtns2.addWidget(self.btnDeleteSeg)
             hboxBtns2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-            hboxBtns = QHBoxLayout()
-            hboxBtns.addLayout(hboxBtns2)
-
             # top part
             vboxTop = QVBoxLayout()
-            vboxTop.addLayout(hboxSpecContr)
-            vboxTop.addLayout(hboxBtns)
+            vboxTop.addWidget(self.specControls)
+            vboxTop.addLayout(hboxBtns2)
 
             # set up the images
             self.flowLayout = SupportClasses_GUI.Layout()
@@ -890,7 +845,8 @@ class BuildRecAdvWizard(QWizard):
                         self.picbuttons[segix].show()
             self.flowLayout.adjustSize()
             self.flowLayout.update()
-            self.setColourLevels()
+            # Apply colour and volume levels
+            self.specControls.emitAll()
 
         def clearButtons(self):
             """ Remove existing buttons, call when merging clusters
@@ -909,17 +865,15 @@ class BuildRecAdvWizard(QWizard):
                     item.widget().hide()
             self.flowLayout.update()
 
-        def setColourLevels(self):
+        def setColourLevels(self, brightness, contrast):
             """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
             Translates the brightness and contrast values into appropriate image levels.
             """
-            brightness = self.brightnessSlider.value()
-            contrast = self.contrastSlider.value()
-            # TODO hardcoded colour map inversion for now
+            brightness = 100-brightness
             colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, False)
             for btn in self.picbuttons:
                 btn.stopPlayback()
-                btn.setImage(self.lut, colRange)
+                btn.setImage(colRange)
                 btn.update()
 
         def volSliderMoved(self, value):
@@ -2502,10 +2456,7 @@ class BuildCNNWizard(QWizard):
                 sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
                 # determine colour map
-                cmap = self.config['cmap']
-                pos, colour, mode = colourMaps.colourMaps(cmap)
-                cmap = pg.ColorMap(pos, colour, mode)
-                self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+                self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
                 picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(sg), self.cnntrain.sp.data, self.cnntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
                 if i == 0:

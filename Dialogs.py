@@ -1854,32 +1854,11 @@ class HumanClassify1(QDialog):
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumHeight(270)
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.valueChanged.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
-
-        # Brightness and contrast sliders. Need to pass true (config) values of these as args
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        if self.cmapInverted:
-            self.brightnessSlider.setValue(brightness)
-        else:
-            self.brightnessSlider.setValue(100-brightness)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(contrast)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        self.specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
 
         # zoom buttons
         self.zoomInBtn = QtGui.QToolButton()
@@ -1902,32 +1881,15 @@ class HumanClassify1(QDialog):
         spNameBox.setStretch(2, 2)
 
         vboxSpecContr = pg.LayoutWidget()
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=13)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=4)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
-        vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
-        vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
-        labelBr = QLabel()
-        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-        labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        vboxSpecContr.addWidget(labelBr, row=2, col=4)
-        vboxSpecContr.addWidget(self.brightnessSlider, row=2, col=5, colspan=2)
-        labelCo = QLabel()
-        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-        labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        vboxSpecContr.addWidget(labelCo, row=2, col=7)
-        vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
-        #spacer = QSpacerItem(1,1)
-        #vboxSpecContr.layout.addWidget(spacer, row=2, col=10)
-        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=11)
-        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=12)
 
-        vboxSpecContr.layout.setColumnStretch(1, 1)
-        vboxSpecContr.layout.setColumnStretch(2, 2)
-        vboxSpecContr.layout.setColumnStretch(4, 1)
-        vboxSpecContr.layout.setColumnStretch(5, 2)
-        vboxSpecContr.layout.setColumnStretch(7, 1)
-        vboxSpecContr.layout.setColumnStretch(8, 2)
-        vboxSpecContr.layout.setColumnStretch(10, 1)
+        vboxSpecContr.addWidget(self.specControls, row=2, col=1)
+
+        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=2)
+        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=3)
+
+        vboxSpecContr.layout.setColumnStretch(1, 6) # specControls
 
         vboxFull = QVBoxLayout()
         vboxFull.addLayout(spNameBox)
@@ -2038,8 +2000,8 @@ class HumanClassify1(QDialog):
 
         # Update UI if no audio (e.g. batmode)
         self.playButton.setEnabled(len(audiodata))
-        self.volIcon.setEnabled(len(audiodata))
-        self.volSlider.setEnabled(len(audiodata))
+        self.specControls.volIcon.setEnabled(len(audiodata))
+        self.specControls.volSlider.setEnabled(len(audiodata))
 
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -2049,7 +2011,7 @@ class HumanClassify1(QDialog):
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
-        self.setColourLevels()
+        self.specControls.emitCol()
         self.scroll.horizontalScrollBar().setValue(0)
 
         FreqRange = (maxFreq-minFreq)/1000.
@@ -2098,7 +2060,7 @@ class HumanClassify1(QDialog):
             for i in range(len(self.guidelines)):
                 self.guidelines[i].setPos(-100)
 
-        self.setColourLevels()
+        self.specControls.emitCol()
 
         # DEAL WITH SPECIES NAMES
         # extract a string of current species names
@@ -2448,7 +2410,7 @@ class HumanClassify1(QDialog):
         self.update()   # for Mac updating
         self.repaint()
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness=None, contrast=None):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         Calculation is simple.
@@ -2457,11 +2419,10 @@ class HumanClassify1(QDialog):
             self.stopPlayback()
         except Exception:
             pass
-        if self.cmapInverted:
-            brightness = self.brightnessSlider.value()
-        else:
-            brightness = 100-self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
+
+        if not self.cmapInverted:
+            brightness = 100-brightness
+
         colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, brightness, contrast, self.cmapInverted)
         self.plot.setLevels(colRange)
 
@@ -2507,7 +2468,7 @@ class HumanClassify2(QDialog):
 
         self.sps = sps
         # Check if playback is possible (e.g. for batmode):
-        haveaudio = all([len(sp.data)>0 for sp in sps if sp is not None])
+        haveaudio = all(len(sp.data)>0 for sp in sps if sp is not None)
 
         self.lut = lut
         self.cmapInverted = cmapInverted
@@ -2515,77 +2476,24 @@ class HumanClassify2(QDialog):
         # filter segments for the requested species
         self.segments = segments
         self.indices2show = indicestoshow
-        # CHECK: do we need this?
-        # self.sampleRate = sampleRate
-        # self.audiodata = audiodata
-        # for i in reversed(self.indices2show):
-        #     # show segments which have midpoint in this page (ensures all are shown only once)
-        #     mid = (segments[i][0] + segments[i][1]) / 2
-        #     if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
-        #         self.indices2show.remove(i)
 
         self.errors = []
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.valueChanged.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
-        #self.volIcon.setStyleSheet("padding: 0px 1px 0px 8px")
+        self.loop = loop
+
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
+        specControls.colChanged.connect(self.setColourLevels)
+        specControls.volChanged.connect(self.volSliderMoved)
+        specControls.layout().addStretch(3) # add a big stretchable outer margin
 
         # batmode customizations:
         self.guidefreq = guidefreq
         self.guidecol = guidecol
         if not haveaudio:
-            self.volSlider.setEnabled(False)
-            self.volIcon.setEnabled(False)
-
-        self.loop = loop
-
-        # Brightness and contrast sliders - need to pass true (config) values of these as args
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        if self.cmapInverted:
-            self.brightnessSlider.setValue(brightness)
-        else:
-            self.brightnessSlider.setValue(100-brightness)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(contrast)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
-
-        hboxSpecContr = QHBoxLayout()
-        hboxSpecContr.addWidget(self.volIcon)
-        hboxSpecContr.addWidget(self.volSlider)
-        labelBr = QLabel()
-        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-        labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        #labelBr.setStyleSheet("padding: 0px 1px 0px 12px")
-        hboxSpecContr.addWidget(labelBr)
-        hboxSpecContr.addWidget(self.brightnessSlider)
-        labelCo = QLabel()
-        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-        labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        #labelCo.setStyleSheet("padding: 0px 1px 0px 12px")
-        hboxSpecContr.addWidget(labelCo)
-        hboxSpecContr.addWidget(self.contrastSlider)
-
-        hboxSpecContr.setStretch(0, 1)
-        hboxSpecContr.setStretch(1, 2)
-        hboxSpecContr.setStretch(2, 1)
-        hboxSpecContr.setStretch(3, 2)
-        hboxSpecContr.setStretch(4, 1)
-        hboxSpecContr.setStretch(5, 2)
-        hboxSpecContr.addStretch(3)
+            specControls.volSlider.setEnabled(False)
+            specControls.volIcon.setEnabled(False)
 
         label1 = QLabel('Click on the images that are incorrectly labelled.')
         label1.setFont(QtGui.QFont('SansSerif', 10))
@@ -2599,7 +2507,7 @@ class HumanClassify2(QDialog):
         vboxTop = QVBoxLayout()
         vboxTop.addWidget(label1)
         vboxTop.addWidget(species)
-        vboxTop.addLayout(hboxSpecContr)
+        vboxTop.addWidget(specControls)
 
         # Controls at the bottom
         # self.buttonPrev = QtGui.QToolButton()
@@ -2648,6 +2556,7 @@ class HumanClassify2(QDialog):
         self.specV = 0
         self.specH = 0
         self.createButtons()
+        specControls.emitAll()  # applies initial colour, volume levels
 
         # sets a lot of self properties needed before showing anything
         self.butStart = 0
@@ -2733,10 +2642,6 @@ class HumanClassify2(QDialog):
             self.buttons.append(newButton)
             self.buttons[-1].buttonClicked=False
             self.marked.append(False)
-        # set volume and brightness on these new buttons
-        self.volSliderMoved(self.volSlider.value())
-        # Now, update the colours w/ correct minsg,maxsg
-        self.setColourLevels()
 
     def resizeEvent(self, ev):
         """ On this event, choose which (and how many) buttons to display
@@ -2937,22 +2842,18 @@ class HumanClassify2(QDialog):
         self.repaint()
         QApplication.processEvents()
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness=None, contrast=None):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
-        Calculation is simple.
         """
-        if self.cmapInverted:
-            brightness = self.brightnessSlider.value()
-        else:
-            brightness = 100-self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
+        if not self.cmapInverted:
+            brightness = 100-brightness
 
         colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, self.cmapInverted)
 
         for btn in self.buttons:
             btn.stopPlayback()
-            btn.setImage(self.lut, colRange)
+            btn.setImage(colRange)
             btn.update()
 
 
@@ -3249,45 +3150,14 @@ class Cluster(QDialog):
         self.nclasses = classes
         self.config = config
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.valueChanged.connect(self.volSliderMoved)
-        self.volSlider.setRange(0, 100)
-        self.volSlider.setValue(50)
-        volIcon = QLabel()
-        volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
-
-        # Brightness, and contrast sliders
-        labelBr = QLabel(" Bright.")
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(20)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        labelCo = QLabel("Contr.")
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(20)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        self.specControls = SupportClasses_GUI.BrightContrVol(80, 20, False)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
 
         # Colour map
-        cmap = self.config['cmap']
-        pos, colour, mode = colourMaps.colourMaps(cmap)
-        cmap = pg.ColorMap(pos, colour,mode)
-        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-
-        hboxSpecContr = QHBoxLayout()
-        hboxSpecContr.addWidget(labelBr)
-        hboxSpecContr.addWidget(self.brightnessSlider)
-        hboxSpecContr.addWidget(labelCo)
-        hboxSpecContr.addWidget(self.contrastSlider)
-        hboxSpecContr.addWidget(volIcon)
-        hboxSpecContr.addWidget(self.volSlider)
+        self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
         # set up the images
         self.flowLayout = pg.LayoutWidget()
@@ -3299,7 +3169,7 @@ class Cluster(QDialog):
 
         # set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
-        self.vboxFull.addLayout(hboxSpecContr)
+        self.vboxFull.addWidget(self.specControls)
         self.vboxFull.addWidget(self.scrollArea)
         self.setLayout(self.vboxFull)
 
@@ -3355,19 +3225,17 @@ class Cluster(QDialog):
                     c += 1
                     self.picbuttons[segix].show()
         self.flowLayout.update()
-        self.setColourLevels()
+        self.specControls.emitAll()  # applies initial colour, volume levels
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness=None, contrast=None):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
-        brightness = self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
-        # TODO hardcoded non-inverted map here
+        brightness = 100-brightness
         colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, False)
         for btn in self.picbuttons:
             btn.stopPlayback()
-            btn.setImage(self.lut, colRange)
+            btn.setImage(colRange)
             btn.update()
 
     def volSliderMoved(self, value):

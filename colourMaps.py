@@ -23,7 +23,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import pyqtgraph
 import numpy as np
 
 def colourMaps(cmap):
@@ -726,3 +726,13 @@ def getColourRange(minsg, maxsg, bright, contr, invert):
     else:
         return [colStart,colEnd]
 
+def getLookupTable(cmapname):
+    """ Wrapper around pyqtgraph.ColorMap.getLookupTable.
+        cmapname: string, name of the colour map from this file.
+        Returns a lookup table which can be directly passed
+        to pg.ImageItem.setLookupTable
+    """
+    pos,colour,mode = colourMaps(cmapname)
+    cmap = pyqtgraph.ColorMap(pos,colour,mode)
+    lut = cmap.getLookupTable(0.0, 1.0, 256)
+    return(lut)

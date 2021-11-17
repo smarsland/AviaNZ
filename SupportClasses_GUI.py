@@ -25,8 +25,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
@@ -1012,7 +1012,8 @@ class PicButton(QAbstractButton):
         # setImage reads some properties from self, to allow easy update
         # when color map changes. Initialize with full colour scale,
         # then we expect to call setImage soon again to update.
-        self.setImage(lut, [np.min(self.spec), np.max(self.spec)])
+        self.lut = lut
+        self.setImage([np.min(self.spec), np.max(self.spec)])
 
         self.buttonClicked = False
         # if not self.cluster:
@@ -1028,14 +1029,14 @@ class PicButton(QAbstractButton):
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
 
-    def setImage(self, lut, colRange):
+    def setImage(self, colRange):
         # takes in a piece of spectrogram and produces a pair of images
         # colRange: list [colStart, colEnd]
         # TODO Could be smoother to separate out setLevels
         # from setImage here, so that colours could be adjusted without
         # redrawing - like in other review dialogs. But this also helps
         # to trigger repaint upon scrolling etc, esp on Macs.
-        im, alpha = fn.makeARGB(self.spec, lut=lut, levels=colRange)
+        im, alpha = fn.makeARGB(self.spec, lut=self.lut, levels=colRange)
         im1 = fn.makeQImage(im, alpha)
         if im1.size().width() == 0:
             print("ERROR: button not shown, likely bad spectrogram coordinates")
@@ -1453,3 +1454,109 @@ class MainPushButton(QPushButton):
         #  MainPushButton:pressed { background-color: #cccccc }
         # But any such change overrides default drawing style entirely.
         self.setFixedHeight(45)
+
+class BrightContrVol(QWidget):
+    """ Widget containing brightness, contrast, volume control sliders
+        and icons. On bright./contr. change, emits a colChanged signal
+        with (brightness, contrast) values. On vol. change, emits a volChanged
+        signal with (volume) value.
+        All values are ints on 0-100 scale.
+    """
+    # Initialize with values to accurately set up slider positions
+    # horizontal: bool, True for e.g. review modes, False for manual
+    #  (adjusts layout accordingly)
+    colChanged = pyqtSignal(int, int)
+    volChanged = pyqtSignal(int)
+    def __init__(self, brightness, contrast, inverted, horizontal=True, parent=None, **kwargs):
+        super(BrightContrVol, self).__init__(parent, **kwargs)
+
+        # Sliders and signals
+        self.brightSlider = QSlider(Qt.Horizontal)
+        self.brightSlider.setMinimum(0)
+        self.brightSlider.setMaximum(100)
+        if inverted:
+            self.brightSlider.setValue(brightness)
+        else:
+            self.brightSlider.setValue(100-brightness)
+        self.brightSlider.setTickInterval(1)
+        self.brightSlider.valueChanged.connect(self.emitCol)
+
+        self.contrSlider = QSlider(Qt.Horizontal)
+        self.contrSlider.setMinimum(0)
+        self.contrSlider.setMaximum(100)
+        self.contrSlider.setValue(contrast)
+        self.contrSlider.setTickInterval(1)
+        self.contrSlider.valueChanged.connect(self.emitCol)
+
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
+        self.volSlider.valueChanged.connect(self.volChanged.emit)
+
+        # static labels
+        labelBr = QLabel()
+        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
+
+        labelCo = QLabel()
+        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
+
+        self.volIcon = QLabel()
+        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
+        # Layout
+        if horizontal:
+            labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            box = QHBoxLayout()
+            box.addSpacing(5)  # outer margin
+            box.addWidget(self.volIcon)
+            box.addWidget(self.volSlider)
+            box.addSpacing(10)
+            box.addWidget(labelBr)
+            box.addWidget(self.brightSlider)
+            box.addSpacing(10)
+            box.addWidget(labelCo)
+            box.addWidget(self.contrSlider)
+            box.addStretch(3)
+
+            box.setStretch(2,4)
+            box.setStretch(5,5)  # color sliders should stretch more than vol
+            box.setStretch(8,5)
+        else:
+            box = QGridLayout()
+            box.addWidget(self.volIcon, 0, 0)
+            box.addWidget(self.volSlider, 0, 1)
+            box.setRowMinimumHeight(0, 30)
+
+            box.addWidget(labelBr, 1, 0)
+            box.addWidget(QLabel("Brightness"), 1, 1)
+            box.addWidget(self.brightSlider, 2, 0, 1, 2)
+
+            box.addWidget(labelCo, 3, 0)
+            box.addWidget(QLabel("Contrast"), 3, 1)
+            box.addWidget(self.contrSlider, 4, 0, 1, 2)
+
+            # Could also set icon scale to 16
+            labelCo.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+            labelBr.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+            self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            box.setColumnStretch(1,3)
+            box.setHorizontalSpacing(20)
+            box.setContentsMargins(0, 5, 0, 10)
+
+        self.setLayout(box)
+
+    def emitCol(self):
+        """ Emit the colour signal (to be triggered by valueChanged or
+            programmatically, when a colour refresh is needed)
+        """
+        self.colChanged.emit(self.brightSlider.value(), self.contrSlider.value())
+
+    def emitAll(self):
+        """ Emit both colour and volume signals (useful for initialization)
+        """
+        self.emitCol()
+        self.volChanged.emit(self.volSlider.value())

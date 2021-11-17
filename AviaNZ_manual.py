@@ -236,7 +236,7 @@ class AviaNZ(QMainWindow):
                             self.loadFile(os.path.join(root, f), cs=True)
                             self.widthWindow.setValue(60)  # self.datalengthSec)
                             print('file path: ', os.path.join(root, f[:-4]))
-                            self.brightnessSlider.setValue(20)
+                            self.setColourLevels(20, 50)
                             self.saveImage(os.path.join(root, f[:-4]+'.png'))
             else:
                 self.loadFile(firstFile)
@@ -812,41 +812,11 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.sliderMoved.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        #volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(16, 16, transformMode=1))
-        self.volIcon.setAlignment(Qt.AlignCenter)
-
-        # Brightness, and contrast sliders
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        if self.config['invertColourMap']:
-            self.brightnessSlider.setValue(self.config['brightness'])
-        else:
-            self.brightnessSlider.setValue(100-self.config['brightness'])
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        brightnessLabel = QLabel()
-        brightnessLabel.setPixmap(QPixmap('img/brightstr24.png').scaled(16, 16, transformMode=1))
-        brightnessLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(self.config['contrast'])
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
-
-        contrastLabel = QLabel()
-        contrastLabel.setPixmap(QPixmap('img/contrstr24.png').scaled(16, 16, transformMode=1))
-        contrastLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        self.specControls = SupportClasses_GUI.BrightContrVol(self.config['brightness'], self.config['contrast'], self.config['invertColourMap'], horizontal=False)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
 
         # Confirm button - auto ups the certainty to 100
         self.confirmButton = QPushButton("   Confirm labels")
@@ -899,16 +869,7 @@ class AviaNZ(QMainWindow):
 
         self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
-        self.w_controls.addWidget(self.volIcon, row=2, col=0)
-        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
-        self.w_controls.layout.setRowMinimumHeight(2, 30)
-
-        self.w_controls.addWidget(brightnessLabel,row=4,col=0)
-        self.w_controls.addWidget(QLabel("Brightness"), row=4, col=1, colspan=3)
-        self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
-        self.w_controls.addWidget(contrastLabel,row=6,col=0)
-        self.w_controls.addWidget(QLabel("Contrast"), row=6, col=1, colspan=3)
-        self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
+        self.w_controls.addWidget(self.specControls, row=2, col=0, rowspan=2, colspan=4)
 
         self.w_controls.addWidget(QLabel('Visible window'),row=8,col=0,colspan=4)
         self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=2)
@@ -1045,8 +1006,8 @@ class AviaNZ(QMainWindow):
 
         self.playButton.setEnabled(not self.batmode)
         self.stopButton.setEnabled(not self.batmode)
-        self.volSlider.setEnabled(not self.batmode)
-        self.volIcon.setEnabled(not self.batmode)
+        self.specControls.volSlider.setEnabled(not self.batmode)
+        self.specControls.volIcon.setEnabled(not self.batmode)
 
         text = "Bat mode" if self.batmode else ""
         self.statusBM.setText(text)
@@ -1726,7 +1687,7 @@ class AviaNZ(QMainWindow):
             self.volSliderMoved(0)
             self.segmentStop = 50
             #self.media_obj.filterSeg(0, 50, self.audiodata)
-            self.volSliderMoved(self.volSlider.value())
+            self.volSliderMoved(self.specControls.volSlider.value())
 
             # Set the length of the scrollbar.
             self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
@@ -2286,11 +2247,7 @@ class AviaNZ(QMainWindow):
             print(np.shape(e))
             e = np.log(e[30:62,:])
 
-            pos, colour, mode = colourMaps.colourMaps("Inferno")
-            cmap = pg.ColorMap(pos, colour, mode)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
-
-            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setLookupTable(colourMaps.getLookupTable("Inferno"))
             self.plotExtra.setImage(e.T)
             self.plotaxis.setLabel('Wavelet node')
 
@@ -2326,10 +2283,7 @@ class AviaNZ(QMainWindow):
             for tmult in range(10, len(annotation)):
                 r[:, tmult] = r[:, tmult-10]
 
-            pos, colour, mode = colourMaps.colourMaps("Viridis")
-            cmap = pg.ColorMap(pos, colour,mode)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
-            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setLookupTable(colourMaps.getLookupTable("Viridis"))
             self.plotExtra.setImage(r.T)
             self.plotaxis.setLabel('Frequency bin')
 
@@ -2540,10 +2494,7 @@ class AviaNZ(QMainWindow):
             maxsg = max(np.min(sgRaw), 1e-9)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
-            pos, colour, mode = colourMaps.colourMaps("Inferno")
-            cmap = pg.ColorMap(pos, colour,mode)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
-            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setLookupTable(colourMaps.getLookupTable("Inferno"))
             self.plotExtra.setImage(tempsp)
 
             # set axis. Always at 0:sampleRate//2
@@ -3608,15 +3559,12 @@ class AviaNZ(QMainWindow):
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
+
         self.config['cmap'] = cmap
+        lut = colourMaps.getLookupTable(self.config['cmap'])
 
-        pos, colour, mode = colourMaps.colourMaps(cmap)
-
-        cmap = pg.ColorMap(pos, colour,mode)
-        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-
-        self.specPlot.setLookupTable(self.lut)
-        self.overviewImage.setLookupTable(self.lut)
+        self.specPlot.setLookupTable(lut)
+        self.overviewImage.setLookupTable(lut)
 
     def invertColourMap(self):
         """ Listener for the menu item that converts the colour map"""
@@ -3637,19 +3585,22 @@ class AviaNZ(QMainWindow):
         self.sgMinimum = np.min(self.sg)
         self.sgMaximum = np.max(self.sg)
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness=None, contrast=None):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
-        Calculation is simple.
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
+        if brightness is None:
+            brightness = self.specControls.brightSlider.value()
+        if contrast is None:
+            contrast = self.specControls.contrSlider.value()
 
         if self.config['invertColourMap']:
-            self.config['brightness'] = self.brightnessSlider.value()
+            self.config['brightness'] = brightness
         else:
-            self.config['brightness'] = 100-self.brightnessSlider.value()
-        self.config['contrast'] = self.contrastSlider.value()
+            self.config['brightness'] = 100-brightness
+        self.config['contrast'] = contrast
         self.saveConfig = True
 
         colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, self.config['brightness'], self.config['contrast'], self.config['invertColourMap'])
