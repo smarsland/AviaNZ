@@ -2410,7 +2410,7 @@ class HumanClassify1(QDialog):
         self.update()   # for Mac updating
         self.repaint()
 
-    def setColourLevels(self, brightness=None, contrast=None):
+    def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         Calculation is simple.
@@ -2842,7 +2842,7 @@ class HumanClassify2(QDialog):
         self.repaint()
         QApplication.processEvents()
 
-    def setColourLevels(self, brightness=None, contrast=None):
+    def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
@@ -3227,7 +3227,7 @@ class Cluster(QDialog):
         self.flowLayout.update()
         self.specControls.emitAll()  # applies initial colour, volume levels
 
-    def setColourLevels(self, brightness=None, contrast=None):
+    def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
