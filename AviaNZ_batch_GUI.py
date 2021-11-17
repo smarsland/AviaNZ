@@ -638,7 +638,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
 
-        self.statusBar().showMessage("Ready to review")
+        #self.statusBar().showMessage("Ready to review")
 
         self.setWindowTitle('AviaNZ - Review Batch Results')
         self.createFrame()
@@ -667,6 +667,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
+        self.w_reviewer.textChanged.connect(self.validateInputs)
         self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
@@ -869,6 +870,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.layout.setColumnMinimumWidth(4, 80)
         self.d_settings.layout.setColumnStretch(2, 5)
         self.show()
+        self.validateInputs()  # initial trigger to determine status
 
     def changedCertSimple(self, cert):
         # update certainty spinbox (adv setting) when dropdown changed
@@ -958,16 +960,30 @@ class AviaNZ_reviewAll(QMainWindow):
             Use similarly to QWizardPage's isComplete, i.e. after any changes in GUI.
         """
         ready = True
+        problemMsg = ""
         if self.listFiles.count()==0 or self.dirName=='':
             ready = False
-            self.statusBar().showMessage("Select a directory to review")
+            problemMsg = "Select a directory to review"
+        elif self.w_reviewer.text()=='':
+            ready = False
+            problemMsg = "Enter reviewer name"
         elif self.fHigh.value()<self.fLow.value():
             ready = False
-            self.statusBar().showMessage("Bad frequency bands set")
+            problemMsg = "Bad frequency bands set"
         else:
-            self.statusBar().showMessage("Ready to review")
+            problemMsg = "Ready to review"
+
+        # show explanations
+        self.statusBar().showMessage(problemMsg)
+        if ready:
+            self.w_processButton.setToolTip("")
+            self.w_processButton1.setToolTip("")
+        else:
+            self.w_processButton.setToolTip(problemMsg)
+            self.w_processButton1.setToolTip(problemMsg)
 
         self.w_processButton.setEnabled(ready)
+
         if self.w_spe1.currentText() == "All species":
             self.w_processButton1.setEnabled(False)
         else:
@@ -1460,8 +1476,8 @@ class AviaNZ_reviewAll(QMainWindow):
         # store position etc to carry over to the next file dialog
         self.dialogSize = self.humanClassifyDialog2.size()
         self.dialogPos = self.humanClassifyDialog2.pos()
-        self.config['brightness'] = self.humanClassifyDialog2.brightnessSlider.value()
-        self.config['contrast'] = self.humanClassifyDialog2.contrastSlider.value()
+        self.config['brightness'] = self.humanClassifyDialog2.specControls.brightSlider.value()
+        self.config['contrast'] = self.humanClassifyDialog2.specControls.contrSlider.value()
         if not self.config['invertColourMap']:
             self.config['brightness'] = 100-self.config['brightness']
         self.humanClassifyDialog2.done(1)
@@ -1734,8 +1750,8 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dialogSize = self.humanClassifyDialog1.size()
             self.dialogPos = self.humanClassifyDialog1.pos()
             self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
-            self.config['brightness'] = self.humanClassifyDialog1.brightnessSlider.value()
-            self.config['contrast'] = self.humanClassifyDialog1.contrastSlider.value()
+            self.config['brightness'] = self.humanClassifyDialog1.specControls.brightSlider.value()
+            self.config['contrast'] = self.humanClassifyDialog1.specControls.contrSlider.value()
             if not self.config['invertColourMap']:
                 self.config['brightness'] = 100-self.config['brightness']
 

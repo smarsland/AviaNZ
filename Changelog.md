@@ -27,6 +27,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - different click detection process when training bat detectors
 - ground truth files no longer store resolution in the name
 - batch processing will not allow upsampling if using wind filter (only 2x or 4x "fake upsampling" which is implemented by node remapping)
+- batch review now has better feedback on input errors
 
 ### Fixed
 - Faster CNN classification
