@@ -4548,8 +4548,8 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
-        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
-        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
@@ -4561,8 +4561,8 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
-        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
-        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
@@ -4573,8 +4573,8 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
-        self.buildCNNWizard.button(3).clicked.connect(self.saveNotestRecogniserCNN)
-        self.buildCNNWizard.saveTestBtn.clicked.connect(self.saveTestRecogniserCNN)
+        self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
+        self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
         self.buildCNNWizard.activateWindow()
         self.buildCNNWizard.exec_()
 
@@ -4583,7 +4583,7 @@ class AviaNZ(QMainWindow):
         self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.configdir, filter)
         self.testRecWizard.exec_()
 
-    def saveNotestRecogniser(self):
+    def saveRecogniser(self, test=False):
         try:
             # actually write out the filter
             filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
@@ -4592,45 +4592,25 @@ class AviaNZ(QMainWindow):
             self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
             rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
             print("Saving new recogniser to ", filename)
-            f = open(filename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.speciesData))
-            f.close()
-            f = open(rocfilename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
-            f.close()
+            with open(filename, 'w') as f:
+                f.write(json.dumps(self.buildRecAdvWizard.speciesData, indent=4))
+            with open(rocfilename, 'w') as f:
+                f.write(json.dumps(self.buildRecAdvWizard.ROCData, indent=4))
 
             # prompt the user
-            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+            if test:
+                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+            else:
+                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
             msg.exec_()
             self.buildRecAdvWizard.done(1)
+            if test:
+                self.testRecogniser(filter=os.path.basename(filename))
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
 
-    def saveTestRecogniser(self):
-        try:
-            filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
-            # also write ROC in to a file
-            rocfilename = self.buildRecAdvWizard.speciesData["species"] + "_ROCWF" + time.strftime("_%H-%M-%S", time.gmtime())
-            self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
-            rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
-            print("Saving new recogniser to ", filename)
-            f = open(filename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.speciesData))
-            f.close()
-            f = open(rocfilename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
-            f.close()
-            # prompt the user
-            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
-            msg.exec_()
-            self.buildRecAdvWizard.done(1)
-            self.testRecogniser(filter=os.path.basename(filename))
-        except Exception as e:
-            print("ERROR: could not save recogniser because:", e)
-            self.buildRecAdvWizard.done(0)
-
-    def saveNotestRecogniserCNN(self):
+    def saveRecogniserCNN(self, test=False):
         # actually write out the filter and CNN model
         modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
         CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
@@ -4639,146 +4619,67 @@ class AviaNZ(QMainWindow):
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
         # also write ROC in to a file
-        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
-                                                                                               time.gmtime())
+        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S", time.gmtime())
         self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
         rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
-        if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
-            try:
+        try:
+            if self.buildCNNWizard.savePage.saveoption == 'New':
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
                 print("Saving a new recogniser", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # save ROC
-                f = open(rocfilename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
-                msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        elif self.buildCNNWizard.savePage.saveoption != 'New':
-            try:
+                with open(rocfilename, 'w') as f:
+                    f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+            else:
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
                 print("Updating the existing recogniser ", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
-                # prompt the user
-                # msg = SupportClasses_GUI.MessagePopup("d", "Training complete", "Recogniser is ready to use")
-                # msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        else:
-            return
-
-    def saveTestRecogniserCNN(self):
-        # actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
-        self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
-        modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.cnntrain.bestweight
-        weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
-        # also write ROC in to a file
-        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
-                                                                                               time.gmtime())
-        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
-        rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
-
-        if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
-            try:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
-                print("Saving a new recogniser", self.filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # save ROC
-                f = open(rocfilename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
-                f.close()
-                # prompt the user
+                # TODO this was disabled here for some reason,
+                # not sure what is the intended behavior
+                # with open(rocfilename, 'w') as f:
+                #     f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+
+            # Store the recognizer txt
+            with open(filename, 'w') as f:
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt, indent=4))
+            # Actually copy the model
+            copyfile(modelsrc, modelfile)
+            copyfile(weightsrc, weightfile)
+            # And remove temp dirs
+            self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+            self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+            # prompt the user
+            if test:
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
-                msg.exec_()
-                self.buildCNNWizard.done(1)
+            else:
+                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+            msg.exec_()
+            self.buildCNNWizard.done(1)
+            if test:
                 self.testRecogniser(filter=os.path.basename(filename))
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        elif self.buildCNNWizard.savePage.saveoption != 'New':
-            try:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
-                print("Updating the existing recogniser ", self.filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
-                # save ROC
-                f = open(rocfilename, 'w')
-                # f.write(json.dumps(self.buildRecAdvWizard.ROCData)) # TODO
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!",
-                                                  "Training completed!\nProceeding to testing.")
-                msg.exec_()
-                self.buildCNNWizard.done(1)
-                self.testRecogniser(filter=os.path.basename(filename))
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        else:
-            return
+        except Exception as e:
+            print("ERROR: could not save recogniser because:", e)
 
-    def saveRecogniser(self):
+    def saveRecogniserROC(self):
         # nothing to worry about CNN files, they are untouched
-        if self.filterManager.saveoption == 'New' and (self.filterManager.enterFiltName.text() != '' or self.filterManager.enterFiltName.text() != '.txt'):
-            try:
+        try:
+            if self.filterManager.saveoption == 'New':
                 filename = os.path.join(self.filtersDir, self.filterManager.enterFiltName.text())
                 print("Saving a new recogniser", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.filterManager.newfilter))
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Saved as a new recogniser: " + self.filterManager.enterFiltName.text() + "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
-                msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        elif self.filterManager.saveoption != 'New':
-            try:
+                msgtext = "Saved as a new recogniser: " + self.filterManager.enterFiltName.text() + "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use."
+            else:
                 filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text() + '.txt')
                 print("Updating the existing recogniser ", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.filterManager.newfilter))
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
-                msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
+                msgtext = "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use."
+
+            # store the changed recognizer txt
+            with open(filename, 'w') as f:
+                f.write(json.dumps(self.filterManager.newfilter, indent=4))
+            # prompt the user
+            msg = SupportClasses_GUI.MessagePopup("d", "Saved!", msgtext)
+            msg.exec_()
+        except Exception as e:
+            print("ERROR: could not save recogniser because:", e)
         self.filterManager.close()
 
     def excel2Annotation(self):
@@ -5565,30 +5466,29 @@ class AviaNZ(QMainWindow):
         """ Listener for Set Operator/Reviewer menu item.
         """
         if hasattr(self, 'operator') and hasattr(self, 'reviewer') :
-            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
+            self.operatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
         else:
-            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
-        #self.setOperatorReviewerDialog.activateWindow()
-        self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)
-        self.setOperatorReviewerDialog.exec()
+            self.operatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
+        self.operatorReviewerDialog.activate.clicked.connect(self.changeOperator)
+        self.operatorReviewerDialog.exec()
 
     def changeOperator(self):
         """ Listener for the operator/reviewer dialog.
         """
-        name1, name2 = self.setOperatorReviewerDialog.getValues()
+        name1, name2 = self.operatorReviewerDialog.getValues()
         self.operator = str(name1)
         self.reviewer = str(name2)
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
-        self.setOperatorReviewerDialog.close()
+        self.operatorReviewerDialog.close()
         self.segmentsToSave = True
 
     def manageFilters(self):
-        self.filterManager = Dialogs.FilterManager(self.filtersDir)
-        self.filterManager.exec_()
+        filterManagerSimple = Dialogs.FilterManager(self.filtersDir)
+        filterManagerSimple.exec_()
 
     def customiseFiltersROC(self):
         self.filterManager = DialogsTraining.FilterCustomiseROC(self.filtersDir)
-        self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
+        self.filterManager.btnSave.clicked.connect(self.saveRecogniserROC)
         self.filterManager.exec_()
 
     def addNoiseData(self):

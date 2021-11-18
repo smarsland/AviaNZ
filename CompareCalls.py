@@ -622,7 +622,7 @@ class ReviewAdjustments(QDialog):
         self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
 
         self.connectCheckbox = QCheckBox("Recorders are connected")
-        self.connectCheckbox.setChecked(self.parent.recConnections[0,1]==1)
+        self.connectCheckbox.setChecked(bool(self.parent.recConnections[0,1]==1))
         self.connectCheckbox.toggled.connect(self.connectToggled)
 
         # main graphic
@@ -706,7 +706,8 @@ class ReviewAdjustments(QDialog):
         self.labelRecs.setText("Suggested shift for recorder %s w.r.t. %s" % (self.rec1, self.rec2))
         i = self.parent.allrecs.index(self.rec1)
         j = self.parent.allrecs.index(self.rec2)
-        self.connectCheckbox.setChecked(self.parent.recConnections[i, j]==1)
+        result = self.parent.recConnections[i, j]==1
+        self.connectCheckbox.setChecked(bool(result))
 
 
 class CompareCallsDialog(QDialog):
