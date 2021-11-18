@@ -47,7 +47,7 @@ for f in os.listdir(main_dir):
 
         # REMEMBER: we need to transpose
         TFR=TFR.T
-        #savemat'C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\test_signal.mat',{'TFR':TFR})
+        #savemat('C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\test_signal.mat',{'TFR':TFR})
         fstep=(fs/2)/np.shape(TFR)[0]
         freqarr=np.arange(fstep,fs/2+fstep,fstep)
         wopt=[fs,1] #this neeeds review
