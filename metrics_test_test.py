@@ -62,7 +62,7 @@ def IMED_distance(A,B):
 ######################## MAIN ######################################################################
 
 test_name = "Test_1"  # change test name
-dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\exponential_downchirp\\Base_Dataset"
+dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\exponential_upchirp\\Base_Dataset"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
 
@@ -93,12 +93,34 @@ window = "Hann"
 # IF law
 # A=1
 T = 5
-omega_0=2000
-omega_1=500
-omega_0=2000
-alpha=(omega_1/omega_0)**(1/T)
+#pure_tone
+#omega_0=2000
 #inst_freq_fun = lambda t: omega * np.ones((np.shape(t)))
+
+#exponential down chirp
+# omega_1=500
+# omega_0=2000
+# alpha=(omega_1/omega_0)**(1/T)
+#
+# inst_freq_fun=lambda x: omega_0*alpha**x
+
+#exponential up-chirp
+omega_1=2000
+omega_0=500
+alpha=(omega_1/omega_0)**(1/T)
 inst_freq_fun=lambda x: omega_0*alpha**x
+
+# #linear down_chirp
+# omega_1=500
+# omega_0=2000
+# c=(omega_1-omega_0)/T
+# inst_freq_fun=lambda x: omega_0+c*x
+
+# #linear upchirp
+# omega_1=2000
+# omega_0=500
+# c=(omega_1-omega_0)/T
+# inst_freq_fun=lambda x: omega_0+c*x
 
 k=0
 for file in os.listdir(dataset_dir):
@@ -179,7 +201,7 @@ for file in os.listdir(dataset_dir):
         k+=1
 
     #save plots
-fig_name=test_fold +'\\metrics_plot.jpg'
+fig_name=test_fold +'\\metrics_plot_exponential_upchirp.jpg'
 #plt.rcParams["figure.autolayout"] = True
 fig, ax = plt.subplots(4, 2, figsize=(20,40))
 
@@ -227,5 +249,5 @@ ax[3, 1].set_xticks(np.arange(0, 9))
 ax[3, 1].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
     rotation=45)
-fig.suptitle(test_fold, fontsize=30)
+fig.suptitle('Linear Downchirp', fontsize=30)
 plt.savefig(fig_name)
