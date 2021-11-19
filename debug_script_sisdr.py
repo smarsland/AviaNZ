@@ -21,7 +21,6 @@ ref_audio=sp.data
 
 sp.readWav(test)
 test_audio=sp.data
-
-score=metric(ref_audio, test_audio, rate=sample_rate)
+score=metric(test_audio, ref_audio, rate=sample_rate)
 print(score)
 print(score["sisdr"])

@@ -2,7 +2,7 @@
 # Author: Virginia Listanti
 # Help script to test metrics before big test
 
-#NOTE FOR SELF_ we just need TFR transposed (without flipud) because in this way
+# NOTE FOR SELF_ we just need TFR transposed (without flipud) because in this way
 # the freq. axis is alligned with freqarray
 
 
@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.linalg import norm
 import os
-import csv
+#import csv
 import imed
 import speechmetrics as sm
 
@@ -61,13 +61,13 @@ def IMED_distance(A,B):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_1"  # change test name
+test_name = "Test_2"  # change test name
 dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\exponential_upchirp\\Base_Dataset"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
 
 #inizialization for sisdr score
-metric=sm.load("relative.sisdr", window=None)
+metric=sm.load("sisdr", window=None)
 
 # check if test_fold exists
 if not os.path.exists(test_fold):
@@ -97,7 +97,7 @@ T = 5
 #omega_0=2000
 #inst_freq_fun = lambda t: omega * np.ones((np.shape(t)))
 
-#exponential down chirp
+# #exponential down chirp
 # omega_1=500
 # omega_0=2000
 # alpha=(omega_1/omega_0)**(1/T)
@@ -147,8 +147,8 @@ for file in os.listdir(dataset_dir):
         wopt = [fs, window_width]  # this neeeds review
         tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
         inst_freq = inst_freq_fun(np.linspace(0, T, np.shape(tfsupp[0, :])[0]))
-        plt.plot(inst_freq)
-        plt.show()
+        # plt.plot(inst_freq)
+        # plt.show()
 
         # invert TFR
         s1_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
@@ -188,9 +188,9 @@ for file in os.listdir(dataset_dir):
         #Reconstructed signal metrics
 
         #sisdr
-        score = metric(signal_original, s1_inverted, rate=fs)
+        score = metric(s1_inverted, signal_original,rate=fs)
         SDR_original[k,0]=score["sisdr"]
-        score = metric(sig1, s1_inverted, rate=fs)
+        score = metric(s1_inverted, sig1, rate=fs)
         SDR_noise[k, 0] = score["sisdr"]
 
         #imed
@@ -249,5 +249,5 @@ ax[3, 1].set_xticks(np.arange(0, 9))
 ax[3, 1].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
     rotation=45)
-fig.suptitle('Linear Downchirp', fontsize=30)
+fig.suptitle('Exponential upchirp', fontsize=30)
 plt.savefig(fig_name)
