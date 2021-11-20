@@ -58,11 +58,47 @@ def IMED_distance(A,B):
 
     return imed.distance(A2,B2)
 
+def set_if_fun(signal_id,T):
+    """
+    Utility function to manage the instantaneous frequency function
+    """
+    if signal_id=="pure_tone":
+        omega=2000
+        if_fun = lambda t: omega * np.ones((np.shape(t)))
+
+    elif signal_id=="exponential_downchirp":
+        omega_1=500
+        omega_0=2000
+        alpha=(omega_1/omega_0)**(1/T)
+        if_fun=lambda x: omega_0*alpha**x
+
+    elif signal_id=="exponential_upchirp":
+        omega_1=2000
+        omega_0=500
+        alpha=(omega_1/omega_0)**(1/T)
+        if_fun=lambda x: omega_0*alpha**x
+
+    elif signal_id=="linear_downchirp":
+        omega_1=500
+        omega_0=2000
+        c=(omega_1-omega_0)/T
+        if_fun=lambda x: omega_0+c*x
+
+    elif signal_id=="linear_upchirp":
+        omega_1=2000
+        omega_0=500
+        c=(omega_1-omega_0)/T
+        if_fun=lambda x: omega_0+c*x
+
+    else:
+        print("ERROR SIGNAL ID NOT CONSISTENT WITH THE IF WE CAN HANDLE")
+    return if_fun
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_2"  # change test name
-dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\exponential_upchirp\\Base_Dataset"
+test_name = "Test_3"  # change test name
+file_id="exponential_upchirp"
+dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
 
@@ -83,7 +119,14 @@ SDR_noise= np.zeros((9,1))
 IMED_original = np.zeros((9,1))
 IMED_noise = np.zeros((9,1))
 
-file_id = []
+NORM_S_1=np.zeros((9,1))
+NORM_S_2=np.zeros((9,1))
+RATIO_1=np.zeros((9,1))
+RATIO_2=np.zeros((9,1))
+NORM_DIFF_1= np.zeros((9,1))
+NORM_DIFF_2= np.zeros((9,1))
+
+# file_id = []
 
 # TFR parameters
 window_width = 2048
@@ -93,39 +136,12 @@ window = "Hann"
 # IF law
 # A=1
 T = 5
-#pure_tone
-#omega_0=2000
-#inst_freq_fun = lambda t: omega * np.ones((np.shape(t)))
-
-# #exponential down chirp
-# omega_1=500
-# omega_0=2000
-# alpha=(omega_1/omega_0)**(1/T)
-#
-# inst_freq_fun=lambda x: omega_0*alpha**x
-
-#exponential up-chirp
-omega_1=2000
-omega_0=500
-alpha=(omega_1/omega_0)**(1/T)
-inst_freq_fun=lambda x: omega_0*alpha**x
-
-# #linear down_chirp
-# omega_1=500
-# omega_0=2000
-# c=(omega_1-omega_0)/T
-# inst_freq_fun=lambda x: omega_0+c*x
-
-# #linear upchirp
-# omega_1=2000
-# omega_0=500
-# c=(omega_1-omega_0)/T
-# inst_freq_fun=lambda x: omega_0+c*x
+inst_freq_fun=set_if_fun(file_id, T)
 
 k=0
 for file in os.listdir(dataset_dir):
     if file.endswith(".wav"):
-        file_id.append(file)
+        # file_id.append(file)
         IF = IFreq.IF(method=2, pars=[1, 1])
         sp = SignalProc.SignalProc(window_width, incr)
         sp.readWav(dataset_dir + '\\' + file)
@@ -188,10 +204,20 @@ for file in os.listdir(dataset_dir):
         #Reconstructed signal metrics
 
         #sisdr
-        score = metric(s1_inverted, signal_original,rate=fs)
+        #respect to original signal
+        len_diff=len(signal_original)-len(s1_inverted)
+        score = metric(s1_inverted, signal_original[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))],rate=fs)
+        NORM_S_1[k, 0] = norm(signal_original)
+        NORM_DIFF_1[k,0]=norm(signal_original[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))]-s1_inverted)
+        RATIO_1[k,0]=NORM_S_1[k,0]/NORM_DIFF_1[k,0]
         SDR_original[k,0]=score["sisdr"]
-        score = metric(s1_inverted, sig1, rate=fs)
+
+        #respect to signal +noise
+        score = metric(s1_inverted, sig1[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))], rate=fs)
         SDR_noise[k, 0] = score["sisdr"]
+        NORM_S_2[k, 0] = norm(sig1)
+        NORM_DIFF_2[k, 0] = norm(sig1[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))] - s1_inverted)
+        RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
 
         #imed
         IMED_original[k,0]=IMED_distance(TFR_original[:,1:-1], TFR2_inv)
@@ -200,8 +226,9 @@ for file in os.listdir(dataset_dir):
         del tfsupp
         k+=1
 
-    #save plots
-fig_name=test_fold +'\\metrics_plot_exponential_upchirp.jpg'
+
+#save metric plots
+fig_name=test_fold +"\\"+file_id+"_metrics_plot.jpg"
 #plt.rcParams["figure.autolayout"] = True
 fig, ax = plt.subplots(4, 2, figsize=(20,40))
 
@@ -249,5 +276,45 @@ ax[3, 1].set_xticks(np.arange(0, 9))
 ax[3, 1].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
     rotation=45)
-fig.suptitle('Exponential upchirp', fontsize=30)
+fig.suptitle(file_id+" metrics", fontsize=30)
+plt.savefig(fig_name)
+
+
+#save plots for sisdr check
+fig_name=test_fold +'\\'+file_id+'_sisdr.jpg'
+#plt.rcParams["figure.autolayout"] = True
+fig, ax = plt.subplots(2, 2, figsize=(20,40))
+ax[0,0].plot(NORM_S_1,'ro', label="norm orig.")
+ax[0,0].plot(NORM_DIFF_1,'bx', label="norm diff")
+ax[0,0].set_title("Norms sisdr1")
+ax[0, 0].set_xticks(np.arange(0, 9))
+ax[0, 0].set_xticklabels(
+    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+    rotation=45)
+ax[0,0].legend(loc="upper right")
+ax[0,1].plot(RATIO_1, 'bo', label="ratio")
+ax[0,1].plot(np.ones((9,1)), 'r-')
+ax[0,1].set_title("Ratio sisdr 1")
+ax[0, 1].set_xticks(np.arange(0, 9))
+ax[0, 1].set_xticklabels(
+    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+    rotation=45)
+ax[0,1].legend(loc="upper right")
+ax[1,0].plot(NORM_S_2,'ro', label="norm sign")
+ax[1,0].plot(NORM_DIFF_2,'bx', label="Norm diff.")
+ax[1,0].set_title("Norms sisdr2")
+ax[1, 0].set_xticks(np.arange(0, 9))
+ax[1, 0].set_xticklabels(
+    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+    rotation=45)
+ax[1,0].legend(loc="upper right")
+ax[1,1].plot(RATIO_2, 'bo', label="norm ratio")
+ax[1,1].plot(np.ones((9,1)), 'r-')
+ax[1,1].set_title("Ratio sisdr 2")
+ax[1, 1].set_xticks(np.arange(0, 9))
+ax[1, 1].set_xticklabels(
+    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+    rotation=45)
+ax[1,1].legend(loc="upper right")
+fig.suptitle(file_id+" sisdr", fontsize=30)
 plt.savefig(fig_name)
