@@ -96,35 +96,46 @@ def set_if_fun(signal_id,T):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_3"  # change test name
+test_name = "Test_8"  # change test name
 file_id="exponential_upchirp"
 dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
 
 #inizialization for sisdr score
-metric=sm.load("sisdr", window=None)
+metrics=sm.load("relative", window=None)
 
 # check if test_fold exists
 if not os.path.exists(test_fold):
     os.mkdir(test_fold)
 
 # initialization
-SNR = np.zeros((9,1))
-RE = np.zeros((9,1))
-L2 = np.zeros((9,1))
-IAM = np.zeros((9,1)) #iatsenko metric
-SDR_original = np.zeros((9,1))
-SDR_noise= np.zeros((9,1))
-IMED_original = np.zeros((9,1))
-IMED_noise = np.zeros((9,1))
+# SNR = np.zeros((9,1))
+# RE = np.zeros((9,1))
+# L2 = np.zeros((9,1))
+# IAM = np.zeros((9,1)) #iatsenko metric
+# SDR_original = np.zeros((9,1))
+# SDR_noise= np.zeros((9,1))
+# IMED_original = np.zeros((9,1))
+# IMED_noise = np.zeros((9,1))
+#
+# NORM_S_1=np.zeros((9,1))
+# NORM_S_2=np.zeros((9,1))
+# RATIO_1=np.zeros((9,1))
+# RATIO_2=np.zeros((9,1))
+# NORM_DIFF_1= np.zeros((9,1))
+# NORM_DIFF_2= np.zeros((9,1))
 
-NORM_S_1=np.zeros((9,1))
-NORM_S_2=np.zeros((9,1))
-RATIO_1=np.zeros((9,1))
-RATIO_2=np.zeros((9,1))
-NORM_DIFF_1= np.zeros((9,1))
-NORM_DIFF_2= np.zeros((9,1))
+BSSEVAL_original=np.zeros((9,1))
+PESQ_original=np.zeros((9,1))
+NBPESQ_original=np.zeros((9,1))
+STOI_original=np.zeros((9,1))
+SDR_original = np.zeros((9,1))
+BSSEVAL_noise=np.zeros((9,1))
+PESQ_noise=np.zeros((9,1))
+NBPESQ_noise=np.zeros((9,1))
+STOI_noise=np.zeros((9,1))
+SDR_noise= np.zeros((9,1))
 
 # file_id = []
 
@@ -180,82 +191,263 @@ for file in os.listdir(dataset_dir):
 
         #evaluate metrics
 
-        #base metrics
-        #snr
+        # #base metrics
+        # #snr
         if file.endswith("0.wav"):
            signal_original=sig1
            TFR_original=TFR2
            noise=[]
         else:
             noise=sig1-signal_original
+        #
+        # SNR[k,0]=Signal_to_noise_Ratio(sig1,noise)
+        #
+        # #Renyi Entropy
+        # RE[k,0]=Renyi_Entropy(TFR2)
+        #
+        # # IF metrics
+        # #L2 norm
+        # L2[k,0]=norm(tfsupp[0,:]-inst_freq)
+        #
+        # #IAM
+        # IAM[k,0]=Iatsenko_style(inst_freq,tfsupp[0,:])
+        #
+        # #Reconstructed signal metrics
+        #
+        # #sisdr
+        # # #cutting only reference and test  signal
+        # # #respect to original signal
+        # # len_diff=len(signal_original)-len(s1_inverted)
+        # # score = metric(s1_inverted, signal_original[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))],rate=fs)
+        # # NORM_S_1[k, 0] = norm(signal_original)
+        # # NORM_DIFF_1[k,0]=norm(signal_original[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))]-s1_inverted)
+        # # RATIO_1[k,0]=NORM_S_1[k,0]/NORM_DIFF_1[k,0]
+        # # SDR_original[k,0]=score["sisdr"]
+        # #
+        # # #respect to signal +noise
+        # # score = metric(s1_inverted, sig1[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))], rate=fs)
+        # # SDR_noise[k, 0] = score["sisdr"]
+        # # NORM_S_2[k, 0] = norm(sig1)
+        # # NORM_DIFF_2[k, 0] = norm(sig1[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))] - s1_inverted)
+        # # RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
+        #
+        # # cutting both test and reference signal in order to have the same dim.
+        #
+        # # #test_4
+        # # # respect to original signal
+        # # len_diff = len(signal_original) - len(s1_inverted)
+        # # s1_inverted = s1_inverted[int(np.floor(window_width/2-len_diff)):-int(np.floor(window_width/2))]
+        # # score = metric(s1_inverted, signal_original[int(np.floor(window_width/2)):-int(np.floor(window_width/2))], rate=fs)
+        # # NORM_S_1[k, 0] = norm(signal_original[int(np.floor(window_width/2)):-int(np.floor(window_width/2))])
+        # # NORM_DIFF_1[k, 0] = norm(signal_original[int(np.floor(window_width/2)):-int(np.floor(window_width/2))] - s1_inverted)
+        # # RATIO_1[k, 0] = NORM_S_1[k, 0] / NORM_DIFF_1[k, 0]
+        # # SDR_original[k, 0] = score["sisdr"]
+        # #
+        # # # respect to signal +noise
+        # # score = metric(s1_inverted, sig1[int(np.floor(window_width/2)):-int(np.floor(window_width/2))], rate=fs)
+        # # SDR_noise[k, 0] = score["sisdr"]
+        # # NORM_S_2[k, 0] = norm(sig1[int(np.floor(window_width/2)):-int(np.floor(window_width/2))])
+        # # NORM_DIFF_2[k, 0] = norm(sig1[int(np.floor(window_width/2)):-int(np.floor(window_width/2))] - s1_inverted)
+        # # RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
+        #
+        # # # test_5
+        # # #symmetric
+        # # # respect to original signal
+        # # len_diff = len(signal_original) - len(s1_inverted)
+        # # s1_inverted = s1_inverted[int(np.ceil((window_width- len_diff)/2)):-int(np.floor((window_width -len_diff)/ 2))]
+        # # score = metric(s1_inverted, signal_original[int(np.ceil(window_width / 2)):-int(np.floor(window_width / 2))],
+        # #                rate=fs)
+        # # NORM_S_1[k, 0] = norm(signal_original[int(np.ceil(window_width / 2)):-int(np.floor(window_width / 2))])
+        # # NORM_DIFF_1[k, 0] = norm(signal_original[int(np.ceil(window_width / 2)):-int(np.floor(window_width / 2))] - s1_inverted)
+        # # RATIO_1[k, 0] = NORM_S_1[k, 0] / NORM_DIFF_1[k, 0]
+        # # SDR_original[k, 0] = score["sisdr"]
+        # #
+        # # # respect to signal +noise
+        # # score = metric(s1_inverted, sig1[int(np.ceil(window_width / 2)):-int(np.floor(window_width / 2))], rate=fs)
+        # # SDR_noise[k, 0] = score["sisdr"]
+        # # NORM_S_2[k, 0] = norm(sig1[int(np.ceil(window_width / 2)):-int(np.floor(window_width / 2))])
+        # # NORM_DIFF_2[k, 0] = norm(sig1[int(np.ceil(window_width / 2)):-int(np.floor(window_width / 2))] - s1_inverted)
+        # # RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
+        #
+        # # # test_6
+        # # #as test 5but using incr instead of win len
+        # # # respect to original signal
+        # # len_diff = len(signal_original) - len(s1_inverted)
+        # # s1_inverted = s1_inverted[int(np.ceil(incr - len_diff / 2)):-int(np.floor(incr - len_diff/ 2))]
+        # # score = metric(s1_inverted, signal_original[int(np.ceil(incr )):-int(np.floor(incr))],
+        # #                rate=fs)
+        # # NORM_S_1[k, 0] = norm(signal_original[int(np.ceil(incr)):-int(np.floor(incr ))])
+        # # NORM_DIFF_1[k, 0] = norm(
+        # #     signal_original[int(np.ceil(incr )):-int(np.floor(incr ))] - s1_inverted)
+        # # RATIO_1[k, 0] = NORM_S_1[k, 0] / NORM_DIFF_1[k, 0]
+        # # SDR_original[k, 0] = score["sisdr"]
+        # #
+        # # # respect to signal +noise
+        # # score = metric(s1_inverted, sig1[int(np.ceil(incr )):-int(np.floor(incr ))], rate=fs)
+        # # SDR_noise[k, 0] = score["sisdr"]
+        # # NORM_S_2[k, 0] = norm(sig1[int(np.ceil(incr)):-int(np.floor(incr ))])
+        # # NORM_DIFF_2[k, 0] = norm(sig1[int(np.ceil(incr )):-int(np.floor(incr ))] - s1_inverted)
+        # # RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
+        #
+        # # test_7
+        # # as test 6 + rescaling s1_inverted
+        # # respect to original signal
+        # len_diff = len(signal_original) - len(s1_inverted)
+        # s1_inverted = s1_inverted[int(np.ceil(incr - len_diff / 2)):-int(np.floor(incr - len_diff / 2))]
+        # s1_inverted_scaled_1 = s1_inverted / (np.ptp(s1_inverted) / np.ptp(signal_original))
+        # score = metric(s1_inverted_scaled_1, signal_original[int(np.ceil(incr)):-int(np.floor(incr))],
+        #                rate=fs)
+        # NORM_S_1[k, 0] = norm(signal_original[int(np.ceil(incr)):-int(np.floor(incr))])
+        # NORM_DIFF_1[k, 0] = norm(
+        #     signal_original[int(np.ceil(incr)):-int(np.floor(incr))] - s1_inverted_scaled_1)
+        # RATIO_1[k, 0] = NORM_S_1[k, 0] / NORM_DIFF_1[k, 0]
+        # SDR_original[k, 0] = score["sisdr"]
+        #
+        # # respect to signal +noise
+        # s1_inverted_scaled_2 = s1_inverted / (np.ptp(s1_inverted) / np.ptp(sig1))
+        # score = metric(s1_inverted_scaled_2, sig1[int(np.ceil(incr)):-int(np.floor(incr))], rate=fs)
+        # SDR_noise[k, 0] = score["sisdr"]
+        # NORM_S_2[k, 0] = norm(sig1[int(np.ceil(incr)):-int(np.floor(incr))])
+        # NORM_DIFF_2[k, 0] = norm(sig1[int(np.ceil(incr)):-int(np.floor(incr))] - s1_inverted_scaled_2)
+        # RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
+        #
+        # #imed
+        # col_dif=np.shape(TFR_original)[1]-np.shape(TFR2_inv)[1]
+        # IMED_original[k,0]=IMED_distance(TFR_original[:,int(np.floor(col_dif/2)):-int(np.ceil(col_dif/2))], TFR2_inv)
+        # IMED_noise[k, 0] = IMED_distance(TFR2[:,int(np.floor(col_dif/2)):-int(np.ceil(col_dif/2))], TFR2_inv)
 
-        SNR[k,0]=Signal_to_noise_Ratio(sig1,noise)
 
-        #Renyi Entropy
-        RE[k,0]=Renyi_Entropy(TFR2)
+        # speech metrics comparison
+        score_original = metrics(s1_inverted, signal_original,rate=fs)
+        BSSEVAL_original[k,0]=score_original['bsseval']
+        PESQ_original[k,0]=score_original['pesq']
+        NBPESQ_original[k,0]=score_original['nb_pesq']
+        STOI_original[k,0]=score_original['stoi']
+        SDR_original[k,0]=score_original['sisdr']
 
-        # IF metrics
-        #L2 norm
-        L2[k,0]=norm(tfsupp[0,:]-inst_freq)
-
-        #IAM
-        IAM[k,0]=Iatsenko_style(inst_freq,tfsupp[0,:])
-
-        #Reconstructed signal metrics
-
-        #sisdr
-        #respect to original signal
-        len_diff=len(signal_original)-len(s1_inverted)
-        score = metric(s1_inverted, signal_original[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))],rate=fs)
-        NORM_S_1[k, 0] = norm(signal_original)
-        NORM_DIFF_1[k,0]=norm(signal_original[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))]-s1_inverted)
-        RATIO_1[k,0]=NORM_S_1[k,0]/NORM_DIFF_1[k,0]
-        SDR_original[k,0]=score["sisdr"]
-
-        #respect to signal +noise
-        score = metric(s1_inverted, sig1[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))], rate=fs)
-        SDR_noise[k, 0] = score["sisdr"]
-        NORM_S_2[k, 0] = norm(sig1)
-        NORM_DIFF_2[k, 0] = norm(sig1[int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))] - s1_inverted)
-        RATIO_2[k, 0] = NORM_S_2[k, 0] / NORM_DIFF_2[k, 0]
-
-        #imed
-        IMED_original[k,0]=IMED_distance(TFR_original[:,1:-1], TFR2_inv)
-        IMED_noise[k, 0] = IMED_distance(TFR2[:,1:-1], TFR2_inv)
-
+        score_noise = metrics(s1_inverted, sig1)
+        BSSEVAL_noise[k, 0] = score_noise['bsseval']
+        PESQ_noise[k, 0] = score_noise['pesq']
+        NBPESQ_noise[k, 0] = score_noise['nb_pesq']
+        STOI_noise[k, 0] = score_noise['stoi']
+        SDR_noise[k, 0] = score_noise['sisdr']
         del tfsupp
         k+=1
 
 
+# #save metric plots
+# fig_name=test_fold +"\\"+file_id+"_metrics_plot.jpg"
+# #plt.rcParams["figure.autolayout"] = True
+# fig, ax = plt.subplots(4, 2, figsize=(20,40))
+#
+# ax[0, 0].plot(SNR, 'o')
+# ax[0, 0].set_title('Signal-to-noise ratio',fontsize='large')
+# ax[0,0].set_xticks(np.arange(0, 9))
+# ax[0,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[0, 1].plot(RE, 'o')
+# ax[0, 1].set_title('Renyi Entropy')
+# ax[0,1].set_xticks(np.arange(0, 9))
+# ax[0,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# #ax[0, 2].boxplot(L2_inv_or_G)
+# #ax[0, 2].set_title('L2 inv. sound vs original')
+# #ax[0,2].set_xticks(np.arange(1, 9))
+# #ax[0,2].set_xticklabels(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[1, 0].plot(L2, 'o')
+# ax[1, 0].set_title('L2 norm IF')
+# ax[1,0].set_xticks(np.arange(0, 9))
+# ax[1,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[1, 1].plot(IAM,'o')
+# ax[1, 1].set_title('Iats. Error')
+# ax[1,1].set_xticks(np.arange(0, 9))
+# ax[1,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# #ax[1, 2].plot(KLD_inv_or_G)
+# #ax[1, 2].set_title('KLD inv. sound vs original')
+# #ax[1,2].set_xticks(np.arange(1, 9))
+# #ax[1,2].set_xticklabels(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[2, 0].plot(SDR_original, 'o')
+# ax[2, 0].set_title('SDR original signal')
+# ax[2,0].set_xticks(np.arange(0, 9))
+# ax[2,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[2, 1].plot(SDR_noise,'o')
+# ax[2, 1].set_title('SDR signal + noise')
+# ax[2, 1].set_xticks(np.arange(0, 9))
+# ax[2, 1].set_xticklabels(['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'], rotation=45)
+# ax[3, 0].plot(IMED_original, 'o')
+# ax[3, 0].set_title('IMED original signal')
+# ax[3, 0].set_xticks(np.arange(0, 9))
+# ax[3, 0].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[3, 1].plot(IMED_noise,'o')
+# ax[3, 1].set_title('IMED signal + noise')
+# ax[3, 1].set_xticks(np.arange(0, 9))
+# ax[3, 1].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# fig.suptitle(file_id+" metrics", fontsize=30)
+# plt.savefig(fig_name)
+
+
+# #save plots for sisdr check
+# fig_name=test_fold +'\\'+file_id+'_sisdr.jpg'
+# #plt.rcParams["figure.autolayout"] = True
+# fig, ax = plt.subplots(2, 2, figsize=(20,40))
+# ax[0,0].plot(NORM_S_1,'ro', label="norm orig.")
+# ax[0,0].plot(NORM_DIFF_1,'bx', label="norm diff")
+# ax[0,0].set_title("Norms sisdr1")
+# ax[0, 0].set_xticks(np.arange(0, 9))
+# ax[0, 0].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[0,0].legend(loc="upper right")
+# ax[0,1].plot(RATIO_1, 'bo', label="ratio")
+# ax[0,1].plot(np.ones((9,1)), 'r-')
+# ax[0,1].set_title("Ratio sisdr 1")
+# ax[0, 1].set_xticks(np.arange(0, 9))
+# ax[0, 1].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[0,1].legend(loc="upper right")
+# ax[1,0].plot(NORM_S_2,'ro', label="norm sign")
+# ax[1,0].plot(NORM_DIFF_2,'bx', label="Norm diff.")
+# ax[1,0].set_title("Norms sisdr2")
+# ax[1, 0].set_xticks(np.arange(0, 9))
+# ax[1, 0].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[1,0].legend(loc="upper right")
+# ax[1,1].plot(RATIO_2, 'bo', label="norm ratio")
+# ax[1,1].plot(np.ones((9,1)), 'r-')
+# ax[1,1].set_title("Ratio sisdr 2")
+# ax[1, 1].set_xticks(np.arange(0, 9))
+# ax[1, 1].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[1,1].legend(loc="upper right")
+# fig.suptitle(file_id+" sisdr", fontsize=30)
+# plt.savefig(fig_name)
+
 #save metric plots
 fig_name=test_fold +"\\"+file_id+"_metrics_plot.jpg"
 #plt.rcParams["figure.autolayout"] = True
-fig, ax = plt.subplots(4, 2, figsize=(20,40))
+fig, ax = plt.subplots(5, 2, figsize=(20,40))
 
-ax[0, 0].plot(SNR, 'o')
-ax[0, 0].set_title('Signal-to-noise ratio',fontsize='large')
+ax[0, 0].plot(BSSEVAL_original, 'o')
+ax[0, 0].set_title('BSSEVAL original',fontsize='large')
 ax[0,0].set_xticks(np.arange(0, 9))
 ax[0,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[0, 1].plot(RE, 'o')
-ax[0, 1].set_title('Renyi Entropy')
+ax[0, 1].plot(BSSEVAL_noise, 'o')
+ax[0, 1].set_title('BSSEVAL noise')
 ax[0,1].set_xticks(np.arange(0, 9))
 ax[0,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-#ax[0, 2].boxplot(L2_inv_or_G)
-#ax[0, 2].set_title('L2 inv. sound vs original')
-#ax[0,2].set_xticks(np.arange(1, 9))
-#ax[0,2].set_xticklabels(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[1, 0].plot(L2, 'o')
-ax[1, 0].set_title('L2 norm IF')
+ax[1, 0].plot(NBPESQ_original, 'o')
+ax[1, 0].set_title('NBPESQ original')
 ax[1,0].set_xticks(np.arange(0, 9))
 ax[1,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[1, 1].plot(IAM,'o')
-ax[1, 1].set_title('Iats. Error')
+ax[1, 1].plot(NBPESQ_noise,'o')
+ax[1, 1].set_title('NBPESQ noise')
 ax[1,1].set_xticks(np.arange(0, 9))
 ax[1,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-#ax[1, 2].plot(KLD_inv_or_G)
-#ax[1, 2].set_title('KLD inv. sound vs original')
-#ax[1,2].set_xticks(np.arange(1, 9))
-#ax[1,2].set_xticklabels(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
 ax[2, 0].plot(SDR_original, 'o')
 ax[2, 0].set_title('SDR original signal')
 ax[2,0].set_xticks(np.arange(0, 9))
@@ -264,57 +456,29 @@ ax[2, 1].plot(SDR_noise,'o')
 ax[2, 1].set_title('SDR signal + noise')
 ax[2, 1].set_xticks(np.arange(0, 9))
 ax[2, 1].set_xticklabels(['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'], rotation=45)
-ax[3, 0].plot(IMED_original, 'o')
-ax[3, 0].set_title('IMED original signal')
+ax[3, 0].plot(PESQ_original, 'o')
+ax[3, 0].set_title('PESQ original signal')
 ax[3, 0].set_xticks(np.arange(0, 9))
 ax[3, 0].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
     rotation=45)
-ax[3, 1].plot(IMED_noise,'o')
-ax[3, 1].set_title('IMED signal + noise')
+ax[3, 1].plot(PESQ_noise,'o')
+ax[3, 1].set_title('PESQ signal + noise')
 ax[3, 1].set_xticks(np.arange(0, 9))
 ax[3, 1].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
     rotation=45)
+ax[4, 0].plot(STOI_original, 'o')
+ax[4, 0].set_title('STOI original signal')
+ax[4, 0].set_xticks(np.arange(0, 9))
+ax[4, 0].set_xticklabels(
+    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+    rotation=45)
+ax[4, 1].plot(STOI_noise,'o')
+ax[4, 1].set_title('STOI signal + noise')
+ax[4, 1].set_xticks(np.arange(0, 9))
+ax[4, 1].set_xticklabels(
+    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+    rotation=45)
 fig.suptitle(file_id+" metrics", fontsize=30)
-plt.savefig(fig_name)
-
-
-#save plots for sisdr check
-fig_name=test_fold +'\\'+file_id+'_sisdr.jpg'
-#plt.rcParams["figure.autolayout"] = True
-fig, ax = plt.subplots(2, 2, figsize=(20,40))
-ax[0,0].plot(NORM_S_1,'ro', label="norm orig.")
-ax[0,0].plot(NORM_DIFF_1,'bx', label="norm diff")
-ax[0,0].set_title("Norms sisdr1")
-ax[0, 0].set_xticks(np.arange(0, 9))
-ax[0, 0].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[0,0].legend(loc="upper right")
-ax[0,1].plot(RATIO_1, 'bo', label="ratio")
-ax[0,1].plot(np.ones((9,1)), 'r-')
-ax[0,1].set_title("Ratio sisdr 1")
-ax[0, 1].set_xticks(np.arange(0, 9))
-ax[0, 1].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[0,1].legend(loc="upper right")
-ax[1,0].plot(NORM_S_2,'ro', label="norm sign")
-ax[1,0].plot(NORM_DIFF_2,'bx', label="Norm diff.")
-ax[1,0].set_title("Norms sisdr2")
-ax[1, 0].set_xticks(np.arange(0, 9))
-ax[1, 0].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[1,0].legend(loc="upper right")
-ax[1,1].plot(RATIO_2, 'bo', label="norm ratio")
-ax[1,1].plot(np.ones((9,1)), 'r-')
-ax[1,1].set_title("Ratio sisdr 2")
-ax[1, 1].set_xticks(np.arange(0, 9))
-ax[1, 1].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[1,1].legend(loc="upper right")
-fig.suptitle(file_id+" sisdr", fontsize=30)
 plt.savefig(fig_name)
