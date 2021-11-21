@@ -409,8 +409,15 @@ class AviaNZ_batchProcess():
             else:
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
-                # no impulse masking for bats or changepoints (as it distorts the means)
-                impMask = self.method!="Click" and self.method!="Bats" and "chp" not in [sf.get("method") for sf in filters]
+                # Impulse masking:   TODO masking is useful but could be improved
+                if speciesStr=="Any sound":
+                    impMask = True  # Up to debate - could turn this off here
+                elif self.method=="Click" or self.method=="Bats":
+                    impMask = False  # definitely off for bats
+                else:
+                    # MUST BE off for changepoints (it introduces discontinuities, which
+                    # create large WCs and highly distort means/variances)
+                    impMask = "chp" not in [sf.get("method") for sf in filters]
                 self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
 
                 # initialize empty segmenter
@@ -514,17 +521,12 @@ class AviaNZ_batchProcess():
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
                 # Post-process
-                # 1. Delete windy segments
-                # 2. Merge neighbours
-                # 3. Delete short segments
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                # maxgap = int(self.maxgap.value())/1000
-                # minlen = int(self.minlen.value())/1000
-                # maxlen = int(self.maxlen.value())/1000
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
-                if self.wind>0:
-                    post.wind()
+                # maxgap = self.maxgap.value()
+                # minlen = self.minlen.value()
+                # maxlen = self.maxlen.value()
                 # TODO CLI mode does not initialize these values and will break
                 post.joinGaps(self.maxgap)
                 post.deleteShort(self.minlen)

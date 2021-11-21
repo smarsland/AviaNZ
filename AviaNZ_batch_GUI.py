@@ -21,7 +21,7 @@
 
 from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -126,33 +126,24 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_wind = QComboBox()
         self.w_wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "No wind filter"])
 
-        # Sliders for minlen and maxgap are in ms scale
-        self.minlen = QSlider(Qt.Horizontal)
-        self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.5*1000)
-        self.minlen.setRange(0.25*1000, 10*1000)
-        self.minlen.setSingleStep(1*1000)
-        self.minlen.setValue(0.5*1000)
-        self.minlen.valueChanged.connect(self.minLenChange)
-        self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
+        # Spinboxes in second scale
+        self.minlen = QDoubleSpinBox()
+        self.minlen.setRange(0.02, 20.0)
+        self.minlen.setSingleStep(1.0)
+        self.minlen.setValue(0.5)
+        self.minlenlbl = QLabel("Minimum segment length (s)")
 
-        self.maxlen = QSlider(Qt.Horizontal)
-        self.maxlen.setTickPosition(QSlider.TicksBelow)
-        self.maxlen.setTickInterval(5*1000)
-        self.maxlen.setRange(5*1000, 120*1000)
-        self.maxlen.setSingleStep(5*1000)
-        self.maxlen.setValue(10*1000)
-        self.maxlen.valueChanged.connect(self.maxLenChange)
-        self.maxlenlbl = QLabel("Maximum segment length: 10 sec")
+        self.maxlen = QDoubleSpinBox()
+        self.maxlen.setRange(0.05, 120.0)
+        self.maxlen.setSingleStep(2.0)
+        self.maxlen.setValue(10.0)
+        self.maxlenlbl = QLabel("Maximum segment length (s)")
 
-        self.maxgap = QSlider(Qt.Horizontal)
-        self.maxgap.setTickPosition(QSlider.TicksBelow)
-        self.maxgap.setTickInterval(0.5*1000)
-        self.maxgap.setRange(0.25*1000, 10*1000)
-        self.maxgap.setSingleStep(0.5*1000)
-        self.maxgap.setValue(1*1000)
-        self.maxgap.valueChanged.connect(self.maxGapChange)
-        self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
+        self.maxgap = QDoubleSpinBox()
+        self.maxgap.setRange(0.05, 10.0)
+        self.maxgap.setSingleStep(0.5)
+        self.maxgap.setValue(1.0)
+        self.maxgaplbl = QLabel("Maximum gap between syllables (s)")
 
         self.w_processButton = SupportClasses_GUI.MainPushButton(" Process Folder")
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
@@ -224,15 +215,6 @@ class AviaNZ_batchWindow(QMainWindow):
         self.fillSpeciesBoxes()  # update the boxes to match the initial position
         self.show()
 
-    def minLenChange(self, value):
-        self.minlenlbl.setText("Minimum segment length: %s sec" % str(round(int(value)/1000, 2)))
-
-    def maxLenChange(self, value):
-        self.maxlenlbl.setText("Maximum segment length: %s sec" % str(round(int(value)/1000, 2)))
-
-    def maxGapChange(self, value):
-        self.maxgaplbl.setText("Maximum gap between syllables: %s sec" % str(round(int(value)/1000, 2)))
-
     def createMenu(self):
         """ Create the basic menu.
         """
@@ -274,9 +256,9 @@ class AviaNZ_batchWindow(QMainWindow):
         self.species = list(self.species)
         print("Recogniser:", self.species)
 
-        self.batchProc.maxgap = int(self.maxgap.value())/1000
-        self.batchProc.minlen = int(self.minlen.value()) / 1000
-        self.batchProc.maxlen = int(self.maxlen.value()) / 1000
+        self.batchProc.maxgap = self.maxgap.value()
+        self.batchProc.minlen = self.minlen.value()
+        self.batchProc.maxlen = self.maxlen.value()
         self.batchProc.species = self.species
         self.batchProc.dirName = self.dirName
         self.batchProc.wind = (self.w_wind.currentIndex()+1)%3

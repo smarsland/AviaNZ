@@ -4870,7 +4870,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText('Segmenting...')
             # Delete old segments:
             # only this species, if using species-specific methods:
-            if alg == 'Wavelets' or alg == 'WV Changepoint':
+            if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 if filtname == 'Choose species...':
                     msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec_()
@@ -4933,7 +4933,7 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.segmentByFIR(float(str(settings["FIRThr1"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
-            elif alg == 'Wavelets':
+            elif alg == 'Wavelet Filter':
                 # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
                 ws = WaveletSegment.WaveletSegment(speciesData)
@@ -4946,8 +4946,9 @@ class AviaNZ(QMainWindow):
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
-                # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, silent=False, wind=settings["wind"])
+                # nuisance-signal changepoint detector (alg 2)
+                # with all params passed:
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -4966,7 +4967,7 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            if alg == 'Wavelets' or alg == 'WV Changepoint':
+            if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print(newSegments)
                 print('Post-processing...')
@@ -4999,7 +5000,7 @@ class AviaNZ(QMainWindow):
                             print("Checking for fundamental frequency...")
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
-                    if alg=='Wavelets':
+                    if alg=='Wavelet Filter':
                         post.joinGaps(maxgap=subfilter['TimeRange'][3])
                     if subfilter['TimeRange'][0]>0:
                         post.deleteShort(minlength=subfilter['TimeRange'][0])
@@ -5022,7 +5023,7 @@ class AviaNZ(QMainWindow):
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
-            if alg=='Wavelets' or alg=='WV Changepoint':
+            if alg=='Wavelet Filter' or alg=='WV Changepoint':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
