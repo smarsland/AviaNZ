@@ -843,9 +843,9 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         if DOC:
-            self.algs.addItems(["Wavelets", "WV Changepoint", "FIR", "Median Clipping"])
+            self.algs.addItems(["WV Changepoint", "Wavelet Filter", "FIR", "Median Clipping"])
         else:
-            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint"])
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Harma","Power","WV Changepoint","Wavelet Filter","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
@@ -929,6 +929,8 @@ class Segmentation(QDialog):
 
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
+        Box.addStretch(1)
+
         # Labels
         #self.amplabel = QLabel("Set threshold amplitude")
         #Box.addWidget(self.amplabel)
@@ -948,10 +950,6 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species_wv = QComboBox()
         self.species_chp = QComboBox()
-
-        # extra hiding step - less widgets to draw on initial load
-        for w in range(Box.count()):
-            Box.itemAt(w).widget().hide()
 
         self.specieslabel_cc = QLabel("Species")
         self.species_cc = QComboBox()
@@ -1018,9 +1016,6 @@ class Segmentation(QDialog):
         self.medSize.valueChanged.connect(self.medSizeChange)
 
         # Parameter selectors for changepoint methods
-        self.chp2l = QCheckBox("Use 2-level detector")
-        self.chp2l.setChecked(True)
-
         self.chpalpha = QDoubleSpinBox()
         self.chpalpha.setRange(0.1, 20)
         self.chpalpha.setValue(3)
@@ -1038,9 +1033,9 @@ class Segmentation(QDialog):
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.25*1000)
-        self.minlen.setRange(0.25*1000, 10*1000)
-        self.minlen.setSingleStep(0.25*1000)
+        self.minlen.setTickInterval(0.5*1000)
+        self.minlen.setRange(0.1*1000, 10*1000)
+        self.minlen.setSingleStep(0.1*1000)
         self.minlen.setValue(0.5*1000)
         self.minlen.valueChanged.connect(self.minLenChange)
         self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
@@ -1048,18 +1043,17 @@ class Segmentation(QDialog):
         self.maxgap = QSlider(Qt.Horizontal)
         self.maxgap.setTickPosition(QSlider.TicksBelow)
         self.maxgap.setTickInterval(0.25*1000)
-        self.maxgap.setRange(0.25*1000, 10*1000)
-        self.maxgap.setSingleStep(0.5*1000)
+        self.maxgap.setRange(0.05*1000, 4*1000)
+        self.maxgap.setSingleStep(0.05*1000)
         self.maxgap.setValue(1*1000)
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
         self.wind = QComboBox()
-        self.wind.addItems(["No wind filter", "OLS wind filter", "Robust wind filter"])
+        self.wind.addItems(["No wind filter", "OLS wind filter (recommended)", "Robust wind filter (experimental)"])
 
         self.chpLayout = QFormLayout()
-        self.chpLayout.addRow(self.chp2l)
-        self.chpLayout.addRow("Alpha:", self.chpalpha)
+        self.chpLayout.addRow("Threshold:", self.chpalpha)
         self.chpLayout.addRow("Window size (s):", self.chpwin)
         self.chpLayout.addRow("Max length (s):", self.maxlen)
         self.chpLayout.addRow("Wind denoising:", self.wind)
@@ -1071,6 +1065,7 @@ class Segmentation(QDialog):
         Box.addWidget(self.minlenlbl)
         Box.addWidget(self.minlen)
         Box.addLayout(self.chpLayout)
+        Box.addStretch(2)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -1078,34 +1073,32 @@ class Segmentation(QDialog):
 
         # Now put everything into the frame,
         # hide and reopen the default
-        for w in range(Box.count()):
-            item = Box.itemAt(w)
-            if item.widget() is not None:
-                item.widget().hide()
-            else:
-                # it is a layout, so loop again:
-                for ww in range(item.layout().count()):
-                    item.layout().itemAt(ww).widget().hide()
         self.setLayout(Box)
+        self.hideAll()
         self.algs.show()
         self.undo.show()
         self.activate.show()
         if DOC:
-            self.changeBoxes("Wavelets")
+            self.changeBoxes("WV Changepoint")
         else:
             self.changeBoxes("Default")
 
-    def changeBoxes(self,alg):
-        # This does the hiding and showing of the options as the algorithm changes
-        # hide and reopen the default
+    def hideAll(self):
         for w in range(self.layout().count()):
             item = self.layout().itemAt(w)
             if item.widget() is not None:
+                # it is a widget
                 item.widget().hide()
-            else:
+            elif item.layout() is not None:
                 # it is a layout, so loop again:
                 for ww in range(item.layout().count()):
                     item.layout().itemAt(ww).widget().hide()
+            # pure items (stretch/spacer) get skipped
+
+
+    def changeBoxes(self,alg):
+        # This does the hiding and showing of the options as the algorithm changes
+        self.hideAll()
         self.algs.show()
         # self.rain.show()
         self.minlenlbl.show()
@@ -1153,7 +1146,7 @@ class Segmentation(QDialog):
             self.specieslabel_cc.show()
             self.species_cc.show()
         else:
-            #"Wavelets" or "WV Changepoint"
+            #"Wavelet Filter" or "WV Changepoint"
             self.specieslabel.show()
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
@@ -1186,7 +1179,7 @@ class Segmentation(QDialog):
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
         alg = self.algs.currentText()
-        if alg=="Wavelets":
+        if alg=="Wavelet Filter":
             filtname = self.species_wv.currentText()
         elif alg=="WV Changepoint":
             filtname = self.species_chp.currentText()
@@ -1198,7 +1191,7 @@ class Segmentation(QDialog):
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "chp2l": self.chp2l.isChecked(), "wind": self.wind.currentIndex()}
+                    "wind": self.wind.currentIndex()}
         return(alg, settings)
 
 #======
