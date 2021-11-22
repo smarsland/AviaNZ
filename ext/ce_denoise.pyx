@@ -214,8 +214,8 @@ def ThresholdNodes2(list oldtree, list bestleaves, threshold, str thrtype, int b
         return 1
 
     # Main loop
-    print("Bestleaves", bestleaves)
-    print("thresholds", threshold[:,0])
+    #print("Bestleaves", bestleaves)
+    #print("thresholds", threshold[:,0])
     for node in range(len(oldtree)):
         if node in bestleavesset:
             # then keep & threshold (inplace)

@@ -26,12 +26,13 @@
 import os
 import shutil
 
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox # listing some explicitly to make syntax checks lighter
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
 import colourMaps
@@ -438,7 +439,7 @@ class Excel2Annotation(QDialog):
                 userDir = os.path.expanduser("~")
             else:
                 userDir, _ = os.path.split(self.txtAudio.text())
-            excelfile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
+            excelfile, _ = QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
             self.txtExcel.setText(excelfile)
             self.txtExcel.setReadOnly(True)
             # Read the excel to get the headers
@@ -467,7 +468,7 @@ class Excel2Annotation(QDialog):
                 userDir = os.path.expanduser("~")
             else:
                 userDir, _ = os.path.split(self.txtExcel.text())
-            audiofile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Audio (*.wav)")
+            audiofile, _ = QFileDialog.getOpenFileName(self, 'Open file', userDir, "Audio (*.wav)")
             self.txtAudio.setText(audiofile)
             self.txtAudio.setReadOnly(True)
         except Exception as e:
@@ -842,9 +843,9 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         if DOC:
-            self.algs.addItems(["Wavelets", "WV Changepoint", "FIR", "Median Clipping"])
+            self.algs.addItems(["WV Changepoint", "Wavelet Filter", "FIR", "Median Clipping"])
         else:
-            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint"])
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Harma","Power","WV Changepoint","Wavelet Filter","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
@@ -928,6 +929,8 @@ class Segmentation(QDialog):
 
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
+        Box.addStretch(1)
+
         # Labels
         #self.amplabel = QLabel("Set threshold amplitude")
         #Box.addWidget(self.amplabel)
@@ -947,10 +950,6 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species_wv = QComboBox()
         self.species_chp = QComboBox()
-
-        # extra hiding step - less widgets to draw on initial load
-        for w in range(Box.count()):
-            Box.itemAt(w).widget().hide()
 
         self.specieslabel_cc = QLabel("Species")
         self.species_cc = QComboBox()
@@ -1017,9 +1016,6 @@ class Segmentation(QDialog):
         self.medSize.valueChanged.connect(self.medSizeChange)
 
         # Parameter selectors for changepoint methods
-        self.chp2l = QCheckBox("Use 2-level detector")
-        self.chp2l.setChecked(True)
-
         self.chpalpha = QDoubleSpinBox()
         self.chpalpha.setRange(0.1, 20)
         self.chpalpha.setValue(3)
@@ -1037,9 +1033,9 @@ class Segmentation(QDialog):
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.25*1000)
-        self.minlen.setRange(0.25*1000, 10*1000)
-        self.minlen.setSingleStep(0.25*1000)
+        self.minlen.setTickInterval(0.5*1000)
+        self.minlen.setRange(0.1*1000, 10*1000)
+        self.minlen.setSingleStep(0.1*1000)
         self.minlen.setValue(0.5*1000)
         self.minlen.valueChanged.connect(self.minLenChange)
         self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
@@ -1047,33 +1043,29 @@ class Segmentation(QDialog):
         self.maxgap = QSlider(Qt.Horizontal)
         self.maxgap.setTickPosition(QSlider.TicksBelow)
         self.maxgap.setTickInterval(0.25*1000)
-        self.maxgap.setRange(0.25*1000, 10*1000)
-        self.maxgap.setSingleStep(0.5*1000)
+        self.maxgap.setRange(0.05*1000, 4*1000)
+        self.maxgap.setSingleStep(0.05*1000)
         self.maxgap.setValue(1*1000)
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
+        self.wind = QComboBox()
+        self.wind.addItems(["No wind filter", "OLS wind filter (recommended)", "Robust wind filter (experimental)"])
+
         self.chpLayout = QFormLayout()
-        self.chpLayout.addRow(self.chp2l)
-        self.chpLayout.addRow("Alpha:", self.chpalpha)
+        self.chpLayout.addRow("Threshold:", self.chpalpha)
         self.chpLayout.addRow("Window size (s):", self.chpwin)
         self.chpLayout.addRow("Max length (s):", self.maxlen)
+        self.chpLayout.addRow("Wind denoising:", self.wind)
 
-        self.wind = QComboBox()
-        # TODO ideally this would adapt to the detector choice
-        # as only CD can use the new filters
-        # (in principle new and old ones can be combined, but would anybody want that?)
-        self.wind.addItems(["No wind filter", "Simple wind filter", "Robust wind filter", "Wind segment drop in post-proc."])
         self.rain = QCheckBox("Remove rain")
-        self.windlabel = QLabel("Wind denoising")
-        Box.addWidget(self.windlabel)
-        Box.addWidget(self.wind)
         Box.addWidget(self.rain)
         Box.addWidget(self.maxgaplbl)
         Box.addWidget(self.maxgap)
         Box.addWidget(self.minlenlbl)
         Box.addWidget(self.minlen)
         Box.addLayout(self.chpLayout)
+        Box.addStretch(2)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -1081,37 +1073,33 @@ class Segmentation(QDialog):
 
         # Now put everything into the frame,
         # hide and reopen the default
-        for w in range(Box.count()):
-            item = Box.itemAt(w)
-            if item.widget() is not None:
-                item.widget().hide()
-            else:
-                # it is a layout, so loop again:
-                for ww in range(item.layout().count()):
-                    item.layout().itemAt(ww).widget().hide()
         self.setLayout(Box)
+        self.hideAll()
         self.algs.show()
         self.undo.show()
         self.activate.show()
         if DOC:
-            self.changeBoxes("Wavelets")
+            self.changeBoxes("WV Changepoint")
         else:
             self.changeBoxes("Default")
 
-    def changeBoxes(self,alg):
-        # This does the hiding and showing of the options as the algorithm changes
-        # hide and reopen the default
+    def hideAll(self):
         for w in range(self.layout().count()):
             item = self.layout().itemAt(w)
             if item.widget() is not None:
+                # it is a widget
                 item.widget().hide()
-            else:
+            elif item.layout() is not None:
                 # it is a layout, so loop again:
                 for ww in range(item.layout().count()):
                     item.layout().itemAt(ww).widget().hide()
+            # pure items (stretch/spacer) get skipped
+
+
+    def changeBoxes(self,alg):
+        # This does the hiding and showing of the options as the algorithm changes
+        self.hideAll()
         self.algs.show()
-        self.windlabel.show()
-        self.wind.show()
         # self.rain.show()
         self.minlenlbl.show()
         self.minlen.show()
@@ -1158,15 +1146,13 @@ class Segmentation(QDialog):
             self.specieslabel_cc.show()
             self.species_cc.show()
         else:
-            #"Wavelets" or "WV Changepoint"
+            #"Wavelet Filter" or "WV Changepoint"
             self.specieslabel.show()
             if alg == "WV Changepoint":
                 for ww in range(self.chpLayout.count()):
                     self.chpLayout.itemAt(ww).widget().show()
-                self.species_wv.hide()
                 self.species_chp.show()
             else:
-                self.species_chp.hide()
                 self.species_wv.show()
             self.maxgaplbl.hide()
             self.maxgap.hide()
@@ -1193,7 +1179,7 @@ class Segmentation(QDialog):
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
         alg = self.algs.currentText()
-        if alg=="Wavelets":
+        if alg=="Wavelet Filter":
             filtname = self.species_wv.currentText()
         elif alg=="WV Changepoint":
             filtname = self.species_chp.currentText()
@@ -1205,15 +1191,7 @@ class Segmentation(QDialog):
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "chp2l": self.chp2l.isChecked()}
-        if self.wind.currentIndex()==3:
-            # old style wind removal requested
-            settings["wind"] = 0
-            settings["windold"] = True
-        else:
-            # either no adjustment, or OLS/QR adjustment
-            settings["wind"] = self.wind.currentIndex()
-            settings["windold"] = False
+                    "wind": self.wind.currentIndex()}
         return(alg, settings)
 
 #======
@@ -1240,15 +1218,13 @@ class Denoise(QDialog):
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
-        self.thrests = QComboBox()
-        self.thrests.addItems(["Constant threshold", "OLS fit", "QR fit"])
-
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
-        # self.wavlabel = QLabel("Wavelets")
         if not self.DOC:
+            self.noiseest = QComboBox()
+            self.noiseest.addItems(["Constant SD", "SD estimated by OLS fit", "SD estimated by QR fit"])
+
             self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
             self.depthchoice = QCheckBox()
-            #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
             self.depthchoice.clicked.connect(self.depthclicked)
             self.depth = QSpinBox()
             self.depth.setRange(1,12)
@@ -1259,7 +1235,7 @@ class Denoise(QDialog):
             self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
             self.thrtype[0].setChecked(True)
 
-            self.thrlabel = QLabel("Multiplier of std dev for threshold")
+            self.thrlabel = QLabel("Multiplier of SD for threshold")
             self.thr = QDoubleSpinBox()
             self.thr.setRange(1,10)
             self.thr.setSingleStep(0.5)
@@ -1311,12 +1287,11 @@ class Denoise(QDialog):
         self.activate = QPushButton("Denoise")
         self.undo = QPushButton("Undo")
         self.save = QPushButton("Save Denoised Sound")
-        #self.connect(self.undo, SIGNAL('clicked()'), self.undo)
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
-        Box.addWidget(self.thrests)
 
         if not self.DOC:
+            Box.addWidget(self.noiseest)
             Box.addWidget(self.depthlabel)
             Box.addWidget(self.depthchoice)
             Box.addWidget(self.depth)
@@ -1379,9 +1354,10 @@ class Denoise(QDialog):
         self.high.setMaximum(self.maxFreq)
 
     def changeBoxes(self,alg):
+        print("changing from", self.prevAlg, " to", alg)
         # This does the hiding and showing of the options as the algorithm changes
         if self.prevAlg == "Wavelets" and not self.DOC:
-            # self.wavlabel.hide()
+            self.noiseest.hide()
             self.depthlabel.hide()
             self.depth.hide()
             self.depthchoice.hide()
@@ -1394,29 +1370,6 @@ class Denoise(QDialog):
             self.aabox2.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif (self.prevAlg == "Bandpass --> Wavelets" or self.prevAlg == "Wavelets --> Bandpass") and not self.DOC:
-            self.wblabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-            self.blabel.hide()
-            self.low.hide()
-            self.lowtext.hide()
-            self.high.hide()
-            self.hightext.hide()
-            #self.trimlabel.hide()
-            #self.trimaxis.hide()
-            #self.trimaxis.setChecked(False)
-            self.medlabel.hide()
-            self.widthlabel.hide()
-            self.width.hide()
         elif self.prevAlg == "Bandpass" or self.prevAlg == "Butterworth Bandpass":
             self.bandlabel.hide()
             self.blabel.hide()
@@ -1424,9 +1377,6 @@ class Denoise(QDialog):
             self.lowtext.hide()
             self.high.hide()
             self.hightext.hide()
-            #self.trimlabel.hide()
-            #self.trimaxis.hide()
-            #self.trimaxis.setChecked(False)
         else:
             # Median filter
             self.medlabel.hide()
@@ -1435,8 +1385,7 @@ class Denoise(QDialog):
 
         self.prevAlg = str(alg)
         if str(alg) == "Wavelets" and not self.DOC:
-            # TEST OPTION: boxes are currently same as for Wavelets
-            # self.wavlabel.show()
+            self.noiseest.show()
             self.depthlabel.show()
             self.depthchoice.show()
             self.depth.show()
@@ -1449,44 +1398,6 @@ class Denoise(QDialog):
             self.aabox2.show()
             self.waveletlabel.show()
             self.wavelet.show()
-        elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
-            # self.wblabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.low.show()
-            self.lowtext.show()
-            self.high.show()
-            self.hightext.show()
-            #self.trimlabel.show()
-            #self.trimaxis.show()
-        elif str(alg) == "Bandpass --> Wavelets" and not self.DOC:
-            # self.wblabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.low.show()
-            self.lowtext.show()
-            self.high.show()
-            self.hightext.show()
-            #self.trimlabel.show()
-            #self.trimaxis.show()
         elif str(alg) == "Bandpass" or str(alg) == "Butterworth Bandpass":
             self.bandlabel.show()
             self.low.show()
@@ -1517,13 +1428,13 @@ class Denoise(QDialog):
             else:
                 depth = int(str(self.depth.text()))
 
-            if self.thrests.currentText()=="Constant threshold":
-                threst = "const"
-            elif self.thrests.currentText()=="OLS fit":
-                threst = "ols"
-            elif self.thrests.currentText()=="QR fit":
-                threst = "qr"
-            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked(), threst]
+            if self.noiseest.currentText()=="Constant SD":
+                noiseest = "const"
+            elif self.noiseest.currentText()=="SD estimated by OLS fit":
+                noiseest = "ols"
+            elif self.noiseest.currentText()=="SD estimated by QR fit":
+                noiseest = "qr"
+            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked(), noiseest]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 
@@ -1631,7 +1542,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None):
+    def __init__(self, lut, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1645,8 +1556,6 @@ class HumanClassify1(QDialog):
         self.batmode = self.parent.batmode
         self.lut = lut
         self.label = []
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
         self.shortBirdList = shortBirdList
         self.longBirdList = longBirdList
@@ -1871,32 +1780,11 @@ class HumanClassify1(QDialog):
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumHeight(270)
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.valueChanged.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
-
-        # Brightness and contrast sliders. Need to pass true (config) values of these as args
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        if self.cmapInverted:
-            self.brightnessSlider.setValue(brightness)
-        else:
-            self.brightnessSlider.setValue(100-brightness)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(contrast)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        self.specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
 
         # zoom buttons
         self.zoomInBtn = QtGui.QToolButton()
@@ -1919,32 +1807,15 @@ class HumanClassify1(QDialog):
         spNameBox.setStretch(2, 2)
 
         vboxSpecContr = pg.LayoutWidget()
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=13)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=4)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
-        vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
-        vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
-        labelBr = QLabel()
-        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-        labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        vboxSpecContr.addWidget(labelBr, row=2, col=4)
-        vboxSpecContr.addWidget(self.brightnessSlider, row=2, col=5, colspan=2)
-        labelCo = QLabel()
-        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-        labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        vboxSpecContr.addWidget(labelCo, row=2, col=7)
-        vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
-        #spacer = QSpacerItem(1,1)
-        #vboxSpecContr.layout.addWidget(spacer, row=2, col=10)
-        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=11)
-        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=12)
 
-        vboxSpecContr.layout.setColumnStretch(1, 1)
-        vboxSpecContr.layout.setColumnStretch(2, 2)
-        vboxSpecContr.layout.setColumnStretch(4, 1)
-        vboxSpecContr.layout.setColumnStretch(5, 2)
-        vboxSpecContr.layout.setColumnStretch(7, 1)
-        vboxSpecContr.layout.setColumnStretch(8, 2)
-        vboxSpecContr.layout.setColumnStretch(10, 1)
+        vboxSpecContr.addWidget(self.specControls, row=2, col=1)
+
+        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=2)
+        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=3)
+
+        vboxSpecContr.layout.setColumnStretch(1, 6) # specControls
 
         vboxFull = QVBoxLayout()
         vboxFull.addLayout(spNameBox)
@@ -2046,6 +1917,8 @@ class HumanClassify1(QDialog):
         """
         self.audiodata = audiodata
         self.sg = sg
+        self.sgMinimum = np.min(self.sg)
+        self.sgMaximum = np.max(self.sg)
         self.sampleRate = sampleRate
         self.incr = incr
         self.bar.setValue(0)
@@ -2055,8 +1928,8 @@ class HumanClassify1(QDialog):
 
         # Update UI if no audio (e.g. batmode)
         self.playButton.setEnabled(len(audiodata))
-        self.volIcon.setEnabled(len(audiodata))
-        self.volSlider.setEnabled(len(audiodata))
+        self.specControls.volIcon.setEnabled(len(audiodata))
+        self.specControls.volSlider.setEnabled(len(audiodata))
 
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -2066,7 +1939,7 @@ class HumanClassify1(QDialog):
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
-        self.setColourLevels()
+        self.specControls.emitCol()
         self.scroll.horizontalScrollBar().setValue(0)
 
         FreqRange = (maxFreq-minFreq)/1000.
@@ -2116,10 +1989,7 @@ class HumanClassify1(QDialog):
             for i in range(len(self.guidelines)):
                 self.guidelines[i].setPos(-100)
 
-        if self.cmapInverted:
-            self.plot.setLevels([self.colourEnd, self.colourStart])
-        else:
-            self.plot.setLevels([self.colourStart, self.colourEnd])
+        self.specControls.emitCol()
 
         # DEAL WITH SPECIES NAMES
         # extract a string of current species names
@@ -2469,7 +2339,7 @@ class HumanClassify1(QDialog):
         self.update()   # for Mac updating
         self.repaint()
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         Calculation is simple.
@@ -2478,20 +2348,12 @@ class HumanClassify1(QDialog):
             self.stopPlayback()
         except Exception:
             pass
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
-        if self.cmapInverted:
-            brightness = self.brightnessSlider.value()
-        else:
-            brightness = 100-self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
 
-        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
-        if self.cmapInverted:
-            self.plot.setLevels([self.colourEnd, self.colourStart])
-        else:
-            self.plot.setLevels([self.colourStart, self.colourEnd])
+        if not self.cmapInverted:
+            brightness = 100-brightness
+
+        colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, brightness, contrast, self.cmapInverted)
+        self.plot.setLevels(colRange)
 
     def getValues(self):
         # Note: we are reading off the calltypes from the label
@@ -2511,13 +2373,13 @@ class HumanClassify2(QDialog):
           and this dialog will select the needed segments.
         3. indices of segments to show (i.e. the selected species and current page)
         4. name of the species that we are reviewing
-        5-10. spec color parameters
-        11-12. guide positions for batmode
-        13. Loop playback or not?
-        14. Filename - just for setting the window title
+        5-8. spec color parameters
+        9-10. guide positions and colors for batmode
+        11. Loop playback or not?
+        12. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2535,87 +2397,32 @@ class HumanClassify2(QDialog):
 
         self.sps = sps
         # Check if playback is possible (e.g. for batmode):
-        haveaudio = all([len(sp.data)>0 for sp in sps if sp is not None])
+        haveaudio = all(len(sp.data)>0 for sp in sps if sp is not None)
 
         self.lut = lut
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
 
         # filter segments for the requested species
         self.segments = segments
         self.indices2show = indicestoshow
-        # CHECK: do we need this?
-        # self.sampleRate = sampleRate
-        # self.audiodata = audiodata
-        # for i in reversed(self.indices2show):
-        #     # show segments which have midpoint in this page (ensures all are shown only once)
-        #     mid = (segments[i][0] + segments[i][1]) / 2
-        #     if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
-        #         self.indices2show.remove(i)
 
         self.errors = []
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.valueChanged.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
-        #self.volIcon.setStyleSheet("padding: 0px 1px 0px 8px")
+        self.loop = loop
+
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
+        specControls.colChanged.connect(self.setColourLevels)
+        specControls.volChanged.connect(self.volSliderMoved)
+        specControls.layout().addStretch(3) # add a big stretchable outer margin
 
         # batmode customizations:
         self.guidefreq = guidefreq
         self.guidecol = guidecol
         if not haveaudio:
-            self.volSlider.setEnabled(False)
-            self.volIcon.setEnabled(False)
-
-        self.loop = loop
-
-        # Brightness and contrast sliders - need to pass true (config) values of these as args
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        if self.cmapInverted:
-            self.brightnessSlider.setValue(brightness)
-        else:
-            self.brightnessSlider.setValue(100-brightness)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(contrast)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
-
-        hboxSpecContr = QHBoxLayout()
-        hboxSpecContr.addWidget(self.volIcon)
-        hboxSpecContr.addWidget(self.volSlider)
-        labelBr = QLabel()
-        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-        labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        #labelBr.setStyleSheet("padding: 0px 1px 0px 12px")
-        hboxSpecContr.addWidget(labelBr)
-        hboxSpecContr.addWidget(self.brightnessSlider)
-        labelCo = QLabel()
-        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-        labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        #labelCo.setStyleSheet("padding: 0px 1px 0px 12px")
-        hboxSpecContr.addWidget(labelCo)
-        hboxSpecContr.addWidget(self.contrastSlider)
-
-        hboxSpecContr.setStretch(0, 1)
-        hboxSpecContr.setStretch(1, 2)
-        hboxSpecContr.setStretch(2, 1)
-        hboxSpecContr.setStretch(3, 2)
-        hboxSpecContr.setStretch(4, 1)
-        hboxSpecContr.setStretch(5, 2)
-        hboxSpecContr.addStretch(3)
+            specControls.volSlider.setEnabled(False)
+            specControls.volIcon.setEnabled(False)
 
         label1 = QLabel('Click on the images that are incorrectly labelled.')
         label1.setFont(QtGui.QFont('SansSerif', 10))
@@ -2629,7 +2436,7 @@ class HumanClassify2(QDialog):
         vboxTop = QVBoxLayout()
         vboxTop.addWidget(label1)
         vboxTop.addWidget(species)
-        vboxTop.addLayout(hboxSpecContr)
+        vboxTop.addWidget(specControls)
 
         # Controls at the bottom
         # self.buttonPrev = QtGui.QToolButton()
@@ -2678,6 +2485,7 @@ class HumanClassify2(QDialog):
         self.specV = 0
         self.specH = 0
         self.createButtons()
+        specControls.emitAll()  # applies initial colour, volume levels
 
         # sets a lot of self properties needed before showing anything
         self.butStart = 0
@@ -2732,6 +2540,8 @@ class HumanClassify2(QDialog):
         """
         self.buttons = []
         self.marked = []
+        self.minsg = 1
+        self.maxsg = 1
         for i in self.indices2show:
             # This will contain pre-made slices of spec and audio
             sp = self.sps[i]
@@ -2739,8 +2549,6 @@ class HumanClassify2(QDialog):
 
             # Seems that image is backwards?
             sp.sg = np.fliplr(sp.sg)
-            self.minsg = 1
-            self.maxsg = 1
             self.minsg = min(self.minsg, np.min(sp.sg))
             self.maxsg = max(self.maxsg, np.max(sp.sg))
 
@@ -2754,7 +2562,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy, guidecol=self.guidecol, loop=self.loop)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2763,9 +2571,6 @@ class HumanClassify2(QDialog):
             self.buttons.append(newButton)
             self.buttons[-1].buttonClicked=False
             self.marked.append(False)
-        # set volume and brightness on these new buttons
-        self.volSliderMoved(self.volSlider.value())
-        self.setColourLevels()
 
     def resizeEvent(self, ev):
         """ On this event, choose which (and how many) buttons to display
@@ -2843,7 +2648,7 @@ class HumanClassify2(QDialog):
                 break
 
         self.repaint()
-        pg.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
     def volSliderMoved(self, value):
         # try/pass to avoid race situations when smth is not initialized
@@ -2964,23 +2769,20 @@ class HumanClassify2(QDialog):
             self.buttons[butNum].changePic(False)
         #self.update()
         self.repaint()
-        pg.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
-        Calculation is simple.
         """
-        if self.cmapInverted:
-            brightness = self.brightnessSlider.value()
-        else:
-            brightness = 100-self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
-        colourStart = (brightness / 100.0 * contrast / 100.0) * (self.maxsg - self.minsg) + self.minsg
-        colourEnd = (self.maxsg - self.minsg) * (1.0 - contrast / 100.0) + colourStart
+        if not self.cmapInverted:
+            brightness = 100-brightness
+
+        colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, self.cmapInverted)
+
         for btn in self.buttons:
             btn.stopPlayback()
-            btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
+            btn.setImage(colRange)
             btn.update()
 
 
@@ -3149,7 +2951,7 @@ class FilterManager(QDialog):
         # Also import corresponding NN files if any
         sources = []
         targets = []
-        source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
+        source, _ = QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
         sources.append(source)
         targets.append(os.path.join(self.filtdir, os.path.basename(source)))
         try:
@@ -3237,7 +3039,7 @@ class FilterManager(QDialog):
             if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
                 sources.append(currfilt["CNN"]["CNN_name"] + ".json")
 
-        target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
+        target = QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
         if target != "":
             targets = []
             for src in sources:
@@ -3277,39 +3079,14 @@ class Cluster(QDialog):
         self.nclasses = classes
         self.config = config
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.valueChanged.connect(self.volSliderMoved)
-        self.volSlider.setRange(0, 100)
-        self.volSlider.setValue(50)
-        volIcon = QLabel()
-        volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        self.specControls = SupportClasses_GUI.BrightContrVol(80, 20, False)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
 
-        # Brightness, and contrast sliders
-        labelBr = QLabel(" Bright.")
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(20)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        labelCo = QLabel("Contr.")
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(20)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
-
-        hboxSpecContr = QHBoxLayout()
-        hboxSpecContr.addWidget(labelBr)
-        hboxSpecContr.addWidget(self.brightnessSlider)
-        hboxSpecContr.addWidget(labelCo)
-        hboxSpecContr.addWidget(self.contrastSlider)
-        hboxSpecContr.addWidget(volIcon)
-        hboxSpecContr.addWidget(self.volSlider)
+        # Colour map
+        self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
         # set up the images
         self.flowLayout = pg.LayoutWidget()
@@ -3321,7 +3098,7 @@ class Cluster(QDialog):
 
         # set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
-        self.vboxFull.addLayout(hboxSpecContr)
+        self.vboxFull.addWidget(self.specControls)
         self.vboxFull.addWidget(self.scrollArea)
         self.setLayout(self.vboxFull)
 
@@ -3339,17 +3116,20 @@ class Cluster(QDialog):
         self.clusters = dict(self.clusters)  # Dictionary of {ID: cluster_name}
 
         # Create the buttons for each segment
+        self.minsg = 1
+        self.maxsg = 1
         for seg in self.segments:
             sp = SignalProc.SignalProc(512, 256)
             sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
             _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             self.sg = sp.normalisedSpec("Log")
-            self.setColourMap()
 
             sg = self.sg
 
-            newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
-                                          self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+            self.minsg = min(self.minsg, np.min(sg))
+            self.maxsg = max(self.maxsg, np.max(sg))
+
+            newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)
 
@@ -3374,20 +3154,17 @@ class Cluster(QDialog):
                     c += 1
                     self.picbuttons[segix].show()
         self.flowLayout.update()
+        self.specControls.emitAll()  # applies initial colour, volume levels
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
-        brightness = self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
-        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        brightness = 100-brightness
+        colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, False)
         for btn in self.picbuttons:
             btn.stopPlayback()
-            btn.setImage(self.lut, colourStart, colourEnd, False)
+            btn.setImage(colRange)
             btn.update()
 
     def volSliderMoved(self, value):
@@ -3398,20 +3175,6 @@ class Cluster(QDialog):
         except Exception:
             pass
 
-    def setColourMap(self):
-        """ Listener for the menu item that chooses a colour map.
-        Loads them from the file as appropriate and sets the lookup table.
-        """
-        cmap = self.config['cmap']
-
-        pos, colour, mode = colourMaps.colourMaps(cmap)
-
-        cmap = pg.ColorMap(pos, colour,mode)
-        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
-        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 class ExportBats(QDialog):
     def __init__(self,filename,observer,easting="",northing="",recorder=""):

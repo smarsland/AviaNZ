@@ -23,7 +23,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import pyqtgraph
 import numpy as np
 
 def colourMaps(cmap):
@@ -706,3 +706,33 @@ def colourMaps(cmap):
         mode = None
 
     return pos,colour,mode
+
+
+def getColourRange(minsg, maxsg, bright, contr, invert):
+    """ Utility for determining a colour range:
+      a list [colStart, colEnd] which can be passed to pyqtgraph's
+      setLevels etc. to clip the data before colorizing and so create
+      contrast/brightness adjustments.
+        minsg,maxsg: range of values in the plotted image (spectrogram)
+        bright,contr: brightness and contrast, in 0-100 range.
+        invert: bool, flips the scale.
+    """
+    bright /= 100.0
+    contr /= 100.0
+    colStart = bright * contr * (maxsg-minsg) + minsg
+    colEnd = (maxsg-minsg) * (1.0 - contr) + colStart
+    if invert:
+        return [colEnd,colStart]
+    else:
+        return [colStart,colEnd]
+
+def getLookupTable(cmapname):
+    """ Wrapper around pyqtgraph.ColorMap.getLookupTable.
+        cmapname: string, name of the colour map from this file.
+        Returns a lookup table which can be directly passed
+        to pg.ImageItem.setLookupTable
+    """
+    pos,colour,mode = colourMaps(cmapname)
+    cmap = pyqtgraph.ColorMap(pos,colour,mode)
+    lut = cmap.getLookupTable(0.0, 1.0, 256)
+    return(lut)

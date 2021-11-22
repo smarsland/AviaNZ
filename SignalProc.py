@@ -618,11 +618,10 @@ class SignalProc:
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
 
         if sgScale == 'Mel Frequency':
-           self.convertToMel(filt='mel',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
+            self.convertToMel(filt='mel',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
         elif sgScale == 'Bark Frequency':
-           self.convertToMel(filt='bark',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
-            
-        print(np.max(self.sg),window_width)
+            self.convertToMel(filt='bark',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
+
         return self.sg
 
     def normalisedSpec(self, tr="Log"):

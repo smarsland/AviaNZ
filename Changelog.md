@@ -3,9 +3,9 @@ All notable changes to AviaNZ program will be documented in this file.
 ## Unreleased
 
 ### Added
-- Wind methods and GUI (TODO DETAIL)
-- Changepoint segmenter (TODO DETAIL)
-- Wavelet filter replaced with changepoint detector as the default non-CNN method
+- New changepoint detector replaces wavelet filter as the default non-CNN recognition method (wavelet filters still work but considered deprecated)
+- Syllable-level detection: trainable filters via the new changepoint pipeline, one example filter for LSK syllables included, and parameter ranges for non-specific detectors adapted
+- New method for wind noise removal by polynomial fitting (OLS or robust options available)
 - Pre-built GPU support for CNN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
@@ -15,6 +15,8 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Changed
 - Training will now include subdirectories when searching for data
 - Node selection in training faster, more stable, and produces ROCs more closely consistent with testing/processing
+- Wind noise removal only available for changepoint detectors now
+- Denoising dialog will now use time-adaptive noise estimation by default
 - Filter format extended to allow setting segmenter
 - Better UI for adding species in review, search function
 - Shorter pages (5 mins) for low sampling rate files in batch mode
@@ -24,6 +26,8 @@ All notable changes to AviaNZ program will be documented in this file.
 - Tab shortcut for species/calltype switch
 - different click detection process when training bat detectors
 - ground truth files no longer store resolution in the name
+- batch processing will not allow upsampling if using wind filter (only 2x or 4x "fake upsampling" which is implemented by node remapping)
+- batch review now has better feedback on input errors
 
 ### Fixed
 - Faster CNN classification
@@ -39,11 +43,13 @@ All notable changes to AviaNZ program will be documented in this file.
 - WAV Splitter produced bad timestamps on files starting within an hour before a DST change
 - data padding for wavelet decomposition/reconstruction was wrong length and reversed
 - Wavelet energy computation made safer and less edge-influenced
+- missing post-processing settings in batch GUI
 
 ### Hidden changes (developer-mode):
 - Ridge/instantaneous freq. detection
 - Shape analysis dialog
 - Button for exporting segment sound at different speed
+- Denoising button now connected to the new denoising
 - Saving spectrogram images without axes
 - Call comparator as a separate script, clock-adjustment only
 

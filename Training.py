@@ -682,7 +682,7 @@ class CNNtest:
                     self.manSegNum += len(segments.getSpecies(species))
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, species, window=self.window, inc=inc)
+                    segments.exportGT(wavFile, species, resolution=self.window)
 
         if self.manSegNum == 0:
             print("ERROR: no segments for species %s found" % species)
@@ -690,8 +690,8 @@ class CNNtest:
             return
 
         # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
-        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test",
-                                                        sdir=self.testDir, recogniser=filtname, wind=True)
+        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test", sdir=self.testDir, recogniser=filtname, wind=1)
+        # NOTE: will use wind-robust detection
 
         # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
         self.text = self.getSummary(CNN=False)

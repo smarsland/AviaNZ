@@ -76,34 +76,38 @@ class WaveletSegment:
         self.spInfo = copy.deepcopy(spInfo)
 
         # in batch mode, it's worth trying some tricks to avoid resampling
-        # However, wind adjustments are tested and hardcoded for
-        # 5th level nodes, and would break after this
-        # (5th lvl effectively becomes 6th lvl then).
-        # TODO this might be worth addressing at some point.
-        if not wind:
-            if fsOut == 2*sampleRate:
-                print("Adjusting nodes for upsampling to", fsOut)
-                for filter in self.spInfo:
-                    for subfilter in filter["Filters"]:
-                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                # Don't want to resample again, so fsTarget = fsIn
-                fsOut = sampleRate
-            elif fsOut == 4*sampleRate:
-                print("Adjusting nodes for upsampling to", fsOut)
-                # same. Wouldn't recommend repeating for larger ratios than 4x
-                for filter in self.spInfo:
-                    for subfilter in filter["Filters"]:
-                        downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                        subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
-                # Don't want to resample again, so fsTarget = fsIn
-                fsOut = sampleRate
-            # Could also similarly "downsample" by adding an extra convolution, but it's way slower
-            # elif sampleRate == 2*fsOut:
-            #     # don't actually downsample audio, just "upsample" the nodes needed
-            #     for subfilter in self.spInfo["Filters"]:
-            #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
-            #     print("upsampled nodes")
-            #     self.spInfo["SampleRate"] = sampleRate
+        if fsOut == 2*sampleRate:
+            print("Adjusting nodes for upsampling to", fsOut)
+            for filter in self.spInfo:
+                for subfilter in filter["Filters"]:
+                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+            # Don't want to resample again, so fsTarget = fsIn
+            fsOut = sampleRate
+        elif fsOut == 4*sampleRate:
+            print("Adjusting nodes for upsampling to", fsOut)
+            # same. Wouldn't recommend repeating for larger ratios than 4x
+            for filter in self.spInfo:
+                for subfilter in filter["Filters"]:
+                    downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
+            # Don't want to resample again, so fsTarget = fsIn
+            fsOut = sampleRate
+        # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+        # elif sampleRate == 2*fsOut:
+        #     # don't actually downsample audio, just "upsample" the nodes needed
+        #     for subfilter in self.spInfo["Filters"]:
+        #         subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+        #     print("upsampled nodes")
+        #     self.spInfo["SampleRate"] = sampleRate
+
+        # After upsampling, there will be a sharp drop in energy
+        # at the original Fs. This will really distort the polynomial
+        # fit used for wind prediction, so do not allow it.
+        # (If the nodes were adjusted by the mechanism above, the fit
+        # will use a continuous block of lower freqs and mostly be fine.)
+        if wind and fsOut>sampleRate:
+            print("ERROR: upsampling will cause problems for wind removal. Either turn off the wind filter, or retrain your recognizer to match the sampling rate of these files.")
+            return
 
         denoisedData = self.preprocess(data, sampleRate, fsOut, d=d, fastRes=True)
 
@@ -372,7 +376,7 @@ class WaveletSegment:
                 # If they differ by <=1, we allow that and just equalize them:
                 if filenwins==len(nodeE)+1:
                     currWCs[node-1,:-1] = nodeE
-                    # last element will be 0 by initialization
+                    currWCs[node-1,-1] = currWCs[node-1,-2] # repeat last element
                 elif filenwins==len(nodeE)-1:
                     # drop last WC
                     currWCs[node-1,:] = nodeE[:-1]
@@ -513,9 +517,9 @@ class WaveletSegment:
             fB_out = 0
             nodes_out = []
             tp_out = 0
-            fp_out = 0
-            tn_out = 0
-            fn_out = 0
+            fp_out = 1  # init the bad stats to 1, so that nothing breaks
+            tn_out = 0  # even if the detector fails entirely
+            fn_out = 1
             for i in range(np.shape(bestix)[0]):
                 b = bestix[i]
                 top_subset_nodes = [nodeList[nix] for nix in ksubsets[b]]
@@ -589,7 +593,7 @@ class WaveletSegment:
 
         return [finalnodes], tpa, fpa, tna, fna
 
-    def waveletSegment_cnn(self, dirName, filter):
+    def waveletSegment_cnn(self, dirName, filt):
         """ Wrapper for segmentation to be used when generating cnn data.
             Should be identical to processing the files in batch mode,
             + returns annotations.
@@ -643,19 +647,21 @@ class WaveletSegment:
 
                 # read in page and resample as needed
                 # will also set self.spInfo with ADJUSTED nodes if resampling!
-                self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filter], wpmode="new")
+                self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filt], wpmode="new", wind=False)
+                # TODO not sure if wind removal should be done here.
+                # Maybe not, to generate more noise examples?
 
                 # segmentation, same as in batch mode. returns [[sub-filter1 segments]]
-                # TODO this isn't updated with the new changepoint method
-                detected_segs = self.waveletSegment(0, wpmode="new")
-                if len(filter["Filters"]) > 1:
-                    out = []
-                    for subfilterdet in detected_segs:
-                        for seg in subfilterdet:
-                            out.append(seg)
-                    detected_out.append((filename, out))
-                else:
-                    detected_out.append((filename, detected_segs[0]))
+                if "method" not in filt or filt["method"]=="wv":
+                    detected_segs = self.waveletSegment(0, wpmode="new")
+                elif filt["method"]=="chp":
+                    detected_segs = self.waveletSegmentChp(0, alg=2, wind=False)
+
+                # flatten over the call types and store
+                out = []
+                for subfilterdet in detected_segs:
+                    out.extend(subfilterdet)
+                detected_out.append((filename, out))
 
         return detected_out
 
@@ -749,15 +755,15 @@ class WaveletSegment:
         """ Computes the beta scores given two sets of predictions """
         annotation = np.array(annotation)
         predicted = np.array(predicted)
-        TP = np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0))
-        T = np.sum(annotation)
-        P = np.sum(predicted)
+        TP = float(np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0)))
+        T = float(np.sum(annotation))  # to force all divisions to float
+        P = float(np.sum(predicted))
         if T != 0:
-            recall = float(TP) / T  # TruePositive/#True
+            recall = TP / T  # TruePositive/#True
         else:
             recall = None
         if P != 0:
-            precision = float(TP) / P  # TruePositive/#Positive
+            precision = TP / P  # TruePositive/#Positive
         else:
             precision = None
         if recall is not None and precision is not None and not (recall == 0 and precision == 0):
@@ -1176,8 +1182,10 @@ class WaveletSegment:
             # quantile 0.2 and roughly 0.1-0.2 s windows
             if wind==2:
                 regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
-                # TODO ideally this should be based on the actual number of WCs in the window
-                if window<=0.1:
+                # ideally this should be based on the actual number of WCs
+                # in the window and the gamma function (see paper),
+                # but generally is negligible except for v small windows and low SRs
+                if window<=0.1 and wf.treefs<16000:
                     qrbiasadjust = 0.4
 
             tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])

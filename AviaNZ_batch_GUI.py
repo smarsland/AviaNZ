@@ -19,8 +19,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -29,8 +30,7 @@ import numpy as np
 import wavio
 import traceback
 
-from pyqtgraph.Qt import QtGui
-from pyqtgraph.dockarea import *
+from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
 from AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
@@ -40,7 +40,7 @@ import SupportClasses, SupportClasses_GUI
 import Dialogs
 import colourMaps
 
-import webbrowser, copy, math
+import webbrowser, copy
 
 
 class AviaNZ_batchWindow(QMainWindow):
@@ -50,8 +50,8 @@ class AviaNZ_batchWindow(QMainWindow):
         # and sets up the window.
         QMainWindow.__init__(self)
 
-        # TODO: convert any communication w/ batchProc from this thread
-        # to signals, or avoid communicating entirely
+        # NOTE: any communication w/ batchProc from this thread
+        # must be via signals, if at all necessary
         self.batchProc = BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=0)
 
         self.batchThread = QThread()
@@ -59,11 +59,11 @@ class AviaNZ_batchWindow(QMainWindow):
         self.batchProc.finished.connect(self.batchThread.quit)
         self.batchProc.completed.connect(self.completed_fileproc)
         self.batchProc.stopped.connect(self.stopped_fileproc)
-        self.batchProc.failed.connect(lambda e: self.error_fileproc(e))
-        self.batchProc.need_msg.connect(lambda title, text: self.check_msg(title,text))
-        self.batchProc.need_clean_UI.connect(lambda total, cnt: self.clean_UI(total, cnt))
-        self.batchProc.need_update.connect(lambda cnt, text: self.update_progress(cnt, text))
-        self.batchProc.need_bat_info.connect(lambda op,east,north,rec: self.bat_survey_form(op,east,north,rec))
+        self.batchProc.failed.connect(self.error_fileproc)
+        self.batchProc.need_msg.connect(self.check_msg)
+        self.batchProc.need_clean_UI.connect(self.clean_UI)
+        self.batchProc.need_update.connect(self.update_progress)
+        self.batchProc.need_bat_info.connect(self.bat_survey_form)
         self.batchProc.moveToThread(self.batchThread)
 
         self.msgClosed = QWaitCondition()
@@ -124,35 +124,26 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
         self.w_wind = QComboBox()
-        self.w_wind.addItems(["No wind filter", "Simple wind filter", "Robust wind filter"])
+        self.w_wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "No wind filter"])
 
-        # Sliders for minlen and maxgap are in ms scale
-        self.minlen = QSlider(Qt.Horizontal)
-        self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.5*1000)
-        self.minlen.setRange(0.25*1000, 10*1000)
-        self.minlen.setSingleStep(1*1000)
-        self.minlen.setValue(0.5*1000)
-        self.minlen.valueChanged.connect(self.minLenChange)
-        self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
+        # Spinboxes in second scale
+        self.minlen = QDoubleSpinBox()
+        self.minlen.setRange(0.02, 20.0)
+        self.minlen.setSingleStep(1.0)
+        self.minlen.setValue(0.5)
+        self.minlenlbl = QLabel("Minimum segment length (s)")
 
-        self.maxlen = QSlider(Qt.Horizontal)
-        self.maxlen.setTickPosition(QSlider.TicksBelow)
-        self.maxlen.setTickInterval(5*1000)
-        self.maxlen.setRange(5*1000, 120*1000)
-        self.maxlen.setSingleStep(5*1000)
-        self.maxlen.setValue(10*1000)
-        self.maxlen.valueChanged.connect(self.maxLenChange)
-        self.maxlenlbl = QLabel("Maximum segment length: 10 sec")
+        self.maxlen = QDoubleSpinBox()
+        self.maxlen.setRange(0.05, 120.0)
+        self.maxlen.setSingleStep(2.0)
+        self.maxlen.setValue(10.0)
+        self.maxlenlbl = QLabel("Maximum segment length (s)")
 
-        self.maxgap = QSlider(Qt.Horizontal)
-        self.maxgap.setTickPosition(QSlider.TicksBelow)
-        self.maxgap.setTickInterval(0.5*1000)
-        self.maxgap.setRange(0.25*1000, 10*1000)
-        self.maxgap.setSingleStep(0.5*1000)
-        self.maxgap.setValue(1*1000)
-        self.maxgap.valueChanged.connect(self.maxGapChange)
-        self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
+        self.maxgap = QDoubleSpinBox()
+        self.maxgap.setRange(0.05, 10.0)
+        self.maxgap.setSingleStep(0.5)
+        self.maxgap.setValue(1.0)
+        self.maxgaplbl = QLabel("Maximum gap between syllables (s)")
 
         self.w_processButton = SupportClasses_GUI.MainPushButton(" Process Folder")
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
@@ -165,12 +156,16 @@ class AviaNZ_batchWindow(QMainWindow):
         self.d_detection.addWidget(self.w_browse, row=0, col=2)
         self.d_detection.addWidget(w_speLabel1, row=1, col=0)
 
+        self.warning = QLabel("Warning!\nThe chosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
+        self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
+
         # Filter selection group
         self.boxSp = QGroupBox("")
         self.formSp = QVBoxLayout()
         self.formSp.addWidget(w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
         self.formSp.addWidget(self.addSp)
+        self.formSp.addWidget(self.warning)
         self.boxSp.setLayout(self.formSp)
         self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=3)
 
@@ -185,11 +180,6 @@ class AviaNZ_batchWindow(QMainWindow):
         self.boxTime.setLayout(formTime)
         self.d_detection.addWidget(self.boxTime, row=2, col=0, colspan=3)
 
-        self.warning = QLabel("Warning!\nThe chosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
-        self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
-        self.d_detection.addWidget(self.warning, row=3, col=0, colspan=3)
-        self.warning.hide()
-
         # Post Proc checkbox group
         self.boxPost = QGroupBox("Post processing")
         formPost = QGridLayout()
@@ -202,13 +192,6 @@ class AviaNZ_batchWindow(QMainWindow):
         formPost.addWidget(self.maxlen, 4, 1)
         self.boxPost.setLayout(formPost)
         self.d_detection.addWidget(self.boxPost, row=4, col=0, colspan=3)
-        if len(spp) > 0:
-            self.maxgaplbl.hide()
-            self.maxgap.hide()
-            self.minlenlbl.hide()
-            self.minlen.hide()
-            self.maxlenlbl.hide()
-            self.maxlen.hide()
 
         self.d_detection.addWidget(self.w_processButton, row=6, col=2)
 
@@ -229,16 +212,8 @@ class AviaNZ_batchWindow(QMainWindow):
         self.d_detection.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
+        self.fillSpeciesBoxes()  # update the boxes to match the initial position
         self.show()
-
-    def minLenChange(self, value):
-        self.minlenlbl.setText("Minimum segment length: %s sec" % str(round(int(value)/1000, 2)))
-
-    def maxLenChange(self, value):
-        self.maxlenlbl.setText("Maximum segment length: %s sec" % str(round(int(value)/1000, 2)))
-
-    def maxGapChange(self, value):
-        self.maxgaplbl.setText("Maximum gap between syllables: %s sec" % str(round(int(value)/1000, 2)))
 
     def createMenu(self):
         """ Create the basic menu.
@@ -281,12 +256,15 @@ class AviaNZ_batchWindow(QMainWindow):
         self.species = list(self.species)
         print("Recogniser:", self.species)
 
-        self.batchProc.maxgap = int(self.maxgap.value())/1000
-        self.batchProc.minlen = int(self.minlen.value()) / 1000
-        self.batchProc.maxlen = int(self.maxlen.value()) / 1000
+        self.batchProc.maxgap = self.maxgap.value()
+        self.batchProc.minlen = self.minlen.value()
+        self.batchProc.maxlen = self.maxlen.value()
         self.batchProc.species = self.species
         self.batchProc.dirName = self.dirName
-        self.batchProc.wind = self.w_wind.currentIndex()
+        self.batchProc.wind = (self.w_wind.currentIndex()+1)%3
+        # a bit wacky but maps: 0 (default option, OLS) -> 1
+        #                       1 (robust) -> 2
+        #                       2 (none) -> 0
         print("Wind set to", self.batchProc.wind)
         self.batchThread.start()  # a signal connected to batchProc.detect()
 
@@ -409,9 +387,9 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def browse(self):
         if self.dirName:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
         # populate file list and update rest of interface:
@@ -478,10 +456,12 @@ class AviaNZ_batchWindow(QMainWindow):
         currname = self.w_spe1.currentText()
         if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
             currfilt = self.FilterDicts[currname]
+            currmethod = currfilt.get("method", "wv")
             # (can't use AllSp with any other filter)
-            # Also don't add the same name again
+            # Don't add different methods, samplerates, or the same name again
+            # (providing that missing method equals "wv")
             for name, filt in self.FilterDicts.items():
-                if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname:
+                if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname and filt.get("method", "wv")==currmethod:
                     spp.append(name)
             self.minlen.hide()
             self.minlenlbl.hide()
@@ -493,7 +473,11 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxTime.show()
             self.addSp.show()
             self.warning.hide()
-        elif currname != "Any sound (Intermittent sampling)":
+            if currmethod=="chp":
+                self.w_wind.show()
+            else:
+                self.w_wind.hide()
+        elif currname == "Any sound":
             self.minlen.show()
             self.minlenlbl.show()
             self.maxlen.show()
@@ -504,7 +488,8 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxTime.show()
             self.addSp.hide()
             self.warning.show()
-        else:
+            self.w_wind.hide()
+        elif currname == "Any sound (Intermittent sampling)":
             self.boxPost.hide()
             self.boxTime.show()
             self.addSp.hide()
@@ -635,7 +620,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
 
-        self.statusBar().showMessage("Ready to review")
+        #self.statusBar().showMessage("Ready to review")
 
         self.setWindowTitle('AviaNZ - Review Batch Results')
         self.createFrame()
@@ -664,6 +649,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
+        self.w_reviewer.textChanged.connect(self.validateInputs)
         self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
@@ -866,6 +852,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.layout.setColumnMinimumWidth(4, 80)
         self.d_settings.layout.setColumnStretch(2, 5)
         self.show()
+        self.validateInputs()  # initial trigger to determine status
 
     def changedCertSimple(self, cert):
         # update certainty spinbox (adv setting) when dropdown changed
@@ -955,16 +942,30 @@ class AviaNZ_reviewAll(QMainWindow):
             Use similarly to QWizardPage's isComplete, i.e. after any changes in GUI.
         """
         ready = True
+        problemMsg = ""
         if self.listFiles.count()==0 or self.dirName=='':
             ready = False
-            self.statusBar().showMessage("Select a directory to review")
+            problemMsg = "Select a directory to review"
+        elif self.w_reviewer.text()=='':
+            ready = False
+            problemMsg = "Enter reviewer name"
         elif self.fHigh.value()<self.fLow.value():
             ready = False
-            self.statusBar().showMessage("Bad frequency bands set")
+            problemMsg = "Bad frequency bands set"
         else:
-            self.statusBar().showMessage("Ready to review")
+            problemMsg = "Ready to review"
+
+        # show explanations
+        self.statusBar().showMessage(problemMsg)
+        if ready:
+            self.w_processButton.setToolTip("")
+            self.w_processButton1.setToolTip("")
+        else:
+            self.w_processButton.setToolTip(problemMsg)
+            self.w_processButton1.setToolTip(problemMsg)
 
         self.w_processButton.setEnabled(ready)
+
         if self.w_spe1.currentText() == "All species":
             self.w_processButton1.setEnabled(False)
         else:
@@ -1008,9 +1009,9 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def browse(self):
         if self.dirName:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
-            self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
+            self.dirName = QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
 
@@ -1370,8 +1371,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Initialize the dialog for this file
         self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments, self.indices2show,
-                                                           self.species, self.lut, self.colourStart,
-                                                           self.colourEnd, self.config['invertColourMap'],
+                                                           self.species, self.lut, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
                                                            guidefreq=guides, guidecol=self.config['guidecol'],
                                                            loop=self.loopBox.isChecked(), filename=self.filename)
@@ -1458,8 +1458,8 @@ class AviaNZ_reviewAll(QMainWindow):
         # store position etc to carry over to the next file dialog
         self.dialogSize = self.humanClassifyDialog2.size()
         self.dialogPos = self.humanClassifyDialog2.pos()
-        self.config['brightness'] = self.humanClassifyDialog2.brightnessSlider.value()
-        self.config['contrast'] = self.humanClassifyDialog2.contrastSlider.value()
+        self.config['brightness'] = self.humanClassifyDialog2.specControls.brightSlider.value()
+        self.config['contrast'] = self.humanClassifyDialog2.specControls.contrSlider.value()
         if not self.config['invertColourMap']:
             self.config['brightness'] = 100-self.config['brightness']
         self.humanClassifyDialog2.done(1)
@@ -1515,7 +1515,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1614,10 +1614,11 @@ class AviaNZ_reviewAll(QMainWindow):
                         # Actual loading of the wav/bmp/spectrogram
                         if self.batmode:
                             sp.readBmp(filename, off=x1, len=x2-x1, silent=segix>1)
-                            # sgRaw was already normalised to 0-1 when loading
+                            # sg was already normalised to 0-1 when loading
                             # with 1 being loudest
-                            sgRaw = sp.sg
-                            sp.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
+                            sp.sg = sp.normalisedSpec("Batmode")
+                            minsg = 0
+                            maxsg = 1
                         else:
                             # segix>1 to print the format details only once for each file
                             sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
@@ -1627,11 +1628,11 @@ class AviaNZ_reviewAll(QMainWindow):
 
                             # Generate the spectrogram
                             _ = sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True,need_even=False)
+                            sp.sg = sp.normalisedSpec("Log")
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
                             maxsg = max(np.max(sp.sg), maxsg)
-                            sp.sg = sp.normalisedSpec("Log")
 
                         # need to also store unbuffered limits in spec units
                         # (relative to start of segment)
@@ -1658,8 +1659,6 @@ class AviaNZ_reviewAll(QMainWindow):
             cmap = pg.ColorMap(pos, colour,mode)
 
             self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-            self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-            self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
             self.nsegments = len(self.indices2show)
             self.segsAccepted = 0
@@ -1733,8 +1732,8 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dialogSize = self.humanClassifyDialog1.size()
             self.dialogPos = self.humanClassifyDialog1.pos()
             self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
-            self.config['brightness'] = self.humanClassifyDialog1.brightnessSlider.value()
-            self.config['contrast'] = self.humanClassifyDialog1.contrastSlider.value()
+            self.config['brightness'] = self.humanClassifyDialog1.specControls.brightSlider.value()
+            self.config['contrast'] = self.humanClassifyDialog1.specControls.contrSlider.value()
             if not self.config['invertColourMap']:
                 self.config['brightness'] = 100-self.config['brightness']
 

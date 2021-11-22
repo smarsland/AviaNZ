@@ -24,6 +24,7 @@
 import sys, os, json, platform, re, shutil
 from shutil import copyfile
 
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
@@ -34,7 +35,6 @@ import numpy as np
 from scipy.ndimage.filters import median_filter
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import DockArea, Dock
 import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
@@ -236,7 +236,7 @@ class AviaNZ(QMainWindow):
                             self.loadFile(os.path.join(root, f), cs=True)
                             self.widthWindow.setValue(60)  # self.datalengthSec)
                             print('file path: ', os.path.join(root, f[:-4]))
-                            self.brightnessSlider.setValue(20)
+                            self.setColourLevels(20, 50)
                             self.saveImage(os.path.join(root, f[:-4]+'.png'))
             else:
                 self.loadFile(firstFile)
@@ -338,7 +338,7 @@ class AviaNZ(QMainWindow):
         self.invertcm.setChecked(self.config['invertColourMap'])
 
         # specMenu.addSeparator()
-        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog)
+        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog, "Ctrl+C")
 
         if not self.DOC:
             specMenu.addSeparator()
@@ -403,7 +403,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
             actionMenu.addAction("Analyse shapes", self.showShapesDialog)
-            actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
+            actionMenu.addAction("Cluster segments", self.classifySegments)
 
         actionMenu.addSeparator()
         self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
@@ -421,7 +421,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
 
-        extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
+        extrarecMenu.addAction("Extend a recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
         recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
@@ -812,41 +812,11 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
 
-        # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.sliderMoved.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        #volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(16, 16, transformMode=1))
-        self.volIcon.setAlignment(Qt.AlignCenter)
-
-        # Brightness, and contrast sliders
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        if self.config['invertColourMap']:
-            self.brightnessSlider.setValue(self.config['brightness'])
-        else:
-            self.brightnessSlider.setValue(100-self.config['brightness'])
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        brightnessLabel = QLabel()
-        brightnessLabel.setPixmap(QPixmap('img/brightstr24.png').scaled(16, 16, transformMode=1))
-        brightnessLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(self.config['contrast'])
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
-
-        contrastLabel = QLabel()
-        contrastLabel.setPixmap(QPixmap('img/contrstr24.png').scaled(16, 16, transformMode=1))
-        contrastLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+        # Volume, brightness and contrast sliders.
+        # Need to pass true (config) values to set up correct initial positions
+        self.specControls = SupportClasses_GUI.BrightContrVol(self.config['brightness'], self.config['contrast'], self.config['invertColourMap'], horizontal=False)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
 
         # Confirm button - auto ups the certainty to 100
         self.confirmButton = QPushButton("   Confirm labels")
@@ -899,16 +869,7 @@ class AviaNZ(QMainWindow):
 
         self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
-        self.w_controls.addWidget(self.volIcon, row=2, col=0)
-        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
-        self.w_controls.layout.setRowMinimumHeight(2, 30)
-
-        self.w_controls.addWidget(brightnessLabel,row=4,col=0)
-        self.w_controls.addWidget(QLabel("Brightness"), row=4, col=1, colspan=3)
-        self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
-        self.w_controls.addWidget(contrastLabel,row=6,col=0)
-        self.w_controls.addWidget(QLabel("Contrast"), row=6, col=1, colspan=3)
-        self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
+        self.w_controls.addWidget(self.specControls, row=2, col=0, rowspan=2, colspan=4)
 
         self.w_controls.addWidget(QLabel('Visible window'),row=8,col=0,colspan=4)
         self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=2)
@@ -1045,8 +1006,8 @@ class AviaNZ(QMainWindow):
 
         self.playButton.setEnabled(not self.batmode)
         self.stopButton.setEnabled(not self.batmode)
-        self.volSlider.setEnabled(not self.batmode)
-        self.volIcon.setEnabled(not self.batmode)
+        self.specControls.volSlider.setEnabled(not self.batmode)
+        self.specControls.volIcon.setEnabled(not self.batmode)
 
         text = "Bat mode" if self.batmode else ""
         self.statusBM.setText(text)
@@ -1728,7 +1689,7 @@ class AviaNZ(QMainWindow):
             self.volSliderMoved(0)
             self.segmentStop = 50
             #self.media_obj.filterSeg(0, 50, self.audiodata)
-            self.volSliderMoved(self.volSlider.value())
+            self.volSliderMoved(self.specControls.volSlider.value())
 
             # Set the length of the scrollbar.
             self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
@@ -2288,11 +2249,7 @@ class AviaNZ(QMainWindow):
             print(np.shape(e))
             e = np.log(e[30:62,:])
 
-            pos, colour, mode = colourMaps.colourMaps("Inferno")
-            cmap = pg.ColorMap(pos, colour, mode)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
-
-            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setLookupTable(colourMaps.getLookupTable("Inferno"))
             self.plotExtra.setImage(e.T)
             self.plotaxis.setLabel('Wavelet node')
 
@@ -2328,10 +2285,7 @@ class AviaNZ(QMainWindow):
             for tmult in range(10, len(annotation)):
                 r[:, tmult] = r[:, tmult-10]
 
-            pos, colour, mode = colourMaps.colourMaps("Viridis")
-            cmap = pg.ColorMap(pos, colour,mode)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
-            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setLookupTable(colourMaps.getLookupTable("Viridis"))
             self.plotExtra.setImage(r.T)
             self.plotaxis.setLabel('Frequency bin')
 
@@ -2542,10 +2496,7 @@ class AviaNZ(QMainWindow):
             maxsg = max(np.min(sgRaw), 1e-9)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
-            pos, colour, mode = colourMaps.colourMaps("Inferno")
-            cmap = pg.ColorMap(pos, colour,mode)
-            lut = cmap.getLookupTable(0.0, 1.0, 256)
-            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setLookupTable(colourMaps.getLookupTable("Inferno"))
             self.plotExtra.setImage(tempsp)
 
             # set axis. Always at 0:sampleRate//2
@@ -3610,15 +3561,12 @@ class AviaNZ(QMainWindow):
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
+
         self.config['cmap'] = cmap
+        lut = colourMaps.getLookupTable(self.config['cmap'])
 
-        pos, colour, mode = colourMaps.colourMaps(cmap)
-
-        cmap = pg.ColorMap(pos, colour,mode)
-        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-
-        self.specPlot.setLookupTable(self.lut)
-        self.overviewImage.setLookupTable(self.lut)
+        self.specPlot.setLookupTable(lut)
+        self.overviewImage.setLookupTable(lut)
 
     def invertColourMap(self):
         """ Listener for the menu item that converts the colour map"""
@@ -3639,32 +3587,28 @@ class AviaNZ(QMainWindow):
         self.sgMinimum = np.min(self.sg)
         self.sgMaximum = np.max(self.sg)
 
-    def setColourLevels(self):
+    def setColourLevels(self, brightness=None, contrast=None):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
-        Calculation is simple.
         """
         if self.media_obj.isPlaying() or self.media_slow.isPlaying():
             self.stopPlayback()
-        minsg = self.sgMinimum
-        maxsg = self.sgMaximum
+        if brightness is None:
+            brightness = self.specControls.brightSlider.value()
+        if contrast is None:
+            contrast = self.specControls.contrSlider.value()
 
         if self.config['invertColourMap']:
-            self.config['brightness'] = self.brightnessSlider.value()
+            self.config['brightness'] = brightness
         else:
-            self.config['brightness'] = 100-self.brightnessSlider.value()
-        self.config['contrast'] = self.contrastSlider.value()
+            self.config['brightness'] = 100-brightness
+        self.config['contrast'] = contrast
         self.saveConfig = True
 
-        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
+        colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, self.config['brightness'], self.config['contrast'], self.config['invertColourMap'])
 
-        if self.config['invertColourMap']:
-            self.overviewImage.setLevels([self.colourEnd, self.colourStart])
-            self.specPlot.setLevels([self.colourEnd, self.colourStart])
-        else:
-            self.overviewImage.setLevels([self.colourStart, self.colourEnd])
-            self.specPlot.setLevels([self.colourStart, self.colourEnd])
+        self.overviewImage.setLevels(colRange)
+        self.specPlot.setLevels(colRange)
 
     def moveLeft(self):
         """ When the left button is pressed (next to the overview plot), move everything along
@@ -4348,13 +4292,11 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        # alg = "const"
-        alg = "ols"
-        # alg = "qr"
+        noiseest = "ols" # or qr, or const
         thrType = "soft"
-        depth = 5   # can also use 0 to autoset
+        depth = 6   # can also use 0 to autoset
         wavelet = "dmey2"
-        aaRec = True
+        aaRec = False  # True if nicer spectrogram is needed - but it's not very clean either way
         aaWP = False
         thr = 2.0  # this one is difficult to set universally...
 
@@ -4365,8 +4307,18 @@ class AviaNZ(QMainWindow):
 
             # extract the piece of audiodata under current segment
             denoised = self.audiodata[start : stop]
+
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-            denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun=alg, costfn="fixed")
+            denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
+
+            # bandpass to selected zones, if it's a box
+            # TODO this could be done faster: pass to waveletDenoise and
+            # do not reconstruct from nodes outside the specified band
+            if self.segments[self.box1id][3]>0:
+                bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
+                top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
+                print("Extracting samples between %d-%d Hz" % (bottom, top))
+                denoised = self.sp.bandpassFilter(denoised, sampleRate=None, start=bottom, end=top)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -4410,7 +4362,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Denoising...")
             # Note: dialog returns all possible parameters
             if not self.DOC:
-                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP,thrfun] = self.denoiseDialog.getValues()
+                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP,noiseest] = self.denoiseDialog.getValues()
             else:
                 wavelet = "dmey2"
                 [alg, start, end, width] = self.denoiseDialog.getValues()
@@ -4425,10 +4377,10 @@ class AviaNZ(QMainWindow):
                     # pass dialog settings
                     # TODO set costfn determines which leaves will be used, by default 'threshold' (universal threshold).
                     # fixed = use all leaves up to selected level. 'Entropy' is also tested and possible
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, thrfun=thrfun, costfn="fixed")
+                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
                 else:
                     # go with defaults
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
+                    self.sp.data = self.waveletDenoiser.waveletDenoise("soft", 3, aaRec=True, aaWP=False, costfn="fixed", noiseest="ols")
 
             else:
                 # SignalProc will deal with denoising
@@ -4598,8 +4550,8 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
-        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
-        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
@@ -4611,8 +4563,8 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
-        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
-        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
+        self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
@@ -4623,8 +4575,8 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
-        self.buildCNNWizard.button(3).clicked.connect(self.saveNotestRecogniserCNN)
-        self.buildCNNWizard.saveTestBtn.clicked.connect(self.saveTestRecogniserCNN)
+        self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
+        self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
         self.buildCNNWizard.activateWindow()
         self.buildCNNWizard.exec_()
 
@@ -4633,7 +4585,7 @@ class AviaNZ(QMainWindow):
         self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.configdir, filter)
         self.testRecWizard.exec_()
 
-    def saveNotestRecogniser(self):
+    def saveRecogniser(self, test=False):
         try:
             # actually write out the filter
             filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
@@ -4642,45 +4594,25 @@ class AviaNZ(QMainWindow):
             self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
             rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
             print("Saving new recogniser to ", filename)
-            f = open(filename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.speciesData))
-            f.close()
-            f = open(rocfilename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
-            f.close()
+            with open(filename, 'w') as f:
+                f.write(json.dumps(self.buildRecAdvWizard.speciesData, indent=4))
+            with open(rocfilename, 'w') as f:
+                f.write(json.dumps(self.buildRecAdvWizard.ROCData, indent=4))
 
             # prompt the user
-            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+            if test:
+                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+            else:
+                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
             msg.exec_()
             self.buildRecAdvWizard.done(1)
+            if test:
+                self.testRecogniser(filter=os.path.basename(filename))
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
 
-    def saveTestRecogniser(self):
-        try:
-            filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
-            # also write ROC in to a file
-            rocfilename = self.buildRecAdvWizard.speciesData["species"] + "_ROCWF" + time.strftime("_%H-%M-%S", time.gmtime())
-            self.buildRecAdvWizard.speciesData["ROCWF"] = rocfilename
-            rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
-            print("Saving new recogniser to ", filename)
-            f = open(filename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.speciesData))
-            f.close()
-            f = open(rocfilename, 'w')
-            f.write(json.dumps(self.buildRecAdvWizard.ROCData))
-            f.close()
-            # prompt the user
-            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
-            msg.exec_()
-            self.buildRecAdvWizard.done(1)
-            self.testRecogniser(filter=os.path.basename(filename))
-        except Exception as e:
-            print("ERROR: could not save recogniser because:", e)
-            self.buildRecAdvWizard.done(0)
-
-    def saveNotestRecogniserCNN(self):
+    def saveRecogniserCNN(self, test=False):
         # actually write out the filter and CNN model
         modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
         CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
@@ -4689,146 +4621,67 @@ class AviaNZ(QMainWindow):
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
         # also write ROC in to a file
-        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
-                                                                                               time.gmtime())
+        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S", time.gmtime())
         self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
         rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
-        if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
-            try:
+        try:
+            if self.buildCNNWizard.savePage.saveoption == 'New':
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
                 print("Saving a new recogniser", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # save ROC
-                f = open(rocfilename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
-                msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        elif self.buildCNNWizard.savePage.saveoption != 'New':
-            try:
+                with open(rocfilename, 'w') as f:
+                    f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+            else:
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
                 print("Updating the existing recogniser ", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
-                # prompt the user
-                # msg = SupportClasses_GUI.MessagePopup("d", "Training complete", "Recogniser is ready to use")
-                # msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        else:
-            return
-
-    def saveTestRecogniserCNN(self):
-        # actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
-        self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
-        modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.cnntrain.bestweight
-        weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
-        # also write ROC in to a file
-        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S",
-                                                                                               time.gmtime())
-        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
-        rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
-
-        if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
-            try:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
-                print("Saving a new recogniser", self.filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # save ROC
-                f = open(rocfilename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata))
-                f.close()
-                # prompt the user
+                # TODO this was disabled here for some reason,
+                # not sure what is the intended behavior
+                # with open(rocfilename, 'w') as f:
+                #     f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+
+            # Store the recognizer txt
+            with open(filename, 'w') as f:
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt, indent=4))
+            # Actually copy the model
+            copyfile(modelsrc, modelfile)
+            copyfile(weightsrc, weightfile)
+            # And remove temp dirs
+            self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+            self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+            # prompt the user
+            if test:
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
-                msg.exec_()
-                self.buildCNNWizard.done(1)
+            else:
+                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+            msg.exec_()
+            self.buildCNNWizard.done(1)
+            if test:
                 self.testRecogniser(filter=os.path.basename(filename))
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        elif self.buildCNNWizard.savePage.saveoption != 'New':
-            try:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
-                print("Updating the existing recogniser ", self.filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
-                f.close()
-                # Actually copy the model
-                copyfile(modelsrc, modelfile)
-                copyfile(weightsrc, weightfile)
-                # And remove temp dirs
-                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
-                # save ROC
-                f = open(rocfilename, 'w')
-                # f.write(json.dumps(self.buildRecAdvWizard.ROCData)) # TODO
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!",
-                                                  "Training completed!\nProceeding to testing.")
-                msg.exec_()
-                self.buildCNNWizard.done(1)
-                self.testRecogniser(filter=os.path.basename(filename))
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        else:
-            return
+        except Exception as e:
+            print("ERROR: could not save recogniser because:", e)
 
-    def saveRecogniser(self):
+    def saveRecogniserROC(self):
         # nothing to worry about CNN files, they are untouched
-        if self.filterManager.saveoption == 'New' and (self.filterManager.enterFiltName.text() != '' or self.filterManager.enterFiltName.text() != '.txt'):
-            try:
+        try:
+            if self.filterManager.saveoption == 'New':
                 filename = os.path.join(self.filtersDir, self.filterManager.enterFiltName.text())
                 print("Saving a new recogniser", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.filterManager.newfilter))
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Saved as a new recogniser: " + self.filterManager.enterFiltName.text() + "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
-                msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
-        elif self.filterManager.saveoption != 'New':
-            try:
+                msgtext = "Saved as a new recogniser: " + self.filterManager.enterFiltName.text() + "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use."
+            else:
                 filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text() + '.txt')
                 print("Updating the existing recogniser ", filename)
-                f = open(filename, 'w')
-                f.write(json.dumps(self.filterManager.newfilter))
-                f.close()
-                # prompt the user
-                msg = SupportClasses_GUI.MessagePopup("d", "Saved!", "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use.")
-                msg.exec_()
-            except Exception as e:
-                print("ERROR: could not save recogniser because:", e)
+                msgtext = "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use."
+
+            # store the changed recognizer txt
+            with open(filename, 'w') as f:
+                f.write(json.dumps(self.filterManager.newfilter, indent=4))
+            # prompt the user
+            msg = SupportClasses_GUI.MessagePopup("d", "Saved!", msgtext)
+            msg.exec_()
+        except Exception as e:
+            print("ERROR: could not save recogniser because:", e)
         self.filterManager.close()
 
     def excel2Annotation(self):
@@ -5019,7 +4872,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText('Segmenting...')
             # Delete old segments:
             # only this species, if using species-specific methods:
-            if alg == 'Wavelets' or alg == 'WV Changepoint':
+            if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 if filtname == 'Choose species...':
                     msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec_()
@@ -5082,29 +4935,22 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.segmentByFIR(float(str(settings["FIRThr1"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
-            elif alg == 'Wavelets':
+            elif alg == 'Wavelet Filter':
+                # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
-                # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-
-                # TODO New style wind denoising NOT IMPLEMENTED HERE
-                if settings["wind"]:
-                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=True)
-                    # TODO
-                    newSegments = ws.waveletSegment(0, wpmode="new")
-                else:
-                    ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
-                    newSegments = ws.waveletSegment(0, wpmode="new")
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                newSegments = ws.waveletSegment(0, wpmode="new")
+                # this will produce a list of lists (over subfilters)
             elif alg == 'WV Changepoint':
                 print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
-                # using all passed params:
-                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=settings["chp2l"]+1, silent=False, wind=settings["wind"])
-                # Or if no params are passed, they will be read from the filter file TimeRange:
-                # newSegments = ws.waveletSegmentChp(0, alg=settings["chp2l"]+1, wind=settings["wind"])
+                # nuisance-signal changepoint detector (alg 2)
+                # with all params passed:
+                newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5123,7 +4969,7 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            if alg == 'Wavelets' or alg == 'WV Changepoint':
+            if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print(newSegments)
                 print('Post-processing...')
@@ -5140,9 +4986,10 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if settings["windold"]:
-                        post.wind()
-                        print('After wind: segments: ', len(post.segments))
+                    # Deprecated wind filter:
+                    # if settings["windold"]:
+                    #     post.wind()
+                    #     print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
                         print('Post-processing with CNN')
                         post.CNN()
@@ -5155,7 +5002,7 @@ class AviaNZ(QMainWindow):
                             print("Checking for fundamental frequency...")
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
-                    if alg=='Wavelets':
+                    if alg=='Wavelet Filter':
                         post.joinGaps(maxgap=subfilter['TimeRange'][3])
                     if subfilter['TimeRange'][0]>0:
                         post.deleteShort(minlength=subfilter['TimeRange'][0])
@@ -5166,9 +5013,9 @@ class AviaNZ(QMainWindow):
                 print('Post-processing...')
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
-                if settings["windold"]:
-                    post.wind()
-                    print('After wind segments: ', len(post.segments))
+                # if settings["windold"]:
+                #     post.wind()
+                #     print('After wind segments: ', len(post.segments))
                 if settings["rain"]:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
@@ -5178,7 +5025,7 @@ class AviaNZ(QMainWindow):
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
-            if alg=='Wavelets' or alg=='WV Changepoint':
+            if alg=='Wavelet Filter' or alg=='WV Changepoint':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
@@ -5622,30 +5469,29 @@ class AviaNZ(QMainWindow):
         """ Listener for Set Operator/Reviewer menu item.
         """
         if hasattr(self, 'operator') and hasattr(self, 'reviewer') :
-            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
+            self.operatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
         else:
-            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
-        #self.setOperatorReviewerDialog.activateWindow()
-        self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)
-        self.setOperatorReviewerDialog.exec()
+            self.operatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
+        self.operatorReviewerDialog.activate.clicked.connect(self.changeOperator)
+        self.operatorReviewerDialog.exec()
 
     def changeOperator(self):
         """ Listener for the operator/reviewer dialog.
         """
-        name1, name2 = self.setOperatorReviewerDialog.getValues()
+        name1, name2 = self.operatorReviewerDialog.getValues()
         self.operator = str(name1)
         self.reviewer = str(name2)
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
-        self.setOperatorReviewerDialog.close()
+        self.operatorReviewerDialog.close()
         self.segmentsToSave = True
 
     def manageFilters(self):
-        self.filterManager = Dialogs.FilterManager(self.filtersDir)
-        self.filterManager.exec_()
+        filterManagerSimple = Dialogs.FilterManager(self.filtersDir)
+        filterManagerSimple.exec_()
 
     def customiseFiltersROC(self):
         self.filterManager = DialogsTraining.FilterCustomiseROC(self.filtersDir)
-        self.filterManager.btnSave.clicked.connect(self.saveRecogniser)
+        self.filterManager.btnSave.clicked.connect(self.saveRecogniserROC)
         self.filterManager.exec_()
 
     def addNoiseData(self):
