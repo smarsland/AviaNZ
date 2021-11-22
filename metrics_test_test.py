@@ -96,14 +96,14 @@ def set_if_fun(signal_id,T):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_8"  # change test name
+test_name = "Test_9"  # change test name
 file_id="exponential_upchirp"
 dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
 
 #inizialization for sisdr score
-metrics=sm.load("relative", window=None)
+metrics=sm.load(['bsseval',"stoi",'sisdr'], window=None)
 
 # check if test_fold exists
 if not os.path.exists(test_fold):
@@ -126,16 +126,16 @@ if not os.path.exists(test_fold):
 # NORM_DIFF_1= np.zeros((9,1))
 # NORM_DIFF_2= np.zeros((9,1))
 
-BSSEVAL_original=np.zeros((9,1))
-PESQ_original=np.zeros((9,1))
-NBPESQ_original=np.zeros((9,1))
+SDR_original=np.zeros((9, 1))
+ISR_original=np.zeros((9, 1))
+SAR_original=np.zeros((9, 1))
 STOI_original=np.zeros((9,1))
-SDR_original = np.zeros((9,1))
-BSSEVAL_noise=np.zeros((9,1))
-PESQ_noise=np.zeros((9,1))
-NBPESQ_noise=np.zeros((9,1))
+SISDR_original = np.zeros((9, 1))
+SDR_noise=np.zeros((9, 1))
+ISR_noise=np.zeros((9, 1))
+SAR_noise=np.zeros((9, 1))
 STOI_noise=np.zeros((9,1))
-SDR_noise= np.zeros((9,1))
+SISDR_noise= np.zeros((9, 1))
 
 # file_id = []
 
@@ -318,19 +318,21 @@ for file in os.listdir(dataset_dir):
 
 
         # speech metrics comparison
+        len_diff = len(signal_original) - len(s1_inverted)
+        # [int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))]
         score_original = metrics(s1_inverted, signal_original,rate=fs)
-        BSSEVAL_original[k,0]=score_original['bsseval']
-        PESQ_original[k,0]=score_original['pesq']
-        NBPESQ_original[k,0]=score_original['nb_pesq']
+        SDR_original[k, 0]=score_original['sdr']
+        ISR_original[k, 0]=score_original['isr']
+        SAR_original[k, 0]=score_original['sar']
         STOI_original[k,0]=score_original['stoi']
-        SDR_original[k,0]=score_original['sisdr']
+        SISDR_original[k, 0]=score_original['sisdr']
 
-        score_noise = metrics(s1_inverted, sig1)
-        BSSEVAL_noise[k, 0] = score_noise['bsseval']
-        PESQ_noise[k, 0] = score_noise['pesq']
-        NBPESQ_noise[k, 0] = score_noise['nb_pesq']
+        score_noise = metrics(s1_inverted, sig1, rate=fs)
+        SDR_noise[k, 0] = score_noise['sdr']
+        ISR_noise[k, 0] = score_noise['isr']
+        SAR_noise[k, 0] = score_noise['sar']
         STOI_noise[k, 0] = score_noise['stoi']
-        SDR_noise[k, 0] = score_noise['sisdr']
+        SISDR_noise[k, 0] = score_noise['sisdr']
         del tfsupp
         k+=1
 
@@ -432,38 +434,38 @@ fig_name=test_fold +"\\"+file_id+"_metrics_plot.jpg"
 #plt.rcParams["figure.autolayout"] = True
 fig, ax = plt.subplots(5, 2, figsize=(20,40))
 
-ax[0, 0].plot(BSSEVAL_original, 'o')
-ax[0, 0].set_title('BSSEVAL original',fontsize='large')
+ax[0, 0].plot(SDR_original, 'o')
+ax[0, 0].set_title('SDR original',fontsize='large')
 ax[0,0].set_xticks(np.arange(0, 9))
 ax[0,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[0, 1].plot(BSSEVAL_noise, 'o')
-ax[0, 1].set_title('BSSEVAL noise')
+ax[0, 1].plot(SDR_noise, 'o')
+ax[0, 1].set_title('SDR noise')
 ax[0,1].set_xticks(np.arange(0, 9))
 ax[0,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[1, 0].plot(NBPESQ_original, 'o')
-ax[1, 0].set_title('NBPESQ original')
+ax[1, 0].plot(ISR_original, 'o')
+ax[1, 0].set_title('ISR original')
 ax[1,0].set_xticks(np.arange(0, 9))
 ax[1,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[1, 1].plot(NBPESQ_noise,'o')
-ax[1, 1].set_title('NBPESQ noise')
+ax[1, 1].plot(ISR_noise, 'o')
+ax[1, 1].set_title('ISR noise')
 ax[1,1].set_xticks(np.arange(0, 9))
 ax[1,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[2, 0].plot(SDR_original, 'o')
-ax[2, 0].set_title('SDR original signal')
+ax[2, 0].plot(SISDR_original, 'o')
+ax[2, 0].set_title('SISDR original signal')
 ax[2,0].set_xticks(np.arange(0, 9))
 ax[2,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[2, 1].plot(SDR_noise,'o')
-ax[2, 1].set_title('SDR signal + noise')
+ax[2, 1].plot(SISDR_noise, 'o')
+ax[2, 1].set_title('SISDR signal + noise')
 ax[2, 1].set_xticks(np.arange(0, 9))
 ax[2, 1].set_xticklabels(['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'], rotation=45)
-ax[3, 0].plot(PESQ_original, 'o')
-ax[3, 0].set_title('PESQ original signal')
+ax[3, 0].plot(SAR_original, 'o')
+ax[3, 0].set_title('SAR original signal')
 ax[3, 0].set_xticks(np.arange(0, 9))
 ax[3, 0].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
     rotation=45)
-ax[3, 1].plot(PESQ_noise,'o')
-ax[3, 1].set_title('PESQ signal + noise')
+ax[3, 1].plot(SAR_noise, 'o')
+ax[3, 1].set_title('SAR signal + noise')
 ax[3, 1].set_xticks(np.arange(0, 9))
 ax[3, 1].set_xticklabels(
     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
