@@ -489,7 +489,7 @@ class WaveletFunctions:
         return data
 
 
-    def waveletDenoise(self,thresholdType='soft',thrMultiplier=4.5,maxLevel=5, costfn='threshold', aaRec=False, aaWP=False, thrfun="const"):
+    def waveletDenoise(self,thresholdType='soft',thrMultiplier=4.5,maxLevel=5, costfn='threshold', aaRec=False, aaWP=False, noiseest="const"):
         """ Perform wavelet denoising.
         Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
         thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the root.
@@ -501,10 +501,10 @@ class WaveletFunctions:
           4. cost func for selecting best tree, or "fixed" to use maxLevel leaves
           6. antialias while reconstructing (T/F)
           7. antialias while building the WP ('full'), (T/F)
-          8. threshold estimation ("const"/"ols"/"qr")
+          8. noise energy estimation ("const"/"ols"/"qr")
         Return: reconstructed signal (ndarray)
         """
-        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, costfn %s, thrfun %s" % (thresholdType, thrMultiplier, maxLevel, costfn, thrfun))
+        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, costfn %s, noiseest %s" % (thresholdType, thrMultiplier, maxLevel, costfn, noiseest))
         opstartingtime = time.time()
 
         ADJBLOCKLEN = 0.15  # block length in s to be used when estimating adj
@@ -537,7 +537,7 @@ class WaveletFunctions:
         print("Checkpoint 2, %.5f" % (time.time() - opstartingtime))
 
         # Estimate the threshold (for each node)
-        if thrfun == "const":
+        if noiseest == "const":
             # Constant threshold across all levels, nodes and times.
             # Estimate sd by MAD median of lvl 1 detail coefs.
             # Note magic conversion number for Gaussian MAD->SD
@@ -545,7 +545,7 @@ class WaveletFunctions:
             sigma = np.median(np.abs(det1)) / 0.6745
             threshold = thrMultiplier * sigma
             blocklen = 0
-        elif thrfun == "n":
+        elif noiseest == "n":
             # threshold node-specific, constant across times
             # Estimate the threshold by MAD for each node separately
             threshold = np.zeros(len(bestleaves))
@@ -555,7 +555,7 @@ class WaveletFunctions:
                 sigma = np.median(np.abs(det1)) / 0.6745
                 threshold[leavenum] = thrMultiplier * sigma
             blocklen = 0
-        elif thrfun == "ols" or thrfun == "qr":
+        elif noiseest == "ols" or noiseest == "qr":
             # Thr is varying over time blocks, so need to supply block size.
             # Here we round it to obtain integer number of WCs:
             minwin = 32/self.treefs
@@ -587,14 +587,14 @@ class WaveletFunctions:
 
             # Will fit the log energies at log center freqs of each node
             # w/ a smooth interpolator, and then retrieve the smoothed values.
-            if thrfun == "ols":
+            if noiseest == "ols":
                 # Fill the thr array w/ OLS estimates
                 for t in range(numblocks):
                     regy = windE[t, :]
                     pol = np.polynomial.polynomial.Polynomial.fit(regx, regy, 3)
                     for node_ix in range(len(interpx)):
                         threshold[node_ix, t] = pol(interpx[node_ix])
-            elif thrfun == "qr":
+            elif noiseest == "qr":
                 # Create the polynomial features manually
                 regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
                 # Fill the thr array w/ QR estimates
@@ -615,7 +615,7 @@ class WaveletFunctions:
 
             threshold *= thrMultiplier
         else:
-            print("ERROR: unknown threshold estimator ", thrfun)
+            print("ERROR: unknown noise energy estimator ", noiseest)
             return
         print("thr shape", np.shape(threshold))
 

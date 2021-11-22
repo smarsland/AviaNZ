@@ -4290,7 +4290,7 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        alg = "ols" # or qr, or const
+        noiseest = "ols" # or qr, or const
         thrType = "soft"
         depth = 6   # can also use 0 to autoset
         wavelet = "dmey2"
@@ -4307,7 +4307,7 @@ class AviaNZ(QMainWindow):
             denoised = self.audiodata[start : stop]
 
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-            denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun=alg, costfn="fixed")
+            denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
 
             # bandpass to selected zones, if it's a box
             # TODO this could be done faster: pass to waveletDenoise and
@@ -4360,7 +4360,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Denoising...")
             # Note: dialog returns all possible parameters
             if not self.DOC:
-                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP,thrfun] = self.denoiseDialog.getValues()
+                [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP,noiseest] = self.denoiseDialog.getValues()
             else:
                 wavelet = "dmey2"
                 [alg, start, end, width] = self.denoiseDialog.getValues()
@@ -4375,10 +4375,10 @@ class AviaNZ(QMainWindow):
                     # pass dialog settings
                     # TODO set costfn determines which leaves will be used, by default 'threshold' (universal threshold).
                     # fixed = use all leaves up to selected level. 'Entropy' is also tested and possible
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, thrfun=thrfun, costfn="fixed")
+                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
                 else:
                     # go with defaults
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
+                    self.sp.data = self.waveletDenoiser.waveletDenoise("soft", 3, aaRec=True, aaWP=False, costfn="fixed", noiseest="ols")
 
             else:
                 # SignalProc will deal with denoising

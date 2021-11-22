@@ -1218,15 +1218,13 @@ class Denoise(QDialog):
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
-        self.thrests = QComboBox()
-        self.thrests.addItems(["Constant threshold", "OLS fit", "QR fit"])
-
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
-        # self.wavlabel = QLabel("Wavelets")
         if not self.DOC:
+            self.noiseest = QComboBox()
+            self.noiseest.addItems(["Constant SD", "SD estimated by OLS fit", "SD estimated by QR fit"])
+
             self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
             self.depthchoice = QCheckBox()
-            #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
             self.depthchoice.clicked.connect(self.depthclicked)
             self.depth = QSpinBox()
             self.depth.setRange(1,12)
@@ -1237,7 +1235,7 @@ class Denoise(QDialog):
             self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
             self.thrtype[0].setChecked(True)
 
-            self.thrlabel = QLabel("Multiplier of std dev for threshold")
+            self.thrlabel = QLabel("Multiplier of SD for threshold")
             self.thr = QDoubleSpinBox()
             self.thr.setRange(1,10)
             self.thr.setSingleStep(0.5)
@@ -1289,12 +1287,11 @@ class Denoise(QDialog):
         self.activate = QPushButton("Denoise")
         self.undo = QPushButton("Undo")
         self.save = QPushButton("Save Denoised Sound")
-        #self.connect(self.undo, SIGNAL('clicked()'), self.undo)
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
-        Box.addWidget(self.thrests)
 
         if not self.DOC:
+            Box.addWidget(self.noiseest)
             Box.addWidget(self.depthlabel)
             Box.addWidget(self.depthchoice)
             Box.addWidget(self.depth)
@@ -1357,9 +1354,10 @@ class Denoise(QDialog):
         self.high.setMaximum(self.maxFreq)
 
     def changeBoxes(self,alg):
+        print("changing from", self.prevAlg, " to", alg)
         # This does the hiding and showing of the options as the algorithm changes
         if self.prevAlg == "Wavelets" and not self.DOC:
-            # self.wavlabel.hide()
+            self.noiseest.hide()
             self.depthlabel.hide()
             self.depth.hide()
             self.depthchoice.hide()
@@ -1372,29 +1370,6 @@ class Denoise(QDialog):
             self.aabox2.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif (self.prevAlg == "Bandpass --> Wavelets" or self.prevAlg == "Wavelets --> Bandpass") and not self.DOC:
-            self.wblabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-            self.blabel.hide()
-            self.low.hide()
-            self.lowtext.hide()
-            self.high.hide()
-            self.hightext.hide()
-            #self.trimlabel.hide()
-            #self.trimaxis.hide()
-            #self.trimaxis.setChecked(False)
-            self.medlabel.hide()
-            self.widthlabel.hide()
-            self.width.hide()
         elif self.prevAlg == "Bandpass" or self.prevAlg == "Butterworth Bandpass":
             self.bandlabel.hide()
             self.blabel.hide()
@@ -1402,9 +1377,6 @@ class Denoise(QDialog):
             self.lowtext.hide()
             self.high.hide()
             self.hightext.hide()
-            #self.trimlabel.hide()
-            #self.trimaxis.hide()
-            #self.trimaxis.setChecked(False)
         else:
             # Median filter
             self.medlabel.hide()
@@ -1413,8 +1385,7 @@ class Denoise(QDialog):
 
         self.prevAlg = str(alg)
         if str(alg) == "Wavelets" and not self.DOC:
-            # TEST OPTION: boxes are currently same as for Wavelets
-            # self.wavlabel.show()
+            self.noiseest.show()
             self.depthlabel.show()
             self.depthchoice.show()
             self.depth.show()
@@ -1427,44 +1398,6 @@ class Denoise(QDialog):
             self.aabox2.show()
             self.waveletlabel.show()
             self.wavelet.show()
-        elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
-            # self.wblabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.low.show()
-            self.lowtext.show()
-            self.high.show()
-            self.hightext.show()
-            #self.trimlabel.show()
-            #self.trimaxis.show()
-        elif str(alg) == "Bandpass --> Wavelets" and not self.DOC:
-            # self.wblabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.low.show()
-            self.lowtext.show()
-            self.high.show()
-            self.hightext.show()
-            #self.trimlabel.show()
-            #self.trimaxis.show()
         elif str(alg) == "Bandpass" or str(alg) == "Butterworth Bandpass":
             self.bandlabel.show()
             self.low.show()
@@ -1495,13 +1428,13 @@ class Denoise(QDialog):
             else:
                 depth = int(str(self.depth.text()))
 
-            if self.thrests.currentText()=="Constant threshold":
-                threst = "const"
-            elif self.thrests.currentText()=="OLS fit":
-                threst = "ols"
-            elif self.thrests.currentText()=="QR fit":
-                threst = "qr"
-            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked(), threst]
+            if self.noiseest.currentText()=="Constant SD":
+                noiseest = "const"
+            elif self.noiseest.currentText()=="SD estimated by OLS fit":
+                noiseest = "ols"
+            elif self.noiseest.currentText()=="SD estimated by QR fit":
+                noiseest = "qr"
+            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked(), noiseest]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 
