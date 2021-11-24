@@ -1241,10 +1241,9 @@ class WaveletSegment:
             # (segments exceeding this length will be marked as 'n')
             realmaxlen = math.ceil(maxlen / realwindow)
 
-            if np.max(E)>1e7:
-                E = E / 1e4 # rescale to avoid potential overflows
             if np.max(E)>1e-2:  # (checking so that the hardcoded epsilon would be relatively small)
                 E = E + 1e-5 # add epsilon in case there is a short quiet period
+                # NOTE: any non-negligible adjustments need to be applied to pred too
 
             # Estimate of the global background for this file/page
             sigma2 = np.percentile(E, 10)

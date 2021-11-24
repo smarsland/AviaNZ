@@ -491,8 +491,18 @@ class AviaNZ_batchProcess():
         # (page size is shorter for low freq things, i.e. bittern,
         # since those freqs are very noisy and variable)
         if self.sampleRate<=4000:
+            # Basically bittern
             samplesInPage = 300*self.sampleRate
+        elif self.method=="Wavelets":
+            # If using changepoints and v short windows,
+            # aim to have roughly 5000 windows:
+            # (4500 = 4 windows in 15 min DoC standard files)
+            winsize = [subf["WaveletParams"].get("win", 1) for f in filters for subf in f["Filters"]]
+            winsize = min(winsize)
+            if winsize<0.05:
+                samplesInPage = int(4500 * 0.05 * self.sampleRate)
         else:
+            # A sensible default
             samplesInPage = 900*16000
 
         # (ceil division for large integers)
