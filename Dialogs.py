@@ -1986,7 +1986,7 @@ class HumanClassify1(QDialog):
             for i in range(len(self.guidelines)):
                 self.guidelines[i].setPos(-100)
 
-        self.specControls.emitCol()
+        self.specControls.emitAll()
 
         # DEAL WITH SPECIES NAMES
         # extract a string of current species names
