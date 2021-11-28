@@ -15,6 +15,7 @@ import os
 #import csv
 import imed
 import speechmetrics as sm
+from fdasrsf.geodesic import geod_sphere
 
 
 
@@ -58,6 +59,23 @@ def IMED_distance(A,B):
 
     return imed.distance(A2,B2)
 
+def Geodesic_curve_distance(x1, y1, x2, y2):
+    """
+    COde suggested by Arianna Salili-James
+    This function computes the distance between two curves x and y using geodesic distance
+
+    Input:
+         - x1, y1 coordinates of the first curve
+         - x2, y2 coordinates of the second curve
+    """
+
+    beta1 = np.column_stack([x1, y1]).T
+    beta2 = np.column_stack([x2, y2]).T
+
+    distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2))
+
+    return distance
+
 def set_if_fun(signal_id,T):
     """
     Utility function to manage the instantaneous frequency function
@@ -96,9 +114,9 @@ def set_if_fun(signal_id,T):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_9"  # change test name
-file_id="exponential_upchirp"
-dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset"
+test_name = "Test_10"  # change test name
+file_id="pure_tone"
+dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset_2"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
 
@@ -126,16 +144,21 @@ if not os.path.exists(test_fold):
 # NORM_DIFF_1= np.zeros((9,1))
 # NORM_DIFF_2= np.zeros((9,1))
 
-SDR_original=np.zeros((9, 1))
-ISR_original=np.zeros((9, 1))
-SAR_original=np.zeros((9, 1))
-STOI_original=np.zeros((9,1))
-SISDR_original = np.zeros((9, 1))
-SDR_noise=np.zeros((9, 1))
-ISR_noise=np.zeros((9, 1))
-SAR_noise=np.zeros((9, 1))
-STOI_noise=np.zeros((9,1))
-SISDR_noise= np.zeros((9, 1))
+# initialization when testin speech metrics
+# SDR_original=np.zeros((9, 1))
+# ISR_original=np.zeros((9, 1))
+# SAR_original=np.zeros((9, 1))
+# STOI_original=np.zeros((9,1))
+# SISDR_original = np.zeros((9, 1))
+# SDR_noise=np.zeros((9, 1))
+# ISR_noise=np.zeros((9, 1))
+# SAR_noise=np.zeros((9, 1))
+# STOI_noise=np.zeros((9,1))
+# SISDR_noise= np.zeros((9, 1))
+
+#initialization for curve distance
+curve_dist =np.zeros((15,1))
+
 
 # file_id = []
 
@@ -173,21 +196,22 @@ for file in os.listdir(dataset_dir):
 
         wopt = [fs, window_width]  # this neeeds review
         tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
-        inst_freq = inst_freq_fun(np.linspace(0, T, np.shape(tfsupp[0, :])[0]))
+        t_support=np.linspace(0, T, np.shape(tfsupp[0, :])[0]) #array with temporal coordinates
+        inst_freq = inst_freq_fun(t_support)
         # plt.plot(inst_freq)
         # plt.show()
 
-        # invert TFR
-        s1_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
-
-        # spectrogram of inverted signal
-        sp.data = s1_inverted
-        TFR_inv = sp.spectrogram(window_width, incr, window)
-        # plt.imshow(TFR_inv)
-        # plt.show()
-        TFR2_inv = TFR_inv.T
-        # plt.imshow(TFR2_inv)
-        # plt.show()
+        # # invert TFR
+        # s1_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
+        #
+        # # spectrogram of inverted signal
+        # sp.data = s1_inverted
+        # TFR_inv = sp.spectrogram(window_width, incr, window)
+        # # plt.imshow(TFR_inv)
+        # # plt.show()
+        # TFR2_inv = TFR_inv.T
+        # # plt.imshow(TFR2_inv)
+        # # plt.show()
 
         #evaluate metrics
 
@@ -195,7 +219,7 @@ for file in os.listdir(dataset_dir):
         # #snr
         if file.endswith("0.wav"):
            signal_original=sig1
-           TFR_original=TFR2
+           #TFR_original=TFR2
            noise=[]
         else:
             noise=sig1-signal_original
@@ -317,23 +341,26 @@ for file in os.listdir(dataset_dir):
         # IMED_noise[k, 0] = IMED_distance(TFR2[:,int(np.floor(col_dif/2)):-int(np.ceil(col_dif/2))], TFR2_inv)
 
 
-        # speech metrics comparison
-        len_diff = len(signal_original) - len(s1_inverted)
-        # [int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))]
-        score_original = metrics(s1_inverted, signal_original,rate=fs)
-        SDR_original[k, 0]=score_original['sdr']
-        ISR_original[k, 0]=score_original['isr']
-        SAR_original[k, 0]=score_original['sar']
-        STOI_original[k,0]=score_original['stoi']
-        SISDR_original[k, 0]=score_original['sisdr']
+        # # speech metrics comparison
+        # len_diff = len(signal_original) - len(s1_inverted)
+        # # [int(np.floor(len_diff/2)):-int(np.ceil(len_diff/2))]
+        # score_original = metrics(s1_inverted, signal_original,rate=fs)
+        # SDR_original[k, 0]=score_original['sdr']
+        # ISR_original[k, 0]=score_original['isr']
+        # SAR_original[k, 0]=score_original['sar']
+        # STOI_original[k,0]=score_original['stoi']
+        # SISDR_original[k, 0]=score_original['sisdr']
+        #
+        # score_noise = metrics(s1_inverted, sig1, rate=fs)
+        # SDR_noise[k, 0] = score_noise['sdr']
+        # ISR_noise[k, 0] = score_noise['isr']
+        # SAR_noise[k, 0] = score_noise['sar']
+        # STOI_noise[k, 0] = score_noise['stoi']
+        # SISDR_noise[k, 0] = score_noise['sisdr']
+        # del tfsupp
 
-        score_noise = metrics(s1_inverted, sig1, rate=fs)
-        SDR_noise[k, 0] = score_noise['sdr']
-        ISR_noise[k, 0] = score_noise['isr']
-        SAR_noise[k, 0] = score_noise['sar']
-        STOI_noise[k, 0] = score_noise['stoi']
-        SISDR_noise[k, 0] = score_noise['sisdr']
-        del tfsupp
+        #CURVE DISTANCE
+        curve_dist[k,0] = Geodesic_curve_distance(t_support,tfsupp[0,:], t_support, inst_freq)
         k+=1
 
 
@@ -429,58 +456,64 @@ for file in os.listdir(dataset_dir):
 # fig.suptitle(file_id+" sisdr", fontsize=30)
 # plt.savefig(fig_name)
 
-#save metric plots
-fig_name=test_fold +"\\"+file_id+"_metrics_plot.jpg"
-#plt.rcParams["figure.autolayout"] = True
-fig, ax = plt.subplots(5, 2, figsize=(20,40))
+# #save metric plots
+# fig_name=test_fold +"\\"+file_id+"_metrics_plot.jpg"
+# #plt.rcParams["figure.autolayout"] = True
+# fig, ax = plt.subplots(5, 2, figsize=(20,40))
+#
+# ax[0, 0].plot(SDR_original, 'o')
+# ax[0, 0].set_title('SDR original',fontsize='large')
+# ax[0,0].set_xticks(np.arange(0, 9))
+# ax[0,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[0, 1].plot(SDR_noise, 'o')
+# ax[0, 1].set_title('SDR noise')
+# ax[0,1].set_xticks(np.arange(0, 9))
+# ax[0,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[1, 0].plot(ISR_original, 'o')
+# ax[1, 0].set_title('ISR original')
+# ax[1,0].set_xticks(np.arange(0, 9))
+# ax[1,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[1, 1].plot(ISR_noise, 'o')
+# ax[1, 1].set_title('ISR noise')
+# ax[1,1].set_xticks(np.arange(0, 9))
+# ax[1,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[2, 0].plot(SISDR_original, 'o')
+# ax[2, 0].set_title('SISDR original signal')
+# ax[2,0].set_xticks(np.arange(0, 9))
+# ax[2,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
+# ax[2, 1].plot(SISDR_noise, 'o')
+# ax[2, 1].set_title('SISDR signal + noise')
+# ax[2, 1].set_xticks(np.arange(0, 9))
+# ax[2, 1].set_xticklabels(['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'], rotation=45)
+# ax[3, 0].plot(SAR_original, 'o')
+# ax[3, 0].set_title('SAR original signal')
+# ax[3, 0].set_xticks(np.arange(0, 9))
+# ax[3, 0].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[3, 1].plot(SAR_noise, 'o')
+# ax[3, 1].set_title('SAR signal + noise')
+# ax[3, 1].set_xticks(np.arange(0, 9))
+# ax[3, 1].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[4, 0].plot(STOI_original, 'o')
+# ax[4, 0].set_title('STOI original signal')
+# ax[4, 0].set_xticks(np.arange(0, 9))
+# ax[4, 0].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# ax[4, 1].plot(STOI_noise,'o')
+# ax[4, 1].set_title('STOI signal + noise')
+# ax[4, 1].set_xticks(np.arange(0, 9))
+# ax[4, 1].set_xticklabels(
+#     ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
+#     rotation=45)
+# fig.suptitle(file_id+" metrics", fontsize=30)
+# plt.savefig(fig_name)
 
-ax[0, 0].plot(SDR_original, 'o')
-ax[0, 0].set_title('SDR original',fontsize='large')
-ax[0,0].set_xticks(np.arange(0, 9))
-ax[0,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[0, 1].plot(SDR_noise, 'o')
-ax[0, 1].set_title('SDR noise')
-ax[0,1].set_xticks(np.arange(0, 9))
-ax[0,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[1, 0].plot(ISR_original, 'o')
-ax[1, 0].set_title('ISR original')
-ax[1,0].set_xticks(np.arange(0, 9))
-ax[1,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[1, 1].plot(ISR_noise, 'o')
-ax[1, 1].set_title('ISR noise')
-ax[1,1].set_xticks(np.arange(0, 9))
-ax[1,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[2, 0].plot(SISDR_original, 'o')
-ax[2, 0].set_title('SISDR original signal')
-ax[2,0].set_xticks(np.arange(0, 9))
-ax[2,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],rotation=45)
-ax[2, 1].plot(SISDR_noise, 'o')
-ax[2, 1].set_title('SISDR signal + noise')
-ax[2, 1].set_xticks(np.arange(0, 9))
-ax[2, 1].set_xticklabels(['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'], rotation=45)
-ax[3, 0].plot(SAR_original, 'o')
-ax[3, 0].set_title('SAR original signal')
-ax[3, 0].set_xticks(np.arange(0, 9))
-ax[3, 0].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[3, 1].plot(SAR_noise, 'o')
-ax[3, 1].set_title('SAR signal + noise')
-ax[3, 1].set_xticks(np.arange(0, 9))
-ax[3, 1].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[4, 0].plot(STOI_original, 'o')
-ax[4, 0].set_title('STOI original signal')
-ax[4, 0].set_xticks(np.arange(0, 9))
-ax[4, 0].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-ax[4, 1].plot(STOI_noise,'o')
-ax[4, 1].set_title('STOI signal + noise')
-ax[4, 1].set_xticks(np.arange(0, 9))
-ax[4, 1].set_xticklabels(
-    ['Original', 'Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8'],
-    rotation=45)
-fig.suptitle(file_id+" metrics", fontsize=30)
+#save metric plot for curve distance
+fig_name=test_fold +"\\"+file_id+"_curve_distance_plot.jpg"
+plt.plot(np.arange(15),curve_dist, 'o')
+plt.title('Curve distance for '+ file_id)
 plt.savefig(fig_name)
