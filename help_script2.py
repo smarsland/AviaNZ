@@ -5,49 +5,68 @@
 import SignalProc
 import IF2 as IFreq
 import numpy as np
-from scipy import io
-#sfrom scipy.io import loadmat, savemat #this can be useful to make python talk with MATLAB
+#from scipy import io
 import matplotlib.pyplot as plt
 
 import WaveletFunctions
-import WaveletSegment
+#import WaveletSegment
 
-test_name="test3" #change test name
+test_name="test5" #change test name
 file_name="C:\\Users\\Harvey\\Documents\\GitHub\\AviaNZ\\Toy signals\\exponential_downchirp_0.wav"
 
 # file_name="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\pure_tone\\Test_02\\pure_tone_0_inv.wav"
 
 #parameters (these are the parameters for a Fourier Transform)
-window_width=1024
-incr=32
-window= "Hann"
+window = 0.25
+inc = 0.256
 
 #"calling IF class
 #"method=2 is the second method of the paper
 IF = IFreq.IF(method=2, pars=[0, 1])
 
 #calling signal proc -> see if it change if you want to use it with wavelets
-sp = SignalProc.SignalProc(window_width, incr)
+sp = SignalProc.SignalProc(window, inc)
 #you need to read the wav file with signal proc
 sp.readWav(file_name)
 fs = sp.sampleRate
 
-#wf = WaveletFunctions.WaveletFunctions(sp.data,'dmey2',None,fs)
-ws = WaveletSegment.WaveletSegment()
 
-#wf.maxLevel = 5
-#allnodes = range(2 ** (wf.maxLevel + 1) - 1)
-#wf.WaveletPacket(allnodes, 'symmetric')
+wf = WaveletFunctions.WaveletFunctions(sp.data,'dmey2',None,fs)
+#ws = WaveletSegment.WaveletSegment()
+
+# number of samples in window
+win_sr = int(np.ceil(window * fs))
+# number of sample in increment
+inc_sr = int(np.ceil(inc * fs))
+wf.maxLevel = 5
+# output columns dimension equal to number of sliding window
+N = int(np.ceil(len(sp.data) / inc_sr))
+coefs = np.zeros((2 ** (wf.maxLevel + 1) - 2, N))
+allnodes = range(2 ** (wf.maxLevel + 1) - 1)
+wf.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
+
 
 #evaluate scalogram
+for node in allnodes:
+    nodeE = wf.extractE(node, window, wpantialias=True)
+    # the wavelet energies may in theory have one more or less windows than annots
+    # b/c they adjust the window size to use integer number of WCs.
+    # If they differ by <=1, we allow that and just equalize them:
+    if N == len(nodeE) + 1:
+        coefs[node - 1, :-1] = nodeE
+        coefs[node - 1, -1] = currWCs[node - 1, -2]  # repeat last element
+    elif N == len(nodeE) - 1:
+        # drop last WC
+        coefs[node - 1, :] = nodeE[:-1]
+    elif np.abs(N - len(nodeE)) > 1:
+        print("ERROR: lengths of annotations and energies differ:", N, len(nodeE))
+    else:
+        coefs[node - 1, :] = nodeE
 
-TFR = ws.computeWaveletEnergy(sp.data, fs, window=0.25, inc=0.25)
-TFR = np.log(TFR[30:62,:])
+TFR = coefs
+#TFR = ws.computeWaveletEnergy(sp.data, fs, window=0.25, inc=0.25)
+#TFR = np.log(TFR[30:62,:])
 
-#io.savemat('export2.mat', {"sig": sp.data})
-#io.savemat('export.mat', {"sig": TFR})
-
-#you need to call sp.scalogram
 print("Scalogram Dim =", np.shape(TFR))
 #TFR = TFR.T
 
@@ -57,7 +76,7 @@ fstep = (fs / 2) / np.shape(TFR)[0]
 freqarr =np.arange(fstep, fs / 2 + fstep, fstep)
 
 #setting parametes for ecurve
-wopt = [fs, window_width]
+wopt = [fs, window]
 #calling ecurve
 tfsupp,_,_=IF.ecurve(TFR,freqarr,wopt)
 
