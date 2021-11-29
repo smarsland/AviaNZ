@@ -28,6 +28,7 @@ For each Test:
     * For each subdirectory in the dataset directory (aka signal-type):
         - create subdirectory in the test result directory
         - Find optimal parameters using optimization metric: window_lenght, incr, window_type
+        - Store optimal paramters info
         - Evaluate & store as .csv Baseline metrics for "pure" signal
         - Initialize general metrics (for signal type): 1 column for each noise level
         - Navigate subdirectory with noise-level samples
@@ -39,6 +40,24 @@ For each Test:
 
         - Save general metrics as .csv
         - Update Test id
+
+Metrics we are going to measure:
+    * Baseline metrics:
+        - Signal-to-noise ratio
+        - Renyi Entropy of the spectrogram
+
+    * Metrics on IF extraction (between correct IF and extracted IF)
+        - l2 norm
+        - Iatsenko error
+        - Geodetic distance
+
+    * Metric on spectrogram inversion
+        - SISDR (between signal obtained via spectrogram inversion and original signal without noise) &
+                (between signal obtained via spectrogram inversion and original signal)
+        - STOI  (between signal obtained via spectrogram inversion and original signal without noise) &
+                (between signal obtained via spectrogram inversion and original signal)
+        - IMED (Between spectrogram of inverted signal and original spectrogram without noise)
+                (Between spectrogram of inverted signal and original spectrogram without noise)
 
 """
 
@@ -55,6 +74,7 @@ import wavio
 import csv
 import imed
 import speechmetrics as sm
+from fdasrsf.geodesic import geod_sphere
 
 ########################## Utility functions ###########################################################################
 def Signal_to_noise_Ratio(signal, noise):
@@ -95,6 +115,23 @@ def IMED_distance(A,B):
 
     return imed.distance(A2,B2)
 
+def Geodesic_curve_distance(x1, y1, x2, y2):
+    """
+    Code suggested by Arianna Salili-James
+    This function computes the distance between two curves x and y using geodesic distance
+
+    Input:
+         - x1, y1 coordinates of the first curve
+         - x2, y2 coordinates of the second curve
+    """
+
+    beta1 = np.column_stack([x1, y1]).T
+    beta2 = np.column_stack([x2, y2]).T
+
+    distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2))
+
+    return distance
+
 def set_if_fun(signal_id,T):
     """
     Utility function to manage the instantaneous frequency function
@@ -131,13 +168,15 @@ def set_if_fun(signal_id,T):
         print("ERROR SIGNAL ID NOT CONSISTENT WITH THE IF WE CAN HANDLE")
     return if_fun
 
-def find_optimal_spec_IF_parameters(signal_path, spectrogram_type, freq_scale, norm_type, opt_metric):
+def find_optimal_spec_IF_parameters(signal_path, save_dir, signal_id, spectrogram_type, freq_scale, norm_type, opt_metric):
     """
     This function find optimal parameters for the spectrogram and the frequency extraction algorithm in order
     to minimize the distance opt_metric between the extracted IF and the "original" ones
 
     Input:
         signal id
+        save_dir directory where to save log and parameters
+        inst_freq_fun: lambda function with instantaneous freqeuncy law
         Spectrogram_type
         freq_scale
         norm_type
@@ -160,58 +199,72 @@ def find_optimal_spec_IF_parameters(signal_path, spectrogram_type, freq_scale, n
     alpha_list = np.array([0, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15, 20])
     beta_list = np.array([0, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15, 20])
 
-    file_name = id_file + "_0.wav"
-    data_file = test_dir + "\\" + test_fold + "\\" + test_id + "\\" + file_name
-
     opt = np.Inf
-    opt_param = {"win_len": [], "hop": []}
+    opt_param = {"window_lenght": [], "hop": [], "window_type": [], "alpha": [], "beta": []}
 
     # store values into .csv file
     # fieldnames=['window_width','incr','n. columns', 'measure']
-    fieldnames = ['window_width', 'incr', 'spec dim', 'measure']
-    csv_filename = test_dir + '\\' + test_fold + "\\" + test_id + '\\find_optimal_parameters.csv'
+    fieldnames = ['window_width', 'incr', 'window type', 'alpha', 'beta','spec dim', 'measure']
+    csv_filename = save_dir+ '/find_optimal_parameters_log.csv'
     with open(csv_filename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-    for i in range(len(win)):
-        for j in range(len(hop_perc)):
-            window_width = int(win[i])
-            incr = int(win[i] * hop_perc[j])
-            print(window_width, incr)
-            IF = IFreq.IF(method=2, pars=[1, 1])
-            sp = SignalProc.SignalProc(window_width, incr)
-            sp.readWav(data_file)
-            fs = sp.sampleRate
-            TFR = sp.spectrogram(window_width, incr, window, sgType=sgType, sgScale=sgScale)
-            TFR = TFR.T
-            print("spec dim", np.shape(TFR))
-            # savemat'C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\test_signal.mat',{'TFR':TFR})
-            fstep = (fs / 2) / np.shape(TFR)[0]
-            freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
+    for win_len in win:
+        for hop in hop_perc:
+            for window_type in win_type:
+                for alpha in alpha_list:
+                    for beta in beta_list:
 
-            wopt = [fs, window_width]  # this neeeds review
-            tfsupp, _, _ = IF.ecurve(TFR, freqarr, wopt)
+                        window_width = int(win_len)
+                        incr = int(win_len * hop)
+                        print(window_width, incr)
+                        IF = IFreq.IF(method=2, pars=[alpha, beta])
+                        sp = SignalProc.SignalProc(window_width, incr)
+                        sp.readWav(signal_path)
+                        fs = sp.sampleRate
 
-            # inst_freq = omega * np.ones((np.shape(tfsupp[0,:])))
-            inst_freq = inst_freq_fun(np.linspace(0, T, np.shape(tfsupp[0, :])[0]))
-            # print("tfsupp", np.shape(tfsupp[0,:]))
-            # print("inst_feq", np.shape(inst_freq))
-            # measure2check=norm(tfsupp[0,:]-inst_freq, ord=2)/np.shape(tfsupp[0,:])[0]
-            measure2check = norm(tfsupp[0, :] - inst_freq, ord=2) / (np.shape(TFR)[0] * np.shape(TFR)[1])
+                        TFR = sp.spectrogram(window_width, incr, window_type, sgType=spectrogram_type, sgScale=freq_scale)
+                        TFR = TFR.T
+                        print("spec dim", np.shape(TFR))
 
-            with open(csv_filename, 'a', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writerow(
-                    {'window_width': window_width, 'incr': incr, 'spec dim': np.shape(TFR)[0] * np.shape(TFR)[1],
-                     'measure': measure2check})
+                        if freq_scale=="Linear":
+                            fstep = (fs / 2) / np.shape(TFR)[0]
+                            freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
+                        else:
+                            # #mel freq axis
+                            nfilters=40
+                            freqarr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs/2), nfilters + 1)
+                            freqarr=freqarr[1:]
+                        # fstep=np.mean(np.diff(freqarr))
 
-            if measure2check < opt:
-                print("optimal parameters updated:", opt_param)
-                print(norm(tfsupp[0, :] - inst_freq, ord=2))
-                opt = measure2check
-                opt_param["win_len"] = window_width
-                opt_param["hop"] = incr
+                        wopt = [fs, window_width]  # this neeeds review
+                        tfsupp, _, _ = IF.ecurve(TFR, freqarr, wopt)
+
+                        T=sp.fileLength/fs
+                        inst_freq_fun = set_if_fun(signal_id, T)
+                        inst_freq = inst_freq_fun(np.linspace(0, T, np.shape(tfsupp[0, :])[0]))
+
+                        if opt_metric=="L2":
+                            measure2check = norm(tfsupp[0, :] - inst_freq, ord=2) / (np.shape(TFR)[0] * np.shape(TFR)[1])
+                        elif opt_metric=="Iatsenko":
+                            measure2check = Iatsenko_style(inst_freq, tfsupp[0,:])
+                        else:
+                            t_support = np.linspace(0, T, np.shape(tfsupp[0, :])[0])
+                            measure2check= Geodesic_curve_distance(t_support,tfsupp[0,:], t_support, inst_freq)
+
+                        with open(csv_filename, 'a', newline='') as csvfile:
+                            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                            writer.writerow(
+                                {'window_width': window_width, 'incr': incr, 'spec dim': np.shape(TFR)[0] * np.shape(TFR)[1],
+                                 'measure': measure2check})
+
+                        if measure2check < opt:
+                            print("optimal parameters updated:", opt_param)
+                            print(norm(tfsupp[0, :] - inst_freq, ord=2))
+                            opt = measure2check
+                            opt_param["win_len"] = window_width
+                            opt_param["hop"] = incr
 
             del TFR, fstep, freqarr, wopt, tfsupp, window_width, incr, sp, IF, measure2check
 
@@ -220,6 +273,11 @@ def find_optimal_spec_IF_parameters(signal_path, spectrogram_type, freq_scale, n
     incr = opt_param["hop"]
     return window_length_opt, incr_opt, window_type_opt, alpha_opt, beta_opt
 
+
+def save_test_info(file_path, spec_type, scale, norm_type, opt_metric):
+    """
+    This function stores TFR info into a .txt file
+    """
 
 ########################################################################################################################
 ########################################################   MAIN ########################################################
@@ -268,7 +326,12 @@ for spec_type in spectrogram_types:
                 if not os.path.lexists(test_result_dir):
                     os.mkdir(test_result_dir)
 
+                #store Test info
+                test_info_file_path=test_result_dir+'TFR_info.txt'
+                save_test_info(test_info_file_path, spec_type, scale, norm_type, opt_metric)
+
                 for signal_id in os.listdir(dataset_dir):
+                    #ADD CHECK TO SKIP IF OPT_METRIC==IATSENKO
                     # looping over signal_directories
                     folder_path=dataset_dir+'/'+signal_id
                     print("Analysing folder: ", folder_path)
@@ -277,7 +340,9 @@ for spec_type in spectrogram_types:
                     if not os.path.exists(test_result_subfolder):
                         os.mkdir(test_result_subfolder)
 
+                    #inst.frequency law
+                    pure_signal_path=folder_path+'/Base_Dataset_2/'+signal_id+'00.wav'
                     #create path for storing test parameters
                     save_test_parameters_path=test_result_subfolder+"/Test_parameters.txt"
-                    window_length, incr, window_type, alpha, beta = find_optimal_spec_IF_parameters(signal_id, spec_type, scale,
+                    window_length, incr, window_type, alpha, beta = find_optimal_spec_IF_parameters(pure_signal_path, signal_id,spec_type, scale,
                                                                                        norm_type, opt_metric)

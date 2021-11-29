@@ -114,8 +114,8 @@ def set_if_fun(signal_id,T):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_10"  # change test name
-file_id="pure_tone"
+test_name = "Test_12"  # change test name
+file_id="exponential_upchirp"
 dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset_2"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
@@ -158,6 +158,8 @@ if not os.path.exists(test_fold):
 
 #initialization for curve distance
 curve_dist =np.zeros((15,1))
+#initalization list of If curves
+inst_freq_curves=[]
 
 
 # file_id = []
@@ -196,6 +198,7 @@ for file in os.listdir(dataset_dir):
 
         wopt = [fs, window_width]  # this neeeds review
         tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
+        inst_freq_curves.append(tfsupp[0,:])
         t_support=np.linspace(0, T, np.shape(tfsupp[0, :])[0]) #array with temporal coordinates
         inst_freq = inst_freq_fun(t_support)
         # plt.plot(inst_freq)
@@ -516,4 +519,62 @@ for file in os.listdir(dataset_dir):
 fig_name=test_fold +"\\"+file_id+"_curve_distance_plot.jpg"
 plt.plot(np.arange(15),curve_dist, 'o')
 plt.title('Curve distance for '+ file_id)
+plt.savefig(fig_name)
+
+
+#plot extracted IF_curves
+inst_freq_curves=np.array(inst_freq_curves)
+true_if=inst_freq_fun(t_support)
+
+fig_name=test_fold +"\\"+file_id+"_if_curves.jpg"
+plt.rcParams["figure.autolayout"] = True
+fig, ax = plt.subplots(3, 5, figsize=(10, 20), sharex=True, sharey=True)
+ax[0][0].plot(true_if, 'g')
+ax[0][0].plot(inst_freq_curves[0,:],'r')
+ax[0][0].set_title('Level 0')
+ax[0][1].plot(true_if, 'g')
+ax[0][1].plot(inst_freq_curves[1,:],'r')
+ax[0][1].set_title('Level 1')
+ax[0][2].plot(true_if, 'g')
+ax[0][2].plot(inst_freq_curves[2,:],'r')
+ax[0][2].set_title('Level 2')
+ax[0][3].plot(true_if, 'g')
+ax[0][3].plot(inst_freq_curves[3,:],'r')
+ax[0][3].set_title('Level 3')
+ax[0][4].plot(true_if, 'g')
+ax[0][4].plot(inst_freq_curves[4,:],'r')
+ax[0][4].set_title('Level 4')
+ax[1][0].plot(true_if, 'g')
+ax[1][0].plot(inst_freq_curves[5,:],'r')
+ax[1][0].set_title('Level 5')
+ax[1][1].plot(true_if, 'g')
+ax[1][1].plot(inst_freq_curves[6,:],'r')
+ax[1][1].set_title('Level 6')
+ax[1][2].plot(true_if, 'g')
+ax[1][2].plot(inst_freq_curves[7,:],'r')
+ax[1][2].set_title('Level 7')
+ax[1][3].plot(true_if, 'g')
+ax[1][3].plot(inst_freq_curves[8,:],'r')
+ax[1][3].set_title('Level 8')
+ax[1][4].plot(true_if, 'g')
+ax[1][4].plot(inst_freq_curves[9,:],'r')
+ax[1][4].set_title('Level 9')
+ax[2][0].plot(true_if, 'g')
+ax[2][0].plot(inst_freq_curves[10,:],'r')
+ax[2][0].set_title('Level 10')
+ax[2][1].plot(true_if, 'g')
+ax[2][1].plot(inst_freq_curves[11,:],'r')
+ax[2][1].set_title('Level 11')
+ax[2][2].plot(true_if, 'g')
+ax[2][2].plot(inst_freq_curves[12,:],'r')
+ax[2][2].set_title('Level 12')
+ax[2][3].plot(true_if, 'g')
+ax[2][3].plot(inst_freq_curves[13,:],'r')
+ax[2][3].set_title('Level 13')
+ax[2][4].plot(true_if, 'g')
+ax[2][4].plot(inst_freq_curves[14,:],'r')
+ax[2][4].set_title('Level 14')
+fig.suptitle(file_id+" Instantaneous Frequency curves", fontsize=30)
+
+
 plt.savefig(fig_name)
