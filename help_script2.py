@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import WaveletFunctions
 #import WaveletSegment
 
-test_name="test5" #change test name
+test_name="test6" #change test name
 file_name="C:\\Users\\Harvey\\Documents\\GitHub\\AviaNZ\\Toy signals\\exponential_downchirp_0.wav"
 
 # file_name="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\pure_tone\\Test_02\\pure_tone_0_inv.wav"
@@ -48,54 +48,51 @@ wf.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=Tru
 
 #evaluate scalogram
 for node in allnodes:
-    nodeE = wf.extractE(node, window, wpantialias=True)
+    nodeE, noderealwindow = wf.extractE(node, window, wpantialias=True)
     # the wavelet energies may in theory have one more or less windows than annots
     # b/c they adjust the window size to use integer number of WCs.
     # If they differ by <=1, we allow that and just equalize them:
     if N == len(nodeE) + 1:
         coefs[node - 1, :-1] = nodeE
-        coefs[node - 1, -1] = currWCs[node - 1, -2]  # repeat last element
+        coefs[node - 1, -1] = coefs[node - 1, -2]  # repeat last element
     elif N == len(nodeE) - 1:
         # drop last WC
         coefs[node - 1, :] = nodeE[:-1]
     elif np.abs(N - len(nodeE)) > 1:
         print("ERROR: lengths of annotations and energies differ:", N, len(nodeE))
+        print(nodeE)
     else:
         coefs[node - 1, :] = nodeE
 
-TFR = coefs
-#TFR = ws.computeWaveletEnergy(sp.data, fs, window=0.25, inc=0.25)
-#TFR = np.log(TFR[30:62,:])
-
-print("Scalogram Dim =", np.shape(TFR))
-#TFR = TFR.T
+print("Scalogram Dim =", np.shape(coefs))
 
 #Standard freq ax
-#it is important to set freqarr
-fstep = (fs / 2) / np.shape(TFR)[0]
+fstep = (fs / 2) / np.shape(coefs)[0]
 freqarr =np.arange(fstep, fs / 2 + fstep, fstep)
 
 #setting parametes for ecurve
 wopt = [fs, window]
 #calling ecurve
-tfsupp,_,_=IF.ecurve(TFR,freqarr,wopt)
+tfsupp,_,_=IF.ecurve(coefs,freqarr,wopt)
 
-# plt.imshow(TFR)
-# plt.show()
+#finding the next component
+TFR = []
+TFR.append(coefs.copy())
+for n in range(int(np.floor(np.amin(tfsupp[0,:])/fstep)),int(np.ceil(np.amax(tfsupp[0,:])/fstep))):
+     TFR[0][n,:] = 0
+TFR.append(TFR[0].copy())
+tfsupp2,_,_=IF.ecurve(TFR[1],freqarr,wopt)
+
 # change fig_name with the path you want
 #save picture
 fig_name="C:\\Users\\Harvey\\Desktop\\Uni\\avianz\\test plots"+"\\"+test_name+".jpg"
 plt.rcParams["figure.autolayout"] = True
 fig, ax = plt.subplots(1, 3, sharex=True)
-ax[0].imshow(np.flipud(TFR), extent=[0, np.shape(TFR)[1], 0, np.shape(TFR)[0]], aspect='auto')
-# ax[0].imshow(TFR, aspect='auto')
-x = np.array(range(np.shape(TFR)[1]))
-#ax[0].plot(x, (ifreq / fstep).T, linewidth=1, color='red')
+ax[0].imshow(np.flipud(coefs), extent=[0, np.shape(coefs)[1], 0, np.shape(coefs)[0]], aspect='auto')
+x = np.array(range(np.shape(coefs)[1]))
 ax[0].plot(x, tfsupp[0, :] / fstep, linewidth=1, color='r')
-ax[1].imshow(np.flipud(TFR), extent=[0, np.shape(TFR)[1], 0, np.shape(TFR)[0]], aspect='auto')
-#ax[2].plot(ifreq, color='red')
-#ax[2].plot(x,tfsupp[0, :], color='green')
-ax[2].plot(x,tfsupp[0, :], color='green')
+ax[0].plot(x, tfsupp2[0, :] / fstep, linewidth=1, color='g')
+ax[1].imshow(np.flipud(TFR[1]), extent=[0, np.shape(TFR[1])[1], 0, np.shape(TFR[1])[0]], aspect='auto')
+ax[2].plot(x,tfsupp2[0, :], color='green')
 ax[2].set_ylim([0,fs/2])
 plt.savefig(fig_name)
-#plt.show()
