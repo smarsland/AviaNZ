@@ -7,59 +7,56 @@ import IF2 as IFreq
 import numpy as np
 #from scipy import io
 import matplotlib.pyplot as plt
-
 import WaveletFunctions
-#import WaveletSegment
 
-test_name="test6" #change test name
-file_name="C:\\Users\\Harvey\\Documents\\GitHub\\AviaNZ\\Toy signals\\exponential_downchirp_0.wav"
+#if multiple files, can just loop over using f-strings
+#for n in range(0,9):
+test_name=f"exponential_downchip_14_multiple" #change test name
+file_name=f"C:\\Users\\Harvey\\Documents\\GitHub\\AviaNZ\\Toy signals\\exponential_downchirp\\exponential_downchirp_14.wav"
 
-# file_name="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\pure_tone\\Test_02\\pure_tone_0_inv.wav"
-
-#parameters (these are the parameters for a Fourier Transform)
+#parameters
 window = 0.25
 inc = 0.256
 
-#"calling IF class
-#"method=2 is the second method of the paper
+#calling IF class
 IF = IFreq.IF(method=2, pars=[0, 1])
 
-#calling signal proc -> see if it change if you want to use it with wavelets
+#calling signal proc
 sp = SignalProc.SignalProc(window, inc)
-#you need to read the wav file with signal proc
 sp.readWav(file_name)
 fs = sp.sampleRate
 
-
+#calling wavelet functions
 wf = WaveletFunctions.WaveletFunctions(sp.data,'dmey2',None,fs)
-#ws = WaveletSegment.WaveletSegment()
 
 # number of samples in window
 win_sr = int(np.ceil(window * fs))
 # number of sample in increment
 inc_sr = int(np.ceil(inc * fs))
+#level of tree
 wf.maxLevel = 5
 # output columns dimension equal to number of sliding window
 N = int(np.ceil(len(sp.data) / inc_sr))
 coefs = np.zeros((2 ** (wf.maxLevel + 1) - 2, N))
 allnodes = range(2 ** (wf.maxLevel + 1) - 1)
-wf.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
 
+#wavelet packet decomposition
+wf.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
 
 #evaluate scalogram
 for node in allnodes:
     nodeE, noderealwindow = wf.extractE(node, window, wpantialias=True)
-    # the wavelet energies may in theory have one more or less windows than annots
-    # b/c they adjust the window size to use integer number of WCs.
-    # If they differ by <=1, we allow that and just equalize them:
+    # fixing in case window differs slightly. copied from wavelet segments
     if N == len(nodeE) + 1:
         coefs[node - 1, :-1] = nodeE
-        coefs[node - 1, -1] = coefs[node - 1, -2]  # repeat last element
+        coefs[node - 1, -1] = coefs[node - 1, -2]
+        # repeat last element
     elif N == len(nodeE) - 1:
-        # drop last WC
         coefs[node - 1, :] = nodeE[:-1]
+        # drop last WC
     elif np.abs(N - len(nodeE)) > 1:
         print("ERROR: lengths of annotations and energies differ:", N, len(nodeE))
+        #if too different, just print error
         print(nodeE)
     else:
         coefs[node - 1, :] = nodeE
@@ -75,24 +72,39 @@ wopt = [fs, window]
 #calling ecurve
 tfsupp,_,_=IF.ecurve(coefs,freqarr,wopt)
 
-#finding the next component
+#setting up lists for iteration
 TFR = []
 TFR.append(coefs.copy())
-for n in range(int(np.floor(np.amin(tfsupp[0,:])/fstep)),int(np.ceil(np.amax(tfsupp[0,:])/fstep))):
-     TFR[0][n,:] = 0
-TFR.append(TFR[0].copy())
-tfsupp2,_,_=IF.ecurve(TFR[1],freqarr,wopt)
+tfsupplist = []
+tfsupplist.append(tfsupp.copy())
 
-# change fig_name with the path you want
+#finding the next components
+for cn in range(0,5):
+    if np.mean(TFR[0]) <= 0.01:
+        #this is so that is stops searching for components once the energy reaches a threshold. I think it is wrong right now.
+        break
+    else:
+        del IF
+        IF = IFreq.IF(method=2, pars=[0, 1])
+        #resetting IF else it doesn't like to update. Probably could fix
+        TFR.append(coefs.copy())
+        for n in range(int(np.floor(np.amin(tfsupplist[cn][0,:])/fstep)),int(np.ceil(np.amax(tfsupplist[cn][0,:])/fstep))):
+             TFR[0][n,:] = 0
+        TFR.append(TFR[0].copy())
+        tfsupp,_,_=IF.ecurve(TFR[cn],freqarr,wopt)
+        tfsupplist.append(tfsupp.copy())
+
 #save picture
+# change fig_name with the path you want
 fig_name="C:\\Users\\Harvey\\Desktop\\Uni\\avianz\\test plots"+"\\"+test_name+".jpg"
 plt.rcParams["figure.autolayout"] = True
 fig, ax = plt.subplots(1, 3, sharex=True)
 ax[0].imshow(np.flipud(coefs), extent=[0, np.shape(coefs)[1], 0, np.shape(coefs)[0]], aspect='auto')
 x = np.array(range(np.shape(coefs)[1]))
-ax[0].plot(x, tfsupp[0, :] / fstep, linewidth=1, color='r')
-ax[0].plot(x, tfsupp2[0, :] / fstep, linewidth=1, color='g')
-ax[1].imshow(np.flipud(TFR[1]), extent=[0, np.shape(TFR[1])[1], 0, np.shape(TFR[1])[0]], aspect='auto')
-ax[2].plot(x,tfsupp2[0, :], color='green')
+ax[1].imshow(np.flipud(coefs), extent=[0, np.shape(coefs)[1], 0, np.shape(coefs)[0]], aspect='auto')
+#plotting the ridge curves
+for i in range(len(tfsupplist)):
+    ax[0].plot(x, tfsupplist[i][0, :] / fstep, linewidth=1, color='r')
+    ax[2].plot(x, tfsupplist[i][0, :], color='green')
 ax[2].set_ylim([0,fs/2])
 plt.savefig(fig_name)
