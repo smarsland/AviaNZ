@@ -11,8 +11,8 @@ import WaveletFunctions
 
 #if multiple files, can just loop over using f-strings
 #for n in range(0,9):
-test_name=f"exponential_downchip_14_multiple" #change test name
-file_name=f"C:\\Users\\Harvey\\Documents\\GitHub\\AviaNZ\\Toy signals\\exponential_downchirp\\exponential_downchirp_14.wav"
+test_name=f"exponential_downchip_00_multiple" #change test name
+file_name=f"C:\\Users\\Harvey\\Documents\\GitHub\\AviaNZ\\Toy signals\\exponential_downchirp\\exponential_downchirp_00.wav"
 
 #parameters
 window = 0.25
@@ -78,10 +78,10 @@ TFR.append(coefs.copy())
 tfsupplist = []
 tfsupplist.append(tfsupp.copy())
 
-#finding the next components
+#finding the next components, arbitrary range right now.
 for cn in range(0,5):
-    if np.mean(TFR[0]) <= 0.01:
-        #this is so that is stops searching for components once the energy reaches a threshold. I think it is wrong right now.
+    if np.mean(TFR[cn]) <= 0:
+        #this should be stopping it searching for components once there're none left. It is wrong right now, not sure why.
         break
     else:
         del IF
@@ -89,8 +89,8 @@ for cn in range(0,5):
         #resetting IF else it doesn't like to update. Probably could fix
         TFR.append(coefs.copy())
         for n in range(int(np.floor(np.amin(tfsupplist[cn][0,:])/fstep)),int(np.ceil(np.amax(tfsupplist[cn][0,:])/fstep))):
-             TFR[0][n,:] = 0
-        TFR.append(TFR[0].copy())
+             TFR[cn][n,:] = 0
+        TFR.append(TFR[cn].copy())
         tfsupp,_,_=IF.ecurve(TFR[cn],freqarr,wopt)
         tfsupplist.append(tfsupp.copy())
 
