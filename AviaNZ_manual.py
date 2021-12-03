@@ -679,10 +679,6 @@ class AviaNZ(QMainWindow):
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
-        self.playSlider = QSlider(Qt.Horizontal)
-        # self.playSlider.sliderReleased.connect(self.playSliderMoved)
-        self.playSlider.setVisible(False)
-        self.d_spec.addWidget(self.playSlider)
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.bar.btn = self.MouseDrawingButton
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
@@ -2086,7 +2082,6 @@ class AviaNZ(QMainWindow):
             self.p_plot.setXRange(minX, maxX, padding=0)
         elif self.extra=="Wavelet scalogram":
             self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
-        # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         # self.saveConfig = True
@@ -5243,9 +5238,11 @@ class AviaNZ(QMainWindow):
         else:
             if self.media_obj.state() != QAudio.SuspendedState and not self.media_obj.keepSlider:
                 # restart playback
-                range = self.p_ampl.viewRange()[0]
-                self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
+                start,end = self.p_ampl.viewRange()[0]
+                self.setPlaySliderLimits(start*1000, end*1000)
                 # (else keep play slider range from before)
+            else:
+                print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
             self.bar.setMovable(False)
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -5259,7 +5256,16 @@ class AviaNZ(QMainWindow):
             self.playSlowButton.repaint()
             QApplication.processEvents()
 
-            self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
+            # if bar was moved under pause, update the playback
+            # start position based on the bar:
+            if self.bar.value()>0:
+                start = self.convertSpectoAmpl(self.bar.value())*1000  # in ms
+                print("found bar at %d ms" % start)
+            else:
+                start = self.segmentStart
+            # (will not be used if resuming without touching the bar)
+
+            self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.audiodata)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -5391,7 +5397,6 @@ class AviaNZ(QMainWindow):
         self.media_slow.pressedStop()
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
-        self.playSlider.setValue(-1000)
         self.bar.setValue(-1000)
 
         # Reset all button icons:
@@ -5423,8 +5428,6 @@ class AviaNZ(QMainWindow):
                 print("Stopped at %d ms" % eltime)
                 self.stopPlayback()
         else:
-            self.playSlider.setValue(eltime)
-            # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
 
     def movePlaySlowSlider(self):
@@ -5440,17 +5443,13 @@ class AviaNZ(QMainWindow):
             print("Stopped at %d ms" % eltime)
             self.stopPlayback()
         else:
-            self.playSlider.setValue(eltime)
-            # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
 
     def setPlaySliderLimits(self, start, end):
-        """ Uses start/end in ms, does what it says, and also seeks file position marker.
+        """ Uses start/end in ms, relative to page start
         """
-        offset = (self.startRead + self.startTime) * 1000 # in ms, absolute
-        self.playSlider.setRange(start + offset, end + offset)
-        self.segmentStart = self.playSlider.minimum() - offset # relative to file start
-        self.segmentStop = self.playSlider.maximum() - offset # relative to file start
+        self.segmentStart = start
+        self.segmentStop = end
 
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
@@ -5458,10 +5457,11 @@ class AviaNZ(QMainWindow):
 
     def barMoved(self, evt):
         """ Listener for when the bar showing playback position moves.
+            Resets both QAudioOutputs so that they don't try to resume
         """
-        self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000)
-        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000, self.segmentStart)
-        self.media_slow.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000, self.segmentStart)
+        print("Resetting playback")
+        self.media_obj.reset()
+        self.media_slow.reset()
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
