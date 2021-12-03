@@ -94,6 +94,11 @@ class CompareCalls(QMainWindow):
         self.compareBtn.clicked.connect(self.showComparisonDialog)
         self.compareBtn.setEnabled(False)
         self.compareRecSelector = QComboBox()
+        self.compareRecSelector.currentTextChanged.connect(self.updateShiftSpinbox)
+
+        self.compareShiftSpinbox = QDoubleSpinBox()
+        self.compareShiftSpinbox.setSingleStep(1.0)
+        self.compareShiftSpinbox.setRange(-300, 300)
 
         self.adjustmentsOut = QPlainTextEdit()
         self.adjustmentsOut.setReadOnly(True)
@@ -141,8 +146,10 @@ class CompareCalls(QMainWindow):
         comparisonGroup.setLayout(comparisonGrid)
         comparisonGroup.setStyleSheet("QGroupBox:title{color: #505050; font-weight: 50}")
 
-        comparisonGrid.addWidget(QLabel("Compare recorders:"), 0, 0, 1, 2)
-        comparisonGrid.addWidget(self.compareRecSelector, 0, 2, 1, 2)
+        comparisonGrid.addWidget(QLabel("Compare recorders:"), 0, 0)
+        comparisonGrid.addWidget(self.compareRecSelector, 0, 2)
+        comparisonGrid.addWidget(QLabel("with shift:"), 0, 3)
+        comparisonGrid.addWidget(self.compareShiftSpinbox, 0, 4)
         comparisonGrid.addWidget(self.compareBtn, 1,0,1,4)
 
         # output save btn and settings
@@ -297,6 +304,18 @@ class CompareCalls(QMainWindow):
         print("Detected recorders:", self.allrecs)
         return(0)
 
+    def updateShiftSpinbox(self, text):
+        """ Updates the shift selection spinbox, when the selected
+            recorder pair or estimated shift change.
+        """
+        # find the currently suggested shift for rec2 w.r.t rec1
+        rec1, rec2 = text.split("-")
+        i = self.allrecs.index(rec1)
+        j = self.allrecs.index(rec2)
+        rec2shift = float(self.pairwiseShifts[i, j])
+
+        self.compareShiftSpinbox.setValue(rec2shift)
+
     def calculateOverlap(self, dtl1, dtl2, shift=0):
         """ Calculates total overlap between two lists of pairs of datetime obj:
             [(s1, e1), (s2, e2)] + [(s3, e3), (s4, e4)] -> total overl. in s
@@ -363,8 +382,8 @@ class CompareCalls(QMainWindow):
                         thisRecAnnots.append((absstart, absend))
 
                 print("Found %d annotations" % len(thisRecAnnots))
-                if len(thisRecAnnots)>100:
-                    print("ERROR: using more than 100 annotations per recorder disabled for safety")
+                if len(thisRecAnnots)>150:
+                    print("ERROR: using more than 150 annotations per recorder disabled for safety")
                     return(1)
 
                 speciesAnnots.append(thisRecAnnots)
@@ -437,9 +456,13 @@ class CompareCalls(QMainWindow):
         annots2 = [sl for sl in self.annots if sl.recname==rec2]
 
         # find the currently suggested shift for rec2 w.r.t rec1
-        i = self.allrecs.index(rec1)
-        j = self.allrecs.index(rec2)
-        rec2shift = self.pairwiseShifts[i, j]
+        # This is the estimated shift:
+        # i = self.allrecs.index(rec1)
+        # j = self.allrecs.index(rec2)
+        # rec2shift = self.pairwiseShifts[i, j]
+        # This is the manually adjusted shift:
+        rec2shift = self.compareShiftSpinbox.value()
+
 
         # find the matching annotations from that pair of Segment Lists
         # ideally need the one with biggest overlap to the other
@@ -452,7 +475,7 @@ class CompareCalls(QMainWindow):
             slpaired2 = []
 
             # extract the right sl from annots2 (matching timestamp)
-            # TODO this is very bodgy & might miss some annotation pairs:
+            # The initial check is quick & dirty & might miss some annotation pairs:
             # as we're only looking for segment matches in the first overlapping file from annots2
             # - extreme case: file 00:00-15:00 cam have sl2match file -14:59-00:01
             # and then very few segment-level matches will be found.
@@ -461,26 +484,48 @@ class CompareCalls(QMainWindow):
             for sl2 in annots2:
                 filelen2 = dt.timedelta(seconds=sl2.metadata["Duration"])
                 if sl2.datetime-filelen1 < sl.datetime < sl2.datetime + filelen2:
-                    sl2match = sl2
-                    break
+                    print("--- potential data file overlap detected:", rec1, sl.datetime, rec2, sl2.datetime)
+                    # Check more carefully if the overlap is not very small, and has segments:
+                    overlSize = min(sl.datetime+filelen1, sl2.datetime+filelen2) - max(sl.datetime, sl2.datetime)
+                    if overlSize>0.2*filelen1 and len(sl2)>0:
+                        print("overlap confirmed")
+                        sl2match = sl2
+                        break
 
             if sl2match is None:
                 print("Warning: no match for file %s found" % sl.wavname)
                 continue
 
+            # difference in start times of the two files
+            # (needed b/c subsequent analysis uses relative segment times)
+            rec2startdiff = (sl.datetime - sl2match.datetime).total_seconds()
+
             # identify the matching segment from sl2
             for seg in sl:
-                # find matching pair at segment level
-                seg[0] = seg[0] + rec2shift
-                seg[1] = seg[1] + rec2shift
-                seg2 = self.findMatchIn(sl2match, seg)
+                # find matching pair at segment level,
+                # after adjusting for the proposed recorder shift
+                # and any recorder start timestamp difference:
+                recdelay = rec2startdiff + rec2shift
+                seg2 = self.findMatchIn(sl2match, seg, recdelay)
                 # store the pair in a temp list (including filenames)
                 if len(seg2)>0:
                     seg.recname = rec1
                     seg2.recname = rec2
                     seg.wavname = sl.wavname
-                    seg2.wavname = sl2.wavname
+                    seg2.wavname = sl2match.wavname
+                    print("Storing SEG1", seg)
                     slpaired1.append(seg)
+
+                    # Use this if you want to show THE BEST MATCHING SEGMENT
+                    # in the comparison dialog
+                    # slpaired2.append(seg2)
+                    # or this if you want to show THE SAME TIME PERIODS
+                    # after adjustment
+                    print("SEG2 before adj", seg2)
+                    seg2[0] = seg[0] + recdelay
+                    seg2[1] = seg[1] + recdelay
+
+                    print("Storing SEG2", seg2)
                     slpaired2.append(seg2)
 
             # add this set of segments to the main long list
@@ -493,13 +538,18 @@ class CompareCalls(QMainWindow):
             return
 
         print("Reviewing calls...")
-        self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, rec2shift, self)
+        self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, self)
         self.comparedialog.exec_()
         print("Call comparison complete")
 
-    def findMatchIn(self, seglist, seg):
-        """ Returns one segment from seglist that has the most overlap with seg. """
-        overlaps = [min(seg[1], seg2[1]) - max(seg[0], seg2[0]) for seg2 in seglist]
+    def findMatchIn(self, seglist, seg, tshift):
+        """ Returns one segment from seglist that has the most overlap with seg.
+            tshift will be added to the segment timestamp temporarily:
+            this is used to adjusted for things like file timestamp
+            differences, without affecting the stored segment.
+        """
+        #print("--- trying to match segment", seg, "(delayed by ", tshift, "s) in list", [(s[0], s[1]) for s in seglist])
+        overlaps = [min(seg[1]+tshift, seg2[1]) - max(seg[0]+tshift, seg2[0]) for seg2 in seglist]
         mpos = np.argmax(overlaps)
         if overlaps[mpos]<=0:
             print("No match found for segment", seg)
@@ -537,6 +587,7 @@ class CompareCalls(QMainWindow):
         ccstr = ";\n".join(ccstr)  # ZA-ZB-ZC  | 1  -2  4; ZD-ZE |  5 -10
         self.componentsOut.setPlainText(ccstr)
         self.componentsOut.setReadOnly(True)
+        self.updateShiftSpinbox(self.compareRecSelector.currentText())
 
     # depth-first search for finding a connected subgraph
     # and relative shift for each recorder within this subgraph
@@ -715,7 +766,9 @@ class CompareCallsDialog(QDialog):
     # 1. list of SegmentLists for rec1
     # 2. list of SegmentLists for rec2
     # 3. best shift for rec2
-    def __init__(self, annots1, annots2, rec2shift, parent=None):
+    # Will show the segments in the lists in order.
+    # Times in the segment lists must be as usual: relative to file start.
+    def __init__(self, annots1, annots2, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Compare Call Pairs')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -733,7 +786,7 @@ class CompareCallsDialog(QDialog):
         self.lut = colourMaps.getLookupTable("Grey")
         self.cmapInverted = False
 
-        self.topLabel = QLabel("Comparing recorders %s (top, shifted by %.1f) and %s (bottom)" %(self.rec1, rec2shift, self.rec2))
+        self.topLabel = QLabel("Comparing recorders %s (top) and %s (bottom)" %(self.rec1, self.rec2))
         self.labelPair = QLabel()
 
         # Volume, brightness and contrast sliders. (NOTE hardcoded init)
@@ -817,16 +870,30 @@ class CompareCallsDialog(QDialog):
 
         wav1 = currseg1.wavname
         wav2 = currseg2.wavname
+        print("Showing:", wav1, wav2)
 
         wav1start = currseg1[0]
         wav2start = currseg2[0]
-        wav1len = currseg1[1]
-        wav2len = currseg2[1]
+        wav1len = currseg1[1]-currseg1[0]
+        wav2len = currseg2[1]-currseg2[0]
+        # want to show equal duration for both spectrograms
+        # so choose min, in case one of them is near file end
+        wavlen = min(wav1len, wav2len)
+
+        # TODO temporary hacks to avoid trying to read past wav end
+        # (this happens if the adjustment forces the matching part out of
+        # the file where the matching segment was found)
+        if wav1start+wavlen>900:
+            print("Warning: adjusting shown period since requested segment %d-%d is not in file" %(wav1start, wav1start+wavlen))
+            wav1start = 900-wavlen
+        if wav2start+wavlen>900:
+            wav2start = 900-wavlen
+            print("Warning: adjusting shown period since requested segment %d-%d is not in file" %(wav2start, wav2start+wavlen))
 
         self.sp1 = SignalProc.SignalProc(256, 128)
-        self.sp1.readWav(wav1, off=wav1start, len=wav1len)
+        self.sp1.readWav(wav1, off=wav1start, len=wavlen)
         self.sp2 = SignalProc.SignalProc(256, 128)
-        self.sp2.readWav(wav2, off=wav2start, len=wav2len)
+        self.sp2.readWav(wav2, off=wav2start, len=wavlen)
         _ = self.sp1.spectrogram()
         _ = self.sp2.spectrogram()
         sg1 = self.sp1.normalisedSpec("Log")
@@ -858,7 +925,7 @@ class CompareCallsDialog(QDialog):
         self.sg_axis2.setLabel('kHz')
 
         # info fields
-        self.labelPair.setText("Showing calls at %.1f-%.1f s (adjusted) and %.1f-%.1f s" % (currseg1[0], currseg1[1], currseg2[0], currseg2[1]))
+        self.labelPair.setText("Showing calls at %.1f-%.1f s and %.1f-%.1f s" % (currseg1[0], currseg1[1], currseg2[0], currseg2[1]))
 
         # self.labelCurrPage.setText("Page %s of %s" %(self.currpage, len(self.shifts)))
         # i = self.parent.allrecs.index(self.rec1)
