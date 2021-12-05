@@ -72,7 +72,7 @@ def Geodesic_curve_distance(x1, y1, x2, y2):
     beta1 = np.column_stack([x1, y1]).T
     beta2 = np.column_stack([x2, y2]).T
 
-    distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2))
+    distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2), rotation=False)
 
     return distance
 
@@ -114,8 +114,9 @@ def set_if_fun(signal_id,T):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_12"  # change test name
-file_id="exponential_upchirp"
+test_name = "Test_11"  # change test name
+#file_id="linear_upchirp"
+file_id="pure_tone"
 dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset_2"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
 test_fold = test_dir + "\\" + test_name
