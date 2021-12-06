@@ -215,16 +215,23 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
     hop_perc = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
     win_type = ['Hann', 'Parzen', 'Welch', 'Hamming', 'Blackman', 'BlackmanHarris']
 
-    # If Extraction parameters: CHECK IATSENKO PAPER
+    # If Extraction parameters
     alpha_list = np.array([0, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15, 20])
     beta_list = np.array([0, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15, 20])
 
+    # mel bins options
+    if freq_scale == 'Mel Frequency':
+        mel_bins = np.array([20, 32, 40, 60, 64, 80, 128, 256, 310])
+    else:
+        mel_bins = [None]
+
     opt = np.Inf
-    opt_param = {"window_lenght": [], "hop": [], "window_type": [], "alpha": [], "beta": []}
+    opt_param = {"window_lenght": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
 
     # store values into .csv file
-    # fieldnames=['window_width','incr','n. columns', 'measure']
-    fieldnames = ['window_width', 'incr', 'window type', 'alpha', 'beta', 'spec dim', 'measure']
+
+    fieldnames = ['window_width', 'incr', 'window type', "mel bins", 'alpha', 'beta', 'spec dim', 'measure']
+
     csv_filename = save_dir + '/find_optimal_parameters_log.csv'
     with open(csv_filename, 'w', newline='') as csv_save_file:
         writer = csv.DictWriter(csv_save_file, fieldnames=fieldnames)
@@ -236,103 +243,106 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
             # loop on possible hop
             for window_type in win_type:
                 # loop on possible window_types
-                for alpha in alpha_list:
-                    # loop on alpha
-                    for beta in beta_list:
-                        # loop on beta
-                        window_width = int(win_len)
-                        incr = int(win_len * hop)
-                        print("TESTING window lenght= ", window_width, " and increment =", incr)
+                for num_bin in mel_bins:
+                    # loop over possible numbers of bins. If None this is just one loop
 
-                        file_list = os.listdir(base_dir)
-                        if optim_option == "Original":
-                            n = 1
-                        else:
-                            # only two possible options
-                            n = len(file_list)
+                    for alpha in alpha_list:
+                        # loop on alpha
 
-                        measure2check = 0
-                        for counter in range(n):
-                            IF = IFreq.IF(method=2, pars=[alpha, beta])
-                            sp = SignalProc.SignalProc(window_width, incr)
-                            # read pure signal
+                        for beta in beta_list:
+                            # loop on beta
+                            window_width = int(win_len)
+                            incr = int(win_len * hop)
+                            print("TESTING window lenght= ", window_width, " and increment =", incr)
 
-                            if counter == 0:
-                                pure_signal_path = base_dir + "/" + sign_id + '_00.wav'
-                                sp.readWav(pure_signal_path)
-                                sample_rate = sp.sampleRate
-                                file_len = sp.fileLength / sample_rate
-                                instant_freq_fun = set_if_fun(sign_id, file_len)
-                            elif counter < 10:
-                                signal_path = base_dir + "/" + sign_id + '_0' + str(counter) + '.wav'
-                                sp.readWav(signal_path)
-                                sample_rate = sp.sampleRate
+                            file_list = os.listdir(base_dir)
+                            if optim_option == "Original":
+                                n = 1
                             else:
-                                signal_path = base_dir + "/" + sign_id + '_' + str(counter) + '.wav'
-                                sp.readWav(signal_path)
-                                sample_rate = sp.sampleRate
+                                # only two possible options
+                                n = len(file_list)
 
-                            tfr = sp.spectrogram(window_width, incr, window_type, sgType=spectrogram_type,
-                                                 sgScale=freq_scale)
-                            print("spec dims", np.shape(tfr))
+                            measure2check = 0
+                            for counter in range(n):
+                                IF = IFreq.IF(method=2, pars=[alpha, beta])
+                                sp = SignalProc.SignalProc(window_width, incr)
+                                # read pure signal
 
-                            # spectrogram normalizations
-                            if normal_type != "Standard":
-                                sp.normalisedSpec(tr=normal_type)
-                                tfr = sp.sg
+                                if counter == 0:
+                                    pure_signal_path = base_dir + "/" + sign_id + '_00.wav'
+                                    sp.readWav(pure_signal_path)
+                                    sample_rate = sp.sampleRate
+                                    file_len = sp.fileLength / sample_rate
+                                    instant_freq_fun = set_if_fun(sign_id, file_len)
+                                elif counter < 10:
+                                    signal_path = base_dir + "/" + sign_id + '_0' + str(counter) + '.wav'
+                                    sp.readWav(signal_path)
+                                    sample_rate = sp.sampleRate
+                                else:
+                                    signal_path = base_dir + "/" + sign_id + '_' + str(counter) + '.wav'
+                                    sp.readWav(signal_path)
+                                    sample_rate = sp.sampleRate
 
-                            tfr = tfr.T
-                            [num_row, num_col] = np.shape(tfr)
-                            # appropriate frequency scale
-                            if freq_scale == "Linear":
-                                f_step = (sample_rate / 2) / np.shape(tfr)[0]
-                                freq_arr = np.arange(f_step, sample_rate / 2 + f_step, f_step)
-                            else:
-                                # #mel freq axis
-                                n_filters = 40
-                                freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2), n_filters + 1)
-                                freq_arr = freq_arr[1:]
+                                tfr = sp.spectrogram(window_width, incr, window_type, sgType=spectrogram_type,
+                                                     sgScale=freq_scale, nfilters=num_bin)
+                                print("spec dims", np.shape(tfr))
 
-                            w_opt = [sample_rate, window_width]  # this neeeds review
-                            tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
+                                # spectrogram normalizations
+                                if normal_type != "Standard":
+                                    sp.normalisedSpec(tr=normal_type)
+                                    tfr = sp.sg
 
-                            # revert to Hz if Mel
-                            if freq_scale == 'Mel Frequency':
-                                tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+                                tfr = tfr.T
+                                [num_row, num_col] = np.shape(tfr)
+                                # appropriate frequency scale
+                                if freq_scale == "Linear":
+                                    f_step = (sample_rate / 2) / np.shape(tfr)[0]
+                                    freq_arr = np.arange(f_step, sample_rate / 2 + f_step, f_step)
+                                else:
+                                    # #mel freq axis
+                                    n_filters = 40
+                                    freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2),
+                                                           n_filters + 1)
+                                    freq_arr = freq_arr[1:]
 
-                            # calculate
-                            instant_freq = instant_freq_fun(np.linspace(0, file_len, np.shape(tf_supp[0, :])[0]))
-                            # line checked
+                                w_opt = [sample_rate, window_width]  # this neeeds review
+                                tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
 
-                            if optim_metric == "L2":
-                                measure2check = norm(tf_supp[0, :] - instant_freq, ord=2) / (num_row * num_col)
-                            elif optim_metric == "Iatsenko":
-                                measure2check = Iatsenko_style(instant_freq, tf_supp[0, :])
-                            else:
-                                time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])
-                                measure2check = Geodesic_curve_distance(time_support, tf_supp[0, :], time_support,
-                                                                        instant_freq)
+                                # revert to Hz if Mel
+                                if freq_scale == 'Mel Frequency':
+                                    tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
 
-                            # safety chack cleaning
-                            del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
-                        measure2check /= n  # mean over samples
-                        with open(csv_filename, 'a', newline='') as csv_file:
-                            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-                            writer.writerow(
-                                {'window_width': window_width, 'incr': incr, 'spec dim': num_row * num_col,
-                                 'measure': measure2check})  # checked: it is ok
+                                # calculate
+                                instant_freq = instant_freq_fun(np.linspace(0, file_len, np.shape(tf_supp[0, :])[0]))
+                                # line checked
 
-                        if measure2check < opt:
-                            print("optimal parameters updated:", opt_param)
-                            opt = measure2check
-                            opt_param["win_len"] = window_width
-                            opt_param["hop"] = incr
-                            opt_param["window_type"] = window_type
-                            opt_param["alpha"] = alpha
-                            opt_param["beta"] = beta
+                                if optim_metric == "L2":
+                                    measure2check = norm(tf_supp[0, :] - instant_freq, ord=2) / (num_row * num_col)
+                                elif optim_metric == "Iatsenko":
+                                    measure2check = Iatsenko_style(instant_freq, tf_supp[0, :])
+                                else:
+                                    time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])
+                                    measure2check = Geodesic_curve_distance(time_support, tf_supp[0, :], time_support,
+                                                                            instant_freq)
 
-                        # another safety check cleaning
-                        del window_width, incr, alpha, beta
+                                # safety chack cleaning
+                                del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
+                            measure2check /= n  # mean over samples
+                            with open(csv_filename, 'a', newline='') as csv_file:
+                                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                                writer.writerow({'window_width': window_width, 'incr': incr, 'window type': window_type,
+                                                 "mel bins": num_bin, 'alpha': alpha, 'beta': beta,
+                                                 'spec dim': num_row * num_col, 'measure': measure2check})
+
+                            if measure2check < opt:
+                                print("optimal parameters updated:", opt_param)
+                                opt = measure2check
+                                opt_param["win_len"] = window_width
+                                opt_param["hop"] = incr
+                                opt_param["window_type"] = window_type
+                                opt_param["alpha"] = alpha
+                                opt_param["beta"] = beta
+                                opt_param["mel_num"] = num_bin
 
     print("optimal parameters \n", opt_param)
     return opt_param
@@ -407,7 +417,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     # Evaluate TFR
     tfr = sp.spectrogram(opt_param["win_len"], opt_param["hop"], opt_param["window_type"], sgType=sg_type,
-                         sgScale=sg_scale)
+                         sgScale=sg_scale, nfilters=opt_param["mel_num"])
     # spectrogram normalizations
     if sg_norm != "Standard":
         sp.normalisedSpec(tr=sg_norm)
@@ -445,7 +455,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     # spectrogram of inverted signal
     sp.data = s1_inverted
     tfr_inv = sp.spectrogram(opt_param["win_len"], opt_param["hop"], opt_param["window_type"], sgType=sg_type,
-                             sgScale=sg_scale)
+                             sgScale=sg_scale, nfilters=opt_param["mel_num"])
 
     # spectrogram normalizations
     if sg_norm != "Standard":
@@ -610,7 +620,8 @@ for spec_type in spectrogram_types:
                         inst_freq_fun = set_if_fun(signal_id, T)
                         #
                         TFR_original = sp.spectrogram(optima_parameters["win_len"], optima_parameters["hop"],
-                                                      optima_parameters["window_type"], sgType=spec_type, sgScale=scale)
+                                                      optima_parameters["window_type"], sgType=spec_type, sgScale=scale,
+                                                      nfilters=optima_parameters["mel_num"])
                         # spectrogram normalizations
                         if norm_type != "Standard":
                             sp.normalisedSpec(tr=norm_type)
@@ -673,7 +684,7 @@ for spec_type in spectrogram_types:
 
                                 TFR = sp.spectrogram(optima_parameters["win_len"], optima_parameters["hop"],
                                                      optima_parameters["window_type"], sgType=spec_type,
-                                                     sgScale=scale)
+                                                     sgScale=scale, nfilters=optima_parameters["mel_num"])
                                 # spectrogram normalizations
                                 if norm_type != "Standard":
                                     sp.normalisedSpec(tr=norm_type)
@@ -710,7 +721,7 @@ for spec_type in spectrogram_types:
                                 sp.data = signal_inverted
                                 TFR_inv = sp.spectrogram(optima_parameters["win_len"], optima_parameters["hop"],
                                                          optima_parameters["window_type"], sgType=spec_type,
-                                                         sgScale=scale)
+                                                         sgScale=scale, nfilters=optima_parameters["mel_num"])
                                 # spectrogram normalizations
                                 if norm_type != "Standard":
                                     sp.normalisedSpec(tr=norm_type)
@@ -768,10 +779,10 @@ for spec_type in spectrogram_types:
                                     TFR2[:, int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
                                     TFR2_inv)
                                 IMED_noise_G[k, i - 1] = IMED_noise
-                                
+
                                 # Renyi entropy spectrogram inverted sound
                                 RE_inv = Renyi_Entropy(TFR2_inv)
-                                RE_inv_G[k, i-1] = RE_inv
+                                RE_inv_G[k, i - 1] = RE_inv
 
                                 with open(csvfilename_noise_level, 'a', newline='') as csvfile:  # should be ok
                                     Writer = csv.DictWriter(csvfile, fieldnames=level_csv_fieldnames)
