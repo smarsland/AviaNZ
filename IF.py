@@ -393,6 +393,7 @@ class IF:
                 #If there are no peaks, assign border points
                 idb=np.argwhere(Number_peaks[tn1:tn2+1]==0)
                 NB=len(idb)
+                print(NB)
                 if NB>0:
                     idb = idb[:,1]
                     idb = tn1 - 1 + idb
