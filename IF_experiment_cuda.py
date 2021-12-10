@@ -527,7 +527,7 @@ def save_metric_csv(csv_filename, fieldnames, metric_matrix):
 
 
 # directory where to find test dataset files
-dataset_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03/Virginia_IF_experiment"
+dataset_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03/Virginia_IF_experiment/Toy_Signals"
 # directory to store test result
 main_results_dir = '/am/state-opera/home1/listanvirg/Documents/IF_experiment_Results'
 
@@ -571,7 +571,7 @@ for spec_type in spectrogram_types:
                     # create test result directory
                     test_result_dir = main_results_dir + '/Test' + str(Test_id)
 
-                    if not os.path.lexists(test_result_dir):
+                    if not os.path.exists(test_result_dir):
                         os.mkdir(test_result_dir)
 
                     # store Test info
@@ -633,7 +633,8 @@ for spec_type in spectrogram_types:
                         TFR_original = TFR_original.T
                         del sp
 
-                        noise_levels_folders = os.listdir(folder_path)
+                        sig_dataset_path = folder_path+'/Dataset_2'
+                        noise_levels_folders = os.listdir(sig_dataset_path)
                         num_levels = len(noise_levels_folders)
 
                         # Fieldnames for general metrics csv
@@ -678,11 +679,11 @@ for spec_type in spectrogram_types:
 
                             # aid variable initialization
                             k = 0  # counter for sample
-                            for file in os.listdir(folder_path + "/" + noise_dir):
+                            for file in os.listdir(sig_dataset_path + "/" + noise_dir):
                                 print('Sample ', file)
                                 IF = IFreq.IF(method=2, pars=[optima_parameters["alpha"], optima_parameters["beta"]])
                                 sp = SignalProc.SignalProc(optima_parameters["win_len"], optima_parameters["hop"])
-                                sp.readWav(folder_path + "/" + noise_dir + '/' + file)
+                                sp.readWav(sig_dataset_path + "/" + noise_dir + '/' + file)
                                 signal = sp.data
                                 fs = sp.sampleRate
 
