@@ -57,7 +57,7 @@ def ClickSearch(dirName, file, resol, window=None):
     sampleRate = sp.sampleRate
     datalength = np.shape(audiodata)[0]
     datalengthSec = datalength / sampleRate
-    window_sample = window*sampleRate #window length in Samples
+    window_sample = int(window*sampleRate) #window length in Samples
     res_sr=resol*sampleRate
     
     #number of analisys spectrogram
@@ -72,7 +72,7 @@ def ClickSearch(dirName, file, resol, window=None):
     #work on 1 sec windows
     for i in range(int(num_spec)):
         #start and end in samples
-        start=i*window_sample
+        start=int(np.floor(i*window_sample))
         #index in resol scale
         #start_resol=int(math.floor(i/resol))
         if start+window_sample>=datalength:
@@ -80,7 +80,7 @@ def ClickSearch(dirName, file, resol, window=None):
             #index in resol scale
             #end_resol=int(math.ceil(datalengthSec/resol))
         else:
-            end=(i+1)*window_sample
+            end=int(np.ceil((i+1)*window_sample))
             #end_resol=int(math.ceil((i+1)/resol))
         
         #generate spectrogram
@@ -94,7 +94,7 @@ def ClickSearch(dirName, file, resol, window=None):
             print('we entered when i=', i)
             detections[-1]=0
             break
-        sgraw= sp.spectrogram(512, 32, 'Blackman')
+        sgraw= sp.spectrogram(64, 12, 'Hann')
         #print('check index ', i)
         imspec=(10.*np.log10(sgraw)).T #transpose 
         imspec=np.flipud(imspec) #updown 
@@ -104,8 +104,8 @@ def ClickSearch(dirName, file, resol, window=None):
         df=sampleRate/(np.shape(imspec)[0]+1) #frequency increment 
         dt= window/(np.shape(imspec)[1]+1) #timeincrement
         # print("file ", file, "dt " , dt)
-        up_len=math.ceil(0.5/dt) #maxlength acceptable
-        min_len=math.ceil(0/dt) #minimum length acceptable
+        up_len=math.ceil(0.02/dt) #maxlength acceptable
+        min_len=math.ceil(0.004/dt) #minimum length acceptable
         #print('up_len= ', up_len, 'min_len= ', min_len)
     
         #Frequency band
@@ -121,8 +121,8 @@ def ClickSearch(dirName, file, resol, window=None):
 
         #Threshold
         mean_spec_all=np.mean(imspec, axis=0)
-        # thr_spec=(np.mean(mean_spec_all)+np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
-        thr_spec=np.mean(mean_spec_all)*np.ones((np.shape(mean_spec)))
+        thr_spec=(np.mean(mean_spec_all)+np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
+        #thr_spec=np.mean(mean_spec_all)*np.ones((np.shape(mean_spec)))
     
         ##clickfinder
         #check when the mean is bigger than the threshold
@@ -144,14 +144,14 @@ def ClickSearch(dirName, file, resol, window=None):
             else:
                 if click_end-click_start+1>up_len or click_end-click_start+1<min_len:
                     clicks[click_start:click_end+1]=0
-                    print('delete control')
+                    #print('delete control')
                 else:
                     #update detections
                     click_start_res=int(np.floor((click_start*dt +i*window)/resol))
                     click_end_res=int(np.ceil((click_end*dt +i*window)/resol))
                     detections[0][click_start_res:click_end_res]=1
                     #print('check')
-                    detected_annotation.append([float(click_start*dt +i*window), float(click_end*dt +i*window), float(f0), float(f1), [{"species": "Bigeye", "certainty": 50.0, "filter": "ClickSearch", "calltype": "Pop"}]])
+                    detected_annotation.append([float(click_start*dt +i*window), float((click_end+1)*dt +i*window), float(f0), float(f1), [{"species": "Bigeye", "certainty": 50.0, "filter": "ClickSearch", "calltype": "Pop"}]])
 
                     
                 #update
@@ -161,14 +161,14 @@ def ClickSearch(dirName, file, resol, window=None):
         #checking last loop with end
         if click_end-click_start+1>up_len or click_end-click_start+1<min_len:
             clicks[click_start:click_end+1]=0
-            print('delete control')
+            #print('delete control')
         else:
             click_start_res=int(np.floor((click_start*dt +i*window)/resol))
             click_end_res=np.minimum(int(np.ceil((click_end*dt +i*window)/resol)),int(det_length))
             detections[0][click_start_res:click_end_res]=1
             #add segment
             #print('check')
-            detected_annotation.append([float(click_start*dt +i*window), float(click_end*dt +i*window), float(f0), float(f1), [{"species": "Bigeye", "certainty": 50.0, "filter": "ClickSearch", "calltype": "Pop"}]])
+            detected_annotation.append([float(click_start*dt +i*window), float((click_end+1)*dt +i*window), float(f0), float(f1), [{"species": "Bigeye", "certainty": 50.0, "filter": "ClickSearch", "calltype": "Pop"}]])
             
     detected_annotation.insert(0,{"Operator": "Zohara", "Reviewer": "", "Duration": datalengthSec})
     
@@ -246,9 +246,9 @@ Work flow:
 
 dirname="C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed\\Downsampled4000"
 filename = '67375127.140303193211_downsampled4000.wav'
-test_fold='TEST_40'
+test_fold='TEST_55'
 os.mkdir(dirname+ '\\' + test_fold)
-window = 2 #length in sec. of window used for click search
+window = 10 #length in sec. of window used for click search
 res = 0.01 #annotation resolution
 
 #    #Read audiodata

@@ -9,6 +9,8 @@ SplitWav
 
 # ignore temp files produced during analysis
 Sound Files/*
+!Sound Files/*bmp
+!Sound Files/*wav
 
 # auto-generated cython sources have to be listed manually here:
 ext/ce_denoise.c
@@ -16,8 +18,13 @@ ext/ce_wvd.c
 ext/ce_wvd_functions.c
 ext/ce_wvd_functions.h
 ext/SplitLauncher.c
-ext/SplitLauncher.c
+ext/ce_detect.c
 ext/build/
+ext/*pyd
+
+.vs/
+
+.idea/
 
 # Latex
 Docs/AviaNZManual.aux
@@ -35,3 +42,6 @@ Docs/FilterTraining.pdf
 Docs/FilterTraining.soc
 # default configs - if this is not distributed
 # AviaNZconfig.txt
+eggs.csv
+test.txt
+bash_test.sh.txt

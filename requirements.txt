@@ -7,19 +7,21 @@
 # cd ext; python3 setup.py build_ext -i
 
 click==7.0
-# Cython==0.29.10
+Cython==0.29.21
+h5py==2.10.0
 jsonschema==3.1.1
 librosa==0.8.0
-numpy==1.16.2
+numpy==1.18.5  # scikit-image overwrites this w/ a newer version
 openpyxl==2.5.5
 pyFFTW==0.12.0
-PyQt5==5.13.1
-git+git://github.com/pyqtgraph/pyqtgraph@2203933#egg=pyqtgraph
-scikit-image==0.15.0
-scipy==1.4.1
-setuptools==41.0.1
+PyQt5==5.15.4
+pyqtgraph==0.11.1
+scikit-image==0.18.3
+six==1.15.0
+scipy==1.5.0
+setuptools==56.1.0
 spectrum==0.7.5
-tensorflow==2.0.1
+tensorflow==2.3.2
 
 ## These dependencies are important, but should be installed by the main packages:
 # joblib==0.13.2
@@ -32,9 +34,7 @@ tensorflow==2.0.1
 ## NECESSARY to install pytgraph development, 0.11.0.dev0+g9aaae8 or another version
 ## Hence git is required.
 ## For compiling binaries:
-# PyInstaller==3.5
-## to install pyInstaller 3.5.dev0+d74052489 development:
-# pip install https://github.com/pyinstaller/pyinstaller/tarball/develop --user
+# PyInstaller==4.0
 
 # For those without AVX2 support:
 # pip install --upgrade https://github.com/fo40225/tensorflow-windows-wheel/blob/master/2.0.0/py37/CPU/sse2/tensorflow-2.0.0-cp37-cp37m-win_amd64.whl

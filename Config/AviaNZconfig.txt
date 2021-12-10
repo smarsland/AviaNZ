@@ -1,4 +1,6 @@
-{"window_width": 256, "incr": 128, "minFreq": 0, "maxFreq": 24000, "maxSearchDepth": 20, "minSegment": 50,
+{"window_width": 256, "incr": 128, "minFreq": 0, "maxFreq": 24000,
+"minFreqBats": 0, "maxFreqBats": 88000,
+"maxSearchDepth": 20, "minSegment": 50,
 "drawingRightBtn": false, "specMouseAction": 3,
 "StartMaximized": true,
 "MultipleSpecies": true,
@@ -23,4 +25,6 @@
 "invertColourMap": false, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
 "protocolOn": false, "protocolSize": 15, "protocolInterval": 300,
+"guidepos": [20000, 60000, 36000, 50000], "guidelinesOn": "bat",
+"guidecol": [[255, 232, 140, 255], [255, 232, 140, 255], [239, 189, 124, 255], [239, 189, 124, 255]],
 "fs_start": 0, "fs_end": 0, "window": "Hann", "FiltersDir": "Filters"}

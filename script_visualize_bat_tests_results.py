@@ -13,162 +13,106 @@ import matplotlib.image as mpimg
 
 ################## MAIN ####################################
 
+
+##Read TEST RESULTS
 #result_csv_file="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests\\Results.csv"
-result_csv_file="/am/state-opera/home1/listanvirg/Documents/Experiments_result/Results.csv"
+result_csv_file="C:\\Users\\Virginia\\Documents\\Work\Data\\Bats\\Results\\20201016_tests\\Results_row64.csv"
+#result_csv_file="/am/state-opera/home1/listanvirg/Documents/Experiments_result/Results.csv"
+
 
 
 Recall=[]
 Precision_pre=[]
 Precision_post=[]
+train_id=[]
 test_id=[]
+
 with open(result_csv_file, 'r') as csvfile:
     csvreader=csv.DictReader(csvfile)
     for row in csvreader:
         Recall.append(dict(row)["RECALL"])
         Precision_pre.append(dict(row)["PRECISION_PRE"])
         Precision_post.append(dict(row)["PRECISION_POST"])
-        test_id.append(dict(row)["TEST"])
+        print(dict(row)["PRECISION_POST"])
+        #print(dict(row)["TEST"])
+        test_id.append(dict(row)["TEST_ID"])
+        train_id.append(dict(row)["TRAIN DATASET"])
 
 #index_conf_0=np.arange(0,73,12)
 #index_conf_0=np.array(index_conf_0,dtype='int
-index_conf_0=slice(0,73,12)
-print(index_conf_0)
-print(Recall[index_conf_0])
-print(test_id[index_conf_0])
-#index_conf_1=slice(1,73,12)
-#print(Recall[index_conf_1])
-#print(test_id[index_conf_1])
+#test_id=np.array(test_id)
+Recall=np.array(Recall, dtype=np.float32)
+Precision_pre=np.array(Precision_pre, dtype=np.float32)
+Precision_post=np.array(Precision_post, dtype=np.float32)
 
-#path to save
-#image_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests\\Results_test.png"
-image_path="/am/state-opera/home1/listanvirg/Documents/Experiments_result/Result_test.png"
+#READ ERROR tables
+R1_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\Test_dataset\\R1'
+R13_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\Test_dataset\\R13'
+R18_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\Test_dataset\\R18'
+dir_path_list=[R1_path, R13_path, R18_path]
+#print('len(test_id)=', len(test_id))
+count=0
+CNN=np.zeros((len(train_id),1))
+CD=np.zeros((len(train_id),1))
+CD_p=np.zeros((len(train_id),1))
+Lab=np.zeros((len(train_id),1))
+for test in test_id:
+    CNN[count]=0
+    CD[count]=0
+    CD_p[count]=0
+    Lab[count]=0
+    for dir in dir_path_list:
+        fp_file=dir+'\\Test_New_row64_'+str(test)+'\\false_positives.csv'
+        fn_file=dir+'\\Test_New_row64_'+str(test)+'\\missed_files.csv'
+        misc_file=dir+'\\Test_New_row64_'+str(test)+'\\misclassified_files.csv'
+        file_list=[fp_file, fn_file, misc_file]
+        for file in file_list:
+            with open(file, 'r') as csvfile:
+                csvreader=csv.DictReader(csvfile)
+                for row in csvreader:
+                    if 'CNN' in dict(row)["Possible Error"]:
+                        CNN[count]+=1
+                    elif 'CD' in dict(row)["Possible Error"]:
+                        CD[count]+=1
+                    elif '?' in dict(row)["Possible Error"]:
+                        CD_p[count]+=1
+                    elif 'Label' in dict(row)["Possible Error"]:
+                        Lab[count]+=1
+    count+=1
+print(np.shape(CNN))
+print(type(CNN))
 
-#fig,ax=  plt.subplots()
+im_file=['win_3','win_11','win_17','win_31']
+title=['Window 3x2', 'Window 11', 'Window 17', 'Window 31']
 
-#plt.figure()
-#fig.set_ylim(0,100)
-fig, ax = plt.subplots()
-ax.plot(test_id[index_conf_0], np.array(Recall[index_conf_0]), 'r')
-ax.plot(test_id[index_conf_0], np.array(Precision_pre[index_conf_0]), 'b')
-ax.plot(test_id[index_conf_0], np.array(Precision_post[index_conf_0]), 'g')
-#plt.show()
-plt.savefig(image_path)
-#Recall=np.array(Recall)
-#Precision_pre=np.array(Precision_pre)
-#Precision_post=np.array(Precision_post)
+for k in range(0,4):
+    #path to save
+    #image_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests\\Results_test_"+im_file[k]+".png"
+    image_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests\\Results_test_"+im_file[k]+"_row64.png"
 
-#print(Recall[0], Recall[12], Recall[24], Recall[36])
-#print(Precision_pre[0], Precision_pre[12], Precision_pre[24], Precision_pre[36])
-#print(Precision_post[0], Precision_post[12], Precision_post[24], Precision_post[36])
-#x_axis_0=[0,1,2,3]
-#x_axis_1=[0,1,2,3, 3.1]
-#x_axis_2=[0,1,2]
+    #fig.set_ylim(0,100)
+    fig, ax = plt.subplots(2,3, sharey='row', sharex='col')
+    fig.suptitle(title[k])
+    for i in range(0,3):
+    #ax.set_ylim(40,100)
+        index_conf_0=slice(3*k+i,48,12)
+        print(i, index_conf_0)
+        ax[0,i].set_title('File Label'+str(i))
+        ax[0,i].plot(train_id[index_conf_0],Recall[index_conf_0], 'r', label='Rec')
+        ax[0,i].plot(train_id[index_conf_0], Precision_pre[index_conf_0], 'b', label='Pre_pre')
+        ax[0,i].plot(train_id[index_conf_0], Precision_post[index_conf_0], 'g', label='Pre_post')
+        ax[0,i].legend(loc='lower right')
 
+        x = np.arange(len(train_id[index_conf_0]))  # the label locations
+        width = 0.15  # the width of the bars
+        rects1 = ax[1,i].bar(x - (3/2)*width, CNN[index_conf_0,0], width, label='CNN')
+        rects2 = ax[1,i].bar(x - width/2, CD[index_conf_0,0], width, label='CD')
+        rects3 = ax[1,i].bar(x + width/2, CD_p[index_conf_0,0], width, label='CD?')
+        rects4 = ax[1,i].bar(x + (3/2)*width, Lab[index_conf_0,0], width, label='Label')
+        ax[1,i].legend()
 
-
-
-##plot clicks probabilities + save images
-#    #Each row has a differen plot: LT, ST NT
-#    # Lt first columin, st second, nt third
-#fig, axes = plt.subplots(2,3)
-##plt.ylim(0,100)
-##first row
-##axes[0,0].set_ylim([0,100])
-#axes[0,0].set_title("win=3x2 File_lab=0")
-##axes[0,0].plot(x_axis_0,[Recall[0], Recall[12], Recall[24], Recall[36]],'r', x_axis_0, [Precision_pre[0], Precision_pre[12], Precision_pre[24], Precision_pre[36]],'b', x_axis_0,[Precision_post[0], Precision_post[12], Precision_post[24], Precision_post[36]],'g')
-#l1,= axes[0,0].plot(x_axis_0,[Recall[0], Recall[12], Recall[24], Recall[36]],'r')
-#l2, =axes[0,0].plot(x_axis_0,[Precision_pre[0], Precision_pre[12], Precision_pre[24], Precision_pre[36]],'b')
-#l3, =axes[0,0].plot(x_axis_0,[Precision_post[0], Precision_post[12], Precision_post[24], Precision_post[36]],'g')
-##axes[0,0].set_ylim((0,100))
-
-#axes[0,1].set_title("win=3x2 File_lab=1")
-#axes[0,1].plot(x_axis_1,[Recall[1], Recall[13], Recall[25], Recall[37], Recall[38]],'r')
-#axes[0,1].plot(x_axis_1,[Precision_pre[1], Precision_pre[13], Precision_pre[25], Precision_pre[37], Precision_pre[38]],'b')
-#axes[0,1].plot(x_axis_1,[Precision_post[1], Precision_post[13], Precision_post[25], Precision_post[37], Precision_post[38]],'g')
-
-#axes[0,2].set_title("win=3x2 File_lab=2")
-#axes[0,2].plot(x_axis_0,[Recall[2], Recall[14], Recall[26], Recall[39]],'r')
-#axes[0,2].plot(x_axis_0,[Precision_pre[2], Precision_pre[14], Precision_pre[26], Precision_pre[39]],'b')
-#axes[0,2].plot(x_axis_0,[Precision_post[2], Precision_post[14], Precision_post[26], Precision_post[39]],'g')
-
-##second row
-#axes[1,0].set_title("win=11 File_lab=0")
-#axes[1,0].plot(x_axis_0,[Recall[3], Recall[15], Recall[27], Recall[40]],'r')
-#axes[1,0].plot(x_axis_0,[Precision_pre[3], Precision_pre[15], Precision_pre[27], Precision_pre[40]],'b')
-#axes[1,0].plot(x_axis_0,[Precision_post[3], Precision_post[15], Precision_post[27], Precision_post[40]],'g')
-
-#axes[1,1].set_title("win=11 File_lab=1")
-#axes[1,1].plot(x_axis_0,[Recall[4], Recall[16], Recall[28], Recall[41]],'r')
-#axes[1,1].plot(x_axis_0,[Precision_pre[4], Precision_pre[16], Precision_pre[28], Precision_pre[41]],'b')
-#axes[1,1].plot(x_axis_0,[Precision_post[4], Precision_post[16], Precision_post[28], Precision_post[41]],'g')
-
-#axes[1,2].set_title("win=11 File_lab=2")
-#axes[1,2].plot(x_axis_0,[Recall[5], Recall[17], Recall[29], Recall[42]],'r')
-#axes[1,2].plot(x_axis_0,[Precision_pre[5], Precision_pre[17], Precision_pre[29], Precision_pre[42]],'b')
-#axes[1,2].plot(x_axis_0,[Precision_post[5], Precision_post[17], Precision_post[29], Precision_post[42]],'g')
-
-#plt.tight_layout()
-
-#plt.savefig(image_path)
+    plt.savefig(image_path)
 
 
-##path to save
-#image_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests\\Results2.png"
-
-##plot clicks probabilities + save images
-#    #Each row has a differen plot: LT, ST NT
-#    # Lt first columin, st second, nt third
-#fig, axes = plt.subplots(2,3, sharey="row")
-
-##2 plots
-##third row
-#axes[0,0].set_title("win=17 File_lab=0")
-#axes[0,0].plot(x_axis_0,[Recall[6], Recall[18], Recall[30], Recall[43]],'r')
-#axes[0,0].plot(x_axis_0,[Precision_pre[6], Precision_pre[18], Precision_pre[30], Precision_pre[43]],'b')
-#axes[0,0].plot(x_axis_0,[Precision_post[6], Precision_post[18], Precision_post[30], Precision_post[43]],'g')
-
-#axes[0,1].set_title("win=17 File_lab=1")
-#axes[0,1].plot(x_axis_0,[Recall[7], Recall[19], Recall[31], Recall[44]],'r')
-#axes[0,1].plot(x_axis_0,[Precision_pre[7], Precision_pre[19], Precision_pre[31], Precision_pre[44]],'b')
-#axes[0,1].plot(x_axis_0,[Precision_post[7], Precision_post[19], Precision_post[31], Precision_post[44]],'g')
-
-#axes[0,2].set_title("win=17 File_lab=2")
-#axes[0,2].plot(x_axis_0,[Recall[8], Recall[20], Recall[32],Recall[45]],'r')
-#axes[0,2].plot(x_axis_0,[Precision_pre[8], Precision_pre[20], Precision_pre[32], Precision_pre[45]],'b')
-#axes[0,2].plot(x_axis_0,[Precision_post[8], Precision_post[20], Precision_post[32], Precision_post[45]],'g')
-
-##forth row
-#axes[1,0].set_title("win=31 File_lab=0")
-#axes[1,0].plot(x_axis_2,[Recall[9], Recall[21], Recall[33]],'r')
-#axes[1,0].plot(x_axis_2,[Precision_pre[9], Precision_pre[21], Precision_pre[33]],'b')
-#axes[1,0].plot(x_axis_2,[Precision_post[9], Precision_post[21], Precision_post[33]],'g')
-
-#axes[1,1].set_title("win=31 File_lab=1")
-#axes[1,1].plot(x_axis_2,[Recall[10], Recall[22], Recall[34]],'r')
-#axes[1,1].plot(x_axis_2,[Precision_pre[10], Precision_pre[22], Precision_pre[34]],'b')
-#axes[1,1].plot(x_axis_2,[Precision_post[10], Precision_post[22], Precision_post[34]],'g')
-
-#axes[1,2].set_title("win=31 File_lab=2")
-#axes[1,2].plot(x_axis_2,[Recall[11], Recall[23], Recall[35]],'r')
-#axes[1,2].plot(x_axis_2,[Precision_pre[11], Precision_pre[23], Precision_pre[35]],'b')
-#axes[1,2].plot(x_axis_2,[Precision_post[11], Precision_post[23], Precision_post[35]],'g')
 
 
-#ax.set_title('File classified as '+file_label+' cert ='+str(cert_label)+', num. clicks = '+str(len(LT_prob)))
-        
-#legend = ax.legend(loc='upper right')
-
-#plt.savefig(image_path)
-
-#image_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests\\Test.png"
-#fig, ax = plt.subplots()
-#ax.plot(x_axis_0,rec,'r', label='Recall' )
-#ax.plot(x_axis_0,pre1,'b', label='Precision_pre')
-#ax.plot(x_axis_0,pre2,'g', label='Precision_post')
-       
-##ax.set_title('File classified as '+file_label+' cert ='+str(cert_label)+', num. clicks = '+str(len(LT_prob)))
-        
-#legend = ax.legend(loc='upper right')
-        
-#plt.savefig(image_path)
-       

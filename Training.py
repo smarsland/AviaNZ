@@ -1,11 +1,10 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for training CNNs
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,13 +19,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# The separated code for CNN training
+# Holds most of the code for training CNNs
 
 import os, gc, re, json, tempfile
 from shutil import copyfile
 from shutil import disk_usage
 
-from keras_preprocessing.image import ImageDataGenerator
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import model_from_json
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
@@ -35,18 +34,25 @@ from sklearn.utils import shuffle
 import numpy as np
 import matplotlib.pyplot as plt
 from time import strftime, gmtime
+import math
 
 import SupportClasses
 import SignalProc
 import CNN
 import Segment, WaveletSegment
 import AviaNZ_batch
+import wavio
 
 class CNNtrain:
 
     def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
+        # Two important things: 
+        # 1. LearningParams.txt, which a dictionary of parameters *** including spectrogram parameters
+        # 2. CLI: whether it runs off the command line, which makes picking the ROC curve parameters hard
+        # Qn: what is imgWidth? Why not a learning param?
 
         self.filterdir = filterdir
+        self.configdir =configdir
         cl = SupportClasses.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
@@ -55,6 +61,7 @@ class CNNtrain:
         self.imgsize = [self.LearningDict['imgX'], self.LearningDict['imgY']]
         self.tmpdir1 = False
         self.tmpdir2 = False
+        self.ROCdata = {}
 
         self.CLI = CLI
         if CLI:
@@ -71,33 +78,43 @@ class CNNtrain:
             self.imgWidth = imgWidth
 
     def setP1(self, folderTrain1, folderTrain2, recogniser, annotationLevel):
+        # This is a function that the Wizard calls to set parameters
         self.folderTrain1 = folderTrain1
         self.folderTrain2 = folderTrain2
         self.filterName = recogniser
         self.annotatedAll = annotationLevel
 
     def setP6(self, recogniser):
+        # This is a function that the Wizard calls to set parameters
         self.newFilterName = recogniser
             
     def cliTrain(self):
-        # This proceeds very much like the wizard 
+        # This is the main training function for CLI-based learning.
+        # It proceeds very much like the wizard 
             
+        # Get info from wavelet filter
         self.readFilter()
+
         # Load data
         # Note: no error checking in the CLI version
         # Find segments belong to each class in the training data
         self.genSegmentDataset(hasAnnotation=True)
 
+        # Check on memory space
         self.checkDisk()
+
+        # OK, WTF?
         self.windowWidth = self.imgsize[0] * self.LearningDict['windowScaling']
         self.windowInc = int(np.ceil(self.imgWidth * self.fs / (self.imgsize[1] - 1)) )
 
         # Train
         self.train()
 
+        # Save the output
         self.saveFilter()
 
     def readFilter(self):
+        # Read the current (wavelet) filter and get the details
         if self.filterName.lower().endswith('.txt'):
             self.currfilt = self.FilterDict[self.filterName[:-4]]
         else:
@@ -108,6 +125,8 @@ class CNNtrain:
 
         mincallengths = []
         maxcallengths = []
+        f1 = []
+        f2 = []
         self.maxgaps = []
         self.calltypes = []
         for fi in self.currfilt['Filters']:
@@ -115,8 +134,12 @@ class CNNtrain:
             mincallengths.append(fi['TimeRange'][0])
             maxcallengths.append(fi['TimeRange'][1])
             self.maxgaps.append(fi['TimeRange'][3])
+            f1.append(fi['FreqRange'][0])
+            f2.append(fi['FreqRange'][1])
         self.mincallength = np.max(mincallengths)
         self.maxcallength = np.max(maxcallengths)
+        self.f1 = np.min(f1)
+        self.f2 = np.max(f2)
 
         print("Manually annotated: %s" % self.folderTrain1)
         print("Auto processed and reviewed: %s" % self.folderTrain2)
@@ -125,6 +148,7 @@ class CNNtrain:
         print("Call types: %s" % self.calltypes)
         print("Call length: %.2f - %.2f sec" % (self.mincallength, self.maxcallength))
         print("Sample rate: %d Hz" % self.fs)
+        print("Frequency range: %d - %d Hz" % (self.f1, self.f2))
 
     def checkDisk(self):
         # Check disk usage
@@ -136,12 +160,19 @@ class CNNtrain:
         return freeGB, totalbytes/1024/1024/1024
 
     def genSegmentDataset(self, hasAnnotation):
+        # Prepares segments for input to the learners
         self.traindata = []
-        self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0)
-        # Dir1 - manually annotated
-        # Find noise segments if the user is confident about full annotation
-        if self.annotatedAll:
+        self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
+
+        # For manually annotated data where the user is confident about full annotation, 
+        # choose anything else in the spectrograms as noise examples
+        if self.annotatedAll=="All":
             self.noisedata1 = self.DataGen.findNoisesegments(self.folderTrain1)
+            print('----noise data1:')
+            for x in self.noisedata1:
+                self.traindata.append(x)
+        if self.annotatedAll=="All-nowt":
+            self.noisedata1 = self.DataGen.findAllsegments(self.folderTrain1)
             print('----noise data1:')
             for x in self.noisedata1:
                 self.traindata.append(x)
@@ -154,8 +185,7 @@ class CNNtrain:
                 for x in ctdata:
                     self.traindata.append(x)
 
-        # Dir2 - auto reviewed
-        # Get noise segments from .corrections
+        # For wavelet outputs that have been manually verified get noise segments from .corrections
         if os.path.isdir(self.folderTrain2):
             for root, dirs, files in os.walk(str(self.folderTrain2)):
                 for file in files:
@@ -222,7 +252,7 @@ class CNNtrain:
         self.trainN = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
     def genImgDataset(self, hop):
-        ''' Generate training images'''
+        ''' Generate training images  for each calltype and noise'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
         self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
@@ -242,7 +272,7 @@ class CNNtrain:
         print('Temporary model dir:', self.tmpdir2.name)
 
         # Find train segments belong to each class
-        self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
+        self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.f1, self.f2)
 
         # Find how many images with default hop (=imgWidth), adjust hop to make a good number of images also keep space
         # for some in-built augmenting (width-shift)
@@ -262,7 +292,7 @@ class CNNtrain:
         print("\t%s:\t%d\n" % ("Noise", self.Nimg[-1]))
 
         # CNN training
-        cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
+        cnn = CNN.CNN(self.configdir, self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
 
         # 1. Data augmentation
         print('Data augmenting...')
@@ -316,7 +346,7 @@ class CNNtrain:
         cnn.createArchitecture()
 
         print('Training...')
-        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator, epochs=self.LearningDict['epochs'])
+        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator)
         print('Training complete!')
 
         self.bestThr = [[0, 0] for i in range(len(self.calltypes))]
@@ -348,17 +378,32 @@ class CNNtrain:
         model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'],
                       metrics=self.LearningDict['metrics'])
         # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        print('Loaded CNN model from ', self.tmpdir2.name)
 
         TPs = [0 for i in range(len(self.calltypes) + 1)]
         FPs = [0 for i in range(len(self.calltypes) + 1)]
         TNs = [0 for i in range(len(self.calltypes) + 1)]
         FNs = [0 for i in range(len(self.calltypes) + 1)]
         CTps = [[[] for i in range(len(self.calltypes) + 1)] for j in range(len(self.calltypes) + 1)]
-        N = len(filenames)
+        # Do all the plots based on Validation set (eliminate augmented?)
+        # N = len(filenames)
+        N = len(X_val_filenames)
+        y_val = np.argmax(y_val, axis=1)
+        print('Validation data: ', N)
+        if os.path.isdir(self.tmpdir2.name):
+            print('Model directory exists')
+        else:
+            print('Model directory DOES NOT exist')
+        if os.path.isdir(self.tmpdir1.name):
+            print('Img directory exists')
+        else:
+            print('Img directory DOES NOT exist')
         
         for i in range(int(np.ceil(N / self.LearningDict['batchsize_ROC']))):
-            imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
-            labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
+            # imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            # labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
+            imagesb = cnn.loadImgBatch(X_val_filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            labelsb = y_val[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
             for ct in range(len(self.calltypes) + 1):
                 res, ctp = self.testCT(ct, imagesb, labelsb, model)  # res=[thrlist, TPs, FPs, TNs, FNs], ctp=[[0to0 probs], [0to1 probs], [0to2 probs]]
                 for j in range(len(self.calltypes) + 1):
@@ -374,11 +419,16 @@ class CNNtrain:
                     TNs[ct] = [TNs[ct][i] + res[3][i] for i in range(len(TNs[ct]))]
                     FNs[ct] = [FNs[ct][i] + res[4][i] for i in range(len(FNs[ct]))]
         self.Thrs = res[0]
+        print('Thrs: ', self.Thrs)
+        print('validation TPs[0]: ', TPs[0])
 
         self.TPRs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
         self.FPRs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
         self.Precisions = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
         self.Accs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
+
+        plt.style.use('ggplot')
+        fig, axs = plt.subplots(len(self.calltypes) + 1, len(self.calltypes) + 1, sharey=True, sharex='col')
 
         for ct in range(len(self.calltypes) + 1):
             self.TPRs[ct] = [TPs[ct][i] / (TPs[ct][i] + FNs[ct][i]) for i in range(len(self.Thrs))]
@@ -390,21 +440,31 @@ class CNNtrain:
             # Temp plot is saved in train data directory - prediction probabilities for instances of current ct
             for i in range(len(self.calltypes) + 1):
                 CTps[ct][i] = sorted(CTps[ct][i], key=float)
-                fig = plt.figure()
-                ax = plt.axes()
-                ax.plot(CTps[ct][i], 'k')
-                ax.plot(CTps[ct][i], 'bo')
-                plt.xlabel('Number of samples')
-                plt.ylabel('Probability')
-                if ct == len(self.calltypes):
-                    plt.title('Class: Noise')
-                else:
-                    plt.title('Class: ' + str(self.calltypes[ct]))
-                if self.folderTrain1:
-                    fig.savefig(os.path.join(self.folderTrain1, str(ct) + '-' + str(i) + '.png'))
-                else:
-                    fig.savefig(os.path.join(self.folderTrain2, str(ct) + '-' + str(i) + '.png'))
-                plt.close()
+                axs[i, ct].plot(CTps[ct][i], 'k')
+                axs[i, ct].plot(CTps[ct][i], 'bo')
+                if ct == i == len(self.calltypes):
+                    axs[i, 0].set_ylabel('Noise')
+                    axs[0, ct].set_title('Noise')
+                elif ct == i:
+                    axs[i, 0].set_ylabel(str(self.calltypes[ct]))
+                    axs[0, ct].set_title(str(self.calltypes[ct]))
+                if i == len(self.calltypes):
+                    axs[i, ct].set_xlabel('Number of samples')
+        fig.suptitle('Human')
+        if self.folderTrain1:
+            fig.savefig(os.path.join(self.folderTrain1, 'validation-plots.png'))
+            print('Validation plot is saved: ', os.path.join(self.folderTrain1, 'validation-plots.png'))
+        else:
+            fig.savefig(os.path.join(self.folderTrain2, 'validation-plots.png'))
+            print('Validation plot is saved: ', os.path.join(self.folderTrain2, 'validation-plots.png'))
+        plt.close()
+
+        # Collate ROC daaa
+        self.ROCdata["TPR"] = self.TPRs
+        self.ROCdata["FPR"] = self.FPRs
+        self.ROCdata["thr"] = self.Thrs
+        print('TPR: ', self.ROCdata["TPR"])
+        print('FPR: ', self.ROCdata["FPR"])
 
         # 4. Auto select the upper threshold (fpr = 0)
         for ct in range(len(self.calltypes)):
@@ -461,7 +521,7 @@ class CNNtrain:
         self.TNs = []
         self.FNs = []
 
-        # Predict and temp plot (just for me)
+        # Predict and temp plot
         pre = model.predict(testimages)
         ctprob = [[] for i in range(len(self.calltypes) + 1)]
         for i in range(len(targets)):
@@ -526,6 +586,9 @@ class CNNtrain:
             modelsrc = os.path.join(self.tmpdir2.name, 'model.json')
             CNN_name = self.species + strftime("_%H-%M-%S", gmtime())
             self.currfilt["CNN"]["CNN_name"] = CNN_name
+            rocfilename = self.species + "_ROCNN" + strftime("_%H-%M-%S", gmtime())
+            self.currfilt["ROCNN"] = rocfilename
+            rocfilename = os.path.join(self.filterdir, rocfilename + '.json')
 
             modelfile = os.path.join(self.filterdir, CNN_name + '.json')
             weightsrc = self.bestweight
@@ -541,6 +604,10 @@ class CNNtrain:
             # Actually copy the model
             copyfile(modelsrc, modelfile)
             copyfile(weightsrc, weightfile)
+            # save ROC
+            f = open(rocfilename, 'w')
+            f.write(json.dumps(self.ROCdata))
+            f.close()
             # And remove temp dirs
             self.tmpdir1.cleanup()
             self.tmpdir2.cleanup()
@@ -554,7 +621,12 @@ class CNNtrain:
         CNNdic["optimizer"] = self.LearningDict['optimizer']
         CNNdic["windowInc"] = [self.windowWidth,self.windowInc]
         CNNdic["win"] = [self.imgWidth,self.imgWidth/5]     # TODO: remove hop
-        CNNdic["inputdim"] = self.imgsize
+        CNNdic["inputdim"] = [int(self.imgsize[0]), int(self.imgsize[1])]
+        if self.f1 == 0 and self.f2 == self.fs/2:
+            print('no frequency masking used')
+        else:
+            print('frequency masking used', self.f1, self.f2)
+            CNNdic["fRange"] = [int(self.f1), int(self.f2)]
         output = {}
         thr = []
         for ct in range(len(self.calltypes)):
@@ -573,31 +645,27 @@ class CNNtrain:
 
 
 class CNNtest:
+    # Test a previously-trained CNN
 
-    def __init__(self,testDir,currfilt,configdir,filterdir,CLI=False):
+    def __init__(self,testDir,currfilt,filtname,configdir,filterdir,CLI=False):
+        """ currfilt: the recognizer to be used (dict) """
         self.testDir = testDir
         self.outfile = open(os.path.join(self.testDir, "test-results.txt"),"w")
 
-        if CLI:
-            cl = SupportClasses.ConfigLoader()
-            self.FilterDict = cl.filters(filterdir, bats=False)
-            if currfilt.lower().endswith('.txt'):
-                self.currfilt = self.FilterDict[currfilt[:-4]]
-            else:
-                self.currfilt = self.FilterDict[currfilt]
-        else:
-            self.currfilt = currfilt
-        
+        self.currfilt = currfilt
+        self.filtname = filtname
+
         self.configdir = configdir
         self.filterdir = filterdir
-        self.species = self.currfilt['species']
+        # Note: this is just the species name, unlike the self.species in Batch mode
+        species = self.currfilt['species']
         self.sampleRate = self.currfilt['SampleRate']
         self.calltypes = []
         for fi in self.currfilt['Filters']:
             self.calltypes.append(fi['calltype'])
 
-        self.outfile.write("Recogniser name: %s\n" %(self.currfilt))
-        self.outfile.write("Species name: %s\n" % (self.species))
+        self.outfile.write("Recogniser name: %s\n" %(filtname))
+        self.outfile.write("Species name: %s\n" % (species))
         self.outfile.write("Using data: %s\n" % (self.testDir))
 
         # 0. Generate GT files from annotations in test folder
@@ -611,109 +679,92 @@ class CNNtest:
                 if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
                     segments = Segment.SegmentList()
                     segments.parseJSON(wavFile + '.data')
-                    self.manSegNum += len(segments.getSpecies(self.species))
+                    self.manSegNum += len(segments.getSpecies(species))
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, self.species, window=self.window, inc=inc)
+                    segments.exportGT(wavFile, species, resolution=self.window)
 
         if self.manSegNum == 0:
-            print("ERROR: no segments for species %s found" % self.species)
-            self.flag = False
+            print("ERROR: no segments for species %s found" % species)
             self.text = 0
             return
 
         # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
-        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test",
-                                                        sdir=self.testDir, recogniser=self.species, wind=True)
+        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test", sdir=self.testDir, recogniser=filtname, wind=1)
+        # NOTE: will use wind-robust detection
 
         # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
-        self.flag, self.text = self.getSummary(avianz_batch, CNN=False)
+        self.text = self.getSummary(CNN=False)
 
         # 3. Report statistics of WF followed by post-proc steps (wind-CNN-merge neighbours-delete short)
         if "CNN" in self.currfilt:
             cl = SupportClasses.ConfigLoader()
             filterlist = cl.filters(self.filterdir, bats=False)
-            CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [self.species])
-            if self.species in CNNDicts.keys():
-                CNNmodel = CNNDicts[self.species]
-                flag, text = self.getSummary(avianz_batch, CNN=True, CNNmodel=CNNmodel)
+            CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [filtname])
+            if filtname in CNNDicts.keys():
+                CNNmodel = CNNDicts[filtname]
+                self.text = self.getSummary(CNN=True)
             else:
-                print("Couldn't find a matching CNN!")
+                print("ERROR: Couldn't find a matching CNN!")
+                self.outfile.write("No matching CNN found!\n")
                 self.outfile.write("-- End of testing --\n")
                 self.outfile.close()
                 return
         self.outfile.write("-- End of testing --\n")
         self.outfile.close()
 
-        # Tidy up
-        for root, dirs, files in os.walk(self.testDir):
-            for file in files:
-                if file.endswith('.tmpdata'):
-                    os.remove(os.path.join(root, file))
+        print("Testing output written to " + os.path.join(self.testDir, "test-results.txt"))
 
-        if CLI:
-            print("Output written to " + os.path.join(self.testDir, "test-results.txt"))
+        # Tidy up
+        # for root, dirs, files in os.walk(self.testDir):
+        #     for file in files:
+        #         if file.endswith('.tmpdata'):
+        #             os.remove(os.path.join(root, file))
 
     def getOutput(self):
-        return self.flag, self.text
+        return self.text
 
-    def findCTsegments(self, file, calltypei):
+    def findCTsegments(self, datafile, calltypei):
         calltypeSegments = []
-        if file.lower().endswith('.wav') and os.path.isfile(file + '.tmpdata'):
-            segments = Segment.SegmentList()
-            segments.parseJSON(file + '.tmpdata')
-            if len(self.calltypes) == 1:
-                ctSegments = segments.getSpecies(self.species)
-            else:
-                ctSegments = segments.getCalltype(self.species, self.calltypes[calltypei])
-            for indx in ctSegments:
-                seg = segments[indx]
-                calltypeSegments.append(seg[:2])
+        species = self.currfilt["species"]
+        segments = Segment.SegmentList()
+        segments.parseJSON(datafile)
+        if len(self.calltypes) == 1:
+            ctSegments = segments.getSpecies(species)
+        else:
+            ctSegments = segments.getCalltype(species, self.calltypes[calltypei])
+        calltypeSegments = [segments[indx][:2] for indx in ctSegments]
 
         return calltypeSegments
 
-    def getSummary(self, avianz_batch, CNN=False, CNNmodel=None):
-        autoSegNum = 0
-        autoSegCT = [[] for i in range(len(self.calltypes))]
+    def getSummary(self, CNN=False):
+        autoSegCTnum = [0] * len(self.calltypes)
         ws = WaveletSegment.WaveletSegment()
         TP = FP = TN = FN = 0
         for root, dirs, files in os.walk(self.testDir):
             for file in files:
                 wavFile = os.path.join(root, file)
                 if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and \
-                        file + '.tmpdata' in files and file[:-4] + '-res' + str(float(self.window)) + 'sec.txt' in files:
-                    autoSegCTCurrent = [[] for i in range(len(self.calltypes))]
-                    avianz_batch.filename = os.path.join(root, file)
-                    avianz_batch.loadFile(self.species, anysound=False)
-                    duration = int(np.ceil(len(avianz_batch.audiodata) / avianz_batch.sampleRate))
-                    for i in range(len(self.calltypes)):
-                        ctsegments = self.findCTsegments(avianz_batch.filename, i)
-                        post = Segment.PostProcess(configdir=self.configdir, audioData=avianz_batch.audiodata,
-                                                   sampleRate=avianz_batch.sampleRate,
-                                                   tgtsampleRate=self.sampleRate, segments=ctsegments,
-                                                   subfilter=self.currfilt['Filters'][i], CNNmodel=CNNmodel, cert=50)
-                        post.wind()
-                        if CNN and CNNmodel:
-                            post.CNN()
-                        if 'F0' in self.currfilt['Filters'][i] and 'F0Range' in self.currfilt['Filters'][i]:
-                            if self.currfilt['Filters'][i]["F0"]:
-                                print("Checking for fundamental frequency...")
-                                post.fundamentalFrq()
-                        post.joinGaps(maxgap=self.currfilt['Filters'][i]['TimeRange'][3])
-                        post.deleteShort(minlength=self.currfilt['Filters'][i]['TimeRange'][0])
-                        if post.segments:
-                            for seg in post.segments:
-                                autoSegCTCurrent[i].append(seg[0])
-                                autoSegCT[i].append(seg[0])
-                                autoSegNum += 1
-                    # back-convert to 0/1:
+                        file + '.tmpdata' in files and file[:-4] + '-GT.txt' in files:
+                    # Extract all segments and back-convert to 0/1:
+                    _, duration, _, _ = wavio.readFmt(wavFile)
+                    duration = math.ceil(duration)
                     det01 = np.zeros(duration)
+
                     for i in range(len(self.calltypes)):
-                        for seg in autoSegCTCurrent[i]:
-                            det01[int(seg[0]):int(seg[1])] = 1
+                        if CNN:
+                            # read segments
+                            ctsegments = self.findCTsegments(wavFile+'.tmpdata', i)
+                        else:
+                            # read segments from an identical postproc pipeline w/o CNN
+                            ctsegments = self.findCTsegments(wavFile+'.tmp2data', i)
+                        autoSegCTnum[i] += len(ctsegments)
+
+                        for seg in ctsegments:
+                            det01[math.floor(seg[0]):math.ceil(seg[1])] = 1
+
                     # get and parse the agreement metrics
-                    GT = self.loadGT(os.path.join(root, file[:-4] + '-res' + str(float(self.window)) + 'sec.txt'),
-                                     duration)
+                    GT = self.loadGT(os.path.join(root, file[:-4] + '-GT.txt'), duration)
                     _, _, tp, fp, tn, fn = ws.fBetaScore(GT, det01)
                     TP += tp
                     FP += fp
@@ -750,18 +801,18 @@ class CNNtest:
         self.outfile.write("Accuracy:\t\t%.2f %%\n\n" % (accuracy * 100))
         self.outfile.write("Manually labelled segments:\t%d\n" % (self.manSegNum))
         for i in range(len(self.calltypes)):
-            self.outfile.write("Auto suggested \'%s\' segments:\t%d\n" % (self.calltypes[i], len(autoSegCT[i])))
-        self.outfile.write("Total auto suggested segments:\t%d\n\n" % (autoSegNum))
+            self.outfile.write("Auto suggested \'%s\' segments:\t%d\n" % (self.calltypes[i], autoSegCTnum[i]))
+        self.outfile.write("Total auto suggested segments:\t%d\n\n" % sum(autoSegCTnum))
 
         if CNN:
-            text = "Wavelet Pre-Processor + CNN detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t %.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
+            text = "Wavelet Pre-Processor + CNN detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t%.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
                    % (TP, TP * 100 / total, FP, FP * 100 / total, TN, TN * 100 / total, FN, FN * 100 / total,
                       specificity * 100, recall * 100, precision * 100, accuracy * 100)
         else:
-            text = "Wavelet Pre-Processor detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t %.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
+            text = "Wavelet Pre-Processor detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t%.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
                    % (TP, TP * 100 / total, FP, FP * 100 / total, TN, TN * 100 / total, FN, FN * 100 / total,
                       specificity * 100, recall * 100, precision * 100, accuracy * 100)
-        return CNN, text
+        return text
 
     def loadGT(self, filename, length):
         import csv
@@ -773,7 +824,7 @@ class CNNtest:
         if d[-1] == []:
             d = d[:-1]
         if len(d) != length:
-            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
+            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), length))
             self.annotation = []
             return False
 

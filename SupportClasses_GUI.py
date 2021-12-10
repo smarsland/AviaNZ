@@ -1,14 +1,15 @@
 
-# SupportClasses_GUI.py
+# coding=latin-1
 
+# SupportClasses_GUI.py
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,13 +24,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 
 import Segment
@@ -123,16 +124,16 @@ class AxisWidget(QAbstractButton):
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(70, sgsize)
-        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 14)
+        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 13)
 
     def paintEvent(self, event):
         if type(event) is not bool:
             painter = QPainter(self)
             # actual axis line painting
             bottomR = event.rect().bottomRight()
-            bottomR.setX(bottomR.x()-6)
+            bottomR.setX(bottomR.x()-12)
             topR = event.rect().topRight()
-            topR.setX(topR.x()-6)
+            topR.setX(topR.x()-12)
             painter.setPen(QPen(QColor(20,20,20), 1))
             painter.drawLine(bottomR, topR)
 
@@ -375,11 +376,145 @@ pg.graphicsItems.ROI.Handle.mouseDragEvent = mouseDragEventFlexible
 pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexibleLine
 
 
+class DemousedViewBox(pg.ViewBox):
+    # A version of ViewBox with no mouse events.
+    # Dramatically reduces CPU usage when such events are not needed.
+    def mouseDragEvent(self, ev, axis=None):
+        return
+
+    def mouseClickEvent(self, ev):
+        return
+
+    def mouseMoveEvent(self, ev):
+        return
+
+    def wheelEvent(self, ev, axis=None):
+        return
+
+
 # Two subclasses of LinearRegionItem, that account for spectrogram bounds when resizing
-class LinearRegionItemO(pg.LinearRegionItem):
+# and use boundary caching to reduce CPU load e.g. when detecting mouse hover
+class LinearRegionItem2(pg.LinearRegionItem):
+    def __init__(self, parent, bounds=None, *args, **kwds):
+        pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)
+        self.parent = parent
+        self.bounds = bounds
+        self.useCachedView = None
+        # we don't provide parent, and therefore don't switch buttons,
+        # when using this for overview
+        if self.parent is not None:
+            self.lines[0].btn = self.parent.MouseDrawingButton
+            self.lines[1].btn = self.parent.MouseDrawingButton
+        self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
+
+    def setHoverBrush(self, *br, **kargs):
+        self.hoverBrush = fn.mkBrush(*br, **kargs)
+
+    def setPen(self, *pen, **kargs):
+        self.lines[0].setPen(*pen, **kargs)
+        self.lines[1].setPen(*pen, **kargs)
+
+    def viewRect(self):
+        """ Return the visible bounds of this item's ViewBox or GraphicsWidget,
+            in the local coordinate system of the item.
+            Overwritten to use caching. """
+        if self.useCachedView is not None:
+            return self.useCachedView
+
+        view = self.getViewBox()
+        if view is None:
+            return None
+        bounds = view.viewRect()
+        bounds = self.mapRectFromView(bounds)
+        if bounds is None:
+            return None
+
+        bounds = bounds.normalized()
+
+        # For debugging cache misses:
+        # if self.useCachedView is not None:
+        #     if self.useCachedView.top()!=bounds.top() or self.useCachedView.bottom()!=bounds.bottom():
+        #         import traceback
+        #         traceback.print_stack()
+        #         print("cached:", self.useCachedView)
+        #         print(bounds)
+
+        self.useCachedView = bounds
+        return bounds
+
+    def viewTransformChanged(self):
+        # Clear cache
+        self.useCachedView = None
+
+    # def boundingRect(self):
+    #     # because we react to hover, this is called frequently
+
+    #     # ORIGINAL:
+    #     br = self.viewRect()  # bounds of containing ViewBox mapped to local coords.
+
+    #     rng = self.getRegion()
+    #     br.setLeft(rng[0])
+    #     br.setRight(rng[1])
+    #     length = br.height()
+    #     br.setBottom(br.top() + length * self.span[1])
+    #     br.setTop(br.top() + length * self.span[0])
+
+    #     br = br.normalized()
+
+    #     if self._bounds != br:
+    #         print("Preparing geom")
+    #         self._bounds = br
+    #         self.prepareGeometryChange()
+
+    #     return br
+
+    def mouseDragEvent(self, ev):
+        if not self.movable or (self.parent is not None and ev.button()==self.parent.MouseDrawingButton):
+            return
+        ev.accept()
+
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+
+        if not self.moving:
+            return
+
+        self.lines[0].blockSignals(True)  # only want to update once
+        newcenter = ev.pos()
+        # added this to bound its dragging, as in ROI.
+        # first, adjust center position to avoid dragging too far:
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
+            if self.bounds is not None:
+                # stop center from moving too far left
+                if tomove.x() < self.bounds[0]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
+                # stop center from moving too far right
+                if tomove.x() > self.bounds[1]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
+
+        # update lines based on adjusted center
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
+            l.setPos(tomove)
+
+        self.lines[0].blockSignals(False)
+        self.prepareGeometryChange()
+
+        if ev.isFinish():
+            self.moving = False
+            self.sigRegionChangeFinished.emit(self)
+        else:
+            self.sigRegionChanged.emit(self)
+
+
+# Just another slight optimization - immediately dropping unneeded mouse events
+class LinearRegionItemO(LinearRegionItem2):
     def __init__(self, *args, **kwds):
-        pg.LinearRegionItem.__init__(self, *args, **kwds)
-        self.bounds = [None,None]
+        LinearRegionItem2.__init__(self, parent=None, bounds=[0,100], *args, **kwds)
 
     def setRegion(self, rgn):
         """Set the values for the edges of the region.
@@ -414,105 +549,30 @@ class LinearRegionItemO(pg.LinearRegionItem):
         self.bounds = bounds
         super(LinearRegionItemO, self).setBounds(bounds)
 
-    def mouseDragEvent(self, ev):
-        if not self.movable or int(ev.button() & Qt.LeftButton)==0:
-            return
+    # identical to original, just w/o debugger
+    def paint(self, p, *args):
+        p.setBrush(self.currentBrush)
+        p.setPen(fn.mkPen(None))
+        p.drawRect(self.boundingRect())
+
+    # Immediate rejects on all unneeded events:
+    def mouseClickEvent(self, ev):
         ev.accept()
+        return
 
-        if ev.isStart():
-            bdp = ev.buttonDownPos()
-            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
-            self.startPositions = [l.pos() for l in self.lines]
-            self.moving = True
-
-        if not self.moving:
-            return
-
-        self.lines[0].blockSignals(True)  # only want to update once
-        newcenter = ev.pos()
-        # added this to bound its dragging, as in ROI.
-        # first, adjust center position to avoid dragging too far:
-        for i, l in enumerate(self.lines):
-            tomove = self.cursorOffsets[i] + newcenter
-            if self.bounds is not None:
-                # stop center from moving too far left
-                if tomove.x() < self.bounds[0]:
-                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
-                # stop center from moving too far right
-                if tomove.x() > self.bounds[1]:
-                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
-
-        # update lines based on adjusted center
-        for i, l in enumerate(self.lines):
-            tomove = self.cursorOffsets[i] + newcenter
-            l.setPos(tomove)
-
-        self.lines[0].blockSignals(False)
-        self.prepareGeometryChange()
-
-        if ev.isFinish():
-            self.moving = False
-            self.sigRegionChangeFinished.emit(self)
-        else:
-            self.sigRegionChanged.emit(self)
-
-class LinearRegionItem2(pg.LinearRegionItem):
-    def __init__(self, parent, bounds=None, *args, **kwds):
-        pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)
-        self.parent = parent
-        self.bounds = bounds
-        self.lines[0].btn = self.parent.MouseDrawingButton
-        self.lines[1].btn = self.parent.MouseDrawingButton
-        self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
-
-    def setHoverBrush(self, *br, **kargs):
-        self.hoverBrush = fn.mkBrush(*br, **kargs)
-
-    def setPen(self, *pen, **kargs):
-        self.lines[0].setPen(*pen, **kargs)
-        self.lines[1].setPen(*pen, **kargs)
-
-    def mouseDragEvent(self, ev):
-        if not self.movable or ev.button()==self.parent.MouseDrawingButton:
-            return
+    def wheelEvent(self, ev):
         ev.accept()
+        return
 
-        if ev.isStart():
-            bdp = ev.buttonDownPos()
-            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
-            self.startPositions = [l.pos() for l in self.lines]
-            self.moving = True
-
-        if not self.moving:
-            return
-
-        self.lines[0].blockSignals(True)  # only want to update once
-        newcenter = ev.pos()
-        # added this to bound its dragging, as in ROI.
-        # first, adjust center position to avoid dragging too far:
-        for i, l in enumerate(self.lines):
-            tomove = self.cursorOffsets[i] + newcenter
-            if self.bounds is not None:
-                # stop center from moving too far left
-                if tomove.x() < self.bounds[0]:
-                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
-                # stop center from moving too far right
-                if tomove.x() > self.bounds[1]:
-                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
-
-        # update lines based on adjusted center
-        for i, l in enumerate(self.lines):
-            tomove = self.cursorOffsets[i] + newcenter
-            l.setPos(tomove)
-
-        self.lines[0].blockSignals(False)
-        self.prepareGeometryChange()
-
-        if ev.isFinish():
-            self.moving = False
-            self.sigRegionChangeFinished.emit(self)
-        else:
-            self.sigRegionChanged.emit(self)
+    # Other events could be dropped too:
+    # def lineMoved(self, i):
+    #     return
+    # def lineMoveFinished(self):
+    #     return
+    # def setMouseHover(self, hover):
+    #     return
+    # def hoverEvent(self, ev):
+    #     return
 
 
 class DragViewBox(pg.ViewBox):
@@ -600,19 +660,53 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
         self.parentWidget().resend(x)
 
 
+class PartlyResizableGLW(pg.GraphicsLayoutWidget):
+    # a widget which has a fixed aspect ratio, set by height.
+    # useful for horizontal scroll areas.
+    def __init__(self):
+        self.plotAspect = 5
+        # to prevent infinite loops:
+        self.alreadyResizing = False
+        super(PartlyResizableGLW, self).__init__()
+
+    def forceResize(self):
+        # this should be doable by postEvent(QResizeEvent),
+        # but somehow doesn't always work.
+        self.alreadyResizing = False
+        self.setMinimumWidth(self.height()*self.plotAspect-10)
+        self.setMaximumWidth(self.height()*self.plotAspect+10)
+        self.adjustSize()
+
+    def resizeEvent(self, e):
+        if e is not None:
+            # break any infinite loops,
+            # and also processes every second event:
+            if self.alreadyResizing:
+                self.alreadyResizing = False
+                return
+
+            self.alreadyResizing = True
+            # Some buffer for flexibility, so that it could adjust itself
+            # and avoid infinite loops
+            self.setMinimumWidth(e.size().height()*self.plotAspect-10)
+            self.setMaximumWidth(e.size().height()*self.plotAspect+10)
+
+            pg.GraphicsLayoutWidget.resizeEvent(self, e)
+
+
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
-    def __init__(self, format):
+    def __init__(self, format, loop=False):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
         self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
         self.tempin = QBuffer()
-        self.startpos = 0
-        self.timeoffset = 0
+        self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
         self.keepSlider = False
+        self.loop = loop
         #self.format = format
         # set small buffer (10 ms) and use processed time
         self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
@@ -623,6 +717,9 @@ class ControllableAudio(QAudioOutput):
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
         if self.state() == QAudio.IdleState:
+            if self.loop:
+                self.restart()
+                return
             # give some time for GUI to catch up and stop
             sleepCycles = 0
             while(self.state() != QAudio.StoppedState and sleepCycles < 30):
@@ -724,6 +821,12 @@ class ControllableAudio(QAudioOutput):
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
+        self.sttime = time.time() - self.timeoffset/1000
+        self.start(self.tempin)
+
+    def restart(self):
+        # self.timeoffset = ? does this need to be fixed?
+        self.tempin.seek(0)
         self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
@@ -866,8 +969,8 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.2 (April 2020)")
-            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
+            self.setText("The AviaNZ Program, v3.3-devel (May 2021)")
+            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
 
@@ -879,7 +982,7 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -892,20 +995,25 @@ class PicButton(QAbstractButton):
         self.playButton = QtGui.QToolButton(self)
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.hide()
+
+        # batmode frequency guides (in Y positions 0-1)
+        self.guides = guides
+        if guides is not None:
+            self.guidelines = [0]*len(self.guides)
+            self.guidecol = [QColor(*col) for col in guidecol]
+
         # check if playback possible (e.g. batmode)
         if len(audiodata)>0:
             self.noaudio = False
             self.playButton.clicked.connect(self.playImage)
         else:
             self.noaudio = True
-            # batmode frequency guides (in Y positions 0-1)
-            if guides is not None:
-                self.guides = guides
-                self.guidelines = [0]*len(self.guides)
 
         # setImage reads some properties from self, to allow easy update
-        # when color map changes
-        self.setImage(lut, colStart, colEnd, cmapInv)
+        # when color map changes. Initialize with full colour scale,
+        # then we expect to call setImage soon again to update.
+        self.lut = lut
+        self.setImage([np.min(self.spec), np.max(self.spec)])
 
         self.buttonClicked = False
         # if not self.cluster:
@@ -917,15 +1025,18 @@ class PicButton(QAbstractButton):
         # playback things
         self.media_obj = ControllableAudio(format)
         self.media_obj.notify.connect(self.endListener)
+        self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
 
-    def setImage(self, lut, colStart, colEnd, cmapInv):
+    def setImage(self, colRange):
         # takes in a piece of spectrogram and produces a pair of images
-        if cmapInv:
-            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colEnd, colStart])
-        else:
-            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
+        # colRange: list [colStart, colEnd]
+        # TODO Could be smoother to separate out setLevels
+        # from setImage here, so that colours could be adjusted without
+        # redrawing - like in other review dialogs. But this also helps
+        # to trigger repaint upon scrolling etc, esp on Macs.
+        im, alpha = fn.makeARGB(self.spec, lut=self.lut, levels=colRange)
         im1 = fn.makeQImage(im, alpha)
         if im1.size().width() == 0:
             print("ERROR: button not shown, likely bad spectrogram coordinates")
@@ -955,7 +1066,7 @@ class PicButton(QAbstractButton):
             self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, self.im1.size().height())
 
             # create guides for batmode
-            if self.noaudio:
+            if self.guides is not None:
                 for i in range(len(self.guides)):
                     self.guidelines[i] = QLineF(0, self.im1.height() - self.guides[i]/heightRedFact, targwidth, self.im1.height() - self.guides[i]/heightRedFact)
 
@@ -980,13 +1091,10 @@ class PicButton(QAbstractButton):
                 painter.drawLine(self.line1)
                 painter.drawLine(self.line2)
 
-            if self.noaudio:
-                painter.setPen(QPen(QColor(255,232,140), 2))
-                painter.drawLine(self.guidelines[0])
-                painter.drawLine(self.guidelines[3])
-                painter.setPen(QPen(QColor(239,189,124), 2))
-                painter.drawLine(self.guidelines[1])
-                painter.drawLine(self.guidelines[2])
+            if self.guides is not None:
+                for gi in range(len(self.guidelines)):
+                    painter.setPen(QPen(self.guidecol[gi], 2))
+                    painter.drawLine(self.guidelines[gi])
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
@@ -1046,7 +1154,10 @@ class PicButton(QAbstractButton):
     def endListener(self):
         timeel = self.media_obj.elapsedUSecs() // 1000
         if timeel > self.duration:
-            self.stopPlayback()
+            if self.media_obj.loop:
+                self.media_obj.restart()
+            else:
+                self.stopPlayback()
 
     def stopPlayback(self):
         self.media_obj.pressedStop()
@@ -1111,6 +1222,7 @@ class LightedFileList(QListWidget):
         self.fsList = set()
         self.listOfFiles = []
         self.minCertainty = 100
+        self.setMinimumWidth(150)
 
         # for the traffic light icons
         self.pixmap = QPixmap(10, 10)
@@ -1230,28 +1342,48 @@ class LightedFileList(QListWidget):
 
         # mark the current file or first row (..), if not found
         if fileName:
-            index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+            # for matching dirs:
+            # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+            index = self.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:
                 self.setCurrentRow(0)
 
-    def refreshFile(self, fileName):
-        """ Repaint a single file icon.
+    def refreshFile(self, fileName, cert):
+        """ Repaint a single file icon with the provided certainty.
             fileName: file stem (dir will be read from self)
+            cert:     0-100, or -1 if no annotations
         """
-        index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+        # for matching dirs - not sure if needed:
+        # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+        index = self.findItems(fileName,Qt.MatchExactly)
         if len(index)==0:
             return
 
-        if self.soundDir is None:
-            # something bad happened
-            print("Warning: soundDir not set, cannot find .data files")
-            return
-
         curritem = index[0]
-        datafile = os.path.join(self.soundDir, fileName)+'.data'
-        self.paintItem(curritem, datafile)
+        # Repainting identical to paintItem
+        if cert == -1:
+            # .data exists, but no annotations
+            self.pixmap.fill(QColor(255,255,255,0))
+            painter = QPainter(self.pixmap)
+            painter.setPen(self.blackpen)
+            painter.drawRect(self.pixmap.rect())
+            painter.end()
+            curritem.setIcon(QIcon(self.pixmap))
+            # no change to self.minCertainty
+        elif cert == 0:
+            self.pixmap.fill(self.ColourNone)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = 0
+        elif cert < 100:
+            self.pixmap.fill(self.ColourPossibleDark)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = min(self.minCertainty, cert)
+        else:
+            self.pixmap.fill(self.ColourNamed)
+            curritem.setIcon(QIcon(self.pixmap))
+            # self.minCertainty cannot be changed by a cert=100 segment
 
     def paintItem(self, item, datafile):
         """ Read the JSON and draw the traffic light for a single item """
@@ -1300,9 +1432,131 @@ class LightedFileList(QListWidget):
                 item.setIcon(QIcon(self.pixmap))
                 # self.minCertainty cannot be changed by a cert=100 segment
         else:
-            # it is a file, but no .data
+            # no .data for this sound file
             self.pixmap.fill(QColor(255,255,255,0))
             item.setIcon(QIcon(self.pixmap))
 
         # collect some extra info about this file as we've read it anyway
         self.spList.update(filesp)
+
+
+class MainPushButton(QPushButton):
+    """ QPushButton with a standard styling """
+    def __init__(self, *args, **kwargs):
+        super(MainPushButton, self).__init__(*args, **kwargs)
+        self.setStyleSheet("""
+          MainPushButton { font-weight: bold; font-size: 14px; padding: 3px 3px 3px 7px; }
+        """)
+        # would like to add more stuff such as:
+        #    border: 2px solid #8f8f91; background-color: #dddddd}
+        #  MainPushButton:disabled { border: 2 px solid #cccccc }
+        #  MainPushButton:hover { background-color: #eeeeee }
+        #  MainPushButton:pressed { background-color: #cccccc }
+        # But any such change overrides default drawing style entirely.
+        self.setFixedHeight(45)
+
+class BrightContrVol(QWidget):
+    """ Widget containing brightness, contrast, volume control sliders
+        and icons. On bright./contr. change, emits a colChanged signal
+        with (brightness, contrast) values. On vol. change, emits a volChanged
+        signal with (volume) value.
+        All values are ints on 0-100 scale.
+    """
+    # Initialize with values to accurately set up slider positions
+    # horizontal: bool, True for e.g. review modes, False for manual
+    #  (adjusts layout accordingly)
+    colChanged = pyqtSignal(int, int)
+    volChanged = pyqtSignal(int)
+    def __init__(self, brightness, contrast, inverted, horizontal=True, parent=None, **kwargs):
+        super(BrightContrVol, self).__init__(parent, **kwargs)
+
+        # Sliders and signals
+        self.brightSlider = QSlider(Qt.Horizontal)
+        self.brightSlider.setMinimum(0)
+        self.brightSlider.setMaximum(100)
+        if inverted:
+            self.brightSlider.setValue(brightness)
+        else:
+            self.brightSlider.setValue(100-brightness)
+        self.brightSlider.setTickInterval(1)
+        self.brightSlider.valueChanged.connect(self.emitCol)
+
+        self.contrSlider = QSlider(Qt.Horizontal)
+        self.contrSlider.setMinimum(0)
+        self.contrSlider.setMaximum(100)
+        self.contrSlider.setValue(contrast)
+        self.contrSlider.setTickInterval(1)
+        self.contrSlider.valueChanged.connect(self.emitCol)
+
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
+        self.volSlider.valueChanged.connect(self.volChanged.emit)
+
+        # static labels
+        labelBr = QLabel()
+        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
+
+        labelCo = QLabel()
+        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
+
+        self.volIcon = QLabel()
+        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
+        # Layout
+        if horizontal:
+            labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            box = QHBoxLayout()
+            box.addSpacing(5)  # outer margin
+            box.addWidget(self.volIcon)
+            box.addWidget(self.volSlider)
+            box.addSpacing(10)
+            box.addWidget(labelBr)
+            box.addWidget(self.brightSlider)
+            box.addSpacing(10)
+            box.addWidget(labelCo)
+            box.addWidget(self.contrSlider)
+            box.addStretch(3)
+
+            box.setStretch(2,4)
+            box.setStretch(5,5)  # color sliders should stretch more than vol
+            box.setStretch(8,5)
+        else:
+            box = QGridLayout()
+            box.addWidget(self.volIcon, 0, 0)
+            box.addWidget(self.volSlider, 0, 1)
+            box.setRowMinimumHeight(0, 30)
+
+            box.addWidget(labelBr, 1, 0)
+            box.addWidget(QLabel("Brightness"), 1, 1)
+            box.addWidget(self.brightSlider, 2, 0, 1, 2)
+
+            box.addWidget(labelCo, 3, 0)
+            box.addWidget(QLabel("Contrast"), 3, 1)
+            box.addWidget(self.contrSlider, 4, 0, 1, 2)
+
+            # Could also set icon scale to 16
+            labelCo.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+            labelBr.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+            self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+            box.setColumnStretch(1,3)
+            box.setHorizontalSpacing(20)
+            box.setContentsMargins(0, 5, 0, 10)
+
+        self.setLayout(box)
+
+    def emitCol(self):
+        """ Emit the colour signal (to be triggered by valueChanged or
+            programmatically, when a colour refresh is needed)
+        """
+        self.colChanged.emit(self.brightSlider.value(), self.contrSlider.value())
+
+    def emitAll(self):
+        """ Emit both colour and volume signals (useful for initialization)
+        """
+        self.emitCol()
+        self.volChanged.emit(self.volSlider.value())

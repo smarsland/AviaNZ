@@ -10,6 +10,23 @@ This software enables you to:
 
 For more information about the project, see http://www.avianz.net
 
+# Citation
+
+If you use this software, please credit us in any papers that you write. An appropriate reference is:
+
+```
+@article{Marsland19,
+  title = "AviaNZ: A future-proofed program for annotation and recognition of animal sounds in long-time field recordings",
+  author = "{Marsland}, Stephen and {Priyadarshani}, Nirosha and {Juodakis}, Julius and {Castro}, Isabel",
+  journal = "Methods in Ecology and Evolution",
+  volume = 10,
+  number = 8,
+  pages = "1189--1195",
+  year = 2019
+}
+```
+
+
 # Installation
 
 ## Windows

@@ -1504,15 +1504,3 @@ for i in range(start_i,6):
                     os.mkdir(test_general_results_dir+ '/' + test_fold)
                 print('\n\n Starting test ', test_count)
         
-                
-
-    
-
-
-
-
-
-
-
-    
-

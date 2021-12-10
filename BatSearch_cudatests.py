@@ -1,20 +1,22 @@
 """
 Created on 1/10/2020
 
+Updated 19/10/2020
+
 @author: Virginia Listanti
 
 This code generate different trained CNN and test them on the folder Moira2020
 
 Different test configuration:
 - 100/250/500 files for each class each [3 diffent datasets
-- window: 3pxl doubled, 7 pxl, 11 pxl
+- window: 3pxl doubled, 7 pxl, 31 pxl
 - augumentation y/n
 
 
 Pipeline:
 -create train dataset: clicksearch + read annotations
 - 75% training, 25% validation
-- agumentation(y/n)
+- [agumentation(y/n)]
 - Cnn train
 - test on dataset
 - generate annotations

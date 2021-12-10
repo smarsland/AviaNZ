@@ -1,112 +1,152 @@
 All notable changes to AviaNZ program will be documented in this file.
 
-## [Unreleased]
+## Unreleased
 
-<<<<<<< HEAD
-## [2.2] - 2020-04-28
+### Added
+- New changepoint detector replaces wavelet filter as the default non-CNN recognition method (wavelet filters still work but considered deprecated)
+- Syllable-level detection: trainable filters via the new changepoint pipeline, one example filter for LSK syllables included, and parameter ranges for non-specific detectors adapted
+- New method for wind noise removal by polynomial fitting (OLS or robust options available)
+- Pre-built GPU support for CNN in compiled versions
+- Option to loop playback in both review types
+- Option to autoplay in one-by-one review
+- Non-linear frequency scale spectrograms (Mel, Bark)
+- Additional spectrogram normalization options, including PCEN
+
+### Changed
+- Training will now include subdirectories when searching for data
+- Node selection in training faster, more stable, and produces ROCs more closely consistent with testing/processing
+- Wind noise removal only available for changepoint detectors now
+- Denoising dialog will now use time-adaptive noise estimation by default
+- Filter format extended to allow setting segmenter
+- Better UI for adding species in review, search function
+- Shorter pages (5 mins) for low sampling rate files in batch mode
+- CNNs no longer redefine segment boundaries, only accept/reject
+- reduced extension length when applying CNNs to short segments
+- various changes to CNN training
+- Tab shortcut for species/calltype switch
+- different click detection process when training bat detectors
+- ground truth files no longer store resolution in the name
+- batch processing will not allow upsampling if using wind filter (only 2x or 4x "fake upsampling" which is implemented by node remapping)
+- batch review now has better feedback on input errors
 
 ### Fixed
+- Faster CNN classification
+- Post-processing harmonised between batch mode, testing, testing with CNN
+- Segmenting in manual mode now only overwrites the current page segments
+- Problems when undoing segmentation in multi-page files
+- Bat BMP reading sometimes wasn't setting a parameter
+- Faster spectrogram updating in manual mode
+- Minor UI bugs in recogniser training wizard
+- Long species list now triggers button reordering in review
+- better edge case handling when adding species in review
+- ancient bugs in best basis selection for wavelet denoising
+- WAV Splitter produced bad timestamps on files starting within an hour before a DST change
+- data padding for wavelet decomposition/reconstruction was wrong length and reversed
+- Wavelet energy computation made safer and less edge-influenced
+- missing post-processing settings in batch GUI
 
-- Empty results in Recogniser testing
-- Cluster button scale
-- Better feedback in Batch Processing and Review
+### Hidden changes (developer-mode):
+- Ridge/instantaneous freq. detection
+- Shape analysis dialog
+- Button for exporting segment sound at different speed
+- Denoising button now connected to the new denoising
+- Saving spectrogram images without axes
+- Call comparator as a separate script, clock-adjustment only
+
+
+## [3.2] - 2021-02-16
+
+### Added
+- Ability to undo previously deleted segments in review
+- "One-by-one" review plot size expands to dialog size
+- BatSearch-compatible output for batmode
+- National Bat Database format output for batmode
+- Segment saving feedback now shown in status bar
+- Mouse cursor indicates current mode
+- "Jump to next annotation" buttons
+- Optional frequency masking in CNN training
+- Ability to customise existing recognisers
+- Formant marking in spectrogram
+- Dialog for adjusting thresholds of stored filters
+- Ability to adjust other filter parameters for newly-trained detectors
+
+### Changed
+- Improved processing pipeline for bats
+- Improved CNN recogniser for bats
+- Extended morepork recogniser with CNN
+- "One-by-one" review (previously All Species) can now be run on single species
+- Batch Review settings separated into Advanced and Simple
+- Simpler dropdown to set review certainty bounds
+- Better spectrogram type selection UI
+- Separate UI thread to keep responsiveness when batch processing
+
+### Fixed
+- Greatly reduced CPU load for mouseover detection in spectrogram items
+- Batch settings are appropriately greyed out and provide tooltips
+- 8-bit WAV playback was not working
+- Bugs in non-specific batch processing
+- Cleaned up gap-merging algorithms, could have caused bugs in edge cases
+
+## [3.1] - 2020-10-09
 
 ### Added
 
-- CNN training to improve precision
-- Call type review in any sound (all species) mode
-- Call type annotation/correction in manual processing mode
-- Bach mode progress dialog
-- Time axis in single species review
-- Recording information in the manual processing mode
+- Visible frequency range in batmode defaults to full
+- Manage Recognisers deals with CNN files as well
+- ROCs during training show more information, wavelet freq. bands
 
-- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
-- NZ bat list and filter to identify them (click detector and CNN)
+### Changed
+
+- Excel output shows absolute times of detected segments, when files have timestamps
+- Tensorflow version bumped up
+
+### Fixed
+
+- Graphical problems on high resolution displays
+- Safer restarting
+
+## [3.0] - 2020-09-17
+
+### Added
+
+- *CNN training* to improve precision
+- Call type annotation/correction in manual processing mode
+- Call type review in all species mode
+
+- *Bat mode:* loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
+- NZ bat list and a filter to identify them (click detector and CNN)
+- Frequency guides for fast bat call annotation
+
+- *Utilities:* importing Freebird or Excel format annotations, backing up data files
+
+- Command line options for batch processing and testing
+
+- New filters for kiwi species
+- New sound and spectrogram samples
+
+- Recording information in the manual processing mode
+- Time axis in single species review
 
 ### Changed
 
 - Removed user input for number of thresholds in wavelet filter training
-- Filter requirements are more flexible now, to incorporate bat settings
-
-## [2.2] - 2020-04-28
-
-### Fixed
-
-- Empty results in Recogniser testing
-- Cluster button scale
-- Better feedback in Batch Processing and Review
-
-### Added
-
-- CNN training to improve precision
-- Call type review in any sound (all species) mode
-- Call type annotation/correction in manual processing mode
-- Bach mode progress dialog
-- Time axis in single species review
-- Recording information in the manual processing mode
-
-- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
-- NZ bat list and filter to identify them (click detector and CNN)
-
-### Changed
-
-- Removed user input for number of thresholds in wavelet filter training
-- Filter requirements are more flexible now, to incorporate bat settings
-
-## [2.2] - 2020-04-28
+- Filter requirements more flexible now, to incorporate bat settings
+- Improved overview window UI
+- Better feedback, progress bars in Batch Processing and Review
+- Customizable tile size in Single species review
+- Easier access to WAV/DATA splitter
+- Better presentation of recogniser testing results
+- Wavelet training now reads clusters from calltype annotations if provided
+- Removed fund. freq. option from wavelet filter training
 
 ### Fixed
 
-- Empty results in Recogniser testing
-- Cluster button scale
-- Better feedback in Batch Processing and Review
-
-### Added
-
-- CNN training to improve precision
-- Call type review in any sound (all species) mode
-- Call type annotation/correction in manual processing mode
-- Bach mode progress dialog
-- Time axis in single species review
-- Recording information in the manual processing mode
-
-- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
-- NZ bat list and filter to identify them (click detector and CNN)
-
-### Changed
-
-- Removed user input for number of thresholds in wavelet filter training
-- Filter requirements are more flexible now, to incorporate bat settings
+- Avoiding div by 0 in edge cases of spectrogram normalization
+- No more CTD on basic import errors in windows
+- Some minor bugfixes and safety checks
 
 ## [2.2] - 2020-04-28
 
-### Fixed
-
-- Empty results in Recogniser testing
-- Cluster button scale
-- Better feedback in Batch Processing and Review
-
-### Added
-
-- CNN training to improve precision
-- Call type review in any sound (all species) mode
-- Call type annotation/correction in manual processing mode
-- Bach mode progress dialog
-- Time axis in single species review
-- Recording information in the manual processing mode
-
-- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
-- NZ bat list and filter to identify them (click detector and CNN)
-
-### Changed
-
-- Removed user input for number of thresholds in wavelet filter training
-- Filter requirements are more flexible now, to incorporate bat settings
-
-## [2.2] - 2020-04-28
-
-=======
->>>>>>> bats
 ### Fixed
 
 - Recogniser testing summary
@@ -114,42 +154,26 @@ All notable changes to AviaNZ program will be documented in this file.
 - Better zoom and scaling in review dialogs
 - Faster and safer Excel export
 - Splitter outputs duration of existing .data files properly
-<<<<<<< HEAD
 - Dialogs adapted to low screen resolutions
 - Various minor bug fixes
-=======
->>>>>>> bats
 
 ### Added
 
 - CNN layer after wavelet filter in the processing pipeline to improve the precision
 - Certainty improved after CNN post-proc
-<<<<<<< HEAD
 - Trained CNN models for NI brown kiwi, ready to use
-=======
-- Trained CNN models for kiwi, ready to use
->>>>>>> bats
 - Separate excel export in Batch Review
 - Intermittent sampling
 - Single Species review now has a frequency axis
 - All Species review now has a "Question" button to mark segments that need editing
-<<<<<<< HEAD
 - File list in Manual mode now has colored icons to identify what level of annotations is present in each file
-=======
->>>>>>> bats
 
 ### Changed
 
 - Human review made faster by loading the segments rather than reading whole file
-<<<<<<< HEAD
 - Single Species review now displays every piece of long segments individually, rather than just showing the center
 - Lots of visual updates
 
-=======
-- Lots of visual updates
-
-
->>>>>>> bats
 ## [2.1] - 2020-02-12
 
 ### Added
@@ -310,12 +334,8 @@ Initial Release (for the Acoustic Workshop at Massey University 2017-06-09)
 - Spectrogram CheatSheet (pdf format)
 
 
-<<<<<<< HEAD
 [unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.2...HEAD
 [2.2]: https://github.com/smarsland/AviaNZ/compare/v2.1...v2.2
-=======
-[unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.0...HEAD
->>>>>>> bats
 [2.1]: https://github.com/smarsland/AviaNZ/compare/v2.0.2...v2.1
 [2.0]: https://github.com/smarsland/AviaNZ/compare/v1.5.1...v2.0
 [1.5.1]: https://github.com/smarsland/AviaNZ/compare/v1.5...v1.5.1

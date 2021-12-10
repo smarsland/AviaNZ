@@ -1,13 +1,12 @@
 
 # SupportClasses.py
-
 # Support classes for the AviaNZ program
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,7 +22,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
 from openpyxl.styles import Font
 
 QtMM = True
@@ -38,7 +36,6 @@ import math
 import numpy as np
 import os, json
 import re
-import sys
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
 
@@ -65,7 +62,8 @@ class Log(object):
         # On init, we parse the existing log to see if appending is possible.
         # Actual append/create happens later.
         self.possibleAppend = False
-        self.file = path
+        self.filepath = path
+        # self.file will be an IO stram opened by the main launcher
         self.species = species
         self.settings = ','.join(map(str, settings))
         self.oldAnalyses = []
@@ -121,10 +119,23 @@ class Log(object):
 
     def appendFile(self, filename):
         print('Appending %s to log' % filename)
+        # convert to path relative to the log file directory
+        if os.path.isabs(filename):
+            filename = os.path.relpath(filename, os.path.dirname(self.filepath))
+
         # attach file path to end of log
         self.file.write(filename)
         self.file.write("\n")
         self.file.flush()
+
+    def getDoneFiles(self, possiblefiles):
+        """ Selects files that are stored in this log from possiblefiles.
+            Assumes possiblefiles stores absolute paths. """
+        currdir = os.path.dirname(self.filepath)
+        done_abs = [os.path.normpath(os.path.join(currdir, f)) for f in self.filesDone if not os.path.isabs(f)]
+        # assuming relative paths on both lists:
+        out = set(done_abs).intersection(set(possiblefiles))
+        return(out)
 
     def appendHeader(self, header, species, settings):
         if header is None:
@@ -165,12 +176,11 @@ class ConfigLoader(object):
             config = json.load(f)
             f.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     def filters(self, dir, bats=True):
         """ Returns a dict of filter JSONs,
@@ -199,6 +209,9 @@ class ConfigLoader(object):
                 # skip this filter if it looks fishy:
                 if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
                     raise ValueError("Filter JSON format wrong, skipping")
+                # note that method may be empty for backwards compatibility:
+                if "method" in filt and filt["method"] not in ["wv", "chp"]:
+                    raise ValueError("Filter JSON format wrong (unrecognised method), skipping")
                 for subfilt in filt["Filters"]:
                     if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
                         raise ValueError("Subfilter JSON format wrong, skipping")
@@ -235,15 +248,28 @@ class ConfigLoader(object):
                         print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
                 else:
                     try:
+                        print(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
                         json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
                         loaded_model_json = json_file.read()
+                        print(loaded_model_json)
+                        print("**")
                         json_file.close()
                         model = model_from_json(loaded_model_json)
+                        print(model)
+                        print("***")
                         model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                        print("****")
                         print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
-                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                        if 'fRange' in filt["CNN"]:
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                                                     filt["CNN"]["output"],
+                                                     filt["CNN"]["windowInc"], filt["CNN"]["thr"], True,
+                                                     filt["CNN"]["fRange"]]
+                        else:
+                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
+                                                     filt["CNN"]["output"], filt["CNN"]["windowInc"],
+                                                     filt["CNN"]["thr"], False]
                     except Exception as e:
                         print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         print(e)
@@ -357,12 +383,11 @@ class ConfigLoader(object):
             config = json.load(configfile)
             configfile.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     # Dumps the provided JSON array to the corresponding bird file.
     def blwrite(self, content, file, configdir):
@@ -392,9 +417,8 @@ class ConfigLoader(object):
             # will always be an absolute path to the user configdir.
             with open(file, 'w') as f:
                 json.dump(content, f, indent=1)
-
         except Exception as e:
-            print("ERROR while saving config file:")
+            print("Warning: could not save config file:")
             print(e)
 
 
@@ -413,14 +437,19 @@ class ExcelIO():
         pagelen:    page length, seconds (for filling out absence)
         numpages:   number of pages in this file (of size pagelen)
         speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
-        startTime:  timestamp for cell names
-        resolution: output resolution on excel (sheet 3) in seconds. Default is 1
+        startTime:  timestamp for page start, or None to autodetect from file name
+        precisionMS:  timestamp resolution for sheet 1: False=in s, True=in ms
+        resolution: output resolution (sheet 3) in seconds
     """
     # functions for filling out the excel sheets:
     # First page lists all segments (of a species, if specified)
     # segsLL: list of SegmentList with filename attribute
     # startTime: offset from 0, when exporting a single page
-    def writeToExcelp1(self, wb, segsLL, currsp, startTime):
+    def writeToExcelp1(self, wb, segsLL, currsp, startTime, precisionMS):
+        if precisionMS:
+            timeStrFormat = "hh:mm:ss.zzz"
+        else:
+            timeStrFormat = "hh:mm:ss"
         from PyQt5.QtCore import QTime
         ws = wb['Time Stamps']
         r = ws.max_row + 1
@@ -436,31 +465,57 @@ class ExcelIO():
             if len(speciesSegs)==0:
                 continue
 
+            if startTime is None:
+                # if no startTime was provided, try to figure it out based on the filename
+                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(segsl.filename)[:-8])
+
+                if DOCRecording:
+                    print("time stamp found", DOCRecording)
+                    startTimeFile = DOCRecording.group(2)
+                    startTimeFile = QTime(int(startTimeFile[:2]), int(startTimeFile[2:4]), int(startTimeFile[4:6]))
+                else:
+                    startTimeFile = QTime(0,0,0)
+            else:
+                startTimeFile = QTime(0,0,0).addSecs(startTime)
+
             # Loop over the segments
             for seg in speciesSegs:
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(seg[0]*1000).toString(timeStrFormat)))
+                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(seg[1]*1000).toString(timeStrFormat)))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
                 if currsp=="Any sound":
-                    # print species and certainty
+                    # print species and certainty and call type
                     text = [lab["species"] for lab in seg[4]]
                     ws.cell(row=r, column=6, value=", ".join(text))
                     text = [str(lab["certainty"]) for lab in seg[4]]
                     ws.cell(row=r, column=7, value=", ".join(text))
+                    strct = []
+                    for lab in seg[4]:
+                        if "calltype" in lab:
+                            strct.append(str(lab["calltype"]))
+                        else:
+                            strct.append("-")
+                    ws.cell(row=r, column=8, value=", ".join(strct))
                 else:
-                    # only print certainty
-                    text = []
+                    # only print certainty and call type
+                    strcert = []
+                    strct = []
                     for lab in seg[4]:
                         if lab["species"]==currsp:
-                            text.append(str(lab["certainty"]))
-                    ws.cell(row=r, column=6, value=", ".join(text))
+                            strcert.append(str(lab["certainty"]))
+                            if "calltype" in lab:
+                                strct.append(str(lab["calltype"]))
+                            else:
+                                strct.append("-")
+                    ws.cell(row=r, column=6, value=", ".join(strcert))
+                    ws.cell(row=r, column=7, value=", ".join(strct))
                 r += 1
 
     # This stores pres/abs and max certainty for the species in each file
@@ -496,7 +551,7 @@ class ExcelIO():
 
         # print resolution "header"
         ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
-        ft = Font(color=colors.DARKYELLOW)
+        ft = Font(color="808000")
         ws.cell(row=r, column=1).font=ft
 
         # print file name and page number
@@ -538,7 +593,7 @@ class ExcelIO():
             ws.cell(row=r+1, column=c, value=detected[t])
             c += 1
 
-    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=0, resolution=10):
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=None, precisionMS=False, resolution=10):
         # will export species present in self, + passed as arg, + "all species" excel
         speciesList = set(speciesList)
         for segl in segments:
@@ -576,15 +631,21 @@ class ExcelIO():
                 wb.create_sheet(title='Time Stamps', index=1)
                 ws = wb['Time Stamps']
                 ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+                if precisionMS:
+                    ws.cell(row=1, column=2, value="start (hh:mm:ss.ms)")
+                    ws.cell(row=1, column=3, value="end (hh:mm:ss.ms)")
+                else:
+                    ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+                    ws.cell(row=1, column=3, value="end (hh:mm:ss)")
                 ws.cell(row=1, column=4, value="min freq. (Hz)")
                 ws.cell(row=1, column=5, value="max freq. (Hz)")
                 if species=="Any sound":
                     ws.cell(row=1, column=6, value="species")
                     ws.cell(row=1, column=7, value="certainty")
+                    ws.cell(row=1, column=8, value="call type")
                 else:
                     ws.cell(row=1, column=6, value="certainty")
+                    ws.cell(row=1, column=7, value="call type")
 
                     # Second sheet
                     wb.create_sheet(title='Presence Absence', index=2)
@@ -614,7 +675,7 @@ class ExcelIO():
                 return 0
 
             # export segments
-            self.writeToExcelp1(wb, segments, species, startTime)
+            self.writeToExcelp1(wb, segments, species, startTime, precisionMS)
 
             if species!="Any sound":
                 # loop over all SegmentLists, i.e. for each wav file:
@@ -651,4 +712,3 @@ class ExcelIO():
                 print(e)
                 return 0
         return 1
-

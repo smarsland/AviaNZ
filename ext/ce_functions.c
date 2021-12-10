@@ -98,10 +98,50 @@ int ce_thresnode2(double *in_array, size_t size, double threshold, int type)
 	}
 }
 
+// Block-threshold a node in a wp tree, in place
+// using thresholds from the threshold array in pieces of blocklen samples
+int ce_thresnode2_block(double *in_array, size_t datalen, size_t blocklen, double *threshold, int type)
+{
+	// printf("C args: inarray %.f, datalen %d, blocklen %d, thresh %.f, type %d\n", in_array[0], datalen, blocklen, threshold[0], type);
+	if(type==2){
+		// Hard thresholding
+		for(size_t bi=0; bi*blocklen<datalen; bi++){
+			size_t endi = (bi+1)*blocklen>datalen ? datalen : (bi+1)*blocklen;
+			for(size_t i=bi*blocklen; i<endi; i++){
+				if(fabs(in_array[i]) < threshold[bi]){
+					in_array[i] = 0.0;
+				} else {
+					in_array[i] = in_array[i];
+				}
+			}
+		}
+		return 0;
+	} else if(type==1){
+		// Soft thresholding
+		for(size_t bi=0; bi*blocklen<datalen; bi++){
+			size_t endi = (bi+1)*blocklen>datalen ? datalen : (bi+1)*blocklen;
+			// printf("piece %d-%d, thr %.2f\n", bi*blocklen, endi, threshold[bi]);
+			for(size_t i=bi*blocklen; i<endi; i++){
+				double tmp = fabs(in_array[i]) - threshold[bi];
+				if(tmp<0){
+					in_array[i] = 0.0;
+				} else if(in_array[i]<0){
+					in_array[i] = -tmp;
+				} else {
+					in_array[i] = tmp;
+				}
+			}
+		}
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
 // Main loop for "energy curve" - expanding envelope around waveform
 void ce_energycurve(double *arrE, double *arrC, size_t N, int M)
 {
-	for(int i=M+1; i<N-M; i++){
+	for(size_t i=M+1; i<N-M; i++){
 		arrE[i] = arrE[i-1] - arrC[i - M - 1] + arrC[i + M];
 	}
 	// Normalize for M
@@ -223,9 +263,9 @@ void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau,
  *  The upsampling is performed by splitting filters to even and odd elements
  *  and performing 2 convolutions.
 */
-int upsampling_convolution_valid_sf(const double * const input, const int N,
-		const double * const filter, const int F,
-		double * const output, const int O){
+int upsampling_convolution_valid_sf(const double * const input, const size_t N,
+		const double * const filter, const size_t F,
+		double * const output, const size_t O){
 
 	size_t o, i;
 

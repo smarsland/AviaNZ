@@ -1,3 +1,4 @@
+
 """
 Created on 15/10/2020
 
@@ -578,11 +579,11 @@ def metrics(confusion_matrix, file_num):
  
 
 #train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Train_Datasets" #directory with train files
-#CNN_test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\Moira 2020\\Raw files\\Bat_tests" #directory with test files
-CNN_test_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset"
+CNN_test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\Moira 2020\\Raw files\\Bat_tests" #directory with test files
+#CNN_test_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset"
 test_count=0 #counter for test number
-#test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
-test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Results/20201016_tests" #directory to store test result
+test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
+#test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Results/20201016_tests" #directory to store test result
 test_fold= "Test_"+str(test_count) #Test folder where to save all the stats
 if test_fold not in os.listdir(test_dir):
     os.mkdir(test_dir+ '/' + test_fold)
@@ -600,8 +601,8 @@ else:
     first_dim=window
 
 #recover model
-#modelpath="C:\\Users\\Virginia\\AppData\\Roaming\\AviaNZ\\Filters\\NZ Bats.h5"
-modelpath="/am/state-opera/home1/listanvirg/sourcecode/AviaNZ/Filters/NZ Bats.h5"
+modelpath="C:\\Users\\Virginia\\AppData\\Roaming\\AviaNZ\\Filters\\NZ Bats.h5"
+#modelpath="/am/state-opera/home1/listanvirg/sourcecode/AviaNZ/Filters/NZ Bats.h5"
 model=load_model(modelpath)
 
  ########## TEST TRAINED MODEL ###########################
@@ -679,8 +680,9 @@ for Moira_dir in dir_list:
                     print('Annotation file found')
                     GT_segments = Segment.SegmentList()
                     GT_segments.parseJSON(GT_annotation_file)
-                    print(GT_segments)
+                    print('GT annotations ', GT_segments)
                 else:
+                    print('Annotation file not found')
                     GT_segments=[] 
                     
 
@@ -900,4 +902,5 @@ L10=['Model used ', modelpath, '\n']
 #L11=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
 file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9, L10)))
 #file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9)))
+
 file1.close()

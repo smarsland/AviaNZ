@@ -5,6 +5,8 @@
     "incr": {"type": "integer", "minimum": 0},
     "minFreq": {"type": "number", "minimum": 0},
     "maxFreq": {"type": "number", "minimum": 0},
+    "minFreqBats": {"type": "number", "minimum": 0},
+    "maxFreqBats": {"type": "number", "minimum": 0},
     "maxSearchDepth": {"type": "integer", "minimum": 0},
     "minSegment": {"type": "number", "minimum": 0},
     "drawingRightBtn": {"type": "boolean"},
@@ -40,6 +42,11 @@
     "ColourPossible": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
     "cmap": {"type": "string"},
   
+    "guidelinesOn": {"type": "string"},
+    "guidepos": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
+    "guidecol": {"type": "array", "items": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
+                        "minItems": 4, "maxItems": 4},
+
     "showAmplitudePlot": {"type": "boolean"},
     "showAnnotationOverview": {"type": "boolean"},
     "showPointerDetails": {"type": "boolean"},
@@ -60,6 +67,6 @@
     "window": {"type": "string"},
     "FiltersDir": {"type": "string"}
   },
-  "required": ["window_width", "incr", "minFreq", "maxFreq", "maxSearchDepth", "minSegment", "drawingRightBtn", "specMouseAction", "StartMaximized", "MultipleSpecies", "RequireNoiseData", "DOC", "ReorderList", "SoundFileDir", "RecentFiles", "secsSave", "windowWidth", "widthOverviewSegment", "maxFileShow", "fileOverlap", "brightness", "contrast", "overlap_allowed", "reviewSpecBuffer", "BirdListShort", "BirdListLong", "BatList", "ColourList", "ColourSelected", "ColourNamed", "ColourNone", "ColourPossible", "cmap", "showAmplitudePlot", "showAnnotationOverview", "showPointerDetails", "readOnly", "transparentBoxes", "showListofFiles", "invertColourMap", "saveCorrections", "operator", "reviewer", "protocolOn", "protocolSize", "protocolInterval", "fs_start", "fs_end", "window", "FiltersDir"]
+  "required": ["window_width", "incr", "minFreq", "maxFreq", "minFreqBats", "maxFreqBats", "maxSearchDepth", "minSegment", "drawingRightBtn", "specMouseAction", "StartMaximized", "MultipleSpecies", "RequireNoiseData", "DOC", "ReorderList", "SoundFileDir", "RecentFiles", "secsSave", "windowWidth", "widthOverviewSegment", "maxFileShow", "fileOverlap", "brightness", "contrast", "overlap_allowed", "reviewSpecBuffer", "BirdListShort", "BirdListLong", "BatList", "ColourList", "ColourSelected", "ColourNamed", "ColourNone", "ColourPossible", "cmap", "showAmplitudePlot", "showAnnotationOverview", "showPointerDetails", "readOnly", "transparentBoxes", "showListofFiles", "invertColourMap", "saveCorrections", "operator", "reviewer", "guidelinesOn", "guidepos", "guidecol", "protocolOn", "protocolSize", "protocolInterval", "fs_start", "fs_end", "window", "FiltersDir"]
 }
 
