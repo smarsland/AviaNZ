@@ -398,10 +398,11 @@ class IF:
                     idb = idb[:,1]
                     idb = tn1 - 1 + idb
                     G4=np.abs(TFR[np.ix_([0,1,NF-2,NF-1],idb)]) #check
-                    print(np.shape(G4), type(G4))
+                    #print(np.shape(G4), type(G4))
                 for bn in range(NB):
                     tn=idb[bn]
                     cn=0
+                    print(bn)
                     cg=G4[:,bn]
                     if cg[0]>cg[1] or cg[2]>cg[3]:
                         if cg[0]>cg[1]:
