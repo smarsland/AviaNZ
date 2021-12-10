@@ -2,7 +2,7 @@
 06/12/2021
 Author: Virginia Listanti
 
-This is a script to test how to invert a Melscale spectrogram
+This is a script to test how to invert a Melscale spectrogram or Multitaper
 """
 
 import SignalProc
@@ -52,7 +52,7 @@ def mel_filterbank_maker(window_size, filter='mel', nfilters=40, minfreq=0, maxf
 file_name = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy " + \
             "signals\\pure_tone\\Base_Dataset_2\\pure_tone_00.wav"
 
-window_width=512
+window_width=1024
 incr=256
 window= "Hann"
 nfilters= 218
@@ -62,7 +62,7 @@ sp.readWav(file_name)
 fs = sp.sampleRate
 
 #evaluate spectrogram
-TFR = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Mel Frequency', nfilters = nfilters)
+TFR = sp.spectrogram(window_width, incr, window, sgType = "Standard",sgScale = 'Linear')
 TFR2 = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Linear', nfilters = nfilters)
 # plt.imshow(TFR2)
 # plt.show()
@@ -111,8 +111,13 @@ print("Spectrogram Dim =", np.shape(TFR))
 # signal_inverted = librosa.feature.inverse.mel_to_audio(TFR, sr=fs, n_fft=window_width *2, hop_length=incr, win_length = window_width, window=window)
 #
 
-#TEST 11 use librosa to recover spectrogram from TFR
-TFR_recovered = librosa.feature.inverse.mel_to_stft(TFR.T, sr=fs, n_fft= int(window_width-1))
-signal_inverted = sp.invertSpectrogram(TFR_recovered.T, window_width=window_width, incr=incr, window=window)
-save_file_path=file_name[:-4]+"_inv10.wav"
+# #TEST 11 use librosa to recover spectrogram from TFR
+# TFR_recovered = librosa.feature.inverse.mel_to_stft(TFR.T, sr=fs, n_fft= int(window_width-1))
+# signal_inverted = sp.invertSpectrogram(TFR_recovered.T, window_width=window_width, incr=incr, window=window)
+# save_file_path=file_name[:-4]+"_inv10.wav"
+# wavio.write(save_file_path, signal_inverted, fs, sampwidth=2)
+
+#TEST 12 : Test everything is working when inverting multitaper spectrogram
+signal_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
+save_file_path=file_name[:-4]+"_inv14.wav"
 wavio.write(save_file_path, signal_inverted, fs, sampwidth=2)
