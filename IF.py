@@ -585,6 +585,7 @@ class IF:
 
             idz=np.where((p_amplitude[tn1:tn2+1 ]==0) |( np.isnan(p_amplitude[tn1:tn2+1]))) #-1 seems to be not needed
             print(np.shape(idz))
+            idz=np.array(idz)
             if np.shape(idz)[1]!=0:
                 #unsure where these 2 lines are coming from
                 # idz = idz[0]
