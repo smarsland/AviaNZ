@@ -586,8 +586,9 @@ class IF:
             idz=np.where((p_amplitude[tn1:tn2+1 ]==0) |( np.isnan(p_amplitude[tn1:tn2+1]))) #-1 seems to be not needed
             print(np.shape(idz))
             if np.shape(idz)[1]!=0:
-                idz = idz[0]
-                idz+=tn1-1
+                #unsure where these 2 lines are coming from
+                # idz = idz[0]
+                # idz+=tn1-1
                 idnz=np.arange(tn1,tn2) #+1 omitted
                 idnz=idnz[np.argwhere(np.isin(idnz,idz)==False)] # =>np.in1d #this is problematic!
                 print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(np.shape(p_index[idz])))
