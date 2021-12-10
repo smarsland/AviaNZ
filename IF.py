@@ -402,7 +402,7 @@ class IF:
                 for bn in range(NB):
                     tn=idb[bn]
                     cn=0
-                    print(bn)
+                    #print(bn)
                     cg=G4[:,bn]
                     if cg[0]>cg[1] or cg[2]>cg[3]:
                         if cg[0]>cg[1]:
@@ -421,10 +421,9 @@ class IF:
                         Frequency_peaks[0:2,tn]=[freq[0],freq[NF-1]]
                         cn=cn+2
 
-                    del G4
                     Number_peaks[0,tn]=cn-1
 
-                del idb, NB
+                del idb, NB, G4
 
             self.Skel={'np':Number_peaks,'mt':Indeces_peaks,'nu':Frequency_peaks,'qn':Amplitude_peaks}
             if self.NormMode.lower()=='on':
