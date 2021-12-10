@@ -393,12 +393,12 @@ class IF:
                 #If there are no peaks, assign border points
                 idb=np.argwhere(Number_peaks[tn1:tn2+1]==0)
                 NB=len(idb)
-                print('NB = ', NB)
+                #print('NB = ', NB)
                 if NB>0:
                     idb = idb[:,1]
                     idb = tn1 - 1 + idb
                     G4=np.abs(TFR[np.ix_([0,1,NF-2,NF-1],idb)]) #check
-                    print(G4)
+                    print(np.shape(G4), np.type(G4))
                 for bn in range(NB):
                     tn=idb[bn]
                     cn=0
