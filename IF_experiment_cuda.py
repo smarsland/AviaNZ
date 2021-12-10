@@ -75,6 +75,7 @@ import csv
 import imed
 import speechmetrics as sm
 from fdasrsf.geodesic import geod_sphere
+from librosa.feature.inverse import mel_to_audio
 
 
 ########################## Utility functions ###########################################################################
@@ -271,17 +272,20 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                 if counter == 0:
                                     pure_signal_path = base_dir + "/" + sign_id + '_00.wav'
                                     sp.readWav(pure_signal_path)
-                                    sample_rate = sp.sampleRate
-                                    file_len = sp.fileLength / sample_rate
-                                    instant_freq_fun = set_if_fun(sign_id, file_len)
+
+
                                 elif counter < 10:
                                     signal_path = base_dir + "/" + sign_id + '_0' + str(counter) + '.wav'
                                     sp.readWav(signal_path)
-                                    sample_rate = sp.sampleRate
+
                                 else:
                                     signal_path = base_dir + "/" + sign_id + '_' + str(counter) + '.wav'
                                     sp.readWav(signal_path)
-                                    sample_rate = sp.sampleRate
+
+
+                                sample_rate = sp.sampleRate
+                                file_len = sp.fileLength / sample_rate
+                                instant_freq_fun = set_if_fun(sign_id, file_len)
 
                                 tfr = sp.spectrogram(window_width, incr, window_type, sgType=spectrogram_type,
                                                      sgScale=freq_scale, nfilters=num_bin)
@@ -712,10 +716,17 @@ for spec_type in spectrogram_types:
                                 t_support = np.linspace(0, T, np.shape(tfsupp[0, :])[0])
                                 inst_freq = inst_freq_fun(t_support)  # IF law
 
-                                # TO DO: Does this work for Mel-Spectrogram?
-                                signal_inverted = sp.invertSpectrogram(TFR, window_width=optima_parameters["win_len"],
-                                                                       incr=optima_parameters["hop"],
-                                                                       window=optima_parameters["window_type"])
+                                if scale == 'Mel Frequency':
+                                    # This is a patch but I am not super happy about this solution
+                                    signal_inverted = mel_to_audio(TFR.T, sr=fs, n_fft=optima_parameters["win_len"] * 2,
+                                                                   hop_length=optima_parameters["hop"],
+                                                                   win_length=optima_parameters["win_len"],
+                                                                   window=optima_parameters["window_type"].lower())
+                                else:
+                                    signal_inverted = sp.invertSpectrogram(TFR,
+                                                                           window_width=optima_parameters["win_len"],
+                                                                           incr=optima_parameters["hop"],
+                                                                           window=optima_parameters["window_type"])
 
                                 # generate spectrogram of inverted sound
                                 sp.data = signal_inverted
