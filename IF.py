@@ -590,7 +590,7 @@ class IF:
                 idz+=tn1-1
                 idnz=np.arange(tn1,tn2) #+1 omitted
                 idnz=idnz[np.argwhere(np.isin(idnz,idz)==False)] # =>np.in1d #this is problematic!
-                print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]))
+                print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(np.shape(p_index[idz])))
                 p_index[idz]=np.interp(idz,idnz,p_index[idnz]) #'linear' in the function no equivalent of 'extrap'
                 p_index[idz]=self.Round(p_index[idz])
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
