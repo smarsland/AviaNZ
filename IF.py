@@ -584,6 +584,7 @@ class IF:
                 p_amplitude[tn1:tn2+1]=Amplitude_peaks.flatten('F')[lid]
 
             idz=np.where((p_amplitude[tn1:tn2+1 ]==0) |( np.isnan(p_amplitude[tn1:tn2+1]))) #-1 seems to be not needed
+            np.shape(idz)
             if np.shape(idz)[1]!=0:
                 idz = idz[0]
                 idz+=tn1-1
