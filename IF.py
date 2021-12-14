@@ -597,6 +597,8 @@ class IF:
                 print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
                 #try reshaping
                 idz=np.reshape(idz,len(idz))
+                idnz = np.reshape(idnz, len(idnz))
+                p_index = np.reshape(p_index, len(p_index))
                 print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
                 a=np.interp(idz,idnz,p_index[idnz]) #'linear' in the function no equivalent of 'extrap'
                 np.shape(a)
