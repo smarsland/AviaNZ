@@ -601,7 +601,7 @@ class IF:
                 p_index = np.reshape(p_index, len(p_index))
                 print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
                 a=np.interp(idz,idnz,p_index[idnz]) #'linear' in the function no equivalent of 'extrap'
-                np.shape(a)
+                print(np.shape(a))
                 #p_index[idz]
                 p_index[idz]=self.Round(p_index[idz])
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
