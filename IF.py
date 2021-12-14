@@ -591,7 +591,7 @@ class IF:
                 #unsure where these 2 lines are coming from
                 # idz = idz[0]
                 # idz+=tn1-1
-                idz=idz.T
+                #idz=idz.T
                 idnz=np.arange(tn1,tn2) #+1 omitted
                 idnz=idnz[np.argwhere(np.isin(idnz,idz)==False)] # =>np.in1d #this is problematic!
                 print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
