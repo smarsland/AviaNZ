@@ -873,6 +873,7 @@ class IF:
 
         if isinstance(logw1, types.LambdaType):
             for tn in range(tn1+1,tn2+1):
+                print(tn)
                 #print(np.shape(np.ones((Number_peaks[0,tn],1))), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1]+1,tn-1]))
                 cf=np.reshape(Frequency_peaks[0:Number_peaks[0,tn],tn],(np.shape(Frequency_peaks[0:Number_peaks[0,tn],tn])[0],1))@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@np.reshape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1],(1,np.shape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1])[0]))
                 #cf=Frequency_peaks[0:Number_peaks[0,tn],tn]@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@Frequency_peaks[0:Number_peaks[0,tn-1],tn-1]
