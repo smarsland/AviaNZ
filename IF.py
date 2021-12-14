@@ -332,6 +332,8 @@ class IF:
                     ii=np.arange(dind[dn]+1,dind[dn+1]+1,1) #ii are indeces first +1 not needed
                     idn[ii]=np.reshape(np.arange(0,len(ii),1),np.shape(idn[ii])) #changef 1 in 0
                     Number_peaks[0,idt[ii[0]]]=len(ii)
+                    if len(ii)==-1:
+                        print(dn)
                 idn = idn.astype('int')
                 idt = idt.astype('int')
                 idnt=np.ravel_multi_index([idn[:,0], idt[:]], (Mp, L), order='F')
@@ -875,7 +877,7 @@ class IF:
             for tn in range(tn1+1,tn2+1):
                 #print(tn, '(', tn1+1,',',tn2+1,') [',Mp,',',L,']')
                 #print(np.shape(np.ones((Number_peaks[0,tn],1))), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1]+1,tn-1]))
-                print(Number_peaks[0,tn-1],Number_peaks[0,tn])
+                #print(Number_peaks[0,tn-1],Number_peaks[0,tn])
                 cf=np.reshape(Frequency_peaks[0:Number_peaks[0,tn],tn],(np.shape(Frequency_peaks[0:Number_peaks[0,tn],tn])[0],1))@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@np.reshape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1],(1,np.shape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1])[0]))
                 #cf=Frequency_peaks[0:Number_peaks[0,tn],tn]@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@Frequency_peaks[0:Number_peaks[0,tn-1],tn-1]
 
