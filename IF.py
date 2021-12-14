@@ -878,7 +878,7 @@ class IF:
                 CW1=logw1(cf)
                 aid_matrix=np.reshape(W2[0:Number_peaks[0,tn],tn],(len(W2[0:Number_peaks[0,tn],tn]),1))@np.ones((1,Number_peaks[0,tn-1]))+CW1+np.ones((Number_peaks[0,tn],1))@np.reshape(U[0:Number_peaks[0,tn-1],tn-1],(1,len(U[0:Number_peaks[0,tn-1],tn-1])))
                 q[0:Number_peaks[0,tn]+1,tn]=np.argmax(aid_matrix,1)
-                U[0:Number_peaks[0,tn],tn]=np.amax(aid_matrix,1)#max along  rows
+                U[0:Number_peaks[0,tn]+1,tn]=np.amax(aid_matrix,1)#max along  rows
                 del aid_matrix
         else:
             for tn in range(tn1+1,tn2+1):
