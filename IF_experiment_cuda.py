@@ -254,7 +254,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                             # loop on beta
                             window_width = int(win_len)
                             incr = int(win_len * hop)
-                            print("TESTING window lenght= ", window_width, " and increment =", incr)
+                            print("\nTESTING window lenght= ", window_width, " and increment = ", incr,"\n")
 
                             file_list = os.listdir(base_dir)
                             if optim_option == "Original":
