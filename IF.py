@@ -584,7 +584,7 @@ class IF:
                 p_amplitude[tn1:tn2+1]=Amplitude_peaks.flatten('F')[lid]
 
             idz=np.where((p_amplitude[tn1:tn2+1 ]==0) |( np.isnan(p_amplitude[tn1:tn2+1]))) #-1 seems to be not needed
-            print(np.shape(idz))
+            #print(np.shape(idz))
             idz=np.array(idz)
             if np.shape(idz)[1]!=0:
                 #check here
@@ -594,12 +594,12 @@ class IF:
                 idz=idz.T #changed while testing on Linux
                 idnz=np.arange(tn1,tn2) #+1 omitted
                 idnz=idnz[np.argwhere(np.isin(idnz,idz)==False)] # =>np.in1d #this is problematic!
-                print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
+                #print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
                 #try reshaping. The next three lines where changed while testing on linux
                 idz=np.reshape(idz,len(idz))
                 idnz = np.reshape(idnz, len(idnz))
                 p_index = np.reshape(p_index, len(p_index))
-                print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
+                #print(np.shape(idz), np.shape(idnz), np.shape(p_index[idnz]), np.shape(p_index[idz]), np.shape(p_index))
                 p_index[idz]=np.interp(idz,idnz,p_index[idnz]) #'linear' in the function no equivalent of 'extrap'
                 p_index[idz]=self.Round(p_index[idz])
                 tfsupp[0][idz]=np.interp(idz,idnz,tfsupp[0][idnz]) #'linear' in the function no equivalent of 'extrap'
@@ -873,7 +873,7 @@ class IF:
 
         if isinstance(logw1, types.LambdaType):
             for tn in range(tn1+1,tn2+1):
-                print(np.shape(Frequency_peaks))
+                print(np.shape(Frequency_peaks[0:Number_peaks[0,tn],tn]), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1]))
                 cf=np.reshape(Frequency_peaks[0:Number_peaks[0,tn],tn],(len(Frequency_peaks[0:Number_peaks[0,tn],tn]),1))@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@np.reshape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1],(1,len(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1])))
                 CW1=logw1(cf)
                 aid_matrix=np.reshape(W2[0:Number_peaks[0,tn],tn],(len(W2[0:Number_peaks[0,tn],tn]),1))@np.ones((1,Number_peaks[0,tn-1]))+CW1+np.ones((Number_peaks[0,tn],1))@np.reshape(U[0:Number_peaks[0,tn-1],tn-1],(1,len(U[0:Number_peaks[0,tn-1],tn-1])))
