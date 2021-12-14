@@ -587,6 +587,7 @@ class IF:
             print(np.shape(idz))
             idz=np.array(idz)
             if np.shape(idz)[1]!=0:
+                #check here
                 #unsure where these 2 lines are coming from
                 # idz = idz[0]
                 # idz+=tn1-1
