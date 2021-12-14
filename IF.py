@@ -873,7 +873,7 @@ class IF:
 
         if isinstance(logw1, types.LambdaType):
             for tn in range(tn1+1,tn2+1):
-                print(np.shape(Frequency_peaks[0:Number_peaks[0,tn],tn]), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1]))
+                print(Number_peaks[0,tn-1],Number_peaks[0,tn-1])
                 cf=np.reshape(Frequency_peaks[0:Number_peaks[0,tn],tn],(np.shape(Frequency_peaks[0:Number_peaks[0,tn],tn])[0],1))@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@np.reshape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1],(1,np.shape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1])[0]))
                 CW1=logw1(cf)
                 aid_matrix=np.reshape(W2[0:Number_peaks[0,tn],tn],(len(W2[0:Number_peaks[0,tn],tn]),1))@np.ones((1,Number_peaks[0,tn-1]))+CW1+np.ones((Number_peaks[0,tn],1))@np.reshape(U[0:Number_peaks[0,tn-1],tn-1],(1,len(U[0:Number_peaks[0,tn-1],tn-1])))
