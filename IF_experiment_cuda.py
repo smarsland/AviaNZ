@@ -315,6 +315,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                 try:
                                     tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
                                 except:
+                                    print('ERROR IN CURVE EXTRACTION')
                                     measure2check+=np.nan
                                     continue
 
@@ -576,7 +577,7 @@ for spec_type in spectrogram_types:
                     # loop over optimization options
                     print("Starting test: ", Test_id)
                     # create test result directory
-                    test_result_dir = main_results_dir + '/Test' + str(Test_id)
+                    test_result_dir = main_results_dir + '/Test_' + str(Test_id)
 
                     if not os.path.exists(test_result_dir):
                         os.mkdir(test_result_dir)

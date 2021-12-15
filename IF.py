@@ -878,8 +878,8 @@ class IF:
 
         if isinstance(logw1, types.LambdaType):
             for tn in range(tn1+1,tn2+1): #I think we need tn2+1
-                if tn==26642:
-                    print('Here')
+                # if tn==26642:
+                #     print('Here')
                 # print(tn, '(', tn1+1,',',tn2,') [',Mp,',',L,']')
                 # print(np.shape(Frequency_peaks[0:Number_peaks[0,tn]+1,tn]),np.shape(np.ones((1,Number_peaks[0,tn-1]))), np.shape(np.ones((Number_peaks[0,tn],1))), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1]+1,tn-1]))
                 # print(Number_peaks[0,tn-1],Number_peaks[0,tn])
