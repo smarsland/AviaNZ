@@ -423,9 +423,12 @@ class IF:
                         Frequency_peaks[0:2,tn]=[freq[0],freq[NF-1]]
                         cn=cn+2
 
-                    Number_peaks[0,tn]=cn-1
+                    Number_peaks[0,tn]=cn
+                    # if Number_peaks[0,tn]==-1:
+                    #     print('Here -1')
+                    del G4
 
-                del idb, NB, G4
+                del idb, NB
 
             self.Skel={'np':Number_peaks,'mt':Indeces_peaks,'nu':Frequency_peaks,'qn':Amplitude_peaks}
             if self.NormMode.lower()=='on':
@@ -870,25 +873,39 @@ class IF:
         #The algorithm by itself
         q=np.zeros((Mp,L))*np.nan
         U=np.zeros((Mp,L))*np.nan
-        q[0:Number_peaks[0,tn1]+1,tn1]=0
-        U[0:Number_peaks[0,tn1]+1,tn1]=W2[0:Number_peaks[0,tn1]+1,tn1]
+        q[0:Number_peaks[0,tn1],tn1]=0
+        U[0:Number_peaks[0,tn1],tn1]=W2[0:Number_peaks[0,tn1],tn1]
 
         if isinstance(logw1, types.LambdaType):
-            for tn in range(tn1+1,tn2+1):
-                #print(tn, '(', tn1+1,',',tn2+1,') [',Mp,',',L,']')
-                #print(np.shape(np.ones((Number_peaks[0,tn],1))), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1]+1,tn-1]))
-                #print(Number_peaks[0,tn-1],Number_peaks[0,tn])
+            for tn in range(tn1+1,tn2+1): #I think we need tn2+1
+                if tn==26642:
+                    print('Here')
+                # print(tn, '(', tn1+1,',',tn2,') [',Mp,',',L,']')
+                # print(np.shape(Frequency_peaks[0:Number_peaks[0,tn]+1,tn]),np.shape(np.ones((1,Number_peaks[0,tn-1]))), np.shape(np.ones((Number_peaks[0,tn],1))), np.shape(Frequency_peaks[0:Number_peaks[0,tn-1]+1,tn-1]))
+                # print(Number_peaks[0,tn-1],Number_peaks[0,tn])
                 cf=np.reshape(Frequency_peaks[0:Number_peaks[0,tn],tn],(np.shape(Frequency_peaks[0:Number_peaks[0,tn],tn])[0],1))@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@np.reshape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1],(1,np.shape(Frequency_peaks[0:Number_peaks[0,tn-1],tn-1])[0]))
-                #cf=Frequency_peaks[0:Number_peaks[0,tn],tn]@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@Frequency_peaks[0:Number_peaks[0,tn-1],tn-1]
+                #cf=Frequency_pe++er_peaks[0,tn],tn]@np.ones((1,Number_peaks[0,tn-1]))-np.ones((Number_peaks[0,tn],1))@Frequency_peaks[0:Number_peaks[0,tn-1],tn-1]
 
                 CW1=logw1(cf)
+                # print(len(W2[0:Number_peaks[0,tn],tn]), np.shape(np.ones((1,Number_peaks[0,tn-1]))), np.shape(CW1), np.shape(np.ones((Number_peaks[0,tn],1))), len(U[0:Number_peaks[0,tn-1],tn-1]))
                 aid_matrix=np.reshape(W2[0:Number_peaks[0,tn],tn],(len(W2[0:Number_peaks[0,tn],tn]),1))@np.ones((1,Number_peaks[0,tn-1]))+CW1+np.ones((Number_peaks[0,tn],1))@np.reshape(U[0:Number_peaks[0,tn-1],tn-1],(1,len(U[0:Number_peaks[0,tn-1],tn-1])))
-                q[0:Number_peaks[0,tn],tn]=np.argmax(aid_matrix,1)
-                U[0:Number_peaks[0,tn],tn]=np.amax(aid_matrix,1)#max along  rows
+                # print('tn = ', tn, ' aid_matrix = ', np.shape(aid_matrix))
+                if np.shape(aid_matrix)==(0,0):
+                    # print(np.shape(q[0:Number_peaks[0, tn], tn]), Number_peaks[0, tn])
+                    q[0:Number_peaks[0, tn], tn]=0
+                    U[0:Number_peaks[0, tn], tn]=0
+                elif np.shape(aid_matrix)[1]==0:
+                    # print('Here', aid_matrix, U[0:Number_peaks[0, tn], tn])
+                    q[0:Number_peaks[0, tn], tn] = 0
+                    U[0:Number_peaks[0, tn], tn] = 0
+                else:
+                    # print('Here')
+                    q[0:Number_peaks[0,tn],tn]=np.argmax(aid_matrix,1)
+                    U[0:Number_peaks[0,tn],tn]=np.amax(aid_matrix,1)#max along  rows
                 del aid_matrix
         else:
             for tn in range(tn1+1,tn2+1):
-                ci=Indeces_peaks[0:Number_peaks[tn]+1,tn]*np.ones((1,Number_peaks[tn-1]))-np.ones((Number_peaks[tn],1))*Indeces_peaks[0:Number_peaks[tn-1]+1,tn-1].T
+                ci=Indeces_peaks[0:Number_peaks[tn],tn]*np.ones((1,Number_peaks[tn-1]))-np.ones((Number_peaks[tn],1))*Indeces_peaks[0:Number_peaks[tn-1],tn-1].T
                 ci=ci+NF
                 cm=ci-np.floor(ci)
                 ci=np.floor(ci)
@@ -896,13 +913,19 @@ class IF:
                     CW1=(1-cm)*logw1(ci+1)+cm*logw1(ci+2)
                 else:
                     CW1=(1-cm)*logw1(ci+1).T+cm*logw1(ci+2).T
-                [U[0:Number_peaks[tn]+1,tn],q[0:Number_peaks[tn]+1,tn]]=np.amax(W2[0:Number_peaks[tn]+1,tn]*np.ones((1,Number_peaks[tn-1]))+CW1+np.ones((Number_peaks[tn],1))*U[0:Number_peaks[tn-1]+1,tn-1].T,1)#max along  rows        #sanity check
+                [U[0:Number_peaks[tn],tn],q[0:Number_peaks[tn],tn]]=np.amax(W2[0:Number_peaks[tn],tn]*np.ones((1,Number_peaks[tn-1]))+CW1+np.ones((Number_peaks[tn],1))*U[0:Number_peaks[tn-1],tn-1].T,1)#max along  rows        #sanity check
         q=q.astype('int')
+
         #Recover the indices
         idid=np.zeros((1,L))*(math.nan)
-        idid[0,tn2]=np.nanargmax(U[:,tn2]).astype('int')
+        try :
+            idid[0, tn2] = np.nanargmax(U[:, tn2]).astype('int')
+        except(ValueError):
+            idid[0, tn2]=0
+            print('All nan  encountered for tn2 = ', tn2)
+
         idid = idid.astype('int')
-        for tn in np.arange(tn2-1,tn1-1,-1):
+        for tn in range(tn2-1,tn1-1,-1):
             idid[0,tn]=q[idid[0,tn+1],tn+1]
 
         return idid

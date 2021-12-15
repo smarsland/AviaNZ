@@ -212,7 +212,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
     """
 
     # Spectrogram parameters
-    win = np.array([32, 64, 128, 256, 1024, 2048, 4096])
+    win = np.array([64, 128, 256, 1024, 2048, 4096])
     hop_perc = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
     win_type = ['Hann', 'Parzen', 'Welch', 'Hamming', 'Blackman', 'BlackmanHarris']
 
@@ -254,7 +254,9 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                             # loop on beta
                             window_width = int(win_len)
                             incr = int(win_len * hop)
-                            print("\nTESTING window lenght= ", window_width, " and increment = ", incr,"\n")
+                            print("\nTESTING with window lenght= ", window_width, " and increment = ", incr,
+                                  " window_type = ", window_type, " mel bins = ", num_bin, " alpha = ", alpha,
+                                  "beta = ", beta, "\n")
 
                             file_list = os.listdir(base_dir)
                             if optim_option == "Original":
