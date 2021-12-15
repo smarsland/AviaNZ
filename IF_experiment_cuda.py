@@ -212,7 +212,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
     """
 
     # Spectrogram parameters
-    win = np.array([64, 128, 256, 1024, 2048, 4096])
+    win = np.array([32, 64, 128, 256, 1024, 2048, 4096])
     hop_perc = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
     win_type = ['Hann', 'Parzen', 'Welch', 'Hamming', 'Blackman', 'BlackmanHarris']
 
@@ -312,7 +312,12 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                     freq_arr = freq_arr[1:]
 
                                 w_opt = [sample_rate, window_width]  # this neeeds review
-                                tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
+                                try:
+                                    tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
+                                except:
+                                    measure2check+=np.nan
+                                    continue
+
 
                                 # revert to Hz if Mel
                                 if freq_scale == 'Mel Frequency':
@@ -323,12 +328,12 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                 # line checked
 
                                 if optim_metric == "L2":
-                                    measure2check = norm(tf_supp[0, :] - instant_freq, ord=2) / (num_row * num_col)
+                                    measure2check += norm(tf_supp[0, :] - instant_freq, ord=2) / (num_row * num_col)
                                 elif optim_metric == "Iatsenko":
-                                    measure2check = Iatsenko_style(instant_freq, tf_supp[0, :])
+                                    measure2check += Iatsenko_style(instant_freq, tf_supp[0, :])
                                 else:
                                     time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])
-                                    measure2check = Geodesic_curve_distance(time_support, tf_supp[0, :], time_support,
+                                    measure2check += Geodesic_curve_distance(time_support, tf_supp[0, :], time_support,
                                                                             instant_freq)
 
                                 # safety chack cleaning
@@ -577,7 +582,7 @@ for spec_type in spectrogram_types:
                         os.mkdir(test_result_dir)
 
                     # store Test info
-                    test_info_file_path = test_result_dir + 'TFR_info.txt'
+                    test_info_file_path = test_result_dir + '/TFR_info.txt'
                     save_test_info(test_info_file_path, spec_type, scale, norm_type, opt_metric, opt_option)
 
                     for signal_id in os.listdir(dataset_dir):

@@ -115,9 +115,9 @@ def set_if_fun(signal_id,T):
 
 ######################## MAIN ######################################################################
 
-test_name = "Test_17"  # change test name
-file_id="exponential_upchirp"
-#file_id="pure_tone"
+test_name = "Test_18"  # change test name
+#file_id="linear_upchirp"
+file_id="pure_tone"
 nfilters=218
 dataset_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\"+file_id+"\\Base_Dataset_2"
 test_dir = "C:\\Users\\Virginia\\Documents\\GitHub\\Thesis\\Experiments\\Metrics_test_plot"
@@ -131,10 +131,10 @@ if not os.path.exists(test_fold):
     os.mkdir(test_fold)
 
 # initialization
-# SNR = np.zeros((9,1))
-# RE = np.zeros((9,1))
-# L2 = np.zeros((9,1))
-# IAM = np.zeros((9,1)) #iatsenko metric
+SNR = np.zeros((15,1))
+RE = np.zeros((15,1))
+L2 = np.zeros((15,1))
+IAM = np.zeros((15,1)) #iatsenko metric
 # SDR_original = np.zeros((9,1))
 # SDR_noise= np.zeros((9,1))
 IMED_original = np.zeros((15,1))
@@ -160,8 +160,8 @@ STOI_noise=np.zeros((15,1))
 SISDR_noise= np.zeros((15, 1))
 RE_inv = np.zeros((15,1))
 
-# #initialization for curve distance
-# curve_dist =np.zeros((15,1))
+#initialization for curve distance
+curve_dist =np.zeros((15,1))
 # #initalization list of If curves
 # inst_freq_curves=[]
 
@@ -176,46 +176,46 @@ window = "Hann"
 # IF law
 # A=1
 T = 5
-#inst_freq_fun=set_if_fun(file_id, T)
+inst_freq_fun=set_if_fun(file_id, T)
 
 k=0
 for file in os.listdir(dataset_dir):
     if file.endswith(".wav"):
         # file_id.append(file)
-        #IF = IFreq.IF(method=2, pars=[1, 1])
+        IF = IFreq.IF(method=2, pars=[1, 1])
         sp = SignalProc.SignalProc(window_width, incr)
         sp.readWav(dataset_dir + '\\' + file)
         sig1 = sp.data
         fs = sp.sampleRate
 
         # evaluate TFR
-        TFR = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Mel Frequency', nfilters = nfilters)
+        TFR = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Linear', nfilters = nfilters)
         # plt.imshow(TFR)
         # plt.show()
         TFR2 = TFR.T
         # plt.imshow(TFR2)
         # plt.show()
 
-        # # extract IF
-        # fstep = (fs / 2) / np.shape(TFR2)[0]
-        # freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
-        #
-        # wopt = [fs, window_width]  # this neeeds review
-        # tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
-        # inst_freq_curves.append(tfsupp[0,:])
-        # t_support=np.linspace(0, T, np.shape(tfsupp[0, :])[0]) #array with temporal coordinates
-        # inst_freq = inst_freq_fun(t_support)
+        # extract IF
+        fstep = (fs / 2) / np.shape(TFR2)[0]
+        freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
+
+        wopt = [fs, window_width]  # this neeeds review
+        tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
+        #inst_freq_curves.append(tfsupp[0,:])
+        t_support=np.linspace(0, T, np.shape(tfsupp[0, :])[0]) #array with temporal coordinates
+        inst_freq = inst_freq_fun(t_support)
         # plt.plot(inst_freq)
         # plt.show()
 
         # # invert TFR
-        # s1_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
-        s1_inverted = signal_inverted = mel_to_audio(TFR.T, sr=fs, n_fft=window_width *2, hop_length=incr,
-                                                     win_length = window_width, window=window.lower())
+        s1_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
+        #s1_inverted = signal_inverted = mel_to_audio(TFR.T, sr=fs, n_fft=window_width *2, hop_length=incr,
+        #                                             win_length = window_width, window=window.lower())
         #
         # spectrogram of inverted signal
         sp.data = s1_inverted
-        TFR_inv = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Mel Frequency', nfilters = nfilters)
+        TFR_inv = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Linear', nfilters = nfilters)
         # # plt.imshow(TFR_inv)
         # # plt.show()
         TFR2_inv = TFR_inv.T
@@ -232,18 +232,20 @@ for file in os.listdir(dataset_dir):
            noise=[]
         else:
             noise=sig1-signal_original
-        #
-        # SNR[k,0]=Signal_to_noise_Ratio(sig1,noise)
-        #
-        # #Renyi Entropy
-        # RE[k,0]=Renyi_Entropy(TFR2)
-        #
-        # # IF metrics
-        # #L2 norm
-        # L2[k,0]=norm(tfsupp[0,:]-inst_freq)
-        #
-        # #IAM
-        # IAM[k,0]=Iatsenko_style(inst_freq,tfsupp[0,:])
+
+
+        SNR[k,0]=Signal_to_noise_Ratio(sig1,noise)
+
+        #Renyi Entropy
+        RE[k,0]=Renyi_Entropy(TFR2)
+
+        # IF metrics
+        #L2 norm
+        L2[k,0]=norm(tfsupp[0,:]-inst_freq)
+
+        #IAM
+        if file_id != "pure_tone":
+            IAM[k,0]=Iatsenko_style(inst_freq,tfsupp[0,:])
         #
         # #Reconstructed signal metrics
         #
@@ -370,7 +372,7 @@ for file in os.listdir(dataset_dir):
         # del tfsupp
 
         #CURVE DISTANCE
-        #curve_dist[k,0] = Geodesic_curve_distance(t_support,tfsupp[0,:], t_support, inst_freq)
+        curve_dist[k,0] = Geodesic_curve_distance(t_support,tfsupp[0,:], t_support, inst_freq)
         k+=1
 
 
@@ -587,9 +589,10 @@ for file in os.listdir(dataset_dir):
 # plt.savefig(fig_name)
 
 #plot metrics from spectrogram inversion
-fig_name=test_fold +"\\"+file_id+"_metrics_spec_inv.jpg"
+
+fig_name=test_fold +"\\"+file_id+"_metrics_safety_test.jpg"
 plt.rcParams["figure.autolayout"] = True
-fig, ax = plt.subplots(4, 2, figsize=(10, 20), sharex=True)
+fig, ax = plt.subplots(4, 3, figsize=(10, 20), sharex=True)
 ax[0, 0].plot(SISDR_original, 'o')
 ax[0, 0].set_title('SISDR original signal')
 ax[0,0].set_xticks(np.arange(0, 15))
@@ -599,6 +602,11 @@ ax[0, 1].plot(SISDR_noise, 'o')
 ax[0, 1].set_title('SISDR signal +noise')
 ax[0,1].set_xticks(np.arange(0, 15))
 ax[0,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
+                         'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
+ax[0, 2].plot(SNR, 'o')
+ax[0, 2].set_title('SNR signal +noise')
+ax[0,2].set_xticks(np.arange(0, 15))
+ax[0,2].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
                          'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
 ax[1, 0].plot(STOI_original, 'o')
 ax[1, 0].set_title('STOI original signal')
@@ -610,6 +618,11 @@ ax[1, 1].set_title('STOI signal +noise')
 ax[1,1].set_xticks(np.arange(0, 15))
 ax[1,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
                          'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
+ax[1, 2].plot(RE, 'o')
+ax[1, 2].set_title('RE ')
+ax[1,2].set_xticks(np.arange(0, 15))
+ax[1,2].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
+                         'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
 ax[2, 0].plot(IMED_original, 'o')
 ax[2, 0].set_title('IMED original signal')
 ax[2,0].set_xticks(np.arange(0, 15))
@@ -620,10 +633,26 @@ ax[2, 1].set_title('IMED signal +noise')
 ax[2,1].set_xticks(np.arange(0, 15))
 ax[2,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
                          'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
+ax[2, 2].plot(L2, 'o')
+ax[2, 2].set_title('L2')
+ax[2,2].set_xticks(np.arange(0, 15))
+ax[2,2].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
+                         'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
 ax[3, 0].plot(RE_inv, 'o')
 ax[3, 0].set_title('Renyi entropy inv. spectr')
 ax[3,0].set_xticks(np.arange(0, 15))
 ax[3,0].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
                          'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
+ax[3, 1].plot(curve_dist, 'o')
+ax[3, 1].set_title('Curve distance')
+ax[3,1].set_xticks(np.arange(0, 15))
+ax[3,1].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
+                         'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
+if file_id!="pure_tone":
+    ax[3, 2].plot(IAM, 'o')
+    ax[3, 2].set_title('Iatsenko error')
+    ax[3,2].set_xticks(np.arange(0, 15))
+    ax[3,2].set_xticklabels(['Original','Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7',
+                             'Level 8', 'Level 9', 'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14'],rotation=45)
 
 plt.savefig(fig_name)
