@@ -346,7 +346,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                                  "mel bins": num_bin, 'alpha': alpha, 'beta': beta,
                                                  'spec dim': num_row * num_col, 'measure': measure2check})
 
-                            if not np.isnan(measure2check) & measure2check < opt:
+                            if (not np.isnan(measure2check)) and (measure2check < opt):
                                 print("optimal parameters updated:", opt_param)
                                 opt = measure2check
                                 opt_param["win_len"] = window_width
