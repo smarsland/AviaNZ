@@ -227,7 +227,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
         mel_bins = [None]
 
     opt = np.Inf
-    opt_param = {"window_lenght": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
+    opt_param = {"win_len": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
 
     # store values into .csv file
 
@@ -439,7 +439,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     # appropriate frequency scale
     if sg_scale == "Linear":
-        f_step = (sample_rate / 2) / np.shape(tfr)[0]
+        f_step = (sample_rate / 2) / np.shape(tfr2)[0]
         freq_arr = np.arange(f_step, sample_rate / 2 + f_step, f_step)
     else:
         # #mel freq axis
@@ -461,7 +461,12 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     # invert spectrogram
     sign_original = sp.data
-    s1_inverted = sp.invertSpectrogram(tfr, window_width=opt_param["win_len"], incr=opt_param["hop"],
+    if sg_scale == 'Mel Frequency':
+        # This is a patch but I am not super happy about this solution
+        s1_inverted = mel_to_audio(tfr2, sr=sample_rate, n_fft=opt_param["win_len"] * 2, hop_length=opt_param["hop"],
+                                   win_length=opt_param["win_len"], window=opt_param["window_type"].lower())
+    else:
+        s1_inverted = sp.invertSpectrogram(tfr, window_width=opt_param["win_len"], incr=opt_param["hop"],
                                        window=opt_param["window_type"])
 
     # spectrogram of inverted signal
@@ -706,7 +711,7 @@ for spec_type in spectrogram_types:
 
                                 # appropriate frequency scale
                                 if scale == "Linear":
-                                    fstep = (fs / 2) / np.shape(TFR)[0]
+                                    fstep = (fs / 2) / np.shape(TFR2)[0]
                                     freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
                                 else:
                                     # #mel freq axis
@@ -725,9 +730,10 @@ for spec_type in spectrogram_types:
                                 t_support = np.linspace(0, T, np.shape(tfsupp[0, :])[0])
                                 inst_freq = inst_freq_fun(t_support)  # IF law
 
+                                #spectrogram of inverted signal
                                 if scale == 'Mel Frequency':
                                     # This is a patch but I am not super happy about this solution
-                                    signal_inverted = mel_to_audio(TFR.T, sr=fs, n_fft=optima_parameters["win_len"] * 2,
+                                    signal_inverted = mel_to_audio(TFR2, sr=fs, n_fft=optima_parameters["win_len"] * 2,
                                                                    hop_length=optima_parameters["hop"],
                                                                    win_length=optima_parameters["win_len"],
                                                                    window=optima_parameters["window_type"].lower())
