@@ -831,9 +831,10 @@ for spec_type in spectrogram_types:
                                 k += 1
                                 del IF, sp, fs, TFR, fstep, freqarr, wopt, tfsupp, signal, signal_inverted, inst_freq
                                 del SNR, RE, L2, GEODETIC, SISDR_original, SISDR_noise, STOI_original, STOI_noise
-                                del IMED_original, IMED_noise, RE_inv, csvfilename_noise_level
+                                del IMED_original, IMED_noise, RE_inv
                                 if signal_id != "pure_tone":
                                     del IAT_ERR
+                            del csvfilename_noise_level
 
                         # save a csvfile per metric
                         # SNR
@@ -874,6 +875,8 @@ for spec_type in spectrogram_types:
                         csvfilename = test_result_subfolder + '/noise_levels_RE_inverted_noise.csv'
                         save_metric_csv(csvfilename, general_csv_fieldnames, RE_inv_G)
 
+                        del signal_original, TFR_original
+
                         # test over: update Test id
-                        print("\n Test ", Test_id, " is over")
-                        Test_id += 1
+                    print("\n Test ", Test_id, " is over")
+                    Test_id += 1
