@@ -772,7 +772,7 @@ for spec_type in spectrogram_types:
                                 # IAM
                                 if signal_id != "pure_tone":
                                     IAT_ERR = Iatsenko_style(inst_freq, tfsupp[0, :])
-                                    IAT_ERR[k, i - 1] = IAT_ERR
+                                    IAT_ERR_G[k, i - 1] = IAT_ERR
                                 # CURVE DISTANCE (Geodesic)
                                 GEODETIC = Geodesic_curve_distance(t_support, tfsupp[0, :], t_support, inst_freq)
                                 GEODETIC_G[k, i - 1] = GEODETIC
