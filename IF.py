@@ -32,7 +32,7 @@ import math
 import types
 from scipy import optimize
 import scipy.special as spec
-
+from numba import cuda
 
 class ec_class:
     #reproduce homonimous structure in the original code
@@ -184,6 +184,7 @@ class IF:
     def Round(self,a):
         return np.trunc(a+np.copysign(0.5,a))
 
+    @cuda.jit
     def ecurve(self,TFR,freq,wopt):
       #From original code
        # extracts the curve (i.e. the sequence of the amplitude ridge points)

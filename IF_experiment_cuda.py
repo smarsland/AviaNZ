@@ -76,10 +76,10 @@ import imed
 import speechmetrics as sm
 from fdasrsf.geodesic import geod_sphere
 from librosa.feature.inverse import mel_to_audio
+from numba import cuda
 
 
 ########################## Utility functions ###########################################################################
-
 
 def Signal_to_noise_Ratio(signal_sample, noise_sample):
     # Signal-to-noise ratio
@@ -184,7 +184,7 @@ def set_if_fun(sig_id, t_len):
         print("ERROR SIGNAL ID NOT CONSISTENT WITH THE IF WE CAN HANDLE")
     return if_fun
 
-
+@cuda.jit
 def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_type, freq_scale, normal_type,
                                     optim_metric, optim_option="Original"):
     """
@@ -266,25 +266,27 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                 n = len(file_list)
 
                             measure2check = 0
-                            for counter in range(n):
+                            for signal_file in file_list:
                                 IF = IFreq.IF(method=2, pars=[alpha, beta])
                                 sp = SignalProc.SignalProc(window_width, incr)
-                                # read pure signal
 
-                                if counter == 0:
-                                    pure_signal_path = base_dir + "/" + sign_id + '_00.wav'
-                                    sp.readWav(pure_signal_path)
+                                # read signal
+                                signal_path = base_dir + "/" + signal_file
+                                sp.readWav(signal_path)
+                                # if counter == 0:
+                                #     signal_path = base_dir + "/" + sign_id + '_00.wav'
+                                #     sp.readWav(pure_signal_path)
+                                #
+                                #
+                                # elif counter < 10:
+                                #     signal_path = base_dir + "/" + sign_id + '_0' + str(counter) + '.wav'
+                                #     sp.readWav(signal_path)
+                                #
+                                # else:
+                                #     signal_path = base_dir + "/" + sign_id + '_' + str(counter) + '.wav'
+                                #     sp.readWav(signal_path)
 
-
-                                elif counter < 10:
-                                    signal_path = base_dir + "/" + sign_id + '_0' + str(counter) + '.wav'
-                                    sp.readWav(signal_path)
-
-                                else:
-                                    signal_path = base_dir + "/" + sign_id + '_' + str(counter) + '.wav'
-                                    sp.readWav(signal_path)
-
-
+                                print('Using ', signal_path)
                                 sample_rate = sp.sampleRate
                                 file_len = sp.fileLength / sample_rate
                                 instant_freq_fun = set_if_fun(sign_id, file_len)
@@ -317,7 +319,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
                                 except:
                                     print('ERROR IN CURVE EXTRACTION')
                                     measure2check += np.nan
-                                    continue
+                                    break
 
 
                                 # revert to Hz if Mel
@@ -339,6 +341,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
 
                                 # safety chack cleaning
                                 del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
+
                             measure2check /= n  # mean over samples
                             with open(csv_filename, 'a', newline='') as csv_file:
                                 writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -403,7 +406,7 @@ def save_optima_parameters(dir_path, opt_par):
 
     return
 
-
+@cuda.jit
 def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg_scale, sg_norm, opt_param):
     """
     This function calculate metrics for the signal without noise
@@ -517,7 +520,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     return
 
-
+@cuda.jit
 def save_metric_csv(csv_filename, fieldnames, metric_matrix):
     """
     This functions save the values stored into metric_matrix to csvfilename using the fieldnames indicated by fieldnames
@@ -580,6 +583,10 @@ for spec_type in spectrogram_types:
                 # loop over optimization metrics
                 for opt_option in optimization_options:
                     # loop over optimization options
+
+                    if Test_id<1:
+                        continue
+
                     print("Starting test: ", Test_id)
                     # create test result directory
                     test_result_dir = main_results_dir + '/Test_' + str(Test_id)
