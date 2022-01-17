@@ -61,25 +61,26 @@ sp = SignalProc.SignalProc(window_width, incr)
 sp.readWav(file_name)
 fs = sp.sampleRate
 
-#evaluate spectrogram
-TFR = sp.spectrogram(window_width, incr, window, sgType = "Standard",sgScale = 'Linear')
-TFR2 = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Linear', nfilters = nfilters)
+# #evaluate spectrogram
+# TFR = sp.spectrogram(window_width, incr, window, sgType = "Standard",sgScale = 'Mel Frequency',  nfilters = nfilters)
+# TFR2 = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Linear')
 # plt.imshow(TFR2)
 # plt.show()
 #you need to call sp.scalogram
-print("Spectrogram Dim =", np.shape(TFR))
+#print("Spectrogram Dim =", np.shape(TFR))
 
 #TEST 0 normal invertion
-#signal_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
+TFR = sp.spectrogram(window_width, incr, window, sgType = 'Standard',sgScale = 'Linear')
+signal_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
 
 #TEST 1 using librosa library
 #TFR = TFR.T (not sure about this)
 #signal_inverted = librosa.feature.inverse.mel_to_audio(TFR, hop_length=incr, win_length=window_width, window=window)
 
-# #TEST2 pseudoinverse
+# # #TEST2 pseudoinverse
 # F = mel_filterbank_maker(window_width, 'mel', nfilters)
 # F_pseudo = np.linalg.pinv(F)
-# TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
+# TFR_recovered = np.absolute(np.dot(TFR, F_pseudo)) #note: in signal proc we have self.sg = np.dot(self.sg,filterbank)
 # plt.imshow(np.absolute(TFR_recovered-TFR2))
 # plt.savefig(file_name[:-4]+"_mel_inversion_test_diff.jpg")
 # #TFR_recovered = TFR @ F_pseudo
@@ -117,7 +118,9 @@ print("Spectrogram Dim =", np.shape(TFR))
 # save_file_path=file_name[:-4]+"_inv10.wav"
 # wavio.write(save_file_path, signal_inverted, fs, sampwidth=2)
 
-#TEST 12 : Test everything is working when inverting multitaper spectrogram
-signal_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
-save_file_path=file_name[:-4]+"_inv14.wav"
+#TEST 12 MULTITAPERED SPECTROGRAM INVERSION
+# TFR= sp.spectrogram(window_width, incr, window, sgType = "Multi-tapered",sgScale = 'Linear')
+# signal_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr, window=window)
+
+save_file_path=file_name[:-4]+"_inv_00.wav"
 wavio.write(save_file_path, signal_inverted, fs, sampwidth=2)

@@ -222,7 +222,7 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
 
     # mel bins options
     if freq_scale == 'Mel Frequency':
-        mel_bins = np.array([20, 32, 40, 60, 64, 80, 128, 256, 310])
+        mel_bins = np.array([20, 32, 40, 60, 64, 80, 128, 256, 310])#only power of 2
     else:
         mel_bins = [None]
 
