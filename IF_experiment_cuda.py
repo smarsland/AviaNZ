@@ -76,7 +76,7 @@ import imed
 import speechmetrics as sm
 from fdasrsf.geodesic import geod_sphere
 from librosa.feature.inverse import mel_to_audio
-from numba import cuda
+#from numba import cuda
 
 
 ########################## Utility functions ###########################################################################
@@ -184,8 +184,105 @@ def set_if_fun(sig_id, t_len):
         print("ERROR SIGNAL ID NOT CONSISTENT WITH THE IF WE CAN HANDLE")
     return if_fun
 
-@cuda.jit
-def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_type, freq_scale, normal_type,
+def find_optimal_spec_IF_parameters(test_param, op_param, op_measure, file_dir, wav_file_list, csv_path, f_names,
+                                    sign_id, spectrogram_type, freq_scale, normal_type, op_metric, op_option="Original"):
+    """
+    This function computes the optimization metrics OP_METRIC for the set of parameters TEST_PARAM.
+    It the metric is smaller than OP_MEASURE, it updates OP_PARAM.
+    Furthermore, it updates the csv_files stored at CVS_PATH
+    """
+
+    print("\nTESTING with window lenght= ", test_param["win_len"], " and increment = ", test_param["hop"],
+          "window_type = ", test_param["window_type"], " mel bins = ", test_param["mel_num"], " alpha = ",
+          test_param["alpha"], "beta = ", test_param["beta"], "\n")
+
+    if op_option == "Original":
+        n = 1
+    else:
+        # only two possible options
+        n = len(wav_file_list)
+
+    measure2check = 0
+    for signal_file in wav_file_list:
+        IF = IFreq.IF(method=2, pars=[test_param["alpha"], test_param["beta"]])
+        sp = SignalProc.SignalProc(test_param["win_len"], test_param["hop"])
+
+        # read signal
+        signal_path = file_dir + "/" + signal_file
+        sp.readWav(signal_path)
+        print('Using ', signal_path)
+        sample_rate = sp.sampleRate
+        file_len = sp.fileLength / sample_rate
+        instant_freq_fun = set_if_fun(sign_id, file_len)
+
+        tfr = sp.spectrogram(test_param["win_len"], test_param["hop"], test_param["window_type"], sgType=spectrogram_type, sgScale=freq_scale,
+                             nfilters=test_param["mel_num"])
+        print("spec dims", np.shape(tfr))
+
+        # spectrogram normalizations
+        if normal_type != "Standard":
+            sp.normalisedSpec(tr=normal_type)
+            tfr = sp.sg
+
+        tfr = tfr.T
+        [num_row, num_col] = np.shape(tfr)
+
+        # appropriate frequency scale
+        if freq_scale == "Linear":
+            f_step = (sample_rate / 2) / np.shape(tfr)[0]
+            freq_arr = np.arange(f_step, sample_rate / 2 + f_step, f_step)
+        else:
+            # #mel freq axis
+            n_filters = test_param["mel_num"]
+            freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2),
+                                   n_filters + 1)
+            freq_arr = freq_arr[1:]
+
+        w_opt = [sample_rate, test_param["win_len"]]  # this neeeds review
+        try:
+            tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
+        except:
+            print('ERROR IN CURVE EXTRACTION')
+            measure2check += np.nan
+            break
+
+        # revert to Hz if Mel
+        if freq_scale == 'Mel Frequency':
+            tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+
+        # calculate
+        instant_freq = instant_freq_fun(np.linspace(0, file_len, np.shape(tf_supp[0, :])[0]))
+        # line checked
+
+        if op_metric == "L2":
+            measure2check += norm(tf_supp[0, :] - instant_freq, ord=2) / (num_row * num_col)
+        elif op_metric == "Iatsenko":
+            measure2check += Iatsenko_style(instant_freq, tf_supp[0, :])
+        else:
+            time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])
+            measure2check += Geodesic_curve_distance(time_support, tf_supp[0, :], time_support,
+                                                     instant_freq)
+
+        # safety chack cleaning
+        del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
+
+    measure2check /= n  # mean over samples
+    with open(csv_path, 'a', newline='') as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=f_names)
+        writer.writerow({'window_width': test_param["win_len"], 'incr': test_param["hop"], 'window type': test_param["window_type"],
+                         "mel bins": test_param["mel_num"], 'alpha': test_param["alpha"], 'beta': test_param["beta"],
+                         'spec dim': num_row * num_col, 'measure': measure2check})
+
+    if (not np.isnan(measure2check)) and (measure2check < op_measure):
+
+        op_measure = measure2check
+        op_param = test_param
+        print("optimal parameters updated:", op_param)
+
+    return op_param, op_measure
+
+
+def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrogram_type, freq_scale, normal_type,
                                     optim_metric, optim_option="Original"):
     """
     This function find optimal parameters for the spectrogram and the frequency extraction algorithm in order
@@ -212,152 +309,93 @@ def find_optimal_spec_IF_parameters(base_dir, save_dir, sign_id, spectrogram_typ
     """
 
     # Spectrogram parameters
-    win = np.array([32, 64, 128, 256, 1024, 2048, 4096])
+    win = np.array([256, 512, 1024, 2048])
     hop_perc = np.array([0.1, 0.25, 0.5, 0.75, 0.9])
-    win_type = ['Hann', 'Parzen', 'Welch', 'Hamming', 'Blackman', 'BlackmanHarris']
+    win_type = ['Hann', 'Parzen', 'Welch', 'Hamming', 'Blackman']
 
     # If Extraction parameters
-    alpha_list = np.array([0, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15, 20])
-    beta_list = np.array([0, 0.25, 0.5, 1, 2, 4, 6, 8, 10, 15, 20])
+    alpha_list = np.array([0, 0.5, 1, 2.5, 5, 10])
+    beta_list = np.array([0, 0.5, 1, 2.5, 5, 10])
 
     # mel bins options
     if freq_scale == 'Mel Frequency':
-        mel_bins = np.array([20, 32, 40, 60, 64, 80, 128, 256, 310])#only power of 2
+        mel_bins = np.array([64, 128, 256])#only power of 2
     else:
         mel_bins = [None]
 
     opt = np.Inf
+
+    #inizialize opt_param with standard values
     opt_param = {"win_len": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
+    test_param = {"win_len": [], "hop": 256, "window_type": 'Hann', "mel_num": None, "alpha": 1, "beta": 1}
+
+    if freq_scale == 'Mel Frequency':
+        opt_param['mel_num'] = 64
+
+    if optim_option== "Original":
+        file_list = [sign_id + "_00.wav"]
+    else:
+        file_list = os.listdir(base_dir)
 
     # store values into .csv file
-
     fieldnames = ['window_width', 'incr', 'window type', "mel bins", 'alpha', 'beta', 'spec dim', 'measure']
-
     csv_filename = save_dir + '/find_optimal_parameters_log.csv'
     with open(csv_filename, 'w', newline='') as csv_save_file:
         writer = csv.DictWriter(csv_save_file, fieldnames=fieldnames)
         writer.writeheader()
 
+    #find optimal window
     for win_len in win:
         # loop on possible window_length
-        for hop in hop_perc:
-            # loop on possible hop
-            for window_type in win_type:
-                # loop on possible window_types
-                for num_bin in mel_bins:
-                    # loop over possible numbers of bins. If None this is just one loop
+        test_param["win_len"] = int(win_len)
+        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list, csv_filename,
+                                                         fieldnames, sign_id, spectrogram_type, freq_scale, normal_type,
+                                                         optim_metric, op_option=optim_option)
 
-                    for alpha in alpha_list:
-                        # loop on alpha
+    test_param = opt_param
+    for hop in hop_perc:
+        # loop on possible hop
+        test_param["hop"] = int(test_param["win_len"]*hop)
+        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+                                                           csv_filename,fieldnames, sign_id, spectrogram_type,
+                                                           freq_scale, normal_type, optim_metric,
+                                                           op_option=optim_option)
 
-                        for beta in beta_list:
-                            # loop on beta
-                            window_width = int(win_len)
-                            incr = int(win_len * hop)
-                            print("\nTESTING with window lenght= ", window_width, " and increment = ", incr,
-                                  " window_type = ", window_type, " mel bins = ", num_bin, " alpha = ", alpha,
-                                  "beta = ", beta, "\n")
+    test_param = opt_param
+    for window_type in win_type:
+        # loop on possible window_types
+        test_param["window_type"] = window_type
+        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+                                                           csv_filename, fieldnames, sign_id, spectrogram_type,
+                                                           freq_scale, normal_type, optim_metric,
+                                                           op_option=optim_option)
 
-                            file_list = os.listdir(base_dir)
-                            if optim_option == "Original":
-                                n = 1
-                            else:
-                                # only two possible options
-                                n = len(file_list)
-
-                            measure2check = 0
-                            for signal_file in file_list:
-                                IF = IFreq.IF(method=2, pars=[alpha, beta])
-                                sp = SignalProc.SignalProc(window_width, incr)
-
-                                # read signal
-                                signal_path = base_dir + "/" + signal_file
-                                sp.readWav(signal_path)
-                                # if counter == 0:
-                                #     signal_path = base_dir + "/" + sign_id + '_00.wav'
-                                #     sp.readWav(pure_signal_path)
-                                #
-                                #
-                                # elif counter < 10:
-                                #     signal_path = base_dir + "/" + sign_id + '_0' + str(counter) + '.wav'
-                                #     sp.readWav(signal_path)
-                                #
-                                # else:
-                                #     signal_path = base_dir + "/" + sign_id + '_' + str(counter) + '.wav'
-                                #     sp.readWav(signal_path)
-
-                                print('Using ', signal_path)
-                                sample_rate = sp.sampleRate
-                                file_len = sp.fileLength / sample_rate
-                                instant_freq_fun = set_if_fun(sign_id, file_len)
-
-                                tfr = sp.spectrogram(window_width, incr, window_type, sgType=spectrogram_type,
-                                                     sgScale=freq_scale, nfilters=num_bin)
-                                print("spec dims", np.shape(tfr))
-
-                                # spectrogram normalizations
-                                if normal_type != "Standard":
-                                    sp.normalisedSpec(tr=normal_type)
-                                    tfr = sp.sg
-
-                                tfr = tfr.T
-                                [num_row, num_col] = np.shape(tfr)
-                                # appropriate frequency scale
-                                if freq_scale == "Linear":
-                                    f_step = (sample_rate / 2) / np.shape(tfr)[0]
-                                    freq_arr = np.arange(f_step, sample_rate / 2 + f_step, f_step)
-                                else:
-                                    # #mel freq axis
-                                    n_filters = 40
-                                    freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2),
-                                                           n_filters + 1)
-                                    freq_arr = freq_arr[1:]
-
-                                w_opt = [sample_rate, window_width]  # this neeeds review
-                                try:
-                                    tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
-                                except:
-                                    print('ERROR IN CURVE EXTRACTION')
-                                    measure2check += np.nan
-                                    break
+    if freq_scale == 'Mel Frequency':
+        # do the loop only if we are testing mel spectrogram
+        test_param = opt_param
+        for num_bin in mel_bins:
+            # loop over possible numbers of bins. If None this is just one loop
+            test_param["mel_num"] = num_bin
+            [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+                                                               csv_filename, fieldnames, sign_id, spectrogram_type,
+                                                               freq_scale, normal_type, optim_metric,
+                                                               op_option=optim_option)
 
 
-                                # revert to Hz if Mel
-                                if freq_scale == 'Mel Frequency':
-                                    tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+    # optimize paremeters needed for IF extraction: these are dipendent
+    test_param = opt_param
+    for alpha in alpha_list:
+        # loop on alpha
+        for beta in beta_list:
+            # loop on beta
 
-                                # calculate
-                                instant_freq = instant_freq_fun(np.linspace(0, file_len, np.shape(tf_supp[0, :])[0]))
-                                # line checked
+            test_param["alpha"] = alpha
+            test_param["beta"] = beta
+            [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+                                                               csv_filename, fieldnames, sign_id, spectrogram_type,
+                                                               freq_scale, normal_type, optim_metric,
+                                                               op_option=optim_option)
 
-                                if optim_metric == "L2":
-                                    measure2check += norm(tf_supp[0, :] - instant_freq, ord=2) / (num_row * num_col)
-                                elif optim_metric == "Iatsenko":
-                                    measure2check += Iatsenko_style(instant_freq, tf_supp[0, :])
-                                else:
-                                    time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])
-                                    measure2check += Geodesic_curve_distance(time_support, tf_supp[0, :], time_support,
-                                                                            instant_freq)
-
-                                # safety chack cleaning
-                                del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
-
-                            measure2check /= n  # mean over samples
-                            with open(csv_filename, 'a', newline='') as csv_file:
-                                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-                                writer.writerow({'window_width': window_width, 'incr': incr, 'window type': window_type,
-                                                 "mel bins": num_bin, 'alpha': alpha, 'beta': beta,
-                                                 'spec dim': num_row * num_col, 'measure': measure2check})
-
-                            if (not np.isnan(measure2check)) and (measure2check < opt):
-                                print("optimal parameters updated:", opt_param)
-                                opt = measure2check
-                                opt_param["win_len"] = window_width
-                                opt_param["hop"] = incr
-                                opt_param["window_type"] = window_type
-                                opt_param["alpha"] = alpha
-                                opt_param["beta"] = beta
-                                opt_param["mel_num"] = num_bin
 
     print("\n Optimal parameters \n", opt_param)
     return opt_param
@@ -406,7 +444,7 @@ def save_optima_parameters(dir_path, opt_par):
 
     return
 
-@cuda.jit
+
 def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg_scale, sg_norm, opt_param):
     """
     This function calculate metrics for the signal without noise
@@ -520,7 +558,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     return
 
-@cuda.jit
+
 def save_metric_csv(csv_filename, fieldnames, metric_matrix):
     """
     This functions save the values stored into metric_matrix to csvfilename using the fieldnames indicated by fieldnames
