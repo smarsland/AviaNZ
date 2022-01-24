@@ -512,6 +512,8 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     else:
         TFR_recovered=tfr
 
+    print('shape TFR rec ', np.shape(TFR_recovered), ' window width ',opt_param["win_len"], ' incr ', opt_param["hop"],
+          ' window type ', opt_param["window_type"])
     s1_inverted = sp.invertSpectrogram(TFR_recovered, window_width=opt_param["win_len"], incr=opt_param["hop"],
                                        window=opt_param["window_type"])
 
