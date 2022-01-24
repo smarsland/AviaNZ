@@ -75,7 +75,7 @@ import csv
 import imed
 import speechmetrics as sm
 from fdasrsf.geodesic import geod_sphere
-from librosa.feature.inverse import mel_to_audio
+#from librosa.feature.inverse import mel_to_audio
 #from numba import cuda
 
 
@@ -503,9 +503,12 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     # invert spectrogram
     sign_original = sp.data
     if sg_scale == 'Mel Frequency':
-        # This is a patch but I am not super happy about this solution
-        s1_inverted = mel_to_audio(tfr2, sr=sample_rate, n_fft=opt_param["win_len"] * 2, hop_length=opt_param["hop"],
-                                   win_length=opt_param["win_len"], window=opt_param["window_type"].lower())
+        # Pathched
+        F = mel_filterbank_maker(opt_param["win_len"], 'mel', nfilters)
+        F_pseudo = np.linalg.pinv(F)
+        TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
+        s1_inverted = sp.invertSpectrogram(TFR_recovered, window_width = opt_param["win_len"],
+                                               incr = opt_param["hop"], window = opt_param["window_type"])
     else:
         s1_inverted = sp.invertSpectrogram(tfr, window_width=opt_param["win_len"], incr=opt_param["hop"],
                                        window=opt_param["window_type"])
@@ -573,6 +576,43 @@ def save_metric_csv(csv_filename, fieldnames, metric_matrix):
                 row[fieldnames[j]] = metric_matrix[h, j]
             writer.writerow(row)
     return
+
+
+def mel_filterbank_maker(window_size, filter='mel', nfilters=40, minfreq=0, maxfreq=None, normalise=True):
+    # Transform the spectrogram to mel or bark scale
+    if maxfreq is None:
+        maxfreq = sp.sampleRate / 2
+    print(filter, nfilters, minfreq, maxfreq, normalise)
+
+    if filter == 'mel':
+        filter_points = np.linspace(sp.convertHztoMel(minfreq), sp.convertHztoMel(maxfreq), nfilters + 2)
+        bins = sp.convertMeltoHz(filter_points)
+    elif filter == 'bark':
+        filter_points = np.linspace(sp.convertHztoBark(minfreq), sp.convertHztoBark(maxfreq), nfilters + 2)
+        bins = sp.convertBarktoHz(filter_points)
+    else:
+        print("ERROR: filter not known", filter)
+        return (1)
+
+    nfft = int(window_size / 2)
+    freq_points = np.linspace(minfreq, maxfreq, nfft)
+
+    filterbank = np.zeros((nfft, nfilters))
+    for m in range(nfilters):
+        # Find points in first and second halves of the triangle
+        inds1 = np.where((freq_points >= bins[m]) & (freq_points <= bins[m + 1]))
+        inds2 = np.where((freq_points >= bins[m + 1]) & (freq_points <= bins[m + 2]))
+        # Compute their contributions
+        filterbank[inds1, m] = (freq_points[inds1] - bins[m]) / (bins[m + 1] - bins[m])
+        filterbank[inds2, m] = (bins[m + 2] - freq_points[inds2]) / (bins[m + 2] - bins[m + 1])
+
+    if normalise:
+        # Normalise to unit area if desired
+        norm = filterbank.sum(axis=0)
+        norm = np.where(norm == 0, 1, norm)
+        filterbank /= norm
+
+    return filterbank
 
 
 ########################################################################################################################
@@ -653,9 +693,9 @@ for spec_type in spectrogram_types:
                         baseline_dir = folder_path + '/Base_Dataset_2'
 
                         # find optima parameters and store them
-                        optima_parameters = find_optimal_spec_IF_parameters(baseline_dir, test_result_subfolder,
-                                                                            signal_id, spec_type, scale, norm_type,
-                                                                            opt_metric, opt_option)
+                        optima_parameters = find_optimal_spec_IF_parameters_handle(baseline_dir, test_result_subfolder,
+                                                                                   signal_id, spec_type, scale,
+                                                                                   norm_type, opt_metric, opt_option)
                         save_optima_parameters(test_result_subfolder, optima_parameters)
 
                         # evaluate metrics for "original signal" and store them
@@ -777,11 +817,16 @@ for spec_type in spectrogram_types:
 
                                 #spectrogram of inverted signal
                                 if scale == 'Mel Frequency':
-                                    # This is a patch but I am not super happy about this solution
-                                    signal_inverted = mel_to_audio(TFR2, sr=fs, n_fft=optima_parameters["win_len"] * 2,
-                                                                   hop_length=optima_parameters["hop"],
-                                                                   win_length=optima_parameters["win_len"],
-                                                                   window=optima_parameters["window_type"].lower())
+                                    # Patched
+                                    F = mel_filterbank_maker(optima_parameters["win_len"], 'mel',
+                                                             optima_parameters["mel_num"])
+                                    F_pseudo = np.linalg.pinv(F)
+                                    TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
+                                    signal_inverted = sp.invertSpectrogram(TFR_recovered,
+                                                                           window_width=optima_parameters["win_len"],
+                                                                           incr=optima_parameters["hop"],
+                                                                           window=optima_parameters["window_type"])
+
                                 else:
                                     signal_inverted = sp.invertSpectrogram(TFR,
                                                                            window_width=optima_parameters["win_len"],

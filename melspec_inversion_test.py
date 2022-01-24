@@ -77,14 +77,14 @@ signal_inverted = sp.invertSpectrogram(TFR, window_width=window_width, incr=incr
 #TFR = TFR.T (not sure about this)
 #signal_inverted = librosa.feature.inverse.mel_to_audio(TFR, hop_length=incr, win_length=window_width, window=window)
 
-# # #TEST2 pseudoinverse
-# F = mel_filterbank_maker(window_width, 'mel', nfilters)
-# F_pseudo = np.linalg.pinv(F)
-# TFR_recovered = np.absolute(np.dot(TFR, F_pseudo)) #note: in signal proc we have self.sg = np.dot(self.sg,filterbank)
-# plt.imshow(np.absolute(TFR_recovered-TFR2))
-# plt.savefig(file_name[:-4]+"_mel_inversion_test_diff.jpg")
-# #TFR_recovered = TFR @ F_pseudo
-# signal_inverted = sp.invertSpectrogram(TFR_recovered, window_width=window_width, incr=incr, window=window)
+# #TEST2 pseudoinverse
+F = mel_filterbank_maker(window_width, 'mel', nfilters)
+F_pseudo = np.linalg.pinv(F)
+TFR_recovered = np.absolute(np.dot(TFR, F_pseudo)) #note: in signal proc we have self.sg = np.dot(self.sg,filterbank)
+plt.imshow(np.absolute(TFR_recovered-TFR2))
+plt.savefig(file_name[:-4]+"_mel_inversion_test_diff.jpg")
+#TFR_recovered = TFR @ F_pseudo
+signal_inverted = sp.invertSpectrogram(TFR_recovered, window_width=window_width, incr=incr, window=window)
 
 # # TEST3 numpy.linalg least square
 # F = mel_filterbank_maker(window_width, 'mel', nfilters)
