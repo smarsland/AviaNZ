@@ -239,12 +239,13 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_measure, file_dir, 
             freq_arr = freq_arr[1:]
 
         w_opt = [sample_rate, test_param["win_len"]]  # this neeeds review
-        try:
-            tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
-        except:
-            print('ERROR IN CURVE EXTRACTION')
-            measure2check += np.nan
-            break
+        tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
+        # try:
+        #     tf_supp, _, _ = IF.ecurve(tfr, freq_arr, w_opt)
+        # except:
+        #     print('ERROR IN CURVE EXTRACTION')
+        #     measure2check += np.nan
+        #     break
 
         # revert to Hz if Mel
         if freq_scale == 'Mel Frequency':
@@ -327,7 +328,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
     #inizialize opt_param with standard values
     opt_param = {"win_len": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
-    test_param = {"win_len": [], "hop": 256, "window_type": 'Hann', "mel_num": None, "alpha": 1, "beta": 1}
+    test_param = {"win_len": [], "hop": 128, "window_type": 'Hann', "mel_num": None, "alpha": 1, "beta": 1}
 
     if freq_scale == 'Mel Frequency':
         opt_param['mel_num'] = 64
