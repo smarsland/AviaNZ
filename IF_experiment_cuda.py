@@ -508,10 +508,11 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
         F = mel_filterbank_maker(opt_param["win_len"], 'mel', nfilters)
         F_pseudo = np.linalg.pinv(F)
         TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
-        s1_inverted = sp.invertSpectrogram(TFR_recovered, window_width = opt_param["win_len"],
-                                               incr = opt_param["hop"], window = opt_param["window_type"])
+
     else:
-        s1_inverted = sp.invertSpectrogram(tfr, window_width=opt_param["win_len"], incr=opt_param["hop"],
+        TFR_recovered=tfr
+
+    s1_inverted = sp.invertSpectrogram(TFR_recovered, window_width=opt_param["win_len"], incr=opt_param["hop"],
                                        window=opt_param["window_type"])
 
     # spectrogram of inverted signal
