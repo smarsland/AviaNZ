@@ -897,14 +897,16 @@ for spec_type in spectrogram_types:
                                 col_dif = np.shape(TFR_original)[1] - np.shape(TFR2_inv)[1]
                                 if col_dif == 0:
                                     IMED_original = IMED_distance(TFR_original, TFR2_inv)
+                                    IMED_noise = IMED_distance(TFR, TFR2_inv)
                                 else:
                                     IMED_original = IMED_distance(TFR_original[:,
                                                                   int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
                                                                 TFR2_inv)
+                                    IMED_noise = IMED_distance( TFR2[:,
+                                                                int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
+                                                                TFR2_inv)
                                 IMED_original_G[k, i - 1] = IMED_original
-                                IMED_noise = IMED_distance(
-                                    TFR2[:, int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
-                                    TFR2_inv)
+
                                 IMED_noise_G[k, i - 1] = IMED_noise
 
                                 # Renyi entropy spectrogram inverted sound
