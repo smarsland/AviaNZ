@@ -162,7 +162,6 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
-
         #print(np.shape(img2))
         # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
@@ -172,109 +171,6 @@ class SignalProc:
         if repeat:
             img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
         #print(np.shape(img2))
-
-        self.data = []
-        self.fileLength = (w-2)*self.incr + self.window_width  # in samples
-        # Alternatively:
-        # self.fileLength = self.convertSpectoAmpl(h-1)*self.sampleRate
-
-        # NOTE: conversions will use self.sampleRate and self.incr, so ensure those are already set!
-        # trim to specified offset and length:
-        if off>0 or len is not None:
-            # Convert offset from seconds to pixels
-            off = int(self.convertAmpltoSpec(off))
-            if len is None:
-                img2 = img2[:, off:]
-            else:
-                # Convert length from seconds to pixels:
-                len = int(self.convertAmpltoSpec(len))
-                img2 = img2[:, off:(off+len)]
-
-        if rotate:
-            # rotate for display, b/c required spectrogram dimensions are:
-            #  t increasing over rows, f increasing over cols
-            # This will be enough if the original image was spectrogram-shape.
-            img2 = np.rot90(img2, 1, (1,0))
-
-        self.sg = img2
-
-        if QtMM:
-            self.audioFormat.setChannelCount(0)
-            self.audioFormat.setSampleSize(0)
-            self.audioFormat.setSampleRate(self.sampleRate)
-        #else:
-            #self.audioFormat['channelCount'] = 0
-            #self.audioFormat['sampleSize'] = 0
-            #self.audioFormat['sampleRate'] = self.sampleRate
-
-        self.minFreq = 0
-        self.maxFreq = self.sampleRate //2
-        self.minFreqShow = max(self.minFreq, self.minFreqShow)
-        self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
-
-        if not silent:
-            print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
-        return(0)
-
-    def readBmp2(self, file, len=None, off=0, silent=False, rotate=True):
-        """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
-            For similarity with readWav, accepts len and off args, in seconds.
-            rotate: if True, rotates to match setImage and other spectrograms (rows=time)
-                otherwise preserves normal orientation (cols=time)
-
-          NOT REPEATED ROWS
-        """
-        # !! Important to set these, as they are used in other functions
-        self.sampleRate = 176000
-        self.incr = 512
-
-        img = QImage(file, "BMP")
-        h = img.height()
-        w = img.width()
-        colc = img.colorCount()
-        if h==0 or w==0:
-            print("ERROR: image was not loaded")
-            return(1)
-
-        # Check color format and convert to grayscale
-        if not silent and (not img.allGray() or colc>256):
-            print("Warning: image provided not in 8-bit grayscale, information will be lost")
-        img.convertTo(QImage.Format_Grayscale8)
-
-        # Convert to numpy
-        # (remember that pyqtgraph images are column-major)
-        ptr = img.constBits()
-        ptr.setsize(h*w*1)
-        img2 = np.array(ptr).reshape(h, w)
-
-        # Determine if original image was rotated, based on expected num of freq bins and freq 0 being empty
-        # We also used to check if np.median(img2[-1,:])==0,
-        # but some files happen to have the bottom freq bin around 90, so we cannot rely on that.
-        if h==64:
-            # standard DoC format
-            pass
-        elif w==64:
-            # seems like DoC format, rotated at -90*
-            img2 = np.rot90(img2, 1, (1,0))
-            w, h = h, w
-        else:
-            print("ERROR: image does not appear to be in DoC format!")
-            print("Format details:")
-            print(img2)
-            print(h, w)
-            print(min(img2[-1,:]), max(img2[-1,:]))
-            print(np.sum(img2[-1,:]>0))
-            print(np.median(img2[-1,:]))
-            return(1)
-
-        print(np.shape(img2))
-        # Could skip that for visual mode - maybe useful for establishing contrast?
-        img2[-1, :] = 254  # lowest freq bin is 0, flip that
-        img2 = 255 - img2  # reverse value having the black as the most intense
-        img2 = img2/np.max(img2)  # normalization
-        img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
-        #img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
-        print(np.shape(img2))
 
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples
@@ -472,7 +368,6 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-
     def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
@@ -577,7 +472,6 @@ class SignalProc:
             times = np.tile(np.arange(0, (len(self.data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
-
             self.sg = np.absolute(self.sg[:, :window_width //2]) #+ 0.1
 
             print("SG range:", np.min(self.sg),np.max(self.sg))
@@ -613,8 +507,7 @@ class SignalProc:
                         winddata = window * self.sg[i:i + window_width]
                         ft[i // incr, :] = fft.fft(winddata)
                 self.sg = np.absolute(ft)
-                #self.sg=ft
-            #print(np.min(self.sg),np.max(self.sg))
+            print(np.min(self.sg),np.max(self.sg))
 
             del ft
             gc.collect()
@@ -626,7 +519,6 @@ class SignalProc:
             self.convertToMel(filt='bark',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
 
         return self.sg
-
 
     def normalisedSpec(self, tr="Log"):
         """ Assumes the spectrogram was precomputed.
@@ -668,7 +560,6 @@ class SignalProc:
             return (self.sg*smooth+bias)**power - bias**power
         else:
             print("ERROR: unrecognized transformation", tr)
-
 
     def Stockwell(self):
         # Stockwell transform (Brown et al. version)
@@ -954,12 +845,19 @@ class SignalProc:
             wave_est = np.real(fft.ifft(spectral_slice))[::-1]
             if calculate_offset and i > 0:
                 offset_size = size - incr
+                print("Offset: ",offset_size)
                 if offset_size <= 0:
-                    #print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
+                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
+                print(wave_start, est_start, offset_size, len(wave), len(wave_est), est_start+offset_size<len(wave_est))
                 offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
+                print("New offset: ",offset)
             else:
                 offset = 0
+            print(wave_end-wave_start, len(window), est_end-est_start,len(wave_est), len(wave),est_start, offset)
+            if est_end-offset >= size:
+                offset+=(est_end-offset-size)
+                wave_end-=(est_end-offset-size)
             wave[wave_start:wave_end] += window * wave_est[est_start - offset:est_end - offset]
             total_windowing_sum[wave_start:wave_end] += window**2 #Virginia: needed square
         wave = np.real(wave) / (total_windowing_sum + 1E-6)
