@@ -551,7 +551,10 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     # imed
     col_diff = np.shape(tfr2)[1] - np.shape(tfr2_inv)[1]
     print('col:diff ',col_diff)
-    original_sound_metrics["IMED"] = IMED_distance(tfr2[:, int(np.floor(col_diff / 2)):-int(np.ceil(col_diff / 2))],
+    if col_diff==0:
+        original_sound_metrics["IMED"] = IMED_distance(tfr2, tfr2_inv)
+    else:
+        original_sound_metrics["IMED"] = IMED_distance(tfr2[:, int(np.floor(col_diff / 2)):-int(np.ceil(col_diff / 2))],
                                                    tfr2_inv)
     original_sound_metrics["Renyi Entropy inv. spec."] = Renyi_Entropy(tfr2_inv)
     # store fieldnames
@@ -892,9 +895,12 @@ for spec_type in spectrogram_types:
 
                                 # imed
                                 col_dif = np.shape(TFR_original)[1] - np.shape(TFR2_inv)[1]
-                                IMED_original = IMED_distance(TFR_original[:,
-                                                              int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
-                                                              TFR2_inv)
+                                if col_dif == 0:
+                                    IMED_original = IMED_distance(TFR_original, TFR2_inv)
+                                else:
+                                    IMED_original = IMED_distance(TFR_original[:,
+                                                                  int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
+                                                                TFR2_inv)
                                 IMED_original_G[k, i - 1] = IMED_original
                                 IMED_noise = IMED_distance(
                                     TFR2[:, int(np.floor(col_dif / 2)):-int(np.ceil(col_dif / 2))],
