@@ -120,6 +120,8 @@ def IMED_distance(a, b):
     a2 = (a - np.amin(a)) / np.ptp(a)
     b2 = (b - np.amin(b)) / np.ptp(b)
 
+    print('shape a2', np.shape(a2), 'shape b2 ', np.shape(b2))
+
     return imed.distance(a2, b2)
 
 
