@@ -673,6 +673,7 @@ for spec_type in spectrogram_types:
                     # loop over optimization options
 
                     if Test_id<1:
+                        print('check')
                         continue
 
                     print("Starting test: ", Test_id)
