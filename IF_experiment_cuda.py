@@ -272,9 +272,10 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_measure, file_dir, 
     measure2check /= n  # mean over samples
     with open(csv_path, 'a', newline='') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=f_names)
-        writer.writerow({'window_width': test_param["win_len"], 'incr': test_param["hop"], 'window type': test_param["window_type"],
-                         "mel bins": test_param["mel_num"], 'alpha': test_param["alpha"], 'beta': test_param["beta"],
-                         'spec dim': num_row * num_col, 'measure': measure2check})
+        writer.writerow({'window_width': test_param["win_len"], 'incr': test_param["hop"],
+                         'window type': test_param["window_type"], "mel bins": test_param["mel_num"],
+                         'alpha': test_param["alpha"], 'beta': test_param["beta"], 'spec dim': num_row * num_col,
+                         'n file': n, 'measure': measure2check})
 
     if (not np.isnan(measure2check)) and (measure2check < op_measure):
 
@@ -317,8 +318,8 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
     win_type = ['Hann', 'Parzen', 'Welch', 'Hamming', 'Blackman']
 
     # If Extraction parameters
-    alpha_list = np.array([0, 0.5, 1, 2.5, 5, 10])
-    beta_list = np.array([0, 0.5, 1, 2.5, 5, 10])
+    alpha_list = np.array([0, 0.5, 1, 2.5, 5, 7.5, 10])
+    beta_list = np.array([0, 0.5, 1, 2.5, 5, 7.5, 10])
 
     # mel bins options
     if freq_scale == 'Mel Frequency':
@@ -341,7 +342,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
         file_list = os.listdir(base_dir)
 
     # store values into .csv file
-    fieldnames = ['window_width', 'incr', 'window type', "mel bins", 'alpha', 'beta', 'spec dim', 'measure']
+    fieldnames = ['window_width', 'incr', 'window type', "mel bins", 'alpha', 'beta', 'spec dim', 'n file', 'measure']
     csv_filename = save_dir + '/find_optimal_parameters_log.csv'
     with open(csv_filename, 'w', newline='') as csv_save_file:
         writer = csv.DictWriter(csv_save_file, fieldnames=fieldnames)
@@ -356,6 +357,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                          optim_metric, op_option=optim_option)
 
     test_param = opt_param
+    opt = np.Inf
     for hop in hop_perc:
         # loop on possible hop
         test_param["hop"] = int(test_param["win_len"]*hop)
@@ -365,6 +367,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                            op_option=optim_option)
 
     test_param = opt_param
+    opt = np.Inf
     for window_type in win_type:
         # loop on possible window_types
         test_param["window_type"] = window_type
@@ -376,6 +379,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
     if freq_scale == 'Mel Frequency':
         # do the loop only if we are testing mel spectrogram
         test_param = opt_param
+        opt = np.Inf
         for num_bin in mel_bins:
             # loop over possible numbers of bins. If None this is just one loop
             test_param["mel_num"] = num_bin
@@ -387,6 +391,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
     # optimize paremeters needed for IF extraction: these are dipendent
     test_param = opt_param
+    opt = np.Inf
     for alpha in alpha_list:
         # loop on alpha
         for beta in beta_list:
