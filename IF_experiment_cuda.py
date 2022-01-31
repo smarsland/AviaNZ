@@ -672,8 +672,8 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    # if Test_id<1:
-                    #     continue
+                    if Test_id<1:
+                        continue
 
                     print("Starting test: ", Test_id)
                     # create test result directory

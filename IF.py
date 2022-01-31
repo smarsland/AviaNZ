@@ -711,7 +711,7 @@ class IF:
             allp_index[0,:]=p_index
             ec_info.mv=mv
             ec_info.rdiff=rdiff
-            while rdiff!=0:
+            while rdiff!=0 and itn<self.MaxIter:
                 #Define the functionals
                 smv=np.array([mv[1],mv[3]]) #to avoid underflow
                 if smv[0]<=0:
