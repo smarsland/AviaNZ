@@ -365,7 +365,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
         if newopt < opt:
             print("here")
             opt = newopt
-            opt_param = test_param
+            opt_param = test_param.copy()
         else:
             print("NOT HERE")
         print(opt,win_len)
@@ -384,9 +384,9 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
         print(newopt, opt)
         if newopt < opt:
-            print("here", hop_perc)
+            print("here", hop)
             opt = newopt
-            opt_param = test_param
+            opt_param = test_param.copy()
         else:
             print("NOT HERE")
         print(opt, win_len,test_param["hop"],opt_param["hop"])
