@@ -356,6 +356,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                          fieldnames, sign_id, spectrogram_type, freq_scale, normal_type,
                                                          optim_metric, op_option=optim_option)
 
+    del opt #cancel to remain safe
     test_param = opt_param
     opt = np.Inf
     for hop in hop_perc:
@@ -366,6 +367,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                            freq_scale, normal_type, optim_metric,
                                                            op_option=optim_option)
 
+    del opt  # cancel to remain safe
     test_param = opt_param
     opt = np.Inf
     for window_type in win_type:
@@ -378,6 +380,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
     if freq_scale == 'Mel Frequency':
         # do the loop only if we are testing mel spectrogram
+        del opt  # cancel to remain safe
         test_param = opt_param
         opt = np.Inf
         for num_bin in mel_bins:
@@ -390,6 +393,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
 
     # optimize paremeters needed for IF extraction: these are dipendent
+    del opt  # cancel to remain safe
     test_param = opt_param
     opt = np.Inf
     for alpha in alpha_list:
