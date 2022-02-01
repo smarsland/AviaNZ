@@ -432,7 +432,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
             test_param["alpha"] = alpha
             test_param["beta"] = beta
-            [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+            newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
                                                                csv_filename, fieldnames, sign_id, spectrogram_type,
                                                                freq_scale, normal_type, optim_metric,
                                                                op_option=optim_option)
