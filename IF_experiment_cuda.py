@@ -370,18 +370,27 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
             print("NOT HERE")
         print(opt,win_len)
 
-    return
+    # return
     del opt  # cancel to remain safe
     test_param = opt_param
     opt = np.Inf
     for hop in hop_perc:
         # loop on possible hop
         test_param["hop"] = int(test_param["win_len"]*hop)
-        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+        newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
                                                            csv_filename, fieldnames, sign_id, spectrogram_type,
                                                            freq_scale, normal_type, optim_metric,
                                                            op_option=optim_option)
 
+    print(newopt, opt)
+    if newopt < opt:
+        print("here")
+        opt = newopt
+        opt_param = test_param
+    else:
+        print("NOT HERE")
+    print(opt, win_len)
+    return
     del opt  # cancel to remain safe
     test_param = opt_param
     opt = np.Inf
