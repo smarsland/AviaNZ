@@ -363,7 +363,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                            optim_metric, op_option=optim_option)
         print(opt,win_len)
 
-    break
+    return
     del opt  # cancel to remain safe
     test_param = opt_param
     opt = np.Inf
