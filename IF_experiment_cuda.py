@@ -382,14 +382,14 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                            freq_scale, normal_type, optim_metric,
                                                            op_option=optim_option)
 
-    print(newopt, opt)
-    if newopt < opt:
-        print("here")
-        opt = newopt
-        opt_param = test_param
-    else:
-        print("NOT HERE")
-    print(opt, win_len)
+        print(newopt, opt)
+        if newopt < opt:
+            print("here")
+            opt = newopt
+            opt_param = test_param
+        else:
+            print("NOT HERE")
+        print(opt, win_len)
     return
     del opt  # cancel to remain safe
     test_param = opt_param
