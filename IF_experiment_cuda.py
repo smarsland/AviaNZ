@@ -75,8 +75,8 @@ import csv
 import imed
 import speechmetrics as sm
 from fdasrsf.geodesic import geod_sphere
-#from librosa.feature.inverse import mel_to_audio
-#from numba import cuda
+# from librosa.feature.inverse import mel_to_audio
+# from numba import cuda
 
 
 ########################## Utility functions ###########################################################################
@@ -120,7 +120,7 @@ def IMED_distance(a, b):
     a2 = (a - np.amin(a)) / np.ptp(a)
     b2 = (b - np.amin(b)) / np.ptp(b)
 
-    #print('shape a2', np.shape(a2), 'shape b2 ', np.shape(b2))
+    # print('shape a2', np.shape(a2), 'shape b2 ', np.shape(b2))
 
     return imed.distance(a2, b2)
 
@@ -186,13 +186,17 @@ def set_if_fun(sig_id, t_len):
         print("ERROR SIGNAL ID NOT CONSISTENT WITH THE IF WE CAN HANDLE")
     return if_fun
 
-def find_optimal_spec_IF_parameters(test_param, op_param, op_measure, file_dir, wav_file_list, csv_path, f_names,
-                                    sign_id, spectrogram_type, freq_scale, normal_type, op_metric, op_option="Original"):
+
+def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_file_list, csv_path, f_names,
+                                    sign_id, spectrogram_type, freq_scale, normal_type, op_metric,
+                                    op_option="Original"):
     """
     This function computes the optimization metrics OP_METRIC for the set of parameters TEST_PARAM.
     It the metric is smaller than OP_MEASURE, it updates OP_PARAM.
     Furthermore, it updates the csv_files stored at CVS_PATH
     """
+
+    op_measure = op_m
 
     print("\nTESTING with window lenght= ", test_param["win_len"], " and increment = ", test_param["hop"],
           "window_type = ", test_param["window_type"], " mel bins = ", test_param["mel_num"], " alpha = ",
@@ -217,8 +221,8 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_measure, file_dir, 
         file_len = sp.fileLength / sample_rate
         instant_freq_fun = set_if_fun(sign_id, file_len)
 
-        tfr = sp.spectrogram(test_param["win_len"], test_param["hop"], test_param["window_type"], sgType=spectrogram_type, sgScale=freq_scale,
-                             nfilters=test_param["mel_num"])
+        tfr = sp.spectrogram(test_param["win_len"], test_param["hop"], test_param["window_type"],
+                             sgType=spectrogram_type, sgScale=freq_scale, nfilters=test_param["mel_num"])
         print("spec dims", np.shape(tfr))
 
         # spectrogram normalizations
@@ -287,7 +291,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_measure, file_dir, 
 
 
 def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrogram_type, freq_scale, normal_type,
-                                    optim_metric, optim_option="Original"):
+                                           optim_metric, optim_option="Original"):
     """
     This function find optimal parameters for the spectrogram and the frequency extraction algorithm in order
     to minimize the distance optim_metric between the extracted IF and the "original" ones
@@ -323,20 +327,20 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
 
     # mel bins options
     if freq_scale == 'Mel Frequency':
-        mel_bins = np.array([64, 128, 256])#only power of 2
+        mel_bins = np.array([64, 128, 256])  # only power of 2
     else:
         mel_bins = [None]
 
     opt = np.Inf
 
-    #inizialize opt_param with standard values
+    # inizialize opt_param with standard values
     opt_param = {"win_len": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
     test_param = {"win_len": [], "hop": 128, "window_type": 'Hann', "mel_num": None, "alpha": 1, "beta": 1}
 
     if freq_scale == 'Mel Frequency':
         opt_param['mel_num'] = 64
 
-    if optim_option== "Original":
+    if optim_option == "Original":
         file_list = [sign_id + "_00.wav"]
     else:
         file_list = os.listdir(base_dir)
@@ -348,22 +352,23 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
         writer = csv.DictWriter(csv_save_file, fieldnames=fieldnames)
         writer.writeheader()
 
-    #find optimal window
+    # find optimal window
     for win_len in win:
         # loop on possible window_length
         test_param["win_len"] = int(win_len)
-        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list, csv_filename,
-                                                         fieldnames, sign_id, spectrogram_type, freq_scale, normal_type,
-                                                         optim_metric, op_option=optim_option)
+        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+                                                           csv_filename, fieldnames, sign_id, spectrogram_type,
+                                                           freq_scale, normal_type,
+                                                           optim_metric, op_option=optim_option)
 
-    del opt #cancel to remain safe
+    del opt  # cancel to remain safe
     test_param = opt_param
     opt = np.Inf
     for hop in hop_perc:
         # loop on possible hop
         test_param["hop"] = int(test_param["win_len"]*hop)
         [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
-                                                           csv_filename,fieldnames, sign_id, spectrogram_type,
+                                                           csv_filename, fieldnames, sign_id, spectrogram_type,
                                                            freq_scale, normal_type, optim_metric,
                                                            op_option=optim_option)
 
@@ -391,7 +396,6 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                                freq_scale, normal_type, optim_metric,
                                                                op_option=optim_option)
 
-
     # optimize paremeters needed for IF extraction: these are dipendent
     del opt  # cancel to remain safe
     test_param = opt_param
@@ -407,7 +411,6 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                                csv_filename, fieldnames, sign_id, spectrogram_type,
                                                                freq_scale, normal_type, optim_metric,
                                                                op_option=optim_option)
-
 
     print("\n Optimal parameters \n", opt_param)
     return opt_param
@@ -450,7 +453,7 @@ def save_optima_parameters(dir_path, opt_par):
 
     save_path = dir_path + "/Optimal_parameters.txt"
 
-    f = open(save_path,'w')
+    f = open(save_path, 'w')
     f.write(str(opt_par))
     f.close()
 
