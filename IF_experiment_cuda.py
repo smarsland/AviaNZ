@@ -282,13 +282,13 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
                          'n file': n, 'measure': measure2check})
 
     # if (not np.isnan(measure2check)) and (measure2check < op_measure):
-    if measure2check < op_measure:
+    # if measure2check < op_measure:
+    #
+    #     op_measure = measure2check
+    #     op_param = test_param
+    #     print("optimal parameters updated:", op_param)
 
-        op_measure = measure2check
-        op_param = test_param
-        print("optimal parameters updated:", op_param)
-
-    return op_param, op_measure
+    return measure2check
 
 
 def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrogram_type, freq_scale, normal_type,
@@ -357,10 +357,17 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
     for win_len in win:
         # loop on possible window_length
         test_param["win_len"] = int(win_len)
-        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+        newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
                                                            csv_filename, fieldnames, sign_id, spectrogram_type,
                                                            freq_scale, normal_type,
                                                            optim_metric, op_option=optim_option)
+        print(newopt,opt)
+        if newopt < opt:
+            print("here")
+            opt = newopt
+            opt_param = test_param
+        else:
+            print("NOT HERE")
         print(opt,win_len)
 
     return
