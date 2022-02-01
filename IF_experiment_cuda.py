@@ -361,18 +361,17 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                            csv_filename, fieldnames, sign_id, spectrogram_type,
                                                            freq_scale, normal_type,
                                                            optim_metric, op_option=optim_option)
-        print(newopt,opt)
+        #print(newopt,opt)
         if newopt < opt:
-            print("here")
-            opt = newopt
+            opt = newopt.copy()
             opt_param = test_param.copy()
-        else:
-            print("NOT HERE")
-        print(opt,win_len)
+            print("Updating optimal parameters ", opt_param)
+
+        # print(opt,win_len)
 
     # return
     del opt  # cancel to remain safe
-    test_param = opt_param
+    test_param = opt_param.copy()
     opt = np.Inf
     for hop in hop_perc:
         # loop on possible hop
@@ -382,44 +381,49 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                            freq_scale, normal_type, optim_metric,
                                                            op_option=optim_option)
 
-        print(newopt, opt)
         if newopt < opt:
-            print("here", hop)
-            opt = newopt
+            opt = newopt.copy()
             opt_param = test_param.copy()
-        else:
-            print("NOT HERE")
-        print(opt, win_len,test_param["hop"],opt_param["hop"])
+            print("Updating optimal parameters ", opt_param)
 
-    print(opt_param)
-    return
+    # print(opt_param)
+    # return
     del opt  # cancel to remain safe
-    test_param = opt_param
+    test_param = opt_param.copy()
     opt = np.Inf
     for window_type in win_type:
         # loop on possible window_types
         test_param["window_type"] = window_type
-        [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+        newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
                                                            csv_filename, fieldnames, sign_id, spectrogram_type,
                                                            freq_scale, normal_type, optim_metric,
                                                            op_option=optim_option)
+        if newopt < opt:
+            opt = newopt.copy()
+            opt_param = test_param.copy()
+            print("Updating optimal parameters ", opt_param)
 
     if freq_scale == 'Mel Frequency':
         # do the loop only if we are testing mel spectrogram
         del opt  # cancel to remain safe
-        test_param = opt_param
+        test_param = opt_param.copy()
         opt = np.Inf
         for num_bin in mel_bins:
             # loop over possible numbers of bins. If None this is just one loop
             test_param["mel_num"] = num_bin
-            [opt_param, opt] = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
+            newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
                                                                csv_filename, fieldnames, sign_id, spectrogram_type,
                                                                freq_scale, normal_type, optim_metric,
                                                                op_option=optim_option)
+            if newopt < opt:
+                opt = newopt.copy()
+                opt_param = test_param.copy()
+                print("Updating optimal parameters ", opt_param)
+
 
     # optimize paremeters needed for IF extraction: these are dipendent
     del opt  # cancel to remain safe
-    test_param = opt_param
+    test_param = opt_param.copy()
     opt = np.Inf
     for alpha in alpha_list:
         # loop on alpha
@@ -432,6 +436,10 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
                                                                csv_filename, fieldnames, sign_id, spectrogram_type,
                                                                freq_scale, normal_type, optim_metric,
                                                                op_option=optim_option)
+            if newopt < opt:
+                opt = newopt.copy()
+                opt_param = test_param.copy()
+                print("Updating optimal parameters ", opt_param)
 
     print("\n Optimal parameters \n", opt_param)
     return opt_param
