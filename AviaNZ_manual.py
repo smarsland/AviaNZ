@@ -1594,6 +1594,7 @@ class AviaNZ(QMainWindow):
                 try:
                         self.operator = self.segments.metadata["Operator"]
                 except KeyError as err:
+                        # Assume it's an old data file, so add metadata 
                         print("Old style data file, modifying")
                         self.operator = self.config['operator']
                         self.reviewer = self.config['reviewer']
@@ -1601,7 +1602,6 @@ class AviaNZ(QMainWindow):
                         self.segmentsToSave = True
                         self.saveSegments()
                         self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
-                        # TODO: Also need to fix the segments
                         
                 self.reviewer = self.segments.metadata["Reviewer"]
 
@@ -2131,7 +2131,7 @@ class AviaNZ(QMainWindow):
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
 
         # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
-        # I'm doing the first for now.
+        # TODO: I'm doing the first for now.
 
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
