@@ -281,7 +281,8 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
                          'alpha': test_param["alpha"], 'beta': test_param["beta"], 'spec dim': num_row * num_col,
                          'n file': n, 'measure': measure2check})
 
-    if (not np.isnan(measure2check)) and (measure2check < op_measure):
+    # if (not np.isnan(measure2check)) and (measure2check < op_measure):
+    if measure2check < op_measure:
 
         op_measure = measure2check
         op_param = test_param
