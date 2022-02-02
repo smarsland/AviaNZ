@@ -2409,17 +2409,17 @@ class HumanClassify2(QDialog):
 
         # Volume, brightness and contrast sliders.
         # Need to pass true (config) values to set up correct initial positions
-        specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
-        specControls.colChanged.connect(self.setColourLevels)
-        specControls.volChanged.connect(self.volSliderMoved)
-        specControls.layout().addStretch(3) # add a big stretchable outer margin
+        self.specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
+        self.specControls.layout().addStretch(3) # add a big stretchable outer margin
 
         # batmode customizations:
         self.guidefreq = guidefreq
         self.guidecol = guidecol
         if not haveaudio:
-            specControls.volSlider.setEnabled(False)
-            specControls.volIcon.setEnabled(False)
+            self.specControls.volSlider.setEnabled(False)
+            self.specControls.volIcon.setEnabled(False)
 
         label1 = QLabel('Click on the images that are incorrectly labelled.')
         label1.setFont(QtGui.QFont('SansSerif', 10))
@@ -2433,7 +2433,7 @@ class HumanClassify2(QDialog):
         vboxTop = QVBoxLayout()
         vboxTop.addWidget(label1)
         vboxTop.addWidget(species)
-        vboxTop.addWidget(specControls)
+        vboxTop.addWidget(self.specControls)
 
         # Controls at the bottom
         # self.buttonPrev = QtGui.QToolButton()
@@ -2482,7 +2482,7 @@ class HumanClassify2(QDialog):
         self.specV = 0
         self.specH = 0
         self.createButtons()
-        specControls.emitAll()  # applies initial colour, volume levels
+        self.specControls.emitAll()  # applies initial colour, volume levels
 
         # sets a lot of self properties needed before showing anything
         self.butStart = 0
