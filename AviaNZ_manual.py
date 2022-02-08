@@ -1587,8 +1587,8 @@ class AviaNZ(QMainWindow):
                 # populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
                 self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
-                self.operator = self.segments.metadata["Operator"]
-                self.reviewer = self.segments.metadata["Reviewer"]
+                self.operator = self.segments.metadata.get("Operator", self.operator)
+                self.reviewer = self.segments.metadata.get("Reviewer", self.reviewer)
                 self.segmentsToSave = True
 
                 # if there are any multi-species segments,
