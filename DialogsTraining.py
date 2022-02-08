@@ -1118,10 +1118,12 @@ class BuildRecAdvWizard(QWizard):
                     return
 
                 # get M and thr for closest point
-                distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
+                # TODO: 9/2/22 -- Replaced self.TPR and self.FPR with self.selectedTPR and self.selectedFPR
+                # Need to check this was what was intended
+                distarr = (tpr_cl - self.selectedTPR) ** 2 + (fpr_cl - self.selectedFPR) ** 2
                 M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
-                self.tpr_near = self.TPR[M_min_ind, thr_min_ind]
-                self.fpr_near = self.FPR[M_min_ind, thr_min_ind]
+                self.tpr_near = self.selectedTPR[M_min_ind, thr_min_ind]
+                self.fpr_near = self.selectedFPR[M_min_ind, thr_min_ind]
                 self.marker.set_visible(False)
                 self.figCanvas.draw()
                 self.marker.set_xdata([fpr_cl, self.fpr_near])
