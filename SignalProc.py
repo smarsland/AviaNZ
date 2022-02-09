@@ -845,12 +845,19 @@ class SignalProc:
             wave_est = np.real(fft.ifft(spectral_slice))[::-1]
             if calculate_offset and i > 0:
                 offset_size = size - incr
+                print("Offset: ",offset_size)
                 if offset_size <= 0:
-                    #print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
+                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
+                print(wave_start, est_start, offset_size, len(wave), len(wave_est), est_start+offset_size<len(wave_est))
                 offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
+                print("New offset: ",offset)
             else:
                 offset = 0
+            print(wave_end-wave_start, len(window), est_end-est_start,len(wave_est), len(wave),est_start, offset)
+            if est_end-offset >= size:
+                offset+=(est_end-offset-size)
+                wave_end-=(est_end-offset-size)
             wave[wave_start:wave_end] += window * wave_est[est_start - offset:est_end - offset]
             total_windowing_sum[wave_start:wave_end] += window**2 #Virginia: needed square
         wave = np.real(wave) / (total_windowing_sum + 1E-6)

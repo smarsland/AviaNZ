@@ -846,7 +846,11 @@ class AviaNZ_batchProcess():
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            if not hasmetadata:
+                    # TODO: Should save this...
+                    self.segments.metadata["Operator"] = "Auto"
+                    self.segments.metadata["Reviewer"] = ""
             # wipe same species:
             for sp in species:
                 # shorthand for double-checking that it's not "Any Sound" etc

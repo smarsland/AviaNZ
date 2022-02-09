@@ -1590,22 +1590,27 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data'):
                 # populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
-                try:
-                        self.operator = self.segments.metadata["Operator"]
-                except KeyError as err:
-                        # Assume it's an old data file, so add metadata 
-                        print("Old style data file, modifying")
-                        self.operator = self.config['operator']
-                        self.reviewer = self.config['reviewer']
-                        self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
+                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
+                if not hasmetadata:
+                        self.segments.metadata["Operator"] = self.operator
+                        self.segments.metadata["Reviewer"] = self.reviewer
                         self.segmentsToSave = True
-                        self.saveSegments()
-                        self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
+                #try:
+                        #self.operator = self.segments.metadata["Operator"]
+                #except KeyError as err:
+                        ## Assume it's an old data file, so add metadata 
+                        #print("Old style data file, modifying")
+                        #self.operator = self.config['operator']
+                        #self.reviewer = self.config['reviewer']
+                        #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
+                        #self.segmentsToSave = True
+                        #self.saveSegments()
+                        #self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                         
+                self.operator = self.segments.metadata["Operator"]
                 self.reviewer = self.segments.metadata["Reviewer"]
 
-                self.segmentsToSave = True
+                #self.segmentsToSave = True
 
                 # if there are any multi-species segments,
                 # switch the option on regardless of user preference
@@ -1921,7 +1926,7 @@ class AviaNZ(QMainWindow):
 
     def drawGuidelines(self):
         # Frequency guides for bat mode
-        print("Updating guidelines...")
+        #print("Updating guidelines...")
         if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
             for gi in range(len(self.guidelines)):
                 self.guidelines[gi].setValue(self.convertFreqtoY(self.config['guidepos'][gi]))
