@@ -21,7 +21,7 @@ six==1.15.0
 scipy==1.5.0
 setuptools==56.1.0
 spectrum==0.7.5
-tensorflow==2.3.2
+tensorflow==2.5.3
 
 ## These dependencies are important, but should be installed by the main packages:
 # joblib==0.13.2
