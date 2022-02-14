@@ -409,6 +409,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
         test_param = opt_param.copy()
         opt = np.Inf
         for num_bin in mel_bins:
+            print('num_bin= ', num_bin)
             # loop over possible numbers of bins. If None this is just one loop
             test_param["mel_num"] = num_bin
             newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
