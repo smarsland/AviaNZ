@@ -339,7 +339,7 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
     test_param = {"win_len": [], "hop": 128, "window_type": 'Hann', "mel_num": None, "alpha": 1, "beta": 1}
 
     if freq_scale == 'Mel Frequency':
-        opt_param['mel_num'] = 64
+        test_param['mel_num'] = 64
 
     if optim_option == "Original":
         file_list = [sign_id + "_00.wav"]
