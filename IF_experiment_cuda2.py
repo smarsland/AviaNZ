@@ -240,8 +240,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
         else:
             # #mel freq axis
             n_filters = test_param["mel_num"]
-            freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2),
-                                   n_filters + 1)
+            freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(sample_rate / 2), n_filters + 1)
             freq_arr = freq_arr[1:]
 
         w_opt = [sample_rate, test_param["win_len"]]  # this neeeds review
@@ -255,7 +254,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
 
         # revert to Hz if Mel
         if freq_scale == 'Mel Frequency':
-            tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+            tf_supp[0, :] = sp.convertMeltoHz(tf_supp[0, :])
 
         # calculate
         instant_freq = instant_freq_fun(np.linspace(0, file_len, np.shape(tf_supp[0, :])[0]))
@@ -271,7 +270,9 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
                                                      instant_freq)
 
         # safety chack cleaning
-        del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
+        del tfr, freq_arr, w_opt, tf_supp, sp, IF
+        if freq_scale == "Linear":
+            del f_step
 
     measure2check /= n  # mean over samples
     with open(csv_path, 'a', newline='') as csv_file:
@@ -337,7 +338,6 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
     # inizialize opt_param with standard values
     opt_param = {"win_len": [], "hop": [], "window_type": [], "mel_num": [], "alpha": [], "beta": []}
     test_param = {"win_len": [], "hop": 128, "window_type": 'Hann', "mel_num": None, "alpha": 1, "beta": 1}
-
 
     if freq_scale == 'Mel Frequency':
         test_param['mel_num'] = 64
@@ -410,7 +410,6 @@ def find_optimal_spec_IF_parameters_handle(base_dir, save_dir, sign_id, spectrog
         test_param = opt_param.copy()
         opt = np.Inf
         for num_bin in mel_bins:
-            print('num_bin= ', num_bin)
             # loop over possible numbers of bins. If None this is just one loop
             test_param["mel_num"] = num_bin
             newopt = find_optimal_spec_IF_parameters(test_param, opt_param, opt, base_dir, file_list,
@@ -715,12 +714,14 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 20:
+                    if Test_id < 30:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
 
-                    if Test_id > 40:
+                    if Test_id > 39:
+                        print('Skipping Test ', Test_id)
+                        Test_id += 1
                         break
 
                     print("Starting test: ", Test_id)
