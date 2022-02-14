@@ -270,7 +270,9 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
                                                      instant_freq)
 
         # safety chack cleaning
-        del tfr, f_step, freq_arr, w_opt, tf_supp, sp, IF
+        del tfr, freq_arr, w_opt, tf_supp, sp, IF
+        if freq_scale == "Linear":
+            del f_step
 
     measure2check /= n  # mean over samples
     with open(csv_path, 'a', newline='') as csv_file:
