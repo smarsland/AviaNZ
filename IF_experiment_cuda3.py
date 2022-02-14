@@ -254,7 +254,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
 
         # revert to Hz if Mel
         if freq_scale == 'Mel Frequency':
-            tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+            tf_supp[0, :] = sp.convertMeltoHz(tf_supp[0, :])
 
         # calculate
         instant_freq = instant_freq_fun(np.linspace(0, file_len, np.shape(tf_supp[0, :])[0]))
