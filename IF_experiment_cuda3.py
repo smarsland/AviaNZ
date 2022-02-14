@@ -240,8 +240,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
         else:
             # #mel freq axis
             n_filters = test_param["mel_num"]
-            freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2),
-                                   n_filters + 1)
+            freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(sample_rate / 2), n_filters + 1)
             freq_arr = freq_arr[1:]
 
         w_opt = [sample_rate, test_param["win_len"]]  # this neeeds review
