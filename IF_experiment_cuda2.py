@@ -983,7 +983,11 @@ for spec_type in spectrogram_types:
 
                                 # os.remove(aid_file)
                                 k += 1
-                                del IF, sp, fs, TFR, fstep, freqarr, wopt, tfsupp, signal, signal_inverted, inst_freq
+                                if scale == "Linear":
+                                    del fstep
+                                else:
+                                    del nfilters
+                                del IF, sp, fs, TFR, freqarr, wopt, tfsupp, signal, signal_inverted, inst_freq
                                 del SNR, RE, L2, GEODETIC, SISDR_original, SISDR_noise, STOI_original, STOI_noise
                                 del IMED_original, IMED_noise, RE_inv
                                 if signal_id != "pure_tone":
