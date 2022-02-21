@@ -551,7 +551,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
         # Pathched
         F = mel_filterbank_maker(sp, opt_param["win_len"], 'mel', n_filters)
         F_pseudo = np.linalg.pinv(F)
-        TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
+        TFR_recovered = np.absolute(np.dot(tfr, F_pseudo))
 
     else:
         TFR_recovered=tfr
