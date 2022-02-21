@@ -549,7 +549,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     sign_original = sp.data
     if sg_scale == 'Mel Frequency':
         # Pathched
-        F = mel_filterbank_maker(opt_param["win_len"], 'mel', nfilters)
+        F = mel_filterbank_maker(opt_param["win_len"], 'mel', n_filters)
         F_pseudo = np.linalg.pinv(F)
         TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
 
