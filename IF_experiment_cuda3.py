@@ -549,7 +549,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     sign_original = sp.data
     if sg_scale == 'Mel Frequency':
         # Pathched
-        F = mel_filterbank_maker(opt_param["win_len"], 'mel', n_filters)
+        F = mel_filterbank_maker(sp, opt_param["win_len"], 'mel', n_filters)
         F_pseudo = np.linalg.pinv(F)
         TFR_recovered = np.absolute(np.dot(tfr, F_pseudo))
 
@@ -630,7 +630,7 @@ def save_metric_csv(csv_filename, fieldnames, metric_matrix):
     return
 
 
-def mel_filterbank_maker(window_size, filter='mel', nfilters=40, minfreq=0, maxfreq=None, normalise=True):
+def mel_filterbank_maker(sp, window_size, filter='mel', nfilters=40, minfreq=0, maxfreq=None, normalise=True):
     # Transform the spectrogram to mel or bark scale
     if maxfreq is None:
         maxfreq = sp.sampleRate / 2
@@ -875,7 +875,7 @@ for spec_type in spectrogram_types:
                                 #spectrogram of inverted signal
                                 if scale == 'Mel Frequency':
                                     # Patched
-                                    F = mel_filterbank_maker(optima_parameters["win_len"], 'mel',
+                                    F = mel_filterbank_maker(sp, optima_parameters["win_len"], 'mel',
                                                              optima_parameters["mel_num"])
                                     F_pseudo = np.linalg.pinv(F)
                                     TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
