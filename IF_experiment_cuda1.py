@@ -529,7 +529,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
         freq_arr = np.arange(f_step, sample_rate / 2 + f_step, f_step)
     else:
         # #mel freq axis
-        n_filters = 40
+        n_filters = opt_param["mel_num"]
         freq_arr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(sample_rate / 2), n_filters + 1)
         freq_arr = freq_arr[1:]
 
@@ -714,12 +714,14 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 11:
+                    if Test_id < 17:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
 
                     if Test_id > 21:
+                        print('Skipping Test ', Test_id)
+                        Test_id += 1
                         break
 
                     print("Starting test: ", Test_id)
@@ -857,7 +859,7 @@ for spec_type in spectrogram_types:
                                     freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
                                 else:
                                     # #mel freq axis
-                                    nfilters = 40
+                                    nfilters = optima_parameters["mel_num"]
                                     freqarr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2), nfilters + 1)
                                     freqarr = freqarr[1:]
 
