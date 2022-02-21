@@ -539,7 +539,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     # revert to Hz if Mel
     if sg_scale == 'Mel Frequency':
-        tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+        tf_supp[0, :] = sp.convertMeltoHz(tf_supp[0, :])
 
     # reference IF
     time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])  # array with temporal coordinates
