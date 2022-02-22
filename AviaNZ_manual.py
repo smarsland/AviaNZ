@@ -160,6 +160,7 @@ class AviaNZ(QMainWindow):
         self.focusRegion = None
         self.operator = self.config['operator']
         self.reviewer = self.config['reviewer']
+        self.filters = []
 
         # For preventing callbacks involving overview panel
         self.updateRequestedByOverview = False
@@ -1120,7 +1121,7 @@ class AviaNZ(QMainWindow):
         Any extras go into the combobox at the end of the second list.
         This is called a lot because the order of birds in the list changes since the last choice
         is moved to the top of the list.
-        When calltype-level display is on, fills the list with some possible call types."""
+        When calltype-level display is on, fills the list with possible call types from a filter (if available)"""
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
@@ -1153,18 +1154,23 @@ class AviaNZ(QMainWindow):
                 # add the species menu
                 spMenu = self.menuBirdList.addMenu(lab["species"])
 
-                # get possible call types from all filters for this species
-                possibleCTs = set()
-                for filt in self.FilterDicts.values():
-                    if filt["species"]==lab["species"]:
-                        possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+                # Get possible call types from all filters for this species
+                # Only if species has changed
+                if len(self.filters)==0 or self.filters[0]["species"]!=lab["species"]:
+                    self.possibleCTs = set()
+                    self.filters = []
+                    for filt in self.FilterDicts.values():
+                        if filt["species"]==lab["species"]:
+                            self.possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+                            self.filters.append(filt)
+
                 # add standard extras and self
-                possibleCTs.add("(Other)")
+                self.possibleCTs.add("(Other)")
                 if "calltype" in lab:
-                    possibleCTs.add(lab["calltype"])
+                    self.possibleCTs.add(lab["calltype"])
 
                 # put them as actions in the species menu
-                for ct in possibleCTs:
+                for ct in self.possibleCTs:
                     ctitem = spMenu.addAction(ct)
                     ctitem.setCheckable(True)
 
@@ -1607,8 +1613,8 @@ class AviaNZ(QMainWindow):
                         #self.saveSegments()
                         #self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                         
-                self.operator = self.segments.metadata["Operator"]
-                self.reviewer = self.segments.metadata["Reviewer"]
+                self.operator = self.segments.metadata.get("Operator", self.operator)
+                self.reviewer = self.segments.metadata.get("Reviewer",self.reviewer)
 
                 #self.segmentsToSave = True
 
@@ -3335,6 +3341,7 @@ class AviaNZ(QMainWindow):
         if birdname is None or birdname=='':
             return
 
+        #print("Here", birdname)
         # special dialog for manual name entry
         if birdname == 'Other':
             # Ask the user for the new name, and save it
@@ -3349,7 +3356,8 @@ class AviaNZ(QMainWindow):
                 print("ERROR: provided name %s does not match format requirements" % birdname)
                 return
 
-            if birdname.lower()=="don't know" or birdname.lower()=="other":
+            #if birdname.lower()=="don't know" or birdname.lower()=="other":
+            if birdname.lower()=="don't know" or birdname.lower()=="other" or birdname.lower()=="(other)":
                 print("ERROR: provided name %s is reserved, cannot create" % birdname)
                 return
 
@@ -3473,8 +3481,75 @@ class AviaNZ(QMainWindow):
         spmenu = ctitem.parentWidget().title()
         if type(ctitem) is not str:
             ctitem = ctitem.text()
-        print(ctitem, spmenu)
+        print("Call Type ",ctitem, spmenu)
 
+        if ctitem == '(Other)': 
+            # Ask the user for the new name, and save it
+            callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
+            if not ok:
+                return
+
+            callname = str(callname).title()
+            # splits "A (B)", with B optional, into groups A and B
+            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
+            if not match:
+                print("ERROR: provided name %s does not match format requirements" % callname)
+                return
+
+            if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
+                print("ERROR: provided name %s is reserved, cannot create" % callname)
+                return
+
+            if "?" in callname:
+                print("ERROR: provided name %s contains reserved symbol '?'" % callname)
+                return
+
+            if len(callname)==0 or len(callname)>150:
+                print("ERROR: provided name appears to be too short or too long")
+                return
+
+            if callname in self.possibleCTs:
+                # call is already listed
+                print("Warning: not adding call type %s as it is already present" % callname)
+                return
+
+            ctitem=callname
+
+            # TODO: Needs a bit of thought, since need to find (or create) a filter. And there might be more than one.
+            # I think this is OK-ish. Now for the DialogsTraining
+            if len(self.filters) == 0:
+                # There wasn't a filter. Make one. Ask for name, or just use default?
+                speciesData = {"species": spmenu, "method": None, "SampleRate": self.sampleRate, "Filters": []}
+                filename = os.path.join(self.filtersDir, spmenu+'.txt')
+                print("no filter",filename)
+                newfilter = speciesData
+            elif len(self.filters) == 1:
+                # There is one filter, so add the new calltype there? Or ask?
+                filename = os.path.join(self.filtersDir,self.filters[0]["species"]+'.txt')
+                print("one filter: ",filename)
+                newfilter = self.filters[0]
+                #print(newfilter)
+            else:
+                # TODO !!
+                # More than one, need to ask
+                print("filters: ",self.filters[0]["species"])
+                filename = os.path.join(self.filtersDir,self.filters[0]["species"]+'.txt')
+                newfilter = self.filters[0]
+
+            # If not, ask, then make it
+            #for filt in self.FilterDicts.values():
+            # Add the new subfilter, with just a call type name
+            newSubfilt = {'calltype': ctitem}
+            newfilter["Filters"].append(newSubfilt)
+
+            print(filename)
+            f = open(filename, 'w')
+            f.write(json.dumps(newfilter))
+            f.close()
+
+            #self.speciesData["Filters"].append(newSubfilt)
+            # Save it
+            
         workingSeg = self.segments[self.box1id]
         for lab in workingSeg[4]:
             if lab["species"] == spmenu:

@@ -277,6 +277,8 @@ class BuildRecAdvWizard(QWizard):
             with pg.BusyCursor():
                 print("Processing. Please wait...")
                 # Check if the annotations come with call type labels, if so skip auto clustering
+                # TODO: SRM: Fix this bit...
+                # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
                 self.CTannotations()
                 if self.hasCTannotations:
                     # self.segments: [parent_audio_file, [segment], class_label]
@@ -287,6 +289,7 @@ class BuildRecAdvWizard(QWizard):
                     # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
                     # self.nclasses: number of class_labels
                     # duration: median length of segments
+                    # TODO: That 5 is arbitrary max number of classes...
                     self.cluster = Clustering.Clustering([], [], 5)
                     self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
                     # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
@@ -334,6 +337,7 @@ class BuildRecAdvWizard(QWizard):
 
         def CTannotations(self):
             """ Check if all the segments from target species has call type annotations"""
+            # TODO: SRM: This is weak. What if some have annotations?
             self.hasCTannotations = True
             listOfDataFiles = []
             for root, dirs, files in os.walk(self.field("trainDir")):
