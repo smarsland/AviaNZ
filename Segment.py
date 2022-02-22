@@ -247,7 +247,6 @@ class SegmentList(list):
         # first segment stores metadata
         self.metadata = dict()
         # -----
-        print("**",isinstance(annots[0], list))
         if isinstance(annots[0],list):
             print(annots[0])
         #if isinstance(annots[0], list) and annots[0][0] == -1:
