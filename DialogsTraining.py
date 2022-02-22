@@ -278,6 +278,7 @@ class BuildRecAdvWizard(QWizard):
                 print("Processing. Please wait...")
                 # Check if the annotations come with call type labels, if so skip auto clustering
                 # TODO: SRM: Fix this bit...
+                # TODO: Also need to work out where there is missing info in the filter 'cos it's just a name
                 # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
                 self.CTannotations()
                 if self.hasCTannotations:
