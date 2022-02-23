@@ -539,7 +539,7 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
 
     # revert to Hz if Mel
     if sg_scale == 'Mel Frequency':
-        tf_supp[0, :] = sp.convertMeltoHz(tfsupp[0, :])
+        tf_supp[0, :] = sp.convertMeltoHz(tf_supp[0, :])
 
     # reference IF
     time_support = np.linspace(0, file_len, np.shape(tf_supp[0, :])[0])  # array with temporal coordinates
@@ -549,9 +549,9 @@ def calculate_metrics_original_signal(signal_dir, save_dir, sign_id, sg_type, sg
     sign_original = sp.data
     if sg_scale == 'Mel Frequency':
         # Pathched
-        F = mel_filterbank_maker(opt_param["win_len"], 'mel', nfilters)
+        F = mel_filterbank_maker(sp, opt_param["win_len"], 'mel', n_filters)
         F_pseudo = np.linalg.pinv(F)
-        TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
+        TFR_recovered = np.absolute(np.dot(tfr, F_pseudo))
 
     else:
         TFR_recovered=tfr
@@ -630,7 +630,7 @@ def save_metric_csv(csv_filename, fieldnames, metric_matrix):
     return
 
 
-def mel_filterbank_maker(window_size, filter='mel', nfilters=40, minfreq=0, maxfreq=None, normalise=True):
+def mel_filterbank_maker(sp, window_size, filter='mel', nfilters=40, minfreq=0, maxfreq=None, normalise=True):
     # Transform the spectrogram to mel or bark scale
     if maxfreq is None:
         maxfreq = sp.sampleRate / 2
@@ -714,12 +714,12 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 17:
+                    if Test_id < 101:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
 
-                    if Test_id > 21:
+                    if Test_id > 120:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         break
@@ -877,7 +877,7 @@ for spec_type in spectrogram_types:
                                 #spectrogram of inverted signal
                                 if scale == 'Mel Frequency':
                                     # Patched
-                                    F = mel_filterbank_maker(optima_parameters["win_len"], 'mel',
+                                    F = mel_filterbank_maker(sp, optima_parameters["win_len"], 'mel',
                                                              optima_parameters["mel_num"])
                                     F_pseudo = np.linalg.pinv(F)
                                     TFR_recovered = np.absolute(np.dot(TFR, F_pseudo))
@@ -983,7 +983,11 @@ for spec_type in spectrogram_types:
 
                                 # os.remove(aid_file)
                                 k += 1
-                                del IF, sp, fs, TFR, fstep, freqarr, wopt, tfsupp, signal, signal_inverted, inst_freq
+                                if scale == "Linear":
+                                    del fstep
+                                else:
+                                    del nfilters
+                                del IF, sp, fs, TFR, freqarr, wopt, tfsupp, signal, signal_inverted, inst_freq
                                 del SNR, RE, L2, GEODETIC, SISDR_original, SISDR_noise, STOI_original, STOI_noise
                                 del IMED_original, IMED_noise, RE_inv
                                 if signal_id != "pure_tone":
