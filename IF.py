@@ -735,6 +735,7 @@ class IF:
                 else:
                     idr, timax, fimax=self.onestepopt(Number_peaks,Indeces_peaks,Frequency_peaks,Wp,freq) #check
 
+                print('tn1 ', tn1, ' tn2 ', tn2, 'shape idr ', np.shape(idr))
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Frequency_peaks),order='F')
                 tfsupp[0,tn1:tn2+1]=Frequency_peaks.flatten('F')[lid]
                 p_index[tn1:tn2+1]=self.Round(Indeces_peaks.flatten('F')[lid])

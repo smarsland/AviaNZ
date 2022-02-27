@@ -741,6 +741,9 @@ for spec_type in spectrogram_types:
                         if opt_metric == 'Iatsenko' and signal_id == 'pure_tone':
                             continue
 
+                        if signal_id == 'linear_downchirp':
+                            continue
+
                         folder_path = dataset_dir + '/' + signal_id
                         print("Analysing folder: ", folder_path)
                         # create test_dir for signal type
