@@ -714,12 +714,12 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 121:
+                    if Test_id < 102:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
 
-                    if Test_id > 140:
+                    if Test_id > 120:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         break
