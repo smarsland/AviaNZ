@@ -714,7 +714,7 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 81:
+                    if Test_id < 90:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
@@ -739,6 +739,9 @@ for spec_type in spectrogram_types:
                         # looping over signal_directories
                         # CHECK TO SKIP IF OPT_METRIC==IATSENKO and pure_tone signal
                         if opt_metric == 'Iatsenko' and signal_id == 'pure_tone':
+                            continue
+
+                        if signal_id != 'linear_upchirp':
                             continue
 
                         folder_path = dataset_dir + '/' + signal_id
@@ -864,7 +867,11 @@ for spec_type in spectrogram_types:
                                     freqarr = freqarr[1:]
 
                                 wopt = [fs, optima_parameters["win_len"]]  # this neeeds review
-                                tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
+
+                                try:
+                                    tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
+                                except:
+                                    continue
 
                                 # revert to Hz if Mel
                                 if scale == 'Mel Frequency':
