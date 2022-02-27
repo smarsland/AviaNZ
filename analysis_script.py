@@ -15,14 +15,14 @@ import csv
 import ast
 
 # signal type we are analysing
-signal_id='linear_downchirp'
+signal_id='pure_tone'
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
 test_analysis_dir="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis"
 
 # Spectrogram parameters
-win_list = {'256': 0, '512': 0, '10240': 0, '2048': 0}
+win_list = {'256': 0, '512': 0, '1024': 0, '2048': 0}
 incr_list = {'25': 0, '51': 0, '64': 0, '102': 0, '128': 0, '192': 0, '204': 0, '230': 0, '256': 0, '384': 0, '460': 0,
              '512': 0, '768': 0, '921': 0, '512': 0, '1024': 0, '1536': 0, '1843': 0}
 win_type_list = {'Hann': 0, 'Parzen': 0, 'Welch': 0, 'Hamming': 0, 'Blackman': 0}
@@ -34,6 +34,8 @@ beta_list = {'0.0': 0, '0.5': 0, '1.0': 0, '2.5': 0, '5.0': 0, '7.5': 0, '10.0':
 # mel bins options
 mel_bins = {'None': 0, '64': 0, '128': 0, '256': 0}  # only power of 2
 
+#cunting tests
+n=0
 for test_id in os.listdir(test_result_dir):
     #open TFR_inf file
     #save folder path
@@ -59,6 +61,8 @@ for test_id in os.listdir(test_result_dir):
     alpha_list[str(opt_param['alpha'])] += 1
     beta_list[str(opt_param['beta'])] += 1
 
+    n +=1
+
 
     del opt_param
 
@@ -67,44 +71,52 @@ for test_id in os.listdir(test_result_dir):
 fig_name = test_analysis_dir + '\\'+signal_id +'_optimal_parametes.jpg'
 #plt.rcParams["figure.autolayout"] = True
 
-fig, ax = plt.subplots(3, 2, figsize=(20,40))
+fig, ax = plt.subplots(3, 2, figsize=(20,20))
+
 
 bar_width = 0.2
 
 index1 = np.arange(len(win_list))
-ax[0, 0].set_title('Win length',fontsize='large')
+ax[0, 0].set_title('Win length',fontsize=25)
 ax[0, 0].bar(index1, win_list.values())
-ax[0, 0].set_xticks(index1, labels= win_list.keys())
+ax[0, 0].set_xticks(index1, labels= win_list.keys(), fontsize=20)
+ax[0, 0].tick_params(axis='y', labelsize=20)
+#ax[0, 0].set_yticks(fontsize=20)
 #ax[0].set_xticks(index1)
 
 index2 = np.arange(len(incr_list))
-ax[0, 1].set_title('Incr length',fontsize='large')
+ax[0, 1].set_title('Incr length',fontsize= 25)
 ax[0, 1].bar(index2, incr_list.values())
-ax[0, 1].set_xticks(index2, labels=incr_list.keys())
+ax[0, 1].set_xticks(index2, labels=incr_list.keys(), fontsize=10)
+ax[0, 1].tick_params(axis='y', labelsize=20)
 
 index3 = np.arange(len(win_type_list))
-ax[1, 0].set_title('Win type',fontsize='large')
+ax[1, 0].set_title('Win type',fontsize= 25)
 ax[1, 0].bar(index3, win_type_list.values())
-ax[1, 0].set_xticks(index3, labels= win_type_list.keys())
+ax[1, 0].set_xticks(index3, labels= win_type_list.keys(), fontsize=18)
+ax[1, 0].tick_params(axis='y', labelsize=20)
 #ax[0].set_xticks(index1)
 
 index4 = np.arange(len(mel_bins))
-ax[1, 1].set_title('mel bins',fontsize='large')
+ax[1, 1].set_title('mel bins',fontsize= 25)
 ax[1, 1].bar(index4, mel_bins.values())
-ax[1, 1].set_xticks(index4, labels=mel_bins.keys())
+ax[1, 1].set_xticks(index4, labels=mel_bins.keys(), fontsize=20)
+ax[1, 1].tick_params(axis='y', labelsize=20)
 
 index5 = np.arange(len(alpha_list))
-ax[2, 0].set_title('Alpha',fontsize='large')
+ax[2, 0].set_title('Alpha',fontsize= 25)
 ax[2, 0].bar(index5, alpha_list.values())
-ax[2, 0].set_xticks(index5, labels= alpha_list.keys())
+ax[2, 0].set_xticks(index5, labels= alpha_list.keys(), fontsize=20)
+ax[2, 0].tick_params(axis='y', labelsize=20)
 #ax[0].set_xticks(index1)
 
 index6 = np.arange(len(beta_list))
-ax[2, 1].set_title('Beta',fontsize='large')
+ax[2, 1].set_title('Beta',fontsize= 25)
 ax[2, 1].bar(index6, beta_list.values())
-ax[2, 1].set_xticks(index6, labels=beta_list.keys())
+ax[2, 1].set_xticks(index6, labels=beta_list.keys(), fontsize=20)
+ax[2, 1].tick_params(axis='y', labelsize=20)
 
-fig.suptitle(signal_id, fontsize=30)
+fig.suptitle(signal_id + '\n test number = ' + str(n), fontsize=40)
 plt.savefig(fig_name)
 
 

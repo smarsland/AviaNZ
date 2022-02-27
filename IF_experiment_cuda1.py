@@ -744,6 +744,8 @@ for spec_type in spectrogram_types:
                         if Test_id == 102:
                             if signal_id == "exponential_upchirp":
                                 continue
+                            if signal_id == "exponential_downchirp":
+                                continue
                             if signal_id == "linear_downchirp":
                                 continue
 
