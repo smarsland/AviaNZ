@@ -735,7 +735,7 @@ for spec_type in spectrogram_types:
                         Test_id += 1
                         continue
 
-                    if Test_id > 39:
+                    if Test_id > 60:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         break
