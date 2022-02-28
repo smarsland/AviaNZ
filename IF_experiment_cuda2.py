@@ -81,6 +81,22 @@ from fdasrsf.geodesic import geod_sphere
 
 ########################## Utility functions ###########################################################################
 
+
+def sort_test_list(s):
+    "This script sort Test_list using nubers"
+
+    test_num = []
+    for element in s:
+        test_num.append(element[5:])
+
+    test_num.sort(key=int)
+
+    new_list = []
+
+    for element in test_num:
+        new_list.append('Test_'+element)
+    return new_list
+
 def Signal_to_noise_Ratio(signal_sample, noise_sample):
     # Signal-to-noise ratio
     # Handle the case with no noise as well
@@ -714,7 +730,7 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 30:
+                    if Test_id < 33:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
@@ -792,12 +808,13 @@ for spec_type in spectrogram_types:
 
                         sig_dataset_path = folder_path+'/Dataset_2'
                         noise_levels_folders = os.listdir(sig_dataset_path)
+                        noise_levels_folders = sort_test_list(noise_levels_folders)
                         num_levels = len(noise_levels_folders)
 
                         # Fieldnames for general metrics csv
                         general_csv_fieldnames = []
                         for k in range(num_levels):
-                            general_csv_fieldnames.append("Level " + str(k + 1))
+                            general_csv_fieldnames.append("Level " + noise_levels_folders[5:])
                         del k
 
                         if signal_id == "pure_tone":
