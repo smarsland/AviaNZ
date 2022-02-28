@@ -138,12 +138,12 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 #signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
 signal_id = 'exponential_downchirp'
-start_index = 0
+start_index = 6
 
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Optimization_methods\\Group1"
+test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Optimization_methods\\Group2"
 
 #create signal folder
 test_analysis_fold = test_analysis_dir + '\\' + signal_id
