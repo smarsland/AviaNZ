@@ -133,11 +133,11 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
     return
 
 # signal type we are analysing
-#signal_id='pure_tone'
-#signal_id = 'linear_upchirp'
+signal_id='pure_tone'
+# signal_id = 'linear_upchirp'
 #signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
-signal_id = 'exponential_downchirp'
+# signal_id = 'exponential_downchirp'
 start_index = 6
 
 

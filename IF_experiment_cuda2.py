@@ -814,7 +814,7 @@ for spec_type in spectrogram_types:
                         # Fieldnames for general metrics csv
                         general_csv_fieldnames = []
                         for k in range(num_levels):
-                            general_csv_fieldnames.append("Level " + noise_levels_folders[5:])
+                            general_csv_fieldnames.append("Level " + noise_levels_folders[k][len(signal_id)+1:])
                         del k
 
                         if signal_id == "pure_tone":
