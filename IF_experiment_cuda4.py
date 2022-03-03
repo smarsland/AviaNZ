@@ -232,6 +232,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
         # read signal
         signal_path = file_dir + "/" + signal_file
         print('Using ', signal_path)
+        print('\n Testing ', test_param)
         sp.readWav(signal_path)
         sample_rate = sp.sampleRate
         file_len = sp.fileLength / sample_rate
