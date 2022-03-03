@@ -81,6 +81,22 @@ from fdasrsf.geodesic import geod_sphere
 
 ########################## Utility functions ###########################################################################
 
+
+def sort_list(s,reference):
+    "This script sort Test_list using nubers"
+
+    test_num = []
+    for element in s:
+        test_num.append(element[len(reference)+1:])
+
+    test_num.sort(key=int)
+
+    new_list = []
+
+    for element in test_num:
+        new_list.append(reference+'_'+element)
+    return new_list
+
 def Signal_to_noise_Ratio(signal_sample, noise_sample):
     # Signal-to-noise ratio
     # Handle the case with no noise as well
@@ -216,6 +232,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
         # read signal
         signal_path = file_dir + "/" + signal_file
         print('Using ', signal_path)
+        print('\n Testing ', test_param)
         sp.readWav(signal_path)
         sample_rate = sp.sampleRate
         file_len = sp.fileLength / sample_rate
@@ -714,7 +731,7 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 90:
+                    if Test_id < 91:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
@@ -739,9 +756,6 @@ for spec_type in spectrogram_types:
                         # looping over signal_directories
                         # CHECK TO SKIP IF OPT_METRIC==IATSENKO and pure_tone signal
                         if opt_metric == 'Iatsenko' and signal_id == 'pure_tone':
-                            continue
-
-                        if signal_id != 'linear_upchirp':
                             continue
 
                         folder_path = dataset_dir + '/' + signal_id
@@ -795,12 +809,13 @@ for spec_type in spectrogram_types:
 
                         sig_dataset_path = folder_path+'/Dataset_2'
                         noise_levels_folders = os.listdir(sig_dataset_path)
+                        noise_levels_folders = sort_list(noise_levels_folders, signal_id)
                         num_levels = len(noise_levels_folders)
 
                         # Fieldnames for general metrics csv
                         general_csv_fieldnames = []
                         for k in range(num_levels):
-                            general_csv_fieldnames.append("Level " + str(k + 1))
+                            general_csv_fieldnames.append("Level " + noise_levels_folders[k][len(signal_id)+1:])
                         del k
 
                         if signal_id == "pure_tone":
@@ -867,11 +882,7 @@ for spec_type in spectrogram_types:
                                     freqarr = freqarr[1:]
 
                                 wopt = [fs, optima_parameters["win_len"]]  # this neeeds review
-
-                                try:
-                                    tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
-                                except:
-                                    continue
+                                tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
 
                                 # revert to Hz if Mel
                                 if scale == 'Mel Frequency':
