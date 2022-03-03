@@ -82,19 +82,19 @@ from fdasrsf.geodesic import geod_sphere
 ########################## Utility functions ###########################################################################
 
 
-def sort_test_list(s):
+def sort_list(s,reference):
     "This script sort Test_list using nubers"
 
     test_num = []
     for element in s:
-        test_num.append(element[5:])
+        test_num.append(element[len(reference)+1:])
 
     test_num.sort(key=int)
 
     new_list = []
 
     for element in test_num:
-        new_list.append('Test_'+element)
+        new_list.append(reference+'_'+element)
     return new_list
 
 def Signal_to_noise_Ratio(signal_sample, noise_sample):
@@ -232,6 +232,7 @@ def find_optimal_spec_IF_parameters(test_param, op_param, op_m, file_dir, wav_fi
         # read signal
         signal_path = file_dir + "/" + signal_file
         print('Using ', signal_path)
+        print('\n Testing ', test_param)
         sp.readWav(signal_path)
         sample_rate = sp.sampleRate
         file_len = sp.fileLength / sample_rate
@@ -808,13 +809,13 @@ for spec_type in spectrogram_types:
 
                         sig_dataset_path = folder_path+'/Dataset_2'
                         noise_levels_folders = os.listdir(sig_dataset_path)
-                        noise_levels_folders = sort_test_list(noise_levels_folders)
+                        noise_levels_folders = sort_list(noise_levels_folders, signal_id)
                         num_levels = len(noise_levels_folders)
 
                         # Fieldnames for general metrics csv
                         general_csv_fieldnames = []
                         for k in range(num_levels):
-                            general_csv_fieldnames.append("Level " + noise_levels_folders[5:])
+                            general_csv_fieldnames.append("Level " + noise_levels_folders[k][len(signal_id)+1:])
                         del k
 
                         if signal_id == "pure_tone":
