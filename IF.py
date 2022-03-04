@@ -349,9 +349,13 @@ class IF:
                 dp=(1/2)*(a1-a3)/(a1-2*a2+a3)
                 #Assign all
                 idf=np.reshape(idf,(1,len(idf)))
-                Indeces_peaks=np.ones((Mp,L))*math.nan
-                Frequency_peaks=np.ones((Mp,L))*math.nan
-                Amplitude_peaks=np.ones((Mp,L))*math.nan
+                # Indeces_peaks=np.ones((Mp,L))*math.nan
+                # Frequency_peaks=np.ones((Mp,L))*math.nan
+                # Amplitude_peaks=np.ones((Mp,L))*math.nan
+                #Initializing with zeros for stability
+                Indeces_peaks = np.zeros((Mp, L))
+                Frequency_peaks = np.zeros((Mp, L))
+                Amplitude_peaks = np.zeros((Mp, L))
                 Indeces_peaks_copy=Indeces_peaks.flatten('F')
                 Indeces_peaks_copy[idnt]=idf+dp
                 #seems to work. we could need a + 1
@@ -387,7 +391,7 @@ class IF:
                 #Display
                 if self.DispMode.lower()!='off':
                     if self.DispMode.lower()!='notify':
-                        print('(number of ridges:', self.Round(np.mean(Number_peaks[tn1:tn2+1])), ' +- ',self.Round(np.std(Number_peaks[tn1:tn2+1])), ' from ',np.amin(Number_peaks),' to ',np.amax(Number_peaks),')\n')
+                        print('(number of ridges:', self.Round(np.mean(Number_peaks[tn1:tn2+1])), ' +- ',self.Round(np.std(Number_peaks[tn1:tn2+1])), ' from ',np.amin(Number_peaks),' to ',np.nanmax(Number_peaks),')\n')
 
                     idb=np.argwhere(Number_peaks[tn1:tn2+1]==0)
                     NB=len(idb)
@@ -434,7 +438,7 @@ class IF:
             self.Skel={'np':Number_peaks,'mt':Indeces_peaks,'nu':Frequency_peaks,'qn':Amplitude_peaks}
             if self.NormMode.lower()=='on':
                 nfunc=self.tfrnormalize(np.abs(TFR[:,tn1:tn2+1]),freq)
-            ci=Indeces_peaks
+            ci=Indeces_peaks.copy()
             ci[np.isnan(ci)]=NF+2-1 #added -1
             cm=ci-np.floor(ci)
             ci=np.floor(ci)
@@ -577,11 +581,11 @@ class IF:
             else:
                 for tn in range(tn1,tn2+1):#from tn2+1
                     if Number_peaks[0,tn]!=0:
-                        p_amplitude[tn]=np.amax(Wp[0:Number_peaks[0,tn],tn])
-                        idr[tn]=np.argmax(Wp[0:Number_peaks[0,tn],tn])
+                        p_amplitude[tn]=np.nanmax(Wp[0:Number_peaks[0,tn],tn])
+                        idr[tn]=np.nanargmax(Wp[0:Number_peaks[0,tn],tn])
                     else:
-                        p_amplitude[tn] = np.amax(Wp[0, tn])
-                        idr[tn] = np.argmax(Wp[0, tn])
+                        p_amplitude[tn] = np.nanmax(Wp[0, tn])
+                        idr[tn] = np.nanargmax(Wp[0, tn])
                 # sanitycheck
                 idr = idr.astype('int')
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Frequency_peaks),order='F')
@@ -619,7 +623,7 @@ class IF:
         #------------------------- Nearest neighbour ------------------------------
         if (type(self.method) =='char') and self.method.lower()=='nearest':
             #Display, if needed
-            imax=np.argmax(Wp.flatten('F'))
+            imax=np.nanargmax(Wp.flatten('F'))
             [fimax,timax]=np.unravel_index(imax,(Mp,L),'F')
             idr[timax]=fimax
             if self.DispMode.lower()!='off' and self.DispMode.lower()!='notify':
@@ -804,6 +808,7 @@ class IF:
                     iup=cpeak+np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]+1
                 del ind_aid
             if cpeak>2:
+                print(tn, cpeak)
                 ind_aid=np.nonzero((cs[cpeak-1:0:-1]<=cs[cpeak:1:-1]) & (cs[cpeak-1:0:-1]<cs[cpeak-2::-1]))
                 if np.any(ind_aid):
                     idown=cpeak-np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]-1
@@ -902,8 +907,8 @@ class IF:
                     U[0:Number_peaks[0, tn], tn] = 0
                 else:
                     # print('Here')
-                    q[0:Number_peaks[0,tn],tn]=np.argmax(aid_matrix,1)
-                    U[0:Number_peaks[0,tn],tn]=np.amax(aid_matrix,1)#max along  rows
+                    q[0:Number_peaks[0,tn],tn]=np.nanargmax(aid_matrix,1)
+                    U[0:Number_peaks[0,tn],tn]=np.nanmax(aid_matrix,1)#max along  rows
                 del aid_matrix
         else:
             for tn in range(tn1+1,tn2+1):
@@ -915,11 +920,12 @@ class IF:
                     CW1=(1-cm)*logw1(ci+1)+cm*logw1(ci+2)
                 else:
                     CW1=(1-cm)*logw1(ci+1).T+cm*logw1(ci+2).T
-                [U[0:Number_peaks[tn],tn],q[0:Number_peaks[tn],tn]]=np.amax(W2[0:Number_peaks[tn],tn]*np.ones((1,Number_peaks[tn-1]))+CW1+np.ones((Number_peaks[tn],1))*U[0:Number_peaks[tn-1],tn-1].T,1)#max along  rows        #sanity check
+                [U[0:Number_peaks[tn],tn],q[0:Number_peaks[tn],tn]]=np.nanmax(W2[0:Number_peaks[tn],tn]*np.ones((1,Number_peaks[tn-1]))+CW1+np.ones((Number_peaks[tn],1))*U[0:Number_peaks[tn-1],tn-1].T,1)#max along  rows        #sanity check
         q=q.astype('int')
 
         #Recover the indices
-        idid=np.zeros((1,L))*(math.nan)
+        #idid=np.zeros((1,L))*(math.nan)
+        idid = np.zeros((1, L)) #to avoid bug I am initializing it with zeors
         try :
             idid[0, tn2] = np.nanargmax(U[:, tn2]).astype('int')
         except(ValueError):
@@ -968,7 +974,7 @@ class IF:
         W2=Wp_inst+W2
 
         #The algorithm by itself
-        imax=np.argmax(W2.flatten('F')[:])
+        imax=np.nanargmax(W2.flatten('F')[:])
         fimax,timax=np.unravel_index(imax,[Mp,L],'F') #determine the starting point
         idid=np.zeros((1,L))*np.nan
         idid[timax]=fimax
@@ -977,11 +983,11 @@ class IF:
             for tn in range(timax+1,tn2+1):
                 cf=Frequency_peaks[1:Number_peaks[tn],tn]-Frequency_peaks[idid[tn-1],tn-1]
                 CW1=logw1(cf)
-                idid[tn]=np.unravel_index(np.argmax(W2[0:Number_peaks[tn]+1,tn]+CW1),np.shape(W2),'F')[1]
+                idid[tn]=np.unravel_index(np.nanargmax(W2[0:Number_peaks[tn]+1,tn]+CW1),np.shape(W2),'F')[1]
             for tn in range(timax-1,tn1-1,-1):
                 cf=-Frequency_peaks[0:Number_peaks[tn]+1,tn]+Frequency_peaks[idid[tn+1],tn+1]
                 CW1=logw1(cf)
-                idid[tn]=np.unravel_index(np.argmax(W2[0:Number_peaks[tn]+1,tn]+CW1),np.shape(W2),'F')[1]
+                idid[tn]=np.unravel_index(np.nanargmax(W2[0:Number_peaks[tn]+1,tn]+CW1),np.shape(W2),'F')[1]
 
         else:
             for tn in range(timax+1,tn2+1):
@@ -989,14 +995,14 @@ class IF:
                 cm=ci-np.floor(ci)
                 ci=np.floor(ci)
                 CW1=(1-cm)*logw1[ci+1]+cm*logw1[ci+2]
-                idid[tn]=np.unravel_index(np.argmax(W2[0:Number_peaks(tn)+1,tn]+CW1),np.shape(W2),'F')
+                idid[tn]=np.unravel_index(np.nanargmax(W2[0:Number_peaks(tn)+1,tn]+CW1),np.shape(W2),'F')
 
             for tn in range(timax-1,tn-1,-1):
                 ci=NF-Indeces_peaks[0:Number_peaks(tn)+1,tn]+Indeces_peaks[idid[tn+1],tn+1]
                 cm=ci-np.floor(ci)
                 ci=np.floor[ci]
                 CW1=(1-cm)*logw1[ci+1]+cm*logw1[ci+2]
-                idid[tn]=np.unravel_index(np.argmax(W2[0:Number_peaks[tn]+1,tn]+CW1),np.shape(W2),'F')
+                idid[tn]=np.unravel_index(np.nanargmax(W2[0:Number_peaks[tn]+1,tn]+CW1),np.shape(W2),'F')
 
         return idid, timax, fimax
 
