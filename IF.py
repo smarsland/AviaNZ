@@ -739,7 +739,7 @@ class IF:
                 else:
                     idr, timax, fimax=self.onestepopt(Number_peaks,Indeces_peaks,Frequency_peaks,Wp,freq) #check
 
-                print('tn1 ', tn1, ' tn2 ', tn2, 'shape idr ', np.shape(idr))
+                # print('tn1 ', tn1, ' tn2 ', tn2, 'shape idr ', np.shape(idr))
                 lid=np.ravel_multi_index([idr[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(Frequency_peaks),order='F')
                 tfsupp[0,tn1:tn2+1]=Frequency_peaks.flatten('F')[lid]
                 p_index[tn1:tn2+1]=self.Round(Indeces_peaks.flatten('F')[lid])
@@ -808,7 +808,7 @@ class IF:
                     iup=cpeak+np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]+1
                 del ind_aid
             if cpeak>2:
-                print(tn, cpeak)
+                # print(tn, cpeak)
                 ind_aid=np.nonzero((cs[cpeak-1:0:-1]<=cs[cpeak:1:-1]) & (cs[cpeak-1:0:-1]<cs[cpeak-2::-1]))
                 if np.any(ind_aid):
                     idown=cpeak-np.ravel_multi_index(ind_aid,np.shape(cs),order='F')[0]-1
@@ -878,7 +878,8 @@ class IF:
         W2=Wp_inst+W2
 
         #The algorithm by itself
-        q=np.zeros((Mp,L))*np.nan
+        # q=np.zeros((Mp,L))*np.nan
+        q = np.zeros((Mp, L))
         U=np.zeros((Mp,L))*np.nan
         q[0:Number_peaks[0,tn1],tn1]=0
         U[0:Number_peaks[0,tn1],tn1]=W2[0:Number_peaks[0,tn1],tn1]

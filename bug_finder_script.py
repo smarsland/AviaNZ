@@ -7,8 +7,8 @@ import SignalProc
 import IF as IFreq
 import numpy as np
 
-signal_path = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\linear_downchirp\\Base_Dataset_2\\" \
-              "linear_downchirp_10.wav"
+signal_path = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\exponential_upchirp\\Base_Dataset_2\\" \
+              "exponential_upchirp_05.wav"
 
 win_len = 256
 hop = 25
