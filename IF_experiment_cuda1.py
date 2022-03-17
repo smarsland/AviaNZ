@@ -761,6 +761,11 @@ for spec_type in spectrogram_types:
                         if Test_id == 103:
                             if signal_id == "linear_downchirp":
                                 continue
+                            if signal_id == "exponential_downchirp":
+                                continue
+                            if signal_id == "exponential_upchirp":
+                                continue
+
 
                         folder_path = dataset_dir + '/' + signal_id
                         print("Analysing folder: ", folder_path)
