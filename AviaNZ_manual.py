@@ -2990,6 +2990,7 @@ class AviaNZ(QMainWindow):
 
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
+                # Possibly, if they pressed the Windows key, use call type menu
                 modifiers = QApplication.keyboardModifiers()
                 if modifiers == Qt.ShiftModifier:
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
@@ -2998,6 +2999,18 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                elif modifiers == Qt.MetaModifier:
+                    # TODO: SM: Check
+                    # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    if self.viewCallType is False:
+                        self.viewCallType = True
+                        # Calltype context menu
+                        self.fillBirdList()
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        self.viewCallType = False
+                    else:
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -3074,8 +3087,21 @@ class AviaNZ(QMainWindow):
                         if wasSelected==box1id:
                             # popup dialog
                             modifiers = QApplication.keyboardModifiers()
+                            print(modifiers)
                             if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
+                            elif modifiers == Qt.MetaModifier:
+                                # TODO: SM: Check
+                                # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                                self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                                if self.viewCallType is False:
+                                    self.viewCallType = True
+                                    # Calltype context menu
+                                    self.fillBirdList()
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.viewCallType = False
+                                else:
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -3163,6 +3189,7 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QApplication.keyboardModifiers()
+                print(modifiers)
                 if modifiers == Qt.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                 elif modifiers == Qt.ControlModifier:
@@ -3170,6 +3197,18 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                elif modifiers == Qt.MetaModifier:
+                    # TODO: SM: Check
+                    # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    if self.viewCallType is False:
+                        self.viewCallType = True
+                        # Calltype context menu
+                        self.fillBirdList()
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        self.viewCallType = False
+                    else:
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
@@ -3258,6 +3297,18 @@ class AviaNZ(QMainWindow):
                             modifiers = QApplication.keyboardModifiers()
                             if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
+                            elif modifiers == Qt.MetaModifier:
+                                # TODO: SM: Check
+                                # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                                self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                                if self.viewCallType is False:
+                                    self.viewCallType = True
+                                    # Calltype context menu
+                                    self.fillBirdList()
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.viewCallType = False
+                                else:
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -4665,7 +4716,7 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
-        self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
+        #self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
         self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
         self.buildCNNWizard.activateWindow()
         self.buildCNNWizard.exec_()
@@ -5311,6 +5362,7 @@ class AviaNZ(QMainWindow):
         """Listener for Action->Cluster segments menu item, cluster segments marked in the current file. Only to display
             the auto generated clusters
         """
+        # TODO: Probably broken!
         if len(self.segments) > 1:
             cl = Clustering.Clustering([], [], 5)
             segments, nclasses, duration = cl.cluster(self.filename, self.sampleRate, None, feature='we')
