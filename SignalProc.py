@@ -368,7 +368,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,stop=None):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -376,7 +376,12 @@ class SignalProc:
         This version is faster than the default versions in pylab and scipy.signal
         Assumes that the values are not normalised.
         """
-        if self.data is None or len(self.data)==0:
+        if start is None:
+            data = self.data
+        else:
+            # TODO: Error checking
+            data = self.data[start:stop]
+        if data is None or len(data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
 
@@ -390,10 +395,10 @@ class SignalProc:
             incr = self.incr
 
         # clean handling of very short segments:
-        if len(self.data) <= window_width:
-            window_width = len(self.data) - 1
+        if len(data) <= window_width:
+            window_width = len(data) - 1
 
-        self.sg = np.copy(self.data)
+        self.sg = np.copy(data)
         if self.sg.dtype != 'float':
             self.sg = self.sg.astype('float')
 
@@ -469,7 +474,7 @@ class SignalProc:
 
             # Messiness. Need to work out where to put each pixel
             # I wish I could think of a way that didn't need a histogram
-            times = np.tile(np.arange(0, (len(self.data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
+            times = np.tile(np.arange(0, (len(data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
             self.sg = np.absolute(self.sg[:, :window_width //2]) #+ 0.1
