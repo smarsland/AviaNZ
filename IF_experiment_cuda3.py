@@ -731,7 +731,7 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 150:
+                    if Test_id < 151:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
@@ -758,8 +758,10 @@ for spec_type in spectrogram_types:
                         if opt_metric == 'Iatsenko' and signal_id == 'pure_tone':
                             continue
 
-                        if Test_id == 150:
+                        if Test_id == 151:
                             if signal_id == "linear_downchirp":
+                                continue
+                            if signal_id == "exponential_downchirp":
                                 continue
                             if signal_id == "exponential_upchirp":
                                 continue

@@ -431,6 +431,7 @@ class IF:
                     Number_peaks[0,tn]=cn
                     # if Number_peaks[0,tn]==-1:
                     #     print('Here -1')
+                if NB>0:
                     del G4
 
                 del idb, NB

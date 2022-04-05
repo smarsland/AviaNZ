@@ -730,7 +730,7 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 35:
+                    if Test_id <40 :
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
@@ -756,6 +756,14 @@ for spec_type in spectrogram_types:
                         # CHECK TO SKIP IF OPT_METRIC==IATSENKO and pure_tone signal
                         if opt_metric == 'Iatsenko' and signal_id == 'pure_tone':
                             continue
+
+                        if Test_id == 40:
+                            if signal_id == "linear_downchirp":
+                                continue
+                            if signal_id == "exponential_downchirp":
+                                continue
+                            if signal_id == "exponential_upchirp":
+                                continue
 
                         folder_path = dataset_dir + '/' + signal_id
                         print("Analysing folder: ", folder_path)
