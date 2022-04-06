@@ -74,7 +74,8 @@ import os
 import csv
 import imed
 import speechmetrics as sm
-from fdasrsf.geodesic import geod_sphere
+from geodesic_copy import geod_sphere
+import ast
 # from librosa.feature.inverse import mel_to_audio
 # from numba import cuda
 
@@ -765,22 +766,38 @@ for spec_type in spectrogram_types:
                                 continue
                             if signal_id == "exponential_upchirp":
                                 continue
+                            if signal_id =='pure_tone':
+                                dictionary_path = "/am/state-opera/home1/listanvirg/Documents/IF_experiment_Results/" \
+                                                  "Test_151/pure_tone/Optimal_parameters.txt"
+                                with open(dictionary_path) as f:
+                                    data_param = f.read()
 
-                        folder_path = dataset_dir + '/' + signal_id
-                        print("Analysing folder: ", folder_path)
-                        # create test_dir for signal type
-                        test_result_subfolder = test_result_dir + '/' + signal_id
-                        if not os.path.exists(test_result_subfolder):
-                            os.mkdir(test_result_subfolder)
+                                # turn raw data into dictionary
+                                optima_parameters = ast.literal_eval(data_param)
+                                folder_path = dataset_dir + '/' + signal_id
+                                print("Analysing folder: ", folder_path)
+                                # create test_dir for signal type
+                                test_result_subfolder = test_result_dir + '/' + signal_id
+                                if not os.path.exists(test_result_subfolder):
+                                    os.mkdir(test_result_subfolder)
 
-                        # inst.frequency law
-                        baseline_dir = folder_path + '/Base_Dataset_2'
+                            else:
 
-                        # find optima parameters and store them
-                        optima_parameters = find_optimal_spec_IF_parameters_handle(baseline_dir, test_result_subfolder,
-                                                                                   signal_id, spec_type, scale,
-                                                                                   norm_type, opt_metric, opt_option)
-                        save_optima_parameters(test_result_subfolder, optima_parameters)
+                                folder_path = dataset_dir + '/' + signal_id
+                                print("Analysing folder: ", folder_path)
+                                # create test_dir for signal type
+                                test_result_subfolder = test_result_dir + '/' + signal_id
+                                if not os.path.exists(test_result_subfolder):
+                                    os.mkdir(test_result_subfolder)
+
+                                # inst.frequency law
+                                baseline_dir = folder_path + '/Base_Dataset_2'
+
+                                # find optima parameters and store them
+                                optima_parameters = find_optimal_spec_IF_parameters_handle(baseline_dir, test_result_subfolder,
+                                                                                           signal_id, spec_type, scale,
+                                                                                           norm_type, opt_metric, opt_option)
+                                save_optima_parameters(test_result_subfolder, optima_parameters)
 
                         # evaluate metrics for "original signal" and store them
                         calculate_metrics_original_signal(baseline_dir, test_result_subfolder, signal_id, spec_type,
