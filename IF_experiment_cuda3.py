@@ -781,6 +781,8 @@ for spec_type in spectrogram_types:
                                 if not os.path.exists(test_result_subfolder):
                                     os.mkdir(test_result_subfolder)
 
+                                baseline_dir = folder_path + '/Base_Dataset_2'
+
                             else:
 
                                 folder_path = dataset_dir + '/' + signal_id
