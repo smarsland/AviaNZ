@@ -801,6 +801,26 @@ for spec_type in spectrogram_types:
                                                                                            norm_type, opt_metric, opt_option)
                                 save_optima_parameters(test_result_subfolder, optima_parameters)
 
+
+                        else:
+
+                            folder_path = dataset_dir + '/' + signal_id
+                            print("Analysing folder: ", folder_path)
+                            # create test_dir for signal type
+                            test_result_subfolder = test_result_dir + '/' + signal_id
+                            if not os.path.exists(test_result_subfolder):
+                                os.mkdir(test_result_subfolder)
+
+                            # inst.frequency law
+                            baseline_dir = folder_path + '/Base_Dataset_2'
+
+                            # find optima parameters and store them
+                            optima_parameters = find_optimal_spec_IF_parameters_handle(baseline_dir,
+                                                                                       test_result_subfolder,
+                                                                                       signal_id, spec_type, scale,
+                                                                                       norm_type, opt_metric,
+                                                                                       opt_option)
+                            save_optima_parameters(test_result_subfolder, optima_parameters)
                         # evaluate metrics for "original signal" and store them
                         calculate_metrics_original_signal(baseline_dir, test_result_subfolder, signal_id, spec_type,
                                                           scale, norm_type, optima_parameters)
