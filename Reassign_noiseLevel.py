@@ -127,7 +127,7 @@ def rearrange_metrics_files(workdir, signal_id):
     fieldnames = ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6', 'Level 7', 'Level 8', 'Level 9',
                   'Level 10', 'Level 11', 'Level 12', 'Level 13', 'Level 14']
 
-    for file in file_list:
+    for file in metrics_list:
         print('Rearranging file ', file)
         # read .csv file
         csvfilename = workdir+ '\\'+file
@@ -169,11 +169,11 @@ def rearrange_metrics_files(workdir, signal_id):
 
 
 # signal type we are analysing
-signal_id='pure_tone'
+#signal_id='pure_tone'
 # signal_id = 'linear_upchirp'
-#signal_id = 'linear_downchirp'
+# signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
-# signal_id = 'exponential_downchirp'
+signal_id = 'exponential_downchirp'
 
 test_result_dir = "C:\\Users\\Virginia\\Documents\Work\\IF_extraction\\Test_Results"
 

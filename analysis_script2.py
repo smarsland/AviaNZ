@@ -133,17 +133,17 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
     return
 
 # signal type we are analysing
-signal_id='pure_tone'
-# signal_id = 'linear_upchirp'
+# signal_id='pure_tone'
+signal_id = 'linear_upchirp'
 #signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
 # signal_id = 'exponential_downchirp'
-start_index = 6
+start_index = 0
 
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Optimization_methods\\Group2"
+test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group1"
 
 #create signal folder
 test_analysis_fold = test_analysis_dir + '\\' + signal_id
@@ -250,6 +250,7 @@ col_counter = 0
 for test_id in test_list:
     if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
         # if not test for signal_id continue
+        print('skipping')
         continue
 
     #read L2 .csv
@@ -540,3 +541,5 @@ for test_id in test_list:
 
 fig.suptitle('Signal inversion metrics', fontsize=100)
 plt.savefig(fig_name4)
+
+print('Plots done')
