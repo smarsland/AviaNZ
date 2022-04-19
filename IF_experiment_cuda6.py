@@ -74,7 +74,7 @@ import os
 import csv
 import imed
 import speechmetrics as sm
-from fdasrsf.geodesic import geod_sphere
+from geodesic_copy import geod_sphere
 # from librosa.feature.inverse import mel_to_audio
 # from numba import cuda
 
@@ -731,12 +731,12 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id < 161:
+                    if Test_id < 163:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
 
-                    if Test_id > 180:
+                    if Test_id > 170:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         break
@@ -758,7 +758,7 @@ for spec_type in spectrogram_types:
                         if opt_metric == 'Iatsenko' and signal_id == 'pure_tone':
                             continue
 
-                        if Test_id == 91:
+                        if Test_id == 163:
                             if signal_id == "linear_downchirp":
                                 continue
                             if signal_id == "exponential_downchirp":
