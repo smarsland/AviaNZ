@@ -121,6 +121,13 @@ class Segment(list):
         self[4].append(label)
         self.keys.append((species, certainty))
 
+    def extendLabel(self, species, certainty, calltype):
+        """ Find a label and add the calltype information to it """
+        for lab in self[4]:
+            if lab["species"]==species and lab["certainty"]==certainty:
+                lab.update({"filter": "M", "calltype":calltype})
+        print(lab)
+
     ### --- couple functions to process all labels for a given species ---
 
     def wipeSpecies(self, species):
