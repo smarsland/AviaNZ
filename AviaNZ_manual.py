@@ -3567,7 +3567,7 @@ class AviaNZ(QMainWindow):
             ctitem=callname
 
             # TODO: Needs a bit of thought, since need to find (or create) a filter. And there might be more than one.
-            # I think this is OK-ish. Now for the DialogsTraining
+            # SM: I think this is OK-ish. Now for the DialogsTraining
             if len(self.filters) == 0:
                 # There wasn't a filter. Make one. Ask for name, or just use default?
                 speciesData = {"species": spmenu, "method": None, "SampleRate": self.sampleRate, "Filters": []}
@@ -3601,10 +3601,43 @@ class AviaNZ(QMainWindow):
             #self.speciesData["Filters"].append(newSubfilt)
             # Save it
             
+        """
+        #SM: Might need some of this?!
+                workingSeg = self.segments[self.box1id]
+                self.refreshOverviewWith(workingSeg, delete=True)
+        
+                # toggle the actual label in the segment list
+                if workingSeg.hasLabel(species, certainty):
+                    workingSeg.removeLabel(species, certainty)
+                else:
+                    # in case the only label so far was Don't Know,
+                    # change it to the new bird (to not waste time unticking it)
+                    if workingSeg.keys == [("Don't Know", 0)]:
+                        workingSeg.addLabel(species, certainty, filter="M")
+                        workingSeg.removeLabel("Don't Know", 0)
+                        # also need to untick that context menu item manually
+                        for act in self.menuBirdList.actions() + self.menuBird2.actions():
+                            if act.text()=="Don't Know":
+                                act.setChecked(False)
+                    else:
+                        # in single-bird mode, just remove the current label:
+                        workingSeg.addLabel(species, certainty, filter="M")
+                        if not self.multipleBirds:
+                            workingSeg.removeLabel(workingSeg[4][0]["species"], workingSeg[4][0]["certainty"])
+        """
+
         workingSeg = self.segments[self.box1id]
+        # SM: Need to extend function
+        if workingSeg.hasLabel(species, certainty):
+            workingSeg.removeLabel(species, certainty)
         for lab in workingSeg[4]:
             if lab["species"] == spmenu:
                 lab["calltype"] = ctitem
+        workingSeg.addLabel(spmenu, 101, filter="M", calltype=ctitem)
+        print(lab,workingSeg.infoString())
+
+        # Store the species in case the user wants it for the next segment
+        self.lastSpecies = [{"species": spmenu, "certainty": 100, "filter": "M", "calltype": ctitem}]
         self.updateText()
         self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
