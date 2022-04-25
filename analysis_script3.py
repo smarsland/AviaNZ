@@ -3,7 +3,7 @@
 Author: Virginia Listanti
 
 This script purpose is to analyse data produced by IF experiment
-Here we want to produce plot to compare results obtained with different optimizations techniques
+Here we want to produce plot to compare results obtained with different TFRs with linear scaling and no normalization
 """
 
 import SignalProc
@@ -138,14 +138,15 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 # signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
 #signal_id = 'exponential_downchirp'
-start_index = 123
+#start_index = 123
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
 # test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group27"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
+                    "LinearScale_NoNormalization"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
 # if not os.path.exists(test_analysis_fold):
@@ -156,14 +157,14 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 # test_list = sort_test_list(test_list)[start_index:start_index+6]
 # test_list = sort_test_list(test_list)[start_index:start_index+25:6]
 
-# test_list = ['Test_66', 'Test_67', 'Test_68', 'Test_69', 'Test_70', 'Test_71']
-test_list =[]
+test_list = ['Test_5', 'Test_3', 'Test_65', 'Test_63', 'Test_125', 'Test_123']
+# test_list =[]
 
 # for i in range(6):
 #     test_list.append('Test_'+str(start_index + i))
 
-for i in range(5):
-    test_list.append('Test_' + str(start_index + i*6))
+# for i in range(5):
+#     test_list.append('Test_' + str(start_index + i*6))
 
 
 # # Count and plot parameters chosen
@@ -171,6 +172,8 @@ for i in range(5):
 
 #read baselive values for pure signal
 #read baseline_values .csv
+
+plot_titles = [' Standard G.', ' Standard I.', ' Reassigned G.', ' Reassigned I.', ' Multi-tapered G.', ' Multi-tapered I.']
 
 for signal_id in Signal_list:
     print('analysing ', signal_id)
@@ -247,7 +250,7 @@ for signal_id in Signal_list:
 
         #plot
         ax[0, col_counter].boxplot(SNR_G)
-        ax[0, col_counter].set_title('SNR ' + test_id, fontsize=50)
+        ax[0, col_counter].set_title('SNR ' + test_id + plot_titles[col_counter], fontsize=50)
         ax[0, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[0, col_counter].tick_params(axis='y', labelsize=30)
@@ -255,7 +258,7 @@ for signal_id in Signal_list:
 
         ax[1, col_counter].boxplot(RE_G)
         ax[1, col_counter].axhline(baseline[col_counter, 1], xmin=0, xmax=1, c='r', ls='--')
-        ax[1, col_counter].set_title('RENYI ENTR. ' + test_id, fontsize=50)
+        ax[1, col_counter].set_title('RENYI ENTR. ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[1, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[1, col_counter].tick_params(axis='y', labelsize=30)
@@ -328,7 +331,7 @@ for signal_id in Signal_list:
         ax[0, col_counter].boxplot(L2_G)
         #ax[0, col_counter].axhline(np.log(baseline[col_counter, 2]), xmin=0, xmax=1, c='r', ls='--')
         ax[0, col_counter].axhline(baseline[col_counter, 2], xmin=0, xmax=1, c='r', ls='--')
-        ax[0, col_counter].set_title('L2 ' + test_id, fontsize=50)
+        ax[0, col_counter].set_title('L2 ' + test_id + plot_titles[col_counter], fontsize=50)
         ax[0, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[0, col_counter].tick_params(axis='y', labelsize=30)
@@ -341,7 +344,7 @@ for signal_id in Signal_list:
         else:
             #ax[1, col_counter].axhline(np.log(baseline[col_counter, 4]), xmin=0, xmax=1, c='r', ls='--')
             ax[1, col_counter].axhline(baseline[col_counter, 4], xmin=0, xmax=1, c='r', ls='--')
-        ax[1, col_counter].set_title('Geodetic ' + test_id, fontsize=50)
+        ax[1, col_counter].set_title('Geodetic ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[1, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[1, col_counter].tick_params(axis='y', labelsize=30)
@@ -349,7 +352,7 @@ for signal_id in Signal_list:
         if signal_id != 'pure_tone':
             ax[2, col_counter].boxplot(Iatsenko_G)
             ax[2, col_counter].axhline(baseline[col_counter, 3], xmin=0, xmax=1, c='r', ls='--')
-            ax[2, col_counter].set_title('Iatsenko ' + test_id, fontsize=50)
+            ax[2, col_counter].set_title('Iatsenko ' + test_id +plot_titles[col_counter], fontsize=50)
             ax[2, col_counter].set_xticks(np.arange(1, len(level_list) + 1))
             ax[2, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
             ax[2, col_counter].tick_params(axis='y', labelsize=30)
@@ -422,7 +425,7 @@ for signal_id in Signal_list:
             ax[0, col_counter].axhline(baseline[col_counter, 7], xmin=0, xmax=1, c='r', ls='--')
         else:
             ax[0, col_counter].axhline(baseline[col_counter, 6], xmin=0, xmax=1, c='r', ls='--')
-        ax[0, col_counter].set_title('IMED ' + test_id, fontsize=50)
+        ax[0, col_counter].set_title('IMED ' + test_id + plot_titles[col_counter], fontsize=50)
         ax[0, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[0, col_counter].tick_params(axis='y', labelsize=30)
@@ -435,7 +438,7 @@ for signal_id in Signal_list:
         else:
             #ax[1, col_counter].axhline(np.log(baseline[col_counter, 4]), xmin=0, xmax=1, c='r', ls='--')
             ax[1, col_counter].axhline(baseline[col_counter, 6], xmin=0, xmax=1, c='r', ls='--')
-        ax[1, col_counter].set_title('SISDR ' + test_id, fontsize=50)
+        ax[1, col_counter].set_title('SISDR ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[1, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[1, col_counter].tick_params(axis='y', labelsize=30)
@@ -446,7 +449,7 @@ for signal_id in Signal_list:
             ax[2, col_counter].axhline(baseline[col_counter, 5], xmin=0, xmax=1, c='r', ls='--')
         else:
             ax[2, col_counter].axhline(baseline[col_counter, 4], xmin=0, xmax=1, c='r', ls='--')
-        ax[2, col_counter].set_title('STOI ' + test_id, fontsize=50)
+        ax[2, col_counter].set_title('STOI ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[2, col_counter].set_xticks(np.arange(1, len(level_list) + 1))
         ax[2, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[2, col_counter].tick_params(axis='y', labelsize=30)
@@ -529,7 +532,7 @@ for signal_id in Signal_list:
             ax[0, col_counter].axhline(baseline[col_counter, 7], xmin=0, xmax=1, c='r', ls='--')
         else:
             ax[0, col_counter].axhline(baseline[col_counter, 6], xmin=0, xmax=1, c='r', ls='--')
-        ax[0, col_counter].set_title('IMED ' + test_id, fontsize=50)
+        ax[0, col_counter].set_title('IMED ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[0, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[0, col_counter].tick_params(axis='y', labelsize=30)
@@ -542,7 +545,7 @@ for signal_id in Signal_list:
         else:
             #ax[1, col_counter].axhline(np.log(baseline[col_counter, 4]), xmin=0, xmax=1, c='r', ls='--')
             ax[1, col_counter].axhline(baseline[col_counter, 6], xmin=0, xmax=1, c='r', ls='--')
-        ax[1, col_counter].set_title('SISDR ' + test_id, fontsize=50)
+        ax[1, col_counter].set_title('SISDR ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[1, col_counter].set_xticks(np.arange(1, len(level_list)+1))
         ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[1, col_counter].tick_params(axis='y', labelsize=30)
@@ -553,7 +556,7 @@ for signal_id in Signal_list:
             ax[2, col_counter].axhline(baseline[col_counter, 5], xmin=0, xmax=1, c='r', ls='--')
         else:
             ax[2, col_counter].axhline(baseline[col_counter, 4], xmin=0, xmax=1, c='r', ls='--')
-        ax[2, col_counter].set_title('STOI ' + test_id, fontsize=50)
+        ax[2, col_counter].set_title('STOI ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[2, col_counter].set_xticks(np.arange(1, len(level_list) + 1))
         ax[2, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[2, col_counter].tick_params(axis='y', labelsize=30)
@@ -563,7 +566,7 @@ for signal_id in Signal_list:
             ax[3, col_counter].axhline(baseline[col_counter, 8], xmin=0, xmax=1, c='r', ls='--')
         else:
             ax[3, col_counter].axhline(baseline[col_counter, 7], xmin=0, xmax=1, c='r', ls='--')
-        ax[3, col_counter].set_title('RE inverted sound ' + test_id, fontsize=50)
+        ax[3, col_counter].set_title('RE inverted sound ' + test_id +plot_titles[col_counter], fontsize=50)
         ax[3, col_counter].set_xticks(np.arange(1, len(level_list) + 1))
         ax[3, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
         ax[3, col_counter].tick_params(axis='y', labelsize=30)
