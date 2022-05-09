@@ -145,8 +145,10 @@ Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_u
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
 # test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group27"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
-                    "LinearScale_NoNormalization"
+# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
+#                     "LinearScale_NoNormalization"
+
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Scale\\Multitapered"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
 # if not os.path.exists(test_analysis_fold):
@@ -157,7 +159,7 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 # test_list = sort_test_list(test_list)[start_index:start_index+6]
 # test_list = sort_test_list(test_list)[start_index:start_index+25:6]
 
-test_list = ['Test_5', 'Test_3', 'Test_65', 'Test_63', 'Test_125', 'Test_123']
+test_list = [ 'Test_125', 'Test_155', 'Test_123', 'Test_153']
 # test_list =[]
 
 # for i in range(6):
@@ -173,8 +175,8 @@ test_list = ['Test_5', 'Test_3', 'Test_65', 'Test_63', 'Test_125', 'Test_123']
 #read baselive values for pure signal
 #read baseline_values .csv
 
-plot_titles = [' Standard G.', ' Standard I.', ' Reassigned G.', ' Reassigned I.', ' Multi-tapered G.', ' Multi-tapered I.']
-
+# plot_titles = [' Standard G.', ' Standard I.', ' Reassigned G.', ' Reassigned I.', ' Multi-tapered G.', ' Multi-tapered I.']
+plot_titles = [' Linear G.', ' Mel G.', ' Linear I.', ' Mel I.' ]
 for signal_id in Signal_list:
     print('analysing ', signal_id)
     baseline = []

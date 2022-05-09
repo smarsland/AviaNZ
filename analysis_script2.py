@@ -138,14 +138,14 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 # signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
 #signal_id = 'exponential_downchirp'
-start_index = 123
+start_index = 30
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-# test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group27"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
+test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group6"
+# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
 # if not os.path.exists(test_analysis_fold):
@@ -159,11 +159,11 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 # test_list = ['Test_66', 'Test_67', 'Test_68', 'Test_69', 'Test_70', 'Test_71']
 test_list =[]
 
-# for i in range(6):
-#     test_list.append('Test_'+str(start_index + i))
+for i in range(6):
+    test_list.append('Test_'+str(start_index + i))
 
-for i in range(5):
-    test_list.append('Test_' + str(start_index + i*6))
+# for i in range(5):
+#     test_list.append('Test_' + str(start_index + i*6))
 
 
 # # Count and plot parameters chosen
@@ -189,6 +189,9 @@ for signal_id in Signal_list:
 
         if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
             # if not test for signal_id continue
+            continue
+
+        if test_id == 'Test_34'and signal_id == 'linear_upchirp':
             continue
 
         test_number += 1
@@ -220,6 +223,9 @@ for signal_id in Signal_list:
     for test_id in test_list:
         if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
             # if not test for signal_id continue
+            continue
+
+        if test_id == 'Test_34' and signal_id == 'linear_upchirp':
             continue
             #read SNR .csv
         csvfilename = test_result_dir+ '\\'+test_id + '\\' + signal_id + '\\noise_levels_SNR.csv'
@@ -281,6 +287,10 @@ for signal_id in Signal_list:
     for test_id in test_list:
         if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
             # if not test for signal_id continue
+            print('skipping')
+            continue
+
+        if test_id == 'Test_34'and signal_id == 'linear_upchirp':
             print('skipping')
             continue
 
@@ -373,6 +383,9 @@ for signal_id in Signal_list:
     for test_id in test_list:
         if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
             # if not test for signal_id continue
+            continue
+
+        if test_id == 'Test_34'and signal_id == 'linear_upchirp':
             continue
 
         #read IMED original .csv
@@ -468,6 +481,9 @@ for signal_id in Signal_list:
     for test_id in test_list:
         if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
             # if not test for signal_id continue
+            continue
+
+        if test_id == 'Test_34'and signal_id == 'linear_upchirp':
             continue
 
         #read IMED noise .csv
