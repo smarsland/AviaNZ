@@ -731,7 +731,7 @@ for spec_type in spectrogram_types:
                 for opt_option in optimization_options:
                     # loop over optimization options
 
-                    if Test_id != 34 or Test_id != 90 or Test_id != 102:
+                    if Test_id != 34 and Test_id != 90 and Test_id != 102:
                         print('Skipping Test ', Test_id)
                         Test_id += 1
                         continue
