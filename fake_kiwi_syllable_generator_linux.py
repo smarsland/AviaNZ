@@ -131,7 +131,7 @@ def Syllable_phase_fun2(t, t0, t1, t2, f0, f1, f2, phi, samplerate):
 ##################################### MAIN ########################################################
 
 # hardcoded variables
-test_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Toy signals\\fake_kiwi_syllables\\New"
+test_dir = "/home/listanvirg/Documents/Individual_identification/Fake_kiwi_syllables/"
 samplerate = 16000
 Amplitude_base = 1
 phi = 0  # initial phase
@@ -194,7 +194,7 @@ t = np.linspace(0., T, int(samplerate*T), endpoint=False)
 
 
 file_id = syllable_id + ".wav"
-save_dir = test_dir+"\\"+syllable_id
+save_dir = test_dir+"/"+syllable_id
 if syllable_id not in os.listdir(test_dir):
     os.mkdir(save_dir)
 
@@ -212,21 +212,21 @@ if n == 1:
     # add trills
 
     if trill_flag == 'yes':
-        t_trill = np.linspace(t3, t4, int(samplerate * (t4 - t3)), endpoint=False)
+        t_trill = np.linspace(t3, t4, int(samplerate * (t4 - t3)+1), endpoint=False)
         trill_phase = (delta / k) * (t4 - t3) * (-np.cos(((2 * np.pi * k) / (t4 - t3)) * t_trill))
         phi_t[int(t3 * samplerate):int(t4 * samplerate)] += trill_phase
         trill = delta * np.sin((2 * np.pi * k * (t_trill - t3)) / (t4 - t3))
         if_t[int(t3 * samplerate):int(t4 * samplerate)] += trill
     # just fundamental
     # save plot IF
-    fig_name = save_dir + "\\"+file_id[:-4] + ".jpg"
+    fig_name = save_dir + "/"+file_id[:-4] + ".jpg"
     fig = plt.figure()
     plt.plot(if_t)
     fig.suptitle(file_id[:-4])
     plt.savefig(fig_name)
 
     # save IF
-    csvfilename = save_dir + "\\"+file_id[:-4]+"_IF.csv"
+    csvfilename = save_dir + "/"+file_id[:-4]+"_IF.csv"
     fieldnames = ["IF"]
     with open(csvfilename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -238,7 +238,7 @@ if n == 1:
 
 else:
     signal = np.zeros((np.shape(t)))
-    fig_name = save_dir + "\\" + file_id[:-4] + ".jpg"
+    fig_name = save_dir + "/" + file_id[:-4] + ".jpg"
     fig = plt.figure()
     for j in range(1, n+1):
         f0_h = j*f0
@@ -258,7 +258,7 @@ else:
         # add trills
 
         if trill_flag == 'yes':
-            t_trill = np.linspace(t3, t4, int(samplerate * (t4 - t3)), endpoint=False)
+            t_trill = np.linspace(t3, t4, int(samplerate * (t4 - t3)+1), endpoint=False)
             trill_phase = (delta / k) * (t4 - t3) * (-np.cos(((2 * np.pi * k) / (t4 - t3)) * t_trill))
             phi_t[int(t3 * samplerate):int(t4 * samplerate)] += trill_phase
             trill = delta * np.sin((2 * np.pi * k * (t_trill - t3)) / (t4 - t3))
@@ -270,7 +270,7 @@ else:
         plt.plot(if_t)
 
         # save IF harmonics
-        csvfilename = save_dir + "\\" + file_id[:-4] + "_IF_harmonic_"+str(j)+".csv"
+        csvfilename = save_dir + "/" + file_id[:-4] + "_IF_harmonic_"+str(j)+".csv"
         fieldnames = ["IF"]
         with open(csvfilename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -282,10 +282,10 @@ else:
     plt.savefig(fig_name)
 
 # save file
-file_name = save_dir+"\\"+file_id
+file_name = save_dir+"/"+file_id
 wavio.write(file_name, signal, samplerate, sampwidth=2)
 
 # save padded version
 s2 = np.concatenate((np.zeros(int(14.5*samplerate)), signal, np.zeros(int(14.5*samplerate))))
-file_name2 = save_dir+"\\"+file_id[:-4]+'_padded.wav'
+file_name2 = save_dir+"/"+file_id[:-4]+'_padded.wav'
 wavio.write(file_name2, s2, samplerate, sampwidth=2)

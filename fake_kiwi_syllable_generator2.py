@@ -140,61 +140,62 @@ phi = 0  # initial phase
 print("\n Welcome to fake kiwi syllable generator \n")
 print("Please, enter the parameters we need to generate your fake kiwi syllable\n")
 
-syllable_id = input("\n Enter the syllable name")
+syllable_id = input("\n Enter the syllable name:    ")
 
-print("\n Which syllable type you want? \n There are 2 options A or B")
+print("\n Which syllable type you want? \n There are 2 options: A or B.")
 print("\n A: 2 quadratic chirps: 1 concave-down, 1 concave up")
 print("\n B: 2 quadratic chirps: both concave-down \n")
-syllable_type = input("\n Type A or B :")
+syllable_type = input("\n Type A or B :  ")
 while syllable_type != 'A' and syllable_type != 'B':
     syllable_type = input("\n Which syllable type you want? Type A or B :")
 
 # syllable parameters
 print("\n Please insert syllable parameters \n")
-T = float(input("\n Enter syllable length (in seconds): "))
+T = float(input("\n Enter syllable length (in seconds):  "))
 t0 = 0.0
 t2 = T
-f0 = float(input("\n Enter initial frequency f0 (in Hz): "))
-t1 = float(input("\n Enter t1, time maximum frequency, (in seconds): "))
+f0 = float(input("\n Enter initial frequency f0 (in Hz):   "))
+t1 = float(input("\n Enter t1, time maximum frequency, (in seconds):    "))
 while t1 > t2:
     print(f"\n ERROR: we need t1<{t2}")
-    t1 = float(input("\n Enter t1, time maximum frequency, (in seconds): "))
-f1 = float(input("\n Enter maximum frequency f1 (in Hz): "))
-f2 = float(input("\n Enter final frequency f2 (in Hz): "))
+    t1 = float(input("\n Enter t1, time maximum frequency, (in seconds):    "))
+f1 = float(input("\n Enter maximum frequency f1 (in Hz):   "))
+f2 = float(input("\n Enter final frequency f2 (in Hz):   "))
 
 # do we have trills?
-trill_flag = input("\n Do you want a trill in your syllable? Type yes or no:")
+trill_flag = input("\n\n Do you want a trill in your syllable? Type yes or no:  ")
 while trill_flag != 'yes' and trill_flag != 'no':
-    trill_flag = input("\n Do you want a trill in your syllable? Type yes or no:")
+    trill_flag = input("\n Do you want a trill in your syllable? Type yes or no:  ")
 
 delta = 0
 # trill parameters
 if trill_flag == 'yes':
-    print("\n Please insert trill parameters \n")
-    k = int(input("\n How many trills you want? Enter an integer:"))
-    t3 = float(input("\n Enter t3, the starting time of the trill in seconds: "))
+    print("\n Please insert trill parameters ")
+    k = int(input("\n How many trills you want? Enter an integer:  "))
+    t3 = float(input("\n Enter t3, the starting time of the trill in seconds:   "))
     while t3 > t2:
         print(f"\n ERROR: we need t3<{t2}")
-        t3 = float(input("\n Enter t3, the starting time of the trill in seconds: "))
-    t4 = float(input("\n Enter t4, the final time of the trill in seconds: "))
+        t3 = float(input("\n Enter t3, the starting time of the trill in seconds:  "))
+    t4 = float(input("\n Enter t4, the final time of the trill in seconds:  "))
     while t4 > t2 or t4 < t3:
         print(f"\n ERROR: we need {t3}<t4<{t2}")
-        t4 = float(input("\n Enter t4, the final time of the trill in seconds: "))
+        t4 = float(input("\n Enter t4, the final time of the trill in seconds:  "))
 
-    delta = float(input("\n Enter the amplitude of the trill: "))
+    delta = float(input("\n Enter the amplitude of the trill:  "))
 
 # harmonics
 n_max = np.floor((samplerate/2)/(f1+delta))
 print("\n How many harmonics do you want?")
-n = int(input("\n Enter an integer. Enter 1 if you want only the fundamental frequency"))
+n = int(input("\n Enter an integer. Enter 1 if you want only the fundamental frequency. n =  "))
 while n < 1 or n > n_max:
     print(f"\n ERROR: n must be an integer between 1 and {n_max}")
+    n = int(input("\n Enter an integer. Enter 1 if you want only the fundamental frequency. n =  "))
 
 t = np.linspace(0., T, int(samplerate*T), endpoint=False)
 
 
 file_id = syllable_id + ".wav"
-save_dir = test_dir+"/"+syllable_id
+save_dir = os.path.join(test_dir, syllable_id)
 if syllable_id not in os.listdir(test_dir):
     os.mkdir(save_dir)
 
@@ -212,21 +213,21 @@ if n == 1:
     # add trills
 
     if trill_flag == 'yes':
-        t_trill = np.linspace(t3, t4, int(samplerate * (t4 - t3)+1), endpoint=False)
+        t_trill = np.linspace(t3, t4, int(np.round(samplerate * (t4 - t3))), endpoint=False)
         trill_phase = (delta / k) * (t4 - t3) * (-np.cos(((2 * np.pi * k) / (t4 - t3)) * t_trill))
         phi_t[int(t3 * samplerate):int(t4 * samplerate)] += trill_phase
         trill = delta * np.sin((2 * np.pi * k * (t_trill - t3)) / (t4 - t3))
         if_t[int(t3 * samplerate):int(t4 * samplerate)] += trill
     # just fundamental
     # save plot IF
-    fig_name = save_dir + "/"+file_id[:-4] + ".jpg"
+    fig_name = os.path.join(save_dir, file_id[:-4] + ".jpg")
     fig = plt.figure()
     plt.plot(if_t)
     fig.suptitle(file_id[:-4])
     plt.savefig(fig_name)
 
     # save IF
-    csvfilename = save_dir + "/"+file_id[:-4]+"_IF.csv"
+    csvfilename = os.path.join(save_dir,file_id[:-4]+"_IF.csv")
     fieldnames = ["IF"]
     with open(csvfilename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -238,7 +239,7 @@ if n == 1:
 
 else:
     signal = np.zeros((np.shape(t)))
-    fig_name = save_dir + "/" + file_id[:-4] + ".jpg"
+    fig_name = os.path.join(save_dir, file_id[:-4] + ".jpg")
     fig = plt.figure()
     for j in range(1, n+1):
         f0_h = j*f0
@@ -258,7 +259,7 @@ else:
         # add trills
 
         if trill_flag == 'yes':
-            t_trill = np.linspace(t3, t4, int(samplerate * (t4 - t3)+1), endpoint=False)
+            t_trill = np.linspace(t3, t4, int(np.round(samplerate * (t4 - t3))), endpoint=False)
             trill_phase = (delta / k) * (t4 - t3) * (-np.cos(((2 * np.pi * k) / (t4 - t3)) * t_trill))
             phi_t[int(t3 * samplerate):int(t4 * samplerate)] += trill_phase
             trill = delta * np.sin((2 * np.pi * k * (t_trill - t3)) / (t4 - t3))
@@ -270,7 +271,7 @@ else:
         plt.plot(if_t)
 
         # save IF harmonics
-        csvfilename = save_dir + "/" + file_id[:-4] + "_IF_harmonic_"+str(j)+".csv"
+        csvfilename = os.path.join(save_dir, file_id[:-4] + "_IF_harmonic_"+str(j)+".csv")
         fieldnames = ["IF"]
         with open(csvfilename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -282,10 +283,10 @@ else:
     plt.savefig(fig_name)
 
 # save file
-file_name = save_dir+"/"+file_id
+file_name = os.path.join(save_dir, file_id)
 wavio.write(file_name, signal, samplerate, sampwidth=2)
 
 # save padded version
 s2 = np.concatenate((np.zeros(int(14.5*samplerate)), signal, np.zeros(int(14.5*samplerate))))
-file_name2 = save_dir+"/"+file_id[:-4]+'_padded.wav'
+file_name2 = file_name[:-4]+'_padded.wav'
 wavio.write(file_name2, s2, samplerate, sampwidth=2)
