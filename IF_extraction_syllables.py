@@ -18,8 +18,10 @@ import matplotlib.pyplot as plt
 
 # CHECK: change working directory
 #analysis_folder = "/home/listanvirg/Documents/Individual_identification/extracted/"
-analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-                  "extracted"
+# analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                   "extracted"
+# analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Test_jump"
+analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\extracted_test"
 alpha = 1
 beta = 0.5
 win_len = 512
@@ -68,20 +70,55 @@ for file in os.listdir(analysis_folder):
         tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
         TFR3 = np.copy(TFR2)
 
+        # # hardcoded check
+        # f_jumps = np.diff(tfsupp[0,:])
+        # # f_jumps = np.diff(tfsupp[0,:], n=2)
+        # # freq_jump_boundary = 800
+        # freq_jump_boundary = 700
+        # if np.amax(np.abs(f_jumps)) > freq_jump_boundary:
+        #     del IF
+        #     print("detected jump: correcting")
+        #     IF = IFreq.IF(method=2, pars=[alpha, beta])
+        #     jump_index = np.argmax(np.abs(f_jumps))
+        #     print(jump_index)
+        #     f_min = np.amin(tfsupp[1, 0:jump_index])
+        #     min_index = int(np.floor(f_min / fstep - 1))
+        #     f_max = np.amax(tfsupp[2, 0:jump_index])
+        #     max_index = int(np.ceil(f_max / fstep - 1))
+        #     TFR3[0:min_index] = 0
+        #     TFR3[max_index+1:] = 0
+        #     tfsupp2, _, _ = IF.ecurve(TFR3, freqarr, wopt)
+        #     if_syllable = np.copy(tfsupp2[0, :])
+        #     low_bound = np.copy(tfsupp2[1, :])
+        #     high_bound = np.copy(tfsupp2[2, :])
+        # else:
+        #     if_syllable = np.copy(tfsupp[0, :])
+        #     low_bound = np.copy(tfsupp[1, :])
+        #     high_bound = np.copy(tfsupp[2, :])
+
         # hardcoded check
-        f_jumps = np.diff(tfsupp[0,:])
-        freq_jump_boundary = 800
-        if np.abs(np.amax(f_jumps)) > freq_jump_boundary:
+        #f_jumps = np.diff(tfsupp[0, :], 2)
+        f_jumps = np.zeros((len(tfsupp[0,:],)))
+        for k in range (len(tfsupp[0,:])-2):
+            f_jumps[k] = tfsupp[0, k+2] - tfsupp[0, k]
+        freq_jump_boundary = 700
+        if np.amax(np.abs(f_jumps)) > freq_jump_boundary:
             del IF
             print("detected jump: correcting")
             IF = IFreq.IF(method=2, pars=[alpha, beta])
-            jump_index = np.argmax(f_jumps)
-            f_min = np.amin(tfsupp[1, 0:jump_index])
+            jump_index = np.argmax(np.abs(f_jumps))
+            print(jump_index)
+            if f_jumps[jump_index]>0:
+                # if we are doing a step up we will focus on the first half
+                f_min = np.amin(tfsupp[1, 0:jump_index+1])
+                f_max = np.amax(tfsupp[2, 0:jump_index+1])
+            else:
+                f_min = np.amin(tfsupp[1, jump_index + 1:])
+                f_max = np.amax(tfsupp[2, jump_index + 1:])
             min_index = int(np.floor(f_min / fstep - 1))
-            f_max = np.amax(tfsupp[2, 0:jump_index])
             max_index = int(np.ceil(f_max / fstep - 1))
             TFR3[0:min_index] = 0
-            TFR3[max_index+1:] = 0
+            TFR3[max_index + 1:] = 0
             tfsupp2, _, _ = IF.ecurve(TFR3, freqarr, wopt)
             if_syllable = np.copy(tfsupp2[0, :])
             low_bound = np.copy(tfsupp2[1, :])
@@ -111,7 +148,7 @@ for file in os.listdir(analysis_folder):
 
         # plotting
         # save picture
-        fig_name = syllable_path[:-4] + "_Fourier_ridges.jpg"
+        fig_name = syllable_path[:-4] + "_Fourier_ridges_1.jpg"
         plt.rcParams["figure.autolayout"] = True
         fig, ax = plt.subplots(1, 3, figsize=(10, 20), sharex=True)
         ax[0].imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
