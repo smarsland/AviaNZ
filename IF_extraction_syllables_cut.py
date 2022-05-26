@@ -43,12 +43,14 @@ for file in os.listdir(analysis_folder):
         fs = sp.sampleRate
         T = sp.fileLength / fs
 
+
         TFR = sp.spectrogram(win_len, hop, window_type, sgType=spec_type, sgScale=scale, nfilters=mel_num)
         # spectrogram normalizations
         if norm_type != "Standard":
             sp.normalisedSpec(tr=norm_type)
             TFR = sp.sg
         TFR2 = TFR.T
+        t_step = T/np.shape(TFR2)[1]
 
         # appropriate frequency scale
         if scale == "Linear":
@@ -69,32 +71,6 @@ for file in os.listdir(analysis_folder):
         wopt = [fs, win_len]  # this neeeds review
         tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
         TFR3 = np.copy(TFR2)
-
-        # # hardcoded check
-        # f_jumps = np.diff(tfsupp[0,:])
-        # # f_jumps = np.diff(tfsupp[0,:], n=2)
-        # # freq_jump_boundary = 800
-        # freq_jump_boundary = 700
-        # if np.amax(np.abs(f_jumps)) > freq_jump_boundary:
-        #     del IF
-        #     print("detected jump: correcting")
-        #     IF = IFreq.IF(method=2, pars=[alpha, beta])
-        #     jump_index = np.argmax(np.abs(f_jumps))
-        #     print(jump_index)
-        #     f_min = np.amin(tfsupp[1, 0:jump_index])
-        #     min_index = int(np.floor(f_min / fstep - 1))
-        #     f_max = np.amax(tfsupp[2, 0:jump_index])
-        #     max_index = int(np.ceil(f_max / fstep - 1))
-        #     TFR3[0:min_index] = 0
-        #     TFR3[max_index+1:] = 0
-        #     tfsupp2, _, _ = IF.ecurve(TFR3, freqarr, wopt)
-        #     if_syllable = np.copy(tfsupp2[0, :])
-        #     low_bound = np.copy(tfsupp2[1, :])
-        #     high_bound = np.copy(tfsupp2[2, :])
-        # else:
-        #     if_syllable = np.copy(tfsupp[0, :])
-        #     low_bound = np.copy(tfsupp[1, :])
-        #     high_bound = np.copy(tfsupp[2, :])
 
         # hardcoded check
         #f_jumps = np.diff(tfsupp[0, :], 2)
@@ -142,6 +118,16 @@ for file in os.listdir(analysis_folder):
             spec_intensity[t_index] = TFR3[f_index, t_index]
 
         spec_gradient = np.diff(spec_intensity)
+
+        #borders check
+        T2 = np.copy(T)
+        threshold = np.amax(spec_intensity) * (1/100)
+        for t_index in range(len(if_syllable)):
+            if spec_intensity[t_index] < threshold:
+                if_syllable[t_index] = 0
+                print('check')
+                T2 -= t_step
+
         # array with temporal coordinates
         t_support = np.linspace(0, T, np.shape(if_syllable)[0])
 
@@ -161,9 +147,9 @@ for file in os.listdir(analysis_folder):
         fig, ax = plt.subplots(1, 3, figsize=(10, 20), sharex=True)
         ax[0].imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
         x = np.array(range(np.shape(TFR2)[1]))
-        ax[0].plot(t_support, if_syllable / fstep, linewidth=2, color='r')
-        ax[0].plot(t_support, low_bound / fstep, linewidth=2, color='w')
-        ax[0].plot(t_support, high_bound / fstep, linewidth=2, color='w')
+        ax[0].plot(x, if_syllable / fstep, linewidth=2, color='r')
+        ax[0].plot(x, low_bound / fstep, linewidth=2, color='w')
+        ax[0].plot(x, high_bound / fstep, linewidth=2, color='w')
         ax[1].imshow(np.flipud(TFR3), extent=[0, np.shape(TFR3)[1], 0, np.shape(TFR3)[0]], aspect='auto')
         x = np.array(range(np.shape(TFR3)[1]))
         ax[2].plot(x, if_syllable, color='r')
