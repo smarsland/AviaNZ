@@ -111,7 +111,8 @@ for file in os.listdir(analysis_folder):
             high_bound = sp.convertMeltoHz(high_bound)
 
 
-        #find spec_intensity array
+        # START AND ENDING POLISHING
+        # find spec_intensity array
         spec_intensity = np.zeros(np.shape(if_syllable)[0])
         for t_index in range(len(if_syllable)):
             f_index = int(np.ceil(if_syllable[t_index] / fstep - 1))
@@ -119,17 +120,39 @@ for file in os.listdir(analysis_folder):
 
         spec_gradient = np.diff(spec_intensity)
 
-        #borders check
+        # borders check
         T2 = np.copy(T)
-        threshold = np.amax(spec_intensity) * (1/100)
-        for t_index in range(len(if_syllable)):
-            if spec_intensity[t_index] < threshold:
-                if_syllable[t_index] = 0
-                print('check')
-                T2 -= t_step
+        if_syllable_copy = np.copy(if_syllable)
+        threshold = np.amax(spec_intensity) * (5/100)
+        start_index = int(np.floor(len(if_syllable)/4)) # first index safe from check
+        last_index = int(np.floor(len(if_syllable) * (3 / 4)))  # last index safe from check
+
+        # check start syllable
+        check_index = 0
+        while (check_index < start_index) and (spec_intensity[check_index] < threshold):
+            if_syllable[check_index] = np.nan # update syllable
+            T2 -= t_step # update time_lenght
+            check_index += 1
+
+        # check end syllable
+        # find first index where to start deleting
+        del_index = len(if_syllable_copy) - 1
+        for check_index2 in range (last_index, len(if_syllable_copy)):
+            if spec_intensity[check_index2] < threshold:
+                del_index = check_index2
+                break
+
+        for canc_index in range (del_index, len(if_syllable_copy)):
+            if_syllable[canc_index] = np.nan  # flag_index
+            T2 -= t_step  # update time_lenght
+
+        # update syllable
+        index_list = np.argwhere(np.isnan(if_syllable))
+        if_syllable = np.delete(if_syllable, index_list)
+        TFR2 = np.delete(TFR2, index_list, 1)
 
         # array with temporal coordinates
-        t_support = np.linspace(0, T, np.shape(if_syllable)[0])
+        t_support = np.linspace(0, T2, np.shape(if_syllable)[0])
 
         # SAVE IF into .csv
         csvfilename = syllable_path[:-4] + "_IF.csv"
@@ -144,16 +167,18 @@ for file in os.listdir(analysis_folder):
         # save picture
         fig_name = syllable_path[:-4] + "_Fourier_ridges_1.jpg"
         plt.rcParams["figure.autolayout"] = True
-        fig, ax = plt.subplots(1, 3, figsize=(10, 20), sharex=True)
+        fig, ax = plt.subplots(1, 4, figsize=(10, 20), sharex=True)
         ax[0].imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
         x = np.array(range(np.shape(TFR2)[1]))
         ax[0].plot(x, if_syllable / fstep, linewidth=2, color='r')
-        ax[0].plot(x, low_bound / fstep, linewidth=2, color='w')
-        ax[0].plot(x, high_bound / fstep, linewidth=2, color='w')
+        # ax[0].plot(x, low_bound / fstep, linewidth=2, color='w')
+        # ax[0].plot(x, high_bound / fstep, linewidth=2, color='w')
         ax[1].imshow(np.flipud(TFR3), extent=[0, np.shape(TFR3)[1], 0, np.shape(TFR3)[0]], aspect='auto')
-        x = np.array(range(np.shape(TFR3)[1]))
         ax[2].plot(x, if_syllable, color='r')
         ax[2].set_ylim([0, fs / 2])
+        x = np.array(range(np.shape(TFR3)[1]))
+        ax[3].plot(x, if_syllable_copy, color='r')
+        ax[3].set_ylim([0, fs / 2])
         fig.suptitle(file[:-4]+' ridges')
         plt.savefig(fig_name)
 
