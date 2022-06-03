@@ -34,7 +34,7 @@ for i in range(0,n):
             curves[i, j] = np.loadtxt(directory + "/" + listridges[i] + ".txt")[1, j]
         except IndexError:
             curves[i, j] = 0
-    resampledcurves[i,:] = scipy.signal.cspline1d_eval(scipy.signal.cspline1d(np.loadtxt(directory + "\\" + listridges[i] + ".txt")[1, :]), lengthmax)
+    resampledcurves[i,:] = scipy.signal.cspline1d_eval(scipy.signal.cspline1d(np.loadtxt(directory + "/" + listridges[i] + ".txt")[1, :]), lengthmax)
 print(resampledcurves)
 distances = np.zeros((n, n))
 for i in range(0,n):
