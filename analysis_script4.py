@@ -133,44 +133,45 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 
     return
 
-# signal type we are analysing
-# signal_id='pure_tone'
-# signal_id = 'linear_upchirp'
-# signal_id = 'linear_downchirp'
-# signal_id = 'exponential_upchirp'
-#signal_id = 'exponential_downchirp'
-start_index = 30
+
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
 test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group6"
-# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
-# #create signal folder
-# test_analysis_fold = test_analysis_dir + '\\' + signal_id
-# if not os.path.exists(test_analysis_fold):
-#     os.mkdir(test_analysis_fold)
-    
-# test_list = os.listdir(test_result_dir)
 
-# test_list = sort_test_list(test_list)[start_index:start_index+6]
-# test_list = sort_test_list(test_list)[start_index:start_index+25:6]
+test_list_1 =[]
+start_index_1 = 0
+for i in range(29):
+    test_list_1.append('Test_'+str(start_index_1 + i*6))
 
-# test_list = ['Test_66', 'Test_67', 'Test_68', 'Test_69', 'Test_70', 'Test_71']
-test_list =[]
+test_list_2 =[]
+start_index_2 = 1
+for i in range(29):
+    test_list_2.append('Test_'+str(start_index_2 + i*6))
 
-for i in range(6):
-    test_list.append('Test_'+str(start_index + i))
+test_list_3 =[]
+start_index_3 = 0
+for i in range(29):
+    test_list_3.append('Test_'+str(start_index_3 + i*6))
 
-# for i in range(5):
-#     test_list.append('Test_' + str(start_index + i*6))
+test_list_4 =[]
+start_index_4 = 0
+for i in range(29):
+    test_list_4.append('Test_'+str(start_index_4 + i*6))
+
+test_list_5 =[]
+start_index_5 = 0
+for i in range(29):
+    test_list_1.append('Test_'+str(start_index_5 + i*6))
+
+test_list_6 =[]
+start_index_6 = 0
+for i in range(29):
+    test_list_1.append('Test_'+str(start_index_6 + i*6))
 
 
-# # Count and plot parameters chosen
-# plot_parameters(test_list, test_result_dir, test_analysis_fold, signal_id)
-
-#read baselive values for pure signal
 #read baseline_values .csv
 
 for signal_id in Signal_list:

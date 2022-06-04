@@ -138,13 +138,13 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 # signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
 #signal_id = 'exponential_downchirp'
-start_index = 30
+start_index = 174
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group6"
+test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group30"
 # test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
@@ -191,8 +191,8 @@ for signal_id in Signal_list:
             # if not test for signal_id continue
             continue
 
-        # if test_id == 'Test_34'and signal_id == 'linear_upchirp':
-        #     continue
+        if test_id == 'Test_96' and signal_id == 'linear_upchirp':
+            continue
 
         test_number += 1
 
@@ -225,8 +225,8 @@ for signal_id in Signal_list:
             # if not test for signal_id continue
             continue
 
-        # if test_id == 'Test_34' and signal_id == 'linear_upchirp':
-        #     continue
+        if test_id == 'Test_96' and signal_id == 'linear_upchirp':
+            continue
             #read SNR .csv
         csvfilename = test_result_dir+ '\\'+test_id + '\\' + signal_id + '\\noise_levels_SNR.csv'
         SNR_G=[]
@@ -290,9 +290,9 @@ for signal_id in Signal_list:
             print('skipping')
             continue
 
-        # if test_id == 'Test_34'and signal_id == 'linear_upchirp':
-        #     print('skipping')
-        #     continue
+        if test_id == 'Test_96'and signal_id == 'linear_upchirp':
+            print('skipping')
+            continue
 
         #read L2 .csv
         csvfilename = test_result_dir+ '\\'+test_id + '\\' + signal_id + '\\noise_levels_L2.csv'
@@ -385,8 +385,8 @@ for signal_id in Signal_list:
             # if not test for signal_id continue
             continue
 
-        # if test_id == 'Test_34'and signal_id == 'linear_upchirp':
-        #     continue
+        if test_id == 'Test_96'and signal_id == 'linear_upchirp':
+            continue
 
         #read IMED original .csv
         csvfilename = test_result_dir+ '\\'+test_id + '\\' + signal_id + '\\noise_levels_IMED_original.csv'
@@ -483,8 +483,8 @@ for signal_id in Signal_list:
             # if not test for signal_id continue
             continue
 
-        # if test_id == 'Test_34'and signal_id == 'linear_upchirp':
-        #     continue
+        if test_id == 'Test_96'and signal_id == 'linear_upchirp':
+            continue
 
         #read IMED noise .csv
         csvfilename = test_result_dir+ '\\'+test_id + '\\' + signal_id + '\\noise_levels_IMED_noise.csv'
