@@ -15,11 +15,16 @@ import csv
 import ast
 
 # signal type we are analysing
-signal_id='pure_tone'
+# signal_id = 'pure_tone'
+# signal_id = 'linear_upchirp'
+# signal_id = 'linear_downchirp'
+# signal_id = 'exponential_downchirp'
+signal_id = 'exponential_upchirp'
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-test_analysis_dir="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis"
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\" \
+                    "General_parameters_comparison"
 
 # Spectrogram parameters
 win_list = {'256': 0, '512': 0, '1024': 0, '2048': 0}

@@ -1,9 +1,10 @@
 """
-28/02/2022
+04/06/2022
 Author: Virginia Listanti
 
 This script purpose is to analyse data produced by IF experiment
 Here we want to produce plot to compare results obtained with different optimizations techniques
+We will group together
 """
 
 import SignalProc
@@ -483,8 +484,8 @@ for signal_id in Signal_list:
             # if not test for signal_id continue
             continue
 
-        # if test_id == 'Test_34'and signal_id == 'linear_upchirp':
-        #     continue
+        if test_id == 'Test_34'and signal_id == 'linear_upchirp':
+            continue
 
         #read IMED noise .csv
         csvfilename = test_result_dir+ '\\'+test_id + '\\' + signal_id + '\\noise_levels_IMED_noise.csv'
