@@ -169,19 +169,22 @@ def rearrange_metrics_files(workdir, signal_id):
 
 
 # signal type we are analysing
-signal_id='pure_tone'
+# signal_id='pure_tone'
 # signal_id = 'linear_upchirp'
 # signal_id = 'linear_downchirp'
 # signal_id = 'exponential_upchirp'
-#signal_id = 'exponential_downchirp'
+signal_id = 'exponential_downchirp'
 
 test_result_dir = "C:\\Users\\Virginia\\Documents\Work\\IF_extraction\\Test_Results"
 
-test_list = os.listdir(test_result_dir)
+# test_list = os.listdir(test_result_dir)
+#
+# test_list = sort_test_list(test_list)
 
-test_list = sort_test_list(test_list)
-
+test_list = ["Test_90", "Test_102", "Test_121"]
 for test_folder in test_list:
+    if test_folder != "Test_121" and signal_id == 'exponential_downchirp':
+        continue
     work_dir = test_result_dir + '\\' + test_folder + '\\' + signal_id
 
     if not os.path.exists(work_dir):
