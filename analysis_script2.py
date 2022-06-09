@@ -132,7 +132,7 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 
     return
 
-start_index = 123
+start_index = 155
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
@@ -141,7 +141,7 @@ test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Res
 # test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group17"
 # test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
 test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
-                    "MultiTapered-LinScale\\Iatsenko"
+                    "MultiTapered-MelScale\\Geodetic"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
 # if not os.path.exists(test_analysis_fold):

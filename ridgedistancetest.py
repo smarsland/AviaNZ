@@ -4,7 +4,7 @@ import numpy as np
 import wavio
 import matplotlib.pyplot as plt
 import scipy
-from geodesic_copy import geod_sphere
+from fdasrsf.geodesic import geod_sphere
 
 directory = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/extracted"
 
@@ -12,15 +12,14 @@ directory = "/am/state-opera/home1/listanvirg/Documents/Individual_identificatio
 listridges = []
 for root, dirs, files in os.walk(directory):
     for filename in files:
-        if filename.endswith(".txt"):
-            listridges.append(filename.replace('.txt', ''))
+        if filename.endswith(".csv"):
+            listridges.append(filename.replace('.csv', ''))
 n = len(listridges)
 print(listridges)
 # get length of longest
 lengthmax = 0
 for i in range(0,n):
-    curve = np.loadtxt(directory + "/" + listridges[i] + ".txt")
-    np.shape(curve)[1]
+    curve = np.transpose(np.loadtxt(open(directory + "\\" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1))
     print(np.shape(curve)[1])
     if np.shape(curve)[1] > lengthmax:
         lengthmax = np.shape(curve)[1]
@@ -31,10 +30,10 @@ resampledcurves = np.zeros((n, lengthmax))
 for i in range(0,n):
     for j in range(0,lengthmax):
         try:
-            curves[i, j] = np.loadtxt(directory + "/" + listridges[i] + ".txt")[1, j]
+            curves[i, j] = np.transpose(np.loadtxt(open(directory + "\\" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1))[1, j]
         except IndexError:
             curves[i, j] = 0
-    resampledcurves[i,:] = scipy.signal.cspline1d_eval(scipy.signal.cspline1d(np.loadtxt(directory + "/" + listridges[i] + ".txt")[1, :]), lengthmax)
+    resampledcurves[i,:] = scipy.signal.cspline1d_eval(scipy.signal.cspline1d(np.transpose(np.loadtxt(open(directory + "\\" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1))[1, :]), lengthmax)
 print(resampledcurves)
 distances = np.zeros((n, n))
 for i in range(0,n):
@@ -47,7 +46,7 @@ for i in range(0,n):
 print(listridges)
 print(distances)
 save_directory = "/am/state-opera/home1/listanvirg/Documents/Harvey_results"
-np.savetxt(save_directory+"/scalogramridges.txt", listridges, fmt='%s')
-np.savetxt(save_directory+"/scalogramdistances.txt", distances, fmt='%s')
-np.savetxt(save_directory+"/scalogramridges2.txt", np.array(listridges))
-np.savetxt(save_directory+"/scalogramdistances2.txt", np.array(distances))
+np.savetxt(directory+"/spectrogramridges.txt", listridges, fmt='%s')
+np.savetxt(directory+"/spectrogramdistances.txt", distances, fmt='%s')
+# np.savetxt(directory+"/spectrogramridges2.txt", np.array(listridges))
+# np.savetxt(directory+"/spectrogramdistances2.txt", np.array(distances))
