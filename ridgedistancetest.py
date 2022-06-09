@@ -4,7 +4,7 @@ import numpy as np
 import wavio
 import matplotlib.pyplot as plt
 import scipy
-from fdasrsf.geodesic import geod_sphere
+from geodesic_copy import geod_sphere
 
 directory = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/extracted"
 
@@ -38,7 +38,6 @@ print(resampledcurves)
 distances = np.zeros((n, n))
 for i in range(0,n):
     for j in range(i+1, n):
-        print(np.column_stack((curves[i,:],np.arange(53))))
         d, _, _, = geod_sphere(np.vstack((np.arange(lengthmax),curves[i,:])), np.vstack((np.arange(lengthmax),curves[j,:])))
         distances[i, j] = d
         distances[j, i] = d
@@ -48,5 +47,5 @@ print(distances)
 save_directory = "/am/state-opera/home1/listanvirg/Documents/Harvey_results"
 np.savetxt(directory+"/spectrogramridges.txt", listridges, fmt='%s')
 np.savetxt(directory+"/spectrogramdistances.txt", distances, fmt='%s')
-# np.savetxt(directory+"/spectrogramridges2.txt", np.array(listridges))
-# np.savetxt(directory+"/spectrogramdistances2.txt", np.array(distances))
+np.savetxt(directory+"/spectrogramridges2.txt", np.array(listridges))
+np.savetxt(directory+"/spectrogramdistances2.txt", np.array(distances))

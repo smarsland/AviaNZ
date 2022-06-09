@@ -143,12 +143,18 @@ Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_u
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Scale\\Multitapered\\" \
-                    "Iatsenko\\Global"
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
+                    "MultiTapered-MelScale\\Geodesic\\Global"
 
-test_list = ['Test_123', 'Test_153']
+# test_list = ['Test_123', 'Test_153']
+#create test_list
+start_index = 153
+test_list = []
+for i in range(5):
+    test_list.append('Test_' + str(start_index + i*6))
 
-plot_titles = [' Linear scale ', ' Mel scale']
+# plot_titles = [' Linear scale ', ' Mel scale']
+plot_titles = ['No Norm.', 'Log', 'Box-Cox', 'Sigmoid', 'PCEN']
 # for signal_id in Signal_list:
 #     print('analysing ', signal_id)
 
@@ -551,7 +557,7 @@ for test_id in test_list:
     #plot
     ax[0, col_counter].boxplot(IMED_G)
     #ax[0, col_counter].axhline(np.log(baseline[col_counter, 2]), xmin=0, xmax=1, c='r', ls='--')
-    ax[0, col_counter].axhline(baseline[col_counter, 7], xmin=0, xmax=1, c='r', ls='--')
+    ax[0, col_counter].axhline(baseline_median[col_counter, 7], xmin=0, xmax=1, c='r', ls='--')
     ax[0, col_counter].set_title('IMED ' + plot_titles[col_counter], fontsize=50)
     ax[0, col_counter].set_xticks(np.arange(1, len(level_list)+1))
     ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
@@ -559,7 +565,7 @@ for test_id in test_list:
 
 
     ax[1, col_counter].boxplot(SISDR_G)
-    ax[1, col_counter].axhline(baseline[col_counter, 6], xmin=0, xmax=1, c='r', ls='--')
+    ax[1, col_counter].axhline(baseline_median[col_counter, 6], xmin=0, xmax=1, c='r', ls='--')
     ax[1, col_counter].set_title('SISDR ' + plot_titles[col_counter], fontsize=50)
     ax[1, col_counter].set_xticks(np.arange(1, len(level_list)+1))
     ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
@@ -567,14 +573,14 @@ for test_id in test_list:
 
 
     ax[2, col_counter].boxplot(STOI_G)
-    ax[2, col_counter].axhline(baseline[col_counter, 5], xmin=0, xmax=1, c='r', ls='--')
+    ax[2, col_counter].axhline(baseline_median[col_counter, 5], xmin=0, xmax=1, c='r', ls='--')
     ax[2, col_counter].set_title('STOI ' + plot_titles[col_counter], fontsize=50)
     ax[2, col_counter].set_xticks(np.arange(1, len(level_list) + 1))
     ax[2, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
     ax[2, col_counter].tick_params(axis='y', labelsize=30)
 
     ax[3, col_counter].boxplot(RE_I_G)
-    ax[3, col_counter].axhline(baseline[col_counter, 8], xmin=0, xmax=1, c='r', ls='--')
+    ax[3, col_counter].axhline(baseline_median[col_counter, 8], xmin=0, xmax=1, c='r', ls='--')
     ax[3, col_counter].set_title('RE inverted sound ' + plot_titles[col_counter], fontsize=50)
     ax[3, col_counter].set_xticks(np.arange(1, len(level_list) + 1))
     ax[3, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
