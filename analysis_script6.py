@@ -143,18 +143,26 @@ Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_u
 
 #analysis for test folder
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
-                    "MultiTapered-MelScale\\Geodesic\\Global"
+# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
+#                     "MultiTapered-MelScale\\Geodesic\\Global"
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
+                    "MelScale_NoNorm\\Geodesic\\Global"
 
 # test_list = ['Test_123', 'Test_153']
 #create test_list
-start_index = 153
+# start_index = 5
+# test_list = []
+# for i in range(5):
+#     test_list.append('Test_' + str(start_index + i*6))
+
+start_index = 35
 test_list = []
-for i in range(5):
-    test_list.append('Test_' + str(start_index + i*6))
+for i in range(3):
+    test_list.append('Test_' + str(start_index + i*60))
 
 # plot_titles = [' Linear scale ', ' Mel scale']
-plot_titles = ['No Norm.', 'Log', 'Box-Cox', 'Sigmoid', 'PCEN']
+# plot_titles = ['No Norm.', 'Log', 'Box-Cox', 'Sigmoid', 'PCEN']
+plot_titles = ["Standard", "Reassigned", "Multitapered"]
 # for signal_id in Signal_list:
 #     print('analysing ', signal_id)
 

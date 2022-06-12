@@ -132,7 +132,7 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
 
     return
 
-start_index = 155
+start_index = 35
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
@@ -140,8 +140,10 @@ Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_u
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
 # test_analysis_dir= "C:\\Users\\Virginia\\Documents\\Work\IF_extraction\\Results analysis\\Optimization_methods\\Group17"
 # test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
-                    "MultiTapered-MelScale\\Geodetic"
+# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
+#                     "MultiTapered-MelScale\\Geodetic"
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
+                    "MelScale_NoNorm\\Geodesic"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
 # if not os.path.exists(test_analysis_fold):
@@ -153,13 +155,19 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 # test_list = sort_test_list(test_list)[start_index:start_index+25:6]
 
 # test_list = ['Test_66', 'Test_67', 'Test_68', 'Test_69', 'Test_70', 'Test_71']
-test_list =[]
+test_list = ['Test_3', 'Test_63', 'Test_123']
 
+# test_list =[]
 # for i in range(6):
 #     test_list.append('Test_'+str(start_index + i))
 
-for i in range(5):
-    test_list.append('Test_' + str(start_index + i*6))
+# test_list =[]
+# for i in range(5):
+#     test_list.append('Test_' + str(start_index + i*6))
+
+test_list = []
+for i in range(3):
+    test_list.append('Test_' + str(start_index + i*60))
 
 
 # # Count and plot parameters chosen
