@@ -5,7 +5,10 @@ import wavio
 import matplotlib.pyplot as plt
 import scipy
 from geodesic_copy import geod_sphere
+import time
 
+#start timer
+tic = time.perf_counter()
 directory = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/Test_ridgedistance"
 
 # pairwise distance calculations
@@ -41,7 +44,9 @@ for i in range(0,n):
         d, _, _, = geod_sphere(np.vstack((np.arange(lengthmax),curves[i,:])), np.vstack((np.arange(lengthmax),curves[j,:])))
         distances[i, j] = d
         distances[j, i] = d
-
+#start timer
+toc = time.perf_counter()
+print(f"execution time  in {toc - tic:0.4f} seconds")
 print(listridges)
 print(distances)
 save_directory = "/am/state-opera/home1/listanvirg/Documents/Harvey_results"
