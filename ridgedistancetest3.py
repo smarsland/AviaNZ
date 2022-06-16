@@ -45,7 +45,7 @@ for i in range(0,n):
 print(listridges)
 print(distances)
 save_directory = "/am/state-opera/home1/listanvirg/Documents/Harvey_results"
-np.savetxt(directory+"/spectrogramridges2.txt", listridges, fmt='%s')
-np.savetxt(directory+"/spectrogramdistances2.txt", distances, fmt='%s')
+np.savetxt(directory+"/spectrogramridges_test.txt", listridges, fmt='%s')
+np.savetxt(directory+"/spectrogramdistances_test.txt", distances, fmt='%s')
 # np.savetxt(directory+"/spectrogramridges2.txt", np.array(listridges))
 # np.savetxt(directory+"/spectrogramdistances2.txt", np.array(distances))
