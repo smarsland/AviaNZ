@@ -145,8 +145,11 @@ Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_u
 test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Results"
 # test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
 #                     "MultiTapered-MelScale\\Geodesic\\Global"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
-                    "MelScale_NoNorm\\Geodesic\\Global"
+# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
+#                     "MelScale_NoNorm\\Geodesic\\Global"
+
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Optimization_methods\\" \
+                    "Global\\Multitapered_mel_standard"
 
 # test_list = ['Test_123', 'Test_153']
 #create test_list
@@ -155,14 +158,19 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 # for i in range(5):
 #     test_list.append('Test_' + str(start_index + i*6))
 
-start_index = 35
+# start_index = 35
+# test_list = []
+# for i in range(3):
+#     test_list.append('Test_' + str(start_index + i*60))
+
+start_index = 150
 test_list = []
-for i in range(3):
-    test_list.append('Test_' + str(start_index + i*60))
+for i in range(6):
+    test_list.append('Test_' + str(start_index + i))
 
 # plot_titles = [' Linear scale ', ' Mel scale']
 # plot_titles = ['No Norm.', 'Log', 'Box-Cox', 'Sigmoid', 'PCEN']
-plot_titles = ["Standard", "Reassigned", "Multitapered"]
+plot_titles = ["L2 pure file", "L2 noise samples", "Iats. pure file", "Iats. noise samples", "Geod. pure file", "Geod. noise samples"]
 # for signal_id in Signal_list:
 #     print('analysing ', signal_id)
 

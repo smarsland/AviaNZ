@@ -155,7 +155,7 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 # test_list = sort_test_list(test_list)[start_index:start_index+25:6]
 
 # test_list = ['Test_66', 'Test_67', 'Test_68', 'Test_69', 'Test_70', 'Test_71']
-test_list = ['Test_3', 'Test_63', 'Test_123']
+# test_list = ['Test_3', 'Test_63', 'Test_123']
 
 # test_list =[]
 # for i in range(6):
