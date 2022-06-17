@@ -2853,12 +2853,12 @@ class AviaNZ(QMainWindow):
 
         # mark this as the current segment
         if index>-1:
-            box1id = index
+            self.box1id = index
         else:
-            box1id = len(self.listLabels) - 1
+            self.box1id = len(self.listLabels) - 1
 
         # update its displayed label
-        self.updateText(box1id)
+        self.updateText(self.box1id)
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
@@ -3602,12 +3602,23 @@ class AviaNZ(QMainWindow):
             # Save it
             
         workingSeg = self.segments[self.box1id]
+        print(workingSeg.infoString(),self.box1id)
         #for lab in workingSeg[4]:
             #if lab["species"] == spmenu:
                 #lab["calltype"] = ctitem
         #workingSeg.addLabel(spmenu, 101, filter="M", calltype=ctitem)
-        workingSeg.extendLabel(spmenu,100,ctitem)
+        # TODO: SM: Bug here!! It updates all of the new segments. Why?
+        print(workingSeg[4][0],'calltype' in workingSeg[4][0])
+        if 'calltype' not in workingSeg[4][0]:
+            workingSeg.extendLabel(spmenu,100,ctitem)
+        else:
+            print("here",workingSeg.infoString(),self.box1id)
+            workingSeg[4][0].update({"filter": "M", "certainty": 100, "calltype": ctitem})
         print(workingSeg.infoString())
+
+        print("---")
+        [print(seg.infoString()) for seg in self.segments]
+        print("+++")
 
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = [{"species": spmenu, "certainty": 100, "filter": "M", "calltype": ctitem}]
