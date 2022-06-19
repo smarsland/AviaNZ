@@ -2734,6 +2734,8 @@ class AviaNZ(QMainWindow):
         # since we allow passing empty list here:
         if len(species) == 0:
             species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
+        else:
+            species = copy.deepcopy(species)
 
         if coordsAbsolute:
             # convert from absolute times to relative-to-page times
@@ -3019,7 +3021,8 @@ class AviaNZ(QMainWindow):
                 self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
-                self.selectSegment(len(self.segments)-1)
+                self.selectSegment(self.box1id)
+                #self.selectSegment(len(self.segments)-1)
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
@@ -3217,7 +3220,8 @@ class AviaNZ(QMainWindow):
                 self.p_spec.setFocus()
 
                 # select the new segment/box
-                self.selectSegment(len(self.segments)-1)
+                self.selectSegment(self.box1id)
+                #self.selectSegment(len(self.segments)-1)
 
             # if this is the first click:
             else:
@@ -3602,23 +3606,18 @@ class AviaNZ(QMainWindow):
             # Save it
             
         workingSeg = self.segments[self.box1id]
-        print(workingSeg.infoString(),self.box1id)
+
+        # TODO: SM: Might not be first label
         #for lab in workingSeg[4]:
             #if lab["species"] == spmenu:
                 #lab["calltype"] = ctitem
         #workingSeg.addLabel(spmenu, 101, filter="M", calltype=ctitem)
-        # TODO: SM: Bug here!! It updates all of the new segments. Why?
-        print(workingSeg[4][0],'calltype' in workingSeg[4][0])
-        if 'calltype' not in workingSeg[4][0]:
+        if 'calltype' not in workingSeg[4]:
             workingSeg.extendLabel(spmenu,100,ctitem)
         else:
-            print("here",workingSeg.infoString(),self.box1id)
-            workingSeg[4][0].update({"filter": "M", "certainty": 100, "calltype": ctitem})
-        print(workingSeg.infoString())
-
-        print("---")
-        [print(seg.infoString()) for seg in self.segments]
-        print("+++")
+            for lab in workingSeg[4]:
+                if lab["species"]==species:
+                    workingSeg[4][lab].update({"filter": "M", "certainty": 100, "calltype": ctitem})
 
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = [{"species": spmenu, "certainty": 100, "filter": "M", "calltype": ctitem}]
