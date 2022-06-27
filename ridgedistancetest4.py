@@ -20,7 +20,7 @@ print(listridges)
 # get length of longest
 lengthmax = 0
 for i in range(0,n):
-    curve = np.transpose(np.loadtxt(open(directory + "\\" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1))
+    curve = np.transpose(np.loadtxt(open(directory + "/" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1))
     print(np.shape(curve)[1])
     if np.shape(curve)[1] > lengthmax:
         lengthmax = np.shape(curve)[1]
@@ -30,7 +30,7 @@ curves = np.zeros((n, lengthmax, 2))
 for i in range(0,n):
     for j in range(0,lengthmax):
         try:
-            curves[i, j,:] = np.loadtxt(open(directory + "\\" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1)[j,:]
+            curves[i, j,:] = np.loadtxt(open(directory + "/" + listridges[i] + ".csv", "rb"), delimiter=",", skiprows=1)[j,:]
         except IndexError:
             curves[i, j,0] = 0
             curves[i, j, 1] = 0
