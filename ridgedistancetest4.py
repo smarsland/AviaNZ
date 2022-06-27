@@ -4,8 +4,8 @@ import numpy as np
 import wavio
 import matplotlib.pyplot as plt
 import scipy
-from fdasrsf.geodesic import geod_sphere
-import linear as Linear
+from geodesic_copy import geod_sphere
+import Linear
 
 directory = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/extracted"
 
