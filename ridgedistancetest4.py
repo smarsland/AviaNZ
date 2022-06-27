@@ -5,7 +5,7 @@ import wavio
 import matplotlib.pyplot as plt
 import scipy
 from fdasrsf.geodesic import geod_sphere
-import Linear
+import linear as Linear
 
 directory = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/extracted"
 
