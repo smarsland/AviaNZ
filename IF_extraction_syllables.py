@@ -24,7 +24,8 @@ import matplotlib.pyplot as plt
 
 # CHECK: change working directory
 #analysis_folder = "/home/listanvirg/Documents/Individual_identification/extracted/"
-analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\extracted"
+# analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\extracted"
+analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\exemplars\\Models"
 alpha = 1
 beta = 0.5
 win_len = 512
