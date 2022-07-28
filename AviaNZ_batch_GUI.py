@@ -109,7 +109,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
 
-        w_timeLabel = QLabel("Want to process a subset of recordings only e.g. dawn or dusk?\nThen select the time window, otherwise skip")
+        w_timeLabel = QLabel("Process a subset of recordings only e.g. dawn or dusk?\nSelect the time window, otherwise skip")
         self.w_timeStart = QTimeEdit()
         self.w_timeStart.setDisplayFormat('hh:mm:ss')
         self.w_timeEnd = QTimeEdit()

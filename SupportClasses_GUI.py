@@ -42,6 +42,7 @@ import math
 import numpy as np
 import os
 import io
+import SignalProc
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -775,12 +776,14 @@ class ControllableAudio(QAudioOutput):
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
 
-    def filterSeg(self, start, stop, audiodata):
+    def filterSeg(self, start, stop, audiodata, speed = 1.0):
         # takes start-end in ms
         self.timeoffset = max(0, start)
         start = max(0, int(start * self.format().sampleRate() // 1000))
         stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
+        if speed != 1.0:
+           segment = SignalProc.wsola(segment,speed) 
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
