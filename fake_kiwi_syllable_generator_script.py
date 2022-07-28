@@ -179,9 +179,9 @@ samplerate = 32000
 Amplitude_base = 1
 phi = 0  # initial phase
 
-syllable_id = "Z_fake"
+syllable_id = "Y_fake"
 
-syllable_type = "B"
+syllable_type = "O"
 
 # # syllable A
 # P1 = np.array([0, 1098.4])
@@ -207,11 +207,7 @@ syllable_type = "B"
 # P1 = np.array([0, 1208.9])
 # P2 = np.array([0.1, 1413.1])
 # P3 = np.array([0.6, 1393.3])
-# P4 = np.array([0,0])
-# P5 = np.array([0,0])
-# P6 = np.array([0,0])
-# P7 = np.array([0,0])
-# P8 = np.array([0,0])
+
 
 # # syllable E
 # P1 = np.array([0, 1220.8])
@@ -275,19 +271,19 @@ syllable_type = "B"
 # P2 = np.array([0.57, 1851.8])
 
 # # syllable P
-# P1 = np.array([0, 2260.1])
-# P2 = np.array([1.09, 2538.5])
-# P3 = np.array([1.09, 2281.5])
-# P4 = np.array([1.32, 2037.4])
+# P1 = np.array([0, 2226.6])
+# P2 = np.array([1.09, 2583.3])
+# P3 = np.array([1.09, 2246.5])
+# P4 = np.array([1.31, 2259.7])
 
 # # syllable Q
-# P1 = np.array([0, 2313.4])
-# P2 = np.array([0.09, 2669.1])
-# P3 = np.array([0.55, 2723])
-# P4 = np.array([0.55, 2787.6])
-# P5 = np.array([0.64, 2432])
-# P6 = np.array([0.64, 2421.2])
-# P7 = np.array([0.76, 1688.4])
+# P1 = np.array([0, 1883.2])
+# P2 = np.array([0.1, 2629.5])
+# P3 = np.array([0.55, 2662.6])
+# P4 = np.array([0.55, 2834.3])
+# P5 = np.array([0.65, 2794.6])
+# P6 = np.array([0.65, 2451.2])
+# P7 = np.array([0.75, 1803.9])
 
 # # syllable R
 # P1 = np.array([0, 1871.6])
@@ -340,32 +336,32 @@ syllable_type = "B"
 # P3 = np.array([0.45, 1548.3])
 # P4 = np.array([0.59, 1235.8])
 
-# # syllable Y
-# P1 = np.array([0, 1656.1])
-# P2 = np.array([0.25, 1839.3])
-# P3 = np.array([0.25, 1537.5])
-# P4 = np.array([0.57, 1257.3])
+# syllable Y
+P1 = np.array([0, 1656.1])
+P2 = np.array([0.25, 1839.3])
+P3 = np.array([0.25, 1537.5])
+P4 = np.array([0.57, 1257.3])
 
-# syllable Z
-P1 = np.array([0, 1505.2])
-P2 = np.array([0.06, 2011.7])
-P3 = np.array([0.14, 1990.1])
-P4 = np.array([0.14, 1677.6])
-P5 = np.array([0.81, 1192.7])
-P6 = np.array([0,0])
-P7 = np.array([0,0])
-P8 = np.array([0,0])
+# # syllable Z
+# P1 = np.array([0, 1505.2])
+# P2 = np.array([0.06, 2011.7])
+# P3 = np.array([0.14, 1990.1])
+# P4 = np.array([0.14, 1677.6])
+# P5 = np.array([0.81, 1192.7])
+# P6 = np.array([0,0])
+# P7 = np.array([0,0])
+# P8 = np.array([0,0])
 
 #syllable length
-T = P5[0]
+T = P4[0]
 
 # do we have trills?
-trill_flag = "no"
-# trill_flag = "yes"
+# trill_flag = "no"
+trill_flag = "yes"
 
-delta = 79.03
-k = 14 # number of trills
-trill_t1 = 0
+delta = 33
+k = 8 # number of trills
+trill_t1 = 0.25
 trill_t2 = 0.57
 
 # harmonics
@@ -588,7 +584,7 @@ for j in range(1, n_max+1):
     # add trills
 
     if trill_flag == 'yes':
-        t_trill = np.linspace(trill_t1, trill_t2, int(np.floor(samplerate * (trill_t2 - trill_t1))), endpoint=False)
+        t_trill = np.linspace(trill_t1, trill_t2, int(np.round(samplerate * (trill_t2 - trill_t1))), endpoint=False)
         trill_phase = (delta / k) * (trill_t2 - trill_t1) * (-np.cos(((2 * np.pi * k) / (trill_t2 - trill_t1)) * t_trill))
         phi_t[int(trill_t1 * samplerate):int(trill_t2 * samplerate)] += trill_phase
         trill = delta * np.sin((2 * np.pi * k * (t_trill - trill_t1)) / (trill_t2 - trill_t1))
