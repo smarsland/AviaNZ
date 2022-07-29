@@ -1,3 +1,17 @@
+"""
+29/7/2022
+Author: Virginia Listanti
+
+This script adapt Harvey Barons's script RIDGEDISTANCES.PY to create the intra-group distance matrix of 2 sets of
+syllables.
+
+The syllables are stored in DIRECTORY1 and  DIRECTORY2 and the .jpg distance matrix will be stored in SAVEDIRECTORY
+
+NOTE: WORK IN PROGRESS
+
+"""
+
+
 import os
 import SignalProc
 import numpy as np
@@ -82,34 +96,18 @@ for i in range(0,n2):
 
 save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
                  "exemplars\\Models\\Distance matrices"
+
+
 # Plot the matrix
-# plt.matshow(distances, cmap="Purples")
 fig, ax = plt.subplots()
 im = ax.imshow(distances, cmap="Purples")
 
-# OLd example
-# ax = plt.gca()
-
-# # Set the plot labels
-# xlabels = listridges
-# ylabels = listridges
-# ax.set_xticklabels(xlabels)
-# ax.set_yticklabels(ylabels)
-
-# #Add text to the plot showing the values at that point
-# for i in range(n):
-#     for j in range(n):
-#         plt.text(j, i, distances[i,j], horizontalalignment='center', verticalalignment='center')
-
-# plt.show()
-
-# New example
 # Show all ticks and label them with the respective list entries
 ax.set_xticks(np.arange(len(listridges1)), labels=listridges1)
 ax.set_yticks(np.arange(len(listridges2)), labels=listridges2)
 # Rotate the tick labels and set their alignment.
-plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-         rotation_mode="anchor")
+plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
 ax.set_title("Distance matrix original vs models")
 fig.tight_layout()
 

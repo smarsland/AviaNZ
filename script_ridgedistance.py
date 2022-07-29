@@ -1,3 +1,16 @@
+"""
+29/7/2022
+Author: Virginia Listanti
+
+This script adapt Harvey Barons's script RIDGEDISTANCES.PY to create the inter-group distance matrix of a set of
+syllables.
+
+The syllables are stored in DIRECTORY and the .jpg distance matrix will be stored in SAVEDIRECTORY
+
+NOTE: WORK IN PROGRESS
+
+"""
+
 import os
 import SignalProc
 import numpy as np
@@ -12,6 +25,8 @@ import matplotlib.pyplot as plt
 #             "exemplars\\Models\\Exemplars Ridges"
 directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
             "exemplars\\Models\\Models-ridges"
+#number resampling points
+
 # pairwise distance calculations
 listridges = []
 for root, dirs, files in os.walk(directory):
@@ -20,6 +35,7 @@ for root, dirs, files in os.walk(directory):
             listridges.append(filename.replace('_IF.csv', ''))
 n = len(listridges)
 print(listridges)
+
 # get length of longest
 lengthmax = 0
 for i in range(0,n):
@@ -53,34 +69,18 @@ print(distances)
 
 save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
                  "exemplars\\Models\\Distance matrices"
+
 # Plot the matrix
-# plt.matshow(distances, cmap="Purples")
+
 fig, ax = plt.subplots()
 im = ax.imshow(distances, cmap="Purples")
 
-# OLd example
-# ax = plt.gca()
-
-# # Set the plot labels
-# xlabels = listridges
-# ylabels = listridges
-# ax.set_xticklabels(xlabels)
-# ax.set_yticklabels(ylabels)
-
-# #Add text to the plot showing the values at that point
-# for i in range(n):
-#     for j in range(n):
-#         plt.text(j, i, distances[i,j], horizontalalignment='center', verticalalignment='center')
-
-# plt.show()
-
-# New example
 # Show all ticks and label them with the respective list entries
 ax.set_xticks(np.arange(len(listridges)), labels=listridges)
 ax.set_yticks(np.arange(len(listridges)), labels=listridges)
 # Rotate the tick labels and set their alignment.
-plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-         rotation_mode="anchor")
+plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
 ax.set_title("Distance matrix models")
 fig.tight_layout()
 
