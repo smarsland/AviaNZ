@@ -145,6 +145,7 @@ class AviaNZ(QMainWindow):
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
         self.extra = "none"
+        self.slowSpeed = 1.0
         self.playSpeed = 1.0
 
         self.noisefloor = 0
@@ -1750,6 +1751,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
         It's a switch from Brush to Pen or vice versa.
         """
+        # sm: todo -- what about the non-dragged ones?
         if self.config['transparentBoxes']:
             for box in self.listRectanglesa2:
                 if type(box) == self.ROItype:
@@ -2225,9 +2227,8 @@ class AviaNZ(QMainWindow):
                 speed = 0.5
             elif speedchar == 190:
                 speed = 0.75
-        #self.playSpeed = speed
-        self.playSpeed = 1/float(speed)
-        print("playback speed:",self.playSpeed)
+        self.slowSpeed = 1/float(speed)
+        print("playback speed:",self.slowSpeed)
 
     def setExtraPlot(self, plotname):
         """ Reacts to menu clicks and updates or hides diagnostic plot window."""
@@ -2789,7 +2790,7 @@ class AviaNZ(QMainWindow):
         if y1==0 and y2==0:
             # filled-in segments normally, transparent ones for bats:
             p_spec_r = None
-            if not self.batmode:
+            if not self.batmode and not self.config['transparentBoxes']:
                 p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
             else:
                 p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, pen=pg.mkPen(self.prevBoxCol, width=6), movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
@@ -3643,7 +3644,7 @@ class AviaNZ(QMainWindow):
         QApplication.processEvents()
 
     def updateColour(self, segID=None):
-        """ Updates the color of a segment (useful for reviewing segments, for example).
+        """ Updates the colour of a segment (useful for reviewing segments, for example).
             Only requires the segment ID, or defaults to the selected one, and
             will determine the color from it.
         """
@@ -4618,7 +4619,7 @@ class AviaNZ(QMainWindow):
                     filename = filename + '.wav'
                 tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
                 if changespeed:
-                    tosave = SignalProc.wsola(tosave,self.playSpeed) 
+                    tosave = SignalProc.wsola(tosave,self.slowSpeed) 
                 wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
@@ -5389,9 +5390,11 @@ class AviaNZ(QMainWindow):
             # Currently playback disabled in this mode - also takes care of spacebar signal
             return
 
+
         if self.media_obj.isPlaying():
             self.pausePlayback()
         else:
+            self.playSpeed = 1.0
             if self.media_obj.state() != QAudio.SuspendedState and not self.media_obj.keepSlider:
                 # restart playback
                 range = self.p_ampl.viewRange()[0]
@@ -5420,6 +5423,7 @@ class AviaNZ(QMainWindow):
         else:
             if self.box1id > -1:
                 self.stopPlayback()
+                self.playSpeed=self.slowSpeed
                 # restart playback
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
@@ -5451,6 +5455,7 @@ class AviaNZ(QMainWindow):
         else:
             if self.box1id > -1:
                 self.stopPlayback()
+                self.playSpeed = 1.0
                 # check frequency limits, + small buffer bands
                 bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
                 top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
@@ -5515,12 +5520,15 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
+        # sm: todo!
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
+        #eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
+            
         bufsize = 0.02
 
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
-            # TODO: allow the user set looping somehow?
+            # TODO: allow the user to set looping somehow?
             if self.media_obj.loop:
                 self.media_obj.restart()
             else:
@@ -5542,7 +5550,20 @@ class AviaNZ(QMainWindow):
     def floorSliderMoved(self,value):
         self.noisefloor = value
         self.setSpectrogram()
-        self.drawfigMain()
+        #self.drawfigMain()
+        # sm: ?
+        height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        pixelstart = int(self.sp.minFreqShow/height)
+        pixelend = int(self.sp.maxFreqShow/height)
+
+        self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
+        self.overviewImageRegion.setBounds([0, len(self.sg)])
+        self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
+        self.setExtraPlot(self.extra)
+
+        self.setColourMap(self.config['cmap'])
+        self.setColourLevels()
+
 
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
