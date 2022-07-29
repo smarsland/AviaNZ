@@ -2110,15 +2110,7 @@ class AviaNZ(QMainWindow):
         QApplication.processEvents()
         self.updateRequestedByOverview = False
 
-    def drawfigMain(self,remaking=False):
-        """ Draws the main amplitude and spectrogram plots and any segments on them.
-        Has to do some work to get the axis labels correct.
-        """
-        if len(self.audiodata)>0:
-            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
-
-        self.timeaxis.setLabel('')
-
+    def setfigs(self):
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         pixelstart = int(self.sp.minFreqShow/height)
         pixelend = int(self.sp.maxFreqShow/height)
@@ -2130,6 +2122,18 @@ class AviaNZ(QMainWindow):
 
         self.setColourMap(self.config['cmap'])
         self.setColourLevels()
+
+
+    def drawfigMain(self,remaking=False):
+        """ Draws the main amplitude and spectrogram plots and any segments on them.
+        Has to do some work to get the axis labels correct.
+        """
+        if len(self.audiodata)>0:
+            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
+
+        self.timeaxis.setLabel('')
+
+        self.setfigs()
 
         # Sort out the spectrogram frequency axis
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
@@ -2787,17 +2791,27 @@ class AviaNZ(QMainWindow):
         p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
         # full-height segments:
-        if y1==0 and y2==0:
+        # sm: 30/7/22 Change here -- get rid of full-height segments for non-bats
+        
+        #if y1==0 and y2==0:
             # filled-in segments normally, transparent ones for bats:
+            #p_spec_r = None
+            #if not self.batmode: #and not self.config['transparentBoxes']:
+                #p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
+            #else:
+                #p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, pen=pg.mkPen(self.prevBoxCol, width=6), movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
+                #p_spec_r.setBrush(None)
+            #p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
+        if self.batmode:
+            # transparent segments for bats:
             p_spec_r = None
-            if not self.batmode and not self.config['transparentBoxes']:
-                p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
-            else:
-                p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, pen=pg.mkPen(self.prevBoxCol, width=6), movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
-                p_spec_r.setBrush(None)
+            p_spec_r = SupportClasses_GUI.LinearRegionItem2(self, pen=pg.mkPen(self.prevBoxCol, width=6), movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
+            p_spec_r.setBrush(None)
             p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
         # rectangle boxes:
         else:
+            if y1==0 and y2==0:
+                y2 = self.sampleRate//2
             specy1 = self.convertFreqtoY(max(y1, self.sp.minFreqShow))
             specy2 = self.convertFreqtoY(min(y2, self.sp.maxFreqShow))
             startpointS = QPointF(self.convertAmpltoSpec(startpoint), specy1)
@@ -4643,14 +4657,16 @@ class AviaNZ(QMainWindow):
                     self.config['minFreq'] = start
                     self.config['maxFreq'] = end
 
+        # sm: changed
         # draw a spectrogram of proper height:
-        height = self.sampleRate // 2 / np.shape(self.sg)[1]
-        pixelstart = int(self.sp.minFreqShow/height)
-        pixelend = int(self.sp.maxFreqShow/height)
+        #height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        #pixelstart = int(self.sp.minFreqShow/height)
+        #pixelend = int(self.sp.maxFreqShow/height)
 
-        self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
-        self.overviewImageRegion.setBounds([0, len(self.sg)])
-        self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
+        #self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
+        #self.overviewImageRegion.setBounds([0, len(self.sg)])
+        #self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
+        self.setfigs()
 
         # if Y freqs changed, some segments may appear/be dropped:
         if changedY:
@@ -5550,20 +5566,9 @@ class AviaNZ(QMainWindow):
     def floorSliderMoved(self,value):
         self.noisefloor = value
         self.setSpectrogram()
+        self.setfigs()
         #self.drawfigMain()
         # sm: ?
-        height = self.sampleRate // 2 / np.shape(self.sg)[1]
-        pixelstart = int(self.sp.minFreqShow/height)
-        pixelend = int(self.sp.maxFreqShow/height)
-
-        self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
-        self.overviewImageRegion.setBounds([0, len(self.sg)])
-        self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
-        self.setExtraPlot(self.extra)
-
-        self.setColourMap(self.config['cmap'])
-        self.setColourLevels()
-
 
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
