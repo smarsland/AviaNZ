@@ -21,7 +21,7 @@
 
 from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -44,31 +44,23 @@ import webbrowser, copy
 
 
 class AviaNZ_batchWindow(QMainWindow):
-
     def __init__(self, configdir=''):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         QMainWindow.__init__(self)
 
-        # NOTE: any communication w/ batchProc from this thread
-        # must be via signals, if at all necessary
-        self.batchProc = BatchProcessWorker(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=0)
-
-        self.batchThread = QThread()
-        self.batchThread.started.connect(self.batchProc.detect)
-        self.batchProc.finished.connect(self.batchThread.quit)
-        self.batchProc.completed.connect(self.completed_fileproc)
-        self.batchProc.stopped.connect(self.stopped_fileproc)
-        self.batchProc.failed.connect(self.error_fileproc)
-        self.batchProc.need_msg.connect(self.check_msg)
-        self.batchProc.need_clean_UI.connect(self.clean_UI)
-        self.batchProc.need_update.connect(self.update_progress)
-        self.batchProc.need_bat_info.connect(self.bat_survey_form)
-        self.batchProc.moveToThread(self.batchThread)
-
         self.msgClosed = QWaitCondition()
 
-        self.FilterDicts = self.batchProc.FilterDicts
+        # read config and filters from user location
+        # recogniser - filter file name without ".txt"
+        # (Duplicated w/ the worker, but is needed here as well)
+        self.configdir = configdir
+        self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
+        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.config = self.ConfigLoader.config(self.configfile)
+
+        filtersDir = os.path.join(configdir, self.config['FiltersDir'])
+        self.FilterDicts = self.ConfigLoader.filters(filtersDir)
 
         self.dirName=''
         self.statusBar().showMessage("Select a directory to process")
@@ -117,7 +109,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
 
-        w_timeLabel = QLabel("Want to process a subset of recordings only e.g. dawn or dusk?\nThen select the time window, otherwise skip")
+        w_timeLabel = QLabel("Process a subset of recordings only e.g. dawn or dusk?\nSelect the time window, otherwise skip")
         self.w_timeStart = QTimeEdit()
         self.w_timeStart.setDisplayFormat('hh:mm:ss')
         self.w_timeEnd = QTimeEdit()
@@ -144,6 +136,14 @@ class AviaNZ_batchWindow(QMainWindow):
         self.maxgap.setSingleStep(0.5)
         self.maxgap.setValue(1.0)
         self.maxgaplbl = QLabel("Maximum gap between syllables (s)")
+
+        # Intermittent Sampling controls
+        self.protocolSize = QSpinBox()
+        self.protocolSize.setRange(1, 180)
+        self.protocolSize.setValue(self.config['protocolSize'])
+        self.protocolInterval = QSpinBox()
+        self.protocolInterval.setRange(5, 3600)
+        self.protocolInterval.setValue(self.config['protocolInterval'])
 
         self.w_processButton = SupportClasses_GUI.MainPushButton(" Process Folder")
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
@@ -180,6 +180,14 @@ class AviaNZ_batchWindow(QMainWindow):
         self.boxTime.setLayout(formTime)
         self.d_detection.addWidget(self.boxTime, row=2, col=0, colspan=3)
 
+        # intermittent sampling group, layout
+        self.boxIntermit = QGroupBox("Intermittent sampling")
+        formIntermit = QFormLayout()
+        formIntermit.addRow("Protocol size", self.protocolSize)
+        formIntermit.addRow("Protocol interval", self.protocolInterval)
+        self.boxIntermit.setLayout(formIntermit)
+        self.d_detection.addWidget(self.boxIntermit, row=4, col=0, colspan=3)
+
         # Post Proc checkbox group
         self.boxPost = QGroupBox("Post processing")
         formPost = QGridLayout()
@@ -191,7 +199,7 @@ class AviaNZ_batchWindow(QMainWindow):
         formPost.addWidget(self.maxlenlbl, 4, 0)
         formPost.addWidget(self.maxlen, 4, 1)
         self.boxPost.setLayout(formPost)
-        self.d_detection.addWidget(self.boxPost, row=4, col=0, colspan=3)
+        self.d_detection.addWidget(self.boxPost, row=5, col=0, colspan=3)
 
         self.d_detection.addWidget(self.w_processButton, row=6, col=2)
 
@@ -199,9 +207,9 @@ class AviaNZ_batchWindow(QMainWindow):
         self.d_files.addWidget(self.w_files)
 
         # List to hold the list of files
-        colourNone = QColor(self.batchProc.config['ColourNone'][0], self.batchProc.config['ColourNone'][1], self.batchProc.config['ColourNone'][2], self.batchProc.config['ColourNone'][3])
-        colourPossibleDark = QColor(self.batchProc.config['ColourPossible'][0], self.batchProc.config['ColourPossible'][1], self.batchProc.config['ColourPossible'][2], 255)
-        colourNamed = QColor(self.batchProc.config['ColourNamed'][0], self.batchProc.config['ColourNamed'][1], self.batchProc.config['ColourNamed'][2], self.batchProc.config['ColourNamed'][3])
+        colourNone = QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
+        colourPossibleDark = QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
+        colourNamed = QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
         self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
@@ -243,29 +251,55 @@ class AviaNZ_batchWindow(QMainWindow):
         QApplication.exit(1)
 
     def detect(self):
+        # 1. Parses GUI
+        # 2. Creates and starts the batch worker
         if not self.dirName:
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
             msg.exec_()
             return(1)
 
         # retrieve selected filter(s)
-        self.species = set()
+        species = set()
         for box in self.speCombos:
             if box.currentText() != "":
-                self.species.add(box.currentText())
-        self.species = list(self.species)
-        print("Recogniser:", self.species)
+                species.add(box.currentText())
+        species = list(species)
+        print("Recognisers:", species)
 
-        self.batchProc.maxgap = self.maxgap.value()
-        self.batchProc.minlen = self.minlen.value()
-        self.batchProc.maxlen = self.maxlen.value()
-        self.batchProc.species = self.species
-        self.batchProc.dirName = self.dirName
-        self.batchProc.wind = (self.w_wind.currentIndex()+1)%3
+        # Parse wind box:
         # a bit wacky but maps: 0 (default option, OLS) -> 1
         #                       1 (robust) -> 2
         #                       2 (none) -> 0
-        print("Wind set to", self.batchProc.wind)
+        wind = (self.w_wind.currentIndex()+1)%3
+        print("Wind set to", wind)
+
+        # Update config file based on provided settings, for reading
+        # by the worker
+        # (particularly to store protocol settings for Intermittent,
+        # but could pass any other changes this way as well)
+        self.config['protocolSize'] = self.protocolSize.value()
+        self.config['protocolInterval'] = self.protocolInterval.value()
+        self.ConfigLoader.configwrite(self.config, self.configfile)
+
+        # Create the worker and move it to its thread
+        # NOTE: any communication w/ batchProc from this thread
+        # must be via signals, if at all necessary
+        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, wind=wind, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+
+        # NOTE: must be on self. to maintain the reference
+        self.batchThread = QThread()
+        self.batchProc.moveToThread(self.batchThread)
+        # NOTE: any connections should be done after moveToThread
+        self.batchProc.finished.connect(self.batchThread.quit)
+        self.batchProc.completed.connect(self.completed_fileproc)
+        self.batchProc.stopped.connect(self.stopped_fileproc)
+        self.batchProc.failed.connect(self.error_fileproc)
+        self.batchProc.need_msg.connect(self.check_msg)
+        self.batchProc.need_clean_UI.connect(self.clean_UI)
+        self.batchProc.need_update.connect(self.update_progress)
+        self.batchProc.need_bat_info.connect(self.bat_survey_form)
+        self.batchThread.started.connect(self.batchProc.detect)
+
         self.batchThread.start()  # a signal connected to batchProc.detect()
 
     def check_msg(self,title,text):
@@ -469,8 +503,8 @@ class AviaNZ_batchWindow(QMainWindow):
             self.maxlenlbl.hide()
             self.maxgap.hide()
             self.maxgaplbl.hide()
+            self.boxIntermit.hide()
             self.boxPost.show()
-            self.boxTime.show()
             self.addSp.show()
             self.warning.hide()
             if currmethod=="chp":
@@ -484,16 +518,17 @@ class AviaNZ_batchWindow(QMainWindow):
             self.maxlenlbl.show()
             self.maxgap.show()
             self.maxgaplbl.show()
+            self.boxIntermit.hide()
             self.boxPost.show()
-            self.boxTime.show()
             self.addSp.hide()
             self.warning.show()
             self.w_wind.hide()
         elif currname == "Any sound (Intermittent sampling)":
             self.boxPost.hide()
-            self.boxTime.show()
+            self.boxIntermit.show()
             self.addSp.hide()
             self.warning.show()
+        self.boxTime.show()
 
         if currname == "NZ Bats" or currname == "NZ Bats_NP":
             self.addSp.setEnabled(False)

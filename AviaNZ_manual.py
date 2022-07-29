@@ -145,7 +145,9 @@ class AviaNZ(QMainWindow):
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
         self.extra = "none"
-        self.slowSpeed = 2
+        self.playSpeed = 1.0
+
+        self.noisefloor = 0
 
         # Whether or not the context menu allows multiple birds.
         self.multipleBirds = self.config['MultipleSpecies']
@@ -160,6 +162,7 @@ class AviaNZ(QMainWindow):
         self.focusRegion = None
         self.operator = self.config['operator']
         self.reviewer = self.config['reviewer']
+        self.filters = []
 
         # For preventing callbacks involving overview panel
         self.updateRequestedByOverview = False
@@ -769,36 +772,29 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setToolTip("Play selected")
         self.playSegButton.clicked.connect(self.playSelectedSegment)
 
-        self.playSlowButton = QtGui.QToolButton()
-        self.playSlowButton.setIcon(QIcon('img/playSlow-w.png'))
-        self.playSlowButton.setIconSize(QtCore.QSize(35, 20))
-        self.playSlowButton.setToolTip("Play slowly")
-        self.playSlowButton.clicked.connect(self.playSlowSegment)
+        self.speedButton = QtGui.QToolButton()
+        self.speedButton.setPopupMode(QtGui.QToolButton.InstantPopup)
+        self.speedButton.setIcon(QIcon('img/playSlow-w.png'))
+        self.speedButton.setIconSize(QtCore.QSize(20, 20))
+        self.speedButton.setToolTip("Playback speed")
 
-        #self.speedButton = QtGui.QToolButton()
-        #self.speedButton.setPopupMode(QtGui.QToolButton.InstantPopup)
-        #self.speedButton.setText(u'\u00BD')
-        #self.speedButton.setIconSize(QtCore.QSize(20, 20))
-        #self.speedButton.setToolTip("Playback speed")
-        #self.speedButton.clicked.connect(self.playSlowSegment)
         speedMenu = QMenu()
         extraGroup = QActionGroup(self)
-        for ename in ["2",u'\u00BD',u'\u00BC']:
+        for ename in ["4","3","2","1",u'\u00BE',u'\u00BD',u'\u00BC']:
             em = speedMenu.addAction(ename)
             em.setCheckable(True)
-            if ename == "0.5":
+            if ename == "1":
                 em.setChecked(True)
             receiver = lambda checked, ename=ename: self.setSpeed(ename)
             em.triggered.connect(receiver)
             extraGroup.addAction(em)
-        #self.speedButton.setMenu(speedMenu)
-        self.playSlowButton.setMenu(speedMenu)
+        self.speedButton.setMenu(speedMenu)
 
-        self.quickDenButton = QtGui.QToolButton()
-        self.quickDenButton.setIcon(QIcon('img/denoisesegment.png'))
-        self.quickDenButton.setIconSize(QtCore.QSize(20, 20))
-        self.quickDenButton.setToolTip("Denoise segment")
-        self.quickDenButton.clicked.connect(self.denoiseSeg)
+        self.quickDenoiseButton = QtGui.QToolButton()
+        self.quickDenoiseButton.setIcon(QIcon('img/denoisesegment.png'))
+        self.quickDenoiseButton.setIconSize(QtCore.QSize(20, 20))
+        self.quickDenoiseButton.setToolTip("Denoise segment")
+        self.quickDenoiseButton.clicked.connect(self.denoiseSeg)
 
         self.viewSpButton = QtGui.QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
@@ -811,6 +807,11 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
+
+        self.floorSlider = QSlider(Qt.Horizontal)
+        self.floorSlider.setMinimum(0)
+        self.floorSlider.setMaximum(100)
+        self.floorSlider.valueChanged.connect(self.floorSliderMoved)
 
         # Volume, brightness and contrast sliders.
         # Need to pass true (config) values to set up correct initial positions
@@ -833,14 +834,14 @@ class AviaNZ(QMainWindow):
 
         # export selected sound
         self.exportSoundBtn = QPushButton("  Save sound clip")
-        self.exportSoundBtn.clicked.connect(lambda _ : self.save_selected_sound())
+        self.exportSoundBtn.clicked.connect(lambda _ : self.saveSelectedSound(False))
         self.exportSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
         self.exportSoundBtn.setToolTip("Export the selected segment to a file")
 
         # export selected sound
         if not self.DOC:
             self.exportSlowSoundBtn = QPushButton("  Save slow sound clip")
-            self.exportSlowSoundBtn.clicked.connect(lambda _ : self.save_selected_sound(self.slowSpeed))
+            self.exportSlowSoundBtn.clicked.connect(lambda _ : self.saveSelectedSound(True))
             self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
             self.exportSlowSoundBtn.setToolTip("Export the selected sound to a file at different speed")
 
@@ -860,16 +861,14 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playButton,row=0,col=0)
         self.w_controls.addWidget(self.playSegButton,row=0,col=1)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
-        self.w_controls.addWidget(self.playSlowButton,row=0,col=3)
+        self.w_controls.addWidget(self.speedButton,row=0,col=3)
         self.w_controls.addWidget(self.stopButton,row=1,col=0)
-        #self.w_controls.addWidget(self.speedButton,row=1,col=1)
-        if not self.DOC:
-            self.w_controls.addWidget(self.quickDenButton,row=1,col=2)
-            # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-
+        self.w_controls.addWidget(self.quickDenoiseButton,row=1,col=2)
         self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
-        self.w_controls.addWidget(self.specControls, row=2, col=0, rowspan=2, colspan=4)
+        self.w_controls.addWidget(QLabel('Noise floor'),row=2,col=0)
+        self.w_controls.addWidget(self.floorSlider,row=2,col=1,colspan=3)
+        self.w_controls.addWidget(self.specControls, row=3, col=0, rowspan=2, colspan=4)
 
         self.w_controls.addWidget(QLabel('Visible window'),row=8,col=0,colspan=4)
         self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=2)
@@ -1034,9 +1033,9 @@ class AviaNZ(QMainWindow):
         """
         # basic buttons which toggle on any segment selection
         if self.DOC:
-            btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn]
+            btns = [self.deleteButton, self.playSegButton, self.quickDenoiseButton, self.exportSoundBtn]
         else:
-            btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn, self.exportSlowSoundBtn]
+            btns = [self.deleteButton, self.playSegButton, self.quickDenoiseButton, self.exportSoundBtn, self.exportSlowSoundBtn]
         # Buttons which should be allowed in batmode
         batbtns = [self.deleteButton]
 
@@ -1120,7 +1119,7 @@ class AviaNZ(QMainWindow):
         Any extras go into the combobox at the end of the second list.
         This is called a lot because the order of birds in the list changes since the last choice
         is moved to the top of the list.
-        When calltype-level display is on, fills the list with some possible call types."""
+        When calltype-level display is on, fills the list with possible call types from a filter (if available)"""
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
@@ -1153,18 +1152,23 @@ class AviaNZ(QMainWindow):
                 # add the species menu
                 spMenu = self.menuBirdList.addMenu(lab["species"])
 
-                # get possible call types from all filters for this species
-                possibleCTs = set()
-                for filt in self.FilterDicts.values():
-                    if filt["species"]==lab["species"]:
-                        possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+                # Get possible call types from all filters for this species
+                # Only if species has changed
+                if len(self.filters)==0 or self.filters[0]["species"]!=lab["species"]:
+                    self.possibleCTs = set()
+                    self.filters = []
+                    for filt in self.FilterDicts.values():
+                        if filt["species"]==lab["species"]:
+                            self.possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+                            self.filters.append(filt)
+
                 # add standard extras and self
-                possibleCTs.add("(Other)")
+                self.possibleCTs.add("(Other)")
                 if "calltype" in lab:
-                    possibleCTs.add(lab["calltype"])
+                    self.possibleCTs.add(lab["calltype"])
 
                 # put them as actions in the species menu
-                for ct in possibleCTs:
+                for ct in self.possibleCTs:
                     ctitem = spMenu.addAction(ct)
                     ctitem.setCheckable(True)
 
@@ -1251,7 +1255,7 @@ class AviaNZ(QMainWindow):
 
         # Check if media is playing and stop it if so
         if hasattr(self,'media_obj'):
-            if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+            if self.media_obj.isPlaying():
                 self.stopPlayback()
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
@@ -1590,10 +1594,27 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data'):
                 # populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
-                self.operator = self.segments.metadata["Operator"]
-                self.reviewer = self.segments.metadata["Reviewer"]
-                self.segmentsToSave = True
+                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
+                if not hasmetadata:
+                        self.segments.metadata["Operator"] = self.operator
+                        self.segments.metadata["Reviewer"] = self.reviewer
+                        self.segmentsToSave = True
+                #try:
+                        #self.operator = self.segments.metadata["Operator"]
+                #except KeyError as err:
+                        ## Assume it's an old data file, so add metadata 
+                        #print("Old style data file, modifying")
+                        #self.operator = self.config['operator']
+                        #self.reviewer = self.config['reviewer']
+                        #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
+                        #self.segmentsToSave = True
+                        #self.saveSegments()
+                        #self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
+                        
+                self.operator = self.segments.metadata.get("Operator", self.operator)
+                self.reviewer = self.segments.metadata.get("Reviewer",self.reviewer)
+
+                #self.segmentsToSave = True
 
                 # if there are any multi-species segments,
                 # switch the option on regardless of user preference
@@ -1676,13 +1697,6 @@ class AviaNZ(QMainWindow):
             self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
             # this responds to audio output timer
             self.media_obj.notify.connect(self.movePlaySlider)
-            # Not needed for DOC mode, but easier if it exists
-            # Enable the snail button to play at other speeds
-            oldSR = self.sp.audioFormat.sampleRate()
-            self.sp.audioFormat.setSampleRate(self.sp.audioFormat.sampleRate()//self.slowSpeed)
-            self.media_slow = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
-            self.sp.audioFormat.setSampleRate(oldSR)
-            self.media_slow.notify.connect(self.movePlaySlowSlider)
 
             # Reset the media player
             self.stopPlayback()
@@ -1911,7 +1925,7 @@ class AviaNZ(QMainWindow):
 
     def drawGuidelines(self):
         # Frequency guides for bat mode
-        print("Updating guidelines...")
+        #print("Updating guidelines...")
         if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
             for gi in range(len(self.guidelines)):
                 self.guidelines[gi].setValue(self.convertFreqtoY(self.config['guidepos'][gi]))
@@ -2064,7 +2078,7 @@ class AviaNZ(QMainWindow):
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
         if hasattr(self, 'media_obj'):
-            if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState or self.media_slow.state() == QAudio.ActiveState:
+            if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState:
                 self.stopPlayback()
 
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -2121,7 +2135,7 @@ class AviaNZ(QMainWindow):
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
 
         # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
-        # I'm doing the first for now.
+        # TODO: I'm doing the first for now.
 
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
@@ -2211,17 +2225,11 @@ class AviaNZ(QMainWindow):
                 speed = 0.25
             elif speedchar == 189:
                 speed = 0.5
-        self.slowSpeed = 1/float(speed)
-        oldSR = self.sp.audioFormat.sampleRate()
-        self.sp.audioFormat.setSampleRate(self.sp.audioFormat.sampleRate()//self.slowSpeed)
-        self.media_slow = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
-        print("modified playback speed set to Fs =", self.sp.audioFormat.sampleRate())
-        self.sp.audioFormat.setSampleRate(oldSR)
-        try:
-            self.media_slow.notify.disconnect()
-        except Exception:
-            pass
-        self.media_slow.notify.connect(self.movePlaySlowSlider)
+            elif speedchar == 190:
+                speed = 0.75
+        #self.playSpeed = speed
+        self.playSpeed = 1/float(speed)
+        print("playback speed:",self.playSpeed)
 
     def setExtraPlot(self, plotname):
         """ Reacts to menu clicks and updates or hides diagnostic plot window."""
@@ -2713,6 +2721,8 @@ class AviaNZ(QMainWindow):
         # since we allow passing empty list here:
         if len(species) == 0:
             species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
+        else:
+            species = copy.deepcopy(species)
 
         if coordsAbsolute:
             # convert from absolute times to relative-to-page times
@@ -2832,12 +2842,12 @@ class AviaNZ(QMainWindow):
 
         # mark this as the current segment
         if index>-1:
-            box1id = index
+            self.box1id = index
         else:
-            box1id = len(self.listLabels) - 1
+            self.box1id = len(self.listLabels) - 1
 
         # update its displayed label
-        self.updateText(box1id)
+        self.updateText(self.box1id)
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
@@ -2969,6 +2979,7 @@ class AviaNZ(QMainWindow):
 
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
+                # Possibly, if they pressed the Windows key, use call type menu
                 modifiers = QApplication.keyboardModifiers()
                 if modifiers == Qt.ShiftModifier:
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
@@ -2977,6 +2988,18 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                elif modifiers == Qt.MetaModifier:
+                    # TODO: SM: Check
+                    # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    if self.viewCallType is False:
+                        self.viewCallType = True
+                        # Calltype context menu
+                        self.fillBirdList()
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        self.viewCallType = False
+                    else:
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -2985,7 +3008,8 @@ class AviaNZ(QMainWindow):
                 self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
-                self.selectSegment(len(self.segments)-1)
+                self.selectSegment(self.box1id)
+                #self.selectSegment(len(self.segments)-1)
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
@@ -3053,8 +3077,21 @@ class AviaNZ(QMainWindow):
                         if wasSelected==box1id:
                             # popup dialog
                             modifiers = QApplication.keyboardModifiers()
+                            print(modifiers)
                             if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
+                            elif modifiers == Qt.MetaModifier:
+                                # TODO: SM: Check
+                                # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                                self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                                if self.viewCallType is False:
+                                    self.viewCallType = True
+                                    # Calltype context menu
+                                    self.fillBirdList()
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.viewCallType = False
+                                else:
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -3142,6 +3179,7 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QApplication.keyboardModifiers()
+                print(modifiers)
                 if modifiers == Qt.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                 elif modifiers == Qt.ControlModifier:
@@ -3149,6 +3187,18 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                elif modifiers == Qt.MetaModifier:
+                    # TODO: SM: Check
+                    # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    if self.viewCallType is False:
+                        self.viewCallType = True
+                        # Calltype context menu
+                        self.fillBirdList()
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        self.viewCallType = False
+                    else:
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
@@ -3157,7 +3207,8 @@ class AviaNZ(QMainWindow):
                 self.p_spec.setFocus()
 
                 # select the new segment/box
-                self.selectSegment(len(self.segments)-1)
+                self.selectSegment(self.box1id)
+                #self.selectSegment(len(self.segments)-1)
 
             # if this is the first click:
             else:
@@ -3237,6 +3288,18 @@ class AviaNZ(QMainWindow):
                             modifiers = QApplication.keyboardModifiers()
                             if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
+                            elif modifiers == Qt.MetaModifier:
+                                # TODO: SM: Check
+                                # TODO: Check fillBirdList and toggleViewSp and whether they compete
+                                self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                                if self.viewCallType is False:
+                                    self.viewCallType = True
+                                    # Calltype context menu
+                                    self.fillBirdList()
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.viewCallType = False
+                                else:
+                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -3320,6 +3383,7 @@ class AviaNZ(QMainWindow):
         if birdname is None or birdname=='':
             return
 
+        #print("Here", birdname)
         # special dialog for manual name entry
         if birdname == 'Other':
             # Ask the user for the new name, and save it
@@ -3334,7 +3398,8 @@ class AviaNZ(QMainWindow):
                 print("ERROR: provided name %s does not match format requirements" % birdname)
                 return
 
-            if birdname.lower()=="don't know" or birdname.lower()=="other":
+            #if birdname.lower()=="don't know" or birdname.lower()=="other":
+            if birdname.lower()=="don't know" or birdname.lower()=="other" or birdname.lower()=="(other)":
                 print("ERROR: provided name %s is reserved, cannot create" % birdname)
                 return
 
@@ -3458,12 +3523,91 @@ class AviaNZ(QMainWindow):
         spmenu = ctitem.parentWidget().title()
         if type(ctitem) is not str:
             ctitem = ctitem.text()
-        print(ctitem, spmenu)
+        print("Call Type ",ctitem, spmenu)
 
+        if ctitem == '(Other)': 
+            # Ask the user for the new name, and save it
+            callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
+            if not ok:
+                return
+
+            callname = str(callname).title()
+            # splits "A (B)", with B optional, into groups A and B
+            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
+            if not match:
+                print("ERROR: provided name %s does not match format requirements" % callname)
+                return
+
+            if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
+                print("ERROR: provided name %s is reserved, cannot create" % callname)
+                return
+
+            if "?" in callname:
+                print("ERROR: provided name %s contains reserved symbol '?'" % callname)
+                return
+
+            if len(callname)==0 or len(callname)>150:
+                print("ERROR: provided name appears to be too short or too long")
+                return
+
+            if callname in self.possibleCTs:
+                # call is already listed
+                print("Warning: not adding call type %s as it is already present" % callname)
+                return
+
+            ctitem=callname
+
+            # TODO: Needs a bit of thought, since need to find (or create) a filter. And there might be more than one.
+            # SM: I think this is OK-ish. Now for the DialogsTraining
+            if len(self.filters) == 0:
+                # There wasn't a filter. Make one. Ask for name, or just use default?
+                speciesData = {"species": spmenu, "method": None, "SampleRate": self.sampleRate, "Filters": []}
+                filename = os.path.join(self.filtersDir, spmenu+'.txt')
+                print("no filter",filename)
+                newfilter = speciesData
+            elif len(self.filters) == 1:
+                # There is one filter, so add the new calltype there? Or ask?
+                filename = os.path.join(self.filtersDir,self.filters[0]["species"]+'.txt')
+                print("one filter: ",filename)
+                newfilter = self.filters[0]
+                #print(newfilter)
+            else:
+                # TODO !!
+                # More than one, need to ask
+                print("filters: ",self.filters[0]["species"])
+                filename = os.path.join(self.filtersDir,self.filters[0]["species"]+'.txt')
+                newfilter = self.filters[0]
+
+            # If not, ask, then make it
+            #for filt in self.FilterDicts.values():
+            # Add the new subfilter, with just a call type name
+            newSubfilt = {'calltype': ctitem}
+            newfilter["Filters"].append(newSubfilt)
+
+            print(filename)
+            f = open(filename, 'w')
+            f.write(json.dumps(newfilter))
+            f.close()
+
+            #self.speciesData["Filters"].append(newSubfilt)
+            # Save it
+            
         workingSeg = self.segments[self.box1id]
-        for lab in workingSeg[4]:
-            if lab["species"] == spmenu:
-                lab["calltype"] = ctitem
+
+        # TODO: SM: Might not be first label
+        #for lab in workingSeg[4]:
+            #if lab["species"] == spmenu:
+                #lab["calltype"] = ctitem
+        #workingSeg.addLabel(spmenu, 101, filter="M", calltype=ctitem)
+        if 'calltype' not in workingSeg[4]:
+            workingSeg.extendLabel(spmenu,100,ctitem)
+        else:
+            for lab in workingSeg[4]:
+                if lab["species"]==species:
+                    workingSeg[4][lab].update({"filter": "M", "certainty": 100, "calltype": ctitem})
+
+        # Store the species in case the user wants it for the next segment
+        self.lastSpecies = [{"species": spmenu, "certainty": 100, "filter": "M", "calltype": ctitem}]
         self.updateText()
         self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
@@ -3559,7 +3703,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the menu item that chooses a colour map.
         Loads them from the file as appropriate and sets the lookup table.
         """
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             self.stopPlayback()
 
         self.config['cmap'] = cmap
@@ -3584,14 +3728,18 @@ class AviaNZ(QMainWindow):
             self.sg = self.sp.normalisedSpec("Batmode")
         else:
             self.sg = self.sp.normalisedSpec(self.sgNormMode)
+
         self.sgMinimum = np.min(self.sg)
         self.sgMaximum = np.max(self.sg)
+        noisefloor = self.noisefloor/100*(self.sgMaximum - self.sgMinimum)+ self.sgMinimum
+        self.sg = np.where(self.sg<noisefloor,0,self.sg)
+        #print("noisefloor: ",self.noisefloor,noisefloor,self.sgMinimum,self.sgMaximum,np.mean(self.sg))
 
     def setColourLevels(self, brightness=None, contrast=None):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             self.stopPlayback()
         if brightness is None:
             brightness = self.specControls.brightSlider.value()
@@ -4288,7 +4436,7 @@ class AviaNZ(QMainWindow):
             print("Can't play, no segment selected")
             return
 
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
@@ -4442,10 +4590,10 @@ class AviaNZ(QMainWindow):
         msg.exec_()
         return
 
-    def save_selected_sound(self, slowdown=1):
+    def saveSelectedSound(self,changespeed):
         """ Listener for 'Save selected (slow) sound' button.
             Chooses destination, file name, and exports.
-            slowdown: can pass a factor >1 (<1) to save slower (faster) sound.
+            Speed comes from self.playSpeed
         """
         if self.box1id is None or self.box1id<0:
             print("No box selected")
@@ -4471,7 +4619,9 @@ class AviaNZ(QMainWindow):
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
                 tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
-                wavio.write(filename, tosave.astype('int16'), int(self.sampleRate/slowdown), scale='dtype-limits', sampwidth=2)
+                if changespeed:
+                    tosave = SignalProc.wsola(tosave,self.playSpeed) 
+                wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
@@ -4575,7 +4725,7 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
-        self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
+        #self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
         self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
         self.buildCNNWizard.activateWindow()
         self.buildCNNWizard.exec_()
@@ -5221,6 +5371,7 @@ class AviaNZ(QMainWindow):
         """Listener for Action->Cluster segments menu item, cluster segments marked in the current file. Only to display
             the auto generated clusters
         """
+        # TODO: Probably broken!
         if len(self.segments) > 1:
             cl = Clustering.Clustering([], [], 5)
             segments, nclasses, duration = cl.cluster(self.filename, self.sampleRate, None, feature='we')
@@ -5240,7 +5391,7 @@ class AviaNZ(QMainWindow):
             # Currently playback disabled in this mode - also takes care of spacebar signal
             return
 
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             self.pausePlayback()
         else:
             if self.media_obj.state() != QAudio.SuspendedState and not self.media_obj.keepSlider:
@@ -5251,14 +5402,12 @@ class AviaNZ(QMainWindow):
             self.bar.setMovable(False)
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
             # OS X doesn't repaint them by default smh
             self.playButton.repaint()
             self.playSegButton.repaint()
             self.playBandLimitedSegButton.repaint()
-            self.playSlowButton.repaint()
             QApplication.processEvents()
 
             self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
@@ -5268,7 +5417,7 @@ class AviaNZ(QMainWindow):
         Get selected segment start and end (or return if no segment selected).
         On PLAY, all three buttons turn to STOPs.
         """
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             self.stopPlayback()
         else:
             if self.box1id > -1:
@@ -5281,17 +5430,15 @@ class AviaNZ(QMainWindow):
                 self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
                 # OS X doesn't repaint them by default smh
                 self.playButton.repaint()
                 self.playSegButton.repaint()
                 self.playBandLimitedSegButton.repaint()
-                self.playSlowButton.repaint()
                 QApplication.processEvents()
 
-                self.media_obj.filterSeg(start, stop, self.audiodata)
+                self.media_obj.filterSeg(start, stop, self.audiodata,self.playSpeed)
             else:
                 print("Can't play, no segment selected")
 
@@ -5301,7 +5448,7 @@ class AviaNZ(QMainWindow):
         Currently uses FIR bandpass filter -- Butterworth is commented out.
         On PLAY, all three buttons turn to STOPs.
         """
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             self.stopPlayback()
         else:
             if self.box1id > -1:
@@ -5317,14 +5464,12 @@ class AviaNZ(QMainWindow):
                 self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
                 # OS X doesn't repaint them by default smh
                 self.playButton.repaint()
                 self.playSegButton.repaint()
                 self.playBandLimitedSegButton.repaint()
-                self.playSlowButton.repaint()
                 QApplication.processEvents()
 
                 # filter the data into a temporary file or buffer
@@ -5332,65 +5477,26 @@ class AviaNZ(QMainWindow):
             else:
                 print("Can't play, no segment selected")
 
-    def playSlowSegment(self):
-        """ Listener for PlaySlowSegment button.
-        Very similar to play selected.
-        """
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
-            self.stopPlayback()
-        else:
-            if self.box1id > -1:
-                self.stopPlayback()
-
-                # Times in milliseconds
-                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-
-                self.setPlaySliderLimits(start, stop)
-                self.bar.setMovable(False)
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
-                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-
-                # OS X doesn't repaint them by default smh
-                self.playButton.repaint()
-                self.playSegButton.repaint()
-                self.playBandLimitedSegButton.repaint()
-                self.playSlowButton.repaint()
-                QApplication.processEvents()
-
-                # filter the data into a temporary file or buffer
-                # Note the offset
-                #print(start,stop,self.slowSpeed,int(start*self.slowSpeed), int(stop*self.slowSpeed))
-                self.media_slow.filterSeg(int(start*self.slowSpeed), int(stop*self.slowSpeed), self.audiodata)
-            else:
-                print("Can't play, no segment selected")
-
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
         self.media_obj.pressedPause()
-        self.media_slow.pressedStop()
         self.bar.setMovable(True)
 
         # Reset all button icons:
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
-        self.playSlowButton.setIcon(QIcon('img/playSlow-w.png'))
         self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
         # OS X doesn't repaint them by default smh
         self.playButton.repaint()
         self.playSegButton.repaint()
         self.playBandLimitedSegButton.repaint()
-        self.playSlowButton.repaint()
         QApplication.processEvents()
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.bar.setMovable(True)
         self.media_obj.pressedStop()
-        self.media_slow.pressedStop()
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
         self.playSlider.setValue(-1000)
@@ -5399,21 +5505,19 @@ class AviaNZ(QMainWindow):
         # Reset all button icons:
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
-        self.playSlowButton.setIcon(QIcon('img/playSlow-w.png'))
         self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
         # OS X doesn't repaint them by default smh
         self.playButton.repaint()
         self.playSegButton.repaint()
         self.playBandLimitedSegButton.repaint()
-        self.playSlowButton.repaint()
         QApplication.processEvents()
 
     def movePlaySlider(self):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
+        eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
         bufsize = 0.02
 
         # listener for playback finish. Note small buffer for catching up
@@ -5429,23 +5533,6 @@ class AviaNZ(QMainWindow):
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
 
-    def movePlaySlowSlider(self):
-        """ Listener called on sound notify (every 20 ms).
-        Controls the slider, text timer, and listens for playback finish.
-        Very similar to previous, but slightly easier just to reproduce the code.
-        """
-        eltime = (self.media_slow.processedUSecs() // 1000 + self.media_slow.timeoffset) // self.slowSpeed
-        bufsize = 0.02
-
-        # listener for playback finish. Note small buffer for catching up
-        if eltime > (self.segmentStop-10):
-            print("Stopped at %d ms" % eltime)
-            self.stopPlayback()
-        else:
-            self.playSlider.setValue(eltime)
-            # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
-
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
         """
@@ -5454,16 +5541,19 @@ class AviaNZ(QMainWindow):
         self.segmentStart = self.playSlider.minimum() - offset # relative to file start
         self.segmentStop = self.playSlider.maximum() - offset # relative to file start
 
+    def floorSliderMoved(self,value):
+        self.noisefloor = value
+        self.setSpectrogram()
+        self.drawfigMain()
+
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
-        self.media_slow.applyVolSlider(value)
 
     def barMoved(self, evt):
         """ Listener for when the bar showing playback position moves.
         """
         self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000)
         self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000, self.segmentStart)
-        self.media_slow.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000, self.segmentStart)
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
@@ -5883,7 +5973,7 @@ class AviaNZ(QMainWindow):
         Updates the overview segments as well.
         """
         print("deleting id:", id)
-        if self.media_obj.isPlaying() or self.media_slow.isPlaying():
+        if self.media_obj.isPlaying():
             # includes resetting playback buttons
             self.stopPlayback()
 
@@ -6080,7 +6170,7 @@ class AviaNZ(QMainWindow):
                 if key == Qt.Key_Backspace or key == Qt.Key_Delete:
                     self.deleteSegment()
                     return True
-                elif key == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
+                elif key == Qt.Key_Escape and self.media_obj.isPlaying():
                     self.stopPlayback()
                     return True
                 elif key == Qt.Key_Meta and platform.system() == 'Darwin':

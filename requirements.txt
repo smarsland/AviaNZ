@@ -6,22 +6,22 @@
 # pip install -r requirements.txt --user
 # cd ext; python3 setup.py build_ext -i
 
-click==7.0
+click==8.0
 Cython==0.29.21
 h5py==2.10.0
-jsonschema==3.1.1
-librosa==0.8.0
+jsonschema==4.7.2
+librosa==0.8.1
 numpy==1.18.5  # scikit-image overwrites this w/ a newer version
-openpyxl==2.5.5
+openpyxl==3.0.7
 pyFFTW==0.12.0
 PyQt5==5.15.4
 pyqtgraph==0.11.1
 scikit-image==0.18.3
 six==1.15.0
-scipy==1.5.0
+scipy==1.8.0
 setuptools==56.1.0
-spectrum==0.7.5
-tensorflow==2.3.2
+spectrum==0.8.1
+tensorflow==2.4.1
 
 ## These dependencies are important, but should be installed by the main packages:
 # joblib==0.13.2

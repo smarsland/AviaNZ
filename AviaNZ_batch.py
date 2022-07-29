@@ -46,7 +46,7 @@ class AviaNZ_batchProcess():
     # Also called by the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=0):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=0, maxgap=1.0, minlen=0.5, maxlen=10.0):
         # read config and filters from user location
         # recogniser - filter file name without ".txt"
         self.configdir = configdir
@@ -77,20 +77,21 @@ class AviaNZ_batchProcess():
             print("ERROR: unrecognized mode ", mode)
             return
 
-        self.dirName = []
+        self.dirName = sdir
+        self.wind = wind
 
-        # In CLI/test modes, immediately run detection on init
-        if self.CLI:
-            self.dirName = sdir
+        # Parameters for "Any sound" post-proc:
+        self.maxgap = maxgap
+        self.minlen = minlen
+        self.maxlen = maxlen
+
+        # In CLI/test modes, immediately run detection on init.
+        # Otherwise GUI will ping that once it is moved to the right thread
+        if self.CLI or self.testmode:
             self.species = [recogniser]
-            self.wind = wind
             self.detect()
-        elif self.testmode:
-            self.dirName = sdir
-            self.species = [recogniser]
-            self.wind = wind
-            self.filesDone = []
-            self.detect()
+        else:
+            self.species = recogniser
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -151,6 +152,7 @@ class AviaNZ_batchProcess():
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
+        self.filesDone = []
         if not self.testmode:
             if self.method != "Intermittent sampling":
                 settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
@@ -495,8 +497,20 @@ class AviaNZ_batchProcess():
         # (page size is shorter for low freq things, i.e. bittern,
         # since those freqs are very noisy and variable)
         if self.sampleRate<=4000:
+            # Basically bittern
             samplesInPage = 300*self.sampleRate
+        elif self.method=="Wavelets":
+            # If using changepoints and v short windows,
+            # aim to have roughly 5000 windows:
+            # (4500 = 4 windows in 15 min DoC standard files)
+            winsize = [subf["WaveletParams"].get("win", 1) for f in filters for subf in f["Filters"]]
+            winsize = min(winsize)
+            if winsize<0.05:
+                samplesInPage = int(4500 * 0.05 * self.sampleRate)
+            else:
+                samplesInPage = 900*16000
         else:
+            # A sensible default
             samplesInPage = 900*16000
 
         # (ceil division for large integers)
@@ -528,10 +542,6 @@ class AviaNZ_batchProcess():
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
-                # maxgap = self.maxgap.value()
-                # minlen = self.minlen.value()
-                # maxlen = self.maxlen.value()
-                # TODO CLI mode does not initialize these values and will break
                 post.joinGaps(self.maxgap)
                 post.deleteShort(self.minlen)
                 # avoid extra long segments (for Isabel)
@@ -840,7 +850,11 @@ class AviaNZ_batchProcess():
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            if not hasmetadata:
+                    # TODO: Should save this...
+                    self.segments.metadata["Operator"] = "Auto"
+                    self.segments.metadata["Reviewer"] = ""
             # wipe same species:
             for sp in species:
                 # shorthand for double-checking that it's not "Any Sound" etc
