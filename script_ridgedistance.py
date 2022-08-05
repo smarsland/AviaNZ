@@ -51,7 +51,7 @@ for i in range(0,n):
         try:
             curves[i, j,:] = np.loadtxt(open(directory + "/" + listridges[i] + "_IF.csv", "rb"), delimiter=",", skiprows=1)[j,:]
         except IndexError:
-            curves[i, j,0] = 0
+            curves[i, j, 0] = 0
             curves[i, j, 1] = 0
 
 rscurves = Linear.resample(curves,53)[0]

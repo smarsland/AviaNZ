@@ -7,8 +7,6 @@ syllables.
 
 The syllables are stored in DIRECTORY1 and  DIRECTORY2 and the .jpg distance matrix will be stored in SAVEDIRECTORY
 
-corrected
-
 NOTE: WORK IN PROGRESS
 
 """
@@ -20,14 +18,17 @@ import numpy as np
 import wavio
 import matplotlib.pyplot as plt
 import scipy
-from geodesic_copy import geod_sphere
+#from geodesic_copy import geod_sphere
+from fdasrsf.geodesic import geod_sphere
 import Linear
 import matplotlib.pyplot as plt
 
-directory1 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Models\\Exemplars Ridges"
-directory2 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Models\\Models-ridges"
+directory1 = "../exemplars/Models/Exemplars-Ridges" 
+directory2 = "../exemplars/Models/Models-Ridges" 
+#directory1 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+            #"exemplars\\Models\\Exemplars Ridges"
+#directory2 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+            #"exemplars\\Models\\Models-ridges"
 # pairwise distance calculations
 #originals
 listridges1 = []
@@ -40,8 +41,8 @@ print(listridges1)
 # get length of longest
 lengthmax = 0
 for i in range(0, n1):
-    curve = np.transpose(np.loadtxt(open(directory1 + "\\" + listridges1[i] + "_IF.csv", "rb"), delimiter=",", skiprows=1))
-    print(np.shape(curve)[1])
+    curve = np.transpose(np.loadtxt(open(directory1 + "/" + listridges1[i] + "_IF.csv", "rb"), delimiter=",", skiprows=1))
+    #print(np.shape(curve)[1])
     if np.shape(curve)[1] > lengthmax:
         lengthmax = np.shape(curve)[1]
 
@@ -68,8 +69,8 @@ print(listridges2)
 # get length of longest
 lengthmax2 =0
 for i in range(0, n2):
-    curve = np.transpose(np.loadtxt(open(directory2 + "\\" + listridges2[i] + "_IF.csv", "rb"), delimiter=",", skiprows=1))
-    print(np.shape(curve)[1])
+    curve = np.transpose(np.loadtxt(open(directory2 + "/" + listridges2[i] + "_IF.csv", "rb"), delimiter=",", skiprows=1))
+    #print(np.shape(curve)[1])
     if np.shape(curve)[1] > lengthmax2:
         lengthmax2= np.shape(curve)[1]
 
@@ -78,7 +79,7 @@ curves2 = np.zeros((n2, lengthmax2, 2))
 for i in range(0,n2):
     for j in range(0,lengthmax2):
         try:
-            curves2[i, j,:] = np.loadtxt(open(directory2 + "/" + listridges2[2] + "_IF.csv", "rb"), delimiter=",", skiprows=1)[j,:]
+            curves2[i, j,:] = np.loadtxt(open(directory2 + "/" + listridges2[i] + "_IF.csv", "rb"), delimiter=",", skiprows=1)[j,:]
         except IndexError:
             curves2[i, j,0] = 0
             curves2[i, j, 1] = 0
@@ -86,6 +87,7 @@ for i in range(0,n2):
 rscurves2 = Linear.resample(curves2,53)[0]
 #
 # print(rscurves[0])
+print("here")
 distances = np.zeros((n2, n1))
 for i in range(0,n2):
     for j in range(i, n1):
@@ -96,17 +98,17 @@ for i in range(0,n2):
 # print(listridges)
 # print(distances)
 
-save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-                 "exemplars\\Models\\Distance matrices"
-
+#save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+                 #"exemplars\\Models\\Distance matrices"
+save_directory = "."
 
 # Plot the matrix
 fig, ax = plt.subplots()
 im = ax.imshow(distances, cmap="Purples")
 
 # Show all ticks and label them with the respective list entries
-ax.set_xticks(np.arange(len(listridges1)), labels=listridges1)
-ax.set_yticks(np.arange(len(listridges2)), labels=listridges2)
+#ax.set_xticks(np.arange(len(listridges1)), labels=listridges1)
+#ax.set_yticks(np.arange(len(listridges2)), labels=listridges2)
 # Rotate the tick labels and set their alignment.
 plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
