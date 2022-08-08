@@ -278,35 +278,34 @@ class BuildRecAdvWizard(QWizard):
                 print("Processing. Please wait...")
                 # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
                 # TODO: SRM: Fix this bit...
-                #self.CTannotations()
-                self.segments, self.nclasses, self.duration = self.getSyllables()
-                # TODO: That 5 is arbitrary max number of classes...
+                self.cluster = Clustering.Clustering([], [], 0)
+                self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
+
+                if len(self.calltypes) > 0:
+                    self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
+                
+                self.cluster.setnClusters(max(self.nclasses,len(self.calltypes)))
+
                 # TODO: So now to rewrite the clustering to take a set of things with labels and things without
                 # TODO: Also, remember that need to update the filter if the calltype labels came from manual annotation
-                self.cluster = Clustering.Clustering([], [], max(self.nclasses,5))
                 # TODO: Having got the segments, we don't use them...
                 ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
                 self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
 
-                #if self.hasCTannotations:
-                    ## self.segments: [parent_audio_file, [segment], class_label]
-                    #self.segments, self.nclasses, self.duration = self.getClustersGT()
-                    #self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
-                #else:
-                    ## return format:
-                    ## self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
-                    ## self.nclasses: number of class_labels
-                    ## duration: median length of segments
-                    ## TODO: That 5 is arbitrary max number of classes...
-                    #self.cluster = Clustering.Clustering([], [], 5)
-                    #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
-                    ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                    ## self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
-                    ##                                                                              self.field("species"),
-                    ##                                                                              feature=self.feature,
-                    ##                                                                              max_clusters=5,
-                    ##                                                                              single=True)
-                    #self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
+                ## return format:
+                ## self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
+                ## self.nclasses: number of class_labels
+                ## duration: median length of segments
+                ## TODO: That 5 is arbitrary max number of classes...
+                #self.cluster = Clustering.Clustering([], [], 5)
+                #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                ## self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                ##                                                                              self.field("species"),
+                ##                                                                              feature=self.feature,
+                ##                                                                              max_clusters=5,
+                ##                                                                              single=True)
+                #self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
 
                 # Create and show the buttons
                 self.clearButtons()
@@ -320,8 +319,8 @@ class BuildRecAdvWizard(QWizard):
             # empty cluster names?
             if len(self.clusters)==0:
                 return False
-            # duplicate cluster names aren't updated:
 
+            # Duplicate cluster names aren't updated:
             for ID in range(self.nclasses):
                 if self.clusters[ID] != self.tboxes[ID].text():
                     return False
@@ -344,9 +343,8 @@ class BuildRecAdvWizard(QWizard):
             self.clusters = {}
 
         def CTannotations(self):
-            """ Check if all the segments from target species has call type annotations"""
-            # TODO: SRM: This is weak. What if some have annotations?
-            self.hasCTannotations = True
+            """ Collect any calltype annotations that are present """
+
             listOfDataFiles = []
             for root, dirs, files in os.walk(self.field("trainDir")):
                 for file in files:
@@ -358,15 +356,20 @@ class BuildRecAdvWizard(QWizard):
                 segments = Segment.SegmentList()
                 segments.parseJSON(file)
                 SpSegs = segments.getSpecies(self.field("species"))
+                calltypes = {}
                 for segix in SpSegs:
                     seg = segments[segix]
                     for label in seg[4]:
-                        if label["species"] == self.field("species") and "calltype" not in label:
-                            self.hasCTannotations = False
-                            break
+                        if label["species"] == self.field("species") and "calltype" in label:
+                            if label["calltype"] in calltypes:
+                                calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
+                            else:
+                                calltypes.update({label["calltype"]:1})
+            print(calltypes)                     
+            return calltypes
 
         def backupDatafiles(self):
-            # Backup original data fiels before updating them
+            # Backup original data files before updating them
             print("Backing up files ", self.field("trainDir"))
             listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
             for file in listOfDataFiles:

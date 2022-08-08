@@ -63,6 +63,13 @@ class Clustering:
         self.targets = labels
         self.n_clusters = nclusters
 
+    def setnClusters(self,nc):
+        # Sets the number of clusters as 5 unless otherwise told
+        if nc > 0:
+            self.n_clusters = nc
+        else:
+            self.n_clusters = 5
+
     def custom_dist(self, x, y):
             d, _ = librosa.sequence.dtw(x, y, metric='euclidean')
             return d[d.shape[0] - 1][d.shape[1] - 1]
@@ -270,7 +277,7 @@ class Clustering:
 
         Given wav + annotation files, plus set of syllables
             1) make them fixed-length by padding or clipping
-            3) cluster with some clustering algorithm
+            2) cluster with some clustering algorithm
 
         :param dataset: syllables output by findSyllables
         :param dir: path to directory with wav & wav.data files
@@ -428,11 +435,11 @@ class Clustering:
     def getSyllables(self,trainDir,species,fs):
         # TODO: Check this!
         """ Gets all syllables. Those with a calltype annotation are given it, the others have a None label
-        Returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
+        Returns [parent_audio_file, [segment], [syllables], class_label], dict of class labels and counts #, median duration
         """
-        sp = SignalProc.SignalProc(256,128)
+        self.sp = SignalProc.SignalProc(256,128)
         CTsegments = []
-        CTlabels = []
+        calltypes = {}
         duration = []
 
         listOfDataFiles = []
@@ -452,36 +459,41 @@ class Clustering:
                 segments.parseJSON(os.path.join(trainDir, file))
                 wavfile = os.path.join(trainDir, file[:-5])
                 SpSegs = segments.getSpecies(species)
+                print(SpSegs)
             
                 if len(SpSegs) > 0:
                     # Load the file
-                    sp.readWav(wavfile)
-                    #audiodata = audiodata.tolist()
+                    self.sp.readWav(wavfile)
+                    #audiodata = sp.data.tolist()
 
+                    # For each segment
                     for segix in SpSegs:
                         seg = segments[segix]
+                        # See if it has a calltype label
                         for label in seg[4]:
                             if label["species"] == species:
                                 if "calltype" in label:
-                                    if label["calltype"] not in ctLabels:
-                                        # This might be the wrong syntax
-                                        ctLabels.append(label["calltype"])
+                                    if label["calltype"] in calltypes:
+                                        calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
+                                    else:
+                                        calltypes.update({label["calltype"]:1})
                                     ct = label["calltype"]
                                 else:
                                     ct = None
+
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
                                 # TODO: is median clipping still best option?
                                 # TODO: SRM: HERE
-                                # the useSp is a non-string item passed to the function that says 'use the SignalProc load'
-                                syls, syls_sg = self.findSyllablesSeg(useSp=True, seg=seg, fs=fs, denoise=False, minlen=0.2)
+                                syls, syls_sg = self.findSyllablesSeg(self.sp.data,seg=seg, fs=fs, denoise=False, minlen=0.2)
                                 # TODO: Something weird with self.clusters It's a dict except when it isn't...
-                                CTsegments.append([wavfile, seg, syls, syls_sg, list(self.clusters.keys())[list(ct)]])
+                                CTsegments.append([wavfile, seg, syls, syls_sg, ct])
                                 #CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(ct)]])
                                 #CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                                 # TODO: What's the point of this duration?
                                 #duration.append(seg[1]-seg[0])
-        return CTsegments, CTlabels #, np.median(duration)
+        print(calltypes)                     
+        return CTsegments, calltypes #, np.median(duration)
 
     def getClustersGT_OLD(self):
         """ Gets call type clusters from annotations
@@ -671,20 +683,25 @@ class Clustering:
         :return: syllables list
         """
         # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
-        # Why not just use the SignalProc load directly?
         # And should avoid opening file more than once
         # And since have made spectrogram, pass it back
-        if isinstance(audiodata,str):
-            audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
-            start = seg[0]
-            self.sp = SignalProc.SignalProc()
-            self.sp.data = audiodata
-            self.sp.sampleRate = fs
-            _ = self.sp.spectrogram()
-        else:
+        audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
+        start = seg[0]
+        #self.sp = SignalProc.SignalProc()
+        self.sp.data = audiodata
+        self.sp.sampleRate = fs
+        _ = self.sp.spectrogram()
+        #if isinstance(audiodata,str):
+            #audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
+            #start = seg[0]
+            #self.sp = SignalProc.SignalProc()
+            #self.sp.data = audiodata
+            #self.sp.sampleRate = fs
+            #_ = self.sp.spectrogram()
+        #else:
             # File is already loaded, make the spectrogram of the call
             # TODO: Check
-            _ = self.sp.spectrogram(start=seg[0],stop=seg[1])
+            #_ = self.sp.spectrogram(start=self.sp.convertAmpltoSpec(seg[0]),stop=self.sp.convertAmpltoSpec(seg[1]))
             
         # Show only the segment frequencies to the median clipping and avoid overlapping noise - better than filtering when loading audiodata (it could make aliasing effect)
         linear = np.linspace(0, fs / 2, int(self.sp.window_width/2))
@@ -818,11 +835,12 @@ class Clustering:
         if duration == 0:
             duration = None
 
-        sp = SignalProc.SignalProc(256, 128)
-        sp.readWav(filename, duration, offset, silent=silent)
-        sp.resample(fs)
-        sampleRate = sp.sampleRate
-        audiodata = sp.data
+        #sp = SignalProc.SignalProc(256, 128)
+        print(filename,duration,offset)
+        self.sp.readWav(filename, duration, offset, silent=silent)
+        self.sp.resample(fs)
+        sampleRate = self.sp.sampleRate
+        audiodata = self.sp.data
 
         # # pre-process
         if denoise:
@@ -831,7 +849,7 @@ class Clustering:
 
         if f1 != 0 and f2 != 0:
             # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
-            audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
+            audiodata = self.sp.bandpassFilter(audiodata, sampleRate, f1, f2)
 
         return audiodata
 
