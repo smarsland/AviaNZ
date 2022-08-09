@@ -71,9 +71,9 @@ class SignalProc:
             self.audioFormat.setCodec("audio/pcm")
             self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
 
-    def readWav(self, file, len=None, off=0, silent=False):
+    def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        wavobj = wavio.read(file, len, off)
+        wavobj = wavio.read(file, duration, off)
         self.data = wavobj.data
 
         # take only left channel

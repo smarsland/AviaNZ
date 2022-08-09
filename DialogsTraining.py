@@ -213,7 +213,6 @@ class BuildRecAdvWizard(QWizard):
             self.nclasses = 0
             self.config = config
             self.segsChanged = False
-            self.hasCTannotations = True
 
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
@@ -279,18 +278,48 @@ class BuildRecAdvWizard(QWizard):
                 # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
                 # TODO: SRM: Fix this bit...
                 self.cluster = Clustering.Clustering([], [], 0)
-                self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
+                calls, calltypes  = self.cluster.getCalls(self.field("trainDir"),self.field("species"),self.field("fs"))
+                #self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
 
-                if len(self.calltypes) > 0:
+                if len(calltypes) > 0:
                     self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
-                
-                self.cluster.setnClusters(max(self.nclasses,len(self.calltypes)))
+                    # Seed clusters 
+                    callsgs = []
+                    audios = []
+                    callIDs = {}
+                    for i in range(len(calltypes)):
+                        sgs = []
+                        audio = []
+                        callIDs.update({i:list(calltypes)[i]})
+                        for j in range(len(calls)):
+                            if calls[j][2] == list(calltypes)[i]:
+                                # Get the spectrogram, append to the calls list
+                                # TODO: Options: break into fixed length pieces, or get syllables
+                                # Both have parameters :(
+                                # For now, try 1 second pieces, no overlap, skip last TODO!!
+                                # Make sure there is at least 1, though
+                                window = 2
+                                duration = max(int(calls[j][1][1]-calls[j][1][0]),window)
+                                audiodata = self.cluster.loadFile(calls[j][0],duration,calls[j][1][0])
+                                sp.data = audiodata
+                                sp.sampleRate = 16000
+                                _= sp.spectrogram(256, 128)
+                                sg = sp.normalisedSpec("Log")
+                                length = window*np.shape(sg)[0]//duration
+                                # TODO: Only use the relevant freqs?
+                                for k in range(duration):
+                                    sgs.append(sg[k*length:(k+1)*length,:])
+                                    audio.append(audiodata[k*window*sp.sampleRate//2:(k+1)*window*sp.sampleRate//2])
+                        callsgs.append(sgs)
+                        audios.append(audio)
+
+                #self.cluster.setnClusters(max(self.nclasses,len(self.calltypes)))
 
                 # TODO: So now to rewrite the clustering to take a set of things with labels and things without
                 # TODO: Also, remember that need to update the filter if the calltype labels came from manual annotation
                 # TODO: Having got the segments, we don't use them...
                 ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
 
                 ## return format:
                 ## self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
@@ -309,7 +338,7 @@ class BuildRecAdvWizard(QWizard):
 
                 # Create and show the buttons
                 self.clearButtons()
-                self.addButtons()
+                self.addButtons(callsgs,audios,callIDs)
                 self.updateButtons()
                 print("buttons added")
                 self.segsChanged = True
@@ -724,41 +753,48 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
-        def addButtons(self):
+        def addButtons(self,ims=None,calls=None,calltypes=None,sp=None):
             """ Only makes the PicButtons and self.clusters dict
             """
             self.picbuttons = []
-            if not self.hasCTannotations:
+            # TODO: Here
+            if ims is not None:
+                for i in range(len(ims)):
+                    for j in range(len(ims[i]))
+                        newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
+                        self.picbuttons.append(newButton)
+                        self.clusters = calltypes
+            else:
                 self.clusters = []
                 for i in range(self.nclasses):
                     self.clusters.append((i, 'Cluster_' + str(i)))
                 self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
-            # largest spec will be this wide
-            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
+                # largest spec will be this wide
+                maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
-            # Create the buttons for each segment
-            self.minsg = 1
-            self.maxsg = 1
-            for seg in self.segments:
-                sp = SignalProc.SignalProc(512, 256)
-                sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+                # Create the buttons for each segment
+                self.minsg = 1
+                self.maxsg = 1
+                for seg in self.segments:
+                    sp = SignalProc.SignalProc(512, 256)
+                    sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+    
+                    # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
+                    incr = 256 * sp.sampleRate // self.field("fs")
+                    _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
+                    sg = sp.normalisedSpec("Log")
 
-                # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                incr = 256 * sp.sampleRate // self.field("fs")
-                _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
-                sg = sp.normalisedSpec("Log")
+                    # buffer the image to largest spec size, so that the resulting buttons would have equal scale
+                    if sg.shape[0]<maxspecsize:
+                        padlen = int(maxspecsize - sg.shape[0])//2
+                        sg = np.pad(sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(sg, 0.1))
+    
+                    self.minsg = min(self.minsg, np.min(sg))
+                    self.maxsg = max(self.maxsg, np.max(sg))
 
-                # buffer the image to largest spec size, so that the resulting buttons would have equal scale
-                if sg.shape[0]<maxspecsize:
-                    padlen = int(maxspecsize - sg.shape[0])//2
-                    sg = np.pad(sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(sg, 0.1))
-
-                self.minsg = min(self.minsg, np.min(sg))
-                self.maxsg = max(self.maxsg, np.max(sg))
-
-                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
-                self.picbuttons.append(newButton)
+                    newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+                    self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
         def selectAll(self):
