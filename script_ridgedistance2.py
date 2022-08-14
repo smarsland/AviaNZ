@@ -7,7 +7,7 @@ syllables.
 
 The syllables are stored in DIRECTORY1 and  DIRECTORY2 and the .jpg distance matrix will be stored in SAVEDIRECTORY
 
-corrected
+cor
 
 NOTE: WORK IN PROGRESS
 
