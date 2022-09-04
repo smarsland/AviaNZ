@@ -1,0 +1,33 @@
+name: CI Test
+on: [push, pull_request]
+jobs:
+  ci-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8']
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Set up python-${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Avianz
+        run: |
+          sudo apt-get update && sudo apt-get dist-upgrade && sudo apt-get install python3 python3-dev python3-pip python3-setuptools build-essential git && \
+          pip3 install --user -r requirements.txt && \
+          cd ext && python3 setup.py build_ext -i
+      - name: Install AviaNZ
+        run: |
+          python3 AviaNZ.py --help
+      - name: Install test requirements
+        run: |
+          pip3 install --user -r test-requirements.txt
+      - name: Run pytype
+        run: |
+          pytype -k AviaNZ.py || true
+          pytype -k $(find . -type f -name \*py) || true
+      - name: Run pylint
+        run: |
+          pylint -E $(find . -type f -name \*py) || true
