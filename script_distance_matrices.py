@@ -15,8 +15,7 @@ DISTANCES:
 IF TEST 1:
 the code works on pre-prepared curves
 
-IF TEST 2:
-the code prepare the curves aligning them row by row
+
 """
 
 import os
@@ -24,11 +23,35 @@ import numpy as np
 import matplotlib.pyplot as plt
 import distances
 
-directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Models\\Exemplars_Ridges_new"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Models\\Exemplars_Ridges_new"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                "exemplars\\Models\\Exemplars_Ridges_cutted_new"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                 "exemplars\\Models\\Exemplars_Ridges_smooth1"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                 "exemplars\\Models\\Exemplars_Ridges_smooth2"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                 "exemplars\\Models\\Exemplars_Ridges_smooth3"
 
 # directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #             "exemplars\\Models\\Models_Ridges_new"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Smaller_Dataset\\Original_prep"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Smaller_Dataset\\Cutted_prep"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Smaller_Dataset\\Smooth_prep"
+
+directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+                "exemplars\\Smaller_Dataset\\Cutted_smooth_prep"
 
 # save syllables list and find number of syllables and max lenght
 # NOTE: we actually know n = 26 and len_max = 108 but kept to not lose generality (especially for when we will have to
@@ -76,12 +99,17 @@ pca_matrix = distances.pca_distance(curves[:, :,1])
 
 # plot distance matrix
 
-save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-                 "exemplars\\Models\\Distance_ matrices\\Exemplars\\Test1"
+# save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                  "exemplars\\Models\\Distance_ matrices\\Exemplars\\Test1"
+
+# save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                  "exemplars\\Models\\Distance_matrices\\Exemplars\\Test9"
 
 # save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #                  "exemplars\\Models\\Distance_ matrices\\Models\\Test1"
 
+save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+                 "exemplars\\Smaller_Dataset\\Tests_results\\Test7"
 #save matrices
 np.savetxt(save_directory+"\\SSD.txt", ssd_matrix, fmt='%s')
 np.savetxt(save_directory+"\\cross-correlation.txt", crosscorr_matrix, fmt='%s')
@@ -129,11 +157,13 @@ plt.setp(ax[1, 1].get_xticklabels(), rotation=45, ha="right", rotation_mode="anc
 ax[1, 1].set_title("PCA distance", fontsize=80)
 
 # fig.suptitle('Models Test 1', fontsize=120)
-fig.suptitle('Exemplars Test 1', fontsize=120)
+fig.suptitle('Test 7', fontsize=120)
 
 # fig.tight_layout()
 
 # fig_name = save_directory+"\\models_test1.jpg"
-fig_name = save_directory+"\\exemplars_test1.jpg"
+# fig_name = save_directory+"\\exemplars_test1.jpg"
+# fig_name = save_directory+"\\exemplars_test9.jpg"
+fig_name = save_directory + "\\distance_matrices_test7.jpg"
 plt.savefig(fig_name)
 

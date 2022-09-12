@@ -15,12 +15,33 @@ DISTANCES:
 
 IF TEST 2:
 the code prepare the curves aligning them row by row
+
+NOTE: Added smoothing
 """
 
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 import distances
+
+def moving_average(s, win_len):
+    """
+    This function smooths the signal s with a moving average filter
+    """
+    N = len(s)
+    half_win = int(np.floor(win_len / 2))
+    new_s = []
+
+    for I in range(half_win):
+        new_s.append(np.mean(s[:I + half_win + 1]))
+
+    for I in range(half_win, N - (half_win - 1)):
+        new_s.append(np.mean(s[I - half_win: I + half_win + 1]))
+
+    for I in range(N - (half_win - 1), N):
+        new_s.append(np.mean(s[I - half_win:]))
+
+    return np.array(new_s)
 
 def prepare_curves(curves_old, ref_curve, length_list):
     """
@@ -37,7 +58,7 @@ def prepare_curves(curves_old, ref_curve, length_list):
 
     for i in range(N):
         # dynamic time warping
-        target_curve = curves_old[i, :length_list[i], 1]
+        target_curve = moving_average(curves_old[i, :length_list[i], 1], 21)
         m = distances.dtw(target_curve, ref_curve, wantDistMatrix=True)
         x, y = distances.dtw_path(m)
         aligned_times = np.linspace(0, 1, len(x))
@@ -65,7 +86,7 @@ def symmetrize_matrix(A):
 
 # directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #             "exemplars\\Models\\Models_Ridges"
-#
+
 # directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #             "exemplars\\Smaller_Dataset\\Original"
 
@@ -103,7 +124,8 @@ dtw_matrix = np.zeros((n,n))
 
 for i in range(n):
     # prepare curves row by row
-    reference_curve = curves[i,:,:]
+    reference_curve = np.copy(curves[i,:,:])
+    reference_curve[:,1] = moving_average(reference_curve[:,1], 21)
     new_curves = prepare_curves(curves, reference_curve[:,1], len_list)
     # evaluate PCA matrix
     pca_matrix[i, :] = distances.pca_distance(new_curves[:, :, 1])[i, :]
@@ -134,13 +156,13 @@ geod_matrix = symmetrize_matrix(geod_matrix)
 #                  "exemplars\\Models\\Distance_ matrices\\Exemplars\\Test2"
 
 # save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-#                  "exemplars\\Models\\Distance_ matrices\\Exemplars\\Test4"
+#                  "exemplars\\Models\\Distance_matrices\\Exemplars\\Test8"
 
 # save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #                  "exemplars\\Models\\Distance_ matrices\\Models\\Test2"
 
-save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-                 "exemplars\\Smaller_Dataset\\Tests_results\\Test4"
+save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\" \
+                 "Kiwi_IndividualID\\exemplars\\Smaller_Dataset\\Tests_results\\Test8"
 
 #save matrices
 np.savetxt(save_directory+"\\SSD.txt", ssd_matrix, fmt='%s')
@@ -198,13 +220,11 @@ plt.setp(ax[1, 1].get_xticklabels(), rotation=45, ha="right", rotation_mode="anc
 ax[1, 1].set_title("PCA distance", fontsize=80)
 
 # fig.suptitle('Models Test 2', fontsize=120)
-# fig.suptitle('Exemplars Test 4', fontsize=120)
-fig.suptitle('Test 4', fontsize=120)
+fig.suptitle('Test 8', fontsize=120)
 
 # fig.tight_layout()
 
-# # fig_name = save_directory+"\\models_test2_log.jpg"
-# fig_name = save_directory+"\\exemplars_test4.jpg"
-fig_name = save_directory + "\\distance_matrices_test4.jpg"
+# fig_name = save_directory+"\\models_test2_log.jpg"
+fig_name = save_directory+"\\test8.jpg"
 plt.savefig(fig_name)
 

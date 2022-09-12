@@ -1,11 +1,12 @@
 """
-3/8/2022
+12/09/2022
 Author: Virginia Listanti
 
 This script adapt Harvey Barons's script RIDGEDISTANCES.PY to prepare the  kiwi syllables curves for distances' test.
 
 Process:
         - read extracted IF from .csv
+        - smoothing
         - DTW (dinamic time-warping) in time
         - subtract average frequency
         - resampling to minimum number of points to
@@ -79,8 +80,12 @@ directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_
 #                "\\exemplars\\Models\\Models_Ridges_smooth2"
 # newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #                "exemplars\\Smaller_Dataset\\Original_prep"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Smaller_Dataset\\Cutted_prep"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                "exemplars\\Smaller_Dataset\\Smooth_prep"
 newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Smaller_Dataset\\Cutted_prep"
+                "exemplars\\Smaller_Dataset\\Cutted_smooth_prep"
 
 list_files = []
 list_length = []
@@ -99,10 +104,9 @@ min_len = np.min(list_length)  # min. curves lenght
 max_freq = np.max(list_max_freq)
 
 # reference curve for DTW
-reference_curve = np.loadtxt(open(directory + "\\" + list_files[0], "rb"), delimiter=",", skiprows=1)[:, 1]
 #smoothing
-# reference_curve = moving_average(np.loadtxt(open(directory + "\\" + list_files[0], "rb"),
-#                                             delimiter=",", skiprows=1)[:, 1], 21)
+reference_curve = moving_average(np.loadtxt(open(directory + "\\" + list_files[0], "rb"),
+                                            delimiter=",", skiprows=1)[:, 1], 21)
 
 # new points
 new_times = np.linspace(0, 1, min_len)
@@ -112,10 +116,9 @@ fieldnames = ['t', "IF"]
 
 for i in range(n):
     # dynamic time warping
-    target_curve = np.loadtxt(open(directory + "\\" + list_files[i], "rb"), delimiter=",", skiprows=1)[:, 1]
-    # #smoothing averege
-    # target_curve = moving_average(np.loadtxt(open(directory + "\\" + list_files[i], "rb"), delimiter=",",
-    #                                          skiprows=1)[:, 1], 21)
+    #smoothing averege
+    target_curve = moving_average(np.loadtxt(open(directory + "\\" + list_files[i], "rb"), delimiter=",",
+                                             skiprows=1)[:, 1], 21)
     m = DTW.dtw(target_curve, reference_curve, wantDistMatrix=True)
     x, y = DTW.dtw_path(m)
     aligned_times = np.linspace(0, 1, len(x))

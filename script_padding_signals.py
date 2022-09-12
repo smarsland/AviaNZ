@@ -12,6 +12,8 @@ import SignalProc
 
 
 syllable_folder = "C:\\Users\\Virginia\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\exemplars\\Models"
+syllable_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID" \
+                  "\\exemplars\\Smaller_Dataset\\Original"
 win_len = 512
 hop = 128
 for file in os.listdir(syllable_folder):
@@ -23,6 +25,6 @@ for file in os.listdir(syllable_folder):
         fs = sp.sampleRate
         T = sp.fileLength / fs
         # save padded version
-        s2 = np.concatenate((np.zeros(int(5 * fs)), signal, np.zeros(int(5 * fs))))
+        s2 = np.concatenate((np.zeros(int(2.5 * fs)), signal, np.zeros(int(2.5 * fs))))
         file_name2 = syllable_path[:-4] + '_padded.wav'
         wavio.write(file_name2, s2, fs, sampwidth=2)

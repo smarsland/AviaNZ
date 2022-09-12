@@ -24,11 +24,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import distances
 
+# directory1 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Models\\Exemplars_Ridges_new"
+
+# directory1 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                "exemplars\\Models\\Exemplars_Ridges_cutted_new"
+
+# directory1 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                 "exemplars\\Models\\Exemplars_Ridges_smooth1"
+
 directory1 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Models\\Exemplars_Ridges_new"
+                "exemplars\\Models\\Exemplars_Ridges_smooth3"
+
+# directory2 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Models\\Models_Ridges_new"
 
 directory2 = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Models\\Models_Ridges_new"
+            "exemplars\\Models\\Models_Ridges_smooth2"
 
 # save syllables list and find number of syllables and max lenght for both sets
 
@@ -114,8 +126,11 @@ crosscorr_matrix = np.max(crosscorr_matrix) - crosscorr_matrix
 
 # plot distance matrix
 
+# save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                  "exemplars\\Models\\Distance_ matrices\\Exemplars_vs_Models\\Test1"
+
 save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-                 "exemplars\\Models\\Distance_ matrices\\Exemplars_vs_Models\\Test1"
+                 "exemplars\\Models\\Distance_matrices\\Exemplars_vs_Models\\Test9"
 
 # save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #                  "exemplars\\Models\\Distance_ matrices\\Models\\Test1"
@@ -170,10 +185,10 @@ plt.setp(ax[1, 1].get_xticklabels(), rotation=45, ha="right", rotation_mode="anc
 ax[1, 1].set_title("DTW distance", fontsize=80)
 
 # fig.suptitle('Models Test 1', fontsize=120)
-fig.suptitle('Exemplars vs Models Test 1', fontsize=120)
+fig.suptitle('Exemplars vs Models Test 9', fontsize=120)
 
 # fig.tight_layout()
 
 # fig_name = save_directory+"\\models_test1.jpg"
-fig_name = save_directory+"\\exemplars_vs_models_test1.jpg"
+fig_name = save_directory+"\\exemplars_vs_models_test9.jpg"
 plt.savefig(fig_name)
