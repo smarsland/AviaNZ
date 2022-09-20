@@ -87,11 +87,11 @@ def symmetrize_matrix(A):
 # directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #             "exemplars\\Models\\Models_Ridges"
 
-# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-#             "exemplars\\Smaller_Dataset\\Original"
-
 directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-            "exemplars\\Smaller_Dataset\\Cutted"
+            "exemplars\\Smaller_Dataset\\Original"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#             "exemplars\\Smaller_Dataset\\Cutted"
 
 # save syllables list and find number of syllables and max lenght
 # NOTE: we actually know n = 26 and len_max = 108 but kept to not lose generality (especially for when we will have to
@@ -162,7 +162,7 @@ geod_matrix = symmetrize_matrix(geod_matrix)
 #                  "exemplars\\Models\\Distance_ matrices\\Models\\Test2"
 
 save_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\" \
-                 "Kiwi_IndividualID\\exemplars\\Smaller_Dataset\\Tests_results\\Test8"
+                 "Kiwi_IndividualID\\exemplars\\Smaller_Dataset\\Tests_results\\Test6_bis"
 
 #save matrices
 np.savetxt(save_directory+"\\SSD.txt", ssd_matrix, fmt='%s')

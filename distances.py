@@ -159,4 +159,35 @@ def pca_distance(data, ps_dim = 4):
 
     return D_PCA
 
+def pca_distance_vector(data, test_data, ps_dim = 4):
+    """
+    This function adapt the previous PCA_DISTANCE FUNCTION
+
+    It evaluates the distance from TEST_DATA and a set of DATA using PCA over a PS_DIM projection space of DATA
+
+    If not given PS_DIM = 4
+    we evaluated it in the experiment reported in the notebook Test_distance
+
+    Note: Data is assumed to have the dimensions (number oF data, number of times)
+    """
+
+    n = np.shape(data)[0]
+
+    # calculate data eigenvectors
+    # NOTE: m and evals not needed
+    m, evals, evecs = asm(data)
+
+    # projection in a lower dim space
+    newdata = np.dot(evecs[:, :ps_dim].T, data.T).T
+    new_test_data = np.dot(evecs[:, :ps_dim].T, test_data.T).T
+
+    # inizialise matrix
+    D_PCA = np.zeros((n))
+
+    for i in range(n):
+        D_PCA[i] = np.linalg.norm(newdata[i, :] - new_test_data, 2)
+
+    return D_PCA
+
+
 
