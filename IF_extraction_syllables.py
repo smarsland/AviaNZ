@@ -28,8 +28,11 @@ import matplotlib.pyplot as plt
 # analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\exemplars\\Models"
 # analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID" \
 #                   "\\exemplars\\Models\\Models-ridges"
-analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
-                  "exemplars\\Smaller_Dataset\\Original"
+# analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
+#                   "exemplars\\Smaller_Dataset\\Original"
+analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+                  "Smaller_Dataset1\\Original"
+
 alpha = 1
 beta = 0.5
 win_len = 512
@@ -194,12 +197,12 @@ for file in os.listdir(analysis_folder):
         fig.suptitle(file[:-4]+' ridges')
         plt.savefig(fig_name)
 
-        #save spectrogram intensity
-        fig_name2 = syllable_path[:-4] + "_spectrogram_intensity.jpg"
-        fig2, ax2 = plt.subplots(1, 1, figsize=(10, 20), sharex=True)
-        ax2.plot(x, spec_intensity, 'r')
-        fig2.suptitle(file[:-4] + 'Spectrogram intensity')
-        plt.savefig(fig_name2)
+        # #save spectrogram intensity
+        # fig_name2 = syllable_path[:-4] + "_spectrogram_intensity.jpg"
+        # fig2, ax2 = plt.subplots(1, 1, figsize=(10, 20), sharex=True)
+        # ax2.plot(x, spec_intensity, 'r')
+        # fig2.suptitle(file[:-4] + 'Spectrogram intensity')
+        # plt.savefig(fig_name2)
         del IF
 
 

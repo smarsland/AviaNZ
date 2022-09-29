@@ -11,9 +11,11 @@ import wavio
 import SignalProc
 
 
-syllable_folder = "C:\\Users\\Virginia\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\exemplars\\Models"
-syllable_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID" \
-                  "\\exemplars\\Smaller_Dataset\\Original"
+# syllable_folder = "C:\\Users\\Virginia\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\exemplars\\Models"
+# syllable_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID" \
+#                   "\\exemplars\\Smaller_Dataset\\Original"
+syllable_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+                  "Smaller_Dataset1\\Original"
 win_len = 512
 hop = 128
 for file in os.listdir(syllable_folder):
