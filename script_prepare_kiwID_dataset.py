@@ -64,39 +64,39 @@ for syllable in list_syllables:
     else:
         Syl_name = 'Syllable_'+str(counter)
     new_list_syllables.append(Syl_name)
-    figname = new_directory + '\\'+ Syl_name + '.jpg'
-    fig, ax = plt.subplots(1, 1, figsize=(10, 40))
-    im = ax.imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
-    ax.yaxis.set_major_locator(LinearLocator(17))
-    ax.set_yticklabels(list_freq_labels, size=20)
-    ax.set_xlabel('Time (seconds)', size = 30)
-    ax.set_ylabel('Frequency (Hz)', size = 30)
-    fig.colorbar(im, ax = ax)
-    fig.suptitle(Syl_name, size = 30)
+    # figname = new_directory + '\\'+ Syl_name + '.jpg'
+    # fig, ax = plt.subplots(1, 1, figsize=(10, 40))
+    # im = ax.imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
+    # ax.yaxis.set_major_locator(LinearLocator(17))
+    # ax.set_yticklabels(list_freq_labels, size=20)
+    # ax.set_xlabel('Time (seconds)', size = 30)
+    # ax.set_ylabel('Frequency (Hz)', size = 30)
+    # fig.colorbar(im, ax = ax)
+    # fig.suptitle(Syl_name, size = 30)
+    #
+    # plt.savefig(figname)
+    # plt.close(fig)
 
-    plt.savefig(figname)
-    plt.close(fig)
-
-    # padded signals
-    s2 = np.concatenate((np.zeros(int(2.5 * fs)), signal, np.zeros(int(2.5 * fs))))
-    file_name2 = new_directory+ '\\' + Syl_name +'.wav'
-    wavio.write(file_name2, s2, fs, sampwidth=2)
+    # # padded signals
+    # s2 = np.concatenate((np.zeros(int(2.5 * fs)), signal, np.zeros(int(2.5 * fs))))
+    # file_name2 = new_directory+ '\\' + Syl_name +'.wav'
+    # wavio.write(file_name2, s2, fs, sampwidth=2)
 
 
     counter += 1
 
 
-# save ground truth
-fieldnames = ["New name", "Old Name"]
-csv_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-           "Manual_classification\\Ground_truth\\GT_file.csv"
-with open(csv_path, 'w', newline='') as csvfile:
-    Writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    Writer.writeheader()
-
-for i in range(len(new_list_syllables)):
-    with open(csv_path, 'a', newline='') as csvfile:  # should be ok
-        Writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        # Writer.writerow({"Label": label_id, "Syllable id": file[:-4]})
-        Writer.writerow({"New name": new_list_syllables[i], "Old Name": list_syllables[i][:-4]})
+# # save ground truth
+# fieldnames = ["New name", "Old Name"]
+# csv_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#            "Manual_classification\\Ground_truth\\GT_file.csv"
+# with open(csv_path, 'w', newline='') as csvfile:
+#     Writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+#     Writer.writeheader()
+#
+# for i in range(len(new_list_syllables)):
+#     with open(csv_path, 'a', newline='') as csvfile:  # should be ok
+#         Writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+#         # Writer.writerow({"Label": label_id, "Syllable id": file[:-4]})
+#         Writer.writerow({"New name": new_list_syllables[i], "Old Name": list_syllables[i][:-4]})
 
