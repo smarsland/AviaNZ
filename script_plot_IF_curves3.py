@@ -9,10 +9,27 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Original"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Original_prep"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Smoothed"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Smoothed_prep"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Cutted"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Cutted_prep"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Cutted_smoothed"
 directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-            "Smaller_Dataset1\\Original"
-save_dir = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-           "Smaller_Dataset1\\Classes_curves"
+            "Smaller_Dataset1\\Cutted_smoothed_prep"
+save_fold = "Classes_curves"
+save_dir = directory +'\\'+ save_fold
+if not save_fold in os.listdir(directory):
+    os.makedirs(save_dir)
+
 
 labels_lists = ["D", "E", "G", "K", "J", "L", "M", "O", "R", "Z"]
 # labels_lists = ["D"]
@@ -38,7 +55,7 @@ for label in labels_lists:
                 else:
                     j += 1
     fig.suptitle('Class ' + label, fontsize=120)
-    fig_name = save_dir + "\\IF_"+label+"_class_curves.jpg"
+    fig_name = save_dir + "\\class"+label+"_IFcurves.jpg"
     plt.savefig(fig_name)
 
 

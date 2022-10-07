@@ -148,14 +148,14 @@ file_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_
             "Smaller_Dataset1\\Original\\K3.wav"
 if_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
           "Smaller_Dataset1\\Original\\K3_IF.csv"
-figname = save_dir +"\\kiwisyllable_win512_hop128_hann_BoxCoxnorm.jpg"
+figname = save_dir +"\\kiwisyllable_win512_hop128_hann_inverted.jpg"
 win_len = 512
 hop = 128
 window_type = 'Hann'
 spec_type = "Standard"
 scale = 'Linear'
 mel_num = None
-norm_type = "Box-Cox"
+norm_type = "Standard"
 list_freq_labels = ['0','500', '1000', '1500', '2000', '2500', '3000', '3500', '4000', '4500', '5000', '5500', '6000',
                    '6500', '7000', '7500', '8000']
 #read time_stamps
@@ -174,9 +174,13 @@ T = sp.fileLength / fs
 TFR = np.copy(sp.spectrogram(win_len, hop, window_type, sgType=spec_type, sgScale=scale, nfilters=mel_num))
 # spectrogram normalizations
 if norm_type != "Standard":
-    sp.normalisedSpec(tr=norm_type)
-    TFR = np.copy(sp.sg)
-TFR2 = TFR.T
+    TFR = sp.normalisedSpec(tr=norm_type)
+    # TFR = np.copy(sp.sg)
+# TFR2 = TFR.T
+s1_inverted = sp.invertSpectrogram(TFR, window_width=win_len, incr=hop, window=window_type)
+sp.data = s1_inverted
+TFR_inv = sp.spectrogram(win_len, hop, window_type, sgType=spec_type, sgScale=scale, nfilters=mel_num)
+TFR2 = TFR_inv.T
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 20))
 im = ax.imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
