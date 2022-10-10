@@ -694,7 +694,7 @@ signals_list = os.listdir(dataset_dir)
 
 # TFR options
 # sgtypes
-spectrogram_types = ["Standard"]
+spectrogram_types = ["Multi-tapered"]
 # sgscale
 freq_scales = ['Linear']
 # spectrogram normalization functions
@@ -708,7 +708,7 @@ optimization_options = ["Directory"]
 metrics = sm.load(["stoi", 'sisdr'], window=None)
 
 # Inizialization
-Test_id = 200
+Test_id = 400
 
 # start loop
 
