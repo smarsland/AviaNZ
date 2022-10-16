@@ -696,7 +696,7 @@ signals_list = os.listdir(dataset_dir)
 # sgtypes
 spectrogram_types = ["Standard"]
 # sgscale
-freq_scales = ['Linear']
+freq_scales = ['Mel Frequency']
 # spectrogram normalization functions
 spec_normalizations = ["Standard", "Log", "Box-Cox", "Sigmoid", "PCEN"]
 # optimization metrics
@@ -708,7 +708,7 @@ optimization_options = ["Directory"]
 metrics = sm.load(["stoi", 'sisdr'], window=None)
 
 # Inizialization
-Test_id = 200
+Test_id = 500
 
 # start loop
 

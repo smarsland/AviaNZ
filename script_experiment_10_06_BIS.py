@@ -77,7 +77,7 @@ def assign_label(D, list2, label_list, true_label_list):
     """
     This function assign label by symmetry breaking given the distance matrix D
 
-    LIST1 is the list of train data
+    D distance matrix
     LIST2 is the list of test data
     LABEL_LIST list of labels for train data
     TRUE_LABEL_LIST list of true label fro LIST2
