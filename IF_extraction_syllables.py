@@ -30,8 +30,10 @@ import matplotlib.pyplot as plt
 #                   "\\exemplars\\Models\\Models-ridges"
 # analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\Kiwi_IndividualID\\" \
 #                   "exemplars\\Smaller_Dataset\\Original"
+# analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                   "Smaller_Dataset1\\Original"
 analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-                  "Smaller_Dataset1\\Original"
+                  "Smaller_Dataset2\\Original"
 
 alpha = 1
 beta = 0.5

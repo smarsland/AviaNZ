@@ -1,5 +1,6 @@
 """
 06/10/2022
+Checked: 28/10/2022
 Author: Virginia Listanti
 
 This script smooth a set of curves using moving averages
@@ -53,13 +54,21 @@ def moving_average(s, win_len):
 
 # directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #             "Smaller_Dataset1\\Original"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Cutted"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset2\\Original"
 directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-            "Smaller_Dataset1\\Cutted"
+            "Smaller_Dataset2\\Cutted"
 
 # newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #                "Smaller_Dataset1\\Smoothed"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset1\\Cutted_smoothed"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Smoothed"
 newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-               "Smaller_Dataset1\\Cutted_smoothed"
+               "Smaller_Dataset2\\Cutted_smoothed"
 
 
 fieldnames = ['t', "IF"]

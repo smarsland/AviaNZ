@@ -1,5 +1,6 @@
 """
 6/10/2022
+Checked: 28/10/2022
 Author: Virginia Listanti
 
 REVIEWED SCRIPT
@@ -40,8 +41,17 @@ import DTW_functions as DTW
 #             "Smaller_Dataset1\\Smoothed"
 # directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #             "Smaller_Dataset1\\Cutted"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset1\\Cutted_smoothed"
+
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset2\\Original"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset2\\Smoothed"
+# directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#             "Smaller_Dataset2\\Cutted"
 directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-            "Smaller_Dataset1\\Cutted_smoothed"
+            "Smaller_Dataset2\\Cutted_smoothed"
 
 # newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #                "Smaller_Dataset1\\Original_prep"
@@ -49,8 +59,17 @@ directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_
 #                "Smaller_Dataset1\\Smoothed_prep"
 # newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #                "Smaller_Dataset1\\Cutted_prep"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset1\\Cutted_smoothed_prep"
+
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Original_prep"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Smoothed_prep"
+# newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Cutted_prep"
 newdirectory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-               "Smaller_Dataset1\\Cutted_smoothed_prep"
+               "Smaller_Dataset2\\Cutted_smoothed_prep"
 
 list_files = []
 list_length = []
