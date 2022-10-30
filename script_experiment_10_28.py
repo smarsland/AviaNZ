@@ -119,12 +119,14 @@ def assign_label(D, list2, label_list, true_label_list):
 #                "Smaller_Dataset2\\Original"
 # dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #                "Smaller_Dataset2\\Smoothed"
+# dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Cutted"
 dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-               "Smaller_Dataset2\\Cutted"
+               "Smaller_Dataset2\\Cutted_smoothed"
 
 train_dataset_path  = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
                "Smaller_Dataset2"
-Test_id = 5
+Test_id = 7
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]

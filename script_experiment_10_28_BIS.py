@@ -117,12 +117,16 @@ def assign_label(D, list2, label_list, true_label_list):
 #################################################        MAIN             ################################
 # dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #                "Smaller_Dataset2\\Original_prep"
+# dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Smoothed_prep"
+# dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Cutted_prep"
 dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-               "Smaller_Dataset2\\Smoothed_prep"
+               "Smaller_Dataset2\\Cutted_smoothed_prep"
 
 train_dataset_path  = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
                "Smaller_Dataset2"
-Test_id = 4
+Test_id = 8
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
