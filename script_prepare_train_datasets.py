@@ -30,7 +30,8 @@ for label in labels_lists:
         if file.endswith('.csv') and file[0] == label:
             num_list.append(file[1:-7])
     random.shuffle(num_list)
-    id_list = num_list[:int(np.floor(len(num_list)*2/3))]
+    # id_list = num_list[:int(np.floor(len(num_list)*2/3))]
+    id_list = num_list[:int(np.floor(len(num_list) * 1 / 2))]
 
     train_set = []
     for id in num_list:
