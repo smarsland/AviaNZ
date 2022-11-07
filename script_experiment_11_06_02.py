@@ -1,11 +1,21 @@
 """
-28/10/2022
+05/11/2022
 Author: Virginia Listanti
 
 This script manage the experiment to find the best pipeline and metric to perform the classification task on
  kiwi syllables
 
 The experiment run on 10 classes
+
+We combine the metrics with mean of the differences of f0, f1 and fmax
+
+Part 2: we combine the results from SSD, DTW, PCA, Geo in pairs
+ - SSD + DTW
+ - SSD + PCA
+ - SSD + Geo
+ - DTW + PCA
+ - DTW + Geo
+ - PCA + Geo
 """
 
 import os
@@ -73,9 +83,9 @@ def symmetrize_matrix(A):
 
     return (A + A.T) / 2
 
-def assign_label(D, list2, label_list, true_label_list):
+def find_best(D, list2, label_list):
     """
-    This function assign label by symmetry breaking given the distance matrix D
+    This function find best 3 matches from a distance matrix D
 
     D distance matrix
     LIST2 is the list of test data
@@ -84,8 +94,6 @@ def assign_label(D, list2, label_list, true_label_list):
     """
     # N1 = len(list1)
     N2 = len(list2)
-    accuracy = 0
-    alg_labels = []
     best3_list = []
 
     for k in range(N2):
@@ -94,39 +102,77 @@ def assign_label(D, list2, label_list, true_label_list):
         best_match = [label_list[indices[0]], label_list[indices[1]], label_list[indices[2]]]
         best3_list.append(best_match)
 
-        if best_match[0] == best_match[1]:
-            label = best_match[0]
-        elif best_match[2] == best_match[1]:
-            label = best_match[2]
-        elif best_match[2] == best_match[0]:
-            label = best_match[2]
-        else:
-            label = best_match[0]
+    return best3_list
 
+def assign_label(list2, best3_list1, best3_list2, true_label_list):
+    """
+    This function assign label by majority from best3_list1 and best3_list2
+
+    LIST2 is the list of test data
+    BEST3_LIST1 best 3 list from distance 1
+    BEST3_LIST2 best 3 list from distance 2
+    TRUE_LABEL_LIST list of true label fro LIST2
+    """
+    # N1 = len(list1)
+    N2 = len(list2)
+    accuracy = 0
+    alg_labels = []
+
+    for k in range(N2):
+        freq_count = CountFrequency(best3_list1[k], best3_list2[k])
+        label = max(freq_count, key=freq_count.get)
         alg_labels.append(label)
         if label == true_label_list[k]:
             accuracy += 1
-
-        del best_match
-
     accuracy /= N2
 
+    return alg_labels, accuracy
 
-    return alg_labels, best3_list, accuracy
+def CountFrequency(my_list1, my_list2):
+
+    """
+    This function counts the frequencies in two lists using a dictionary
+    """
+    # Creating an empty dictionary
+    freq = {}
+    for item in my_list1:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list2:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    return freq
+
+def normalise_matrix(A):
+    """
+    This function normalise a Matrix A
+    """
+
+    range_A = np.abs(np.max(A) - np.min(A))
+
+
+    return (A-np.min(A))/range_A
 
 #################################################        MAIN             ################################
-dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-               "Smaller_Dataset2\\Original_prep"
-# dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-#                "Smaller_Dataset2\\Smoothed_prep"
-# dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-#                "Smaller_Dataset2\\Cutted_prep"
-# dataset_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-#                "Smaller_Dataset2\\Cutted_smoothed_prep"
+# freq_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Original"
+# freq_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Smoothed"
+# freq_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+#                "Smaller_Dataset2\\Cutted"
+freq_path = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
+               "Smaller_Dataset2\\Cutted_smoothed"
+dataset_path = freq_path +"_prep"
 
 train_dataset_path  = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
                       "Smaller_Dataset2\\Test_50_50"
-Test_id = 1
+Test_id = 4
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
@@ -141,74 +187,90 @@ list_train_syllables_path = []
 # list_train_path = []
 list_train_labels = []
 len_list1 = []
+len_freq_list1 = []
 list_train_files =[]
+list_train_freq_path =[]
 for label in list_labels:
     train_dataset_list_path = train_dataset_path + "\\Class_"+label+".csv"
     train_list = np.loadtxt(train_dataset_list_path, skiprows=1, delimiter=',', dtype=str)
     for file in train_list:
         file_path = dataset_path + '\\' + file
+        freq_file_path = freq_path + "\\" + file
         list_train_files.append(file[:-7])
         list_train_syllables_path.append(file_path)
+        list_train_freq_path.append(freq_file_path)
         list_train_labels.append(label)
         len_syl = len(np.loadtxt(file_path, skiprows=1, delimiter=',')[:, 1])
         len_list1.append(len_syl)
+        len_freq_list1.append(len(np.loadtxt(freq_file_path, skiprows=1, delimiter=',')[:, 1]))
 n1 = len(list_train_syllables_path)
 
 #read label for test dataset
 list_syllables = []
 list_syllables_path = []
+list_freq_path = []
 list_assigned_labels_ssd = []
 list_assigned_labels_pca = []
 list_assigned_labels_dtw = []
-list_assigned_labels_crosscorr = []
 list_assigned_labels_geod = []
 len_list2= []
-
-
+len_freq_list2 = []
 for file in test_list:
     list_syllables.append(file[:-7])
     file_path = dataset_path+'\\'+file
+    freq_file_path = freq_path+'\\'+file
     list_syllables_path.append(file_path)
+    list_freq_path.append(freq_file_path)
     len_syl = len(np.loadtxt(file_path, skiprows=1, delimiter=',')[:, 1])
     len_list2.append(len_syl)
-            #how to do comparison?.
+    len_freq_list2.append(len(np.loadtxt(freq_file_path, skiprows=1, delimiter=',')[:, 1]))
 
 n2 = len(list_syllables_path)
 len_max = max(np.max(len_list1),np.max(len_list2))
 len_min = min(np.min(len_list1),np.min(len_list2))
+len_max_freq = max(np.max(len_freq_list1),np.max(len_freq_list2))
 
 #number of files
 n = n1+n2
 
 # save train curves
 train_curves = np.zeros((n1, len_max, 2))
+train_freq_curves = np.zeros((n1, len_max_freq,2)) #note I am saving the original curve (t,f)
 for i in range(n1):
     train_curves[i,:len_list1[i],:] = np.loadtxt(open(list_train_syllables_path[i], "rb"), delimiter=",", skiprows=1)
+    train_freq_curves[i, :len_freq_list1[i], :] = np.loadtxt(open(list_train_freq_path[i], "rb"), delimiter=",",
+                                                             skiprows=1)
 
 # save test curves
 test_curves = np.zeros((n2, len_max, 2))
+test_freq_curves = np.zeros((n2, len_max_freq,2)) #note I am saving the original curve (t,f)
 for i in range(n2):
     test_curves[i,:len_list2[i],:] = np.loadtxt(open(list_syllables_path[i], "rb"), delimiter=",", skiprows=1)
+    test_freq_curves[i, :len_freq_list2[i], :] = np.loadtxt(open(list_freq_path[i], "rb"), delimiter=",", skiprows=1)
 
 num_label = len(list_labels)
 # accuracy
-accuracy_ssd = 0
-accuracy_pca = 0
-accuracy_dtw = 0
-accuracy_crosscorr = 0
-accuracy_geod = 0
+accuracy_ssd_dtw = 0
+accuracy_ssd_pca = 0
+accuracy_ssd_geo = 0
+accuracy_dtw_pca = 0
+accuracy_dtw_geo = 0
+accuracy_pca_geo = 0
 
 #pre-allocate distance_matrices
 ssd_matrix = np.zeros((n2,n1))
-crosscorr_matrix = np.zeros((n2,n1))
 geod_matrix = np.zeros((n2,n1))
 pca_matrix = np.zeros((n2,n1))
 dtw_matrix = np.zeros((n2,n1))
+df0_matrix = np.zeros((n2,n1)) #matrix of difference of initial frequencies
+df1_matrix = np.zeros((n2,n1)) #matrix of difference of final frequencies
+dfmax_matrix = np.zeros((n2,n1)) #matrix of difference of max frequencies
 
 
 for i in range(n2):
     # prepare curves row by row
     new_reference_curve = np.copy(test_curves[i,:len_list2[i],:])
+    new_reference_freq_curve = np.copy(test_freq_curves[i, :len_freq_list2[i], :])
     new_curves = train_curves
 
     # # evaluate PCA distance vector
@@ -216,10 +278,14 @@ for i in range(n2):
 
     for j in range(n1):
         ssd_matrix[i, j] = distances.ssd(new_reference_curve[:,1], new_curves[j, :, 1])
-        crosscorr_matrix[i, j] = distances.cross_corr(new_reference_curve[:,1], new_curves[j, :, 1])
+        # crosscorr_matrix[i, j] = distances.cross_corr(new_reference_curve[:,1], new_curves[j, :, 1])
         geod_matrix[i, j] = distances.Geodesic_curve_distance( new_reference_curve[:,0], new_reference_curve[:,1],
                                                               new_curves[j, :, 0], new_curves[j, :, 1])
         dtw_matrix[i, j] = distances.dtw(new_reference_curve[:,1], new_curves[j, :, 1])
+        df0_matrix[i, j] = np.abs(new_reference_freq_curve[0, 1] - train_freq_curves[j, 0, 1])
+        df1_matrix[i, j] = np.abs(new_reference_freq_curve[-1, 1] - train_freq_curves[j, len_freq_list1[j] - 1, 1])
+        dfmax_matrix[i, j] = np.abs(np.max(new_reference_freq_curve[:, 1]) -
+                                    np.max(train_freq_curves[j, :len_freq_list1[j], 1]))
 
 
 #symmetrize matrices
@@ -232,52 +298,73 @@ for i in range(n2):
 
 # prepare corosscorellation matrix for clustering
 # NOTE: we don't need this but I am doing for having it for the next step
-crosscorr_matrix = np.max(crosscorr_matrix) - crosscorr_matrix
+# crosscorr_matrix = np.max(crosscorr_matrix) - crosscorr_matrix
 
-list_assigned_labels_ssd, best3_list_ssd, accuracy_ssd = assign_label(ssd_matrix, list_syllables, list_train_labels,
-                                                                      list_true_labels)
-list_assigned_labels_pca, best3_list_pca, accuracy_pca = assign_label(pca_matrix, list_syllables, list_train_labels,
-                                                                      list_true_labels)
-list_assigned_labels_dtw, best3_list_dtw, accuracy_dtw = assign_label(dtw_matrix, list_syllables, list_train_labels,
-                                                                      list_true_labels)
-list_assigned_labels_geod, best3_list_geod, accuracy_geod = assign_label(geod_matrix, list_syllables, list_train_labels,
-                                                                      list_true_labels)
-list_assigned_labels_crosscorr, best3_list_crosscorr, accuracy_crosscorr = assign_label(crosscorr_matrix, list_syllables,
-                                                                                        list_train_labels,
-                                                                                        list_true_labels)
+# normalise matrices
+
+df0_matrix = normalise_matrix(df0_matrix)
+df1_matrix = normalise_matrix(df1_matrix)
+dfmax_matrix = normalise_matrix(dfmax_matrix)
+df_matrix = (df0_matrix + df1_matrix + dfmax_matrix) /3
+ssd_matrix = normalise_matrix(ssd_matrix) + df_matrix
+pca_matrix = normalise_matrix(pca_matrix) + df_matrix
+dtw_matrix = normalise_matrix(dtw_matrix) + df_matrix
+geod_matrix = normalise_matrix(geod_matrix) + df_matrix
+
+# find best 3 match for each metric
+best3_list_ssd = find_best(ssd_matrix, list_syllables, list_train_labels)
+best3_list_pca = find_best(pca_matrix, list_syllables, list_train_labels)
+best3_list_dtw = find_best(dtw_matrix, list_syllables, list_train_labels)
+best3_list_geo = find_best(geod_matrix, list_syllables, list_train_labels)
+
+list_assigned_labels_ssd_dtw, accuracy_ssd_dtw = assign_label(list_syllables, best3_list_ssd, best3_list_dtw,
+                                                              list_true_labels)
+list_assigned_labels_ssd_pca, accuracy_ssd_pca = assign_label(list_syllables, best3_list_ssd, best3_list_pca,
+                                                              list_true_labels)
+list_assigned_labels_ssd_geo, accuracy_ssd_geo = assign_label(list_syllables, best3_list_ssd, best3_list_geo,
+                                                              list_true_labels)
+list_assigned_labels_dtw_pca, accuracy_dtw_pca = assign_label(list_syllables, best3_list_dtw, best3_list_pca,
+                                                              list_true_labels)
+list_assigned_labels_dtw_geo, accuracy_dtw_geo = assign_label(list_syllables, best3_list_dtw, best3_list_geo,
+                                                              list_true_labels)
+list_assigned_labels_pca_geo, accuracy_pca_geo = assign_label(list_syllables, best3_list_pca, best3_list_geo,
+                                                              list_true_labels)
+
 
 # save labels
 results_directory = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-                    "Smaller_Dataset2\\Tests_metrics\\Test_metrics_17"
+                    "Smaller_Dataset2\\Tests_metrics\\Test_metrics_13"
 result_folder = results_directory + "\\"+ "Test_"+ str(Test_id)
-if not "Test_"+ str(Test_id) in os.listdir(results_directory):
+if not "Test_" + str(Test_id) in os.listdir(results_directory):
     os.mkdir(result_folder)
 
 csvfilename = result_folder + "\\" + "Labels_comparison.csv"
-fieldnames = ['Syllable', 'True Label', 'SSD label', 'PCA label', 'DTW label', 'Crosscorr label', 'GEO label']
+fieldnames = ['Syllable', 'True Label', 'SSD + DTW label', 'SSD + PCA label', 'SSD + GEO label', 'DTW + PCA label',
+              'DTW + GEO label', 'PCA + GEO label']
 with open(csvfilename, 'w', newline='') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
 
     for i in range(n2):
         dictionary = {'Syllable': list_syllables[i], 'True Label': list_true_labels[i],
-                      'SSD label': list_assigned_labels_ssd[i], 'PCA label': list_assigned_labels_pca[i],
-                      'DTW label': list_assigned_labels_dtw[i], 'Crosscorr label': list_assigned_labels_crosscorr[i],
-                      'GEO label': list_assigned_labels_geod[i]}
+                      'SSD + DTW label': list_assigned_labels_ssd_dtw[i], 'SSD + PCA label':
+                          list_assigned_labels_ssd_pca[i], 'SSD + GEO label': list_assigned_labels_ssd_geo[i],
+                      'DTW + PCA label': list_assigned_labels_dtw_pca[i], 'DTW + GEO label':
+                          list_assigned_labels_dtw_geo[i], 'PCA + GEO label': list_assigned_labels_pca_geo[i]}
 
         writer.writerow(dictionary)
         del dictionary
 
 # save best3 match
 csvfilename = result_folder + "\\" + "Best3_comparison.csv"
-fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'Crosscorr', 'GEO']
+fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'GEO']
 with open(csvfilename, 'w', newline='') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
 
     for i in range(n2):
         dictionary = {'Syllable': list_syllables[i], 'SSD': best3_list_ssd[i], 'PCA': best3_list_pca[i],
-                      'DTW': best3_list_dtw[i], 'Crosscorr': best3_list_crosscorr[i], 'GEO': best3_list_geod[i]}
+                      'DTW': best3_list_dtw[i], 'GEO': best3_list_geo[i]}
 
         writer.writerow(dictionary)
         del dictionary
@@ -286,27 +373,30 @@ with open(csvfilename, 'w', newline='') as csvfile:
 file_path = result_folder + '\\Accuracy_results.txt'
 file_txt = open(file_path, 'w')
 l0 = [" Accuracy results \n"]
-l1 = ["\n SSD Accuracy: " + str(accuracy_ssd)]
-l2 = ["\n PCA Accuracy: " + str(accuracy_pca)]
-l3 = ["\n DTW Accuracy: " + str(accuracy_dtw)]
-l4 = ["\n Crosscorr Accuracy: " + str(accuracy_crosscorr)]
-l5 = ["\n Geodesic Accuracy: " + str(accuracy_geod)]
-file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5)))
+l1 = ["\n SSD + DTW Accuracy: " + str(accuracy_ssd_dtw)]
+l2 = ["\n SSD + PCA Accuracy: " + str(accuracy_ssd_pca)]
+l3 = ["\n SSD + GEO Accuracy: " + str(accuracy_ssd_geo)]
+l4 = ["\n DTW + PCA Accuracy: " + str(accuracy_dtw_pca)]
+l5 = ["\n DTW + GEO Accuracy: " + str(accuracy_dtw_geo)]
+l6 = ["\n PCA + GEO Accuracy: " + str(accuracy_pca_geo)]
+file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5, l6)))
 file_txt.close()
 
 #save matrices
 np.savetxt(result_folder +"\\SSD.txt", ssd_matrix, fmt='%s')
-np.savetxt(result_folder +"\\cross-correlation.txt", crosscorr_matrix, fmt='%s')
 np.savetxt(result_folder+"\\Geodesic.txt", geod_matrix, fmt='%s')
 np.savetxt(result_folder+"\\PCA.txt", pca_matrix, fmt='%s')
 np.savetxt(result_folder +"\\DTW.txt", dtw_matrix, fmt='%s')
+np.savetxt(result_folder +"\\IntialFreq.txt", df0_matrix, fmt='%s')
+np.savetxt(result_folder +"\\FinalFreq.txt", df1_matrix, fmt='%s')
+np.savetxt(result_folder +"\\MaxFreq.txt", dfmax_matrix, fmt='%s')
 
 # Plot the matrices
 
 list_labels2 = list_train_files
 list_labels1 = list_syllables
 
-fig, ax = plt.subplots(3,2, figsize=(80, 80))
+fig, ax = plt.subplots(2,2, figsize=(80, 80))
 
 ax[0,0].imshow(ssd_matrix, cmap="Purples")
 # Show all ticks and label them with the respective list entries
@@ -316,13 +406,13 @@ ax[0,0].set_yticks(np.arange(n2), labels=list_labels1, fontsize=40)
 plt.setp(ax[0, 0].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 ax[0, 0].set_title("SSD distance", fontsize=80)
 
-ax[0,1].imshow(crosscorr_matrix, cmap="Purples")
+ax[0, 1].imshow(pca_matrix, cmap="Purples")
 # Show all ticks and label them with the respective list entries
-ax[0,1].set_xticks(np.arange(n1), labels=list_labels2, fontsize=40)
-ax[0,1].set_yticks(np.arange(n2), labels=list_labels1, fontsize=40)
+ax[0, 1].set_xticks(np.arange(n1), labels=list_labels2, fontsize=40)
+ax[0, 1].set_yticks(np.arange(n2), labels=list_labels1, fontsize=40)
 # Rotate the tick labels and set their alignment.
 plt.setp(ax[0, 1].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-ax[0, 1].set_title("Cross-correlation", fontsize=80)
+ax[0, 1].set_title("PCA distance", fontsize=80)
 
 ax[1,0].imshow(geod_matrix, cmap="Purples")
 # Show all ticks and label them with the respective list entries
@@ -339,14 +429,6 @@ ax[1,1].set_yticks(np.arange(n2), labels=list_labels1, fontsize=40)
 # Rotate the tick labels and set their alignment.
 plt.setp(ax[1, 1].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 ax[1, 1].set_title("DTW distance", fontsize=80)
-
-ax[2,0].imshow(pca_matrix, cmap="Purples")
-# Show all ticks and label them with the respective list entries
-ax[2,0].set_xticks(np.arange(n1), labels=list_labels2, fontsize=40)
-ax[2,0].set_yticks(np.arange(n2), labels=list_labels1, fontsize=40)
-# Rotate the tick labels and set their alignment.
-plt.setp(ax[2, 0].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-ax[2, 0].set_title("PCA distance", fontsize=80)
 
 # fig.suptitle('Models Test 1', fontsize=120)
 fig.suptitle('Distance matrices', fontsize=120)

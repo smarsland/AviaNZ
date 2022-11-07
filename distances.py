@@ -97,6 +97,7 @@ def Geodesic_curve_distance(x1, y1, x2, y2):
     beta2 = np.column_stack([x2, y2]).T
 
     distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2), rotation=False)
+    # distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2), rotation=True)
 
     # distance, _, _ = geod_sphere(np.array(beta1), np.array(beta2))
 
