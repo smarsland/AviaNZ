@@ -402,7 +402,7 @@ list_true_labels = np.loadtxt(test_dataset_list_path, skiprows=1, delimiter=',',
 
 
 mel_list = [None]
-norm_list = [ "Standard"]
+norm_list = ["Standard"]
 spectrogram_parameters = {'spec_type': "Standard", 'scale': 'Linear', 'norm_type': None, 'win_len': None, 'hop': None,
                           'window_type': None, 'mel_num': None, 'alpha': None, 'beta': None}
 
@@ -410,6 +410,7 @@ Test_id = 0
 
 for norm_type in norm_list:
     spectrogram_parameters['norm_type'] = norm_type
+    print(norm_type)
     if norm_type == "Standard":
         window_parameters_list = [[512, 460], [512, 256], [512, 384], [256, 230], [256, 128], [256, 192]]
         Iatsenko_parameters_list = []
@@ -430,6 +431,8 @@ for norm_type in norm_list:
                 for Iatsenko_parameters in Iatsenko_parameters_list:
                     spectrogram_parameters['alpha'] = Iatsenko_parameters[0]
                     spectrogram_parameters['beta'] = Iatsenko_parameters[1]
+
+                    print(spectrogram_parameters)
 
                     save_dir = result_dir + '/Test_' + str(Test_id)
 
