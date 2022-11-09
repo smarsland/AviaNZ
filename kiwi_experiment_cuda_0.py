@@ -345,7 +345,7 @@ def save_curve(newdirectory, curves, list_files):
     M = np.shape(curves)[0]
     fieldnames = ['t', "IF"]
     for i in range(M):
-        csvfilename = newdirectory + "\\" + list_files[i]+'.csv'
+        csvfilename = newdirectory + "/" + list_files[i]+'.csv'
         with open(csvfilename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
@@ -415,6 +415,7 @@ for norm_type in norm_list:
         window_parameters_list = [[512, 460], [512, 256], [512, 384], [256, 230], [256, 128], [256, 192]]
         Iatsenko_parameters_list = [[1,0], [0.5, 0]]
         window_type_list = ["Hann", "Parzen", "Welch"]
+        print('check')
     elif norm_type == "Box-Cox":
         window_parameters_list = []
         Iatsenko_parameters_list = []
@@ -462,11 +463,11 @@ for norm_type in norm_list:
                     i = 0
                     #read files and extract IF
                     for label in list_labels:
-                        train_dataset_list_path = train_dataset_path + "\\Class_"+label+".csv"
+                        train_dataset_list_path = train_dataset_path + "/Class_"+label+".csv"
                         train_list = np.loadtxt(train_dataset_list_path, skiprows=1, delimiter=',', dtype=str)
                         for file in train_list:
                             file_wav = file[:-7] +'.wav'
-                            file_path = dataset_folder + '\\' + file_wav
+                            file_path = dataset_folder + '/' + file_wav
                             list_train_files.append(file[:-7])
                             list_train_syllables_path.append(file_path)
                             list_train_labels.append(label)
@@ -487,7 +488,7 @@ for norm_type in norm_list:
                     i += 0
                     for file in test_list:
                         file_wav = file[:-7] + '.wav'
-                        file_path = dataset_folder + '\\' + file_wav
+                        file_path = dataset_folder + '/' + file_wav
                         list_syllables.append(file[:-7])
                         list_syllables_path.append(file_path)
                         syllable_curve = extract_IF(file_path, spectrogram_parameters,file[:-7],
@@ -649,7 +650,7 @@ for norm_type in norm_list:
                                                                                            best3_list_geod_1,
                                                                                            list_true_labels)
 
-                    csvfilename = save_dir + "\\" + "Labels_comparison_pure.csv"
+                    csvfilename = save_dir + "/" + "Labels_comparison_pure.csv"
                     fieldnames = ['Syllable', 'True Label', 'SSD label', 'PCA label', 'DTW label', 'GEO label']
                     with open(csvfilename, 'w', newline='') as csvfile:
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -665,7 +666,7 @@ for norm_type in norm_list:
                             writer.writerow(dictionary)
                             del dictionary
 
-                    csvfilename = save_dir + "\\" + "Labels_comparison_df.csv"
+                    csvfilename = save_dir + "/" + "Labels_comparison_df.csv"
                     fieldnames = ['Syllable', 'True Label', 'SSD label', 'PCA label', 'DTW label', 'GEO label']
                     with open(csvfilename, 'w', newline='') as csvfile:
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -681,7 +682,7 @@ for norm_type in norm_list:
                             writer.writerow(dictionary)
                             del dictionary
 
-                    csvfilename = save_dir + "\\" + "Labels_comparison_combine2.csv"
+                    csvfilename = save_dir + "/" + "Labels_comparison_combine2.csv"
                     fieldnames = ['Syllable', 'True Label', 'SSD + DTW label', 'SSD + PCA label', 'SSD + GEO label',
                                   'DTW + PCA label',
                                   'DTW + GEO label', 'PCA + GEO label']
@@ -701,7 +702,7 @@ for norm_type in norm_list:
                             writer.writerow(dictionary)
                             del dictionary
 
-                    csvfilename = save_dir + "\\" + "Labels_comparison_combine2_df.csv"
+                    csvfilename = save_dir + "/" + "Labels_comparison_combine2_df.csv"
                     fieldnames = ['Syllable', 'True Label', 'SSD + DTW label', 'SSD + PCA label', 'SSD + GEO label',
                                   'DTW + PCA label',
                                   'DTW + GEO label', 'PCA + GEO label']
@@ -721,7 +722,7 @@ for norm_type in norm_list:
                             writer.writerow(dictionary)
                             del dictionary
 
-                    csvfilename = save_dir + "\\" + "Labels_comparison_combine3.csv"
+                    csvfilename = save_dir + "/" + "Labels_comparison_combine3.csv"
                     fieldnames = ['Syllable', 'True Label', 'SSD + DTW + PCA label', 'SSD + DTW + GEO label',
                                   'SSD + PCA +GEO label',
                                   'DTW + PCA + GEO label']
@@ -740,7 +741,7 @@ for norm_type in norm_list:
                             writer.writerow(dictionary)
                             del dictionary
 
-                    csvfilename = save_dir + "\\" + "Labels_comparison_combine3_df.csv"
+                    csvfilename = save_dir + "/" + "Labels_comparison_combine3_df.csv"
                     fieldnames = ['Syllable', 'True Label', 'SSD + DTW + PCA label', 'SSD + DTW + GEO label',
                                   'SSD + PCA +GEO label',
                                   'DTW + PCA + GEO label']
@@ -762,7 +763,7 @@ for norm_type in norm_list:
 
 
                     # save best3 match
-                    csvfilename = save_dir + "\\" + "Best3_comparison.csv"
+                    csvfilename = save_dir + "/" + "Best3_comparison.csv"
                     fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'GEO']
                     with open(csvfilename, 'w', newline='') as csvfile:
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -777,7 +778,7 @@ for norm_type in norm_list:
                             del dictionary
 
                     # save best3 match df
-                    csvfilename = save_dir + "\\" + "Best3_comparison_df.csv"
+                    csvfilename = save_dir + "/" + "Best3_comparison_df.csv"
                     fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'GEO']
                     with open(csvfilename, 'w', newline='') as csvfile:
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -794,7 +795,7 @@ for norm_type in norm_list:
 
 
                     # print accuracies in txt files
-                    file_path = save_dir + '\\Accuracy_results.txt'
+                    file_path = save_dir + '/Accuracy_results.txt'
                     file_txt = open(file_path, 'w')
                     l0 = [" Accuracy results \n"]
                     l1 = ["\n SSD Accuracy: " + str(accuracy_ssd)]
@@ -831,11 +832,11 @@ for norm_type in norm_list:
                     file_txt.close()
 
                     # save matrices
-                    np.savetxt(save_dir + "\\SSD.txt", ssd_matrix, fmt='%s')
-                    np.savetxt(save_dir + "\\Geodesic.txt", geod_matrix, fmt='%s')
-                    np.savetxt(save_dir + "\\PCA.txt", pca_matrix, fmt='%s')
-                    np.savetxt(save_dir + "\\DTW.txt", dtw_matrix, fmt='%s')
-                    np.savetxt(save_dir + "\\Duration.txt", df_matrix, fmt='%s')
+                    np.savetxt(save_dir + "/SSD.txt", ssd_matrix, fmt='%s')
+                    np.savetxt(save_dir + "/Geodesic.txt", geod_matrix, fmt='%s')
+                    np.savetxt(save_dir + "/PCA.txt", pca_matrix, fmt='%s')
+                    np.savetxt(save_dir + "/DTW.txt", dtw_matrix, fmt='%s')
+                    np.savetxt(save_dir + "/Duration.txt", df_matrix, fmt='%s')
 
                     Test_id +=1
 
