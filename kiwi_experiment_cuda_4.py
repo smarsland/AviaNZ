@@ -460,6 +460,12 @@ for norm_type in norm_list:
                     spectrogram_parameters['alpha'] = Iatsenko_parameters[0]
                     spectrogram_parameters['beta'] = Iatsenko_parameters[1]
 
+                    if Test_id < 620:
+                        print('\n\n Skipping Test ', Test_id)
+                        Test_id += 1
+                        continue
+
+
                     print('\n\n Starting Test ', Test_id)
                     print(spectrogram_parameters)
 
@@ -500,6 +506,7 @@ for norm_type in norm_list:
                             list_train_files.append(file[:-7])
                             list_train_syllables_path.append(file_path)
                             list_train_labels.append(label)
+                            print('If file: ', file_wav)
                             syllable_curve = extract_IF(file_path, spectrogram_parameters, file[:-7],
                                                         save_dir_IF)
                             len_syl = np.shape(syllable_curve)[0]
@@ -520,6 +527,7 @@ for norm_type in norm_list:
                         file_path = dataset_folder + '/' + file_wav
                         list_syllables.append(file[:-7])
                         list_syllables_path.append(file_path)
+                        print('If file: ', file_wav)
                         syllable_curve = extract_IF(file_path, spectrogram_parameters,file[:-7],
                                                         save_dir_IF)
                         len_syl = np.shape(syllable_curve)[0]
