@@ -357,7 +357,7 @@ def calculate_distances(prep_curves1, prep_curves2, extracted_curves1, extracted
     "This function evaluate the distance matrices"
 
     N1 = np.shape(prep_curves1)[0]
-    N2= np.shape(prep_curves1)[1]
+    N2= np.shape(prep_curves2)[0]
     # pre-allocate distance_matrices
     ssd_m = np.zeros((N2, N1))
     geod_m = np.zeros((N2, N1))
