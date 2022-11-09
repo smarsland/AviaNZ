@@ -98,7 +98,7 @@ def assign_label2(list2, best3_list1, best3_list2, true_label_list):
     alg_labels = []
 
     for k in range(N2):
-        freq_count = CountFrequency(best3_list1[k], best3_list2[k])
+        freq_count = CountFrequency2(best3_list1[k], best3_list2[k])
         label = max(freq_count, key=freq_count.get)
         alg_labels.append(label)
         if label == true_label_list[k]:
@@ -123,7 +123,7 @@ def assign_label3(list2, best3_list1, best3_list2, best3_list3, true_label_list)
     alg_labels = []
 
     for k in range(N2):
-        freq_count = CountFrequency(best3_list1[k], best3_list2[k], best3_list3[k])
+        freq_count = CountFrequency3(best3_list1[k], best3_list2[k], best3_list3[k])
         label = max(freq_count, key=freq_count.get)
         alg_labels.append(label)
         if label == true_label_list[k]:
@@ -132,7 +132,7 @@ def assign_label3(list2, best3_list1, best3_list2, best3_list3, true_label_list)
 
     return alg_labels, accuracy
 
-def CountFrequency(my_list1, my_list2):
+def CountFrequency2(my_list1, my_list2):
 
     """
     This function counts the frequencies in two lists using a dictionary
@@ -146,6 +146,33 @@ def CountFrequency(my_list1, my_list2):
             freq[item] = 1
 
     for item in my_list2:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    return freq
+
+def CountFrequency3(my_list1, my_list2, my_list3):
+
+    """
+    This function counts the frequencies in three lists using a dictionary
+    """
+    # Creating an empty dictionary
+    freq = {}
+    for item in my_list1:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list2:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list3:
         if (item in freq):
             freq[item] += 1
         else:
