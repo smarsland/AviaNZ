@@ -324,9 +324,9 @@ def prepare_curves(extracted_curves, reference_curve, len_list, min_len):
     # new points
     new_times = np.linspace(0, 1, min_len)
 
-    for i in range(n):
+    for I in range(M):
         # dynamic time warping
-        target_curve = extracted_curves[i, : len_list[i], 1]
+        target_curve = extracted_curves[I, : len_list[I], 1]
         m = DTW.dtw(target_curve, reference_curve, wantDistMatrix=True)
         x, y = DTW.dtw_path(m)
         aligned_times = np.linspace(0, 1, len(x))
@@ -335,8 +335,8 @@ def prepare_curves(extracted_curves, reference_curve, len_list, min_len):
         aligned_curve -= np.mean(aligned_curve)
         # resample
         new_curve = np.interp(new_times, aligned_times, aligned_curve)
-        new_curves[i,:,0] = new_times
-        new_curves[i, :, 1] = new_curve
+        new_curves[I,:,0] = new_times
+        new_curves[I, :, 1] = new_curve
 
     return new_curves
 
@@ -508,7 +508,7 @@ for norm_type in norm_list:
                     # number of files
                     n = n1 + n2
 
-                    reference_curve = train_extracted_IF[0, :len_list1[0], :]
+                    reference_curve = train_extracted_IF[0, :len_list1[0], 1]
                     #prepare train curves
                     prepared_train_curves = prepare_curves(train_extracted_IF, reference_curve, len_list1, len_min)
                     save_curve(save_dir_IF, prepared_train_curves, list_train_files)
