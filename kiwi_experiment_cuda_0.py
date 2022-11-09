@@ -485,7 +485,7 @@ for norm_type in norm_list:
                     len_list2 = []
                     len_freq_list2 = []
                     test_extracted_IF = np.zeros((49, 40000, 2)) # we already know that we have 46 train file,
-                    i += 0
+                    i = 0
                     for file in test_list:
                         file_wav = file[:-7] + '.wav'
                         file_path = dataset_folder + '/' + file_wav
