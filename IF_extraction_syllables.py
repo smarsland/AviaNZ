@@ -33,12 +33,12 @@ import matplotlib.pyplot as plt
 # analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
 #                   "Smaller_Dataset1\\Original"
 analysis_folder = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
-                  "Smaller_Dataset2\\Original"
+                  "Smaller_Dataset2\\Original_test"
 
 alpha = 1
-beta = 0.5
+beta = 0
 win_len = 512
-hop = 128
+hop = 256
 window_type = 'Hann'
 spec_type = "Standard"
 scale = 'Linear'
@@ -90,6 +90,7 @@ for file in os.listdir(analysis_folder):
         for k in range (len(tfsupp[0,:])-2):
             f_jumps[k] = tfsupp[0, k+2] - tfsupp[0, k]
         freq_jump_boundary = 700
+        # freq_jump_boundary = 500
         if np.amax(np.abs(f_jumps)) > freq_jump_boundary:
             del IF
             print("detected jump: correcting")
