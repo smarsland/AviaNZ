@@ -413,7 +413,7 @@ for norm_type in norm_list:
     print(norm_type)
     if norm_type == "Standard":
         window_parameters_list = [[512, 460], [512, 256], [512, 384], [256, 230], [256, 128], [256, 192]]
-        Iatsenko_parameters_list = []
+        Iatsenko_parameters_list = [[1,0], [0.5, 0]]
         window_type_list = ["Hann", "Parzen", "Welch"]
     elif norm_type == "Box-Cox":
         window_parameters_list = []
