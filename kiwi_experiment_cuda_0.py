@@ -514,7 +514,7 @@ for norm_type in norm_list:
                     save_curve(save_dir_IF, prepared_train_curves, list_train_files)
 
                     # prepare test curves
-                    prepared_test_curves = prepare_curves(test_extracted_IF, reference_curve, len_list1, len_min)
+                    prepared_test_curves = prepare_curves(test_extracted_IF, reference_curve, len_list2, len_min)
                     save_curve(save_dir_IF, prepared_test_curves, list_syllables)
 
                     # iniziatlization
