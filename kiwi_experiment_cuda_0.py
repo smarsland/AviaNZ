@@ -433,7 +433,9 @@ for norm_type in norm_list:
                     spectrogram_parameters['alpha'] = Iatsenko_parameters[0]
                     spectrogram_parameters['beta'] = Iatsenko_parameters[1]
 
+                    print('\n\n Starting Test ', Test_id)
                     print(spectrogram_parameters)
+
 
                     save_dir = result_dir + '/Test_' + str(Test_id)
 
@@ -501,7 +503,7 @@ for norm_type in norm_list:
                     n2 = len(list_syllables_path)
                     len_max = max(np.max(len_list1), np.max(len_list2))
                     len_min = min(np.min(len_list1), np.min(len_list2))
-                    len_max_freq = max(np.max(len_freq_list1), np.max(len_freq_list2))
+                    # len_max_freq = max(np.max(len_freq_list1), np.max(len_freq_list2))
 
                     # number of files
                     n = n1 + n2
