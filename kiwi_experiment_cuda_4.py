@@ -444,7 +444,8 @@ for norm_type in norm_list:
         window_type_list = ["Hann"]
         print('check')
     elif norm_type == "Box-Cox":
-        window_parameters_list = [[512, 460], [256, 230], [128, 12], [64, 6], [128, 32], [64, 6]]
+        # window_parameters_list = [[512, 460], [256, 230], [128, 12], [64, 6], [128, 32], [64, 6]]
+        window_parameters_list = [[512, 460], [256, 230],[512, 128], [512, 51]]
         Iatsenko_parameters_list = [[0.5, 0], [10, 0], [1, 0], [1, 0.5]]
         window_type_list = ["Hann"]
 
