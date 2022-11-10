@@ -213,20 +213,27 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
     if spec_par['scale'] == "Linear":
         fstep = (fs / 2) / np.shape(TFR2)[0]
         freqarr = np.arange(fstep, fs / 2 + fstep, fstep)
+        f_band = 800
+        band_index = int(np.ceil(f_band / fstep - 1))
     else:
         # #mel freq axis
         nfilters = spec_par['mel_num']
         freqarr = np.linspace(sp.convertHztoMel(0), sp.convertHztoMel(fs / 2), nfilters + 1)
         freqarr = freqarr[1:]
+        f_band = sp.convertMeltoHz(800)
+        band_index = 0
+        while freqarr[band_index]<=f_band and band_index<len(freqarr):
+            band_index += 1
 
     # bandpass spectrogram below 800 Hz
-    f_band = 800
-    band_index = int(np.ceil(f_band / fstep - 1))
     TFR2[0:band_index, :] = 0
 
     wopt = [fs, spec_par['win_len']]
     tfsupp, _, _ = IF.ecurve(TFR2, freqarr, wopt)
     TFR3 = np.copy(TFR2)
+    # revert to Hz if Mel
+    if spec_par['scale'] == 'Mel Frequency':
+        tfsupp[:, :] = sp.convertMeltoHz(tfsupp[0, :])
 
     # hardcoded check
     f_jumps = np.zeros((len(tfsupp[0, :], )))
@@ -246,30 +253,49 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
         else:
             f_min = np.amin(tfsupp[1, jump_index + 1:])
             f_max = np.amax(tfsupp[2, jump_index + 1:])
-        min_index = int(np.floor(f_min / fstep - 1))
-        max_index = int(np.ceil(f_max / fstep - 1))
+        if spec_par['scale'] == 'Mel Frequency':
+            f_min = sp.convertHztoMel(f_min)
+            min_index = 0
+            while freqarr[min_index] <= f_min and min_index < len(freqarr): #here
+                min_index += 1
+
+            f_max = sp.convertHztoMel(f_max)
+            max_index = 0
+            while freqarr[max_index] <= f_max and max_index < len(freqarr):  # here
+                max_index += 1
+        else:
+            min_index = int(np.floor(f_min / fstep - 1))
+            max_index = int(np.ceil(f_max / fstep - 1))
         TFR3[0:min_index] = 0
         TFR3[max_index + 1:] = 0
         tfsupp2, _, _ = IF.ecurve(TFR3, freqarr, wopt)
         if_syllable = np.copy(tfsupp2[0, :])
         low_bound = np.copy(tfsupp2[1, :])
         high_bound = np.copy(tfsupp2[2, :])
+        # revert to Hz if Mel
+        if spec_par['scale'] == 'Mel Frequency':
+            if_syllable = sp.convertMeltoHz(if_syllable)
+            low_bound = sp.convertMeltoHz(low_bound)
+            high_bound = sp.convertMeltoHz(high_bound)
     else:
+        #for Mel-scale already converted
         if_syllable = np.copy(tfsupp[0, :])
         low_bound = np.copy(tfsupp[1, :])
         high_bound = np.copy(tfsupp[2, :])
 
-    # revert to Hz if Mel
-    if spec_par['scale'] == 'Mel Frequency':
-        if_syllable = sp.convertMeltoHz(if_syllable)
-        low_bound = sp.convertMeltoHz(low_bound)
-        high_bound = sp.convertMeltoHz(high_bound)
+
 
     # START AND ENDING POLISHING
     # find spec_intensity array
     spec_intensity = np.zeros(np.shape(if_syllable)[0])
     for t_index in range(len(if_syllable)):
-        f_index = int(np.ceil(if_syllable[t_index] / fstep - 1))
+        if spec_par['scale'] == 'Mel Frequency':
+            freq_check = sp.convertHztoMel(if_syllable[t_index])
+            f_index = 0
+            while freqarr[f_index] <= freq_check and f_index < len(freqarr): #here
+                f_index += 1
+        else:
+            f_index = int(np.ceil(if_syllable[t_index] / fstep - 1))
         spec_intensity[t_index] = TFR3[f_index, t_index]
 
     # borders check
