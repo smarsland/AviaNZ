@@ -469,7 +469,7 @@ list_true_labels = np.loadtxt(test_dataset_list_path, skiprows=1, delimiter=',',
 
 mel_list = [None]
 norm_list = ["Standard", 'PCEN']
-spectrogram_parameters = {'spec_type': "Standard", 'scale': 'Mel Frequency', 'norm_type': None, 'win_len': None, 'hop': None,
+spectrogram_parameters = {'spec_type': "Reassigned", 'scale': 'Mel Frequency', 'norm_type': None, 'win_len': None, 'hop': None,
                           'window_type': None, 'mel_num': None, 'alpha': None, 'beta': None}
 
 Test_id = 700
