@@ -332,6 +332,7 @@ class IF:
                 for dn in range(len(dind)-1):
                     ii=np.arange(dind[dn]+1,dind[dn+1]+1,1) #ii are indeces first +1 not needed
                     idn[ii]=np.reshape(np.arange(0,len(ii),1),np.shape(idn[ii])) #changef 1 in 0
+                    print(np.shape(ii), np.shape(idt), np.shape(Number_peaks))
                     Number_peaks[0,idt[ii[0]]]=len(ii)
                     if len(ii)==-1:
                         print(dn)

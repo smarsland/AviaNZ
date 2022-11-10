@@ -263,6 +263,7 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
             max_index = 0
             while freqarr[max_index] <= f_max and max_index < len(freqarr):  # here
                 max_index += 1
+            print('min_index ', min_index, 'max_index ', max_index)
         else:
             min_index = int(np.floor(f_min / fstep - 1))
             max_index = int(np.ceil(f_max / fstep - 1))
