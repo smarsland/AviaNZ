@@ -347,13 +347,26 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
             writer.writerow({"t": t_support[i], "IF": if_syllable[i]})
 
     # plotting
+    #if Mel scale translate
+    if spec_par['scale'] == 'Mel Frequency':
+        syl_len = len(if_syllable)
+        if_syl_discr = np.zeros(np.shape(if_syllable))
+        for i in range(syl_len):
+            f_index = 0
+            freq_check = sp.convertHztoMel(if_syllable[i])
+            while freqarr[f_index] <= freq_check and f_index < len(freqarr): #here
+                f_index += 1
+            if_syl_discr[i] =f_index
     # save picture
     fig_name = Save_dir+ '/'+ file_id  + "_Fourier_ridges_1.jpg"
     plt.rcParams["figure.autolayout"] = True
     fig, ax = plt.subplots(1, 4, figsize=(10, 20), sharex=True)
     ax[0].imshow(np.flipud(TFR2), extent=[0, np.shape(TFR2)[1], 0, np.shape(TFR2)[0]], aspect='auto')
     x = np.array(range(np.shape(TFR2)[1]))
-    ax[0].plot(x, if_syllable / fstep, linewidth=2, color='r')
+    if spec_par['scale'] == 'Mel Frequency':
+        ax[0].plot(x, if_syl_discr, linewidth=2, color='r')
+    else:
+        ax[0].plot(x, if_syllable / fstep, linewidth=2, color='r')
     ax[1].imshow(np.flipud(TFR3), extent=[0, np.shape(TFR3)[1], 0, np.shape(TFR3)[0]], aspect='auto')
     ax[2].plot(x, if_syllable, color='r')
     ax[2].set_ylim([0, fs / 2])
