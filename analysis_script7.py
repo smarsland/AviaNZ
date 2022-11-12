@@ -1,11 +1,13 @@
 """
 08/11/2022
+
 Author: Virginia Listanti
 
 This script purpose is to analyse data produced by IF experiment
 Here we want to produce plot to compare results obtained with different normalization
 We will produce one plot for each normalisation method (No norm, log, Box-Cox, PCEN)
-This is the global version: where we put all the signals togheter
+This is the global version: where we put all the signals together
+
 """
 
 import SignalProc

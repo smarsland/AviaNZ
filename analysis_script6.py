@@ -3,7 +3,7 @@
 Author: Virginia Listanti
 
 This script purpose is to analyse data produced by IF experiment
-Here we want to produce plot to compare results obtained with different TFRs with linear/meal scaling and no normalization
+Here we want to produce plot to compare results obtained with different TFRs with linear/mel scaling and no normalization
 We will produce one plot for each optimization method (Iatsenko, Geodesic)
 This is the global version: where we put all the signals togheter
 """
@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import os
 import csv
 import ast
+
 
 def sort_test_list(s):
     "This script sort Test_list using nubers"
