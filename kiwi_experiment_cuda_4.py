@@ -433,20 +433,22 @@ norm_list = ["Standard", "Box-Cox"]
 spectrogram_parameters = {'spec_type': "Multi-tapered", 'scale': 'Linear', 'norm_type': None, 'win_len': None, 'hop': None,
                           'window_type': None, 'mel_num': None, 'alpha': None, 'beta': None}
 
-Test_id = 600
+Test_id = 2300
 
 for norm_type in norm_list:
     spectrogram_parameters['norm_type'] = norm_type
     print(norm_type)
     if norm_type == "Standard":
-        window_parameters_list = [[512, 460], [512, 384], [512, 256], [256, 230], [256, 192], [256, 128]]
-        Iatsenko_parameters_list = [[1, 0], [1, 1]]
+        window_parameters_list = [[2048, 512], [2048, 204], [1024, 256], [1024, 102], [512, 128], [512, 51],
+                                  [256, 64], [256, 25]]
+        Iatsenko_parameters_list = [[1, 0], [1, 1], [1, 0.5]]
         window_type_list = ["Hann"]
         print('check')
     elif norm_type == "Box-Cox":
         # window_parameters_list = [[512, 460], [256, 230], [128, 12], [64, 6], [128, 32], [64, 6]]
-        window_parameters_list = [[512, 460], [256, 230],[512, 128], [512, 51]]
-        Iatsenko_parameters_list = [[0.5, 0], [10, 0], [1, 0], [1, 0.5]]
+        window_parameters_list = [[2048, 512], [2048, 204], [1024, 256], [1024, 102], [512, 128], [512, 51],
+                                  [256, 64], [256, 25]]
+        Iatsenko_parameters_list = [[1, 0], [1, 1], [1, 0.5]]
         window_type_list = ["Hann"]
 
     for window_type in window_type_list:
