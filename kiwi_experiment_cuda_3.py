@@ -468,20 +468,23 @@ list_true_labels = np.loadtxt(test_dataset_list_path, skiprows=1, delimiter=',',
 
 
 mel_list = [None]
-norm_list = ["Standard", 'PCEN']
+# norm_list = ["Standard", 'PCEN']
+norm_list = ["Standard"]
+
 spectrogram_parameters = {'spec_type': "Reassigned", 'scale': 'Mel Frequency', 'norm_type': None, 'win_len': None, 'hop': None,
                           'window_type': None, 'mel_num': None, 'alpha': None, 'beta': None}
 
-Test_id = 700
+Test_id = 2200
 
 for norm_type in norm_list:
     spectrogram_parameters['norm_type'] = norm_type
     print(norm_type)
     if norm_type == "Standard":
-        window_parameters_list = [[512, 460], [256, 230], [256, 192], [128, 96]]
+        window_parameters_list = [[2048, 512], [2048, 204], [1024, 256], [1024, 102], [512, 128], [512, 51],
+                                  [256, 64], [256, 25]]
         Iatsenko_parameters_list = [[0.5, 0], [2.5, 0]]
-        window_type_list = ['Hann', "Welch", 'Blackman']
-        mel_list = [64, 128, 256]
+        window_type_list = ['Hann', "Welch"]
+        mel_list = [64, 128]
         # print('check')
     elif norm_type == 'PCEN':
         window_parameters_list = [[512, 460], [512, 384], [256, 230], [256, 192], [128, 115]]
