@@ -1,6 +1,7 @@
 """
 28/02/2022
 Author: Virginia Listanti
+Reviewed 
 
 This script purpose is to analyse data produced by IF experiment
 Here we want to produce plot to compare results obtained with different optimizations techniques
