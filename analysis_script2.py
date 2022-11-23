@@ -1,10 +1,11 @@
 """
 28/02/2022
 Author: Virginia Listanti
-Reviewed 
+Reviewed 21/11/2022
 
 This script purpose is to analyse data produced by IF experiment
 Here we want to produce plot to compare results obtained with different optimizations techniques
+NOTE: HALF REVIEWED BECAUSE WE WANTED GROUPED RESULTS
 """
 
 import SignalProc
@@ -14,6 +15,9 @@ import matplotlib.pyplot as plt
 import os
 import csv
 import ast
+import statsmodels.api as sa
+import statsmodels.formula.api as sfa
+import scikit_posthocs as spost
 
 def sort_test_list(s):
     "This script sort Test_list using nubers"
@@ -84,56 +88,57 @@ def plot_parameters(t_list, t_result_dir, t_analysis_fold, s_id):
     fig_name = t_analysis_fold + '\\' + 'optimal_parametes.jpg'
     # plt.rcParams["figure.autolayout"] = True
 
-    fig, ax = plt.subplots(3, 2, figsize=(20, 20))
+    fig, ax = plt.subplots(3, 2, figsize=(10, 10))
 
     # bar_width = 0.2
 
     index1 = np.arange(len(win_list))
-    ax[0, 0].set_title('Win length', fontsize=25)
-    ax[0, 0].bar(index1, win_list.values())
-    ax[0, 0].set_xticks(index1, labels=win_list.keys(), fontsize=20)
-    ax[0, 0].tick_params(axis='y', labelsize=20)
+    ax[0, 0].set_title('Win length', fontsize=12)
+    ax[0, 0].bar(index1, win_list.values(), color='darkred')
+    ax[0, 0].set_xticks(index1, labels=win_list.keys(), fontsize=10)
+    ax[0, 0].tick_params(axis='y', labelsize=10)
     # ax[0, 0].set_yticks(fontsize=20)
     # ax[0].set_xticks(index1)
 
     index2 = np.arange(len(incr_list))
-    ax[0, 1].set_title('Incr length', fontsize=25)
-    ax[0, 1].bar(index2, incr_list.values())
-    ax[0, 1].set_xticks(index2, labels=incr_list.keys(), fontsize=10)
-    ax[0, 1].tick_params(axis='y', labelsize=20)
+    ax[0, 1].set_title('Incr length', fontsize=12)
+    ax[0, 1].bar(index2, incr_list.values(), color='darkred')
+    ax[0, 1].set_xticks(index2, labels=incr_list.keys(), fontsize=6)
+    ax[0, 1].tick_params(axis='y', labelsize=10)
 
     index3 = np.arange(len(win_type_list))
-    ax[1, 0].set_title('Win type', fontsize=25)
-    ax[1, 0].bar(index3, win_type_list.values())
-    ax[1, 0].set_xticks(index3, labels=win_type_list.keys(), fontsize=18)
-    ax[1, 0].tick_params(axis='y', labelsize=20)
+    ax[1, 0].set_title('Win type', fontsize=12)
+    ax[1, 0].bar(index3, win_type_list.values(), color='darkred')
+    ax[1, 0].set_xticks(index3, labels=win_type_list.keys(), fontsize=10)
+    ax[1, 0].tick_params(axis='y', labelsize=10)
     # ax[0].set_xticks(index1)
 
     index4 = np.arange(len(mel_bins))
-    ax[1, 1].set_title('mel bins', fontsize=25)
-    ax[1, 1].bar(index4, mel_bins.values())
-    ax[1, 1].set_xticks(index4, labels=mel_bins.keys(), fontsize=20)
-    ax[1, 1].tick_params(axis='y', labelsize=20)
+    ax[1, 1].set_title('mel bins', fontsize=12)
+    ax[1, 1].bar(index4, mel_bins.values(), color='darkred')
+    ax[1, 1].set_xticks(index4, labels=mel_bins.keys(), fontsize=10)
+    ax[1, 1].tick_params(axis='y', labelsize=10)
 
     index5 = np.arange(len(alpha_list))
-    ax[2, 0].set_title('Alpha', fontsize=25)
-    ax[2, 0].bar(index5, alpha_list.values())
-    ax[2, 0].set_xticks(index5, labels=alpha_list.keys(), fontsize=20)
-    ax[2, 0].tick_params(axis='y', labelsize=20)
+    ax[2, 0].set_title('Alpha', fontsize=12)
+    ax[2, 0].bar(index5, alpha_list.values(), color='darkred')
+    ax[2, 0].set_xticks(index5, labels=alpha_list.keys(), fontsize=10)
+    ax[2, 0].tick_params(axis='y', labelsize=10)
     # ax[0].set_xticks(index1)
 
     index6 = np.arange(len(beta_list))
-    ax[2, 1].set_title('Beta', fontsize=25)
-    ax[2, 1].bar(index6, beta_list.values())
-    ax[2, 1].set_xticks(index6, labels=beta_list.keys(), fontsize=20)
-    ax[2, 1].tick_params(axis='y', labelsize=20)
+    ax[2, 1].set_title('Beta', fontsize=12)
+    ax[2, 1].bar(index6, beta_list.values(), color='darkred')
+    ax[2, 1].set_xticks(index6, labels=beta_list.keys(), fontsize=10)
+    ax[2, 1].tick_params(axis='y', labelsize=10)
 
-    fig.suptitle(signal_id + '\n test number = ' + str(n), fontsize=40)
-    plt.savefig(fig_name)
+    fig.suptitle(signal_id, fontsize=10)
+    fig.tight_layout()
+    plt.savefig(fig_name, dpi=200)
 
     return
 
-start_index = 35
+start_index = 0
 Signal_list = ['pure_tone', 'linear_upchirp', 'linear_downchirp', 'exponential_upchirp', 'exponential_downchirp']
 
 
@@ -143,8 +148,11 @@ test_result_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Test_Res
 # test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\MultiTapered-LinScale\\Iatsenko"
 # test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\Normalization_comparison\\" \
 #                     "MultiTapered-MelScale\\Geodetic"
-test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
-                    "MelScale_NoNorm\\Geodesic"
+# test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Results analysis\\TFRs_comparison\\" \
+#                     "MelScale_NoNorm\\Geodesic"
+
+test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\Thesis_images\\Chapter_3\\Optimal_parameters_method\\" \
+                    "Standard_Linear"
 # #create signal folder
 # test_analysis_fold = test_analysis_dir + '\\' + signal_id
 # if not os.path.exists(test_analysis_fold):
@@ -167,8 +175,8 @@ test_analysis_dir = "C:\\Users\\Virginia\\Documents\\Work\\IF_extraction\\Result
 #     test_list.append('Test_' + str(start_index + i*6))
 
 test_list = []
-for i in range(3):
-    test_list.append('Test_' + str(start_index + i*60))
+for i in range(6):
+    test_list.append('Test_' + str(start_index + i))
 
 
 # # Count and plot parameters chosen
@@ -223,7 +231,7 @@ for signal_id in Signal_list:
     #save plots
     fig_name1 = test_analysis_fold +'\\signal_baseline_metrics.jpg'
 
-    fig, ax = plt.subplots(2, test_number, figsize=(100,40))
+    fig, ax = plt.subplots(2, test_number, figsize=(25,10))
     col_counter = 0
     for test_id in test_list:
         if not signal_id in os.listdir(test_result_dir+'\\'+test_id):
@@ -257,24 +265,25 @@ for signal_id in Signal_list:
         RE_G = np.array(RE_G[1:][:]).astype('float')
 
         #plot
-        ax[0, col_counter].boxplot(SNR_G)
-        ax[0, col_counter].set_title('SNR ' + test_id, fontsize=50)
+        ax[0, col_counter].boxplot(SNR_G, color='firebrick')
+        ax[0, col_counter].set_title('SNR Method ' + col_counter, fontsize=12)
         ax[0, col_counter].set_xticks(np.arange(1, len(level_list)+1))
-        ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
-        ax[0, col_counter].tick_params(axis='y', labelsize=30)
+        ax[0, col_counter].set_xticklabels(level_list, rotation=45, fontsize=8)
+        ax[0, col_counter].tick_params(axis='y', labelsize=7)
 
 
-        ax[1, col_counter].boxplot(RE_G)
+        ax[1, col_counter].boxplot(RE_G, color='firebrick')
         ax[1, col_counter].axhline(baseline[col_counter, 1], xmin=0, xmax=1, c='r', ls='--')
-        ax[1, col_counter].set_title('RENYI ENTR. ' + test_id, fontsize=50)
+        ax[1, col_counter].set_title('RENYI ENTR. Method' + col_counter, fontsize=25)
         ax[1, col_counter].set_xticks(np.arange(1, len(level_list)+1))
-        ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=25)
-        ax[1, col_counter].tick_params(axis='y', labelsize=30)
+        ax[1, col_counter].set_xticklabels(level_list, rotation=45, fontsize=8)
+        ax[1, col_counter].tick_params(axis='y', labelsize=7)
 
 
         col_counter+=1
 
-    fig.suptitle('Signal baseline metrics', fontsize=100)
+    fig.suptitle('Signal baseline metrics', fontsize=25)
+    fig.tight_layout
     plt.savefig(fig_name1)
     plt.close(fig)
 
@@ -284,9 +293,9 @@ for signal_id in Signal_list:
     fig_name2 = test_analysis_fold +'\\IF_extraction_metrics.jpg'
 
     if signal_id == 'pure_tone':
-        fig, ax = plt.subplots(2, test_number, figsize=(100,50))
+        fig, ax = plt.subplots(2, test_number, figsize=(25,12))
     else:
-        fig, ax = plt.subplots(3, test_number, figsize=(100, 60))
+        fig, ax = plt.subplots(3, test_number, figsize=(25, 15))
 
     col_counter = 0
     for test_id in test_list:
