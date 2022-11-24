@@ -1,10 +1,13 @@
 """
 6/10/2022
 Checked: 28/10/2022
+Reviewed: 25/11/2022
 Author: Virginia Listanti
 
 This script prepare a .csv for each class with the list of the train files. After that saves a .csv with a list of the
 test dataset
+
+Update: creates for supplementary datasets for bootstrap
 """
 
 import os
@@ -23,7 +26,7 @@ labels_lists = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
 # random.shuffle(num_list)
 # id_list = num_list[:7]
 fieldnames1 = ['Syllable']
-for i in range(1,4):
+for i in range(1,5):
     save_dir = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_IndividualID\\exemplars\\" \
                "Smaller_Dataset2\\Test_50_50_"+str(i)
     if not os.path.exists(save_dir):
