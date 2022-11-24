@@ -2,7 +2,7 @@
 28/09/22
 Author: Virginia Listanti
 
-This script plot the extracted IF in a subplot divided by classes
+This script plot the spectrogram in a subplot divided by classes
 """
 
 import os
