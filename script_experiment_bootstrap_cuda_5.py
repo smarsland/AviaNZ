@@ -158,7 +158,7 @@ for pipeline in pipeline_list:
     PCA_v = np.zeros((5, 1))
     DTW_v = np.zeros((5, 1))
     GEO_v = np.zeros((5, 1))
-    CRCO_v = np.zeros((5, 1))
+
     for k in range(5):
         print('Boot strap test ', k)
         datasets_list_path ="/home/listanvirg/Documents/Individual_identification/Dataset_lists" + "/Test_50_50_"+str(k)
@@ -233,17 +233,18 @@ for pipeline in pipeline_list:
             train_freq_curves[i, :len_freq_list1[i], :] = np.loadtxt(open(list_train_freq_path[i], "rb"), delimiter=",",
                                                                      skiprows=1)
 
-        del list_train_syllables_path
+        del list_train_syllables_path, list_train_freq_path
 
         # print('Loaded train curves')
         # save test curves
         test_curves = np.zeros((n2, len_max, 2))
+        test_freq_curves = np.zeros((n2, len_max_freq, 2))  # note I am saving the original curve (t,f)
+
         for i in range(n2):
             test_curves[i,:len_list2[i],:] = np.loadtxt(open(list_syllables_path[i], "rb"), delimiter=",", skiprows=1)
-            #subtract mean
-            test_curves[i, :len_list2[i], :] -= np.mean(test_curves[i, :len_list2[i], :] )
+            test_freq_curves[i, :len_freq_list2[i], :] = np.loadtxt(open(list_freq_path[i], "rb"), delimiter=",", skiprows=1)
 
-        del list_syllables_path
+        del list_syllables_path, list_freq_path
         # print('Loaded test curves')
         num_label = len(list_labels)
         # accuracy
@@ -255,7 +256,6 @@ for pipeline in pipeline_list:
 
         #pre-allocate distance_matrices
         ssd_matrix = np.zeros((n2,n1))
-        crosscorr_matrix = np.zeros((n2,n1))
         geod_matrix = np.zeros((n2,n1))
         pca_matrix = np.zeros((n2,n1))
         dtw_matrix = np.zeros((n2,n1))
@@ -267,13 +267,13 @@ for pipeline in pipeline_list:
         for i in range(n2):
             new_reference_curve = np.copy(test_curves[i, :len_list2[i], :])
             new_curves = train_curves
+            new_reference_freq_curve = np.copy(test_freq_curves[i, :len_freq_list2[i], :])
             # # evaluate PCA distance vector
             pca_matrix[i,:] = distances.pca_distance_vector(new_curves[:, :, 1], new_reference_curve[:,1])
 
             for j in range(n1):
                 # print(j)
                 ssd_matrix[i, j] = distances.ssd(new_reference_curve[:,1], new_curves[j, :, 1])
-                crosscorr_matrix[i, j] = distances.cross_corr(new_reference_curve[:,1], new_curves[j, :, 1])
                 geod_matrix[i, j] = distances.Geodesic_curve_distance( new_reference_curve[:,0], new_reference_curve[:,1],
                                                                       new_curves[j, :, 0], new_curves[j, :, 1])
                 dtw_matrix[i, j] = distances.dtw(new_reference_curve[:,1], new_curves[j, :, 1])
@@ -281,9 +281,16 @@ for pipeline in pipeline_list:
                                          np.mean(train_freq_curves[j, :len_freq_list1[j], 1]))
 
 
-        crosscorr_matrix = np.max(crosscorr_matrix) - crosscorr_matrix
 
-        del new_curves, train_curves, test_curves
+        del new_curves, train_curves, test_curves, train_freq_curves, test_freq_curves
+
+        # normalise matrices
+
+        df_matrix = normalise_matrix(df_matrix)
+        ssd_matrix = normalise_matrix(ssd_matrix) + df_matrix
+        pca_matrix = normalise_matrix(pca_matrix) + df_matrix
+        dtw_matrix = normalise_matrix(dtw_matrix) + df_matrix
+        geod_matrix = normalise_matrix(geod_matrix) + df_matrix
 
         list_assigned_labels_ssd, best3_list_ssd, accuracy_ssd = assign_label(ssd_matrix, list_syllables, list_train_labels,
                                                                               list_true_labels)
@@ -293,20 +300,15 @@ for pipeline in pipeline_list:
                                                                               list_true_labels)
         list_assigned_labels_geod, best3_list_geod, accuracy_geod = assign_label(geod_matrix, list_syllables, list_train_labels,
                                                                               list_true_labels)
-        list_assigned_labels_crosscorr, best3_list_crosscorr, accuracy_crosscorr = assign_label(crosscorr_matrix, list_syllables,
-                                                                                                list_train_labels,
-                                                                                                list_true_labels)
-
 
         SSD_v[k] = accuracy_ssd
         PCA_v[k] = accuracy_pca
         DTW_v[k] = accuracy_dtw
         GEO_v[k] = accuracy_geod
-        CRCO_v[k] = accuracy_crosscorr
 
         print('Saving metrics')
         csvfilename = result_folder + "/" + "Labels_comparison"+ str(k)+".csv"
-        fieldnames = ['Syllable', 'True Label', 'SSD label', 'PCA label', 'DTW label', 'Crosscorr label', 'GEO label']
+        fieldnames = ['Syllable', 'True Label', 'SSD label', 'PCA label', 'DTW label', 'GEO label']
         with open(csvfilename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
@@ -314,7 +316,7 @@ for pipeline in pipeline_list:
             for i in range(n2):
                 dictionary = {'Syllable': list_syllables[i], 'True Label': list_true_labels[i],
                               'SSD label': list_assigned_labels_ssd[i], 'PCA label': list_assigned_labels_pca[i],
-                              'DTW label': list_assigned_labels_dtw[i], 'Crosscorr label': list_assigned_labels_crosscorr[i],
+                              'DTW label': list_assigned_labels_dtw[i],
                               'GEO label': list_assigned_labels_geod[i]}
 
                 writer.writerow(dictionary)
@@ -324,19 +326,19 @@ for pipeline in pipeline_list:
         del list_assigned_labels_dtw, list_assigned_labels_crosscorr, list_assigned_labels_geod
         # save best3 match
         csvfilename = result_folder + "/" + "Best3_comparison"+ str(k)+".csv"
-        fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'Crosscorr', 'GEO']
+        fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'GEO']
         with open(csvfilename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
             for i in range(n2):
                 dictionary = {'Syllable': list_syllables[i], 'SSD': best3_list_ssd[i], 'PCA': best3_list_pca[i],
-                              'DTW': best3_list_dtw[i], 'Crosscorr': best3_list_crosscorr[i], 'GEO': best3_list_geod[i]}
+                              'DTW': best3_list_dtw[i], 'GEO': best3_list_geod[i]}
 
                 writer.writerow(dictionary)
                 del dictionary
 
-            del list_syllables,  best3_list_ssd, best3_list_pca, best3_list_dtw, best3_list_crosscorr, best3_list_geod
+            del list_syllables,  best3_list_ssd, best3_list_pca, best3_list_dtw, best3_list_geod
 
         # print accuracies in txt files
         file_path = result_folder + '/Accuracy_results'+ str(k)+".txt"
@@ -354,23 +356,23 @@ for pipeline in pipeline_list:
 
         #save matrices
         np.savetxt(result_folder +"/SSD"+ str(k)+".txt", ssd_matrix, fmt='%s')
-        np.savetxt(result_folder +"/cross-correlation"+ str(k)+".txt", crosscorr_matrix, fmt='%s')
         np.savetxt(result_folder+"/Geodesic"+ str(k)+".txt", geod_matrix, fmt='%s')
         np.savetxt(result_folder+"/PCA"+ str(k)+".txt", pca_matrix, fmt='%s')
         np.savetxt(result_folder +"/DTW"+ str(k)+".txt", dtw_matrix, fmt='%s')
+        np.savetxt(result_folder + "\\MeanFreq.txt", df_matrix, fmt='%s')
 
-        del ssd_matrix, crosscorr_matrix, geod_matrix, pca_matrix, dtw_matrix
+        del ssd_matrix, df_matrix, geod_matrix, pca_matrix, dtw_matrix
 
     # save_metrics
 
     csvfilename = result_folder + "/metric_bootstrap.csv"
-    fieldnames = ['SSD', 'PCA', 'DTW', 'Crosscorr', 'GEO']
+    fieldnames = ['SSD', 'PCA', 'DTW', 'GEO']
     with open(csvfilename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
         for i in range(5):
-            dictionary = {'SSD': SSD_v[i], 'PCA': PCA_v[i], 'DTW': DTW_v[i], 'Crosscorr': CRCO_v[i],
+            dictionary = {'SSD': SSD_v[i], 'PCA': PCA_v[i], 'DTW': DTW_v[i],
                           'GEO': GEO_v[i]}
 
             writer.writerow(dictionary)
@@ -380,7 +382,6 @@ for pipeline in pipeline_list:
     conf_interval_ssd = np.percentile(SSD_v, [2.5, 97.5])
     conf_interval_pca = np.percentile(PCA_v, [2.5, 97.5])
     conf_interval_dtw = np.percentile(DTW_v, [2.5, 97.5])
-    conf_interval_crosscorr = np.percentile(CRCO_v, [2.5, 97.5])
     conf_interval_geo = np.percentile(GEO_v, [2.5, 97.5])
 
     # print accuracies in txt files
@@ -394,15 +395,13 @@ for pipeline in pipeline_list:
     l4 = ["\n PCA Range: [" + str(np.amin(PCA_v)) + ", " + str(np.amax(PCA_v)) + "]"]
     l5 = ["\n DTW Confidence interval: " + str(conf_interval_dtw)]
     l6 = ["\n DTW Range: [" + str(np.amin(DTW_v)) + ", " + str(np.amax(DTW_v)) + "]"]
-    l7 = ["\n Crosscorr Confidence interval: " + str(conf_interval_crosscorr)]
-    l8 = ["\n Crosscorr Range: [" + str(np.amin(CRCO_v)) + ", " + str(np.amax(CRCO_v)) + "]"]
-    l9 = ["\n Geodesic Confidence interval: " + str(conf_interval_geo)]
-    l10 = ["\n Geodesic Range: [" + str(np.amin(GEO_v)) + ", " + str(np.amax(GEO_v)) + "]"]
-    file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5, l6, l7, l8, l9, l10)))
+    l7 = ["\n Geodesic Confidence interval: " + str(conf_interval_geo)]
+    l8 = ["\n Geodesic Range: [" + str(np.amin(GEO_v)) + ", " + str(np.amax(GEO_v)) + "]"]
+    file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5, l6, l7, l8)))
     file_txt.close()
 
-    del SSD_v, CRCO_v, GEO_v, PCA_v, DTW_v, conf_interval_geo, conf_interval_dtw, conf_interval_pca, conf_interval_ssd
-    del conf_interval_crosscorr
+    del SSD_v, GEO_v, PCA_v, DTW_v, conf_interval_geo, conf_interval_dtw, conf_interval_pca, conf_interval_ssd
+
 
 
 
