@@ -7,7 +7,7 @@ This script manage the experiment to find the best pipeline and metric to perfor
 
 The experiment run on 10 classes
 
-In this script we test the use of the difference of mean averages fro original frequency profile
+In this script we test the use of the difference of mean averages and duration difference
 """
 
 import os

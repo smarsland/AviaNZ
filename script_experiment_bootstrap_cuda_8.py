@@ -6,7 +6,7 @@ Author: Virginia Listanti
 This script manage the experiment to find the best metric to perform the classification task on
  kiwi syllables
 
-In this script we test the use of the difference of duration
+In this script we test the use of the difference of mean averages and duration difference
 
 The experiment run on 10 classes
 
@@ -138,7 +138,7 @@ pipeline_list = ["Original_prep", "Smoothed_prep", "Cutted_prep", "Cutted_smooth
 dataset_main = "/home/listanvirg/Documents/Individual_identification/Kiwi_syllable_dataset"
 
 # save labels
-results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_7"
+results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_8"
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
@@ -258,7 +258,8 @@ for pipeline in pipeline_list:
         geod_matrix = np.zeros((n2,n1))
         pca_matrix = np.zeros((n2,n1))
         dtw_matrix = np.zeros((n2,n1))
-        dt_matrix = np.zeros((n2,n1)) #matrix of duration differences
+        df_matrix = np.zeros((n2, n1))  # matrix of difference of mean frequencies
+        dt_matrix = np.zeros((n2, n1))  # matrix of duration differences
 
         print('Evaluating metrics ')
         # print('Train curves ', np.shape(train_curves))
@@ -275,20 +276,22 @@ for pipeline in pipeline_list:
                 ssd_matrix[i, j] = distances.ssd(new_reference_curve[:,1], new_curves[j, :, 1])
                 geod_matrix[i, j] = distances.Geodesic_curve_distance( new_reference_curve[:,0], new_reference_curve[:,1],
                                                                       new_curves[j, :, 0], new_curves[j, :, 1])
-                dtw_matrix[i, j] = distances.dtw(new_reference_curve[:,1], new_curves[j, :, 1])
-                dt_matrix[i, j] = np.abs(new_reference_freq_curve[-1, 0] - train_freq_curves[j, len_freq_list1[j]-1, 0])
+                df_matrix[i, j] = np.abs(np.mean(new_reference_freq_curve[:, 1]) -
+                                         np.mean(train_freq_curves[j, :len_freq_list1[j], 1]))
+                dt_matrix[i, j] = np.abs(
+                    new_reference_freq_curve[-1, 0] - train_freq_curves[j, len_freq_list1[j] - 1, 0])
 
 
 
         del new_curves, train_curves, test_curves, train_freq_curves, test_freq_curves
 
-        # normalise matrices
-
+        #normalise matrices
+        df_matrix = normalise_matrix(df_matrix)
         dt_matrix = normalise_matrix(dt_matrix)
-        ssd_matrix = normalise_matrix(ssd_matrix) + dt_matrix
-        pca_matrix = normalise_matrix(pca_matrix) + dt_matrix
-        dtw_matrix = normalise_matrix(dtw_matrix) + dt_matrix
-        geod_matrix = normalise_matrix(geod_matrix) + dt_matrix
+        ssd_matrix = normalise_matrix(ssd_matrix) + df_matrix + dt_matrix
+        pca_matrix = normalise_matrix(pca_matrix) + df_matrix + dt_matrix
+        dtw_matrix = normalise_matrix(dtw_matrix) + df_matrix + dt_matrix
+        geod_matrix = normalise_matrix(geod_matrix) + df_matrix + dt_matrix
 
         list_assigned_labels_ssd, best3_list_ssd, accuracy_ssd = assign_label(ssd_matrix, list_syllables, list_train_labels,
                                                                               list_true_labels)
@@ -356,9 +359,9 @@ for pipeline in pipeline_list:
         np.savetxt(result_folder+"/Geodesic"+ str(k)+".txt", geod_matrix, fmt='%s')
         np.savetxt(result_folder+"/PCA"+ str(k)+".txt", pca_matrix, fmt='%s')
         np.savetxt(result_folder +"/DTW"+ str(k)+".txt", dtw_matrix, fmt='%s')
-        np.savetxt(result_folder +"/Duration"+ str(k)+".txt", dt_matrix, fmt='%s')
+        np.savetxt(result_folder + "/MedianFreq.txt", df_matrix, fmt='%s')
 
-        del ssd_matrix, dt_matrix, geod_matrix, pca_matrix, dtw_matrix
+        del ssd_matrix, df_matrix, geod_matrix, pca_matrix, dtw_matrix, dt_matrix, df_matrix
 
     # save_metrics
 
