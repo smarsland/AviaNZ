@@ -316,7 +316,7 @@ pipeline_list = ["Original_prep", "Smoothed_prep", "Cutted_prep", "Cutted_smooth
 dataset_main = "/home/listanvirg/Documents/Individual_identification/Kiwi_syllable_dataset"
 
 # save labels
-results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_3"
+results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_4"
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
