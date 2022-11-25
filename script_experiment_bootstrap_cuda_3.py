@@ -338,8 +338,6 @@ for pipeline in pipeline_list:
         train_curves = np.zeros((n1, len_max, 2))
         for i in range(n1):
             train_curves[i,:len_list1[i],:] = np.loadtxt(open(list_train_syllables_path[i], "rb"), delimiter=",", skiprows=1)
-            #subtract mean
-            train_curves[i, :len_list1[i], :] -= np.mean(train_curves[i, :len_list1[i], :] )
 
         del list_train_syllables_path
 
@@ -348,8 +346,6 @@ for pipeline in pipeline_list:
         test_curves = np.zeros((n2, len_max, 2))
         for i in range(n2):
             test_curves[i,:len_list2[i],:] = np.loadtxt(open(list_syllables_path[i], "rb"), delimiter=",", skiprows=1)
-            #subtract mean
-            test_curves[i, :len_list2[i], :] -= np.mean(test_curves[i, :len_list2[i], :] )
 
         del list_syllables_path
         # print('Loaded test curves')
