@@ -440,7 +440,7 @@ for pipeline in pipeline_list:
                 writer.writerow(dictionary)
                 del dictionary
 
-        del list_true_labels, list_assigned_labels_ssd_dtw_geo, list_assigned_labels_ssd_dtw_geo,
+        del list_true_labels, list_assigned_labels_ssd_dtw_pca, list_assigned_labels_ssd_dtw_geo,
         del list_assigned_labels_ssd_pca_geo, list_assigned_labels_dtw_pca_geo
         # save best3 match
         csvfilename = result_folder + "/" + "Best3_comparison"+ str(k)+".csv"
