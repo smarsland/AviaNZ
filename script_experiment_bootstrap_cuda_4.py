@@ -6,7 +6,7 @@ Author: Virginia Listanti
 This script manage the experiment to find the best metric to perform the classification task on
  kiwi syllables
 
- combination of three metrics
+ combination of four metrics
 
 The experiment run on 10 classes
 
@@ -193,6 +193,32 @@ def assign_label3(list2, best3_list1, best3_list2, best3_list3, true_label_list)
 
     return alg_labels, accuracy
 
+def assign_label4(list2, best3_list1, best3_list2, best3_list3, best3_list4, true_label_list):
+    """
+    This function assign label by majority from best3_list1 and best3_list2
+
+    LIST2 is the list of test data
+    BEST3_LIST1 best 3 list from distance 1
+    BEST3_LIST2 best 3 list from distance 2
+    BEST3_LIST3 best 3 list from distance 3
+    BEST3_LIST4 best 3 list from distance 4
+    TRUE_LABEL_LIST list of true label fro LIST2
+    """
+    # N1 = len(list1)
+    N2 = len(list2)
+    accuracy = 0
+    alg_labels = []
+
+    for k in range(N2):
+        freq_count = CountFrequency4(best3_list1[k], best3_list2[k], best3_list3[k], best3_list4[k])
+        label = max(freq_count, key=freq_count.get)
+        alg_labels.append(label)
+        if label == true_label_list[k]:
+            accuracy += 1
+    accuracy /= N2
+
+    return alg_labels, accuracy
+
 def CountFrequency2(my_list1, my_list2):
 
     """
@@ -214,7 +240,40 @@ def CountFrequency2(my_list1, my_list2):
 
     return freq
 
-def CountFrequency3(my_list1, my_list2, my_list3):
+def CountFrequency3(my_list1, my_list2, my_list3, my_list4):
+
+    """
+    This function counts the frequencies in three lists using a dictionary
+    """
+    # Creating an empty dictionary
+    freq = {}
+    for item in my_list1:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list2:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list3:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list4:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    return freq
+
+def CountFrequency4(my_list1, my_list2, my_list3):
 
     """
     This function counts the frequencies in three lists using a dictionary
@@ -486,6 +545,11 @@ for pipeline in pipeline_list:
     with open(csvfilename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
+
+        SSD_DTW_PCA_v[k] = accuracy_ssd_dtw_pca
+        SSD_DTW_GEO_v[k] = accuracy_ssd_dtw_geo
+        SSD_PCA_GEO_v[k] = accuracy_ssd_pca_geo
+        DTW_PCA_GEO_v[k] = accuracy_dtw_pca_geo
 
         for i in range(5):
             dictionary = {'SSD+DTW+PCA': SSD_DTW_PCA_v[i], 'SSD+DTW+GEO': SSD_DTW_GEO_v[i], 'SSD+PCA+GEO':
