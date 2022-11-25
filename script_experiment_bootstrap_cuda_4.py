@@ -330,10 +330,7 @@ for pipeline in pipeline_list:
         os.mkdir(result_folder)
 
     #initialise metrics vector
-    SSD_DTW_PCA_v = np.zeros((5,1))
-    SSD_DTW_GEO_v = np.zeros((5, 1))
-    SSD_PCA_GEO_v = np.zeros((5, 1))
-    DTW_PCA_GEO_v = np.zeros((5, 1))
+    Accuracy_v = np.zeros((5,1))
 
 
     for k in range(5):
@@ -414,10 +411,7 @@ for pipeline in pipeline_list:
         # print('Loaded test curves')
         num_label = len(list_labels)
         # accuracy
-        accuracy_ssd_dtw_pca = 0
-        accuracy_ssd_dtw_geo = 0
-        accuracy_ssd_pca_geo = 0
-        accuracy_dtw_pca_geo = 0
+        accuracy_tot = 0
 
         #pre-allocate distance_matrices
         ssd_matrix = np.zeros((n2,n1))
@@ -453,54 +447,27 @@ for pipeline in pipeline_list:
 
         # combine 3
 
-        list_assigned_labels_ssd_dtw_pca, accuracy_ssd_dtw_pca = assign_label3(list_syllables,
-                                                                               best3_list_ssd,
-                                                                               best3_list_dtw,
-                                                                               best3_list_pca,
-                                                                               list_true_labels)
-        list_assigned_labels_ssd_dtw_geo, accuracy_ssd_dtw_geo = assign_label3(list_syllables,
-                                                                               best3_list_ssd,
-                                                                               best3_list_dtw,
-                                                                               best3_list_geo,
-                                                                               list_true_labels)
-        list_assigned_labels_ssd_pca_geo, accuracy_ssd_pca_geo = assign_label3(list_syllables,
-                                                                               best3_list_ssd,
-                                                                               best3_list_pca,
-                                                                               best3_list_geo,
-                                                                               list_true_labels)
-        list_assigned_labels_dtw_pca_geo, accuracy_dtw_pca_geo = assign_label3(list_syllables,
-                                                                               best3_list_dtw,
-                                                                               best3_list_pca,
-                                                                               best3_list_geo,
-                                                                               list_true_labels)
+        list_assigned_labels, accuracy_tot = assign_label4(list_syllables, best3_list_ssd, best3_list_dtw,
+                                                           best3_list_pca, best3_list_geo, list_true_labels)
 
-        SSD_DTW_PCA_v[k] = accuracy_ssd_dtw_pca
-        SSD_DTW_GEO_v[k] = accuracy_ssd_dtw_geo
-        SSD_PCA_GEO_v[k] = accuracy_ssd_pca_geo
-        DTW_PCA_GEO_v[k] = accuracy_dtw_pca_geo
 
+        Accuracy_v[k] = accuracy_tot
 
         print('Saving metrics')
         csvfilename = result_folder + "/" + "Labels_comparison"+ str(k)+".csv"
-        fieldnames = ['Syllable', 'True Label', 'SSD + DTW + PCA label', 'SSD + DTW + GEO label',
-                      'SSD + PCA +GEO label',
-                      'DTW + PCA + GEO label']
+        fieldnames = ['Syllable', 'True Label', 'Assigned label']
         with open(csvfilename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
             for i in range(n2):
                 dictionary = {'Syllable': list_syllables[i], 'True Label': list_true_labels[i],
-                              'SSD + DTW + PCA label': list_assigned_labels_ssd_dtw_pca[i], 'SSD + DTW + GEO label':
-                                  list_assigned_labels_ssd_dtw_geo[i],
-                              'SSD + PCA +GEO label': list_assigned_labels_ssd_pca_geo[i],
-                              'DTW + PCA + GEO label': list_assigned_labels_dtw_pca_geo[i]}
+                              'Assigned label': list_assigned_labels[i]}
 
                 writer.writerow(dictionary)
                 del dictionary
 
-        del list_true_labels, list_assigned_labels_ssd_dtw_pca, list_assigned_labels_ssd_dtw_geo,
-        del list_assigned_labels_ssd_pca_geo, list_assigned_labels_dtw_pca_geo
+        del list_true_labels, list_assigned_labels
         # save best3 match
         csvfilename = result_folder + "/" + "Best3_comparison"+ str(k)+".csv"
         fieldnames = ['Syllable', 'SSD', 'PCA', 'DTW', 'GEO']
@@ -521,14 +488,11 @@ for pipeline in pipeline_list:
         file_path = result_folder + '/Accuracy_results'+ str(k)+".txt"
         file_txt = open(file_path, 'w')
         l0 = [" Accuracy results \n"]
-        l1 = ["\n SSD + DTW + PCA Accuracy: " + str(accuracy_ssd_dtw_pca)]
-        l2 = ["\n SSD + DTW + GEO Accuracy: " + str(accuracy_ssd_dtw_geo)]
-        l3 = ["\n SSD + PCA + GEO Accuracy: " + str(accuracy_ssd_pca_geo)]
-        l4 = ["\n DTW + PCA + GEO Accuracy: " + str(accuracy_dtw_pca_geo)]
-        file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4)))
+        l1 = ["\n Accuracy 4 metrics: " + str(accuracy_tot)]
+        file_txt.writelines(np.concatenate((l0, l1)))
         file_txt.close()
 
-        del accuracy_ssd_dtw_pca, accuracy_ssd_dtw_geo, accuracy_ssd_pca_geo,accuracy_dtw_pca_geo
+        del accuracy_tot
 
         #save matrices
         np.savetxt(result_folder +"/SSD"+ str(k)+".txt", ssd_matrix, fmt='%s')
@@ -541,28 +505,19 @@ for pipeline in pipeline_list:
 
     # save_metrics
     csvfilename = result_folder + "/metric_bootstrap.csv"
-    fieldnames = ['SSD+DTW+PCA', 'SSD+DTW+GEO', 'SSD+PCA+GEO', 'DTW+PCA+GEO']
+    fieldnames = ['Accuracy tot']
     with open(csvfilename, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-        SSD_DTW_PCA_v[k] = accuracy_ssd_dtw_pca
-        SSD_DTW_GEO_v[k] = accuracy_ssd_dtw_geo
-        SSD_PCA_GEO_v[k] = accuracy_ssd_pca_geo
-        DTW_PCA_GEO_v[k] = accuracy_dtw_pca_geo
-
         for i in range(5):
-            dictionary = {'SSD+DTW+PCA': SSD_DTW_PCA_v[i], 'SSD+DTW+GEO': SSD_DTW_GEO_v[i], 'SSD+PCA+GEO':
-                SSD_PCA_GEO_v[i], 'DTW+PCA+GEO':DTW_PCA_GEO_v[i]}
+            dictionary = {'Accuracy tot': Accuracy_v[i]}
 
             writer.writerow(dictionary)
             del dictionary
 
     #evaluate bootstrap confidence interval
-    conf_interval_ssd_dtw_pca = np.percentile(SSD_DTW_PCA_v, [2.5, 97.5])
-    conf_interval_ssd_dtw_geo = np.percentile(SSD_DTW_GEO_v, [2.5, 97.5])
-    conf_interval_ssd_pca_geo = np.percentile(SSD_PCA_GEO_v, [2.5, 97.5])
-    conf_interval_dtw_pca_geo = np.percentile(DTW_PCA_GEO_v, [2.5, 97.5])
+    conf_interval = np.percentile(Accuracy_v, [2.5, 97.5])
 
 
     # print accuracies in txt files
@@ -570,20 +525,15 @@ for pipeline in pipeline_list:
     file_path = result_folder + '/Accuracy_results_bootstrap_'+pipeline+ ".txt"
     file_txt = open(file_path, 'w')
     l0 = [" Accuracy results \n"]
-    l1 = ["\n SSD + DTW + PCA Confidence interval: " + str(conf_interval_ssd_dtw_pca)]
-    l2 = ["\n SSD + DTW + PCA Range: [" + str(np.amin(SSD_DTW_PCA_v))+", "+ str(np.amax(SSD_DTW_PCA_v))+"]"]
-    l3 = ["\n SSD + DTW + GEO Confidence interval: " + str(conf_interval_ssd_dtw_geo)]
-    l4 = ["\n SSD + DTW + GEO Range: [" + str(np.amin(SSD_DTW_GEO_v)) + ", " + str(np.amax(SSD_DTW_GEO_v)) + "]"]
-    l5 = ["\n SSD + PCA + GEO Confidence interval: " + str(conf_interval_ssd_pca_geo)]
-    l6 = ["\n SSD + PCA + GEO Range: [" + str(np.amin(SSD_PCA_GEO_v)) + ", " + str(np.amax(SSD_PCA_GEO_v)) + "]"]
-    l7 = ["\n DTW + PCA + GEO Confidence interval: " + str(conf_interval_dtw_pca_geo)]
-    l8 = ["\n DTW + PCA + GEO Range: [" + str(np.amin(DTW_PCA_GEO_v)) + ", " + str(np.amax(DTW_PCA_GEO_v)) + "]"]
+    l1 = ["\n Accuracy Confidence interval: " + str(conf_interval)]
+    l2 = ["\n Accuracy Range: [" + str(np.amin(Accuracy_v))+", "+ str(np.amax(Accuracy_v))+"]"]
 
-    file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5, l6, l7, l8)))
+
+    file_txt.writelines(np.concatenate((l0, l1, l2)))
     file_txt.close()
 
-    del SSD_DTW_PCA_v, SSD_DTW_GEO_v, SSD_PCA_GEO_v, DTW_PCA_GEO_v
-    del conf_interval_ssd_dtw_pca, conf_interval_ssd_dtw_geo, conf_interval_ssd_pca_geo, conf_interval_dtw_pca_geo
+    del Accuracy_v
+    del conf_interval
 
 
 
