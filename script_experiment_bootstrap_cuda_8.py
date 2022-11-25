@@ -361,7 +361,7 @@ for pipeline in pipeline_list:
         np.savetxt(result_folder +"/DTW"+ str(k)+".txt", dtw_matrix, fmt='%s')
         np.savetxt(result_folder + "/MedianFreq.txt", df_matrix, fmt='%s')
 
-        del ssd_matrix, df_matrix, geod_matrix, pca_matrix, dtw_matrix, dt_matrix, df_matrix
+        del ssd_matrix, geod_matrix, pca_matrix, dtw_matrix, dt_matrix, df_matrix
 
     # save_metrics
 
