@@ -359,7 +359,8 @@ for pipeline in pipeline_list:
         np.savetxt(result_folder+"/Geodesic"+ str(k)+".txt", geod_matrix, fmt='%s')
         np.savetxt(result_folder+"/PCA"+ str(k)+".txt", pca_matrix, fmt='%s')
         np.savetxt(result_folder +"/DTW"+ str(k)+".txt", dtw_matrix, fmt='%s')
-        np.savetxt(result_folder + "/MedianFreq.txt", df_matrix, fmt='%s')
+        np.savetxt(result_folder + "/MeanFreq"+ str(k)+".txt", df_matrix, fmt='%s')
+        np.savetxt(result_folder + "/Duration" + str(k) + ".txt", dt_matrix, fmt='%s')
 
         del ssd_matrix, geod_matrix, pca_matrix, dtw_matrix, dt_matrix, df_matrix
 
