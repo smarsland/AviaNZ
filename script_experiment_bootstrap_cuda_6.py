@@ -6,8 +6,7 @@ Author: Virginia Listanti
 This script manage the experiment to find the best metric to perform the classification task on
  kiwi syllables
 
-In this script we test the use of the difference of mean averages fro original frequency profile
-
+In this script we test the use of the difference of median averages fro original frequency profile
 
 The experiment run on 10 classes
 
@@ -139,7 +138,7 @@ pipeline_list = ["Original_prep", "Smoothed_prep", "Cutted_prep", "Cutted_smooth
 dataset_main = "/home/listanvirg/Documents/Individual_identification/Kiwi_syllable_dataset"
 
 # save labels
-results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_5"
+results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_6"
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
@@ -277,8 +276,8 @@ for pipeline in pipeline_list:
                 geod_matrix[i, j] = distances.Geodesic_curve_distance( new_reference_curve[:,0], new_reference_curve[:,1],
                                                                       new_curves[j, :, 0], new_curves[j, :, 1])
                 dtw_matrix[i, j] = distances.dtw(new_reference_curve[:,1], new_curves[j, :, 1])
-                df_matrix[i, j] = np.abs(np.mean(new_reference_freq_curve[:, 1]) -
-                                         np.mean(train_freq_curves[j, :len_freq_list1[j], 1]))
+                df_matrix[i, j] = np.abs(np.median(new_reference_freq_curve[:, 1]) -
+                                         np.median(train_freq_curves[j, :len_freq_list1[j], 1]))
 
 
 
@@ -359,7 +358,7 @@ for pipeline in pipeline_list:
         np.savetxt(result_folder+"/Geodesic"+ str(k)+".txt", geod_matrix, fmt='%s')
         np.savetxt(result_folder+"/PCA"+ str(k)+".txt", pca_matrix, fmt='%s')
         np.savetxt(result_folder +"/DTW"+ str(k)+".txt", dtw_matrix, fmt='%s')
-        np.savetxt(result_folder + "/MeanFreq.txt", df_matrix, fmt='%s')
+        np.savetxt(result_folder + "/MedianFreq.txt", df_matrix, fmt='%s')
 
         del ssd_matrix, df_matrix, geod_matrix, pca_matrix, dtw_matrix
 
