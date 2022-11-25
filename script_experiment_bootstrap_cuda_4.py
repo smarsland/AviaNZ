@@ -273,7 +273,7 @@ def CountFrequency3(my_list1, my_list2, my_list3, my_list4):
 
     return freq
 
-def CountFrequency4(my_list1, my_list2, my_list3):
+def CountFrequency4(my_list1, my_list2, my_list3, my_list4):
 
     """
     This function counts the frequencies in three lists using a dictionary
@@ -293,6 +293,12 @@ def CountFrequency4(my_list1, my_list2, my_list3):
             freq[item] = 1
 
     for item in my_list3:
+        if (item in freq):
+            freq[item] += 1
+        else:
+            freq[item] = 1
+
+    for item in my_list4:
         if (item in freq):
             freq[item] += 1
         else:
