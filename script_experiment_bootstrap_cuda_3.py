@@ -257,7 +257,7 @@ pipeline_list = ["Original_prep", "Smoothed_prep", "Cutted_prep", "Cutted_smooth
 dataset_main = "/home/listanvirg/Documents/Individual_identification/Kiwi_syllable_dataset"
 
 # save labels
-results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_2"
+results_directory = "/home/listanvirg/Documents/Individual_identification/Test_results/Bootstrap_tests_3"
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
@@ -513,23 +513,19 @@ for pipeline in pipeline_list:
     l0 = [" Accuracy results \n"]
     l1 = ["\n SSD + DTW + PCA Confidence interval: " + str(conf_interval_ssd_dtw_pca)]
     l2 = ["\n SSD + DTW + PCA Range: [" + str(np.amin(SSD_DTW_PCA_v))+", "+ str(np.amax(SSD_DTW_PCA_v))+"]"]
-    l3 = ["\n SSD + PCA Confidence interval: " + str(conf_interval_ssd_pca)]
-    l4 = ["\n SSD + PCA Range: [" + str(np.amin(SSD_PCA_v)) + ", " + str(np.amax(SSD_PCA_v)) + "]"]
-    l5 = ["\n SSD + GEO Confidence interval: " + str(conf_interval_ssd_geo)]
-    l6 = ["\n SSD + GEO Range: [" + str(np.amin(SSD_GEO_v)) + ", " + str(np.amax(SSD_GEO_v)) + "]"]
-    l7 = ["\n DTW + PCA Confidence interval: " + str(conf_interval_dtw_pca)]
-    l8 = ["\n DTW + PCA Range: [" + str(np.amin(DTW_PCA_v)) + ", " + str(np.amax(DTW_PCA_v)) + "]"]
-    l9 = ["\n DTW + GEO Confidence interval: " + str(conf_interval_dtw_geo)]
-    l10 = ["\n DTW + GEO Range: [" + str(np.amin(DTW_GEO_v)) + ", " + str(np.amax(DTW_GEO_v)) + "]"]
-    l11 = ["\n PCA + GEO  Confidence interval: " + str(conf_interval_pca_geo)]
-    l12 = ["\n PCA + GEO  Range: [" + str(np.amin(PCA_GEO_v)) + ", " + str(np.amax(PCA_GEO_v)) + "]"]
+    l3 = ["\n SSD + DTW + GEO Confidence interval: " + str(conf_interval_ssd_dtw_geo)]
+    l4 = ["\n SSD + DTW + GEO Range: [" + str(np.amin(SSD_DTW_GEO_v)) + ", " + str(np.amax(SSD_DTW_GEO_v)) + "]"]
+    l5 = ["\n SSD + PCA + GEO Confidence interval: " + str(conf_interval_ssd_pca_geo)]
+    l6 = ["\n SSD + PCA + GEO Range: [" + str(np.amin(SSD_PCA_GEO_v)) + ", " + str(np.amax(SSD_PCA_GEO_v)) + "]"]
+    l7 = ["\n DTW + PCA + GEO Confidence interval: " + str(conf_interval_dtw_pca_geo)]
+    l8 = ["\n DTW + PCA + GEO Range: [" + str(np.amin(DTW_PCA_GEO_v)) + ", " + str(np.amax(DTW_PCA_GEO_v)) + "]"]
 
-    file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l12)))
+    file_txt.writelines(np.concatenate((l0, l1, l2, l3, l4, l5, l6, l7, l8)))
     file_txt.close()
 
-    del SSD_DTW_v, SSD_PCA_v, SSD_GEO_v, DTW_PCA_v, DTW_GEO_v, PCA_GEO_v
-    del conf_interval_ssd_dtw, conf_interval_ssd_pca, conf_interval_ssd_geo, conf_interval_dtw_pca
-    del conf_interval_dtw_geo, conf_interval_pca_geo
+    del SSD_DTW_PCA_v, SSD_DTW_GEO_v, SSD_PCA_GEO_v, DTW_PCA_GEO_v
+    del conf_interval_ssd_dtw_pca, conf_interval_ssd_dtw_geo, conf_interval_ssd_pca_geo, conf_interval_dtw_pca_geo
+
 
 
 
