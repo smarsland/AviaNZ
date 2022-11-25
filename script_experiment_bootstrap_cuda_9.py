@@ -277,6 +277,7 @@ for pipeline in pipeline_list:
                 ssd_matrix[i, j] = distances.ssd(new_reference_curve[:,1], new_curves[j, :, 1])
                 geod_matrix[i, j] = distances.Geodesic_curve_distance( new_reference_curve[:,0], new_reference_curve[:,1],
                                                                       new_curves[j, :, 0], new_curves[j, :, 1])
+                dtw_matrix[i, j] = distances.dtw(new_reference_curve[:, 1], new_curves[j, :, 1])
                 df0_matrix[i, j] = np.abs(new_reference_freq_curve[0, 1] - train_freq_curves[j, 0, 1])
                 df1_matrix[i, j] = np.abs(new_reference_freq_curve[-1, 1] -
                                           train_freq_curves[j, len_freq_list1[j] - 1, 1])
