@@ -441,7 +441,7 @@ def calculate_distances(prep_curves1, prep_curves2, extracted_curves1, extracted
         pca_m[I, :] = distances.pca_distance_vector(new_curves[:, :, 1], new_reference_curve[:, 1])
 
         for J in range(N1):
-            ssd_m[I, ] = distances.ssd(new_reference_curve[:, 1], new_curves[J, :, 1])
+            ssd_m[I, J] = distances.ssd(new_reference_curve[:, 1], new_curves[J, :, 1])
             geod_m[I, J] = distances.Geodesic_curve_distance(new_reference_curve[:, 0], new_reference_curve[:, 1],
                                                                   new_curves[J, :, 0], new_curves[J, :, 1])
             dtw_m[I, J] = distances.dtw(new_reference_curve[:, 1], new_curves[J, :, 1])
