@@ -1008,7 +1008,7 @@ class Segmenter:
         The multitaper spectrogram helps a lot
 
         """
-        tt = time.time()
+        #tt = time.time()
         sg = self.sg/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!

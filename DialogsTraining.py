@@ -760,7 +760,7 @@ class BuildRecAdvWizard(QWizard):
             # TODO: Here
             if ims is not None:
                 for i in range(len(ims)):
-                    for j in range(len(ims[i]))
+                    for j in range(len(ims[i])):
                         newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
                         self.picbuttons.append(newButton)
                         self.clusters = calltypes
