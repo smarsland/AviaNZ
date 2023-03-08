@@ -484,8 +484,8 @@ class ExcelIO():
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(seg[0]*1000).toString(timeStrFormat)))
-                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(seg[1]*1000).toString(timeStrFormat)))
+                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(int(seg[0]*1000)).toString(timeStrFormat)))
+                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(int(seg[1]*1000)).toString(timeStrFormat)))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
