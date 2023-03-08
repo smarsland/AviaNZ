@@ -110,7 +110,7 @@ class SignalProc:
             if QtMM:
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
-    def readBmp(self, file, len=None, off=0, silent=False, rotate=True, repeat=True):
+    def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
             For similarity with readWav, accepts len and off args, in seconds.
             rotate: if True, rotates to match setImage and other spectrograms (rows=time)
@@ -179,15 +179,15 @@ class SignalProc:
 
         # NOTE: conversions will use self.sampleRate and self.incr, so ensure those are already set!
         # trim to specified offset and length:
-        if off>0 or len is not None:
+        if off>0 or duration is not None:
             # Convert offset from seconds to pixels
             off = int(self.convertAmpltoSpec(off))
-            if len is None:
+            if duration is None:
                 img2 = img2[:, off:]
             else:
                 # Convert length from seconds to pixels:
-                len = int(self.convertAmpltoSpec(len))
-                img2 = img2[:, off:(off+len)]
+                duration = int(self.convertAmpltoSpec(duration))
+                img2 = img2[:, off:(off+duration)]
 
         if rotate:
             # rotate for display, b/c required spectrogram dimensions are:
@@ -320,7 +320,14 @@ class SignalProc:
 
     def convertToMel(self,filt='mel',nfilters=40,minfreq=0,maxfreq=None,normalise=True):
         filterbank = self.mel_filter(filt,nfilters,minfreq,maxfreq,normalise)
-        self.sg = np.dot(self.sg,filterbank)
+        # Single channel spectrograms will convert successfully. Exception is for Multi-tapered spectrograms.
+        try:
+            self.sg = np.dot(self.sg,filterbank)
+        except:
+            placeholder = np.zeros(shape=(np.shape(self.sg)[0],np.shape(filterbank)[1],np.shape(self.sg)[2]))
+            for i in range(np.shape(self.sg)[2]):
+                placeholder[:,:,i] = np.dot(self.sg[:,:,i],filterbank)
+            self.sg = placeholder
     # ====
 
     def setWidth(self,window_width,incr):
@@ -445,17 +452,21 @@ class SignalProc:
             self.sg -= self.sg.mean()
 
         starts = range(0, len(self.sg) - window_width, incr)
+        # This multi-tapered method does not sum all channels. Each taper equals one channel.
         if sgType=='Multi-tapered':
             if specExtra:
-                [tapers, eigen] = dpss(window_width, 2.5, 4)
+                [tapers, eigen] = dpss(window_width, 2.5, 3)
                 counter = 0
-                out = np.zeros((len(starts),window_width // 2))
+                out = np.zeros(shape=(len(starts),window_width // 2,3))
                 for start in starts:
                     Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
                     Sk = abs(Sk)**2
                     Sk = np.mean(Sk.T * weights, axis=1)
-                    out[counter:counter + 1,:] = Sk[window_width // 2:].T
-                    counter += 1
+                    for taper in range(3):
+                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][window_width // 2:].T
+                    counter += 1  
+                    # The next line is for summing them
+                    #out[counter:counter + 1,:] = Sk[window_width // 2:].T
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")

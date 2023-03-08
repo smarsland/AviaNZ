@@ -21,6 +21,15 @@
 
 # ? click, shutil
 
+# TODO: 1. Finish Freebird import
+# 2. Finish Neural Networks
+# 3. Finish clustering
+# 4. Colour maps
+# 5. At the moment have hacks in AxisItem.py, sort out (str) things
+# 6. ...
+# 7. Merge with main
+# 8. Test
+
 import sys, os, json, platform, re, shutil
 from shutil import copyfile
 
@@ -4918,33 +4927,47 @@ class AviaNZ(QMainWindow):
 
     def genTag2Annot(self):
         """ Utility function: Generate AviaNZ style annotations given the freebird style annotations"""
-
+        """ Holy shit this is an embarrassment, Nirosha."""
+        """ There are 3 parts to Freebird tags: x.tag, x.p, s.sample.
+        x.p has time: StartTimeSecond and DurationSecond. What are they?
+        x.setting has view info, which we ignore
+        x.tag has species code, time, duration, freqlow and freqhigh
+        There is also the species list. Which we need to store and copy into .avianz.
+        """
         values = self.tag2AnnotationDialog.getValues()
         if values:
             [sessiondir, duration] = values
         else:
             return
 
+        # Read freebird bird list
+        spName = []
+        spCode = []
         try:
-            # Read freebird bird list
-            spName = []
-            spCode = []
             book = openpyxl.load_workbook(os.path.join(self.configdir, "Freebird_species_list.xlsx"))
             sheet = book.active
-            name = sheet['A2': 'A' + str(sheet.max_row)]
-            code = sheet['B2': 'B' + str(sheet.max_row)]
-            for i in range(len(name)):
-                spName.append(str(name[i][0].value))
-            for i in range(len(code)):
-                spCode.append(int(code[i][0].value))
-            spDict = dict(zip(spCode, spName))
+        except:
+            print("Warning: Did not find Freebird species list")
+            return
 
-            # Generate the .data files from .tag, read operator/reviewer from the corresponding .setting file
-            for root, dirs, files in os.walk(str(sessiondir)):
-                for file in files:
-                    if file.endswith('.tag'):
-                        annotation = []
-                        tagFile = os.path.join(root, file)
+        name = sheet['A2': 'A' + str(sheet.max_row)]
+        code = sheet['B2': 'B' + str(sheet.max_row)]
+        for i in range(len(name)):
+            spName.append(str(name[i][0].value))
+        for i in range(len(code)):
+            if code[i][0].value is not None:
+                spCode.append(int(code[i][0].value))
+            else:
+                spCode.append(-1)
+        spDict = dict(zip(spCode, spName))
+
+        # Generate the .data files from .tag, read operator/reviewer from the corresponding .setting file
+        for root, dirs, files in os.walk(str(sessiondir)):
+            for file in files:
+                if file.endswith('.tag'):
+                    annotation = []
+                    tagFile = os.path.join(root, file)
+                    try:
                         tree = ET.parse(tagFile)
                         troot = tree.getroot()
 
@@ -4964,18 +4987,19 @@ class AviaNZ(QMainWindow):
                                 reviewer = elem.text
                         annotation.insert(0, {"Operator": operator, "Reviewer": reviewer, "Duration": duration})
                         # save .data, possible over-writing
+                        # TODO!!
                         file = open(tagFile[:-4] + '.wav.data', 'w')
                         json.dump(annotation, file)
                         file.close()
+                    except Exception as e:
+                        print("Warning: Generating annotation from %s failed with error:" % (tagFile))
+                        print(e)
+                        return
             self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",
                                               "Successfully saved the annotations in: " + '\n' + sessiondir)
             msg.exec_()
-        except Exception as e:
-            print("Warning: Generating annotation from %s failed with error:" % (tagFile))
-            print(e)
-            return
 
     def backupAnnotation(self):
         """ Utility function: Copy .data and corrections files while preserving directory hierarchy"""
