@@ -223,7 +223,7 @@ class SignalProc:
             print("No resampling needed")
             return
 
-        self.data = librosa.core.audio.resample(self.data, self.sampleRate, target)
+        self.data = librosa.resample(self.data, self.sampleRate, target)
 
         self.sampleRate = target
         if QtMM:
@@ -550,6 +550,7 @@ class SignalProc:
             sg, lam = boxcox(sg)
             return np.reshape(sg, size)
         elif tr=="Sigmoid":
+            # TODO!!!
             sig  = 1/(1+np.exp(1.2))
             return self.sg**sig
         elif tr=="PCEN":
@@ -979,20 +980,21 @@ class SignalProc:
     def drawSpectralDeriv(self):
         # helper function to parse output for plotting spectral derivs.
         sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
-        x, y = np.where(sd > 0)
-        #print(y)
+        if sd is not None:
+            x, y = np.where(sd > 0)
+            #print(y)
 
-        # remove points beyond frq range to show
-        y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
-        y1 = np.asarray(y1)
-        valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+            # remove points beyond frq range to show
+            y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+            y1 = np.asarray(y1)
+            valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+    
+            inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+            x = x[inds]
+            y = y[inds]
+            y = [i - valminfrq for i in y]
 
-        inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
-        x = x[inds]
-        y = y[inds]
-        y = [i - valminfrq for i in y]
-
-        return x, y
+            return x, y
 
     def drawFundFreq(self, seg):
         """ Produces marks of fundamental freq to be drawn on the spectrogram.

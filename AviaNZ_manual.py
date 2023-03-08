@@ -26,7 +26,7 @@ from shutil import copyfile
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -289,7 +289,7 @@ class AviaNZ(QMainWindow):
         Some of them are initialised according to the data in the configuration file."""
 
         fileMenu = self.menuBar().addMenu("&File")
-        openIcon = self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton)
+        openIcon = self.style().standardIcon(QStyle.SP_DialogOpenButton)
         fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
@@ -572,12 +572,12 @@ class AviaNZ(QMainWindow):
 
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
-        self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
+        self.prev5mins.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekBackward))
         self.prev5mins.setMinimumSize(35, 30)
         self.prev5mins.setToolTip("Previous page")
         self.prev5mins.clicked.connect(self.movePrev5mins)
         self.next5mins=QToolButton()
-        self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
+        self.next5mins.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekForward))
         self.next5mins.setMinimumSize(35, 30)
         self.next5mins.setToolTip("Next page")
         self.next5mins.clicked.connect(self.moveNext5mins)
@@ -747,34 +747,34 @@ class AviaNZ(QMainWindow):
 
         # Button to move to the next file in the list
         self.nextFileBtn=QToolButton()
-        self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
+        self.nextFileBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipForward))
         self.nextFileBtn.clicked.connect(self.openNextFile)
         self.nextFileBtn.setToolTip("Open next file")
         self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
 
         # The buttons inside the controls dock
-        self.playButton = QtGui.QToolButton()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton = QToolButton()
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QtCore.QSize(20, 20))
         self.playButton.setToolTip("Play visible")
         self.playButton.clicked.connect(self.playVisible)
         self.playKey = QShortcut(QKeySequence("Space"), self)
         self.playKey.activated.connect(self.playVisible)
 
-        self.stopButton = QtGui.QToolButton()
-        self.stopButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+        self.stopButton = QToolButton()
+        self.stopButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
         self.stopButton.setIconSize(QtCore.QSize(20, 20))
         self.stopButton.setToolTip("Stop playback")
         self.stopButton.clicked.connect(self.stopPlayback)
 
-        self.playSegButton = QtGui.QToolButton()
+        self.playSegButton = QToolButton()
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playSegButton.setToolTip("Play selected")
         self.playSegButton.clicked.connect(self.playSelectedSegment)
 
-        self.speedButton = QtGui.QToolButton()
-        self.speedButton.setPopupMode(QtGui.QToolButton.InstantPopup)
+        self.speedButton = QToolButton()
+        self.speedButton.setPopupMode(QToolButton.InstantPopup)
         self.speedButton.setIcon(QIcon('img/playSlow-w.png'))
         self.speedButton.setIconSize(QtCore.QSize(20, 20))
         self.speedButton.setToolTip("Playback speed")
@@ -791,19 +791,19 @@ class AviaNZ(QMainWindow):
             extraGroup.addAction(em)
         self.speedButton.setMenu(speedMenu)
 
-        self.quickDenoiseButton = QtGui.QToolButton()
+        self.quickDenoiseButton = QToolButton()
         self.quickDenoiseButton.setIcon(QIcon('img/denoisesegment.png'))
         self.quickDenoiseButton.setIconSize(QtCore.QSize(20, 20))
         self.quickDenoiseButton.setToolTip("Denoise segment")
         self.quickDenoiseButton.clicked.connect(self.denoiseSeg)
 
-        self.viewSpButton = QtGui.QToolButton()
+        self.viewSpButton = QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
         self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
         self.viewSpButton.clicked.connect(self.toggleViewSp)
 
-        self.playBandLimitedSegButton = QtGui.QToolButton()
+        self.playBandLimitedSegButton = QToolButton()
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
@@ -1705,7 +1705,8 @@ class AviaNZ(QMainWindow):
             self.volSliderMoved(self.specControls.volSlider.value())
 
             # Set the length of the scrollbar.
-            self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
+            # SRM: int bug?
+            self.scrollSlider.setRange(0,int(np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value())))
             self.scrollSlider.setValue(0)
 
             self.drawOverview()
@@ -2103,7 +2104,7 @@ class AviaNZ(QMainWindow):
         elif self.extra=="Wavelet scalogram":
             self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
-        self.scrollSlider.setValue(minX)
+        self.scrollSlider.setValue(int(minX))
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         # self.saveConfig = True
         self.timeaxis.update()
@@ -2270,7 +2271,7 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # preprocess
-            data = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+            data = librosa.resample(self.audiodata, self.sampleRate, 16000)
             data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
@@ -2308,7 +2309,7 @@ class AviaNZ(QMainWindow):
             print("Will use window of", chpwin, "s")
             # resample and generate WP w/ all nodes for the current page
             if self.sampleRate != TGTSAMPLERATE:
-                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, TGTSAMPLERATE)
+                datatoplot = librosa.resample(self.audiodata, self.sampleRate, TGTSAMPLERATE)
             else:
                 datatoplot = self.audiodata
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
@@ -2472,7 +2473,7 @@ class AviaNZ(QMainWindow):
 
             # resample
             if self.sampleRate != 16000:
-                audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+                audiodata = librosa.resample(self.audiodata, self.sampleRate, 16000)
             else:
                 audiodata = self.audiodata
 
@@ -2498,7 +2499,7 @@ class AviaNZ(QMainWindow):
             # reconstructed signal was @ 16 kHz,
             # so we upsample to get equal sized spectrograms
             if self.sampleRate != 16000:
-                C = librosa.core.audio.resample(C, 16000, self.sampleRate)
+                C = librosa.resample(C, 16000, self.sampleRate)
             tempsp = SignalProc.SignalProc()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
@@ -3315,7 +3316,8 @@ class AviaNZ(QMainWindow):
                                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                             else:
                                 self.fillBirdList()
-                            self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                            # SRM int
+                            self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
 
     def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
@@ -3865,7 +3867,8 @@ class AviaNZ(QMainWindow):
             newmaxX = self.convertAmpltoSpec(value)+minX
             self.overviewImageRegion.setRegion([minX, newmaxX])
 
-        self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
+        # SRM int added
+        self.scrollSlider.setMaximum(int(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value())))
 
         # Decide whether or not to show milliseconds
         if value > 3:
@@ -4006,7 +4009,7 @@ class AviaNZ(QMainWindow):
             # 1. decompose
             # if needed, adjusting sampling rate to match filter
             if self.sampleRate != spInfo['SampleRate']:
-                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, spInfo['SampleRate'])
+                datatoplot = librosa.resample(self.audiodata, self.sampleRate, spInfo['SampleRate'])
             else:
                 datatoplot = self.audiodata
 
@@ -5325,7 +5328,7 @@ class AviaNZ(QMainWindow):
 
             # Get the data for the spectrogram
             if self.sampleRate != self.sppInfo[str(species)][4]:
-                data1 = librosa.core.audio.resample(self.audiodata, self.sampleRate, self.sppInfo[str(species)][4])
+                data1 = librosa.resample(self.audiodata, self.sampleRate, self.sppInfo[str(species)][4])
                 sampleRate1 = self.sppInfo[str(species)][4]
             else:
                 data1 = self.audiodata
@@ -5413,13 +5416,14 @@ class AviaNZ(QMainWindow):
             self.playSpeed = 1.0
             if self.media_obj.state() != QAudio.SuspendedState and not self.media_obj.keepSlider:
                 # restart playback
-                range = self.p_ampl.viewRange()[0]
-                self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
+                playRange = self.p_ampl.viewRange()[0]
+                # SRM
+                self.setPlaySliderLimits(playRange[0]*1000, playRange[1]*1000)
                 # (else keep play slider range from before)
             self.bar.setMovable(False)
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
-            self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
 
             # OS X doesn't repaint them by default smh
             self.playButton.repaint()
@@ -5446,9 +5450,9 @@ class AviaNZ(QMainWindow):
                 self.setPlaySliderLimits(start, stop)
 
                 self.bar.setMovable(False)
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
-                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+                self.playSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
 
                 # OS X doesn't repaint them by default smh
                 self.playButton.repaint()
@@ -5481,9 +5485,9 @@ class AviaNZ(QMainWindow):
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
                 self.setPlaySliderLimits(start, stop)
                 self.bar.setMovable(False)
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
-                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+                self.playSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
 
                 # OS X doesn't repaint them by default smh
                 self.playButton.repaint()
@@ -5502,7 +5506,7 @@ class AviaNZ(QMainWindow):
         self.bar.setMovable(True)
 
         # Reset all button icons:
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
         self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
@@ -5522,7 +5526,7 @@ class AviaNZ(QMainWindow):
         self.bar.setValue(-1000)
 
         # Reset all button icons:
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
         self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
@@ -5551,15 +5555,17 @@ class AviaNZ(QMainWindow):
                 print("Stopped at %d ms" % eltime)
                 self.stopPlayback()
         else:
-            self.playSlider.setValue(eltime)
+            self.playSlider.setValue(int(eltime))
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
+            # SRM: int
+            self.bar.setValue(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
 
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
         """
+        # SRM int
         offset = (self.startRead + self.startTime) * 1000 # in ms, absolute
-        self.playSlider.setRange(start + offset, end + offset)
+        self.playSlider.setRange(int(start + offset), int(end + offset))
         self.segmentStart = self.playSlider.minimum() - offset # relative to file start
         self.segmentStop = self.playSlider.maximum() - offset # relative to file start
 
@@ -5576,8 +5582,8 @@ class AviaNZ(QMainWindow):
     def barMoved(self, evt):
         """ Listener for when the bar showing playback position moves.
         """
-        self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000)
-        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000, self.segmentStart)
+        self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
+        self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.

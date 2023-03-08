@@ -824,9 +824,9 @@ class CompareCallsDialog(QDialog):
         wav2len = currseg2[1]
 
         self.sp1 = SignalProc.SignalProc(256, 128)
-        self.sp1.readWav(wav1, off=wav1start, len=wav1len)
+        self.sp1.readWav(wav1, off=wav1start, duration=wav1len)
         self.sp2 = SignalProc.SignalProc(256, 128)
-        self.sp2.readWav(wav2, off=wav2start, len=wav2len)
+        self.sp2.readWav(wav2, off=wav2start, duration=wav2len)
         _ = self.sp1.spectrogram()
         _ = self.sp2.spectrogram()
         sg1 = self.sp1.normalisedSpec("Log")

@@ -642,7 +642,7 @@ class GenerateData:
 
             try:
                 # load file
-                sp.readWav(record[0], len=duration, off=record[1][0])
+                sp.readWav(record[0], duration=duration, off=record[1][0])
                 sp.resample(self.fs)
                 sgRaw = sp.spectrogram()
                 # Could bandpass here if relevant:

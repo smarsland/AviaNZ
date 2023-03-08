@@ -28,7 +28,7 @@ import shutil
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox # listing some explicitly to make syntax checks lighter
+from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
 
@@ -71,7 +71,7 @@ class StartScreen(QDialog):
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
-        bclose = QtGui.QToolButton()
+        bclose = QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
         bclose.setIconSize(QSize(40, 40))
         bclose.setToolTip("Close")
@@ -1033,19 +1033,19 @@ class Segmentation(QDialog):
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.5*1000)
-        self.minlen.setRange(0.1*1000, 10*1000)
-        self.minlen.setSingleStep(0.1*1000)
-        self.minlen.setValue(0.5*1000)
+        self.minlen.setTickInterval(500)
+        self.minlen.setRange(100, 10000)
+        self.minlen.setSingleStep(100)
+        self.minlen.setValue(500)
         self.minlen.valueChanged.connect(self.minLenChange)
         self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
 
         self.maxgap = QSlider(Qt.Horizontal)
         self.maxgap.setTickPosition(QSlider.TicksBelow)
-        self.maxgap.setTickInterval(0.25*1000)
-        self.maxgap.setRange(0.05*1000, 4*1000)
-        self.maxgap.setSingleStep(0.05*1000)
-        self.maxgap.setValue(1*1000)
+        self.maxgap.setTickInterval(250)
+        self.maxgap.setRange(50, 4000)
+        self.maxgap.setSingleStep(50)
+        self.maxgap.setValue(1000)
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
@@ -1622,22 +1622,22 @@ class HumanClassify1(QDialog):
         self.numberLeft.setAlignment(Qt.AlignCenter)
 
         iconSize = QSize(45, 45)
-        self.buttonPrev = QtGui.QToolButton()
+        self.buttonPrev = QToolButton()
         self.buttonPrev.setIcon(QtGui.QIcon('img/undo.png'))
         self.buttonPrev.setIconSize(iconSize)
         self.buttonPrev.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.buttonNext = QtGui.QToolButton()
+        self.buttonNext = QToolButton()
         self.buttonNext.setIcon(QtGui.QIcon('img/questionL.png'))
         self.buttonNext.setIconSize(iconSize)
         self.buttonNext.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.correct = QtGui.QToolButton()
+        self.correct = QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/check-mark2.png'))
         self.correct.setIconSize(iconSize)
         self.correct.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.delete = QtGui.QToolButton()
+        self.delete = QToolButton()
         self.delete.setIcon(QtGui.QIcon('img/deleteL.png'))
         self.delete.setIconSize(iconSize)
         self.delete.setStyleSheet("padding: 5px 5px 5px 5px")
@@ -1706,7 +1706,7 @@ class HumanClassify1(QDialog):
             self.ctbtns.append(btn)
 
         # button to switch to call type view
-        self.viewSpButton = QtGui.QToolButton()
+        self.viewSpButton = QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
         self.viewSpButton.setIconSize(QSize(42, 25))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
@@ -1770,12 +1770,12 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.delete)
         hboxNextPrev.addWidget(self.numberLeft)
 
-        self.playButton = QtGui.QToolButton()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton = QToolButton()
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
         self.playButton.clicked.connect(self.playSeg)
 
-        self.scroll = QtGui.QScrollArea()
+        self.scroll = QScrollArea()
         self.scroll.setWidget(self.wPlot)
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumHeight(270)
@@ -1787,8 +1787,8 @@ class HumanClassify1(QDialog):
         self.specControls.volChanged.connect(self.volSliderMoved)
 
         # zoom buttons
-        self.zoomInBtn = QtGui.QToolButton()
-        self.zoomOutBtn = QtGui.QToolButton()
+        self.zoomInBtn = QToolButton()
+        self.zoomOutBtn = QToolButton()
         self.zoomInBtn.setIcon(QtGui.QIcon('img/zoom-in.png'))
         self.zoomOutBtn.setIcon(QtGui.QIcon('img/search.png'))
         self.zoomInBtn.setIconSize(QSize(24, 24))
@@ -1832,13 +1832,13 @@ class HumanClassify1(QDialog):
         if self.media_obj2.isPlaying():
             self.stopPlayback()
         else:
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
             self.playButton.setIconSize(QSize(40, 40))
             self.media_obj2.loadArray(self.audiodata)
 
     def stopPlayback(self):
         self.media_obj2.pressedStop()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
 
     def volSliderMoved(self, value):
@@ -1971,8 +1971,9 @@ class HumanClassify1(QDialog):
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
         # add time markers next to the lines
-        time1 = QTime(0,0,0).addSecs(time1).toString('hh:mm:ss')
-        time2 = QTime(0,0,0).addSecs(time2).toString('hh:mm:ss')
+        # SRM int
+        time1 = QTime(0,0,0).addSecs(int(time1)).toString('hh:mm:ss')
+        time2 = QTime(0,0,0).addSecs(int(time2)).toString('hh:mm:ss')
         self.segTimeText1.setText(time1)
         self.segTimeText2.setText(time2)
         self.segTimeText1.setPos(startV, SgSize)
@@ -3089,7 +3090,7 @@ class Cluster(QDialog):
         self.flowLayout = pg.LayoutWidget()
         self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
 
-        self.scrollArea = QtGui.QScrollArea(self)
+        self.scrollArea = QScrollArea(self)
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setWidget(self.flowLayout)
 
