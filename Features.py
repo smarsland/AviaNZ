@@ -349,7 +349,7 @@ def loadFile(filename):
         audiodata = audiodata[:,0]
 
     # if sampleRate != 16000:
-    #     audiodata = librosa.core.audio.resample(audiodata, sampleRate, 16000)
+    #     audiodata = librosa.resample(audiodata, sampleRate, 16000)
     #     sampleRate=16000
 
     # # pre-process
@@ -376,7 +376,7 @@ def genCluterData(dir, duration=1, sampRate=16000):
                 data, fs = loadFile(filename)
                 # resample where necessary
                 if fs != sampRate:
-                    data = librosa.core.audio.resample(data, fs, sampRate)
+                    data = librosa.resample(data, fs, sampRate)
                     fs = sampRate
                 # get the middle 'duration' secs
                 middle_duration = int(duration * fs)

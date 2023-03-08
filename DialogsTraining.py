@@ -31,9 +31,9 @@ import copy
 from shutil import copyfile
 import json
 
-from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor
+from PyQt5.QtGui import QIcon, QValidator, QPixmap, QColor
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
