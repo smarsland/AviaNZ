@@ -25,7 +25,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
 from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
@@ -60,10 +60,10 @@ class TimeAxisHour(pg.AxisItem):
         # Overwrite the axis tick code
         if self.showMS:
             self.setLabel('Time', units='hh:mm:ss.ms')
-            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('hh:mm:ss.z') for value in values]
+            return [QTime(0,0,0).addMSecs(int(value+self.offset)*1000).toString('hh:mm:ss.z') for value in values]
         else:
             self.setLabel('Time', units='hh:mm:ss')
-            return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
+            return [QTime(0,0,0).addSecs(int(value+self.offset)).toString('hh:mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -100,7 +100,8 @@ class TimeAxisMin(pg.AxisItem):
             return vstr1
         else:
             self.setLabel('Time', units='mm:ss')
-            vstr1 = [QTime(0,0,0).addSecs(value).toString('mm:ss') for value in vs]
+            # SRM: bug? (int)
+            vstr1 = [QTime(0,0,0).addSecs(int(value)).toString('mm:ss') for value in vs]
             # check if we need to add hours:
             if vs[-1]>=3600:
                 self.setLabel('Time', units='h:mm:ss')
@@ -581,8 +582,8 @@ class DragViewBox(pg.ViewBox):
     # Effectively, if "dragging" is enabled, it captures press & release signals.
     # Otherwise it ignores the event, which then goes to the scene(),
     # which only captures click events.
-    sigMouseDragged = QtCore.Signal(object,object,object)
-    keyPressed = QtCore.Signal(int)
+    sigMouseDragged = QtCore.pyqtSignal(object,object,object)
+    keyPressed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent, enableDrag, thisIsAmpl, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -637,7 +638,7 @@ class DragViewBox(pg.ViewBox):
 
 class ChildInfoViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to pass a message back from a child
-    sigChildMessage = QtCore.Signal(object)
+    sigChildMessage = QtCore.pyqtSignal(object)
 
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -646,10 +647,10 @@ class ChildInfoViewBox(pg.ViewBox):
         self.sigChildMessage.emit(x)
 
 
-class ClickableRectItem(QtGui.QGraphicsRectItem):
+class ClickableRectItem(QGraphicsRectItem):
     # QGraphicsItem doesn't include signals, hence this mess
     def __init__(self, *args, **kwds):
-        QtGui.QGraphicsRectItem.__init__(self, *args, **kwds)
+        QGraphicsRectItem.__init__(self, *args, **kwds)
 
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
@@ -674,8 +675,8 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
         # this should be doable by postEvent(QResizeEvent),
         # but somehow doesn't always work.
         self.alreadyResizing = False
-        self.setMinimumWidth(self.height()*self.plotAspect-10)
-        self.setMaximumWidth(self.height()*self.plotAspect+10)
+        self.setMinimumWidth(int(self.height()*self.plotAspect)-10)
+        self.setMaximumWidth(int(self.height()*self.plotAspect)+10)
         self.adjustSize()
 
     def resizeEvent(self, e):
@@ -689,8 +690,8 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
             self.alreadyResizing = True
             # Some buffer for flexibility, so that it could adjust itself
             # and avoid infinite loops
-            self.setMinimumWidth(e.size().height()*self.plotAspect-10)
-            self.setMaximumWidth(e.size().height()*self.plotAspect+10)
+            self.setMinimumWidth(int(e.size().height()*self.plotAspect)-10)
+            self.setMaximumWidth(int(e.size().height()*self.plotAspect)+10)
 
             pg.GraphicsLayoutWidget.resizeEvent(self, e)
 
@@ -847,7 +848,7 @@ class ControllableAudio(QAudioOutput):
         self.setVolume(value)
 
 
-class FlowLayout(QtGui.QLayout):
+class FlowLayout(QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
     # nicely as possible
     # From https://gist.github.com/Cysu/7461066
@@ -995,8 +996,8 @@ class PicButton(QAbstractButton):
         self.cluster = cluster
         self.setMouseTracking(True)
 
-        self.playButton = QtGui.QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton = QToolButton(self)
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.hide()
 
         # batmode frequency guides (in Y positions 0-1)
@@ -1127,7 +1128,7 @@ class PicButton(QAbstractButton):
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
@@ -1151,7 +1152,7 @@ class PicButton(QAbstractButton):
         if self.media_obj.isPlaying():
             self.stopPlayback()
         else:
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
             self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
@@ -1165,7 +1166,7 @@ class PicButton(QAbstractButton):
     def stopPlayback(self):
         self.media_obj.pressedStop()
         self.playButton.hide()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
 
     def sizeHint(self):
         return self.im1.size()
@@ -1196,7 +1197,7 @@ class PicButton(QAbstractButton):
 
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
-    buttonDragged = QtCore.Signal(int,object)
+    buttonDragged = QtCore.pyqtSignal(int,object)
 
     def __init__(self):
         super().__init__()
