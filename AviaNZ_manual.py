@@ -4934,6 +4934,8 @@ class AviaNZ(QMainWindow):
         x.tag has species code, time, duration, freqlow and freqhigh
         There is also the species list. Which we need to store and copy into .avianz.
         """
+
+        # TODO: Remove duration from dialog
         values = self.tag2AnnotationDialog.getValues()
         if values:
             [sessiondir, duration] = values
@@ -4941,6 +4943,7 @@ class AviaNZ(QMainWindow):
             return
 
         # Read freebird bird list
+        # TODO: make it part of the setup
         spName = []
         spCode = []
         try:
@@ -4965,17 +4968,10 @@ class AviaNZ(QMainWindow):
         for root, dirs, files in os.walk(str(sessiondir)):
             for file in files:
                 if file.endswith('.tag'):
-                    annotation = []
                     tagFile = os.path.join(root, file)
+                    tagSegments = Segment.SegmentList()
                     try:
-                        tree = ET.parse(tagFile)
-                        troot = tree.getroot()
-
-                        for elem in troot:
-                            species = spDict[int(elem[0].text)]
-                            annotation.append(
-                                [float(elem[1].text), float(elem[1].text) + float(elem[2].text), 0, 0, species])
-
+                        # First get the metadata
                         operator = ""
                         reviewer = ""
                         stree = ET.parse(tagFile[:-4] + '.setting')
@@ -4986,19 +4982,40 @@ class AviaNZ(QMainWindow):
                             if elem.tag == 'Reviewer' and elem.text:
                                 reviewer = elem.text
                         annotation.insert(0, {"Operator": operator, "Reviewer": reviewer, "Duration": duration})
+                        # Read the duration from the sample if possible
+                        # TODO
+                        # Otherwise, read file in
+                        # TODO
+
+                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
+                        
+                        tree = ET.parse(tagFile)
+                        troot = tree.getroot()
+
+                        for elem in troot:
+                            try:
+                                species = spDict[int(elem[0].text)]
+                                # TODO: Get the size right!
+                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), elem[3].text, elem[4].text, species])
+                                tagSegments.append(newSegment)
+                            except KeyError:
+                                print("{0} not in bird list for file %s" %elem[0],tagfile)
+
                         # save .data, possible over-writing
                         # TODO!!
-                        file = open(tagFile[:-4] + '.wav.data', 'w')
-                        json.dump(annotation, file)
-                        file.close()
+                        self.segments.saveJSON(str(self.filename) + '.data')
+                        #file = open(tagFile[:-4] + '.wav.data', 'w')
+                        #json.dump(annotation, file)
+                        #file.close()
                     except Exception as e:
                         print("Warning: Generating annotation from %s failed with error:" % (tagFile))
                         print(e)
                         return
+
+            # What is this?
             self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
-            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",
-                                              "Successfully saved the annotations in: " + '\n' + sessiondir)
+            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
             msg.exec_()
 
     def backupAnnotation(self):
