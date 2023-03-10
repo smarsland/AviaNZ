@@ -493,12 +493,12 @@ class Tag2Annotation(QDialog):
         self.btnBrowseSession.setFixedWidth(220)
         self.btnBrowseSession.clicked.connect(self.browseSession)
 
-        self.txtDuration = QLineEdit()
-        self.txtDuration.setMinimumWidth(400)
-        self.txtDuration.setText('')
-        lblDuration = QLabel("Duration (sec) of a recording")
-        lblDuration.setFixedWidth(220)
-        lblDuration.setAlignment(Qt.AlignCenter)
+        #self.txtDuration = QLineEdit()
+        #self.txtDuration.setMinimumWidth(400)
+        #self.txtDuration.setText('')
+        #lblDuration = QLabel("Duration (sec) of a recording")
+        #lblDuration.setFixedWidth(220)
+        #lblDuration.setAlignment(Qt.AlignCenter)
 
         self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
@@ -507,11 +507,11 @@ class Tag2Annotation(QDialog):
         Box1 = QHBoxLayout()
         Box1.addWidget(self.btnBrowseSession)
         Box1.addWidget(self.txtSession)
-        Box2 = QHBoxLayout()
-        Box2.addWidget(lblDuration)
-        Box2.addWidget(self.txtDuration)
+        #Box2 = QHBoxLayout()
+        #Box2.addWidget(lblDuration)
+        #Box2.addWidget(self.txtDuration)
         Box.addLayout(Box1)
-        Box.addLayout(Box2)
+        #Box.addLayout(Box2)
         Box.addWidget(QLabel())
         Box.addWidget(self.btnGenerateAnnot)
 
@@ -519,10 +519,11 @@ class Tag2Annotation(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        if self.txtDuration.text() and self.txtSession.text():
-            return [self.txtSession.text(), self.txtDuration.text()]
+        if self.txtSession.text(): # and self.txtDuration.text():
+            return self.txtSession.text()
+            #return [self.txtSession.text(), self.txtDuration.text()]
         else:
-            msg = SupportClasses_GUI.MessagePopup("w", "All fields are mandatory ", "All fields are mandatory.")
+            msg = SupportClasses_GUI.MessagePopup("w", "Folder ", "Need a folder of Freebird tags.")
             msg.exec_()
             return []
 
