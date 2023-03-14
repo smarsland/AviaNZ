@@ -29,8 +29,9 @@
 # 6. ...
 # 7. Merge with main
 # 8. Test
+# 9. Make Freebird species file a parameter
 
-import sys, os, json, platform, re, shutil
+import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
 
 from PyQt5 import QtCore, QtGui
@@ -4264,8 +4265,8 @@ class AviaNZ(QMainWindow):
         # these are all segments in file
         print("segs", self.segments)
 
-        csv = open(self.filename[:-4] + '_features.csv', "w")
-        csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
+        cs = open(self.filename[:-4] + '_features.csv', "w")
+        cs.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
 
         for seg in self.segments:
             # Important because all manual mode functions should operate on the current page only:
@@ -4302,11 +4303,11 @@ class AviaNZ(QMainWindow):
             # quartile1, quartile2, quartile3, f5, f95, interquartileRange = f.get_Raven_robust_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
             # print(quartile1, quartile2, quartile3, f5, f95, interquartileRange)
-            # csv.write("%s\t%.4f\t%.4f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq, quartile1, quartile2, quartile3, f5, f95, interquartileRange))
-            # csv.write("%s,%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
-            csv.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
+            # cs.write("%s\t%.4f\t%.4f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq, quartile1, quartile2, quartile3, f5, f95, interquartileRange))
+            # cs.write("%s,%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
+            cs.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
 
-        csv.close()
+        cs.close()
 
     def detectShapes(self):
         #method = self.shapesDialog.getValues()
@@ -4934,6 +4935,103 @@ class AviaNZ(QMainWindow):
         There is also the species list. Which we need to store and copy into .avianz.
         """
 
+        # TODO: sort out the frequencies
+        sessiondir = self.tag2AnnotationDialog.getValues()
+        if sessiondir is None:
+            return
+
+        spName = []
+        spCode = []
+
+        try:
+            with open('/home/marslast/.avianz/Freebird_species_list.csv', mode='r') as f:
+                cs = csv.DictReader(f)
+                for l in cs:
+                    if l['FreebirdCode'] != '':
+                        spName.append(l['SpeciesName'])
+                        spCode.append(int(l['FreebirdCode']))
+
+            f.close()
+        except:
+            print("Warning: Did not find Freebird species list")
+
+        spDict = dict(zip(spCode, spName))
+
+        # Generate the .data files from .tag, read operator/reviewer from the corresponding .setting file
+        for root, dirs, files in os.walk(sessiondir):
+            for file in files:
+                if file.endswith('.tag'):
+                    tagFile = os.path.join(root, file)
+                    tagSegments = Segment.SegmentList()
+
+                    # First get the metadata
+                    operator = ""
+                    reviewer = ""
+                    duration = ""
+                    try:
+                        stree = ET.parse(tagFile[:-4] + '.setting')
+                        stroot = stree.getroot()
+                        for elem in stroot:
+                            if elem.tag == 'Operator':
+                                operator = elem.text
+                            if elem.tag == 'Reviewer' and elem.text:
+                                reviewer = elem.text
+                    except:
+                        print("Can't read %s.setting or missing data" %tagFile[:-4])
+                    try:
+                        # Read the duration from the sample if possible
+                        ptree = ET.parse(tagFile[:-4] + '.p')
+                        ptroot = ptree.getroot()
+                        for elem in ptroot:
+                            for elem2 in elem:
+                                if elem2.tag == 'DurationSecond':
+                                    duration = elem2.text
+                    except:
+                        print("Can't read %s.p or missing data" %tagFile[:-4])
+                        # Otherwise, load the wav file
+                        import SignalProc 
+                        sp = SignalProc.SignalProc(512,256, 0, 0)
+                        sp.readWav(tagFile[:-4] + '.wav', 0, 0)
+                        duration = sp.fileLength / sp.sampleRate
+        
+                    tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
+                        
+                    try:
+                        tree = ET.parse(tagFile)
+                        troot = tree.getroot()
+        
+                        for elem in troot:
+                            try:
+                                species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
+                                # TODO: Get the size right! Something weird about the freqs
+                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), 0,0, species])
+                                #newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), float(elem[3].text), float(elem[4].text), species])
+                                tagSegments.append(newSegment)
+                                #print(tagSegments)
+                            except KeyError:
+                                print("{0} not in bird list for file {1}".format(elem[0].text,tagFile))
+                    except Exception as e:
+                        print("Can't read %s or missing data" %tagFile)
+                        print("Warning: Generating annotation from %s failed with error:" % (tagFile))
+                        print(e)
+        
+                    # save .data, possible over-writing
+                    tagSegments.saveJSON(tagFile[:-4] + '.wav.data')
+        
+            #self.tag2AnnotationDialog.txtDuration.setText('')
+            self.tag2AnnotationDialog.txtSession.setText('')
+            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
+            msg.exec_()
+        
+    def genTag2Annot_xlsx(self):
+        """ Utility function: Generate AviaNZ style annotations given the freebird style annotations
+        There are 3 parts to Freebird tags: x.tag, x.p, s.sample.
+        x.p has time: StartTimeSecond and DurationSecond. What are they?
+        x.setting has view info, which we ignore
+        x.tag has species code, time, duration, freqlow and freqhigh
+        There is also the species list. Which we need to store and copy into .avianz.
+        """
+
         # TODO: Remove duration from dialog
         sessiondir = self.tag2AnnotationDialog.getValues()
         if sessiondir is None:
@@ -4941,6 +5039,18 @@ class AviaNZ(QMainWindow):
 
         spName = []
         spCode = []
+
+        try:
+            with open('/home/marslast/.avianz/Freebird_species_list.csv', mode='r') as f:
+                cs = csv.DictReader(f)
+                for l in cs:
+                    if l['FreebirdCode'] != '':
+                        spName.append(l['SpeciesName'])
+                        spCode.append(int(l['FreebirdCode']))
+
+            f.close()
+        except:
+            print("Warning: Did not find Freebird species list")
 
         try:
             book = openpyxl.load_workbook(os.path.join(self.configdir, "Freebird_species_list.xlsx"))
