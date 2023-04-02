@@ -196,6 +196,7 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
 
     IF = IFreq.IF(method=2, pars=[spec_par['alpha'], spec_par['beta']])
     sp = SignalProc.SignalProc(spec_par['win_len'], spec_par['hop'])
+    print(syllable_path)
     sp.readWav(syllable_path)
     # signal = sp.data
     fs = sp.sampleRate
