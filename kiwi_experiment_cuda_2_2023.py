@@ -494,7 +494,7 @@ for norm_type in norm_list:
                     len_freq_list1 = []
                     list_train_files =[]
                     list_train_freq_path =[]
-                    train_extracted_IF = np.zeros((46, 40000, 2)) # we already know that we have 46 train file,
+                    train_extracted_IF = np.zeros((30, 40000, 2)) # we already know that we have 30 train file,
                     # file lenght maximised
 
                     i = 0
@@ -521,7 +521,7 @@ for norm_type in norm_list:
                     list_syllables_path = []
                     len_list2 = []
                     len_freq_list2 = []
-                    test_extracted_IF = np.zeros((49, 40000, 2)) # we already know that we have 46 train file,
+                    test_extracted_IF = np.zeros((33, 40000, 2)) # we already know that we have 33 test file,
                     i = 0
                     for file in test_list:
                         file_wav = file[:-7] + '.wav'

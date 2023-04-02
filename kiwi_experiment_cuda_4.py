@@ -1,5 +1,6 @@
 """
 10/11/2022
+Reviewed: 02/04/2023 Prethesis defence
 Author: Virginia Listanti
 
 This is an experiment script testing different parameter for a multitapered spectrogram with linear scale
@@ -414,12 +415,12 @@ def calculate_distances(prep_curves1, prep_curves2, extracted_curves1, extracted
 
 ################################################# MAIN ################################################################
 
-dataset_folder = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/Kiwi_syllable_dataset"
-train_dataset_path  = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/Dataset_list"
-result_dir = '/am/state-opera/home1/listanvirg/Documents/Individual_identification/Test_results'
+dataset_folder = "/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Kiwi_syllable_dataset"
+train_dataset_path  = "/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Dataset_list"
+result_dir = '/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Test_results'
 
 #read classes from train dataset
-list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
+list_labels = ["D", "E", "J", "K", "L", "M", "O", "Z"]
 
 #recover train and test list
 test_dataset_list_path =  train_dataset_path + '/Test_file_list.csv'
@@ -433,7 +434,7 @@ norm_list = ["Standard", "Box-Cox"]
 spectrogram_parameters = {'spec_type': "Multi-tapered", 'scale': 'Linear', 'norm_type': None, 'win_len': None, 'hop': None,
                           'window_type': None, 'mel_num': None, 'alpha': None, 'beta': None}
 
-Test_id = 2300
+Test_id = 3000
 
 for norm_type in norm_list:
     spectrogram_parameters['norm_type'] = norm_type
@@ -463,10 +464,10 @@ for norm_type in norm_list:
                     spectrogram_parameters['alpha'] = Iatsenko_parameters[0]
                     spectrogram_parameters['beta'] = Iatsenko_parameters[1]
 
-                    if Test_id < 620:
-                        print('\n\n Skipping Test ', Test_id)
-                        Test_id += 1
-                        continue
+                    # if Test_id < 620:
+                    #     print('\n\n Skipping Test ', Test_id)
+                    #     Test_id += 1
+                    #     continue
 
 
                     print('\n\n Starting Test ', Test_id)
