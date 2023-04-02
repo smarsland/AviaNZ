@@ -415,9 +415,9 @@ def calculate_distances(prep_curves1, prep_curves2, extracted_curves1, extracted
 
 ################################################# MAIN ################################################################
 
-dataset_folder = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/Kiwi_syllable_dataset"
-train_dataset_path  = "/am/state-opera/home1/listanvirg/Documents/Individual_identification/Dataset_list"
-result_dir = '/am/state-opera/home1/listanvirg/Documents/Individual_identification/Test_results'
+dataset_folder = "/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Kiwi_syllable_dataset"
+train_dataset_path  = "/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Dataset_list"
+result_dir = '/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Test_results'
 
 #read classes from train dataset
 list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
