@@ -208,6 +208,7 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
         sp.normalisedSpec(tr=spec_par['norm_type'])
         TFR = sp.sg
     TFR2 = TFR.T
+    print(np.shape(TFR2))
     t_step = T / np.shape(TFR2)[1]
 
     # appropriate frequency scale
