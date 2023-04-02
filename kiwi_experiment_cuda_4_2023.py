@@ -200,6 +200,7 @@ def extract_IF(syllable_path, spec_par, file_id, Save_dir):
     # signal = sp.data
     fs = sp.sampleRate
     T = sp.fileLength / fs
+    print(T)
 
     TFR = sp.spectrogram(spec_par['win_len'], spec_par['hop'], spec_par['window_type'], sgType=spec_par['spec_type'],
                          sgScale=spec_par['scale'], nfilters=spec_par['mel_num'])
