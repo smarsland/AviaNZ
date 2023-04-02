@@ -287,8 +287,8 @@ else:
 
 # syllable J
 P1 = np.array([0, 1686.9])
-P2 = np.array([0.11, 2070.2])
-P3 = np.array([0.54, 1774])
+P2 = np.array([0.2, 2085.2])
+P3 = np.array([0.54, 1850])
 P4 = np.array([T, 1364])
 
 # # syllable K
@@ -406,14 +406,14 @@ P4 = np.array([T, 1364])
 # trill_flag = "no"
 trill_flag = "yes"
 
-delta = 100
+delta = 90
 k = 8 # number of trills
 trill_t1 = 0.2
 trill_t2 = 0.54
 
 # harmonics
 n_limit = np.floor((fs/2)/(P1[1]+delta))
-n = 1
+n = 4
 n_max = np.int(np.min([n,n_limit]))
 
 t = np.linspace(0., T, t_bins, endpoint=False)
@@ -637,11 +637,12 @@ for j in range(1, n_max+1):
     # add trills
 
     if trill_flag == 'yes':
-        t_trill = np.linspace(trill_t1, trill_t2, int(np.round((trill_t2 - trill_t1)/t_step)), endpoint=False)
+        # t_trill = np.linspace(trill_t1, trill_t2, int(np.round((trill_t2 - trill_t1)/t_step)), endpoint=False)
+        t_trill = np.linspace(trill_t1, trill_t2, int(np.ceil((trill_t2 - trill_t1)/t_step)), endpoint=False)
         trill_phase = (delta / k) * (trill_t2 - trill_t1) * (-np.cos(((2 * np.pi * k) / (trill_t2 - trill_t1)) * t_trill))
-        phi_t[int(trill_t1 /t_step):int(trill_t2 /t_step)] += trill_phase
+        phi_t[int(np.floor(trill_t1 /t_step)):int(np.ceil(trill_t2 /t_step))] += trill_phase
         trill = delta * np.sin((2 * np.pi * k * (t_trill - trill_t1)) / (trill_t2 - trill_t1))
-        if_t[int(trill_t1 /t_step):int(trill_t2/t_step)] += trill
+        if_t[int(np.floor(trill_t1 /t_step)):int(np.ceil(trill_t2/t_step))] += trill
 
     signal += A*np.sin(phi+phi_t)
 
