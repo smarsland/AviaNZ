@@ -434,7 +434,7 @@ norm_list = ["Standard"]
 spectrogram_parameters = {'spec_type': "Standard", 'scale': 'Linear', 'norm_type': None, 'win_len': None, 'hop': None,
                           'window_type': None, 'mel_num': None, 'alpha': None, 'beta': None}
 
-Test_id = 2000
+Test_id = 0
 
 for norm_type in norm_list:
     spectrogram_parameters['norm_type'] = norm_type
