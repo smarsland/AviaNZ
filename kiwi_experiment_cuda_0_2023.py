@@ -420,7 +420,7 @@ train_dataset_path  = "/am/state-opera/home1/listanvirg/Documents/Individual_ide
 result_dir = '/am/state-opera/home1/listanvirg/Documents/Individual_identification2/Test_results'
 
 #read classes from train dataset
-list_labels = ["D", "E", "J", "K", "L", "M", "O", "R", "Z"]
+list_labels = ["D", "E", "J", "K", "L", "M", "O", "Z"]
 
 #recover train and test list
 test_dataset_list_path =  train_dataset_path + '/Test_file_list.csv'
