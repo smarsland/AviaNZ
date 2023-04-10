@@ -1691,7 +1691,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # sets the color map, based on the extremes of all segment spectrograms
             cmap = self.config['cmap']
             pos, colour, mode = colourMaps.colourMaps(cmap)
-            cmap = pg.ColorMap(pos, colour,mode)
+            cmap = pg.ColorMap(pos, colour) #Modified to remove error - due to pyqtgraph version changes? BRR - deleted third parameter
 
             self.lut = cmap.getLookupTable(0.0, 1.0, 256)
 
