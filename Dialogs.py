@@ -28,7 +28,7 @@ import shutil
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox # listing some explicitly to make syntax checks lighter
+from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton # listing some explicitly to make syntax checks lighter
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
 
@@ -71,7 +71,7 @@ class StartScreen(QDialog):
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
-        bclose = QtGui.QToolButton()
+        bclose = QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
         bclose.setIconSize(QSize(40, 40))
         bclose.setToolTip("Close")
