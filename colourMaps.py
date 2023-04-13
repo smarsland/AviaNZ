@@ -733,6 +733,6 @@ def getLookupTable(cmapname):
         to pg.ImageItem.setLookupTable
     """
     pos,colour,mode = colourMaps(cmapname)
-    cmap = pyqtgraph.ColorMap(pos,colour,mode)
+    cmap = pyqtgraph.ColorMap(pos,colour)
     lut = cmap.getLookupTable(0.0, 1.0, 256)
     return(lut)

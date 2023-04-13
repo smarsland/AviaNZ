@@ -6,35 +6,37 @@
 # pip install -r requirements.txt --user
 # cd ext; python3 setup.py build_ext -i
 
-click==7.0
-Cython==0.29.21
-h5py==2.10.0
-jsonschema==3.1.1
-librosa==0.8.0
-numpy==1.18.5  # scikit-image overwrites this w/ a newer version
-openpyxl==2.5.5
-pyFFTW==0.12.0
-PyQt5==5.15.4
-pyqtgraph==0.11.1
-scikit-image==0.18.3
-six==1.15.0
-scipy==1.5.0
-setuptools==56.1.0
-spectrum==0.7.5
-tensorflow==2.3.2
+# arm64 native versions listed below to allow running on M1 mac with acceleration
+
+click==8.1.3              # <- 7.0
+Cython==0.29.34           # <- 0.29.21
+h5py==3.6.0               # <- 2.10.0
+jsonschema==4.17.3        # <- 3.1.1
+librosa==0.9.2            # <- 0.8.0
+numpy==1.23.2             # <- 1.18.5
+openpyxl==3.1.1           # <- 2.5.5
+pyFFTW==0.13.1            # <- 0.12.0 
+PyQt5==5.15.7             # <- 5.15.4 # note: use brew install PyQt5 (see below)
+pyqtgraph==0.13.2         # <- 0.11.1
+scikit-image==0.20.0      # <- 0.18.3
+six==1.16.0               # <- 1.15.0
+scipy==1.10.1             # <- 1.5.0
+setuptools==65.6.3        # <- 56.1.0
+spectrum==0.8.1           # <- 0.7.5
+tensorflow-macos==2.21.0  # - mac M1 support <- tensorflow 2.3.2
+tensorflow-metal==0.8.0   # - mac M1 support
+tensorflow-deps==2.10.0   # - mac M1 support
 
 ## These dependencies are important, but should be installed by the main packages:
-# joblib==0.13.2
-# llvmlite==0.29.0
-# matplotlib==3.1.0
-# PyWavelets==1.0.3
-# scikit-learn==0.21.2
+# joblib==1.2.0           # <- 0.13.2          
+# llvmlite==0.39.1        # <- 0.29.0
+# matplotlib==3.7.3       # <- 3.1.0
+# PyWavelets==1.4.1       # <- 1.0.3
+# scikit-learn==1.2.2     # <- 0.21.2
 
 ## MANUAL:
 ## NECESSARY to install pytgraph development, 0.11.0.dev0+g9aaae8 or another version
 ## Hence git is required.
 ## For compiling binaries:
-# PyInstaller==4.0
-
-# For those without AVX2 support:
-# pip install --upgrade https://github.com/fo40225/tensorflow-windows-wheel/blob/master/2.0.0/py37/CPU/sse2/tensorflow-2.0.0-cp37-cp37m-win_amd64.whl
+# PyInstaller==5.9.0      # <- 4.0
+ 

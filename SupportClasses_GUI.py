@@ -25,7 +25,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout
 from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
@@ -580,8 +580,8 @@ class DragViewBox(pg.ViewBox):
     # Effectively, if "dragging" is enabled, it captures press & release signals.
     # Otherwise it ignores the event, which then goes to the scene(),
     # which only captures click events.
-    sigMouseDragged = QtCore.Signal(object,object,object)
-    keyPressed = QtCore.Signal(int)
+    sigMouseDragged = QtCore.pyqtSignal(object,object,object)
+    keyPressed = QtCore.pyqtSignal(int)
 
     def __init__(self, parent, enableDrag, thisIsAmpl, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -636,7 +636,7 @@ class DragViewBox(pg.ViewBox):
 
 class ChildInfoViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to pass a message back from a child
-    sigChildMessage = QtCore.Signal(object)
+    sigChildMessage = QtCore.pyqtSignal(object)
 
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -645,10 +645,10 @@ class ChildInfoViewBox(pg.ViewBox):
         self.sigChildMessage.emit(x)
 
 
-class ClickableRectItem(QtGui.QGraphicsRectItem):
+class ClickableRectItem(QGraphicsRectItem):
     # QGraphicsItem doesn't include signals, hence this mess
     def __init__(self, *args, **kwds):
-        QtGui.QGraphicsRectItem.__init__(self, *args, **kwds)
+        QGraphicsRectItem.__init__(self, *args, **kwds)
 
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
@@ -831,7 +831,7 @@ class ControllableAudio(QAudioOutput):
         self.setVolume(value)
 
 
-class FlowLayout(QtGui.QLayout):
+class FlowLayout(QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
     # nicely as possible
     # From https://gist.github.com/Cysu/7461066
@@ -1180,7 +1180,7 @@ class PicButton(QAbstractButton):
 
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
-    buttonDragged = QtCore.Signal(int,object)
+    buttonDragged = QtCore.pyqtSignal(int,object)
 
     def __init__(self):
         super().__init__()

@@ -21,7 +21,7 @@
 
 from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -87,7 +87,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to process (may contain sub folders)")
         self.w_browse.setFixedSize(165, 50)
-        self.w_browse.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; padding: 3px 3px 3px 3px}')
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
@@ -689,7 +689,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold}')
-        self.w_browse.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
@@ -1691,7 +1691,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # sets the color map, based on the extremes of all segment spectrograms
             cmap = self.config['cmap']
             pos, colour, mode = colourMaps.colourMaps(cmap)
-            cmap = pg.ColorMap(pos, colour,mode)
+            cmap = pg.ColorMap(pos, colour) #Modified to remove error - due to pyqtgraph version changes? BRR - deleted third parameter
 
             self.lut = cmap.getLookupTable(0.0, 1.0, 256)
 
