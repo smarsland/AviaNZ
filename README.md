@@ -67,10 +67,10 @@ For Apple M1/M2, the most stable version as at April 23 seems to be Python versi
 Use MiniForge3 -> https://github.com/conda-forge/miniforge 
 
 1. set up and activate a conda environment: 
-
-    `conda create --name aviaNZ_ARM python=3.9.13`
-    `conda activate aviaNZ_ARM`
-
+```
+    conda create --name aviaNZ_ARM python=3.9.13
+    conda activate aviaNZ_ARM
+```
 2. Install python package dependencies listed in requirements.txt using `conda install <package name>`. I suggest doing individually to check for issues - all should install with the exception of spectrum and PyQt5. Make sure that arm64 platform versions are installed.
 
 3. Install spectrum with `python -m pip install spectrum` 
@@ -90,21 +90,25 @@ To get it working:
 
  follow instructions at: https://developer.apple.com/metal/tensorflow-plugin/ (ignore the earliest steps setting up condaforge - as we are using miniforge instead)
 
-       `conda install -s apple tensorflow-deps`
-       `python -m pip install tensorflow-macos`
-       `python -m pip install tensorflow-metal`
-  
+```
+       conda install -s apple tensorflow-deps
+       python -m pip install tensorflow-macos
+       python -m pip install tensorflow-metal
+```  
+
  Note: if this fails, then you may need to manually install the older, more stable versions: 
  follow instructions at https://developer.apple.com/forums/thread/706920
-
+```
 pip install https://files.pythonhosted.org/packages/4d/74/47440202d9a26c442b19fb8a15ec36d443f25e5ef9cf7bfdeee444981513/tensorflow_macos-2.8.0-cp39-cp39-macosx_11_0_arm64.whl
 pip install https://files.pythonhosted.org/packages/d5/37/c48486778e4756b564ef844b145b16f3e0627a53b23500870d260c3a49f3/tensorflow_metal-0.4.0-cp39-cp39-macosx_11_0_arm64.whl
-
+```
 After all that, it should work OK. Note that you will need the code changes from this repo as the PyQt5 version changed some object dependencies.
 
 To run:
 
-`cd path/to/local/repo/`
-`conda activate aviaNZ_ARM`
-`python aviaNZ.py`
+'''
+cd path/to/local/repo/
+conda activate aviaNZ_ARM
+python aviaNZ.py
+'''
  
