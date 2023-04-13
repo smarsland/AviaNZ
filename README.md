@@ -106,9 +106,9 @@ After all that, it should work OK. Note that you will need the code changes from
 
 To run:
 
-'''
+```
 cd path/to/local/repo/
 conda activate aviaNZ_ARM
 python aviaNZ.py
-'''
+```
  
