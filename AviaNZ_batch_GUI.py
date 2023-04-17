@@ -1257,9 +1257,10 @@ class AviaNZ_reviewAll(QMainWindow):
             # TODO sort out how to do this if we want to fix the split in a filter
             # merge back any split segments, plus ANY overlaps within calltypes
             # (NOTE: applied to either review type to get identical results)
-            todelete = self.segments.mergeSplitSeg()
-            for dl in todelete:
-                del self.segments[dl]
+            # SRM: Have removed this for now, since it gets in the way of Harry's desire for a way to have multiple segments
+            #todelete = self.segments.mergeSplitSeg()
+            #for dl in todelete:
+                #del self.segments[dl]
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
@@ -1276,6 +1277,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
             self.segments.extend(self.goodsegments)
+            self.segments.extend(self.toadd)
             cleanexit = self.segments.saveJSON(filename+'.data', self.reviewer)
             if cleanexit != 1:
                 print("Warning: could not save segments!")
@@ -1398,6 +1400,7 @@ class AviaNZ_reviewAll(QMainWindow):
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
         self.loadFile(filename, species=self.species, chunksize=chunksize)
+        self.toadd = []
 
         if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
             guides = self.config['guidepos']
@@ -1465,6 +1468,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyClose2(self):
         todelete = []
+        toadd = []
         # initialize correction file. All "downgraded" segments will be stored
         outputErrors = []
 
@@ -1486,6 +1490,18 @@ class AviaNZ_reviewAll(QMainWindow):
                 anyChanged = currSeg.questionLabels(self.species)
                 if anyChanged:
                     outputErrors.append(currSeg)
+            elif btn.mark=="blue":
+                # SRM: TODO: Move OK?
+                #print(self.segments[btn.index],self.segments[btn.index+1])
+                currSeg.confirmLabels(self.species)
+                toadd.append(currSeg)
+                toadd[-1][0]+=0.1
+                toadd[-1][1]+=0.1
+                toadd[-1][2]+=50
+                toadd[-1][3]+=50
+                #self.segments.insert(btn.index+1,self.segments[btn.index])
+                #print(self.segments[btn.index],self.segments[btn.index+1],self.segments[btn.index+2])
+
             elif btn.mark=="green":
                 # find "yellows", swap to "greens"
                 currSeg.confirmLabels(self.species)
@@ -1509,6 +1525,8 @@ class AviaNZ_reviewAll(QMainWindow):
         # reverse loop to allow deleting segments
         for dl in reversed(list(set(todelete))):
             del self.segments[dl]
+
+        self.segments.extend(toadd)
 
         # done - the segments will be saved by the main loop
         return
@@ -1564,6 +1582,7 @@ class AviaNZ_reviewAll(QMainWindow):
         #self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
+        self.humanClassifyDialog1.buttonPlus.clicked.connect(self.humanClassifyPlus)
         success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
 
         if success == 0:
@@ -1850,6 +1869,29 @@ class AviaNZ_reviewAll(QMainWindow):
             #self.updateCallType(self.box1id, calltype)
 
         self.returned = False
+        self.humanClassifyNextImage1()
+
+    def humanClassifyPlus(self):
+        # Repeat a segment, offset slightly in freq and time
+        self.humanClassifyDialog1.stopPlayback()
+
+        # Insert new segment
+        # Don't bother changing the numbers for now, or show the new box to the user TODO: ??? Right choice???
+        # TODO: Offset
+        currSeg = self.segments[self.indices2show[self.box1id]]
+        currSeg.confirmLabels()
+        self.toadd.append(currSeg)
+        self.toadd[-1][0]+=0.1
+        self.toadd[-1][1]+=0.1
+        self.toadd[-1][2]+=50
+        self.toadd[-1][3]+=50
+        #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1])
+        #self.segments.insert(self.indices2show[self.box1id]+1,self.segments[self.indices2show[self.box1id]])
+        #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1],self.segments[self.indices2show[self.box1id]+2])
+        #self.box1id += 1
+
+        self.returned = False
+        self.segsAccepted+=1
         self.humanClassifyNextImage1()
 
     def humanClassifyCorrect1(self):
