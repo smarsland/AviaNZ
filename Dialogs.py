@@ -1643,6 +1643,11 @@ class HumanClassify1(QDialog):
         self.delete.setIconSize(iconSize)
         self.delete.setStyleSheet("padding: 5px 5px 5px 5px")
 
+        # TODO: Icon
+        self.buttonPlus = QToolButton()
+        self.buttonPlus.setText('+')
+        self.buttonPlus.setStyleSheet("padding: 5px 5px 5px 5px")
+
         self.birds3 = SearchableBirdWidget(self.multipleBirds)
         if self.longBirdList is not None and self.longBirdList != 'None':
             for item in self.longBirdList:
@@ -1769,6 +1774,7 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.buttonNext)
         hboxNextPrev.addWidget(self.delete)
+        hboxNextPrev.addWidget(self.buttonPlus)
         hboxNextPrev.addWidget(self.numberLeft)
 
         self.playButton = QToolButton()
@@ -2423,7 +2429,7 @@ class HumanClassify2(QDialog):
             self.specControls.volSlider.setEnabled(False)
             self.specControls.volIcon.setEnabled(False)
 
-        label1 = QLabel('Click on the images that are incorrectly labelled.')
+        label1 = QLabel('Click on the images that are incorrectly labelled or need some change.')
         label1.setFont(QtGui.QFont('SansSerif', 10))
         species = QLabel(label)
         species.setStyleSheet("padding: 2px 0px 5px 0px")
@@ -3107,6 +3113,7 @@ class Cluster(QDialog):
 
     def addButtons(self):
         """ Only makes the PicButtons and self.clusters dict
+        TODO: Get the parameters for the spectrogram from the config
         """
         self.clusters = []
         self.picbuttons = []

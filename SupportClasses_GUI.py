@@ -1000,6 +1000,12 @@ class PicButton(QAbstractButton):
         self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.hide()
 
+        # SRM: Decided this isn't the right wat
+        #self.plusButton = QToolButton(self)
+        #self.plusButton.setText('+')
+        #self.plusButton.hide()
+        #self.plusButton.clicked.connect(self.plusSegment)
+
         # batmode frequency guides (in Y positions 0-1)
         self.guides = guides
         if guides is not None:
@@ -1088,7 +1094,7 @@ class PicButton(QAbstractButton):
             else:
                 if self.mark == "yellow":
                     painter.setOpacity(0.8)
-                elif self.mark == "red":
+                elif self.mark == "red" or self.mark == "blue":
                     painter.setOpacity(0.5)
             painter.drawImage(rect, self.im1)
             if not self.cluster:
@@ -1114,6 +1120,11 @@ class PicButton(QAbstractButton):
                 painter.setPen(QPen(QColor(220, 220, 0)))
                 painter.setFont(QFont("Helvetica", fontsize))
                 painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "√")
+            elif self.mark == "blue":
+                painter.setOpacity(0.9)
+                painter.setPen(QPen(QColor(0,0,220)))
+                painter.setFont(QFont("Helvetica", fontsize))
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "+")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
@@ -1188,11 +1199,13 @@ class PicButton(QAbstractButton):
             elif self.mark == "red":
                 self.mark = "yellow"
             elif self.mark == "yellow":
+                self.mark = "blue"
+            elif self.mark == "blue":
                 self.mark = "green"
         self.paintEvent(ev)
         #self.update()
         self.repaint()
-        pg.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
 
 class Layout(pg.LayoutWidget):
