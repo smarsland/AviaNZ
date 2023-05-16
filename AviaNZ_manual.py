@@ -4936,6 +4936,7 @@ class AviaNZ(QMainWindow):
         """
 
         # TODO: sort out the frequencies
+        # TODO: make sure it saves to the right folder
         sessiondir = self.tag2AnnotationDialog.getValues()
         if sessiondir is None:
             return
@@ -4989,6 +4990,7 @@ class AviaNZ(QMainWindow):
                     except:
                         print("Can't read %s.p or missing data" %tagFile[:-4])
                         # Otherwise, load the wav file
+                        # TODO: Test
                         import SignalProc 
                         sp = SignalProc.SignalProc(512,256, 0, 0)
                         sp.readWav(tagFile[:-4] + '.wav', 0, 0)
@@ -5128,8 +5130,8 @@ class AviaNZ(QMainWindow):
                         print("Warning: Generating annotation from %s failed with error:" % (tagFile))
                         print(e)
         
-                    # save .data, possible over-writing
-                    tagSegments.saveJSON(tagFile[:-4] + '.wav.data')
+                    # save .data, possible over-writing *TODO
+                    tagSegments.saveJSON('../' + tagFile[:-4] + '.wav.data')
         
             #self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')

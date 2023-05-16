@@ -30,7 +30,7 @@ from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir
 
 import pyqtgraph as pg
 
@@ -528,8 +528,13 @@ class Tag2Annotation(QDialog):
             return []
 
     def browseSession(self):
-        dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
-        self.txtSession.setText(dirName)
+        #dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
+        #TODO
+        d = QFileDialog(self)
+        d.setFilter(QDir.AllDirs | QDir.Hidden)
+        if d.exec_():
+            dirName = dialog.getExistingDirectory(caption='Choose folder that holds .session folder with .tag and .setting')
+            self.txtSession.setText(dirName)
 
 #======
 class BackupAnnotation(QDialog):
