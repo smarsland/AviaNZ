@@ -529,12 +529,12 @@ class Tag2Annotation(QDialog):
 
     def browseSession(self):
         #dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
-        #TODO
         d = QFileDialog(self)
-        d.setFilter(QDir.AllDirs | QDir.Hidden)
-        if d.exec_():
-            dirName = dialog.getExistingDirectory(caption='Choose folder that holds .session folder with .tag and .setting')
-            self.txtSession.setText(dirName)
+        d.setFilter(QDir.AllDirs | QDir.Hidden | QDir.NoDotAndDotDot)
+        d.setFileMode(QFileDialog.Directory)
+        if(d.exec()):
+            dirName = d.selectedFiles()[0]
+        self.txtSession.setText(dirName)
 
 #======
 class BackupAnnotation(QDialog):

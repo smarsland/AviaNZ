@@ -1512,9 +1512,9 @@ class WaveletSegment:
         if sampleRate != fsOut:
             print("Resampling from", sampleRate, "to", fsOut)
             if not fastRes:
-                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+                data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_best')
             else:
-                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+                data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
 
         # Get the five level wavelet decomposition
         if d:
