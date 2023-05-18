@@ -29,7 +29,6 @@
 # 6. ...
 # 7. Merge with main
 # 8. Test
-# 9. Make Freebird species file a parameter
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -1358,7 +1357,8 @@ class AviaNZ(QMainWindow):
         # (it is provided when this is called by File -> [recent file clicked])
         success = 1
         SoundFileDirOld = self.SoundFileDir
-        fileNameOld = os.path.basename(self.filename)
+        if self.filename is not None:
+            fileNameOld = os.path.basename(self.filename)
         if fileName != '':
             print("Opening file %s" % fileName)
             self.SoundFileDir = os.path.dirname(fileName)
@@ -2615,7 +2615,7 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(self.segments[i])
 
     def addRegularSegments(self):
-        """ Perform the Hartley bodge: add 10s segments every minute. """
+        """ Perform the Hartley bodge: add regular segments"""
         if self.box1id>-1:
             self.deselectSegment(self.box1id)
         segtimes = [(seg[0], seg[1]) for seg in self.segments]
@@ -2641,7 +2641,8 @@ class AviaNZ(QMainWindow):
         self.protocolMarks = []
 
         if self.config['protocolOn']:
-            linePen = pg.mkPen((148, 0, 211), width=5)
+            linePen = pg.mkPen(self.config['protocolLineCol'], width=self.config['protocolLineWidth'])
+            #linePen = pg.mkPen((148, 0, 211), width=5)
             linestart = 0
 
             # pages >1 start with an overlap zone, so need to offset marks:
@@ -2649,11 +2650,15 @@ class AviaNZ(QMainWindow):
                 linestart += self.config['fileOverlap']
             while linestart < self.datalength/self.sampleRate:
                 lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
-                # print("Adding to", linestart, lineend)
-                line = pg.ROI(pos=(self.convertAmpltoSpec(linestart),0),
-                              size=(self.convertAmpltoSpec(lineend-linestart),0), movable=False, pen=linePen)
+                line = pg.ROI(pos=(self.convertAmpltoSpec(linestart),0), size=(self.convertAmpltoSpec(lineend-linestart),0), movable=False, pen=linePen)
+                lline = pg.InfiniteLine(pos=self.convertAmpltoSpec(linestart), angle=90, movable=False, pen=linePen)
+                rline = pg.InfiniteLine(pos=self.convertAmpltoSpec(lineend), angle=90, movable=False, pen=linePen)
                 self.protocolMarks.append(line)
+                self.protocolMarks.append(lline)
+                self.protocolMarks.append(rline)
                 self.p_spec.addItem(line)
+                self.p_spec.addItem(lline)
+                self.p_spec.addItem(rline)
                 linestart += self.config['protocolInterval']
 
     def refreshOverviewWith(self, segment, delete=False):
@@ -4936,33 +4941,64 @@ class AviaNZ(QMainWindow):
         """
 
         # TODO: sort out the frequencies
-        # TODO: make sure it saves to the right folder
+        # TODO: test that it saves to the right folder
         sessiondir = self.tag2AnnotationDialog.getValues()
         if sessiondir is None:
             return
 
+        if sessiondir.endswith(".session"):
+            sessiondir = sessiondir[:-8]
+            #sessiondir = os.path.join(sessiondir,".session")
+        print(sessiondir)
+
         spName = []
         spCode = []
 
-        try:
-            with open('/home/marslast/.avianz/Freebird_species_list.csv', mode='r') as f:
-                cs = csv.DictReader(f)
-                for l in cs:
-                    if l['FreebirdCode'] != '':
-                        spName.append(l['SpeciesName'])
-                        spCode.append(int(l['FreebirdCode']))
+        if not os.path.isabs(self.config['FreebirdList']):
+            filename = os.path.join(self.configdir,self.config['FreebirdList'])
+        else:
+            filename = self.config['FreebirdList']
 
-            f.close()
-        except:
-            print("Warning: Did not find Freebird species list")
+        if self.config['FreebirdList'][-4:] == '.csv':
+            try:
+                with open(filename, mode='r') as f:
+                #with open(os.path.join(self.configdir,self.config['FreebirdList']), mode='r') as f:
+                    cs = csv.DictReader(f)
+                    for l in cs:
+                        if l['FreebirdCode'] != '':
+                            spName.append(l['SpeciesName'])
+                            spCode.append(int(l['FreebirdCode']))
+
+                f.close()
+            except:
+                print("Warning: Did not find Freebird species list")
+        elif self.config['FreebirdList'][-5:] == '.xlsx':
+            try:
+                book = openpyxl.load_workbook(filename)
+                sheet = book.active
+            except:
+                print("Warning: Did not find Freebird species list")
+
+                name = sheet['A2': 'A' + str(sheet.max_row)]
+                code = sheet['B2': 'B' + str(sheet.max_row)]
+    
+                for i in range(len(name)):
+                    spName.append(str(name[i][0].value))
+                for i in range(len(code)):
+                    if code[i][0].value is not None:
+                        spCode.append(int(code[i][0].value))
+                    else:
+                        spCode.append(-1)
 
         spDict = dict(zip(spCode, spName))
 
+        # Go into each .session folder
         # Generate the .data files from .tag, read operator/reviewer from the corresponding .setting file
         for root, dirs, files in os.walk(sessiondir):
             for file in files:
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
+                    #print(tagFile)
                     tagSegments = Segment.SegmentList()
 
                     # First get the metadata
@@ -4995,13 +5031,13 @@ class AviaNZ(QMainWindow):
                         sp = SignalProc.SignalProc(512,256, 0, 0)
                         sp.readWav(tagFile[:-4] + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate
-        
+           
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
-                        
+                                
                     try:
                         tree = ET.parse(tagFile)
                         troot = tree.getroot()
-        
+          
                         for elem in troot:
                             try:
                                 species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
@@ -5016,16 +5052,22 @@ class AviaNZ(QMainWindow):
                         print("Can't read %s or missing data" %tagFile)
                         print("Warning: Generating annotation from %s failed with error:" % (tagFile))
                         print(e)
+                
+                    # save .data, possible over-writing TODO
+                    # Don't want in the .session folder
+                    if root[-8:] == ".session":
+                       di = root[:-8] 
+                    else:
+                        di = root
+                    tagSegments.saveJSON(os.path.join(di,file[:-4] + '.wav.data'))
+                    #print("saving to",os.path.join(di,file[:-4] + '.wav.data'))
+         
+        #self.tag2AnnotationDialog.txtDuration.setText('')
+        self.tag2AnnotationDialog.txtSession.setText('')
+        msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
+        msg.exec_()
         
-                    # save .data, possible over-writing
-                    tagSegments.saveJSON(tagFile[:-4] + '.wav.data')
-        
-            #self.tag2AnnotationDialog.txtDuration.setText('')
-            self.tag2AnnotationDialog.txtSession.setText('')
-            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
-            msg.exec_()
-        
-    def genTag2Annot_xlsx(self):
+    def genTag2Annot_xlsx_TBD(self):
         """ Utility function: Generate AviaNZ style annotations given the freebird style annotations
         There are 3 parts to Freebird tags: x.tag, x.p, s.sample.
         x.p has time: StartTimeSecond and DurationSecond. What are they?
@@ -5042,35 +5084,36 @@ class AviaNZ(QMainWindow):
         spName = []
         spCode = []
 
-        try:
-            with open('/home/marslast/.avianz/Freebird_species_list.csv', mode='r') as f:
-                cs = csv.DictReader(f)
-                for l in cs:
-                    if l['FreebirdCode'] != '':
-                        spName.append(l['SpeciesName'])
-                        spCode.append(int(l['FreebirdCode']))
+        if self.config['FreebirdList'][-4:] == '.csv':
+            try:
+                with open(self.config['FreebirdList'], mode='r') as f:
+                    cs = csv.DictReader(f)
+                    for l in cs:
+                        if l['FreebirdCode'] != '':
+                            spName.append(l['SpeciesName'])
+                            spCode.append(int(l['FreebirdCode']))
 
-            f.close()
-        except:
-            print("Warning: Did not find Freebird species list")
+                f.close()
+            except:
+                print("Warning: Did not find Freebird species list")
+        elif self.config['FreebirdList'][-5:] == '.xlsx':
+            try:
+                book = openpyxl.load_workbook(os.path.join(self.config['FreebirdList']))
+                sheet = book.active
+            except:
+                print("Warning: Did not find Freebird species list")
 
-        try:
-            book = openpyxl.load_workbook(os.path.join(self.configdir, "Freebird_species_list.xlsx"))
-            sheet = book.active
-        except:
-            print("Warning: Did not find Freebird species list")
-
-        name = sheet['A2': 'A' + str(sheet.max_row)]
-        code = sheet['B2': 'B' + str(sheet.max_row)]
-
-        for i in range(len(name)):
-            spName.append(str(name[i][0].value))
-        for i in range(len(code)):
-            if code[i][0].value is not None:
-                spCode.append(int(code[i][0].value))
-            else:
-                spCode.append(-1)
-        spDict = dict(zip(spCode, spName))
+                name = sheet['A2': 'A' + str(sheet.max_row)]
+                code = sheet['B2': 'B' + str(sheet.max_row)]
+    
+                for i in range(len(name)):
+                    spName.append(str(name[i][0].value))
+                for i in range(len(code)):
+                    if code[i][0].value is not None:
+                        spCode.append(int(code[i][0].value))
+                    else:
+                        spCode.append(-1)
+                spDict = dict(zip(spCode, spName))
 
         # Generate the .data files from .tag, read operator/reviewer from the corresponding .setting file
         for root, dirs, files in os.walk('Freebird'):
@@ -5926,6 +5969,9 @@ class AviaNZ(QMainWindow):
         fn3 = self.config['BatList']
         if fn3 is not None and '/' in fn3:
             fn3 = os.path.basename(fn3)
+        fn4 = self.config['FreebirdList']
+        if fn4 is not None and '/' in fn4:
+            fn4 = os.path.basename(fn4)
         hasMultipleSegments = False
         for s in self.segments:
             if len(s[4])>1:
@@ -5988,7 +6034,10 @@ class AviaNZ(QMainWindow):
                     {'name': 'Length of checking zone', 'type': 'float', 'value': self.config['protocolSize'],
                      'limits': (1, 300), 'step': 1, 'suffix': ' sec'},
                     {'name': 'Repeat zones every', 'type': 'float', 'value': self.config['protocolInterval'],
-                     'limits': (1, 600), 'step': 1, 'suffix': ' sec'},
+                     'limits': (1, 300), 'step': 1, 'suffix': ' sec'},
+                    {'name': 'Line colour', 'type': 'color', 'value': self.config['protocolLineCol']},
+                    {'name': 'Line width', 'type': 'int', 'value': self.config['protocolLineWidth'],
+                     'limits': (1, 10), 'step': 1},
                 ]}
             ]},
 
@@ -6008,6 +6057,10 @@ class AviaNZ(QMainWindow):
                 ]},
                 {'name': 'Bat List', 'type': 'group', 'children': [
                     {'name': 'Filename', 'type': 'str', 'value': fn3, 'readonly': True},
+                    {'name': 'Choose File', 'type': 'action'}
+                ]},
+                {'name': 'Freebird List', 'type': 'group', 'children': [
+                    {'name': 'Filename', 'type': 'str', 'value': fn4, 'readonly': True},
                     {'name': 'Choose File', 'type': 'action'}
                 ]},
                 {'name': 'Dynamically reorder bird list', 'type': 'bool', 'value': self.config['ReorderList']},
@@ -6098,6 +6151,8 @@ class AviaNZ(QMainWindow):
                 self.config['BirdListLong'] = data
             elif childName=='Bird List.Bat List.Filename':
                 self.config['BatList'] = data
+            elif childName=='Bird List.Freebird List.Filename':
+                self.config['FreebirdList'] = data
             elif childName=='Annotation.Segment colours.Confirmed segments':
                 rgbaNamed = list(data.getRgb())
                 if rgbaNamed[3] > 100:
@@ -6160,6 +6215,13 @@ class AviaNZ(QMainWindow):
             elif childName=='Annotation.Check-ignore protocol.Repeat zones every':
                 self.config['protocolInterval'] = data
                 self.drawProtocolMarks()
+            elif childName=='Annotation.Check-ignore protocol.Line colour':
+                rgbaVal = list(data.getRgb())
+                self.config['protocolLineCol'] = rgbaVal
+                self.drawProtocolMarks()
+            elif childName=='Annotation.Check-ignore protocol.Line width':
+                self.config['protocolLineWidth'] = data
+                self.drawProtocolMarks()
             elif childName=='User.Operator':
                 self.config['operator'] = data
                 self.operator = data
@@ -6204,6 +6266,13 @@ class AviaNZ(QMainWindow):
                         self.p['Bird List','Bat List','Filename'] = filename
                     else:
                         self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
+            elif childName=='Bird List.Freebird List.Choose File':
+                filename, drop = QFileDialog.getOpenFileName(self, 'Choose Freebird List', self.configdir, "*.csv *.xlsx")
+                if filename == '':
+                    print("no list file selected")
+                    return
+                else:
+                    self.config['FreebirdList'] = filename
                     #self.p['Bird List','Full Bird List','No long list'] = False
             #elif childName=='Bird List.Full Bird List.No long list':
                 #if param.value():
