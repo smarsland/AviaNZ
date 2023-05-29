@@ -13,6 +13,7 @@
 "BirdListShort": "ListCommonBirds.txt",
 "BirdListLong": "ListDOCBirds.txt",
 "BatList": "ListBats.txt",
+"FreebirdList": "Freebird_species_list.xlsx",
 "RecentFiles": [],
 "ColourList": ["Grey", "Viridis", "Inferno", "Plasma", "Autumn", "Cool", "Bone",
                 "Copper", "Hot", "Jet", "Thermal", "Flame", "Yellowy", "Bipolar", "Spectrum"],
@@ -24,7 +25,8 @@
 "readOnly": false, "transparentBoxes": false, "showListofFiles": true,
 "invertColourMap": false, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
-"protocolOn": false, "protocolSize": 15, "protocolInterval": 300,
+"protocolOn": false, "protocolSize": 15, "protocolInterval": 300, "protocolLineWidth": 3,
+"protocolLineCol": [148, 0, 211, 255],
 "guidepos": [20000, 60000, 36000, 50000], "guidelinesOn": "bat",
 "guidecol": [[255, 232, 140, 255], [255, 232, 140, 255], [239, 189, 124, 255], [239, 189, 124, 255]],
 "fs_start": 0, "fs_end": 0, "window": "Hann", "FiltersDir": "Filters"}

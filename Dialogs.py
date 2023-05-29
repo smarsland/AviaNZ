@@ -1650,7 +1650,8 @@ class HumanClassify1(QDialog):
 
         # TODO: Icon
         self.buttonPlus = QToolButton()
-        self.buttonPlus.setText('+')
+        self.buttonPlus.setIcon(QtGui.QIcon('img/iconplus.png'))
+        #self.buttonPlus.setText('+')
         self.buttonPlus.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.birds3 = SearchableBirdWidget(self.multipleBirds)
