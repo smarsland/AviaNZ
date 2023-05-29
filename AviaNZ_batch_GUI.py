@@ -1468,7 +1468,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyClose2(self):
         todelete = []
-        toadd = []
+        self.toadd = []
         # initialize correction file. All "downgraded" segments will be stored
         outputErrors = []
 
@@ -1494,11 +1494,11 @@ class AviaNZ_reviewAll(QMainWindow):
                 # SRM: TODO: Move OK?
                 #print(self.segments[btn.index],self.segments[btn.index+1])
                 currSeg.confirmLabels(self.species)
-                toadd.append(currSeg)
-                toadd[-1][0]+=0.1
-                toadd[-1][1]+=0.1
-                toadd[-1][2]+=50
-                toadd[-1][3]+=50
+                self.toadd.append(currSeg)
+                self.toadd[-1][0]+=0.1
+                self.toadd[-1][1]+=0.1
+                self.toadd[-1][2]+=50
+                self.toadd[-1][3]+=50
                 #self.segments.insert(btn.index+1,self.segments[btn.index])
                 #print(self.segments[btn.index],self.segments[btn.index+1],self.segments[btn.index+2])
 
@@ -1526,7 +1526,7 @@ class AviaNZ_reviewAll(QMainWindow):
         for dl in reversed(list(set(todelete))):
             del self.segments[dl]
 
-        self.segments.extend(toadd)
+        self.segments.extend(self.toadd)
 
         # done - the segments will be saved by the main loop
         return
@@ -1538,6 +1538,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         if self.config['saveCorrections']:
             self.origSeg = copy.deepcopy(self.segments)
+        self.toadd = []
 
         # Load the birdlists:
         # short list is necessary, long list can be None

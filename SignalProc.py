@@ -106,6 +106,8 @@ class SignalProc:
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
 
+        #print("a",self.sampleRate, self.fileLength, np.shape(self.data))
+
         if not silent:
             if QtMM:
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
@@ -217,13 +219,13 @@ class SignalProc:
 
     def resample(self, target):
         if len(self.data)==0:
-            print("Warning: no data set to resmample")
+            print("Warning: no data set to resample")
             return
         if target==self.sampleRate:
             print("No resampling needed")
             return
 
-        self.data = librosa.resample(self.data, self.sampleRate, target)
+        self.data = librosa.resample(self.data, orig_sr=self.sampleRate, target_sr=target)
 
         self.sampleRate = target
         if QtMM:

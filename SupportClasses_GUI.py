@@ -90,13 +90,13 @@ class TimeAxisMin(pg.AxisItem):
         vs = [value + self.offset for value in values]
         if self.showMS:
             self.setLabel('Time', units='mm:ss.ms')
-            vstr1 = [QTime(0,0,0).addMSecs(value*1000).toString('mm:ss.z') for value in vs]
+            vstr1 = [QTime(0,0,0).addMSecs(int(value*1000)).toString('mm:ss.z') for value in vs]
             # check if we need to add hours:
             if vs[-1]>=3600:
                 self.setLabel('Time', units='h:mm:ss.ms')
                 for i in range(len(vs)):
                     if vs[i]>=3600:
-                        vstr1[i] = QTime(0,0,0).addMSecs(vs[i]*1000).toString('h:mm:ss.z')
+                        vstr1[i] = QTime(0,0,0).addMSecs(int(vs[i]*1000)).toString('h:mm:ss.z')
             return vstr1
         else:
             self.setLabel('Time', units='mm:ss')

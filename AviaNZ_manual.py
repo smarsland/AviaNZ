@@ -228,17 +228,18 @@ class AviaNZ(QMainWindow):
         else:
             self.MouseDrawingButton = Qt.LeftButton
 
+        self.createMenu()
+        self.createFrame()
+
         # Boxes with area smaller than this will be ignored -
         # to avoid accidentally creating little boxes
         self.minboxsize = 0.1
 
-        self.createMenu()
-        self.createFrame()
-
         self.resetStorageArrays()
         if self.CLI:
             if cheatsheet or zooniverse:
-                # use infile and imagefile as directories
+                # use infile as directory
+                # TODO: imagefile?
                 print(firstFile)
                 self.SoundFileDir = firstFile
                 # Read folders and sub-folders
@@ -1539,7 +1540,6 @@ class AviaNZ(QMainWindow):
                     lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
 
                 self.sp.readWav(self.filename, lenRead, self.startRead)
-                self.datalength = np.shape(self.sp.data)[0]
 
                 # resample to 16K if needed (SignalProc will determine)
                 if cs:
@@ -1549,6 +1549,8 @@ class AviaNZ(QMainWindow):
             # Parse wav format details based on file header:
             self.sampleRate = self.sp.sampleRate
             self.audiodata = self.sp.data
+            self.datalength = np.shape(self.sp.data)[0]
+
             # self.sp.audioFormat will be set
             # self.sp.fileLength will be determined from wav header
             # self.sp.minFreq and maxFreq will be set based on sample rate
@@ -1557,7 +1559,6 @@ class AviaNZ(QMainWindow):
             dlg += 1
             dlg.update()
 
-            print(self.datalength,self.sampleRate)
             self.datalengthSec = self.datalength / self.sampleRate
             print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
 
@@ -1702,32 +1703,35 @@ class AviaNZ(QMainWindow):
 
             self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
 
-            # Load the file for playback
-            self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
-            # this responds to audio output timer
-            self.media_obj.notify.connect(self.movePlaySlider)
+            if not self.CLI:
+                # Load the file for playback
+                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
+                # this responds to audio output timer
+                self.media_obj.notify.connect(self.movePlaySlider)
 
-            # Reset the media player
-            self.stopPlayback()
-            self.volSliderMoved(0)
-            self.segmentStop = 50
-            #self.media_obj.filterSeg(0, 50, self.audiodata)
-            self.volSliderMoved(self.specControls.volSlider.value())
+                # Reset the media player
+                self.stopPlayback()
+                self.volSliderMoved(0)
+                self.segmentStop = 50
+                #self.media_obj.filterSeg(0, 50, self.audiodata)
+                self.volSliderMoved(self.specControls.volSlider.value())
 
-            # Set the length of the scrollbar.
-            # SRM: int bug?
-            self.scrollSlider.setRange(0,int(np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value())))
-            self.scrollSlider.setValue(0)
+                # Set the length of the scrollbar.
+                # SRM: int bug?
+                self.scrollSlider.setRange(0,int(np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value())))
+                self.scrollSlider.setValue(0)
 
-            self.drawOverview()
-            dlg += 1
-            dlg.update()
-            self.drawfigMain()
-            self.setWindowTitle('AviaNZ - Manual Processing ' + self.filename)
-            dlg += 1
-            dlg.update()
-            self.w_spec.setFocus()
-            self.statusLeft.setText("Ready")
+                self.drawOverview()
+                dlg += 1
+                dlg.update()
+                self.drawfigMain()
+                self.setWindowTitle('AviaNZ - Manual Processing ' + self.filename)
+                dlg += 1
+                dlg.update()
+                self.w_spec.setFocus()
+                self.statusLeft.setText("Ready")
+            else:
+                self.drawfigMain()
 
     def openNextFile(self):
         """ Listener for next file >> button.
@@ -2211,7 +2215,11 @@ class AviaNZ(QMainWindow):
             else:
                 self.specaxis.setLabel('kHz')
        
-            self.specaxis.setTicks([[(0,round(labels[0]/1000,2)),(SpecRange/4,round(labels[1]/1000,2)),(SpecRange/2,round(labels[2]/1000,2)),(3*SpecRange/4,round(labels[3]/1000,2)),(SpecRange,round(labels[4]/1000,2))]])
+            #self.specaxis.setTicks([[(0,round(labels[0]/1000,2)),(SpecRange/4,round(labels[1]/1000,2)),(SpecRange/2,round(labels[2]/1000,2)),(3*SpecRange/4,round(labels[3]/1000,2)),(SpecRange,round(labels[4]/1000,2))]])
+            ticks = [(0,round(labels[0]/1000,2)),(SpecRange/4,round(labels[1]/1000,2)),(SpecRange/2,round(labels[2]/1000,2)),(3*SpecRange/4,round(labels[3]/1000,2)),(SpecRange,round(labels[4]/1000,2))]
+            ticks = [[(tick[0], "%.1f" % tick[1] ) for tick in ticks]]
+            self.specaxis.setTicks(ticks)
+
             #self.specaxis.setTicks([[(0,round(self.sp.minFreqShow/1000, 2)),
                                  #(SpecRange/4,round(self.sp.minFreqShow/1000+FreqRange/4000, 2)),
                                  #(SpecRange/2,round(self.sp.minFreqShow/1000+FreqRange/2000, 2)),
@@ -2281,7 +2289,7 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # preprocess
-            data = librosa.resample(self.audiodata, self.sampleRate, 16000)
+            data = librosa.resample(self.audiodata, orig_sf=self.sampleRate, target_sr=16000)
             data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
@@ -2319,7 +2327,7 @@ class AviaNZ(QMainWindow):
             print("Will use window of", chpwin, "s")
             # resample and generate WP w/ all nodes for the current page
             if self.sampleRate != TGTSAMPLERATE:
-                datatoplot = librosa.resample(self.audiodata, self.sampleRate, TGTSAMPLERATE)
+                datatoplot = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=TGTSAMPLERATE)
             else:
                 datatoplot = self.audiodata
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
@@ -2483,7 +2491,7 @@ class AviaNZ(QMainWindow):
 
             # resample
             if self.sampleRate != 16000:
-                audiodata = librosa.resample(self.audiodata, self.sampleRate, 16000)
+                audiodata = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=16000)
             else:
                 audiodata = self.audiodata
 
@@ -2509,7 +2517,7 @@ class AviaNZ(QMainWindow):
             # reconstructed signal was @ 16 kHz,
             # so we upsample to get equal sized spectrograms
             if self.sampleRate != 16000:
-                C = librosa.resample(C, 16000, self.sampleRate)
+                C = librosa.resample(C, orig_sr=16000, target_sr=self.sampleRate)
             tempsp = SignalProc.SignalProc()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
@@ -2527,11 +2535,11 @@ class AviaNZ(QMainWindow):
             MaxFreq = 8000
             height = 16000 // 2 / np.shape(tempsp)[1]
             SpecRange = MaxFreq/height
-            self.plotaxis.setTicks([[(0, 0.0),
-                                 (SpecRange/4,round(MaxFreq/4000, 2)),
-                                 (SpecRange/2,round(MaxFreq/2000, 2)),
-                                 (3*SpecRange/4,round(3*MaxFreq/4000, 2)),
-                                 (SpecRange,round(MaxFreq/1000, 2))]])
+            #self.plotaxis.setTicks([[(0, 0.0), (SpecRange/4,round(MaxFreq/4000, 2)), (SpecRange/2,round(MaxFreq/2000, 2)), (3*SpecRange/4,round(3*MaxFreq/4000, 2)), (SpecRange,round(MaxFreq/1000, 2))]])
+            ticks = [(0, 0.0), (SpecRange/4,round(MaxFreq/4000, 2)), (SpecRange/2,round(MaxFreq/2000, 2)), (3*SpecRange/4,round(3*MaxFreq/4000, 2)), (SpecRange,round(MaxFreq/1000, 2))]
+            ticks = [[(tick[0], "%.1f" % tick[1] ) for tick in ticks]]
+            self.plotaxis.setTicks(ticks)
+
             self.plotaxis.setLabel('kHz')
 
     def updateRegion_spec(self):
@@ -3733,8 +3741,9 @@ class AviaNZ(QMainWindow):
         """ Listener for the menu item that chooses a colour map.
         Loads them from the file as appropriate and sets the lookup table.
         """
-        if self.media_obj.isPlaying():
-            self.stopPlayback()
+        if not self.CLI:
+            if self.media_obj.isPlaying():
+                self.stopPlayback()
 
         self.config['cmap'] = cmap
         lut = colourMaps.getLookupTable(self.config['cmap'])
@@ -3769,8 +3778,9 @@ class AviaNZ(QMainWindow):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
-        if self.media_obj.isPlaying():
-            self.stopPlayback()
+        if not self.CLI:
+            if self.media_obj.isPlaying():
+                self.stopPlayback()
         if brightness is None:
             brightness = self.specControls.brightSlider.value()
         if contrast is None:
@@ -4024,7 +4034,7 @@ class AviaNZ(QMainWindow):
             # 1. decompose
             # if needed, adjusting sampling rate to match filter
             if self.sampleRate != spInfo['SampleRate']:
-                datatoplot = librosa.resample(self.audiodata, self.sampleRate, spInfo['SampleRate'])
+                datatoplot = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=spInfo['SampleRate'])
             else:
                 datatoplot = self.audiodata
 
@@ -5627,7 +5637,7 @@ class AviaNZ(QMainWindow):
 
             # Get the data for the spectrogram
             if self.sampleRate != self.sppInfo[str(species)][4]:
-                data1 = librosa.resample(self.audiodata, self.sampleRate, self.sppInfo[str(species)][4])
+                data1 = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=self.sppInfo[str(species)][4])
                 sampleRate1 = self.sppInfo[str(species)][4]
             else:
                 data1 = self.audiodata
