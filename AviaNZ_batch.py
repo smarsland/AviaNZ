@@ -1191,7 +1191,9 @@ class AviaNZ_batchProcess():
         # Write out a file that can be used for BatSearch import
         # For now, looks like the xml file used there
         # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
-        # No error checking
+        # TODO: No error checking!
+        # TODO: Use xml properly
+        # TODO: Check date
         operator = "AviaNZ 3.0"
         site = "Nowhere"
         # BatSeach codes
@@ -1246,7 +1248,10 @@ class AviaNZ_batchProcess():
                         s3 = "<AssignedSite>"+site+"</AssignedSite>\n"
                         s4 = "<AssignedUser>"+operator+"</AssignedUser>\n"
                         # DOC format
-                        s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                        # ddmmyy_hhmmss.bmp not yyyymmdd_hhmmss.bmp
+                        # TODO: Find files! I'm confused!!!
+                        s5 = "<RecTime>"+filename[4:8]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                        #s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
                         s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
                         s7 = "<RecordingFolderName>.\\"+os.path.relpath(root, dirName)+"</RecordingFolderName>\n"
                         s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
