@@ -1166,7 +1166,10 @@ class AviaNZ_batchProcess():
                         # DOC format
                         # night comes from the directory
                         night = root[-2:]+"/"+root[-4:-2]+"/"+root[-6:-4]
+                        print(night)
                         folder = root.split("/")[-2]
+                        print(folder)
+                        # TODO
                         detname = folder.split(" ")[-2]
                         #print(detname,folder)
                         #print("night "+night)
@@ -1193,7 +1196,7 @@ class AviaNZ_batchProcess():
         # TODO: No error checking!
         # TODO: Use xml properly
         # TODO: Check date
-        from lxml import etree as ET
+        from lxml import etree 
 
         # TODO: Get version label!
         operator = "AviaNZ 3.0"
@@ -1201,7 +1204,9 @@ class AviaNZ_batchProcess():
         # BatSeach codes
         namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
         # Set up the XML start
-        start = ET.element("ArrayOfBatRecording")#<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+        schema = etree.QName("http://www.w3.org/2001/XMLSchema-instance", "schema")
+
+        start = etree.Element("ArrayOfBatRecording", nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance", 'xsd':"http://www.w3.org/2001/XMLSchema"})
 
         if not os.path.isdir(dirName):
             print("Folder doesn't exist")
@@ -1212,7 +1217,7 @@ class AviaNZ_batchProcess():
                 for count in range(nfiles):
                     filename = files[count]
                     if filename.endswith('.data'):
-                        s1 = ET.SubElement(start,"BatRecording")
+                        s1 = etree.SubElement(start,"BatRecording")
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
                         if len(segments)>0:
@@ -1246,13 +1251,13 @@ class AviaNZ_batchProcess():
                             label = 'Non-bat'
                             #label = 'Unassigned'
                         # This is the text for the file
-                        s2 = ET.SubElement(s1,"AssignedBatCategory")
-                        s3 = ET.SubElement(s1,"AssignedSite")
-                        s4 = ET.SubElement(s1,"AssignedUser")
-                        s5 = ET.SubElement(s1,"RecTime")
-                        s6 = ET.SubElement(s1,"RecordingFileName")
-                        s7 = ET.SubElement(s1,"RecordingFolderName")
-                        s8 = ET.SubElement(s1,"MeasureTimeFrom")
+                        s2 = etree.SubElement(s1,"AssignedBatCategory")
+                        s3 = etree.SubElement(s1,"AssignedSite")
+                        s4 = etree.SubElement(s1,"AssignedUser")
+                        s5 = etree.SubElement(s1,"RecTime")
+                        s6 = etree.SubElement(s1,"RecordingFileName")
+                        s7 = etree.SubElement(s1,"RecordingFolderName")
+                        s8 = etree.SubElement(s1,"MeasureTimeFrom")
 
                         s2.text = str(namedict[label])
                         s3.text = site
@@ -1273,11 +1278,10 @@ class AviaNZ_batchProcess():
                         s7.text = ".\\"+os.path.relpath(root, dirName)
                         s8.text = str(0)
 
-                # Now write the file if necessary
-                if output != start:
-                    print("writing to", os.path.join(root, savefile))
-                    with open(os.path.join(root, savefile), "wb") as f:
-                        f.write(etree.tostring(etree.ElementTree(start), xml_declaration=True, encoding='utf-8'))
+                # Now write the file 
+                print("writing to", os.path.join(root, savefile))
+                with open(os.path.join(root, savefile), "wb") as f:
+                    f.write(etree.tostring(etree.ElementTree(start), pretty_print=True, xml_declaration=True, encoding='utf-8'))
         return 1
 
     def exportToBatSearch_2(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):

@@ -64,7 +64,9 @@ import librosa
 import webbrowser, copy, math
 import time
 import openpyxl
-import xml.etree.ElementTree as ET
+# TODO: Check this
+from lxml import etree as ET
+#import xml.etree.ElementTree as ET
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
