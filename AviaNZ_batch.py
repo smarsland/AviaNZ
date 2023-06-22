@@ -1169,8 +1169,9 @@ class AviaNZ_batchProcess():
                         print(night)
                         folder = root.split("/")[-2]
                         print(folder)
-                        # TODO
-                        detname = folder.split(" ")[-2]
+                        # TODO -- Note sure what this is doing?!
+                        #detname = folder.split(" ")[-2]
+                        detname = ""
                         #print(detname,folder)
                         #print("night "+night)
                         #night = filename[6:8]+"/"+filename[4:6]+"/"+filename[2:4]
@@ -1190,17 +1191,17 @@ class AviaNZ_batchProcess():
             output = start
 
     def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
-        # Write out a file that can be used for BatSearch import
-        # For now, looks like the xml file used there
-        # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
+        # Write out a BatData.xml that can be used for BatSearch import
+        # The format of Bat searches is <Survey> / <Site> / Bat / <Date> / files ----- the word Bat is fixed
+        # The BatData.xml goes in the Date folder
         # TODO: No error checking!
-        # TODO: Use xml properly
         # TODO: Check date
         from lxml import etree 
 
         # TODO: Get version label!
         operator = "AviaNZ 3.0"
         site = "Nowhere"
+
         # BatSeach codes
         namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
         # Set up the XML start
@@ -1212,10 +1213,12 @@ class AviaNZ_batchProcess():
             print("Folder doesn't exist")
             return 0
         for root, dirs, files in os.walk(dirName, topdown=True):
-            nfiles = len(files)
-            if nfiles > 0:
-                for count in range(nfiles):
-                    filename = files[count]
+            #nfiles = len(files)
+            if any(fnmatch.fnmatch(filename, '*.bmp') for filename in files):
+            #if nfiles > 0:
+                for filename in files:
+                #for count in range(nfiles):
+                    #filename = files[count]
                     if filename.endswith('.data'):
                         s1 = etree.SubElement(start,"BatRecording")
                         segments = Segment.SegmentList()
@@ -1265,17 +1268,18 @@ class AviaNZ_batchProcess():
                         # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
                         if len(filename.split('_')[0]) == 6:
                             # ddmmyy
-                            timedate = "20"+filename[4:6]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[7:9]+":"+filename[9:11]+":"+filename[11:13]+"</RecTime>\n"
+                            timedate = "20"+filename[4:6]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[7:9]+":"+filename[9:11]+":"+filename[11:13]
                         elif len(filename.split('_')[0]) == 8:
                             # yyyymmdd
-                            timedate = filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                            timedate = filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]
                         else:
                             print("Error: time unknown")
                             timedate = ""
                         s5.text = timedate
 
                         s6.text = filename[:-5]
-                        s7.text = ".\\"+os.path.relpath(root, dirName)
+                        s7.text = ".\\"+os.path.split(root)[-1]
+                        #s7.text = ".\\"+os.path.relpath(root, dirName)
                         s8.text = str(0)
 
                 # Now write the file 
