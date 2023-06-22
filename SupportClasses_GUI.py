@@ -734,30 +734,41 @@ class ControllableAudio(QAudioOutput):
                 self.notify.emit()
             self.pressedStop()
 
-    def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
-        if not resetPause and self.state() == QAudio.SuspendedState:
-            print("Resuming at: %d" % self.pauseoffset)
-            self.sttime = time.time() - self.pauseoffset/1000
+    #def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
+        #if not resetPause and self.state() == QAudio.SuspendedState:
+            #print("Resuming at: %d" % self.pauseoffset)
+            #self.sttime = time.time() - self.pauseoffset/1000
+    def pressedPlay(self, start=0, stop=0, audiodata=None):
+        # If playback bar is not moved, this can use resume() to
+        # continue from the same spot.
+        # Otherwise assumes that the QAudioOutput was stopped/reset,
+        # the updated position passed as start, and will
+        # start anew from there.
+        if self.state() == QAudio.SuspendedState:
+            print("Resuming the segment %d-%d ms" % (start,stop))
             self.resume()
         else:
-            if not self.keepSlider or resetPause:
+            if not self.keepSlider: #or resetPause:
                 self.pressedStop()
 
-            print("Starting at: %d" % self.tempin.pos())
-            sleep(0.2)
-            # in case bar was moved under pause, we need this:
-            pos = self.tempin.pos() # bytes
-            pos = self.format().durationForBytes(pos) / 1000 # convert to ms
-            pos = pos + start
-            print("Pos: %d start: %d stop %d" %(pos, start, stop))
-            self.filterSeg(pos, stop, audiodata)
+            #print("Starting at: %d" % self.tempin.pos())
+            #sleep(0.2)
+            ## in case bar was moved under pause, we need this:
+            #pos = self.tempin.pos() # bytes
+            #pos = self.format().durationForBytes(pos) / 1000 # convert to ms
+            #pos = pos + start
+            #print("Pos: %d start: %d stop %d" %(pos, start, stop))
+            #self.filterSeg(pos, stop, audiodata)
+            sleep(0.1)
+            print("Playing segment: %d-%d ms" %(start, stop))
+            self.filterSeg(start, stop, audiodata)
 
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
-        pos = self.tempin.pos() # bytes
-        pos = self.format().durationForBytes(pos) / 1000 # convert to ms
-        # store offset, relative to the start of played segment
-        self.pauseoffset = pos + self.timeoffset
+        #pos = self.tempin.pos() # bytes
+        #pos = self.format().durationForBytes(pos) / 1000 # convert to ms
+        ## store offset, relative to the start of played segment
+        #self.pauseoffset = pos + self.timeoffset
         self.suspend()
 
     def pressedStop(self):
@@ -768,7 +779,8 @@ class ControllableAudio(QAudioOutput):
             self.tempin.close()
 
     def filterBand(self, start, stop, low, high, audiodata, sp):
-        # takes start-end in ms, relative to file start
+        # Selects the data between start-stop ms, relative to file start,
+        # bandpasses it and plays it.
         self.timeoffset = max(0, start)
         start = max(0, start * self.format().sampleRate() // 1000)
         stop = min(stop * self.format().sampleRate() // 1000, len(audiodata))
@@ -778,7 +790,8 @@ class ControllableAudio(QAudioOutput):
         self.loadArray(segment)
 
     def filterSeg(self, start, stop, audiodata, speed = 1.0):
-        # takes start-end in ms
+        # Selects the data between start-stop ms, relative to file start
+        # and plays it.
         self.timeoffset = max(0, start)
         start = max(0, int(start * self.format().sampleRate() // 1000))
         stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
@@ -788,7 +801,8 @@ class ControllableAudio(QAudioOutput):
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
-        # loads an array from memory into an audio buffer
+        # Plays the entire audiodata: puts it onto a buffer
+        # and then starts the QAudioOutput from that buffer
         if self.format().sampleSize() == 16:
             audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
         elif self.format().sampleSize() == 32:
@@ -825,21 +839,21 @@ class ControllableAudio(QAudioOutput):
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
-        self.sttime = time.time() - self.timeoffset/1000
+        #self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
     def restart(self):
         # self.timeoffset = ? does this need to be fixed?
         self.tempin.seek(0)
-        self.sttime = time.time() - self.timeoffset/1000
+        #self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
-    def seekToMs(self, ms, start):
-        print("Seeking to %d ms" % ms)
-        # start is an offset for the current view start, as it is position 0 in extracted file
-        self.reset()
-        self.tempin.seek(self.format().bytesForDuration((ms-start)*1000))
-        self.timeoffset = ms
+    #def seekToMs(self, ms, start):
+        #print("Seeking to %d ms" % ms)
+        ## start is an offset for the current view start, as it is position 0 in extracted file
+        #self.reset()
+        #self.tempin.seek(self.format().bytesForDuration((ms-start)*1000))
+        #self.timeoffset = ms
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly

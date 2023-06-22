@@ -81,6 +81,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     else:
         print("ERROR: what OS is this? %s" % platform.system())
         raise
+    print(configdir)
 
     # if config and bird files not found, copy from distributed backups.
     # so these files will always exist on load (although they could be corrupt)
