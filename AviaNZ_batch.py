@@ -1204,18 +1204,17 @@ class AviaNZ_batchProcess():
 
         # BatSeach codes
         namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
-        # Set up the XML start
-        schema = etree.QName("http://www.w3.org/2001/XMLSchema-instance", "schema")
-
-        start = etree.Element("ArrayOfBatRecording", nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance", 'xsd':"http://www.w3.org/2001/XMLSchema"})
-
         if not os.path.isdir(dirName):
             print("Folder doesn't exist")
             return 0
         for root, dirs, files in os.walk(dirName, topdown=True):
             #nfiles = len(files)
-            if any(fnmatch.fnmatch(filename, '*.bmp') for filename in files):
             #if nfiles > 0:
+            if any(fnmatch.fnmatch(filename, '*.bmp') for filename in files):
+                # Set up the XML start
+                schema = etree.QName("http://www.w3.org/2001/XMLSchema-instance", "schema")
+                start = etree.Element("ArrayOfBatRecording", nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance", 'xsd':"http://www.w3.org/2001/XMLSchema"})
+
                 for filename in files:
                 #for count in range(nfiles):
                     #filename = files[count]
