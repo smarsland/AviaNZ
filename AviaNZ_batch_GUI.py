@@ -1494,14 +1494,14 @@ class AviaNZ_reviewAll(QMainWindow):
                 # SRM: TODO: Move OK?
                 #print(self.segments[btn.index],self.segments[btn.index+1])
                 currSeg.confirmLabels(self.species)
-                print("*: ",len(self.toadd))
+                #print("*: ",len(self.toadd))
                 self.toadd.append(copy.deepcopy(currSeg))
                 self.toadd[-1][0]+=0.1
                 self.toadd[-1][1]+=0.1
                 self.toadd[-1][2]+=50
                 self.toadd[-1][3]+=50
-                print(self.toadd)
-                print("*: ",len(self.toadd))
+                #print(self.toadd)
+                #print("*: ",len(self.toadd))
                 #self.segments.insert(btn.index+1,self.segments[btn.index])
                 #print(self.segments[btn.index],self.segments[btn.index+1],self.segments[btn.index+2])
 
@@ -1886,14 +1886,20 @@ class AviaNZ_reviewAll(QMainWindow):
         # TODO: Offset
         currSeg = self.segments[self.indices2show[self.box1id]]
         currSeg.confirmLabels()
-        print("****: ",len(self.toadd))
-        self.toadd.append(copy.deepcopy(currSeg))
-        self.toadd[-1][0]+=0.1
-        self.toadd[-1][1]+=0.1
-        self.toadd[-1][2]+=50
-        self.toadd[-1][3]+=50
-        print(self.toadd)
-        print("****: ",len(self.toadd))
+        #print("****: ",len(self.toadd))
+        # TODO: SRM: Alert box asking how many to add? (default = 1, but deal with 0!)
+        getNumCopies = Dialogs.getNumberCopiesPlus()
+        response = getNumCopies.exec_()
+        numCopies = getNumCopies.getValues()
+
+        for i in range(numCopies):
+            self.toadd.append(copy.deepcopy(currSeg))
+            self.toadd[-1][0]+=(i+1)*0.1
+            self.toadd[-1][1]+=(i+1)*0.1
+            self.toadd[-1][2]+=(i+1)*50
+            self.toadd[-1][3]+=(i+1)*50
+        #print(self.toadd)
+        #print("****: ",len(self.toadd))
         #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1])
         #self.segments.insert(self.indices2show[self.box1id]+1,self.segments[self.indices2show[self.box1id]])
         #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1],self.segments[self.indices2show[self.box1id]+2])
