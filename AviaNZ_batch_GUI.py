@@ -1494,11 +1494,14 @@ class AviaNZ_reviewAll(QMainWindow):
                 # SRM: TODO: Move OK?
                 #print(self.segments[btn.index],self.segments[btn.index+1])
                 currSeg.confirmLabels(self.species)
-                self.toadd.append(currSeg)
+                print("*: ",len(self.toadd))
+                self.toadd.append(copy.deepcopy(currSeg))
                 self.toadd[-1][0]+=0.1
                 self.toadd[-1][1]+=0.1
                 self.toadd[-1][2]+=50
                 self.toadd[-1][3]+=50
+                print(self.toadd)
+                print("*: ",len(self.toadd))
                 #self.segments.insert(btn.index+1,self.segments[btn.index])
                 #print(self.segments[btn.index],self.segments[btn.index+1],self.segments[btn.index+2])
 
@@ -1526,7 +1529,9 @@ class AviaNZ_reviewAll(QMainWindow):
         for dl in reversed(list(set(todelete))):
             del self.segments[dl]
 
-        self.segments.extend(self.toadd)
+        # TODO? Needed?
+        #self.segments.extend(self.toadd)
+        #print("**: ",len(self.toadd))
 
         # done - the segments will be saved by the main loop
         return
@@ -1881,11 +1886,14 @@ class AviaNZ_reviewAll(QMainWindow):
         # TODO: Offset
         currSeg = self.segments[self.indices2show[self.box1id]]
         currSeg.confirmLabels()
-        self.toadd.append(currSeg)
+        print("****: ",len(self.toadd))
+        self.toadd.append(copy.deepcopy(currSeg))
         self.toadd[-1][0]+=0.1
         self.toadd[-1][1]+=0.1
         self.toadd[-1][2]+=50
         self.toadd[-1][3]+=50
+        print(self.toadd)
+        print("****: ",len(self.toadd))
         #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1])
         #self.segments.insert(self.indices2show[self.box1id]+1,self.segments[self.indices2show[self.box1id]])
         #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1],self.segments[self.indices2show[self.box1id]+2])
