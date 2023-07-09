@@ -25,7 +25,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
+from PyQt5.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
 from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
@@ -146,15 +146,15 @@ class AxisWidget(QAbstractButton):
             fontOffset = 5 + 2.6*self.fontsize
             tickmark = QLine(bottomR, QPoint(bottomR.x()+6, bottomR.y()))
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+1, "%.1f" % currFrq)
+            painter.drawText(int(tickmark.x2()-fontOffset), int(tickmark.y2()+1), "%.1f" % currFrq)
             for ticknum in range(3):
                 currFrq += (self.maxFreq - self.minFreq)/4
                 tickmark.translate(0, -event.rect().height()//4)
                 painter.drawLine(tickmark)
-                painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize//2, "%.1f" % currFrq)
+                painter.drawText(int(tickmark.x2()-fontOffset), int(tickmark.y2()+self.fontsize//2), "%.1f" % currFrq)
             tickmark.translate(0, -tickmark.y2())
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize+1, "%.1f" % self.maxFreq)
+            painter.drawText(int(tickmark.x2()-fontOffset), int(tickmark.y2()+self.fontsize+1), "%.1f" % self.maxFreq)
 
             painter.save()
             painter.translate(self.fontsize//2, event.rect().height()//2)
@@ -205,18 +205,18 @@ class TimeAxisWidget(QAbstractButton):
 
             tickmark = QLine(bottomL.x(), top+6, bottomL.x(), top)
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x1(), tickmark.y1()+fontOffset, timeFormat % currTime)
+            painter.drawText(int(tickmark.x1()), int(tickmark.y1()+fontOffset), timeFormat % currTime)
             for ticknum in range(4):
                 currTime += self.maxTime/5
                 tickmark.translate(event.rect().width()//5,0)
                 painter.drawLine(tickmark)
-                painter.drawText(tickmark.x1()-fontOffset//4, tickmark.y1()+fontOffset, timeFormat % currTime)
+                painter.drawText(int(tickmark.x1()-fontOffset//4), int(tickmark.y1()+fontOffset), timeFormat % currTime)
             tickmark.translate(event.rect().width()//5-2,0)
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-fontOffset*0.7, tickmark.y1()+fontOffset, timeFormat % self.maxTime)
+            painter.drawText(int(tickmark.x2()-fontOffset*0.7), int(tickmark.y1()+fontOffset), timeFormat % self.maxTime)
 
             painter.save()
-            painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
+            painter.drawText(int((bottomR.x() - bottomL.x())//2), int(bottomL.y()), "s")
             painter.restore()
 
     def sizeHint(self):
