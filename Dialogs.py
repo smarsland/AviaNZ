@@ -3363,3 +3363,31 @@ class Shapes(QDialog):
             pars=[]
         print('pars', pars)
         return(method, pars)
+
+class getNumberCopiesPlus(QDialog):
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Shape analysis')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setMinimumWidth(300)
+
+        self.numCopies = QSpinBox()
+        self.numCopies.setRange(0,10)
+        self.numCopies.setSingleStep(1)
+        self.numCopies.setValue(1)
+
+        button = QPushButton("OK")
+        button.clicked.connect(self.accept)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(QLabel("How many calls in this segment?"))
+        vbox.addWidget(self.numCopies)
+        vbox.addWidget(button)
+
+        self.setLayout(vbox)
+
+    def getValues(self):
+        return self.numCopies.value()
+
+
