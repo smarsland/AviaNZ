@@ -3511,13 +3511,10 @@ class AviaNZ(QMainWindow):
 
         # toggle the actual label in the segment list
         if workingSeg.hasLabel(species, certainty):
-            print("0: ",workingSeg.infoString())
             workingSeg.removeLabel(species, certainty)
-            print("1: ",workingSeg.infoString())
         else:
             # in case the only label so far was Don't Know,
             # change it to the new bird (to not waste time unticking it)
-            print(workingSeg.keys)
             if workingSeg.keys == [("Don't Know", 0)]:
                 workingSeg.addLabel(species, certainty, filter="M")
                 workingSeg.removeLabel("Don't Know", 0)
@@ -3529,10 +3526,7 @@ class AviaNZ(QMainWindow):
                 # in single-bird mode, just remove the current label:
                 workingSeg.addLabel(species, certainty, filter="M")
                 if not self.multipleBirds:
-                    print("a: ",workingSeg.infoString())
                     workingSeg.removeLabel(workingSeg[4][0]["species"], workingSeg[4][0]["certainty"])
-                    print("b: ",workingSeg.infoString())
-                    print("===")
 
         # Put the selected bird name at the top of the list
         if self.config['ReorderList']:
@@ -3559,8 +3553,6 @@ class AviaNZ(QMainWindow):
         self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
         self.updateText()
         self.updateColour()
-        # SRM
-        print("c:",workingSeg.infoString())
         self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
 
