@@ -939,7 +939,8 @@ class AviaNZ(QMainWindow):
         self.menuBird2.installEventFilter(self)
         self.fillBirdList()
         self.menuBirdList.triggered.connect(self.birdSelectedMenu)
-        self.menuBird2.triggered.connect(self.birdSelectedMenu)
+        if self.multipleBirds:
+            self.menuBird2.triggered.connect(self.birdSelectedMenu)
         #self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
 
         # Hack to get the type of an ROI
@@ -1302,7 +1303,11 @@ class AviaNZ(QMainWindow):
         self.bar.setValue(0)
 
         # Reset the MultipleSpecies option
+        if self.multipleBirds:
+            self.menuBird2.triggered.disconnect()
         self.multipleBirds = self.config['MultipleSpecies']
+        if self.multipleBirds:
+            self.menuBird2.triggered.connect(self.birdSelectedMenu)
 
         # reset buttons which require segment selection
         self.refreshSegmentControls()
@@ -1634,7 +1639,9 @@ class AviaNZ(QMainWindow):
                 # switch the option on regardless of user preference
                 for s in self.segments:
                     if len(s[4])>1:
-                        self.multipleBirds = True
+                        if not self.multipleBirds:
+                            self.multipleBirds = True
+                            self.menuBird2.triggered.connect(self.birdSelectedMenu)
             else:
                 self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
 
@@ -3028,7 +3035,7 @@ class AviaNZ(QMainWindow):
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 elif modifiers == Qt.MetaModifier:
-                    # TODO: SM: Check
+                    # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                     if self.viewCallType is False:
@@ -3116,11 +3123,10 @@ class AviaNZ(QMainWindow):
                         if wasSelected==box1id:
                             # popup dialog
                             modifiers = QApplication.keyboardModifiers()
-                            print(modifiers)
                             if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             elif modifiers == Qt.MetaModifier:
-                                # TODO: SM: Check
+                                # TODO: SRM: Check
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                                 if self.viewCallType is False:
@@ -3218,7 +3224,6 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QApplication.keyboardModifiers()
-                print(modifiers)
                 if modifiers == Qt.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                 elif modifiers == Qt.ControlModifier:
@@ -3227,7 +3232,7 @@ class AviaNZ(QMainWindow):
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 elif modifiers == Qt.MetaModifier:
-                    # TODO: SM: Check
+                    # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                     if self.viewCallType is False:
@@ -3328,7 +3333,7 @@ class AviaNZ(QMainWindow):
                             if modifiers == Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             elif modifiers == Qt.MetaModifier:
-                                # TODO: SM: Check
+                                # TODO: SRM: Check
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                                 if self.viewCallType is False:
@@ -3423,7 +3428,8 @@ class AviaNZ(QMainWindow):
         if birdname is None or birdname=='':
             return
 
-        #print("Here", birdname)
+        # SRM
+        print("Here", birdname)
         # special dialog for manual name entry
         if birdname == 'Other':
             # Ask the user for the new name, and save it
@@ -3505,10 +3511,13 @@ class AviaNZ(QMainWindow):
 
         # toggle the actual label in the segment list
         if workingSeg.hasLabel(species, certainty):
+            print("0: ",workingSeg.infoString())
             workingSeg.removeLabel(species, certainty)
+            print("1: ",workingSeg.infoString())
         else:
             # in case the only label so far was Don't Know,
             # change it to the new bird (to not waste time unticking it)
+            print(workingSeg.keys)
             if workingSeg.keys == [("Don't Know", 0)]:
                 workingSeg.addLabel(species, certainty, filter="M")
                 workingSeg.removeLabel("Don't Know", 0)
@@ -3520,7 +3529,10 @@ class AviaNZ(QMainWindow):
                 # in single-bird mode, just remove the current label:
                 workingSeg.addLabel(species, certainty, filter="M")
                 if not self.multipleBirds:
+                    print("a: ",workingSeg.infoString())
                     workingSeg.removeLabel(workingSeg[4][0]["species"], workingSeg[4][0]["certainty"])
+                    print("b: ",workingSeg.infoString())
+                    print("===")
 
         # Put the selected bird name at the top of the list
         if self.config['ReorderList']:
@@ -3543,15 +3555,18 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(workingSeg)
 
         # Store the species in case the user wants it for the next segment
+        # TODO SRM: correct certainty and filter?
         self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
         self.updateText()
         self.updateColour()
+        # SRM
+        print("c:",workingSeg.infoString())
         self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
 
         if not self.multipleBirds:
-            # select the bird and close
             self.menuBirdList.hide()
+
         QApplication.processEvents()
 
     def callSelectedMenu(self, ctitem):
@@ -3598,7 +3613,7 @@ class AviaNZ(QMainWindow):
             ctitem=callname
 
             # TODO: Needs a bit of thought, since need to find (or create) a filter. And there might be more than one.
-            # SM: I think this is OK-ish. Now for the DialogsTraining
+            # SRM: I think this is OK-ish. Now for the DialogsTraining
             if len(self.filters) == 0:
                 # There wasn't a filter. Make one. Ask for name, or just use default?
                 speciesData = {"species": spmenu, "method": None, "SampleRate": self.sampleRate, "Filters": []}
@@ -3634,7 +3649,7 @@ class AviaNZ(QMainWindow):
             
         workingSeg = self.segments[self.box1id]
 
-        # TODO: SM: Might not be first label
+        # TODO: SRM: Might not be first label
         #for lab in workingSeg[4]:
             #if lab["species"] == spmenu:
                 #lab["calltype"] = ctitem
