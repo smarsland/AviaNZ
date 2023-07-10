@@ -21,7 +21,7 @@
 
 from PyQt5 import QtGui
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -97,22 +97,17 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_dir.setStyleSheet("color : #808080;")
 
         w_speLabel1 = QLabel("Select one or more recognisers to use:")
-        self.w_spe1 = QListWidget()
-        # This is select many options
-        self.w_spe1.setSelectionMode(2)
-        #self.speCombos = [self.w_spe1]
+        self.w_spe1 = QComboBox()
+        self.speCombos = [self.w_spe1]
 
-        # SRM: Tidy this up -- needs thought...
         # populate this box (always show all filters here)
-        # Maybe have an any sound button and an NZ bats button, and then an Chosen species button
-        # There will be some effort needed to tidy up the sampling rate, etc.
+        spp = sorted(list(self.FilterDicts.keys()))
         self.w_spe1.addItem("Any sound")
         self.w_spe1.addItem("Any sound (Intermittent sampling)")
-        spp = sorted(list(self.FilterDicts.keys()))
         self.w_spe1.addItems(spp)
-        #self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
-        #self.addSp = QPushButton("Add another recogniser")
-        #self.addSp.clicked.connect(self.addSpeciesBox)
+        self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
+        self.addSp = QPushButton("Add another recogniser")
+        self.addSp.clicked.connect(self.addSpeciesBox)
 
         w_timeLabel = QLabel("Process a subset of recordings only e.g. dawn or dusk?\nSelect the time window, otherwise skip")
         self.w_timeStart = QTimeEdit()
@@ -169,7 +164,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.formSp = QVBoxLayout()
         self.formSp.addWidget(w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
-        #self.formSp.addWidget(self.addSp)
+        self.formSp.addWidget(self.addSp)
         self.formSp.addWidget(self.warning)
         self.boxSp.setLayout(self.formSp)
         self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=3)
@@ -492,8 +487,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # select filters with Fs matching box 1 selection
         # and show/hide any other UI elements specific to bird filters or AnySound methods
         spp = []
-        #currname = self.w_spe1.currentText()
-        currname = "Any sound"
+        currname = self.w_spe1.currentText()
         if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
             currfilt = self.FilterDicts[currname]
             currmethod = currfilt.get("method", "wv")
@@ -511,7 +505,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.maxgaplbl.hide()
             self.boxIntermit.hide()
             self.boxPost.show()
-            #self.addSp.show()
+            self.addSp.show()
             self.warning.hide()
             if currmethod=="chp":
                 self.w_wind.show()
@@ -526,37 +520,37 @@ class AviaNZ_batchWindow(QMainWindow):
             self.maxgaplbl.show()
             self.boxIntermit.hide()
             self.boxPost.show()
-            #self.addSp.hide()
+            self.addSp.hide()
             self.warning.show()
             self.w_wind.hide()
         elif currname == "Any sound (Intermittent sampling)":
             self.boxPost.hide()
             self.boxIntermit.show()
-            #self.addSp.hide()
+            self.addSp.hide()
             self.warning.show()
         self.boxTime.show()
 
         if currname == "NZ Bats" or currname == "NZ Bats_NP":
-            #self.addSp.setEnabled(False)
-            #self.addSp.setToolTip("Bat recognisers cannot be combined with others")
+            self.addSp.setEnabled(False)
+            self.addSp.setToolTip("Bat recognisers cannot be combined with others")
             self.w_wind.setCurrentIndex(0)
             self.w_wind.setEnabled(False)
             self.w_wind.setToolTip("Filter not applicable to bats")
         else:
-            #self.addSp.setEnabled(True)
-            #self.addSp.setToolTip("")
+            self.addSp.setEnabled(True)
+            self.addSp.setToolTip("")
             self.w_wind.setEnabled(True)
             self.w_wind.setToolTip("")
 
         # (skip first box which is fixed)
-        #for box in self.speCombos[1:]:
-            ## clear old items:
-            #for i in reversed(range(box.count())):
-                #box.removeItem(i)
-            #box.setCurrentIndex(-1)
-            #box.setCurrentText("")
+        for box in self.speCombos[1:]:
+            # clear old items:
+            for i in reversed(range(box.count())):
+                box.removeItem(i)
+            box.setCurrentIndex(-1)
+            box.setCurrentText("")
 
-            #box.addItems(sorted(spp))
+            box.addItems(sorted(spp))
 
     def fillFileList(self, fileName=None):
         """ Populates the list of files for the file listbox.
@@ -1888,10 +1882,12 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.stopPlayback()
 
         # Insert new segment
-        # Don't bother showing the new box to the user TODO: ??? Right choice???
+        # Don't bother changing the numbers for now, or show the new box to the user TODO: ??? Right choice???
         # TODO: Offset
         currSeg = self.segments[self.indices2show[self.box1id]]
         currSeg.confirmLabels()
+        #print("****: ",len(self.toadd))
+        # TODO: SRM: Alert box asking how many to add? (default = 1, but deal with 0!)
         getNumCopies = Dialogs.getNumberCopiesPlus()
         response = getNumCopies.exec_()
         numCopies = getNumCopies.getValues()
