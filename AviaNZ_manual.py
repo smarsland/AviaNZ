@@ -22,13 +22,16 @@
 # ? click, shutil
 
 # TODO: 1. Check Freebird import, BatSearch output
-# 2. Finish Neural Networks
-# 3. Finish clustering
-# 4. Colour maps
-# 5. Merge with main cf media playback cleanup, CompareCalls dialog bugs changes
-# 6. Test
-# 7. Check OutputBatPasses
-# 8. Qt6
+# 2. Harry's overlaps into excel -> SupportClasses
+# 3. Check James' filters list -> better to select all from list? -> batch_GUI
+# 4. Finish Neural Networks
+# 5. Finish clustering
+# 6. Colour maps
+# 7. Check merge with main cf media playback cleanup, CompareCalls dialog bugs changes
+# 8. Fix OutputBatPasses
+# 9. Mac installation
+# 10. Test
+# 11. Qt6
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
