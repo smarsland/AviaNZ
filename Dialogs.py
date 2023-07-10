@@ -1650,7 +1650,9 @@ class HumanClassify1(QDialog):
 
         # TODO: Icon
         self.buttonPlus = QToolButton()
-        self.buttonPlus.setIcon(QtGui.QIcon('img/iconplus.png'))
+        self.buttonPlus.setIcon(QtGui.QIcon('img/add.png'))
+        self.buttonPlus.setIconSize(iconSize)
+        #self.buttonPlus.setIcon(QtGui.QIcon('img/iconplus.png'))
         #self.buttonPlus.setText('+')
         self.buttonPlus.setStyleSheet("padding: 5px 5px 5px 5px")
 
@@ -3367,7 +3369,7 @@ class Shapes(QDialog):
 class getNumberCopiesPlus(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Shape analysis')
+        self.setWindowTitle('Multiple Calls')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setMinimumWidth(300)
