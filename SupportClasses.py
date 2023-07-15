@@ -479,7 +479,9 @@ class ExcelIO():
                 startTimeFile = QTime(0,0,0).addSecs(startTime)
 
             # Loop over the segments
-            for seg in speciesSegs:
+            #for seg in speciesSegs:
+            for i in range(len(speciesSegs)):
+                seg = speciesSegs[i]
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
@@ -516,6 +518,15 @@ class ExcelIO():
                                 strct.append("-")
                     ws.cell(row=r, column=6, value=", ".join(strcert))
                     ws.cell(row=r, column=7, value=", ".join(strct))
+                    # SRM: As desired for bittern (H. Caley)
+                    # The segments are sorted into order of start time
+                    Previous=1
+                    while i-Previous>=0 and speciesSegs[i-Previous][1] > seg[0]:
+                        Previous += 1
+                    Next = 1
+                    while i+Next<len(speciesSegs) and speciesSegs[i+Next][0] < seg[1]:
+                        Next += 1
+                    ws.cell(row=r, column=8, value=", ".join(str(Next+Previous-2)))
                 r += 1
 
     # This stores pres/abs and max certainty for the species in each file
@@ -646,6 +657,7 @@ class ExcelIO():
                 else:
                     ws.cell(row=1, column=6, value="certainty")
                     ws.cell(row=1, column=7, value="call type")
+                    ws.cell(row=1, column=8, value="number of overlaps")
 
                     # Second sheet
                     wb.create_sheet(title='Presence Absence', index=2)
