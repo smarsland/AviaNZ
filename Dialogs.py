@@ -649,18 +649,18 @@ class addNoiseData(QDialog):
         self.btnMed = QRadioButton('Medium')
         self.level.addButton(self.btnMed)
         if noiseLevel == 'Medium':
-            self.btnLow.setChecked(True)
+            self.btnMed.setChecked(True)
         HBox1.addWidget(self.btnMed)
         self.btnHigh = QRadioButton('High')
         self.level.addButton(self.btnHigh)
         if noiseLevel == 'High':
-            self.btnLow.setChecked(True)
+            self.btnHigh.setChecked(True)
         HBox1.addWidget(self.btnHigh)
         self.btnTerrible = QRadioButton('Terrible')
         self.level.addButton(self.btnTerrible)
         HBox1.addWidget(self.btnTerrible)
         if noiseLevel == 'Terrible':
-            self.btnLow.setChecked(True)
+            self.btnTerrible.setChecked(True)
 
         self.activate = QPushButton("Set")
         HBox1.addWidget(self.activate)
