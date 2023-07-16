@@ -35,6 +35,13 @@ import time
 import math
 import copy
 
+# SRM: TODO:
+# Need to work through this and ensure:
+# 1. everything needed is passed from interface (or command line, or test)
+# 2. one bat method
+# 3. care taken for resampling for different filters
+# 4. intermittent sampling and time of files is correct
+# 5. simplify if possible
 
 class AviaNZ_batchProcess():
     # Main class for batch processing
@@ -73,6 +80,7 @@ class AviaNZ_batchProcess():
             print("ERROR: unrecognized mode ", mode)
             return
 
+        # TODO: get all the UI params here
         self.dirName = sdir
         self.wind = wind
 
@@ -88,6 +96,7 @@ class AviaNZ_batchProcess():
             self.detect()
         else:
             self.species = recogniser
+        print(self.species)
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -103,13 +112,15 @@ class AviaNZ_batchProcess():
             self.method = "Default"
             speciesStr = "Any sound"
             filters = None
+        # TODO: Not used?
         elif "Any sound (Intermittent sampling)" in self.species:
             self.method = "Intermittent sampling"
             speciesStr = "Intermittent sampling"
             filters = None
         else:
+            # TODO: One bat filter!
             if "NZ Bats" in self.species:
-                # Should bats only be possible alone?
+                # TODO: Should bats only be possible alone?
                 self.method = "Click"   # old bat method
                 #self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
             elif "NZ Bats_NP" in self.species:
@@ -117,6 +128,7 @@ class AviaNZ_batchProcess():
             else:
                 self.method = "Wavelets"
 
+            # TODO: NOT TRUE NOW!
             # double-check that all Fs are equal (should already be prevented by UI)
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
@@ -131,6 +143,7 @@ class AviaNZ_batchProcess():
             self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
+        # TODO: Will always need to do bats separately
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
@@ -139,6 +152,7 @@ class AviaNZ_batchProcess():
         total = len(allwavs)
 
         # Parse the user-set time window to process
+        # TODO: Check if they selected it
         if self.CLI or self.testmode:
             timeWindow_s = 0
             timeWindow_e = 0
@@ -148,6 +162,7 @@ class AviaNZ_batchProcess():
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
+        # TODO: This will change a bit
         self.filesDone = []
         if not self.testmode:
             if self.method != "Intermittent sampling":
@@ -273,6 +288,7 @@ class AviaNZ_batchProcess():
                         os.remove(filenamef)
 
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
+            # TODO: Move into a separate function
             if self.method == 'Click':
                 self.exportToBatSearch(self.dirName)
                 self.outputBatPasses(self.dirName)
@@ -319,8 +335,7 @@ class AviaNZ_batchProcess():
                     self.ui.msgClosed.wait(self.mutex)
                     self.mutex.unlock()
 
-                    # now, the form was either rejected, setting results to None,
-                    # or accepted:
+                    # now, the form was either rejected, setting results to None, or accepted:
                     if self.ui.batFormResults is not None:
                         self.exportBatSurvey(self.dirName, self.ui.batFormResults)
                 else:
@@ -334,6 +349,7 @@ class AviaNZ_batchProcess():
 
     def mainloop(self,allwavs,total,speciesStr,filters,settings):
         # MAIN PROCESSING starts here
+        # TODO: This will need a bit of work to deal with different filters with non-matching sample rates
         processingTime = 0
         cleanexit = 0
         cnt = 0
@@ -371,7 +387,7 @@ class AviaNZ_batchProcess():
                     self.log.appendFile(filename)
                     continue
 
-            # test the selected time window if it is a doc recording
+            # test the selected time window if it is a DOC recording
             DOCRecording = re.search(r'(\d{6})_(\d{6})', os.path.basename(filename))
             if DOCRecording:
                 startTime = DOCRecording.group(2)
@@ -410,7 +426,7 @@ class AviaNZ_batchProcess():
             else:
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
-                # Impulse masking:   TODO masking is useful but could be improved
+                # Impulse masking:   TODO: masking is useful but could be improved
                 if speciesStr=="Any sound":
                     impMask = True  # Up to debate - could turn this off here
                 elif self.method=="Click" or self.method=="Bats":
@@ -468,7 +484,7 @@ class AviaNZ_batchProcess():
             # END of audio batch processing
 
     def addRegularSegments(self):
-        """ Perform the Hartley bodge: add 10s segments every minute. """
+        """ Perform the Hartley bodge: add fixed length segments at specified frequency. """
         # if wav.data exists get the duration
         (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
         self.segments.metadata = dict()
@@ -674,7 +690,7 @@ class AviaNZ_batchProcess():
                                 else:
                                     probs = 0
                                 if isinstance(probs, int):
-                                    # there is no at least one img generated from this segment, very unlikely to be a true seg.
+                                    # there is not at least one img generated from this segment, very unlikely to be a true seg.
                                     label = []
                                 else:
                                     ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
