@@ -96,9 +96,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_dir.setToolTip("The folder being processed")
         self.w_dir.setStyleSheet("color : #808080;")
 
-        # SRM: TODO Tidy this up -- needs thought...
+        # SRM: TODO 
         # There will be some effort needed to tidy up the sampling rate, etc.
-        # How to get the size right?
+        # How to get the size of the filter list right?
+        # Make bats separate?
         self.process = QButtonGroup()
         self.process.setExclusive(True)
         self.usefilters = QRadioButton("Specify filters")
@@ -171,7 +172,6 @@ class AviaNZ_batchWindow(QMainWindow):
 
         #self.mergesegments = QCheckBox("Split Segments")
         #self.mergesegements.setChecked(True)
-        # TODO: these not visible
         self.maxlen = QDoubleSpinBox()
         self.maxlen.setRange(0.05, 120.0)
         self.maxlen.setSingleStep(2.0)
@@ -279,7 +279,6 @@ class AviaNZ_batchWindow(QMainWindow):
     def createMenu(self):
         """ Create the basic menu.
         """
-
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
@@ -311,12 +310,21 @@ class AviaNZ_batchWindow(QMainWindow):
             msg.exec_()
             return(1)
 
+        # TODO: SRM: This needs tidying up to use everything from the GUI more clearly
+
         # retrieve selected filter(s)
-        species = set()
+        #species = set()
         #for box in self.speCombos:
             #if box.currentText() != "":
                 #species.add(box.currentText())
-        species = list(species)
+        #species = list(species)
+        if self.anysound.isChecked():
+            species = "Any sound"
+        else:
+            selected = self.w_spe1.selectedItems()
+            species = []
+            for s in selected:
+                species.append(s.text())
         print("Recognisers:", species)
 
         # Parse wind box:
@@ -326,8 +334,7 @@ class AviaNZ_batchWindow(QMainWindow):
         wind = (self.w_wind.currentIndex()+1)%3
         print("Wind set to", wind)
 
-        # Update config file based on provided settings, for reading
-        # by the worker
+        # Update config file based on provided settings, for reading by the worker
         # (particularly to store protocol settings for Intermittent,
         # but could pass any other changes this way as well)
         self.config['protocolSize'] = self.protocolSize.value()
@@ -337,6 +344,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
+        # TODO: enable post-processing things not to be used!
         self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, wind=wind, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
@@ -544,6 +552,7 @@ class AviaNZ_batchWindow(QMainWindow):
         else:
             self.boxPost.hide()
 
+    # OLD
     def addSpeciesBox(self):
         """ Deals with adding and moving species comboboxes """
         # create a new combobox
@@ -572,6 +581,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.setMinimumHeight(610+30*len(self.speCombos))
         self.boxSp.updateGeometry()
 
+    # OLD
     def removeSpeciesBox(self):
         """ Deals with removing and moving species comboboxes """
         # identify the clicked button
@@ -593,6 +603,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.setMinimumHeight(610+30*len(self.speCombos))
         self.boxSp.updateGeometry()
 
+    # Old
     def CheckSpeciesBoxes(self):
         # Show/hide any other UI elements specific to bird filters or AnySound methods
 
@@ -669,6 +680,7 @@ class AviaNZ_batchWindow(QMainWindow):
                 self.w_wind.setEnabled(True)
                 self.w_wind.setToolTip("")
 
+    # Old
     def fillSpeciesBoxes(self):
         # select filters with Fs matching box 1 selection
         # and show/hide any other UI elements specific to bird filters or AnySound methods
@@ -782,7 +794,6 @@ class AviaNZ_batchWindow(QMainWindow):
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         return(0)
-
 
 class BatchProcessWorker(AviaNZ_batchProcess, QObject):
     # adds QObject functionality to standard batchProc,
@@ -1449,6 +1460,7 @@ class AviaNZ_reviewAll(QMainWindow):
             #todelete = self.segments.mergeSplitSeg()
             #for dl in todelete:
                 #del self.segments[dl]
+            # SRM: I think it's right anyway -- use should specify what they want it processing
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)

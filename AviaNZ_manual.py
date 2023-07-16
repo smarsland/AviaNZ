@@ -19,18 +19,23 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# ? click, shutil
-
-# TODO: 1. Check Freebird import, BatSearch output
-# 2. Harry's overlaps into excel -> SupportClasses
-# 3. Check James' filters list -> better to select all from list? -> batch_GUI
+# TODO: 
+# 1. Check Freebird import, BatSearch output
+# 2. Test Harry's overlaps into excel 
+# 2a -> Replace (or not...) the mergeSegments whereever that was
+# 3. James' filters list
+# 3a -> replace warning about deleting excels?
+# 3b -> sort out logic for actually running multiple (e.g. for resampling)
+# 3c -> size of filter box
+# 3d -> WTF merge segments things
+# 3e -> tidy code
 # 4. Finish Neural Networks
 # 5. Finish clustering
 # 6. Colour maps
 # 7. Check merge with main cf media playback cleanup, CompareCalls dialog bugs changes
 # 8. Fix OutputBatPasses
 # 9. Mac installation
-# 10. Test
+# 10. Test and test again. And again.
 # 11. Qt6
 
 import sys, os, json, platform, re, shutil, csv
