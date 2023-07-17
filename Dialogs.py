@@ -381,7 +381,7 @@ class Excel2Annotation(QDialog):
         tableWidget.setItem(3, 3, QTableWidgetItem("8000.30"))
         tableWidget.setMinimumWidth(700)
         tableWidget.setStyleSheet("QTableWidget { color : #808080; }")
-        tableWidget.setEditTriggers(QAbstractItemView.SelectionMode.NoEditTriggers)
+        tableWidget.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel('Sample Excel:'))

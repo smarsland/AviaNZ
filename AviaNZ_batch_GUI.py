@@ -286,6 +286,14 @@ class AviaNZ_batchWindow(QMainWindow):
         quitMenu = self.menuBar().addMenu("&Quit")
         quitMenu.addAction("Restart program", self.restart)
         quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
+        #helpMenu = self.menuBar().addMenu("&Help")
+        #helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        #aboutMenu = self.menuBar().addMenu("&About")
+        #aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        #quitMenu = self.menuBar().addMenu("&Quit")
+        #quitMenu.addAction("Restart program", self.restart)
+        #quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
@@ -1215,6 +1223,15 @@ class AviaNZ_reviewAll(QMainWindow):
         quitMenu = self.menuBar().addMenu("&Quit")
         quitMenu.addAction("Restart program", self.restart)
         quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
+
+        #helpMenu = self.menuBar().addMenu("&Help")
+        #helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        #aboutMenu = self.menuBar().addMenu("&About")
+        #aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        #quitMenu = self.menuBar().addMenu("&Quit")
+        #quitMenu.addAction("Restart program", self.restart)
+        #quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+
 
     def restart(self):
         print("Restarting")
