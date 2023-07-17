@@ -24,11 +24,11 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
-from PyQt5.QtMultimedia import QAudio, QAudioOutput
-from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
+from PyQt6 import QtCore, QtGui
+from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
+from PyQt6.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
+from PyQt6.QtMultimedia import QAudio, QAudioOutput
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
 import pyqtgraph.functions as fn
@@ -697,7 +697,7 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
 
 
 class ControllableAudio(QAudioOutput):
-    # This links all the PyQt5 audio playback things -
+    # This links all the PyQt6 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
     def __init__(self, format, loop=False):
@@ -937,12 +937,12 @@ class FlowLayout(QLayout):
             spaceX = self.spacing() + wid.style().layoutSpacing(
                 QtGui.QSizePolicy.PushButton,
                 QtGui.QSizePolicy.PushButton,
-                QtCore.Qt.Horizontal)
+                QtCore.Qt.Orientation.Horizontal)
 
             spaceY = self.spacing() + wid.style().layoutSpacing(
                 QtGui.QSizePolicy.PushButton,
                 QtGui.QSizePolicy.PushButton,
-                QtCore.Qt.Vertical)
+                QtCore.Qt.Orientation.Vertical)
 
             nextX = x + item.sizeHint().width() + spaceX
             if nextX - spaceX > rect.right() and lineHeight > 0:
@@ -975,14 +975,14 @@ class MessagePopup(QMessageBox):
 
         self.setText(text)
         self.setWindowTitle(title)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         if (type=="w"):
             self.setIconPixmap(QPixmap("img/Owl_warning.png"))
         elif (type=="d"):
-            self.setIcon(QMessageBox.Information)
+            self.setIcon(QMessageBox.Icon.Information)
             self.setIconPixmap(QPixmap("img/Owl_done.png"))
         elif (type=="t"):
-            self.setIcon(QMessageBox.Information)
+            self.setIcon(QMessageBox.Icon.Information)
             self.setIconPixmap(QPixmap("img/Owl_thinking.png"))
         elif (type=="a"):
             # Easy way to set ABOUT text here:
@@ -995,7 +995,7 @@ class MessagePopup(QMessageBox):
         self.setWindowIcon(QIcon("img/Avianz.ico"))
 
         # by default, adding OK button. Can easily be overwritten after creating
-        self.setStandardButtons(QMessageBox.Ok)
+        self.setStandardButtons(QMessageBox.StandardButton.Ok)
 
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
@@ -1011,7 +1011,7 @@ class PicButton(QAbstractButton):
         self.setMouseTracking(True)
 
         self.playButton = QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.hide()
 
         # SRM: Decided this isn't the right wat
@@ -1128,22 +1128,22 @@ class PicButton(QAbstractButton):
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "?")
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "?")
             elif self.mark == "yellow" and self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220, 220, 0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "√")
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "√")
             elif self.mark == "blue":
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(0,0,220)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "+")
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "+")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "X")
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "X")
             else:
                 print("ERROR: unrecognised segment mark")
                 return
@@ -1153,7 +1153,7 @@ class PicButton(QAbstractButton):
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
-            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
@@ -1171,13 +1171,13 @@ class PicButton(QAbstractButton):
         drag = QDrag(self)
         drag.setMimeData(mimeData)
         drag.setPixmap(QPixmap("./img/Owl_thinking.png"))
-        dropAction = drag.exec_(Qt.MoveAction)
+        dropAction = drag.exec(Qt.MoveAction)
 
     def playImage(self):
         if self.media_obj.isPlaying():
             self.stopPlayback()
         else:
-            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
@@ -1191,7 +1191,7 @@ class PicButton(QAbstractButton):
     def stopPlayback(self):
         self.media_obj.pressedStop()
         self.playButton.hide()
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def sizeHint(self):
         return self.im1.size()
@@ -1280,7 +1280,7 @@ class LightedFileList(QListWidget):
 
         with pg.BusyCursor():
             # Read contents of current dir
-            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.AllDirs | QDir.NoDot | QDir.Files,sort=QDir.DirsFirst)
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDot | QDir.Filter.Files,sort=QDir.SortFlag.DirsFirst)
             self.soundDir = soundDir
 
             for file in self.listOfFiles:
@@ -1375,7 +1375,7 @@ class LightedFileList(QListWidget):
         if fileName:
             # for matching dirs:
             # index = self.findItems(fileName+"\/",Qt.MatchExactly)
-            index = self.findItems(fileName,Qt.MatchExactly)
+            index = self.findItems(fileName,Qt.MatchFlag.MatchExactly)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:
@@ -1388,7 +1388,7 @@ class LightedFileList(QListWidget):
         """
         # for matching dirs - not sure if needed:
         # index = self.findItems(fileName+"\/",Qt.MatchExactly)
-        index = self.findItems(fileName,Qt.MatchExactly)
+        index = self.findItems(fileName,Qt.MatchFlag.MatchExactly)
         if len(index)==0:
             return
 
@@ -1502,7 +1502,7 @@ class BrightContrVol(QWidget):
         super(BrightContrVol, self).__init__(parent, **kwargs)
 
         # Sliders and signals
-        self.brightSlider = QSlider(Qt.Horizontal)
+        self.brightSlider = QSlider(Qt.Orientation.Horizontal)
         self.brightSlider.setMinimum(0)
         self.brightSlider.setMaximum(100)
         if inverted:
@@ -1512,7 +1512,7 @@ class BrightContrVol(QWidget):
         self.brightSlider.setTickInterval(1)
         self.brightSlider.valueChanged.connect(self.emitCol)
 
-        self.contrSlider = QSlider(Qt.Horizontal)
+        self.contrSlider = QSlider(Qt.Orientation.Horizontal)
         self.contrSlider.setMinimum(0)
         self.contrSlider.setMaximum(100)
         self.contrSlider.setValue(contrast)
@@ -1520,25 +1520,26 @@ class BrightContrVol(QWidget):
         self.contrSlider.valueChanged.connect(self.emitCol)
 
         # Volume control
-        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider = QSlider(Qt.Orientation.Horizontal)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volSlider.valueChanged.connect(self.volChanged.emit)
 
         # static labels
         labelBr = QLabel()
-        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
+        # TODO -- transformation mode was 1, not sure if this right option
+        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=Qt.TransformationMode.SmoothTransformation))
 
         labelCo = QLabel()
-        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
+        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=Qt.TransformationMode.SmoothTransformation))
 
         self.volIcon = QLabel()
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
+        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=Qt.TransformationMode.SmoothTransformation))
         # Layout
         if horizontal:
-            labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            labelCo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            labelBr.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.volIcon.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
             box = QHBoxLayout()
             box.addSpacing(5)  # outer margin
@@ -1570,9 +1571,9 @@ class BrightContrVol(QWidget):
             box.addWidget(self.contrSlider, 4, 0, 1, 2)
 
             # Could also set icon scale to 16
-            labelCo.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
-            labelBr.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
-            self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            labelCo.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
+            labelBr.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
+            self.volIcon.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
             box.setColumnStretch(1,3)
             box.setHorizontalSpacing(20)

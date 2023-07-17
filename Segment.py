@@ -206,7 +206,7 @@ class Segment(list):
                     text += "\nWhich had keys" + str(self.keys)
                     import SupportClasses_GUI
                     msg = SupportClasses_GUI.MessagePopup("w", "ERROR - please report", text)
-                    msg.exec_()
+                    msg.exec()
                 # if that was the last label, flip to Don't Know
                 if len(self[4])==0:
                     self.addLabel("Don't Know", 0)

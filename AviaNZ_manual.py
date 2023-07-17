@@ -41,11 +41,12 @@
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
 
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle
-from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
-from PyQt5.QtMultimedia import QAudio
+from PyQt6 import QtCore, QtGui
+from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
+from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle
+from PyQt6.QtGui import QActionGroup, QShortcut
+from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
+from PyQt6.QtMultimedia import QAudio
 
 import wavio
 import numpy as np
@@ -131,7 +132,10 @@ class AviaNZ(QMainWindow):
             raise OSError("Bat list missing, cannot continue")
 
         # avoid comma/point problem in number parsing
-        QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
+        # TODO!!
+        #QLocale.setDefault(QLocale.English)
+        #QLocale.setDefault(QLocale.English,QLocale.NewZealand)
+        #QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
         print('Locale is set to ' + QLocale().name())
 
         # The data structures for the segments
@@ -212,10 +216,10 @@ class AviaNZ(QMainWindow):
                 firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
                 while firstFile == '':
                     msg = SupportClasses_GUI.MessagePopup("w", "Select Sound File", "Choose a sound file to proceed.\nDo you want to continue?")
-                    msg.setStandardButtons(QMessageBox.No)
-                    msg.addButton("Choose a file", QMessageBox.YesRole)
-                    msg.button(QMessageBox.No).setText("Exit")
-                    reply = msg.exec_()
+                    msg.setStandardButtons(QMessageBox.StandardButton.No)
+                    msg.addButton("Choose a file", QMessageBox.ButtonRole.YesRole)
+                    msg.button(QMessageBox.StandardButton.No).setText("Exit")
+                    reply = msg.exec()
                     if reply == 0:
                         firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
                     else:
@@ -234,9 +238,9 @@ class AviaNZ(QMainWindow):
 
         # parse mouse settings
         if self.config['drawingRightBtn']:
-            self.MouseDrawingButton = Qt.RightButton
+            self.MouseDrawingButton = Qt.MouseButton.RightButton
         else:
-            self.MouseDrawingButton = Qt.LeftButton
+            self.MouseDrawingButton = Qt.MouseButton.LeftButton
 
         self.createMenu()
         self.createFrame()
@@ -289,8 +293,8 @@ class AviaNZ(QMainWindow):
             if self.config['StartMaximized']:
                 self.showMaximized()
                 # extra toggle because otherwise Windows starts at a non-maximized size
-                self.setWindowState(self.windowState() ^ Qt.WindowMaximized)
-                self.setWindowState(self.windowState() | Qt.WindowMaximized)
+                self.setWindowState(self.windowState() ^ Qt.WindowState.WindowMaximized)
+                self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
             else:
                 self.show()
 
@@ -309,21 +313,21 @@ class AviaNZ(QMainWindow):
         Some of them are initialised according to the data in the configuration file."""
 
         fileMenu = self.menuBar().addMenu("&File")
-        openIcon = self.style().standardIcon(QStyle.SP_DialogOpenButton)
-        fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
+        openIcon = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton)
+        fileMenu.addAction(openIcon, "&Open sound file", "Ctrl+O", self.openFile)
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         for recentfile in self.config['RecentFiles']:
             fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
         fileMenu.addSeparator()
-        fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
-        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit",QApplication.quit,"Ctrl+Q")
+        fileMenu.addAction("Restart Program","Ctrl+R",self.restart)
+        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit","Ctrl+Q",QApplication.quit)
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
         if platform.system() == 'Darwin':
-            fileMenu.addAction("&Quit",QApplication.quit,"Ctrl+Q")
+            fileMenu.addAction("&Quit","Ctrl+Q",QApplication.quit)
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
@@ -362,7 +366,7 @@ class AviaNZ(QMainWindow):
         self.invertcm.setChecked(self.config['invertColourMap'])
 
         # specMenu.addSeparator()
-        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog, "Ctrl+C")
+        specMenu.addAction("&Change spectrogram parameters","Ctrl+C",self.showSpectrogramDialog)
 
         if not self.DOC:
             specMenu.addSeparator()
@@ -381,7 +385,7 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
         markMenu = specMenu.addMenu("Mark on spectrogram")
-        self.showFundamental = markMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental = markMenu.addAction("Fundamental frequency","Ctrl+F", self.showFundamentalFreq)
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(True)
         self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
@@ -409,12 +413,12 @@ class AviaNZ(QMainWindow):
         specMenu.addAction("Put docks back",self.dockReplace)
 
         actionMenu = self.menuBar().addMenu("&Actions")
-        actionMenu.addAction("Delete all segments", self.deleteAll, "Ctrl+D")
-        self.addRegularAction = actionMenu.addAction("Mark regular segments", self.addRegularSegments, "Ctrl+M")
+        actionMenu.addAction("Delete all segments","Ctrl+D",self.deleteAll)
+        self.addRegularAction = actionMenu.addAction("Mark regular segments","Ctrl+M", self.addRegularSegments)
 
         actionMenu.addSeparator()
         self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
-        actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
+        actionMenu.addAction("Add metadata about noise","Ctrl+N",self.addNoiseData)
         #actionMenu.addAction("Find matches",self.findMatches)
 
         if not self.DOC:
@@ -422,7 +426,7 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
         actionMenu.addSeparator()
-        self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        self.segmentAction = actionMenu.addAction("Segment","Ctrl+S",self.segmentationDialog)
 
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
@@ -436,7 +440,7 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Export spectrogram image", self.saveImageRaw)
-        actionMenu.addAction("&Export current view as image",self.saveImage,"Ctrl+I")
+        actionMenu.addAction("&Export current view as image","Ctrl+I",self.saveImage)
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -458,17 +462,17 @@ class AviaNZ(QMainWindow):
         utilMenu.addAction("&Split WAV/DATA files", self.launchSplitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
+        helpMenu.addAction("Help","Ctrl+H", self.showHelp)
         helpMenu.addAction("&Cheat Sheet", self.showCheatSheet)
         helpMenu.addSeparator()
-        helpMenu.addAction("About", self.showAbout, "Ctrl+A")
+        helpMenu.addAction("About","Ctrl+A", self.showAbout)
         if platform.system() == 'Darwin':
-            helpMenu.addAction("About", self.showAbout, "Ctrl+A")
+            helpMenu.addAction("About","Ctrl+A", self.showAbout)
 
     def showAbout(self):
         """ Create the About Message Box"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
-        msg.exec_()
+        msg.exec()
         return
 
     def showHelp(self):
@@ -515,7 +519,9 @@ class AviaNZ(QMainWindow):
         self.d_controls = Dock("Controls",size=(40,90))
         self.d_files = Dock("Files",size=(40,200))
         self.d_plot = Dock("Plots",size=(1200,150))
-        self.d_controls.setSizePolicy(1,1)
+        # TODO!!
+        #self.d_controls.setSizePolicy(QSizePolicy.PolicyFlag.GrowFlag,QSizePolicy.PolicyFlag.GrowFlag)
+        #self.d_controls.setSizePolicy(1,1)
 
         self.area.addDock(self.d_files,'left')
         self.area.addDock(self.d_overview,'right',self.d_files)
@@ -572,7 +578,7 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
         self.p_overview2.setPreferredHeight(25)
 
-        self.p_overview2.setCursor(Qt.PointingHandCursor)
+        self.p_overview2.setCursor(Qt.CursorShape.PointingHandCursor)
 
         # The buttons to move through the overview
         self.leftBtn = QPushButton()
@@ -587,26 +593,28 @@ class AviaNZ(QMainWindow):
         self.rightBtn.setMinimumWidth(16)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("Move view forward")
-        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
-        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        # TODO!!
+        #self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        #self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
 
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
-        self.prev5mins.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekBackward))
+        self.prev5mins.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward))
         self.prev5mins.setMinimumSize(35, 30)
         self.prev5mins.setToolTip("Previous page")
         self.prev5mins.clicked.connect(self.movePrev5mins)
         self.next5mins=QToolButton()
-        self.next5mins.setIcon(self.style().standardIcon(QStyle.SP_MediaSeekForward))
+        self.next5mins.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward))
         self.next5mins.setMinimumSize(35, 30)
         self.next5mins.setToolTip("Next page")
         self.next5mins.clicked.connect(self.moveNext5mins)
         self.placeInFileLabel2 = QLabel('Page')
         self.placeInFileLabel = QLabel('')
-        self.placeInFileLabel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        # TODO!!
+        #self.placeInFileLabel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         self.placeInFileSelector = QSpinBox()
         self.placeInFileSelector.setRange(1,1)
-        self.placeInFileSelector.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.placeInFileSelector.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.placeInFileSelector.editingFinished.connect(self.moveTo5mins)
         self.placeInFileSelector.setMinimumHeight(25)
 
@@ -648,9 +656,9 @@ class AviaNZ(QMainWindow):
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
         # Corresponding keyboard shortcuts:
-        self.moveLeftKey = QShortcut(QKeySequence(Qt.Key_Left), self)
+        self.moveLeftKey = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
         self.moveLeftKey.activated.connect(self.moveLeft)
-        self.moveRightKey = QShortcut(QKeySequence(Qt.Key_Right), self)
+        self.moveRightKey = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
         self.moveRightKey.activated.connect(self.moveRight)
         self.movePrev5minsKey = QShortcut(QKeySequence("Shift+Left"), self)
         self.movePrev5minsKey.activated.connect(self.movePrev5mins)
@@ -734,14 +742,14 @@ class AviaNZ(QMainWindow):
         self.overviewImageRegion = SupportClasses_GUI.LinearRegionItemO(pen=pg.mkPen(120,80,200, width=2),
                 hoverPen=pg.mkPen(60, 40, 230, width=3.5))
         # this is needed for compatibility with other shaded rectangles:
-        self.overviewImageRegion.lines[0].btn = Qt.RightButton
-        self.overviewImageRegion.lines[1].btn = Qt.RightButton
+        self.overviewImageRegion.lines[0].btn = Qt.MouseButton.RightButton
+        self.overviewImageRegion.lines[1].btn = Qt.MouseButton.RightButton
         self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.amplPlot = pg.PlotDataItem()
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
         self.p_spec.addItem(self.specPlot)
-        if self.MouseDrawingButton==Qt.RightButton:
+        if self.MouseDrawingButton==Qt.MouseButton.RightButton:
             self.p_ampl.unsetCursor()
             self.specPlot.unsetCursor()
             self.bar.setCursor(Qt.OpenHandCursor)
@@ -767,14 +775,14 @@ class AviaNZ(QMainWindow):
 
         # Button to move to the next file in the list
         self.nextFileBtn=QToolButton()
-        self.nextFileBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaSkipForward))
+        self.nextFileBtn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipForward))
         self.nextFileBtn.clicked.connect(self.openNextFile)
         self.nextFileBtn.setToolTip("Open next file")
         self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
 
         # The buttons inside the controls dock
         self.playButton = QToolButton()
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.setIconSize(QtCore.QSize(20, 20))
         self.playButton.setToolTip("Play visible")
         self.playButton.clicked.connect(self.playVisible)
@@ -782,7 +790,7 @@ class AviaNZ(QMainWindow):
         self.playKey.activated.connect(self.playVisible)
 
         self.stopButton = QToolButton()
-        self.stopButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+        self.stopButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
         self.stopButton.setIconSize(QtCore.QSize(20, 20))
         self.stopButton.setToolTip("Stop playback")
         self.stopButton.clicked.connect(self.stopPlayback)
@@ -794,7 +802,7 @@ class AviaNZ(QMainWindow):
         self.playSegButton.clicked.connect(self.playSelectedSegment)
 
         self.speedButton = QToolButton()
-        self.speedButton.setPopupMode(QToolButton.InstantPopup)
+        self.speedButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.speedButton.setIcon(QIcon('img/playSlow-w.png'))
         self.speedButton.setIconSize(QtCore.QSize(20, 20))
         self.speedButton.setToolTip("Playback speed")
@@ -829,7 +837,7 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
 
-        self.floorSlider = QSlider(Qt.Horizontal)
+        self.floorSlider = QSlider(Qt.Orientation.Horizontal)
         self.floorSlider.setMinimum(0)
         self.floorSlider.setMaximum(100)
         self.floorSlider.valueChanged.connect(self.floorSliderMoved)
@@ -871,7 +879,7 @@ class AviaNZ(QMainWindow):
 
         # The spinbox for changing the width shown in the controls dock
         windowLabel = QLabel('Visible window (seconds)')
-        windowLabel.setAlignment(Qt.AlignBottom)
+        windowLabel.setAlignment(Qt.AlignmentFlag.AlignBottom)
         self.widthWindow = QDoubleSpinBox()
         self.widthWindow.setSingleStep(1.0)
         self.widthWindow.setDecimals(2)
@@ -925,7 +933,7 @@ class AviaNZ(QMainWindow):
         #     self.w_controls.layout.setColumnStretch(c, 2)
 
         # A slider to move through the file easily
-        self.scrollSlider = QScrollBar(Qt.Horizontal)
+        self.scrollSlider = QScrollBar(Qt.Orientation.Horizontal)
         self.scrollSlider.valueChanged.connect(self.scroll)
         self.d_spec.addWidget(self.scrollSlider)
 
@@ -938,7 +946,7 @@ class AviaNZ(QMainWindow):
         self.w_files.addWidget(self.listFiles,row=2,colspan=2)
 
         # The context menu (drops down on mouse click) to select birds
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.menuBirdList = QMenu()
         self.menuBird2 = QMenu('Other')
         #self.menuBird2 = self.menuBirdList.addMenu('Other')
@@ -962,16 +970,16 @@ class AviaNZ(QMainWindow):
         # add statusbar
         self.statusLeft = QLabel("Left")
         # Not sure what's the difference between Sunken and Panel?
-        self.statusLeft.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.statusLeft.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
         self.statusBM = QLabel("")
-        self.statusBM.setAlignment(Qt.AlignCenter)
-        self.statusBM.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.statusBM.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.statusBM.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
         self.statusRO = QLabel("")
-        self.statusRO.setAlignment(Qt.AlignCenter)
-        self.statusRO.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.statusRO.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.statusRO.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
         self.statusRight = QLabel("")
-        self.statusRight.setAlignment(Qt.AlignRight)
-        self.statusRight.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.statusRight.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.statusRight.setFrameStyle(QFrame.Shape.Panel | QFrame.Shadow.Sunken)
         # Style
         # statusStyle='QLabel {border:transparent}'
         # self.statusLeft.setStyleSheet(statusStyle)
@@ -1766,7 +1774,7 @@ class AviaNZ(QMainWindow):
         else:
             # Tell the user they've finished
             msg = SupportClasses_GUI.MessagePopup("d", "Last file", "You've finished processing the folder")
-            msg.exec_()
+            msg.exec()
 
     def showPointerDetailsCheck(self):
         """ Listener for the menuitem that sets if detailed info should be shown when hovering over spectrogram.
@@ -1869,8 +1877,10 @@ class AviaNZ(QMainWindow):
         self.d_plot.hide()
         containers, docks = self.area.findAll()
         # basically say that left panel and controls should be as small as possible:
-        self.d_controls.setSizePolicy(1,1)
-        containers[1].setSizePolicy(1,1)
+        # TODO!!
+        #self.d_controls.setSizePolicy(1,1)
+        # TODO!!
+        #containers[1].setSizePolicy(1,1)
         #self.useAmplitudeTick.setChecked(True)
         #self.useAmplitude = True
         #self.config['showAmplitudePlot'] = True
@@ -3068,7 +3078,7 @@ class AviaNZ(QMainWindow):
                 self.startedInAmpl = False
 
                 # reset cursor to not drawing (or leave as drawing if LMB draws)
-                if self.MouseDrawingButton==Qt.RightButton:
+                if self.MouseDrawingButton==Qt.MouseButton.RightButton:
                     self.p_ampl.unsetCursor()
                     self.specPlot.unsetCursor()
             # if this is the first click:
@@ -3199,7 +3209,7 @@ class AviaNZ(QMainWindow):
                 self.startedInAmpl = False
 
                 # reset cursor to not drawing (or leave as drawing if LMB draws)
-                if self.MouseDrawingButton==Qt.RightButton:
+                if self.MouseDrawingButton==Qt.MouseButton.RightButton:
                     self.p_ampl.unsetCursor()
                     self.specPlot.unsetCursor()
 
@@ -3947,7 +3957,7 @@ class AviaNZ(QMainWindow):
             QApplication.restoreOverrideCursor()
             print("No further annotation to jump to found")
             msg = SupportClasses_GUI.MessagePopup("w", "No more annotations", "No further annotation to jump to found")
-            msg.exec_()
+            msg.exec()
             return
 
         target = self.segments[targetix]
@@ -3959,7 +3969,7 @@ class AviaNZ(QMainWindow):
                 print("Warning: annotation outside file bounds")
                 QApplication.restoreOverrideCursor()
                 msg = SupportClasses_GUI.MessagePopup("w", "No more annotations", "No further annotation to jump to found in this sound file")
-                msg.exec_()
+                msg.exec()
                 return
             self.moveTo5mins(pagenum)
         newminT = target[0] - self.startRead - self.windowSize / 2  # in s
@@ -4148,7 +4158,7 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setText("Ready")
 
     def setCTDiagnosticsCNN(self):
-        from PyQt5.QtWidgets import QCheckBox
+        from PyQt6.QtWidgets import QCheckBox
         filter = self.diagnosticDialogCNN.filter.currentText()
         speciesData = self.FilterDicts[filter]
         CTs = []
@@ -4261,7 +4271,7 @@ class AviaNZ(QMainWindow):
 
         if (minFreq >= maxFreq):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
-            msg.exec_()
+            msg.exec()
             return
         with pg.BusyCursor():
             self.statusLeft.setText("Updating the spectrogram...")
@@ -4645,7 +4655,7 @@ class AviaNZ(QMainWindow):
         wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
-        msg.exec_()
+        msg.exec()
         return
 
     def saveSelectedSound(self,changespeed):
@@ -4656,7 +4666,7 @@ class AviaNZ(QMainWindow):
         if self.box1id is None or self.box1id<0:
             print("No box selected")
             msg = SupportClasses_GUI.MessagePopup("w", "No segment", "No sound selected to save")
-            msg.exec_()
+            msg.exec()
             return
         else:
             if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
@@ -4763,7 +4773,7 @@ class AviaNZ(QMainWindow):
         self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
-        self.buildRecAdvWizard.exec_()
+        self.buildRecAdvWizard.exec()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
@@ -4776,7 +4786,7 @@ class AviaNZ(QMainWindow):
         self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
-        self.buildRecAdvWizard.exec_()
+        self.buildRecAdvWizard.exec()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
@@ -4788,12 +4798,12 @@ class AviaNZ(QMainWindow):
         #self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
         self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
         self.buildCNNWizard.activateWindow()
-        self.buildCNNWizard.exec_()
+        self.buildCNNWizard.exec()
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
         self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.configdir, filter)
-        self.testRecWizard.exec_()
+        self.testRecWizard.exec()
 
     def saveRecogniser(self, test=False):
         try:
@@ -4814,7 +4824,7 @@ class AviaNZ(QMainWindow):
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
             else:
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
-            msg.exec_()
+            msg.exec()
             self.buildRecAdvWizard.done(1)
             if test:
                 self.testRecogniser(filter=os.path.basename(filename))
@@ -4865,7 +4875,7 @@ class AviaNZ(QMainWindow):
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
             else:
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
-            msg.exec_()
+            msg.exec()
             self.buildCNNWizard.done(1)
             if test:
                 self.testRecogniser(filter=os.path.basename(filename))
@@ -4889,7 +4899,7 @@ class AviaNZ(QMainWindow):
                 f.write(json.dumps(self.filterManager.newfilter, indent=4))
             # prompt the user
             msg = SupportClasses_GUI.MessagePopup("d", "Saved!", msgtext)
-            msg.exec_()
+            msg.exec()
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
         self.filterManager.close()
@@ -4952,7 +4962,7 @@ class AviaNZ(QMainWindow):
             self.excel2AnnotationDialog.txtExcel.setText('')
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",
                                               "Successfully saved the annotation file: " + '\n' + audiofile + '.data')
-            msg.exec_()
+            msg.exec()
         except Exception as e:
             print("ERROR: Generating annotation failed with error:")
             print(e)
@@ -5092,7 +5102,7 @@ class AviaNZ(QMainWindow):
         #self.tag2AnnotationDialog.txtDuration.setText('')
         self.tag2AnnotationDialog.txtSession.setText('')
         msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
-        msg.exec_()
+        msg.exec()
         
     def genTag2Annot_xlsx_TBD(self):
         """ Utility function: Generate AviaNZ style annotations given the freebird style annotations
@@ -5206,7 +5216,7 @@ class AviaNZ(QMainWindow):
             #self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
-            msg.exec_()
+            msg.exec()
         
 
 
@@ -5301,7 +5311,7 @@ class AviaNZ(QMainWindow):
             self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
-            msg.exec_()
+            msg.exec()
 
     def backupAnnotation(self):
         """ Utility function: Copy .data and corrections files while preserving directory hierarchy"""
@@ -5369,7 +5379,7 @@ class AviaNZ(QMainWindow):
             if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 if filtname == 'Choose species...':
                     msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
-                    msg.exec_()
+                    msg.exec()
                     return
 
                 filtspecies = self.FilterDicts[filtname]["species"]
@@ -5576,11 +5586,11 @@ class AviaNZ(QMainWindow):
         if len(foundxls)>0:
             # check with user
             msg = SupportClasses_GUI.MessagePopup("w", "Excel file exists", "Detection summaries already present in " + self.SoundFileDir + ". Overwrite them, append to them, or cancel the operation?")
-            msg.setStandardButtons(QMessageBox.Cancel)
-            msg.addButton("Overwrite", QMessageBox.YesRole)
-            msg.addButton("Append", QMessageBox.YesRole)
+            msg.setStandardButtons(QMessageBox.StandardButton.Cancel)
+            msg.addButton("Overwrite", QMessageBox.ButtonRole.YesRole)
+            msg.addButton("Append", QMessageBox.ButtonRole.YesRole)
             # cancelBtn = msg.addButton(QMessageBox.Cancel)
-            reply = msg.exec_()
+            reply = msg.exec()
             # print(reply)
             if reply == 4194304:  # weird const for Cancel
                 return
@@ -5621,7 +5631,7 @@ class AviaNZ(QMainWindow):
             return
         else:
             msg = SupportClasses_GUI.MessagePopup("d", "Segments Exported", "Check this directory for the Excel output: " + '\n' + self.SoundFileDir)
-            msg.exec_()
+            msg.exec()
             return
 
     def findMatches(self,thr=0.4, species='Choose species...'):
@@ -5683,7 +5693,7 @@ class AviaNZ(QMainWindow):
         elif self.box1id is None or self.box1id<0:
             print("No box selected")
             msg = SupportClasses_GUI.MessagePopup("w", "No segment", "No segment selected to match")
-            msg.exec_()
+            msg.exec()
             return []
         else:
             self.statusLeft.setText("Finding matches...")
@@ -5749,9 +5759,9 @@ class AviaNZ(QMainWindow):
             else:
                 print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
             self.bar.setMovable(False)
-            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
-            self.playSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
-            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
 
             # OS X doesn't repaint them by default smh
             self.playButton.repaint()
@@ -5788,9 +5798,9 @@ class AviaNZ(QMainWindow):
                 self.setPlaySliderLimits(start, stop)
 
                 self.bar.setMovable(False)
-                self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
-                self.playSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
-                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+                self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
 
                 # OS X doesn't repaint them by default smh
                 self.playButton.repaint()
@@ -5823,9 +5833,9 @@ class AviaNZ(QMainWindow):
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
                 self.setPlaySliderLimits(start, stop)
                 self.bar.setMovable(False)
-                self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
-                self.playSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
-                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+                self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
 
                 # OS X doesn't repaint them by default smh
                 self.playButton.repaint()
@@ -5844,7 +5854,7 @@ class AviaNZ(QMainWindow):
         self.bar.setMovable(True)
 
         # Reset all button icons:
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
         self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
@@ -5864,7 +5874,7 @@ class AviaNZ(QMainWindow):
         self.bar.setValue(-1000)
 
         # Reset all button icons:
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playSegButton.setIcon(QIcon('img/playsegment.png'))
         self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
@@ -5951,12 +5961,12 @@ class AviaNZ(QMainWindow):
 
     def manageFilters(self):
         filterManagerSimple = Dialogs.FilterManager(self.filtersDir)
-        filterManagerSimple.exec_()
+        filterManagerSimple.exec()
 
     def customiseFiltersROC(self):
         self.filterManager = DialogsTraining.FilterCustomiseROC(self.filtersDir)
         self.filterManager.btnSave.clicked.connect(self.saveRecogniserROC)
-        self.filterManager.exec_()
+        self.filterManager.exec()
 
     def addNoiseData(self):
         """ Listener for the adding metadata about noise action """
@@ -6163,12 +6173,12 @@ class AviaNZ(QMainWindow):
             elif childName == 'Mouse settings.Use right button to make segments':
                 self.config['drawingRightBtn'] = data
                 if self.config['drawingRightBtn']:
-                    self.MouseDrawingButton = Qt.RightButton
+                    self.MouseDrawingButton = Qt.MouseButton.RightButton
                     self.specPlot.unsetCursor()
                     self.p_ampl.unsetCursor()
                     self.bar.setCursor(Qt.OpenHandCursor)
                 else:
-                    self.MouseDrawingButton = Qt.LeftButton
+                    self.MouseDrawingButton = Qt.MouseButton.LeftButton
                     self.bar.unsetCursor()
                     self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                     self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
@@ -6410,13 +6420,13 @@ class AviaNZ(QMainWindow):
         """
         if len(self.segments) == 0:
             msg = SupportClasses_GUI.MessagePopup("w", "No segments", "No segments to delete")
-            msg.exec_()
+            msg.exec()
             return
         else:
             msg = SupportClasses_GUI.MessagePopup("t", "Delete All Segments?", "Are you sure you want to delete all segments?")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
+            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply = msg.exec()
+            if reply == QMessageBox.StandardButton.Yes:
                 self.removeSegments()
                 self.segmentsToSave = True
 
@@ -6555,7 +6565,7 @@ class AviaNZ(QMainWindow):
               escape to pause playback
               ctrl on Mac to detect right clicks
         """
-        if isinstance(obj, QMenu) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+        if isinstance(obj, QMenu) and event.type() in [QtCore.QEvent.Type.MouseButtonRelease]:
             if hasattr(self, 'multipleBirds') and self.multipleBirds:
                 if obj.activeAction():
                     if not obj.activeAction().menu():
@@ -6565,17 +6575,17 @@ class AviaNZ(QMainWindow):
                         return True
             return QMenu.eventFilter(self,obj, event)
         if isinstance(obj, pg.GraphicsLayoutWidget):
-            if event.type()==QtCore.QEvent.KeyPress:
+            if event.type()==QtCore.QEvent.Type.KeyPress:
                 key = event.key()
-                if key == Qt.Key_Backspace or key == Qt.Key_Delete:
+                if key == Qt.Key.Key_Backspace or key == Qt.Key.Key_Delete:
                     self.deleteSegment()
                     return True
-                elif key == Qt.Key_Escape and self.media_obj.isPlaying():
+                elif key == Qt.Key.Key_Escape and self.media_obj.isPlaying():
                     self.stopPlayback()
                     return True
-                elif key == Qt.Key_Meta and platform.system() == 'Darwin':
+                elif key == Qt.Key.Key_Meta and platform.system() == 'Darwin':
                     # flip to rightMB cursors
-                    if self.MouseDrawingButton==Qt.RightButton:
+                    if self.MouseDrawingButton==Qt.MouseButton.RightButton:
                         self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                         self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                         self.bar.unsetCursor()
@@ -6584,10 +6594,10 @@ class AviaNZ(QMainWindow):
                         self.specPlot.unsetCursor()
                         self.bar.setCursor(Qt.OpenHandCursor)
                     return True
-            elif event.type()==QtCore.QEvent.KeyRelease:
-                if event.key() == Qt.Key_Meta and platform.system() == 'Darwin':
+            elif event.type()==QtCore.QEvent.Type.KeyRelease:
+                if event.key() == Qt.Key.Key_Meta and platform.system() == 'Darwin':
                     # revert to standard cursors (for leftMB)
-                    if self.MouseDrawingButton==Qt.RightButton:
+                    if self.MouseDrawingButton==Qt.MouseButton.RightButton:
                         self.p_ampl.unsetCursor()
                         self.specPlot.unsetCursor()
                         self.bar.setCursor(Qt.OpenHandCursor)

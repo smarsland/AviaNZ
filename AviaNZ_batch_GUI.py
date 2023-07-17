@@ -19,10 +19,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5 import QtGui
-from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
-from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
+from PyQt6 import QtGui
+from PyQt6.QtGui import QIcon, QPixmap, QColor, QScreen
+from PyQt6.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
+from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
 
@@ -87,7 +87,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to process (may contain sub folders)")
         self.w_browse.setFixedSize(165, 50)
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; padding: 3px 3px 3px 3px}')
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
@@ -115,7 +115,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_speLabel1 = QLabel("Select one or more recognisers to use:")
         self.w_spe1 = QListWidget()
         self.w_spe1.setMinimumSize(800,500)
-        self.w_spe1.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.w_spe1.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
 
         spp = sorted(list(self.FilterDicts.keys()))
         self.w_spe1.addItems(spp)
@@ -280,17 +280,17 @@ class AviaNZ_batchWindow(QMainWindow):
         """ Create the basic menu.
         """
         helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        helpMenu.addAction("Help","Ctrl+H", self.showHelp)
         aboutMenu = self.menuBar().addMenu("&About")
-        aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        aboutMenu.addAction("About","Ctrl+A", self.showAbout)
         quitMenu = self.menuBar().addMenu("&Quit")
         quitMenu.addAction("Restart program", self.restart)
-        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+        quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
-        msg.exec_()
+        msg.exec()
         return
 
     def showHelp(self):
@@ -307,7 +307,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # 2. Creates and starts the batch worker
         if not self.dirName:
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec_()
+            msg.exec()
             return(1)
 
         # TODO: SRM: This needs tidying up to use everything from the GUI more clearly
@@ -365,13 +365,13 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def check_msg(self,title,text):
         msg = SupportClasses_GUI.MessagePopup("t", title, text)
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        response = msg.exec_()
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        response = msg.exec()
 
-        if response == QMessageBox.Cancel:
+        if response == QMessageBox.StandardButton.Cancel:
             # a fall back basically
             self.msg_response = 2
-        elif response == QMessageBox.No:
+        elif response == QMessageBox.StandardButton.No:
             # catches Esc as well
             self.msg_response = 1
         else:
@@ -382,7 +382,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def bat_survey_form(self,operator,easting,northing,recorder):
         exportForm = Dialogs.ExportBats(os.path.join(self.dirName, "BatDB.csv"),operator,easting,northing,recorder)
-        response = exportForm.exec_()
+        response = exportForm.exec()
         if response==1:
             self.batFormResults = exportForm.getValues()
         else:
@@ -399,10 +399,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
-        self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
+        self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint ^ Qt.WindowType.WindowCloseButtonHint)
         self.dlg.canceled.connect(self.stopping_fileproc)
         # should be the default, but to make sure:
-        self.dlg.setWindowModality(Qt.ApplicationModal)
+        self.dlg.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.dlg.open()
         self.dlg.setValue(cnt)
         self.dlg.update()
@@ -418,7 +418,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.dlg.setValue(self.dlg.maximum())
         msg = SupportClasses_GUI.MessagePopup("w", "Analysis error!", e)
         msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
-        msg.exec_()
+        msg.exec()
         self.w_processButton.setEnabled(True)
 
     def completed_fileproc(self):
@@ -429,9 +429,9 @@ class AviaNZ_batchWindow(QMainWindow):
 
         text = "Finished processing.\nWould you like to return to the start screen?"
         msg = SupportClasses_GUI.MessagePopup("t", "Finished", text)
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        reply = msg.exec_()
-        if reply==QMessageBox.Yes:
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = msg.exec()
+        if reply==QMessageBox.StandardButton.Yes:
             QApplication.exit(1)
         else:
             return(0)
@@ -474,9 +474,10 @@ class AviaNZ_batchWindow(QMainWindow):
         # geometry of the main window
         qr = self.frameGeometry()
         # centre point of screen
-        cp = QDesktopWidget().availableGeometry().center()
+        # TODO!!!
+        #cp = QScreen().availableGeometry().center()
         # move rectangle's centre point to screen's centre point
-        qr.moveCenter(cp)
+        #qr.moveCenter(cp)
         # top left of rectangle becomes top left of window centring it
         self.move(qr.topLeft())
 
@@ -790,7 +791,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.previousFile = None
             self.fillFileList(current)
             # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchFlag.MatchExactly)
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         return(0)
@@ -888,7 +889,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold}')
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
@@ -984,8 +985,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox.valueChanged.connect(self.changedCert)
 
         # sliders to select min/max frequencies for ALL SPECIES only
-        self.fLow = QSlider(Qt.Horizontal)
-        self.fLow.setTickPosition(QSlider.TicksBelow)
+        self.fLow = QSlider(Qt.Orientation.Horizontal)
+        self.fLow.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.fLow.setTickInterval(500)
         self.fLow.setRange(0, 5000)
         self.fLow.setSingleStep(100)
@@ -993,8 +994,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fLowtext = QLabel('Show only freq. above (Hz)')
         self.fLowvalue = QLabel('0')
         self.fLow.valueChanged.connect(self.fLowChanged)
-        self.fHigh = QSlider(Qt.Horizontal)
-        self.fHigh.setTickPosition(QSlider.TicksBelow)
+        self.fHigh = QSlider(Qt.Orientation.Horizontal)
+        self.fHigh.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.fHigh.setTickInterval(1000)
         self.fHigh.setRange(4000, 32000)
         self.fHigh.setSingleStep(250)
@@ -1209,12 +1210,12 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Create the basic menu.
         """
         helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        helpMenu.addAction("Help","Ctrl+H", self.showHelp)
         aboutMenu = self.menuBar().addMenu("&About")
-        aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        aboutMenu.addAction("About","Ctrl+A", self.showAbout)
         quitMenu = self.menuBar().addMenu("&Quit")
         quitMenu.addAction("Restart program", self.restart)
-        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+        quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
 
     def restart(self):
         print("Restarting")
@@ -1223,7 +1224,7 @@ class AviaNZ_reviewAll(QMainWindow):
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
-        msg.exec_()
+        msg.exec()
         return
 
     def showHelp(self):
@@ -1235,9 +1236,10 @@ class AviaNZ_reviewAll(QMainWindow):
         # geometry of the main window
         qr = self.frameGeometry()
         # centre point of screen
-        cp = QDesktopWidget().availableGeometry().center()
+        # TODO!!!
+        #cp = QScreen().availableGeometry().center()
         # move rectangle's centre point to screen's centre point
-        qr.moveCenter(cp)
+        #qr.moveCenter(cp)
         # top left of rectangle becomes top left of window centring it
         self.move(qr.topLeft())
 
@@ -1325,7 +1327,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.previousFile = None
             self.fillFileList(current)
             # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchFlag.MatchExactly)
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         return(0)
@@ -1338,7 +1340,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.species = self.w_spe1.currentText()
         if self.species == "All species":
             msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
-            msg.exec_()
+            msg.exec()
         else:
             self.review(False)
 
@@ -1347,12 +1349,12 @@ class AviaNZ_reviewAll(QMainWindow):
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Enter Reviewer", "Please enter reviewer name")
-            msg.exec_()
+            msg.exec()
             return
 
         if self.dirName == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec_()
+            msg.exec()
             return
 
         # Update config based on provided settings
@@ -1506,16 +1508,16 @@ class AviaNZ_reviewAll(QMainWindow):
         if filesuccess == 1:
             msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
+            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply = msg.exec()
+            if reply == QMessageBox.StandardButton.Yes:
                 QApplication.exit(1)
         else:
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
+            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            reply = msg.exec()
+            if reply == QMessageBox.StandardButton.Yes:
                 QApplication.exit(1)
 
     def exportExcel(self):
@@ -1526,7 +1528,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.species = self.w_spe1.currentText()
         if self.dirName == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec_()
+            msg.exec()
             return
 
         with pg.BusyCursor():
@@ -1592,7 +1594,7 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
             msg = SupportClasses_GUI.MessagePopup("d", "Excel output produced", msgtext)
-        msg.exec_()
+        msg.exec()
 
     def review_single(self, filename, chunksize):
         """ Initializes single species dialog, based on self.species.
@@ -1618,7 +1620,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog2.move(self.dialogPos)
         self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
         self.humanClassifyDialog2.setModal(True)
-        success = self.humanClassifyDialog2.exec_()
+        success = self.humanClassifyDialog2.exec()
 
         # capture Esc press or other "dirty" exit:
         if success == 0:
@@ -1789,7 +1791,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
         self.humanClassifyDialog1.buttonPlus.clicked.connect(self.humanClassifyPlus)
-        success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
+        success = self.humanClassifyDialog1.exec()     # 1 on clean exit
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()
@@ -1815,7 +1817,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 dlg.setWindowIcon(QIcon('img/Avianz.ico'))
                 dlg.setWindowTitle('AviaNZ')
                 dlg.setFixedSize(350, 100)
-                dlg.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+                dlg.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
                 dlg.update()
                 dlg.repaint()
                 dlg.show()
@@ -2087,7 +2089,7 @@ class AviaNZ_reviewAll(QMainWindow):
         currSeg = self.segments[self.indices2show[self.box1id]]
         currSeg.confirmLabels()
         getNumCopies = Dialogs.getNumberCopiesPlus()
-        response = getNumCopies.exec_()
+        response = getNumCopies.exec()
         numCopies = getNumCopies.getValues()
 
         for i in range(numCopies):
@@ -2199,7 +2201,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)
-        if ev == Qt.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
+        if ev == Qt.Key.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
             self.humanClassifyDialog1.done(0)
 
     def updateCallType(self, boxid, calltype):

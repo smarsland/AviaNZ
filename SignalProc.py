@@ -29,11 +29,11 @@ import librosa
 import copy
 import gc
 
-from PyQt5.QtGui import QImage
+from PyQt6.QtGui import QImage
 
 QtMM = True
 try:
-    from PyQt5.QtMultimedia import QAudioFormat
+    from PyQt6.QtMultimedia import QAudioFormat
 except ImportError:
     print("No QtMM")
     QtMM = False
@@ -68,8 +68,9 @@ class SignalProc:
         # only accepting wav files of this format
         if QtMM:
             self.audioFormat = QAudioFormat()
-            self.audioFormat.setCodec("audio/pcm")
-            self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+            # TODO!!
+            #self.audioFormat.setCodec("audio/pcm")
+            #self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -92,13 +93,15 @@ class SignalProc:
         self.sampleRate = wavobj.rate
 
         if QtMM:
-            self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+            # TODO!!!
+            #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
             self.audioFormat.setSampleRate(self.sampleRate)
             # Only 8-bit WAVs are unsigned:
-            if wavobj.sampwidth==1:
-                self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
-            else:
-                self.audioFormat.setSampleType(QAudioFormat.SignedInt)
+            # TODO!!
+            #if wavobj.sampwidth==1:
+                #self.audioFormat.setSampleType(QAudioFormat.SampleFormat.UnSignedInt)
+            #else:
+                #self.audioFormat.setSampleType(QAudioFormat.SampleFormat.SignedInt)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -136,7 +139,7 @@ class SignalProc:
         # Check color format and convert to grayscale
         if not silent and (not img.allGray() or colc>256):
             print("Warning: image provided not in 8-bit grayscale, information will be lost")
-        img.convertTo(QImage.Format_Grayscale8)
+        img.convertTo(QImage.Format.Format_Grayscale8)
 
         # Convert to numpy
         # (remember that pyqtgraph images are column-major)
@@ -201,7 +204,7 @@ class SignalProc:
 
         if QtMM:
             self.audioFormat.setChannelCount(0)
-            self.audioFormat.setSampleSize(0)
+            #self.audioFormat.setSampleSize(0)
             self.audioFormat.setSampleRate(self.sampleRate)
         #else:
             #self.audioFormat['channelCount'] = 0

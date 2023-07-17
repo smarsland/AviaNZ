@@ -179,7 +179,7 @@ class ConfigLoader(object):
         except ValueError:
             # if JSON looks corrupt, quit:
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
-            msg.exec_()
+            msg.exec()
             raise
 
     def filters(self, dir, bats=True):
@@ -304,14 +304,14 @@ class ConfigLoader(object):
                 # if JSON looks corrupt, quit and suggest deleting:
                 print(e)
                 msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
-                msg.exec_()
+                msg.exec()
                 return None
 
         except Exception as e:
             # if file is not found at all, quit, user must recreate the file or change path
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
-            msg.exec_()
+            msg.exec()
             return None
 
     def longbl(self, file, configdir):
@@ -336,13 +336,13 @@ class ConfigLoader(object):
             except ValueError as e:
                 print(e)
                 msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
-                msg.exec_()
+                msg.exec()
                 return None
 
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
-            msg.exec_()
+            msg.exec()
             return None
 
     def batl(self, file, configdir):
@@ -367,13 +367,13 @@ class ConfigLoader(object):
             except ValueError as e:
                 print(e)
                 msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
-                msg.exec_()
+                msg.exec()
                 return None
 
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
-            msg.exec_()
+            msg.exec()
             return None
 
     def learningParams(self, file):
@@ -386,7 +386,7 @@ class ConfigLoader(object):
         except ValueError:
             # if JSON looks corrupt, quit:
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
-            msg.exec_()
+            msg.exec()
             raise
 
     # Dumps the provided JSON array to the corresponding bird file.
@@ -408,7 +408,7 @@ class ConfigLoader(object):
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
-            msg.exec_()
+            msg.exec()
 
     # Dumps the provided JSON array to the corresponding config file.
     def configwrite(self, content, file):
@@ -450,7 +450,7 @@ class ExcelIO():
             timeStrFormat = "hh:mm:ss.zzz"
         else:
             timeStrFormat = "hh:mm:ss"
-        from PyQt5.QtCore import QTime
+        from PyQt6.QtCore import QTime
         ws = wb['Time Stamps']
         r = ws.max_row + 1
 

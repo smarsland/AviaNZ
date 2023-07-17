@@ -174,7 +174,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 raise
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):
-                from PyQt5.QtWidgets import QApplication
+                from PyQt6.QtWidgets import QApplication
                 import AviaNZ_manual
                 app = QApplication(sys.argv)
                 avianz = AviaNZ_manual.AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
@@ -185,9 +185,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     else:
         task = None
         print("Starting AviaNZ in GUI mode")
-        from PyQt5.QtWidgets import QApplication
-        from PyQt5 import QtCore
-        QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6 import QtCore
+        #QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         app = QApplication(sys.argv)
         # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
         QApplication.setFont(QApplication.font("QMenu"))
@@ -199,7 +199,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 import Dialogs
                 first = Dialogs.StartScreen()
                 first.show()
-                app.exec_()
+                app.exec()
                 task = first.getValues()
 
             avianz = None
@@ -222,7 +222,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             else:
                 return
 
-            out = app.exec_()
+            out = app.exec()
             QApplication.closeAllWindows()
             QApplication.processEvents()
 

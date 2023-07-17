@@ -1,8 +1,8 @@
 # Self-standing executable for call comparison mode
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QDoubleSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox, QDialog, QToolButton, QCheckBox
-from PyQt5.QtCore import QDir, Qt, QSize
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QDoubleSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox, QDialog, QToolButton, QCheckBox
+from PyQt6.QtCore import QDir, Qt, QSize
+from PyQt6.QtGui import QIcon, QPixmap
 
 import sys
 import os
@@ -23,11 +23,11 @@ class CompareCalls(QMainWindow):
         print("Starting...")
         self.setWindowTitle("AviaNZ call comparator")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
-        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec_())
+        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec())
         fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
@@ -43,12 +43,12 @@ class CompareCalls(QMainWindow):
         self.dirName = ""
         label = QLabel("Select input folder containing files named in one of the following formats:")
         formatlabel = QLabel("recordername_YYMMDD_hhmmss.wav\n or \nrecordername_YYYYMMDD_hhmmss.wav")
-        formatlabel.setAlignment(Qt.AlignCenter)
+        formatlabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("QLabel {color: #303030}")
         formatlabel.setStyleSheet("QLabel {color: #303030}")
 
         self.w_browse = QPushButton(" Browse Folder")
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.setMinimumSize(170, 40)
         self.w_browse.setSizePolicy(QSizePolicy(1,1))
@@ -178,7 +178,7 @@ class CompareCalls(QMainWindow):
         self.w_dir.setPlainText("")
         self.w_dir.setReadOnly(True)
         self.labelDatas.setText("")
-        pm = self.style().standardIcon(QStyle.SP_DialogCancelButton).pixmap(QSize(12,12))
+        pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton).pixmap(QSize(12,12))
         self.labelDatasIcon.setPixmap(pm)
         self.suggestAdjBtn.setEnabled(False)
         self.reviewAdjBtn.setEnabled(False)
@@ -209,7 +209,7 @@ class CompareCalls(QMainWindow):
         else:
             self.labelDatas.setText("Read %d data files from %d recorders" % (len(self.annots), len(self.allrecs)))
             self.labelDatas.setStyleSheet("QLabel {color: #000000}")
-            pm = self.style().standardIcon(QStyle.SP_DialogApplyButton).pixmap(QSize(12,12))
+            pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton).pixmap(QSize(12,12))
             self.labelDatasIcon.setPixmap(pm)
             print("Read %d data files from %d recorders" % (len(self.annots), len(self.allrecs)))
 
@@ -349,7 +349,7 @@ class CompareCalls(QMainWindow):
 
         # Disable GUI in case of errors
         self.labelAdjust.setText("Clock adjustment not done")
-        pm = self.style().standardIcon(QStyle.SP_DialogCancelButton).pixmap(QSize(12,12))
+        pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton).pixmap(QSize(12,12))
         self.labelAdjustIcon.setPixmap(pm)
         self.reviewAdjBtn.setEnabled(False)
 
@@ -434,14 +434,14 @@ class CompareCalls(QMainWindow):
 
         print("Clock adjustment complete")
         self.labelAdjust.setText("Clock adjustment complete")
-        pm = self.style().standardIcon(QStyle.SP_DialogApplyButton).pixmap(QSize(12,12))
+        pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton).pixmap(QSize(12,12))
         self.labelAdjustIcon.setPixmap(pm)
         self.reviewAdjBtn.setEnabled(True)
         self.refreshMainOut()
 
     def showAdjustmentsDialog(self):
         self.adjrevdialog = ReviewAdjustments(self.overlaps_forplot, self.hopSpin.value(), self)
-        self.adjrevdialog.exec_()
+        self.adjrevdialog.exec()
 
         self.cclist = self.connectedComponents()
 
@@ -547,7 +547,7 @@ class CompareCalls(QMainWindow):
         print("Reviewing calls...")
         self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, self)
         #self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, rec2shift, self)
-        self.comparedialog.exec_()
+        self.comparedialog.exec()
         print("Call comparison complete")
 
     #def findMatchIn(self, seglist, seg):
@@ -658,7 +658,7 @@ class ReviewAdjustments(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Clock Adjustments')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         self.parent = parent
 
@@ -784,7 +784,7 @@ class CompareCallsDialog(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Compare Call Pairs')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         self.parent = parent
         self.rec1 = annots1[0].recname
@@ -978,6 +978,6 @@ print("Starting AviaNZ call comparator")
 app = QApplication(sys.argv)
 mainwindow = CompareCalls()
 mainwindow.show()
-app.exec_()
+app.exec()
 print("Processing complete, closing AviaNZ call comparator")
 QApplication.closeAllWindows()

@@ -31,9 +31,9 @@ import copy
 from shutil import copyfile
 import json
 
-from PyQt5.QtGui import QIcon, QValidator, QPixmap, QColor
-from PyQt5.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
+from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
+from PyQt6.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -75,7 +75,7 @@ class BuildRecAdvWizard(QWizard):
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumHeight(225)
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             selectSpLabel = QLabel("Choose the species for which you want to build the recogniser")
             self.species = QComboBox()  # fill during browse
@@ -108,7 +108,7 @@ class BuildRecAdvWizard(QWizard):
             layout.addWidget(selectSpLabel)
             layout.addWidget(self.species)
             layout.addLayout(form1)
-            layout.setAlignment(Qt.AlignVCenter)
+            layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             self.setLayout(layout)
 
         def browseTrainData(self):
@@ -242,7 +242,7 @@ class BuildRecAdvWizard(QWizard):
             hboxBtns2 = QHBoxLayout()
             hboxBtns2.addWidget(self.btnCreateNewCluster)
             hboxBtns2.addWidget(self.btnDeleteSeg)
-            hboxBtns2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            hboxBtns2.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
             # top part
             vboxTop = QVBoxLayout()
@@ -660,7 +660,7 @@ class BuildRecAdvWizard(QWizard):
                 self.completeChanged.emit()
             else:
                 msg = SupportClasses_GUI.MessagePopup("t", "Select", "Select calls to make the new cluster")
-                msg.exec_()
+                msg.exec()
                 self.completeChanged.emit()
                 return
 
@@ -737,13 +737,13 @@ class BuildRecAdvWizard(QWizard):
             names = [self.tboxes[ID].text() for ID in range(self.nclasses)]
             if len(names) != len(set(names)):
                 msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
-                msg.exec_()
+                msg.exec()
                 self.completeChanged.emit()
                 return
 
             if "(Other)" in names:
                 msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
-                msg.exec_()
+                msg.exec()
                 self.completeChanged.emit()
                 return
 
@@ -827,7 +827,7 @@ class BuildRecAdvWizard(QWizard):
                 tbox.setMinimumWidth(80)
                 tbox.setMaximumHeight(150)
                 tbox.setStyleSheet("border: none;")
-                tbox.setAlignment(Qt.AlignCenter)
+                tbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 tbox.textChanged.connect(self.updateClusterNames)
                 self.tboxes.append(tbox)
                 self.flowLayout.addWidget(self.tboxes[-1], r, c)
@@ -1336,9 +1336,9 @@ class BuildRecAdvWizard(QWizard):
 
             # filter dir listbox
             self.listFiles = QListWidget()
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFiles.setMinimumHeight(200)
-            filtdir = QDir(filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+            filtdir = QDir(filtdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file)
@@ -1355,7 +1355,7 @@ class BuildRecAdvWizard(QWizard):
                     elif input=="M.txt":
                         print("filter name \"M\" reserved for manual annotations")
                         return(QValidator.Intermediate, input, pos)
-                    elif self.listFiles.findItems(input, Qt.MatchExactly):
+                    elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
                     else:
@@ -1476,9 +1476,9 @@ class BuildRecAdvWizard(QWizard):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
 
         # add the Save & Test button
@@ -1647,7 +1647,7 @@ class TestRecWizard(QWizard):
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumHeight(275)
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             selectSpLabel = QLabel("Choose the recogniser that you want to test")
             self.species = QComboBox()  # fill during browse
@@ -1667,7 +1667,7 @@ class TestRecWizard(QWizard):
             layout.addWidget(space)
             layout.addWidget(selectSpLabel)
             layout.addWidget(self.species)
-            layout.setAlignment(Qt.AlignVCenter)
+            layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             self.setLayout(layout)
             self.setButtonText(QWizard.NextButton, 'Test >')
 
@@ -1784,9 +1784,9 @@ class TestRecWizard(QWizard):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
         self.setOptions(QWizard.NoBackButtonOnStartPage)
 
@@ -1875,9 +1875,9 @@ class BuildCNNWizard(QWizard):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
         self.setOptions(QWizard.NoBackButtonOnStartPage)
 
@@ -1942,15 +1942,15 @@ class BuildCNNWizard(QWizard):
             self.listFilesTrain2 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain2.setMinimumWidth(350)
             self.listFilesTrain2.setMinimumHeight(275)
-            self.listFilesTrain2.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFilesTrain2.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFilesTrain1 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain1.setMinimumWidth(350)
             self.listFilesTrain1.setMinimumHeight(275)
-            self.listFilesTrain1.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFilesTrain1.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFilesTest = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTest.setMinimumWidth(150)
             self.listFilesTest.setMinimumHeight(275)
-            self.listFilesTest.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFilesTest.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             self.speciesCombo = QComboBox()  # fill during browse
             self.speciesCombo.addItems(['Choose recogniser...'])
@@ -2670,7 +2670,7 @@ class BuildCNNWizard(QWizard):
             for ct in range(len(self.cnntrain.calltypes)):
                 lblct = QLabel('Call type: ' + self.cnntrain.calltypes[ct])
                 lblct.setStyleSheet("QLabel { color : #808080; font-weight: bold; }")
-                self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignTop)
+                self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignmentFlag.AlignTop)
                 lblctsumy = QLabel('True Positive Rate: %.2f\nFalse Positive Rate: %.2f\nPrecision: %.2f\nAccuracy: %.2f'
                                    % (self.cnntrain.TPRs[ct][self.cnntrain.bestThrInd[ct]],
                                       self.cnntrain.FPRs[ct][self.cnntrain.bestThrInd[ct]],
@@ -2713,9 +2713,9 @@ class BuildCNNWizard(QWizard):
 
             # filter dir listbox
             self.listFiles = QListWidget()
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFiles.setMinimumHeight(200)
-            filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+            filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file)
@@ -2732,7 +2732,7 @@ class BuildCNNWizard(QWizard):
                     elif input=="M.txt":
                         print("filter name \"M\" reserved for manual annotations")
                         return(QValidator.Intermediate, input, pos)
-                    elif self.listFiles.findItems(input, Qt.MatchExactly):
+                    elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
                     else:
@@ -2928,7 +2928,7 @@ class FilterCustomiseROC(QDialog):
         self.setWindowTitle("Customise a recogniser (use existing ROC)")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.filtdir = filtdir
         self.saveoption = "New"
         self.ROCWF = False
@@ -2942,7 +2942,7 @@ class FilterCustomiseROC(QDialog):
         self.listFiles = QListWidget()
         self.listFiles.setFixedWidth(300)
         self.listFiles.setFixedHeight(450)
-        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.listFiles.itemSelectionChanged.connect(self.readFilter)
 
         self.readContents()
@@ -2960,7 +2960,7 @@ class FilterCustomiseROC(QDialog):
                 elif input=="M.txt":
                     print("filter name \"M\" reserved for manual annotations")
                     return(QValidator.Intermediate, input, pos)
-                elif self.listFiles.findItems(input, Qt.MatchExactly):
+                elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                     print("duplicated input", input)
                     return(QValidator.Intermediate, input, pos)
                 else:
