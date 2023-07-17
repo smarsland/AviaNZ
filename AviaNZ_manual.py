@@ -132,9 +132,7 @@ class AviaNZ(QMainWindow):
             raise OSError("Bat list missing, cannot continue")
 
         # avoid comma/point problem in number parsing
-        # TODO!!
-        #QLocale.setDefault(QLocale.English)
-        #QLocale.setDefault(QLocale.English,QLocale.NewZealand)
+        QLocale.setDefault(QLocale(QLocale.Language.English,QLocale.Country.NewZealand))
         #QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
         print('Locale is set to ' + QLocale().name())
 
@@ -520,7 +518,7 @@ class AviaNZ(QMainWindow):
         self.d_files = Dock("Files",size=(40,200))
         self.d_plot = Dock("Plots",size=(1200,150))
         # TODO!!
-        #self.d_controls.setSizePolicy(QSizePolicy.PolicyFlag.GrowFlag,QSizePolicy.PolicyFlag.GrowFlag)
+        #self.d_controls.setSizePolicy(QSizePolicy(QSizePolicy.PolicyFlag.GrowFlag,QSizePolicy.PolicyFlag.GrowFlag))
         #self.d_controls.setSizePolicy(1,1)
 
         self.area.addDock(self.d_files,'left')
@@ -594,7 +592,7 @@ class AviaNZ(QMainWindow):
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("Move view forward")
         # TODO!!
-        #self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
         #self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
 
         # Buttons to move to next/previous five minutes
@@ -611,7 +609,7 @@ class AviaNZ(QMainWindow):
         self.placeInFileLabel2 = QLabel('Page')
         self.placeInFileLabel = QLabel('')
         # TODO!!
-        #self.placeInFileLabel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.placeInFileLabel.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.placeInFileSelector = QSpinBox()
         self.placeInFileSelector.setRange(1,1)
         self.placeInFileSelector.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)

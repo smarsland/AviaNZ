@@ -62,7 +62,7 @@ class BuildRecAdvWizard(QWizard):
             self.setSubTitle('To start training, you need labelled calls from your species as training data (see the manual). Select the folder where this data is located. Then select the species.')
 
             self.setMinimumSize(600, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.trainDirName = QLineEdit()
@@ -159,7 +159,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Confirm data input')
             self.setSubTitle('When ready, press \"Cluster\" to start clustering. The process may take a long time.')
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             revtop = QLabel("The following parameters were set:")
@@ -195,7 +195,7 @@ class BuildRecAdvWizard(QWizard):
             # start larger than minimumSize, but not bigger than the screen:
             screenresol = QApplication.primaryScreen().availableSize()
             self.manualSizeHint = QSize(min(800, 0.9*screenresol.width()), min(600, 0.9*screenresol.height()))
-            self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+            self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             self.adjustSize()
 
             instr = QLabel("To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.")
@@ -258,7 +258,7 @@ class BuildRecAdvWizard(QWizard):
             self.scrollArea = QScrollArea(self)
             #self.scrollArea.setWidgetResizable(True)
             self.scrollArea.setWidget(self.flowLayout)
-            self.scrollArea.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+            self.scrollArea.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
 
             # set overall layout of the dialog
             self.vboxFull = QVBoxLayout()
@@ -892,7 +892,7 @@ class BuildRecAdvWizard(QWizard):
             self.setSubTitle("These fields were completed using the training data. Adjust if required.\nWhen ready, "
                              "press \"Train\". The process may take a long time.")
             #self.setMinimumSize(350, 430)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
             self.adjustSize()
 
             self.method = method
@@ -1053,7 +1053,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(520, 440)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.segments = segments
@@ -1318,7 +1318,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Save recogniser')
             self.setSubTitle('If you are happy with the overall call detection summary, save the recogniser. \n You should now test it.')
             self.setMinimumSize(430, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.lblTrainDir = QLabel()
@@ -1474,7 +1474,7 @@ class BuildRecAdvWizard(QWizard):
         super(BuildRecAdvWizard, self).__init__()
         self.setWindowTitle("Build Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+        self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         if platform.system() == 'Linux':
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
@@ -1631,7 +1631,7 @@ class TestRecWizard(QWizard):
             self.setSubTitle('Select the folder with testing data, then choose species')
 
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             # the combobox will default to this filter initially if provided
@@ -1689,7 +1689,7 @@ class TestRecWizard(QWizard):
             self.setTitle('Summary of testing results')
 
             self.setMinimumSize(300, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
             self.configdir = configdir
             self.filterdir = filterdir
@@ -1782,7 +1782,7 @@ class TestRecWizard(QWizard):
         super(TestRecWizard, self).__init__()
         self.setWindowTitle("Test Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         if platform.system() == 'Linux':
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
@@ -1873,7 +1873,7 @@ class BuildCNNWizard(QWizard):
         super(BuildCNNWizard, self).__init__()
         self.setWindowTitle("Train CNN")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         if platform.system() == 'Linux':
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
@@ -1918,7 +1918,7 @@ class BuildCNNWizard(QWizard):
             self.setSubTitle('Choose the recogniser that you want to extend with CNN, then select training data.')
 
             self.setMinimumSize(300, 600)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2034,7 +2034,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Confirm data input')
             self.setSubTitle('When ready, press \"Next\" to start preparing images and train the CNN.')
             self.setMinimumSize(350, 275)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2240,7 +2240,7 @@ class BuildCNNWizard(QWizard):
             self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN and training.\nThe process may take a long time.')
 
             self.setMinimumSize(350, 200)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             # self.cnntrain = cnntrain
@@ -2542,7 +2542,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(350, 200)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2642,7 +2642,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Training Summary')
             self.setSubTitle('If you are happy with the CNN performance, press \"Save the Recogniser.\"')
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2704,7 +2704,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Save Recogniser')
             self.setSubTitle('If you are happy with the CNN performance, save the recogniser.')
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain

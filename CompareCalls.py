@@ -680,8 +680,8 @@ class ReviewAdjustments(QDialog):
         self.rightBtn.setArrowType(Qt.RightArrow)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("View next pair")
-        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
-        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
 
         self.connectCheckbox = QCheckBox("Recorders are connected")
         self.connectCheckbox.setChecked(bool(self.parent.recConnections[0,1]==1))
@@ -835,8 +835,8 @@ class CompareCallsDialog(QDialog):
         self.rightBtn.setArrowType(Qt.RightArrow)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("View next pair")
-        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
-        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
 
         # accept / close
         closeBtn = QPushButton("Close")
