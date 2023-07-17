@@ -29,11 +29,11 @@ import librosa
 import copy
 import gc
 
-from PyQt6.QtGui import QImage
+from PyQt5.QtGui import QImage
 
 QtMM = True
 try:
-    from PyQt6.QtMultimedia import QAudioFormat
+    from PyQt5.QtMultimedia import QAudioFormat
 except ImportError:
     print("No QtMM")
     QtMM = False
@@ -94,14 +94,14 @@ class SignalProc:
 
         if QtMM:
             # TODO!!!
-            #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+            self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
             self.audioFormat.setSampleRate(self.sampleRate)
             # Only 8-bit WAVs are unsigned:
             # TODO!!
-            #if wavobj.sampwidth==1:
-                #self.audioFormat.setSampleType(QAudioFormat.SampleFormat.UnSignedInt)
-            #else:
-                #self.audioFormat.setSampleType(QAudioFormat.SampleFormat.SignedInt)
+            if wavobj.sampwidth==1:
+                self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
+            else:
+                self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0

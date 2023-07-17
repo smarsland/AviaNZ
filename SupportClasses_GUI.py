@@ -24,11 +24,11 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt6 import QtCore, QtGui
-from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
-from PyQt6.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
-from PyQt6.QtMultimedia import QAudio, QAudioOutput
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
+from PyQt5.QtMultimedia import QAudio, QAudioOutput
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
 import pyqtgraph.functions as fn
@@ -697,7 +697,7 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
 
 
 class ControllableAudio(QAudioOutput):
-    # This links all the PyQt6 audio playback things -
+    # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
     def __init__(self, format, loop=False):

@@ -1,8 +1,8 @@
 # Self-standing executable for call comparison mode
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QDoubleSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox, QDialog, QToolButton, QCheckBox
-from PyQt6.QtCore import QDir, Qt, QSize
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QDoubleSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox, QDialog, QToolButton, QCheckBox
+from PyQt5.QtCore import QDir, Qt, QSize
+from PyQt5.QtGui import QIcon, QPixmap
 
 import sys
 import os

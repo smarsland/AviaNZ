@@ -26,11 +26,11 @@
 import os
 import shutil
 
-from PyQt6 import QtCore, QtGui
-from PyQt6.QtGui import *
-from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
-from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir
 
 import pyqtgraph as pg
 

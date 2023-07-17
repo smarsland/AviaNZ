@@ -41,13 +41,13 @@
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
 
-from PyQt6 import QtCore, QtGui
-from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
-from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle#, QActionGroup, QShortcut
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QActionGroup, QShortcut
 # The two below moved from QtWidgets
-from PyQt6.QtGui import QActionGroup, QShortcut
-from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
-from PyQt6.QtMultimedia import QAudio
+#from PyQt6.QtGui import QActionGroup, QShortcut
+from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
+from PyQt5.QtMultimedia import QAudio
 
 import wavio
 import numpy as np
@@ -313,24 +313,24 @@ class AviaNZ(QMainWindow):
 
         fileMenu = self.menuBar().addMenu("&File")
         openIcon = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton)
-        fileMenu.addAction(openIcon, "&Open sound file", "Ctrl+O", self.openFile)
-        #fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
+        #fileMenu.addAction(openIcon, "&Open sound file", "Ctrl+O", self.openFile)
+        fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         for recentfile in self.config['RecentFiles']:
             fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
         fileMenu.addSeparator()
-        fileMenu.addAction("Restart Program","Ctrl+R",self.restart)
-        #fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
-        #fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit",QApplication.quit,"Ctrl+Q")
-        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit","Ctrl+Q",QApplication.quit)
+        #fileMenu.addAction("Restart Program","Ctrl+R",self.restart)
+        fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
+        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit",QApplication.quit,"Ctrl+Q")
+        #fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit","Ctrl+Q",QApplication.quit)
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
         if platform.system() == 'Darwin':
-            fileMenu.addAction("&Quit","Ctrl+Q",QApplication.quit)
-            #fileMenu.addAction("&Quit",QApplication.quit,"Ctrl+Q")
+            #fileMenu.addAction("&Quit","Ctrl+Q",QApplication.quit)
+            fileMenu.addAction("&Quit",QApplication.quit,"Ctrl+Q")
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
@@ -369,8 +369,8 @@ class AviaNZ(QMainWindow):
         self.invertcm.setChecked(self.config['invertColourMap'])
 
         # specMenu.addSeparator()
-        specMenu.addAction("&Change spectrogram parameters","Ctrl+C",self.showSpectrogramDialog)
-        #specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog, "Ctrl+C")
+        #specMenu.addAction("&Change spectrogram parameters","Ctrl+C",self.showSpectrogramDialog)
+        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog, "Ctrl+C")
 
         if not self.DOC:
             specMenu.addSeparator()
@@ -389,8 +389,8 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
         markMenu = specMenu.addMenu("Mark on spectrogram")
-        self.showFundamental = markMenu.addAction("Fundamental frequency","Ctrl+F", self.showFundamentalFreq)
-        #self.showFundamental = markMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        #self.showFundamental = markMenu.addAction("Fundamental frequency","Ctrl+F", self.showFundamentalFreq)
+        self.showFundamental = markMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(True)
         self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
@@ -418,15 +418,15 @@ class AviaNZ(QMainWindow):
         specMenu.addAction("Put docks back",self.dockReplace)
 
         actionMenu = self.menuBar().addMenu("&Actions")
-        actionMenu.addAction("Delete all segments","Ctrl+D",self.deleteAll)
-        #actionMenu.addAction("Delete all segments", self.deleteAll, "Ctrl+D")
-        #self.addRegularAction = actionMenu.addAction("Mark regular segments", self.addRegularSegments, "Ctrl+M")
-        self.addRegularAction = actionMenu.addAction("Mark regular segments","Ctrl+M", self.addRegularSegments)
+        #actionMenu.addAction("Delete all segments","Ctrl+D",self.deleteAll)
+        actionMenu.addAction("Delete all segments", self.deleteAll, "Ctrl+D")
+        self.addRegularAction = actionMenu.addAction("Mark regular segments", self.addRegularSegments, "Ctrl+M")
+        #self.addRegularAction = actionMenu.addAction("Mark regular segments","Ctrl+M", self.addRegularSegments)
 
         actionMenu.addSeparator()
         self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
-        actionMenu.addAction("Add metadata about noise","Ctrl+N",self.addNoiseData)
-        #actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
+        #actionMenu.addAction("Add metadata about noise","Ctrl+N",self.addNoiseData)
+        actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
         #actionMenu.addAction("Find matches",self.findMatches)
 
         if not self.DOC:
@@ -434,8 +434,8 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
         actionMenu.addSeparator()
-        self.segmentAction = actionMenu.addAction("Segment","Ctrl+S",self.segmentationDialog)
-        #self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        #self.segmentAction = actionMenu.addAction("Segment","Ctrl+S",self.segmentationDialog)
+        self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
 
         if not self.DOC:
             actionMenu.addAction("Calculate segment statistics", self.calculateStats)
@@ -449,8 +449,8 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Export spectrogram image", self.saveImageRaw)
-        actionMenu.addAction("&Export current view as image","Ctrl+I",self.saveImage)
-        #actionMenu.addAction("&Export current view as image",self.saveImage,"Ctrl+I")
+        #actionMenu.addAction("&Export current view as image","Ctrl+I",self.saveImage)
+        actionMenu.addAction("&Export current view as image",self.saveImage,"Ctrl+I")
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -472,15 +472,15 @@ class AviaNZ(QMainWindow):
         utilMenu.addAction("&Split WAV/DATA files", self.launchSplitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help","Ctrl+H", self.showHelp)
-        #helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
+        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
+        helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
         helpMenu.addAction("&Cheat Sheet", self.showCheatSheet)
         helpMenu.addSeparator()
-        helpMenu.addAction("About","Ctrl+A", self.showAbout)
-        #helpMenu.addAction("About", self.showAbout, "Ctrl+A")
+        #helpMenu.addAction("About","Ctrl+A", self.showAbout)
+        helpMenu.addAction("About", self.showAbout, "Ctrl+A")
         if platform.system() == 'Darwin':
-            helpMenu.addAction("About","Ctrl+A", self.showAbout)
-            #helpMenu.addAction("About", self.showAbout, "Ctrl+A")
+            #helpMenu.addAction("About","Ctrl+A", self.showAbout)
+            helpMenu.addAction("About", self.showAbout, "Ctrl+A")
 
     def showAbout(self):
         """ Create the About Message Box"""
@@ -4167,7 +4167,7 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setText("Ready")
 
     def setCTDiagnosticsCNN(self):
-        from PyQt6.QtWidgets import QCheckBox
+        from PyQt5.QtWidgets import QCheckBox
         filter = self.diagnosticDialogCNN.filter.currentText()
         speciesData = self.FilterDicts[filter]
         CTs = []

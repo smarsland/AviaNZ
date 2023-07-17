@@ -19,10 +19,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt6 import QtGui
-from PyQt6.QtGui import QIcon, QPixmap, QColor, QScreen
-from PyQt6.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
-from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
+from PyQt5 import QtGui
+from PyQt5.QtGui import QIcon, QPixmap, QColor, QScreen
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
+from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
 
@@ -279,20 +279,20 @@ class AviaNZ_batchWindow(QMainWindow):
     def createMenu(self):
         """ Create the basic menu.
         """
-        helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help","Ctrl+H", self.showHelp)
-        aboutMenu = self.menuBar().addMenu("&About")
-        aboutMenu.addAction("About","Ctrl+A", self.showAbout)
-        quitMenu = self.menuBar().addMenu("&Quit")
-        quitMenu.addAction("Restart program", self.restart)
-        quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
         #helpMenu = self.menuBar().addMenu("&Help")
-        #helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
         #aboutMenu = self.menuBar().addMenu("&About")
-        #aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        #aboutMenu.addAction("About","Ctrl+A", self.showAbout)
         #quitMenu = self.menuBar().addMenu("&Quit")
         #quitMenu.addAction("Restart program", self.restart)
-        #quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+        #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
+        helpMenu = self.menuBar().addMenu("&Help")
+        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        aboutMenu = self.menuBar().addMenu("&About")
+        aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        quitMenu = self.menuBar().addMenu("&Quit")
+        quitMenu.addAction("Restart program", self.restart)
+        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
 
     def showAbout(self):
@@ -1216,22 +1216,21 @@ class AviaNZ_reviewAll(QMainWindow):
     def createMenu(self):
         """ Create the basic menu.
         """
-        helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help","Ctrl+H", self.showHelp)
-        aboutMenu = self.menuBar().addMenu("&About")
-        aboutMenu.addAction("About","Ctrl+A", self.showAbout)
-        quitMenu = self.menuBar().addMenu("&Quit")
-        quitMenu.addAction("Restart program", self.restart)
-        quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
-
         #helpMenu = self.menuBar().addMenu("&Help")
-        #helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
         #aboutMenu = self.menuBar().addMenu("&About")
-        #aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        #aboutMenu.addAction("About","Ctrl+A", self.showAbout)
         #quitMenu = self.menuBar().addMenu("&Quit")
         #quitMenu.addAction("Restart program", self.restart)
-        #quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+        #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
 
+        helpMenu = self.menuBar().addMenu("&Help")
+        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        aboutMenu = self.menuBar().addMenu("&About")
+        aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        quitMenu = self.menuBar().addMenu("&Quit")
+        quitMenu.addAction("Restart program", self.restart)
+        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
     def restart(self):
         print("Restarting")
