@@ -3058,7 +3058,7 @@ class AviaNZ(QMainWindow):
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
@@ -3141,13 +3141,13 @@ class AviaNZ(QMainWindow):
                                     self.viewCallType = True
                                     # Calltype context menu
                                     self.fillBirdList()
-                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                                     self.viewCallType = False
                                 else:
-                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
-                            self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                            self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
 
     def mouseClicked_spec(self,evt):
         """ Listener for if the user clicks on the spectrogram plot.
