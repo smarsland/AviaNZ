@@ -75,11 +75,11 @@ class AviaNZ_batchWindow(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(1200, 1000)
+        self.setMinimumSize(1200, 800)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(900, 1000))
-        self.d_files = Dock("File list", size=(300, 1000))
+        self.d_detection = Dock("Automatic Detection",size=(900, 800))
+        self.d_files = Dock("File list", size=(300, 800))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
@@ -474,10 +474,9 @@ class AviaNZ_batchWindow(QMainWindow):
         # geometry of the main window
         qr = self.frameGeometry()
         # centre point of screen
-        # TODO!!!
-        #cp = QScreen().availableGeometry().center()
+        cp = self.screen().availableGeometry().center()
         # move rectangle's centre point to screen's centre point
-        #qr.moveCenter(cp)
+        qr.moveCenter(cp)
         # top left of rectangle becomes top left of window centring it
         self.move(qr.topLeft())
 
@@ -1236,10 +1235,9 @@ class AviaNZ_reviewAll(QMainWindow):
         # geometry of the main window
         qr = self.frameGeometry()
         # centre point of screen
-        # TODO!!!
-        #cp = QScreen().availableGeometry().center()
+        cp = self.screen().availableGeometry().center()
         # move rectangle's centre point to screen's centre point
-        #qr.moveCenter(cp)
+        qr.moveCenter(cp)
         # top left of rectangle becomes top left of window centring it
         self.move(qr.topLeft())
 
