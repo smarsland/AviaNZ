@@ -517,8 +517,7 @@ class AviaNZ(QMainWindow):
         self.d_controls = Dock("Controls",size=(40,90))
         self.d_files = Dock("Files",size=(40,200))
         self.d_plot = Dock("Plots",size=(1200,150))
-        # TODO!!
-        #self.d_controls.setSizePolicy(QSizePolicy(QSizePolicy.PolicyFlag.GrowFlag,QSizePolicy.PolicyFlag.GrowFlag))
+        self.d_controls.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
         #self.d_controls.setSizePolicy(1,1)
 
         self.area.addDock(self.d_files,'left')
@@ -591,9 +590,8 @@ class AviaNZ(QMainWindow):
         self.rightBtn.setMinimumWidth(16)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("Move view forward")
-        # TODO!!
         self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
-        #self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
 
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
@@ -608,7 +606,6 @@ class AviaNZ(QMainWindow):
         self.next5mins.clicked.connect(self.moveNext5mins)
         self.placeInFileLabel2 = QLabel('Page')
         self.placeInFileLabel = QLabel('')
-        # TODO!!
         self.placeInFileLabel.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.placeInFileSelector = QSpinBox()
         self.placeInFileSelector.setRange(1,1)
@@ -1876,9 +1873,8 @@ class AviaNZ(QMainWindow):
         containers, docks = self.area.findAll()
         # basically say that left panel and controls should be as small as possible:
         # TODO!!
-        #self.d_controls.setSizePolicy(1,1)
-        # TODO!!
-        #containers[1].setSizePolicy(1,1)
+        self.d_controls.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
+        containers[1].setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
         #self.useAmplitudeTick.setChecked(True)
         #self.useAmplitude = True
         #self.config['showAmplitudePlot'] = True
