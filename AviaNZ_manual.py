@@ -37,6 +37,7 @@
 # 9. Mac installation
 # 10. Test and test again. And again.
 # 11. Qt6
+# 12. Check minimal things carried between objects
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -1579,21 +1580,21 @@ class AviaNZ(QMainWindow):
                     self.sp.resample(16000)
                     self.sp.maxFreqShow = 8000
 
-            # Parse wav format details based on file header:
-            self.sampleRate = self.sp.sampleRate
-            self.audiodata = self.sp.data
-            self.datalength = np.shape(self.sp.data)[0]
+                # Parse wav format details based on file header:
+                #self.sampleRate = self.sp.sampleRate
+                #self.audiodata = self.sp.data
+                self.datalength = np.shape(self.sp.data)[0]
 
-            # self.sp.audioFormat will be set
-            # self.sp.fileLength will be determined from wav header
-            # self.sp.minFreq and maxFreq will be set based on sample rate
-            # self.sp.*Show will be set based on SignalProc settings
+                # self.sp.audioFormat will be set
+                # self.sp.fileLength will be determined from wav header
+                # self.sp.minFreq and maxFreq will be set based on sample rate
+                # self.sp.*Show will be set based on SignalProc settings
 
             dlg += 1
             dlg.update()
 
-            self.datalengthSec = self.datalength / self.sampleRate
-            print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
+            self.datalengthSec = self.datalength / self.sp.sampleRate
+            print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.sampleRate, " Hz.")
 
             if name is not None:  # i.e. starting a new file, not next section
                 if self.datalength != self.sp.fileLength:
@@ -1621,11 +1622,11 @@ class AviaNZ(QMainWindow):
                 self.placeInFileSelector.setValue(self.currentFileSection+1)
                 self.placeInFileSelector.setMaximum(self.nFileSections)
                 self.placeInFileLabel.setText("of %d (%d s in page)" % (self.nFileSections, self.datalengthSec))
-            self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sampleRate)
+            self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
             # SRM: TODO
             #self.fileInfoSS.setText("<b>Bit depth:</b> %d" % self.sp.audioFormat.sampleSize())
-            self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sampleRate, 60))
+            self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.sampleRate, 60))
 
             if not self.batmode:
                 # Create the main spectrogram
@@ -1685,10 +1686,10 @@ class AviaNZ(QMainWindow):
                         #print(result,start,end)
                     else:
                         start = 0
-                        end = self.sp.fileLength / self.sampleRate
+                        end = self.sp.fileLength / self.sp.sampleRate
                 else:
                     start = 0
-                    end = self.sp.fileLength / self.sampleRate
+                    end = self.sp.fileLength / self.sp.sampleRate
                 newSegment = Segment.Segment([start, end, 0, 0, species])
                 #newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
                 self.segments.append(newSegment)
@@ -1702,7 +1703,7 @@ class AviaNZ(QMainWindow):
             if hasattr(self,'seg'):
                 self.seg.setNewData(self.sp)
             else:
-                self.seg = Segment.Segmenter(self.sp, self.sampleRate)
+                self.seg = Segment.Segmenter(self.sp, self.sp.sampleRate)
 
             # Update the Dialogs
             # Also close any ones that could get buggy when moving between bird-bat modes
@@ -1742,10 +1743,8 @@ class AviaNZ(QMainWindow):
             if not self.CLI:
                 # Load the file for playback
                 self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
-                # SRM: TODO!!
                 audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
-                # SRM: TODO!!
                 self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
 
                 # Reset the media player
@@ -2055,7 +2054,7 @@ class AviaNZ(QMainWindow):
             incr = 512
         else:
             incr = self.config['incr']
-        return x*self.sampleRate/incr
+        return x*self.sp.sampleRate/incr
 
     def convertSpectoAmpl(self,x):
         """ Unit conversion """
@@ -2063,7 +2062,7 @@ class AviaNZ(QMainWindow):
             incr = 512
         else:
             incr = self.config['incr']
-        return x*incr/self.sampleRate
+        return x*incr/self.sp.sampleRate
 
     def convertMillisecs(self,millisecs):
         """ Unit conversion """
@@ -2075,12 +2074,12 @@ class AviaNZ(QMainWindow):
         """ Unit conversion """
         if sgy is None:
             sgy = np.shape(self.sg)[1]
-        return y * self.sampleRate//2 / sgy + self.sp.minFreqShow
+        return y * self.sp.sampleRate//2 / sgy + self.sp.minFreqShow
 
     def convertFreqtoY(self,f):
         """ Unit conversion """
         sgy = np.shape(self.sg)[1]
-        return (f-self.sp.minFreqShow) * sgy / (self.sampleRate//2)
+        return (f-self.sp.minFreqShow) * sgy / (self.sp.sampleRate//2)
 
     def drawOverview(self):
         """ On loading a new file, update the overview figure to show where you are up to in the file.
@@ -2166,7 +2165,7 @@ class AviaNZ(QMainWindow):
         self.updateRequestedByOverview = False
 
     def setfigs(self):
-        height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        height = self.sp.sampleRate // 2 / np.shape(self.sg)[1]
         pixelstart = int(self.sp.minFreqShow/height)
         pixelend = int(self.sp.maxFreqShow/height)
 
@@ -2183,8 +2182,8 @@ class AviaNZ(QMainWindow):
         """ Draws the main amplitude and spectrogram plots and any segments on them.
         Has to do some work to get the axis labels correct.
         """
-        if len(self.audiodata)>0:
-            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
+        if len(self.sp.data)>0 and not self.batmode:
+            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.sp.data)
 
         self.timeaxis.setLabel('')
 
@@ -2194,10 +2193,10 @@ class AviaNZ(QMainWindow):
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
 
         # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
-        # TODO: I'm doing the first for now.
+        # TODO: I'm doing the first for now. -- SRM: that's crap :(
 
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
-        height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        height = self.sp.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
         self.drawGuidelines()
 
@@ -2312,7 +2311,7 @@ class AviaNZ(QMainWindow):
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate, window=0.25, inc=0.25)
+            e = ws.computeWaveletEnergy(self.sp.data, self.sp.sampleRate, window=0.25, inc=0.25)
             # e is 2^nlevels x nseconds
 
             # show only leaf nodes:
@@ -2329,12 +2328,12 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # preprocess
-            data = librosa.resample(self.audiodata, orig_sf=self.sampleRate, target_sr=16000)
-            data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
+            data = librosa.resample(self.sp.data, orig_sf=self.sp.sampleRate, target_sr=16000)
+            data = self.sp.bandpassFilter(data, self.sp.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+            e = ws.computeWaveletEnergy(self.sp.data, self.sp.sampleRate)
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
                 annotation[math.floor(s[0]):math.ceil(s[1])] = 1
@@ -2366,10 +2365,10 @@ class AviaNZ(QMainWindow):
             chpwin = round(0.25/minchpwin)*minchpwin
             print("Will use window of", chpwin, "s")
             # resample and generate WP w/ all nodes for the current page
-            if self.sampleRate != TGTSAMPLERATE:
-                datatoplot = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=TGTSAMPLERATE)
+            if self.sp.sampleRate != TGTSAMPLERATE:
+                datatoplot = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=TGTSAMPLERATE)
             else:
-                datatoplot = self.audiodata
+                datatoplot = self.sp.data
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
@@ -2473,9 +2472,9 @@ class AviaNZ(QMainWindow):
             we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
-                data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sampleRate, segments=[], subfilter={})
-                m, std, _ = post.wind_cal(data, self.sampleRate)
+                data = self.sp.data[int(w*self.sp.sampleRate):int((w+1)*self.sp.sampleRate)]
+                post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.sampleRate, segments=[], subfilter={})
+                m, std, _ = post.wind_cal(data, self.sp.sampleRate)
                 we_mean[w] = m
                 we_std[w] = std
 
@@ -2498,8 +2497,8 @@ class AviaNZ(QMainWindow):
         if self.extra == "Rain":
             we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
-            for w in range(int(self.datalength/self.sampleRate)):
-                data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
+            for w in range(int(self.datalength/self.sp.sampleRate)):
+                data = self.sp.data[int(w*self.sp.sampleRate):int((w+1)*self.sp.sampleRate)]
                 tempsp = SignalProc.SignalProc()
                 tempsp.data = data
                 sgRaw = tempsp.spectrogram()
@@ -2530,38 +2529,38 @@ class AviaNZ(QMainWindow):
                 plotNodes = [48, 49, 52]
 
             # resample
-            if self.sampleRate != 16000:
-                audiodata = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=16000)
+            if self.sp.sampleRate != 16000:
+                audiodata = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=16000)
             else:
-                audiodata = self.audiodata
+                audiodata = self.sp.data
 
             WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
             if self.extra == "Filtered spectrogram, new + AA":
                 WF.WaveletPacket(plotNodes, 'symmetric', True, True)
-                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.audiodata)]
+                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.sp.data)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
                 WF.WaveletPacket(plotNodes, 'symmetric', False)
-                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.audiodata)]
+                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.sp.data)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
                 WF.WaveletPacket(plotNodes, 'symmetric', False)
-                C = WF.reconstructWP2(plotNodes[0], False)[:len(self.audiodata)]
+                C = WF.reconstructWP2(plotNodes[0], False)[:len(self.sp.data)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, False)[:len(C)]
 
             # reconstructed signal was @ 16 kHz,
             # so we upsample to get equal sized spectrograms
-            if self.sampleRate != 16000:
-                C = librosa.resample(C, orig_sr=16000, target_sr=self.sampleRate)
+            if self.sp.sampleRate != 16000:
+                C = librosa.resample(C, orig_sr=16000, target_sr=self.sp.sampleRate)
             tempsp = SignalProc.SignalProc()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
-            sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sampleRate
+            sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.sampleRate
             sgRaw = sgRaw[:, :sgHeightReduction]
             maxsg = max(np.min(sgRaw), 1e-9)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
@@ -2696,8 +2695,8 @@ class AviaNZ(QMainWindow):
             # pages >1 start with an overlap zone, so need to offset marks:
             if self.currentFileSection > 0:
                 linestart += self.config['fileOverlap']
-            while linestart < self.datalength/self.sampleRate:
-                lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
+            while linestart < self.datalength/self.sp.sampleRate:
+                lineend = min(self.datalength/self.sp.sampleRate, linestart + self.config['protocolSize'])
                 line = pg.ROI(pos=(self.convertAmpltoSpec(linestart),0), size=(self.convertAmpltoSpec(lineend-linestart),0), movable=False, pen=linePen)
                 lline = pg.InfiniteLine(pos=self.convertAmpltoSpec(linestart), angle=90, movable=False, pen=linePen)
                 rline = pg.InfiniteLine(pos=self.convertAmpltoSpec(lineend), angle=90, movable=False, pen=linePen)
@@ -2875,7 +2874,7 @@ class AviaNZ(QMainWindow):
         # rectangle boxes:
         else:
             if y1==0 and y2==0:
-                y2 = self.sampleRate//2
+                y2 = self.sp.sampleRate//2
             specy1 = self.convertFreqtoY(max(y1, self.sp.minFreqShow))
             specy2 = self.convertFreqtoY(min(y2, self.sp.maxFreqShow))
             startpointS = QPointF(self.convertAmpltoSpec(startpoint), specy1)
@@ -3008,9 +3007,9 @@ class AviaNZ(QMainWindow):
                 minutes = (time//60) % 60
                 hours = (time//3600) % 24
                 if hours>0:
-                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sp.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
                 else:
-                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sp.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
@@ -3637,7 +3636,7 @@ class AviaNZ(QMainWindow):
             # SRM: I think this is OK-ish. Now for the DialogsTraining
             if len(self.filters) == 0:
                 # There wasn't a filter. Make one. Ask for name, or just use default?
-                speciesData = {"species": spmenu, "method": None, "SampleRate": self.sampleRate, "Filters": []}
+                speciesData = {"species": spmenu, "method": None, "SampleRate": self.sp.sampleRate, "Filters": []}
                 filename = os.path.join(self.filtersDir, spmenu+'.txt')
                 print("no filter",filename)
                 newfilter = speciesData
@@ -4071,10 +4070,10 @@ class AviaNZ(QMainWindow):
             # plot things
             # 1. decompose
             # if needed, adjusting sampling rate to match filter
-            if self.sampleRate != spInfo['SampleRate']:
-                datatoplot = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=spInfo['SampleRate'])
+            if self.sp.sampleRate != spInfo['SampleRate']:
+                datatoplot = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=spInfo['SampleRate'])
             else:
-                datatoplot = self.audiodata
+                datatoplot = self.sp.data
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
@@ -4223,8 +4222,8 @@ class AviaNZ(QMainWindow):
             probs = 0
             if filtername in self.CNNDicts.keys():
                 CNNmodel = self.CNNDicts[filtername]
-            post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata,
-                                       sampleRate=self.sampleRate,
+            post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data,
+                                       sampleRate=self.sp.sampleRate,
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
                                        subfilter=speciesData['Filters'][0], CNNmodel=CNNmodel, cert=50)
             if CNNmodel:
@@ -4334,7 +4333,7 @@ class AviaNZ(QMainWindow):
 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
-            data = self.audiodata[int(starttime*self.sampleRate):int(endtime*self.sampleRate)]
+            data = self.sp.data[int(starttime*self.sp.sampleRate):int(endtime*self.sp.sampleRate)]
 
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
@@ -4351,7 +4350,7 @@ class AviaNZ(QMainWindow):
 
             # TODO: Hardcoded for now - add a dialog to read parameters?
             # TODO: Workout the units
-            f = Features.Features(data=data, sampleRate=self.sampleRate, window_width=256, incr=128)
+            f = Features.Features(data=data, sampleRate=self.sp.sampleRate, window_width=256, incr=128)
             avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             # quartile1, quartile2, quartile3, f5, f95, interquartileRange = f.get_Raven_robust_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
@@ -4367,7 +4366,7 @@ class AviaNZ(QMainWindow):
         method, IFsettings = self.shapesDialog.getValues()
         allshapes = []
         specxunit = self.convertSpectoAmpl(1)
-        specyunit = self.sampleRate//2 / np.shape(self.sg)[1]
+        specyunit = self.sp.sampleRate//2 / np.shape(self.sg)[1]
         if self.batmode:
             incr = 512
         else:
@@ -4396,9 +4395,9 @@ class AviaNZ(QMainWindow):
                     segshape = Shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
-                    data = self.audiodata[int(segRelativeStart*self.sampleRate):int(segRelativeEnd*self.sampleRate)]
+                    data = self.sp.data[int(segRelativeStart*self.sp.sampleRate):int(segRelativeEnd*self.sp.sampleRate)]
                     W = 4*incr
-                    segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sampleRate)
+                    segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.sampleRate)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
@@ -4414,7 +4413,7 @@ class AviaNZ(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod, IFsettings)
+                    segshape = Shapes.instantShaper(sg, self.sp.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
@@ -4478,14 +4477,14 @@ class AviaNZ(QMainWindow):
                 audiodata_backup_new = np.empty(
                     (np.shape(self.audiodata_backup)[0], np.shape(self.audiodata_backup)[1] + 1))
                 audiodata_backup_new[:, :-1] = np.copy(self.audiodata_backup)
-                audiodata_backup_new[:, -1] = np.copy(self.audiodata)
+                audiodata_backup_new[:, -1] = np.copy(self.sp.data)
                 self.audiodata_backup = audiodata_backup_new
             else:
-                self.audiodata_backup = np.empty((np.shape(self.audiodata)[0], 1))
-                self.audiodata_backup[:, 0] = np.copy(self.audiodata)
+                self.audiodata_backup = np.empty((np.shape(self.sp.data)[0], 1))
+                self.audiodata_backup[:, 0] = np.copy(self.sp.data)
         else:
-            self.audiodata_backup = np.empty((np.shape(self.audiodata)[0], 1))
-            self.audiodata_backup[:, 0] = np.copy(self.audiodata)
+            self.audiodata_backup = np.empty((np.shape(self.sp.data)[0], 1))
+            self.audiodata_backup[:, 0] = np.copy(self.sp.data)
         self.showFreq_backup = [self.sp.minFreqShow, self.sp.maxFreqShow]
 
     def decomposeWP(self, x=None):
@@ -4494,7 +4493,7 @@ class AviaNZ(QMainWindow):
         """
         print("Decomposing to WP...")
         ot = time.time()
-        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
+        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
         maxLevel = 5
         allnodes = range(2 ** (maxLevel + 1) - 1)
         self.WFinst.WaveletPacket(allnodes, mode='symmetric', antialias=False)
@@ -4509,8 +4508,8 @@ class AviaNZ(QMainWindow):
         """
         if self.box1id > -1:
             start, stop = self.listRectanglesa1[self.box1id].getRegion()
-            start = int(start*self.sampleRate)
-            stop = int(stop*self.sampleRate)
+            start = int(start*self.sp.sampleRate)
+            stop = int(stop*self.sp.sampleRate)
         else:
             print("Can't play, no segment selected")
             return
@@ -4533,9 +4532,9 @@ class AviaNZ(QMainWindow):
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
             # extract the piece of audiodata under current segment
-            denoised = self.audiodata[start : stop]
+            denoised = self.sp.data[start : stop]
 
-            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
+            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
             denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
 
             # bandpass to selected zones, if it's a box
@@ -4551,14 +4550,14 @@ class AviaNZ(QMainWindow):
 
             # update full audiodata
             self.sp.data[start : stop] = denoised
-            self.audiodata[start : stop] = denoised
+            #self.audiodata[start : stop] = denoised
 
             # recalculate spectrogram
             _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             self.setSpectrogram()
 
             # Update the ampl image
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.sampleRate,num=self.datalength,endpoint=True),self.sp.data)
 
             # Update the spec & overview images.
             # Does not reset to start if the freqs aren't changed
@@ -4599,7 +4598,7 @@ class AviaNZ(QMainWindow):
                 # here we override default 0-Fs/2 returns
                 start = self.sp.minFreqShow
                 end = self.sp.maxFreqShow
-                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
+                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
                     # TODO set costfn determines which leaves will be used, by default 'threshold' (universal threshold).
@@ -4612,14 +4611,14 @@ class AviaNZ(QMainWindow):
             else:
                 # SignalProc will deal with denoising
                 self.sp.denoise(alg, start=start, end=end, width=width)
-            self.audiodata = self.sp.data
+            #self.audiodata = self.sp.data
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             self.setSpectrogram()
 
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.sampleRate,num=self.datalength,endpoint=True),self.sp.data)
 
             # Update the frequency axis
             self.redoFreqAxis(start, end, store=False)
@@ -4639,16 +4638,16 @@ class AviaNZ(QMainWindow):
         if hasattr(self,'audiodata_backup'):
             if self.audiodata_backup is not None:
                 if np.shape(self.audiodata_backup)[1]>0:
-                    self.audiodata = np.copy(self.audiodata_backup[:,-1])
+                    self.sp.data = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
-                    self.sp.data = self.audiodata
+                    #self.sp.data = self.audiodata
 
                     _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
                     self.setSpectrogram()
 
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
-                        self.audiodata)
+                        self.sp.data)
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.sp)
 
@@ -4663,7 +4662,7 @@ class AviaNZ(QMainWindow):
         Adds _d to the filename and saves it as a new sound file.
         """
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
+        wavio.write(filename,self.sp.data.astype('int16'),self.sp.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
         msg.exec()
@@ -4697,10 +4696,10 @@ class AviaNZ(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
-                tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
+                tosave = self.sp.bandpassFilter(self.sp.data[int(x1):int(x2)], start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.slowSpeed) 
-                wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                wavio.write(filename, tosave.astype('int16'), self.sp.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
@@ -5357,7 +5356,7 @@ class AviaNZ(QMainWindow):
         """
         maxampl = 0.001
         if self.datalength>0:
-            maxampl = np.max(self.audiodata)
+            maxampl = np.max(self.sp.data)
         self.segmentDialog = Dialogs.Segmentation(maxampl,DOC=self.DOC, species=self.FilterDicts)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
@@ -5370,7 +5369,7 @@ class AviaNZ(QMainWindow):
         if self.CLI:
             maxampl = 0.001
             if self.datalength>0:
-                maxampl = np.max(self.audiodata)
+                maxampl = np.max(self.sp.data)
             self.segmentDialog = Dialogs.Segmentation(maxampl)
 
         opstartingtime = time.time()
@@ -5454,7 +5453,7 @@ class AviaNZ(QMainWindow):
                 # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                ws.readBatch(self.sp.data, self.sp.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 newSegments = ws.waveletSegment(0, wpmode="new")
                 # this will produce a list of lists (over subfilters)
             elif alg == 'WV Changepoint':
@@ -5462,7 +5461,7 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
+                ws.readBatch(self.sp.data, self.sp.sampleRate, d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
                 # nuisance-signal changepoint detector (alg 2)
                 # with all params passed:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])
@@ -5498,7 +5497,7 @@ class AviaNZ(QMainWindow):
                     if 'CNN' in speciesData:
                         CNNmodel = self.CNNDicts.get(speciesData['CNN']['CNN_name'])
 
-                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
+                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
                     # Deprecated wind filter:
@@ -5526,7 +5525,7 @@ class AviaNZ(QMainWindow):
             else:
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.sampleRate,
                                            segments=newSegments, subfilter={})
                 # if settings["windold"]:
                 #     post.wind()
@@ -5544,7 +5543,7 @@ class AviaNZ(QMainWindow):
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
-                    y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
+                    y2 = min(self.sp.sampleRate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
@@ -5555,7 +5554,7 @@ class AviaNZ(QMainWindow):
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
-                    y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
+                    y2 = min(self.sp.sampleRate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1]}], index=-1)
@@ -5674,30 +5673,30 @@ class AviaNZ(QMainWindow):
                                         equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided)
 
             # Get the data for the spectrogram
-            if self.sampleRate != self.sppInfo[str(species)][4]:
-                data1 = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=self.sppInfo[str(species)][4])
+            if self.sp.sampleRate != self.sppInfo[str(species)][4]:
+                data1 = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=self.sppInfo[str(species)][4])
                 sampleRate1 = self.sppInfo[str(species)][4]
             else:
-                data1 = self.audiodata
-                sampleRate1 = self.sampleRate
+                data1 = self.sp.data
+                sampleRate1 = self.sp.sampleRate
             # TODO utilize self.sp / SignalProc more here
             sp_temp.data = data1
             sp_temp.sampleRate = sampleRate1
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             indices = self.seg.findCCMatches(sgRaw_temp,sgRaw,thr)
             # scale indices to match with self.samplerate
-            indices = [i*self.sampleRate/sampleRate1 for i in indices]
+            indices = [i*self.sp.sampleRate/sampleRate1 for i in indices]
             # print('indices:', indices)
             # identifySegments(seg=indices, minlength=10)
             # indices are in spectrogram pixels, need to turn into times
             y1 = self.convertFreqtoY(self.sppInfo[str(species)][2]/2)
-            if self.sppInfo[str(species)][4]/2 > self.sampleRate:
-                y2 = self.convertFreqtoY(self.sampleRate / 2 - self.sampleRate * 0.01)
+            if self.sppInfo[str(species)][4]/2 > self.sp.sampleRate:
+                y2 = self.convertFreqtoY(self.sp.sampleRate / 2 - self.sp.sampleRate * 0.01)
             else:
                 y2 = self.convertFreqtoY(self.sppInfo[str(species)][4] / 2)
             for i in indices:
                 if np.abs(i) > self.config['overlap_allowed']:
-                    time = i*self.config['incr'] / self.sampleRate
+                    time = i*self.config['incr'] / self.sp.sampleRate
                     # print(time, time + len_seg,self.segments)
                     # self.addSegment(time, time+len_seg,y1,y2,[species+'?'])
                     segments.append([time, time+len_seg])
@@ -5720,13 +5719,13 @@ class AviaNZ(QMainWindow):
             # TODO utilize self.sp / SignalProc more here
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             segment = sgRaw[int(x1):int(x2),:]
-            len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
+            len_seg = (x2-x1) * self.config['incr'] / self.sp.sampleRate
             indices = self.seg.findCCMatches(segment,sgRaw,thr)
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter
                 if np.abs(i-x1) > self.config['overlap_allowed']:
-                    time = i*self.config['incr'] / self.sampleRate
+                    time = i*self.config['incr'] / self.sp.sampleRate
                     segments.append([time, time+len_seg])
                     # self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
             self.statusLeft.setText("Ready")
@@ -5739,8 +5738,8 @@ class AviaNZ(QMainWindow):
         # TODO: Probably broken!
         if len(self.segments) > 1:
             cl = Clustering.Clustering([], [], 5)
-            segments, nclasses, duration = cl.cluster(self.filename, self.sampleRate, None, feature='we')
-            self.clusterD = Dialogs.Cluster(segments, self.sampleRate, nclasses, self.config)
+            segments, nclasses, duration = cl.cluster(self.filename, self.sp.sampleRate, None, feature='we')
+            self.clusterD = Dialogs.Cluster(segments, self.sp.sampleRate, nclasses, self.config)
             self.clusterD.show()
         else:
             print('need segments to cluster!')
@@ -5792,7 +5791,7 @@ class AviaNZ(QMainWindow):
                 start = self.segmentStart
             # (will not be used if resuming without touching the bar)
 
-            self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.audiodata)
+            self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.sp.data)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -5822,7 +5821,7 @@ class AviaNZ(QMainWindow):
                 QApplication.processEvents()
 
                 #print("filterseg")
-                self.media_obj.filterSeg(start, stop, self.audiodata,self.playSpeed)
+                self.media_obj.filterSeg(start, stop, self.sp.data,self.playSpeed)
             else:
                 print("Can't play, no segment selected")
 
@@ -5859,7 +5858,7 @@ class AviaNZ(QMainWindow):
 
                 # filter the data into a temporary file or buffer
                 #print("bandseg")
-                self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
+                self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.sp.data, self.sp)
             else:
                 print("Can't play, no segment selected")
 
@@ -5905,7 +5904,6 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        # SRM: TODO!
         #print("yep", self.media_obj.processedUSecs())
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
         #eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset

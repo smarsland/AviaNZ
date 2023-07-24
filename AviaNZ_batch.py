@@ -507,9 +507,9 @@ class AviaNZ_batchProcess():
         # Segment over pages separately, to allow dealing with large files smoothly:
         # (page size is shorter for low freq things, i.e. bittern,
         # since those freqs are very noisy and variable)
-        if self.sampleRate<=4000:
+        if self.sp.sampleRate<=4000:
             # Basically bittern
-            samplesInPage = 300*self.sampleRate
+            samplesInPage = 300*self.sp.sampleRate
         elif self.method=="Wavelets":
             # If using changepoints and v short windows,
             # aim to have roughly 5000 windows:
@@ -517,7 +517,7 @@ class AviaNZ_batchProcess():
             winsize = [subf["WaveletParams"].get("win", 1) for f in filters for subf in f["Filters"]]
             winsize = min(winsize)
             if winsize<0.05:
-                samplesInPage = int(4500 * 0.05 * self.sampleRate)
+                samplesInPage = int(4500 * 0.05 * self.sp.sampleRate)
             else:
                 samplesInPage = 900*16000
         else:
@@ -532,7 +532,7 @@ class AviaNZ_batchProcess():
             print("Segmenting page %d / %d" % (page+1, numPages))
             start = page*samplesInPage
             end = min(start+samplesInPage, self.datalength)
-            thisPageLen = (end-start) / self.sampleRate
+            thisPageLen = (end-start) / self.sp.sampleRate
 
             if thisPageLen < 2 and (self.method != "Click" and self.method != "Bats"):
                 print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
@@ -546,13 +546,13 @@ class AviaNZ_batchProcess():
                 self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
                 _ = self.sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True)
-                self.seg = Segment.Segmenter(self.sp, self.sampleRate)
+                self.seg = Segment.Segmenter(self.sp, self.sp.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
                 # Post-process
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 post.joinGaps(self.maxgap)
                 post.deleteShort(self.minlen)
                 # avoid extra long segments (for Isabel)
@@ -561,8 +561,8 @@ class AviaNZ_batchProcess():
                 # adjust segment starts for 15min "pages"
                 if start != 0:
                     for seg in post.segments:
-                        seg[0][0] += start/self.sampleRate
-                        seg[0][1] += start/self.sampleRate
+                        seg[0][0] += start/self.sp.sampleRate
+                        seg[0][1] += start/self.sp.sampleRate
                 # attach mandatory "Don't Know"s etc and put on self.segments
                 self.makeSegments(self.segments, post.segments)
                 del self.seg
@@ -576,7 +576,8 @@ class AviaNZ_batchProcess():
             else:
                 if self.method != "Click" and self.method != "Bats":
                     # read in the page and resample as needed
-                    self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
+                    # TODO: correct samplerate?
+                    self.ws.readBatch(self.audiodata[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
 
                 data_test = []
                 click_label = 'None'
@@ -649,7 +650,7 @@ class AviaNZ_batchProcess():
                                     print('CNN detected: ', label)
                                     if len(label)>0:
                                         # Convert the annotation into a full segment in self.segments
-                                        thisPageStart = start / self.sampleRate
+                                        thisPageStart = start / self.sp.sampleRate
                                         self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
                                 else:
                                     # do not create any segments
@@ -714,7 +715,7 @@ class AviaNZ_batchProcess():
                                 print('CNN detected: ', label)
                                 if len(label) > 0:
                                     # Convert the annotation into a full segment in self.segments
-                                    thisPageStart = start / self.sampleRate
+                                    thisPageStart = start / self.sp.sampleRate
                                     self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
                             else:
                                 # bird-style CNN and other processing:
@@ -751,7 +752,7 @@ class AviaNZ_batchProcess():
         """
         subfilter = spInfo["Filters"][filtix]
         post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end],
-                            sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"],
+                            sampleRate=self.sp.sampleRate, tgtsampleRate=spInfo["SampleRate"],
                             segments=segments[filtix], subfilter=subfilter,
                             CNNmodel=CNNmodel, cert=50)
         print("Segments detected after WF: ", len(segments[filtix]))
@@ -776,8 +777,8 @@ class AviaNZ_batchProcess():
         # adjust segment starts for 15min "pages"
         if start != 0:
             for seg in post.segments:
-                seg[0][0] += start/self.sampleRate
-                seg[0][1] += start/self.sampleRate
+                seg[0][0] += start/self.sp.sampleRate
+                seg[0][1] += start/self.sp.sampleRate
         print("After post-processing: ", post.segments)
         return(post.segments)
 
@@ -794,7 +795,7 @@ class AviaNZ_batchProcess():
         elif subfilter is not None:
             # for wavelet segments: (same as self.species!="Any sound")
             y1 = subfilter["FreqRange"][0]
-            y2 = min(subfilter["FreqRange"][1], self.sampleRate//2)
+            y2 = min(subfilter["FreqRange"][1], self.sp.sampleRate//2)
             for s in segmentsNew:
                 segment = Segment.Segment([s[0][0], s[0][1], y1, y2, [{"species": species, "certainty": s[1], "filter": filtName, "calltype": subfilter["calltype"]}]])
                 segmentsList.addSegment(segment)
@@ -816,7 +817,7 @@ class AviaNZ_batchProcess():
         segmentList.metadata["Operator"] = "Auto"
         segmentList.metadata["Reviewer"] = ""
         if self.method != "Intermittent sampling":
-            segmentList.metadata["Duration"] = float(self.datalength)/self.sampleRate
+            segmentList.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
         segmentList.metadata["noiseLevel"] = None
         segmentList.metadata["noiseTypes"] = []
 
@@ -834,20 +835,20 @@ class AviaNZ_batchProcess():
         # Read audiodata or spectrogram
         if self.method == "Click":  # old bat method
             self.sp.readBmp(self.filename, rotate=False)
-            self.sampleRate = self.sp.sampleRate
+            #self.sampleRate = self.sp.sampleRate
             self.datalength = self.sp.fileLength
         elif self.method == "Bats":
             self.sp = SignalProc.SignalProc(512, 256)
             self.sp.readBmp(self.filename, rotate=True, repeat=False)
-            self.sampleRate = self.sp.sampleRate
+            #self.sampleRate = self.sp.sampleRate
             self.datalength = self.sp.fileLength
         else:
             self.sp.readWav(self.filename)
-            self.sampleRate = self.sp.sampleRate
-            self.audiodata = self.sp.data
+            #self.sampleRate = self.sp.sampleRate
+            #self.audiodata = self.sp.data
 
-            self.datalength = np.shape(self.audiodata)[0]
-            print("Read %d samples, %f s at %d Hz" % (len(self.audiodata), float(self.datalength)/self.sampleRate, self.sampleRate))
+            self.datalength = np.shape(self.sp.data)[0]
+            print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(self.datalength)/self.sp.sampleRate, self.sp.sampleRate))
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
@@ -856,12 +857,12 @@ class AviaNZ_batchProcess():
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
             self.segments.metadata["Reviewer"] = ""
-            self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
+            self.segments.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
             # wipe all segments:
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sp.sampleRate)
             if not hasmetadata:
                     # TODO: Should save this...
                     self.segments.metadata["Operator"] = "Auto"
@@ -885,7 +886,7 @@ class AviaNZ_batchProcess():
                 self.sp.data = self.sp.impMask(engp=70, fp=0.50)
             else:
                 self.sp.data = self.sp.impMask()
-            self.audiodata = self.sp.data
+            #self.audiodata = self.sp.data
 
     def ClickSearch(self, imspec, file,virginia=True):
         """
@@ -910,8 +911,8 @@ class AviaNZ_batchProcess():
         featuress = []
         count = 0
 
-        df=self.sampleRate//2 /(np.shape(imspec)[0]+1)  # frequency increment
-        dt=self.sp.incr/self.sampleRate  # self.sp.incr is set to 512 for bats
+        df=self.sp.sampleRate//2 /(np.shape(imspec)[0]+1)  # frequency increment
+        dt=self.sp.incr/self.sp.sampleRate  # self.sp.incr is set to 512 for bats
         # dt=0.002909090909090909
         # up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
         up_len=17
@@ -1156,7 +1157,7 @@ class AviaNZ_batchProcess():
                             fn = filename[:-5]
                             #print(fn,os.path.join(root, fn))
                             self.sp.readBmp(os.path.join(root, fn), rotate=False,silent=True)
-                            self.sampleRate = self.sp.sampleRate
+                            #self.sampleRate = self.sp.sampleRate
                             res = self.ClickSearch(self.sp.sg,None,virginia=False)
                             if res is not None:
                                 length = "{:.2f}".format((res[1]-res[0])*dt)
