@@ -27,7 +27,7 @@
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
 from PyQt6.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
-from PyQt6.QtMultimedia import QAudio, QAudioOutput
+from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink #,QMediaPlayer
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
@@ -235,7 +235,7 @@ class ShadedROI(pg.ROI):
             self.setPen(QtGui.QPen(QtGui.QColor(255, 0, 0, 255)))
         p.save()
         r = self.boundingRect()
-        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         p.setPen(self.currentPen)
         p.setBrush(self.currentBrush)
 
@@ -370,7 +370,8 @@ class ShadedRectROI(ShadedROI):
             return
 
         if self.translatable and self.isMoving and ev.buttons() != self.parent.MouseDrawingButton:
-            snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
+            snap = True if (ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier) else None
+            #snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
             newPos = self.mapToParent(ev.pos()) + self.cursorOffset
             self.translate(newPos - self.pos(), snap=snap, finish=False)
 
@@ -696,42 +697,46 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
             pg.GraphicsLayoutWidget.resizeEvent(self, e)
 
 
-class ControllableAudio(QAudioOutput):
+class ControllableAudio(QAudioSink):
     # This links all the PyQt6 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
     def __init__(self, format, loop=False):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
-        self.setNotifyInterval(30)
+        # SRM -- change
+        #self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
+
         self.tempin = QBuffer()
         self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
         self.keepSlider = False
         self.loop = loop
-        #self.format = format
+        self.format = format
         # set small buffer (10 ms) and use processed time
-        self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
+        # SRM: TODO!
+        self.setBufferSize(16 * self.format.sampleRate()//100 * self.format.channelCount())
+        #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
     def isPlaying(self):
-        return(self.state() == QAudio.ActiveState)
+        return(self.state() == QAudio.State.ActiveState)
 
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
-        if self.state() == QAudio.IdleState:
+        if self.state() == QAudio.State.IdleState:
             if self.loop:
                 self.restart()
                 return
             # give some time for GUI to catch up and stop
             sleepCycles = 0
-            while(self.state() != QAudio.StoppedState and sleepCycles < 30):
+            while(self.state() != QAudio.State.StoppedState and sleepCycles < 30):
                 sleep(0.03)
                 sleepCycles += 1
                 # This loop stops when timeoffset+processedtime > designated stop position.
                 # By adding this offset, we ensure the loop stops even if
                 # processed audio timer breaks somehow.
                 self.timeoffset += 30
-                self.notify.emit()
+                #self.notify.emit()
             self.pressedStop()
 
     #def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
@@ -744,7 +749,7 @@ class ControllableAudio(QAudioOutput):
         # Otherwise assumes that the QAudioOutput was stopped/reset,
         # the updated position passed as start, and will
         # start anew from there.
-        if self.state() == QAudio.SuspendedState:
+        if self.state() == QAudio.State.SuspendedState:
             print("Resuming the segment %d-%d ms" % (start,stop))
             self.resume()
         else:
@@ -782,8 +787,8 @@ class ControllableAudio(QAudioOutput):
         # Selects the data between start-stop ms, relative to file start,
         # bandpasses it and plays it.
         self.timeoffset = max(0, start)
-        start = max(0, start * self.format().sampleRate() // 1000)
-        stop = min(stop * self.format().sampleRate() // 1000, len(audiodata))
+        start = max(0, start * self.format.sampleRate() // 1000)
+        stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[int(start):int(stop)]
         segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
@@ -793,8 +798,8 @@ class ControllableAudio(QAudioOutput):
         # Selects the data between start-stop ms, relative to file start
         # and plays it.
         self.timeoffset = max(0, start)
-        start = max(0, int(start * self.format().sampleRate() // 1000))
-        stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
+        start = max(0, int(start * self.format.sampleRate() // 1000))
+        stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
         if speed != 1.0:
            segment = SignalProc.wsola(segment,speed) 
@@ -803,31 +808,35 @@ class ControllableAudio(QAudioOutput):
     def loadArray(self, audiodata):
         # Plays the entire audiodata: puts it onto a buffer
         # and then starts the QAudioOutput from that buffer
-        if self.format().sampleSize() == 16:
-            audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
-        elif self.format().sampleSize() == 32:
-            audiodata = audiodata.astype('int32')
-        elif self.format().sampleSize() == 24:
-            audiodata = audiodata.astype('int32')
-            print("Warning: 24-bit sample playback currently not supported")
-        elif self.format().sampleSize() == 8:
-            audiodata = audiodata.astype('uint8')
-        else:
-            print("ERROR: sampleSize %d not supported" % self.format().sampleSize())
-            return
+        # SRM: TODO!! -- sampleFormat is the thing I think
+        audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
+        #if self.format().sampleSize() == 16:
+            #audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
+        #elif self.format().sampleSize() == 32:
+            #audiodata = audiodata.astype('int32')
+        #elif self.format().sampleSize() == 24:
+            #audiodata = audiodata.astype('int32')
+            #print("Warning: 24-bit sample playback currently not supported")
+        #elif self.format().sampleSize() == 8:
+            #audiodata = audiodata.astype('uint8')
+        #else:
+            #print("ERROR: sampleSize %d not supported" % self.format().sampleSize())
+            #return
         # double mono sound to get two channels - simplifies reading
-        if self.format().channelCount()==2:
+        if self.format.channelCount()==2:
             audiodata = np.column_stack((audiodata, audiodata))
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
         # NOTE: scale=None rescales using data minimum/max. This can cause clipping. Use scale="none" if this causes weird playback sound issues.
         # in particular for 8bit samples, we need more scaling:
-        if self.format().sampleSize() == 8:
-            scale = (audiodata.min()/2, audiodata.max()*2)
-        else:
-            scale = None
-        wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
+        # SRM: TODO!
+        #if self.format().sampleSize() == 8:
+            #scale = (audiodata.min()/2, audiodata.max()*2)
+        #else:
+            #scale = None
+        #wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=None, sampwidth=2)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])
@@ -835,7 +844,7 @@ class ControllableAudio(QAudioOutput):
         if self.tempin.isOpen():
             self.tempin.close()
         self.tempin.setBuffer(self.temparr)
-        self.tempin.open(QIODevice.ReadOnly)
+        self.tempin.open(QIODevice.OpenModeFlag.ReadOnly)
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)

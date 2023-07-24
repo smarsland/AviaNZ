@@ -93,15 +93,16 @@ class SignalProc:
         self.sampleRate = wavobj.rate
 
         if QtMM:
-            # TODO!!!
             #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
             self.audioFormat.setSampleRate(self.sampleRate)
             # Only 8-bit WAVs are unsigned:
-            # TODO!!
-            #if wavobj.sampwidth==1:
-                #self.audioFormat.setSampleType(QAudioFormat.SampleFormat.UnSignedInt)
-            #else:
-                #self.audioFormat.setSampleType(QAudioFormat.SampleFormat.SignedInt)
+            # TODO!! Int16/Int32
+            if wavobj.sampwidth==1:
+                self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
+            elif wavobj.sampwidth==2:
+                self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+            else:
+                self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -113,7 +114,8 @@ class SignalProc:
 
         if not silent:
             if QtMM:
-                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+                print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
+                #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.

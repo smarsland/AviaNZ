@@ -47,7 +47,7 @@ from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow
 # The two below moved from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
-from PyQt6.QtMultimedia import QAudio
+from PyQt6.QtMultimedia import QAudio, QAudioDevice, QMediaDevices
 
 import wavio
 import numpy as np
@@ -1623,7 +1623,8 @@ class AviaNZ(QMainWindow):
                 self.placeInFileLabel.setText("of %d (%d s in page)" % (self.nFileSections, self.datalengthSec))
             self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
-            self.fileInfoSS.setText("<b>Bit depth:</b> %d" % self.sp.audioFormat.sampleSize())
+            # SRM: TODO
+            #self.fileInfoSS.setText("<b>Bit depth:</b> %d" % self.sp.audioFormat.sampleSize())
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sampleRate, 60))
 
             if not self.batmode:
@@ -1741,8 +1742,11 @@ class AviaNZ(QMainWindow):
             if not self.CLI:
                 # Load the file for playback
                 self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
+                # SRM: TODO!!
+                audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
-                self.media_obj.notify.connect(self.movePlaySlider)
+                # SRM: TODO!!
+                #self.media_obj.notify.connect(self.movePlaySlider)
 
                 # Reset the media player
                 self.stopPlayback()
@@ -2129,7 +2133,7 @@ class AviaNZ(QMainWindow):
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
         if hasattr(self, 'media_obj'):
-            if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState:
+            if self.media_obj.state() == QAudio.State.ActiveState or self.media_obj.state() == QAudio.State.SuspendedState:
                 self.stopPlayback()
 
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -3054,14 +3058,14 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 # Possibly, if they pressed the Windows key, use call type menu
                 modifiers = QApplication.keyboardModifiers()
-                if modifiers == Qt.ShiftModifier:
+                if modifiers == Qt.KeyboardModifier.ShiftModifier:
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                elif modifiers == Qt.ControlModifier:
+                elif modifiers == Qt.KeyboardModifier.ControlModifier:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                elif modifiers == Qt.MetaModifier:
+                elif modifiers == Qt.KeyboardModifier.MetaModifier:
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
@@ -3150,9 +3154,9 @@ class AviaNZ(QMainWindow):
                         if wasSelected==box1id:
                             # popup dialog
                             modifiers = QApplication.keyboardModifiers()
-                            if modifiers == Qt.ControlModifier:
+                            if modifiers == Qt.KeyboardModifier.ControlModifier:
                                 self.fillBirdList(unsure=True)
-                            elif modifiers == Qt.MetaModifier:
+                            elif modifiers == Qt.KeyboardModifier.MetaModifier:
                                 # TODO: SRM: Check
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
@@ -3251,14 +3255,14 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QApplication.keyboardModifiers()
-                if modifiers == Qt.ShiftModifier:
+                if modifiers == Qt.KeyboardModifier.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
-                elif modifiers == Qt.ControlModifier:
+                elif modifiers == Qt.KeyboardModifier.ControlModifier:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == Qt.MetaModifier:
+                elif modifiers == Qt.KeyboardModifier.MetaModifier:
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
@@ -3357,9 +3361,9 @@ class AviaNZ(QMainWindow):
                         # if this segment is clicked again, pop up bird menu:
                         if wasSelected==box1id:
                             modifiers = QApplication.keyboardModifiers()
-                            if modifiers == Qt.ControlModifier:
+                            if modifiers == Qt.KeyboardModifier.ControlModifier:
                                 self.fillBirdList(unsure=True)
-                            elif modifiers == Qt.MetaModifier:
+                            elif modifiers == Qt.KeyboardModifier.MetaModifier:
                                 # TODO: SRM: Check
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
@@ -3455,8 +3459,6 @@ class AviaNZ(QMainWindow):
         if birdname is None or birdname=='':
             return
 
-        # SRM
-        print("Here", birdname)
         # special dialog for manual name entry
         if birdname == 'Other':
             # Ask the user for the new name, and save it
@@ -5759,7 +5761,7 @@ class AviaNZ(QMainWindow):
             self.pausePlayback()
         else:
             self.playSpeed = 1.0
-            if self.media_obj.state() != QAudio.SuspendedState and not self.media_obj.keepSlider:
+            if self.media_obj.state() != QAudio.State.SuspendedState and not self.media_obj.keepSlider:
                 # restart playback
                 start,end = self.p_ampl.viewRange()[0]
                 # SRM
@@ -5897,7 +5899,7 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        # sm: todo!
+        # SRM: TODO!
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
         #eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
             
