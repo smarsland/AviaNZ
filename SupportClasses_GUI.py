@@ -26,7 +26,7 @@
 
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
-from PyQt6.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
+from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot
 from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink #,QMediaPlayer
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
@@ -704,9 +704,11 @@ class ControllableAudio(QAudioSink):
     def __init__(self, format, loop=False):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
+        self.NotifyTimer = QTimer(self)
+        #self.NotifyTimer.timeout.connect(self.NotifyTimerTick)
         # SRM -- change
         #self.setNotifyInterval(30)
-        self.stateChanged.connect(self.endListener)
+        #self.stateChanged.connect(self.endListener)
 
         self.tempin = QBuffer()
         self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
@@ -723,6 +725,9 @@ class ControllableAudio(QAudioSink):
 
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
+        # SRM!!
+        print("endlistener")
+        print(self.state())
         if self.state() == QAudio.State.IdleState:
             if self.loop:
                 self.restart()
@@ -743,8 +748,9 @@ class ControllableAudio(QAudioSink):
         #if not resetPause and self.state() == QAudio.SuspendedState:
             #print("Resuming at: %d" % self.pauseoffset)
             #self.sttime = time.time() - self.pauseoffset/1000
+
     def pressedPlay(self, start=0, stop=0, audiodata=None):
-        # If playback bar is not moved, this can use resume() to
+        # If playback bar has not moved, this can use resume() to
         # continue from the same spot.
         # Otherwise assumes that the QAudioOutput was stopped/reset,
         # the updated position passed as start, and will
@@ -752,6 +758,7 @@ class ControllableAudio(QAudioSink):
         if self.state() == QAudio.State.SuspendedState:
             print("Resuming the segment %d-%d ms" % (start,stop))
             self.resume()
+            self.NotifyTimer.start(30)
         else:
             if not self.keepSlider: #or resetPause:
                 self.pressedStop()
@@ -766,6 +773,7 @@ class ControllableAudio(QAudioSink):
             #self.filterSeg(pos, stop, audiodata)
             sleep(0.1)
             print("Playing segment: %d-%d ms" %(start, stop))
+            #self.NotifyTimer.start(30)
             self.filterSeg(start, stop, audiodata)
 
     def pressedPause(self):
@@ -775,11 +783,13 @@ class ControllableAudio(QAudioSink):
         ## store offset, relative to the start of played segment
         #self.pauseoffset = pos + self.timeoffset
         self.suspend()
+        self.NotifyTimer.stop()
 
     def pressedStop(self):
         # stop and reset to window/segment start
         self.keepSlider=False
         self.stop()
+        self.NotifyTimer.stop()
         if self.tempin.isOpen():
             self.tempin.close()
 
@@ -848,14 +858,16 @@ class ControllableAudio(QAudioSink):
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
-        #self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
+        self.NotifyTimer.start(30)
+        #self.sttime = time.time() - self.timeoffset/1000
 
     def restart(self):
         # self.timeoffset = ? does this need to be fixed?
         self.tempin.seek(0)
-        #self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
+        self.NotifyTimer.start(30)
+        #self.sttime = time.time() - self.timeoffset/1000
 
     #def seekToMs(self, ms, start):
         #print("Seeking to %d ms" % ms)
@@ -870,6 +882,14 @@ class ControllableAudio(QAudioSink):
         value = (math.exp(value/50)-1)/(math.exp(2)-1)
         self.setVolume(value)
 
+    @pyqtSlot()
+    def NotifyTimerTick(self):
+        print("here")
+        #if self.m_audioSink is not None and self.m_audioSink.state() != QAudio.State.StoppedState:
+            #bytes_free = self.m_audioSink.bytesFree()
+            #data = self.m_generator.read(bytes_free)
+            #if data:
+                #self.m_output.write(data)
 
 class FlowLayout(QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as

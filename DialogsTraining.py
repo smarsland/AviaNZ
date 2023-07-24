@@ -85,8 +85,8 @@ class BuildRecAdvWizard(QWizard):
             space.setFixedHeight(20)
 
             # SampleRate parameter
-            self.fs = QSlider(Qt.Horizontal)
-            self.fs.setTickPosition(QSlider.TicksBelow)
+            self.fs = QSlider(Qt.Orientation.Horizontal)
+            self.fs.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.fs.setTickInterval(2000)
             self.fs.setRange(0, 32000)
             self.fs.setValue(0)
@@ -938,8 +938,8 @@ class BuildRecAdvWizard(QWizard):
                 return
 
             # FreqRange parameters
-            self.fLow = QSlider(Qt.Horizontal)
-            self.fLow.setTickPosition(QSlider.TicksBelow)
+            self.fLow = QSlider(Qt.Orientation.Horizontal)
+            self.fLow.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.fLow.setTickInterval(2000)
             self.fLow.setRange(0, 32000)
             self.fLow.setSingleStep(100)
@@ -947,8 +947,8 @@ class BuildRecAdvWizard(QWizard):
             self.fLowtext = QLabel('')
             form1_step4.addRow('', self.fLowtext)
             form1_step4.addRow('Lower frq. limit (Hz)', self.fLow)
-            self.fHigh = QSlider(Qt.Horizontal)
-            self.fHigh.setTickPosition(QSlider.TicksBelow)
+            self.fHigh = QSlider(Qt.Orientation.Horizontal)
+            self.fHigh.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.fHigh.setTickInterval(2000)
             self.fHigh.setRange(0, 32000)
             self.fHigh.setSingleStep(100)
@@ -2251,8 +2251,8 @@ class BuildCNNWizard(QWizard):
             self.redopages = True
 
             # Parameter/s
-            self.imgsec = QSlider(Qt.Horizontal)
-            self.imgsec.setTickPosition(QSlider.TicksBelow)
+            self.imgsec = QSlider(Qt.Orientation.Horizontal)
+            self.imgsec.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.imgsec.setTickInterval(25)
             self.imgsec.setRange(0, 600)  # 0-6 sec
             self.imgsec.setValue(25)
@@ -2263,16 +2263,16 @@ class BuildCNNWizard(QWizard):
             self.cbfrange.setStyleSheet("QCheckBox { font-weight: bold; }")
             self.cbfrange.toggled.connect(self.onClickedFrange)
 
-            self.f1 = QSlider(Qt.Horizontal)
-            self.f1.setTickPosition(QSlider.TicksBelow)
+            self.f1 = QSlider(Qt.Orientation.Horizontal)
+            self.f1.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.f1.setTickInterval(1000)
             # self.f1.setRange(0, self.cnntrain.fs)  # 0-6 sec
             # self.f1.setValue(self.cnntrain.f1)
             # self.f1.valueChanged.connect(self.f1Change)
             self.f1text = QLabel('')
 
-            self.f2 = QSlider(Qt.Horizontal)
-            self.f2.setTickPosition(QSlider.TicksBelow)
+            self.f2 = QSlider(Qt.Orientation.Horizontal)
+            self.f2.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.f2.setTickInterval(1000)
             # self.f2.setRange(0, self.cnntrain.fs)  # 0-6 sec
             # self.f2.setValue(self.cnntrain.f2)
@@ -2894,12 +2894,12 @@ class FilterCustomiseROC(QDialog):
             oldlbl.setStyleSheet("QLabel { color: #808080}")
 
             if slider:
-                slid = QSlider(Qt.Horizontal)
+                slid = QSlider(Qt.Orientation.Horizontal)
                 slid.setMinimum(minimum*1000)
                 slid.setMaximum(maximum*1000)
                 slid.setValue(round(initial*1000))
                 slid.setTickInterval(1000)
-                slid.setTickPosition(QSlider.TicksBelow)
+                slid.setTickPosition(QSlider.TickPosition.TicksBelow)
                 slid.valueChanged.connect(self.updatelbl)
 
             box = QHBoxLayout()

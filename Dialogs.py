@@ -190,8 +190,8 @@ class Spectrogram(QDialog):
         self.equal_loudness = QCheckBox()
         self.equal_loudness.setChecked(False)
 
-        self.low = QSlider(Qt.Horizontal)
-        self.low.setTickPosition(QSlider.TicksBelow)
+        self.low = QSlider(Qt.Orientation.Horizontal)
+        self.low.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.low.setTickInterval(1000)
         self.low.setSingleStep(100)
         self.low.valueChanged.connect(self.lowChange)
@@ -199,8 +199,8 @@ class Spectrogram(QDialog):
         self.lowtext.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.lowChange(minFreqShow)
 
-        self.high = QSlider(Qt.Horizontal)
-        self.high.setTickPosition(QSlider.TicksBelow)
+        self.high = QSlider(Qt.Orientation.Horizontal)
+        self.high.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.high.setTickInterval(1000)
         self.high.setSingleStep(100)
         self.high.valueChanged.connect(self.highChange)
@@ -907,8 +907,8 @@ class Segmentation(QDialog):
         self.medThr.setValue(3)
 
         # set min seg size for median clipping
-        self.medSize = QSlider(Qt.Horizontal)
-        self.medSize.setTickPosition(QSlider.TicksBelow)
+        self.medSize = QSlider(Qt.Orientation.Horizontal)
+        self.medSize.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.medSize.setTickInterval(100)
         self.medSize.setRange(100,2000)
         self.medSize.setSingleStep(100)
@@ -1013,8 +1013,8 @@ class Segmentation(QDialog):
 
         Box.addWidget(self.CCThr1)
 
-        self.medSize = QSlider(Qt.Horizontal)
-        self.medSize.setTickPosition(QSlider.TicksBelow)
+        self.medSize = QSlider(Qt.Orientation.Horizontal)
+        self.medSize.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.medSize.setTickInterval(100)
         self.medSize.setRange(100,2000)
         self.medSize.setSingleStep(100)
@@ -1037,8 +1037,8 @@ class Segmentation(QDialog):
         self.maxlen.setValue(10)
 
         # Sliders for minlen and maxgap are in ms scale
-        self.minlen = QSlider(Qt.Horizontal)
-        self.minlen.setTickPosition(QSlider.TicksBelow)
+        self.minlen = QSlider(Qt.Orientation.Horizontal)
+        self.minlen.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.minlen.setTickInterval(500)
         self.minlen.setRange(100, 10000)
         self.minlen.setSingleStep(100)
@@ -1046,8 +1046,8 @@ class Segmentation(QDialog):
         self.minlen.valueChanged.connect(self.minLenChange)
         self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
 
-        self.maxgap = QSlider(Qt.Horizontal)
-        self.maxgap.setTickPosition(QSlider.TicksBelow)
+        self.maxgap = QSlider(Qt.Orientation.Horizontal)
+        self.maxgap.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.maxgap.setTickInterval(250)
         self.maxgap.setRange(50, 4000)
         self.maxgap.setSingleStep(50)
@@ -1267,7 +1267,7 @@ class Denoise(QDialog):
         self.bandlabel = QLabel("Bandpass Filter")
         self.wblabel = QLabel("Wavelets and Bandpass Filter")
         self.blabel = QLabel("Start and end points of the band")
-        self.low = QSlider(Qt.Horizontal)
+        self.low = QSlider(Qt.Orientation.Horizontal)
         self.low.setTickPosition(QSlider.TicksBelow)
         self.low.setTickInterval(1000)
         self.low.setRange(minFreq,maxFreq)
@@ -1275,7 +1275,7 @@ class Denoise(QDialog):
         self.low.setValue(minFreq)
         self.low.valueChanged.connect(self.lowChange)
         self.lowtext = QLabel(str(self.low.value()))
-        self.high = QSlider(Qt.Horizontal)
+        self.high = QSlider(Qt.Orientation.Horizontal)
         self.high.setTickPosition(QSlider.TicksBelow)
         self.high.setTickInterval(1000)
         self.high.setRange(minFreq,maxFreq)

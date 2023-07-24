@@ -1746,7 +1746,7 @@ class AviaNZ(QMainWindow):
                 audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
                 # SRM: TODO!!
-                #self.media_obj.notify.connect(self.movePlaySlider)
+                self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
 
                 # Reset the media player
                 self.stopPlayback()
@@ -5756,18 +5756,19 @@ class AviaNZ(QMainWindow):
             # Currently playback disabled in this mode - also takes care of spacebar signal
             return
 
-
         if self.media_obj.isPlaying():
             self.pausePlayback()
         else:
             self.playSpeed = 1.0
             if self.media_obj.state() != QAudio.State.SuspendedState and not self.media_obj.keepSlider:
+                #print("restart playback")
                 # restart playback
                 start,end = self.p_ampl.viewRange()[0]
                 # SRM
                 self.setPlaySliderLimits(start*1000, end*1000)
                 # (else keep play slider range from before)
             else:
+                #print("resume playback")
                 print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
             self.bar.setMovable(False)
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
@@ -5787,6 +5788,7 @@ class AviaNZ(QMainWindow):
                 start = self.convertSpectoAmpl(self.bar.value())*1000  # in ms
                 print("found bar at %d ms" % start)
             else:
+                #print("segStart")
                 start = self.segmentStart
             # (will not be used if resuming without touching the bar)
 
@@ -5819,6 +5821,7 @@ class AviaNZ(QMainWindow):
                 self.playBandLimitedSegButton.repaint()
                 QApplication.processEvents()
 
+                #print("filterseg")
                 self.media_obj.filterSeg(start, stop, self.audiodata,self.playSpeed)
             else:
                 print("Can't play, no segment selected")
@@ -5855,12 +5858,14 @@ class AviaNZ(QMainWindow):
                 QApplication.processEvents()
 
                 # filter the data into a temporary file or buffer
+                #print("bandseg")
                 self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
             else:
                 print("Can't play, no segment selected")
 
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
+        #print("pause")
         self.media_obj.pressedPause()
         self.bar.setMovable(True)
 
@@ -5877,6 +5882,7 @@ class AviaNZ(QMainWindow):
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
+        #print("stop")
         self.bar.setMovable(True)
         self.media_obj.pressedStop()
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
@@ -5900,6 +5906,7 @@ class AviaNZ(QMainWindow):
         Controls the slider, text timer, and listens for playback finish.
         """
         # SRM: TODO!
+        #print("yep", self.media_obj.processedUSecs())
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
         #eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
             
@@ -5917,6 +5924,7 @@ class AviaNZ(QMainWindow):
             #self.playSlider.setValue(int(eltime))
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
             # SRM: int
+            #print(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
             self.bar.setValue(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
 
     def setPlaySliderLimits(self, start, end):
@@ -5946,9 +5954,9 @@ class AviaNZ(QMainWindow):
         """
         #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
         #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
-        print("Resetting playback")
+        #print("Resetting playback")
         self.media_obj.reset()
-        self.media_slow.reset()
+        #self.media_slow.reset()
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
