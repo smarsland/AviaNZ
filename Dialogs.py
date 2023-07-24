@@ -1727,8 +1727,9 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        self.media_obj2 = SupportClasses_GUI.ControllableAudio(audioFormat)
-        self.media_obj2.notify.connect(self.endListener)
+        self.media_obj2 = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
+        self.media_obj2.NotifyTimer.timeout.connect(self.endListener)
+        #self.media_obj2.notify.connect(self.endListener)
         self.media_obj2.loop = loop
         self.autoplay = autoplay
 

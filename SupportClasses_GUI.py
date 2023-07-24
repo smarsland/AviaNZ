@@ -1077,7 +1077,7 @@ class PicButton(QAbstractButton):
 
         # playback things
         self.media_obj = ControllableAudio(format)
-        self.media_obj.notify.connect(self.endListener)
+        self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
