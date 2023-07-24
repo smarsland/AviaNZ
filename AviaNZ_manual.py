@@ -1475,7 +1475,7 @@ class AviaNZ(QMainWindow):
 
         return(0)
 
-    def loadFile(self, name=None, cs=False):
+    def loadFile(self, name=None):
         """ This does the work of loading a file.
         We are using wavio to do the reading. We turn the data into a float, but do not normalise it (/2^(15)).
         For 2 channels, just take the first one.
@@ -1576,7 +1576,7 @@ class AviaNZ(QMainWindow):
                 self.sp.readWav(self.filename, lenRead, self.startRead)
 
                 # resample to 16K if needed (SignalProc will determine)
-                if cs:
+                if self.cheatsheet:
                     self.sp.resample(16000)
                     self.sp.maxFreqShow = 8000
 
@@ -1742,7 +1742,7 @@ class AviaNZ(QMainWindow):
 
             if not self.CLI:
                 # Load the file for playback
-                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
+                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp)
                 audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
                 self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
@@ -5791,7 +5791,8 @@ class AviaNZ(QMainWindow):
                 start = self.segmentStart
             # (will not be used if resuming without touching the bar)
 
-            self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.sp.data)
+            self.media_obj.pressedPlay(start=start, stop=self.segmentStop) #, audiodata=self.sp.data)
+            #self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.sp.data)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -5821,7 +5822,8 @@ class AviaNZ(QMainWindow):
                 QApplication.processEvents()
 
                 #print("filterseg")
-                self.media_obj.filterSeg(start, stop, self.sp.data,self.playSpeed)
+                self.media_obj.filterSeg(start, stop, self.playSpeed) #self.sp.data,self.playSpeed)
+                #self.media_obj.filterSeg(start, stop, self.sp.data,self.playSpeed)
             else:
                 print("Can't play, no segment selected")
 
@@ -5858,7 +5860,7 @@ class AviaNZ(QMainWindow):
 
                 # filter the data into a temporary file or buffer
                 #print("bandseg")
-                self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.sp.data, self.sp)
+                self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top)
             else:
                 print("Can't play, no segment selected")
 
@@ -5952,7 +5954,7 @@ class AviaNZ(QMainWindow):
         """
         #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
         #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
-        #print("Resetting playback")
+        print("Resetting playback")
         self.media_obj.reset()
         #self.media_slow.reset()
 

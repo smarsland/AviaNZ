@@ -1727,7 +1727,8 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        self.media_obj2 = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
+        #self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
+        self.media_obj2 = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
         self.media_obj2.NotifyTimer.timeout.connect(self.endListener)
         #self.media_obj2.notify.connect(self.endListener)
         self.media_obj2.loop = loop
@@ -1787,7 +1788,7 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.numberLeft)
 
         self.playButton = QToolButton()
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
         self.playButton.clicked.connect(self.playSeg)
 
@@ -1848,13 +1849,13 @@ class HumanClassify1(QDialog):
         if self.media_obj2.isPlaying():
             self.stopPlayback()
         else:
-            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.playButton.setIconSize(QSize(40, 40))
             self.media_obj2.loadArray(self.audiodata)
 
     def stopPlayback(self):
         self.media_obj2.pressedStop()
-        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
 
     def volSliderMoved(self, value):
@@ -2462,19 +2463,22 @@ class HumanClassify2(QDialog):
         self.pageLabel = QLabel()
 
         self.none = QPushButton("Toggle all")
-        self.none.setSizePolicy(QSizePolicy(5,5))
+        #self.none.setSizePolicy(QSizePolicy(5,5))
+        self.none.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         self.none.setMaximumSize(250, 30)
         self.none.clicked.connect(self.toggleAll)
 
         # Either the next or finish button is visible. They have different internal
         # functionality, but look the same to the user
         self.next = QPushButton("Next")
-        self.next.setSizePolicy(QSizePolicy(5,5))
+        #self.next.setSizePolicy(QSizePolicy(5,5))
+        self.next.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         self.next.setMaximumSize(250, 30)
         self.next.clicked.connect(self.nextPage)
 
         self.finish = QPushButton("Next")
-        self.finish.setSizePolicy(QSizePolicy(5,5))
+        #self.finish.setSizePolicy(QSizePolicy(5,5))
+        self.finish.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         self.finish.setMaximumSize(250, 30)
 
         # movement buttons and page numbers
@@ -2510,11 +2514,13 @@ class HumanClassify2(QDialog):
         # Freq axes
         self.flowAxes = pg.LayoutWidget()
         self.flowAxes.setMinimumSize(70, self.specV+20)
-        self.flowAxes.setSizePolicy(0, 5)
+        #self.flowAxes.setSizePolicy(0, 5)
+        self.flowAxes.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.MinimumExpanding)
         # Time axes
         self.flowAxesT = pg.LayoutWidget()
         self.flowAxesT.setMinimumSize(self.specH+20, 40)
-        self.flowAxesT.setSizePolicy(5, 0)
+        #self.flowAxesT.setSizePolicy(5, 0)
+        self.flowAxesT.setSizePolicy(QSizePolicy.Policy.MinimumExpanding,QSizePolicy.Policy.Fixed)
         self.flowAxesT.layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         gridFlowAndAxes = QGridLayout()
@@ -2528,18 +2534,19 @@ class HumanClassify2(QDialog):
         self.vboxFull = QVBoxLayout()
         # self.vboxFull.setSpacing(0)
         self.vboxFull.addLayout(vboxTop)
-        self.vboxSpacer = QSpacerItem(1,1, 5, 5)
+        self.vboxSpacer = QSpacerItem(1,1, QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         self.vboxFull.addItem(self.vboxSpacer)
         self.vboxFull.addLayout(gridFlowAndAxes)
         self.vboxFull.addLayout(self.vboxBot)
         # must be fixed size!
-        vboxTop.setSizeConstraint(QLayout.SetFixedSize)
+        vboxTop.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         # must be fixed size!
-        self.vboxBot.setSizeConstraint(QLayout.SetFixedSize)
+        self.vboxBot.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
         # we need to know the true size of space available for flowLayout.
         # the idea is that spacer absorbs all height changes
-        self.setSizePolicy(1,1)
+        #self.setSizePolicy(1,1)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
         self.setMinimumSize(self.specH+100, self.specV+100)
         self.setLayout(self.vboxFull)
         self.vboxFull.setStretch(1, 100)

@@ -72,14 +72,16 @@ class SplitData(QMainWindow):
         self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.clicked.connect(self.browse)
-        self.w_browse.setSizePolicy(QSizePolicy(1,1))
+        #self.w_browse.setSizePolicy(QSizePolicy(1,1))
+        self.w_browse.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
 
         # area showing the selected folder
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(40)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
-        self.w_dir.setSizePolicy(QSizePolicy(3,1))
+        #self.w_dir.setSizePolicy(QSizePolicy(3,1))
+        self.w_dir.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Minimum)
 
 
         ## output
@@ -89,14 +91,16 @@ class SplitData(QMainWindow):
         self.w_browseO.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_browseO.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browseO.clicked.connect(self.browseO)
-        self.w_browseO.setSizePolicy(QSizePolicy(1,1))
+        #self.w_browseO.setSizePolicy(QSizePolicy(1,1))
+        self.w_browseO.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
 
         # area showing the selected folder
         self.w_dirO = QPlainTextEdit()
         self.w_dirO.setFixedHeight(40)
         self.w_dirO.setPlainText('')
         self.w_dirO.setToolTip("Split files will be placed here")
-        self.w_dirO.setSizePolicy(QSizePolicy(3,1))
+        #self.w_dirO.setSizePolicy(QSizePolicy(3,1))
+        self.w_dirO.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Minimum)
 
 
         ## split length
@@ -126,6 +130,8 @@ class SplitData(QMainWindow):
 
 
         ## groups
+        # SRM: Likely that these will need the last numbers changed
+        # 1: Qt.AlignmentFlag.AlignLeft 2: AlignRight 3: AlignHCenter 4: AlignJustify
         inputGroup = QGroupBox("Input")
         inputGrid = QGridLayout()
         inputGroup.setLayout(inputGrid)
@@ -156,20 +162,24 @@ class SplitData(QMainWindow):
         ## add everything to the main layout
         grid.addWidget(inputGroup, 0, 0, 2, 4)
         grid.addWidget(outputGroup, 2, 0, 2, 4)
-        grid.addItem(QSpacerItem(4, 0, 1, 4))
+        grid.addItem(QSpacerItem(4, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred))
         grid.addWidget(self.labelSum, 5, 0, 1, 4)
         grid.addWidget(self.splitBut, 6, 1, 1, 2)
 
         #inputGrid.setSizeConstraint(QLayout.SetFixedSize)
         #outputGrid.setSizeConstraint(QLayout.SetFixedSize)
-        inputGroup.setSizePolicy(QSizePolicy(1,5))
+        #inputGroup.setSizePolicy(QSizePolicy(1,5))
+        inputGroup.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.MinimumExpanding)
         inputGroup.setMinimumSize(400, 220)
-        outputGroup.setSizePolicy(QSizePolicy(1,5))
+        #outputGroup.setSizePolicy(QSizePolicy(1,5))
+        outputGroup.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.MinimumExpanding)
         outputGroup.setMinimumSize(400, 180)
         grid.setSizeConstraint(QLayout.SetMinimumSize)
-        area.setSizePolicy(QSizePolicy(1,5))
+        #area.setSizePolicy(QSizePolicy(1,5))
+        area.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.MinimumExpanding)
         area.setMinimumSize(400, 400)
-        self.setSizePolicy(QSizePolicy(1,1))
+        #self.setSizePolicy(QSizePolicy(1,1))
+        self.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
         self.setMinimumSize(200, 400)
         self.show()
 

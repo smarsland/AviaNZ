@@ -25,7 +25,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt6 import QtCore, QtGui
-from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
+from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy
 from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot
 from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink #,QMediaPlayer
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
@@ -124,7 +124,7 @@ class AxisWidget(QAbstractButton):
         self.sgsize = sgsize
 
         # fixed size
-        self.setSizePolicy(0,0)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed)
         self.setMinimumSize(70, sgsize)
         self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 13)
 
@@ -177,7 +177,7 @@ class TimeAxisWidget(QAbstractButton):
         self.maxTime = maxTime
 
         # fixed size
-        self.setSizePolicy(0,0)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed)
         self.setMinimumSize(sgsize, 40)
         self.setMaximumSize(sgsize, 50)
         self.fontsize = min(max(int(math.sqrt(sgsize)*0.55), 9), 13)
@@ -701,23 +701,35 @@ class ControllableAudio(QAudioSink):
     # This links all the PyQt6 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
-    def __init__(self, format, loop=False):
-        super(ControllableAudio, self).__init__(format)
+    def __init__(self, sp, loop=False, audioFormat=None):
+        if sp is not None:
+            super(ControllableAudio, self).__init__(sp.audioFormat)
+            print("SP")
+        else:
+            if audioFormat is None:
+                print("Error!!: audioFormat needed")
+                return
+            super(ControllableAudio, self).__init__(audioFormat)
+            print("not SP")
+            self.audioFormat = audioFormat
         # on this notify, move slider (connected in main file)
         self.NotifyTimer = QTimer(self)
         #self.NotifyTimer.timeout.connect(self.NotifyTimerTick)
         # SRM -- change
         #self.setNotifyInterval(30)
-        #self.stateChanged.connect(self.endListener)
+        self.stateChanged.connect(self.endListener)
 
         self.tempin = QBuffer()
         self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
         self.keepSlider = False
         self.loop = loop
-        self.format = format
+        self.sp = sp
         # set small buffer (10 ms) and use processed time
         # SRM: TODO!
-        self.setBufferSize(16 * self.format.sampleRate()//100 * self.format.channelCount())
+        if sp is not None:
+            self.setBufferSize(16 * self.sp.audioFormat.sampleRate()//100 * self.sp.audioFormat.channelCount())
+        else:
+            self.setBufferSize(16 * self.audioFormat.sampleRate()//100 * self.audioFormat.channelCount())
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
     def isPlaying(self):
@@ -728,6 +740,8 @@ class ControllableAudio(QAudioSink):
         # SRM!!
         print("endlistener")
         print(self.state())
+        print(self.error())
+        return
         if self.state() == QAudio.State.IdleState:
             if self.loop:
                 self.restart()
@@ -749,7 +763,7 @@ class ControllableAudio(QAudioSink):
             #print("Resuming at: %d" % self.pauseoffset)
             #self.sttime = time.time() - self.pauseoffset/1000
 
-    def pressedPlay(self, start=0, stop=0, audiodata=None):
+    def pressedPlay(self, start=0, stop=0):#, audiodata=None):
         # If playback bar has not moved, this can use resume() to
         # continue from the same spot.
         # Otherwise assumes that the QAudioOutput was stopped/reset,
@@ -760,7 +774,9 @@ class ControllableAudio(QAudioSink):
             self.resume()
             self.NotifyTimer.start(30)
         else:
+            print("not resuming")
             if not self.keepSlider: #or resetPause:
+                print("bar moved")
                 self.pressedStop()
 
             #print("Starting at: %d" % self.tempin.pos())
@@ -771,10 +787,10 @@ class ControllableAudio(QAudioSink):
             #pos = pos + start
             #print("Pos: %d start: %d stop %d" %(pos, start, stop))
             #self.filterSeg(pos, stop, audiodata)
-            sleep(0.1)
+            #sleep(0.1)
             print("Playing segment: %d-%d ms" %(start, stop))
             #self.NotifyTimer.start(30)
-            self.filterSeg(start, stop, audiodata)
+            self.filterSeg(start, stop) #, audiodata)
 
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
@@ -793,26 +809,37 @@ class ControllableAudio(QAudioSink):
         if self.tempin.isOpen():
             self.tempin.close()
 
-    def filterBand(self, start, stop, low, high, audiodata, sp):
+    def filterBand(self, start, stop, low, high):
         # Selects the data between start-stop ms, relative to file start,
         # bandpasses it and plays it.
         self.timeoffset = max(0, start)
-        start = max(0, start * self.format.sampleRate() // 1000)
-        stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
-        segment = audiodata[int(start):int(stop)]
-        segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
+        start = max(0, start * self.sp.audioFormat.sampleRate() // 1000)
+        stop = min(stop * self.sp.audioFormat.sampleRate() // 1000, len(self.sp.data))
+        segment = self.sp.data[int(start):int(stop)]
+        #segment = audiodata[int(start):int(stop)]
+        segment = self.sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
 
-    def filterSeg(self, start, stop, audiodata, speed = 1.0):
+    #def filterSeg(self, start, stop, audiodata, speed = 1.0):
+    def filterSeg(self, start, stop, speed = 1.0, audiodata=None):
         # Selects the data between start-stop ms, relative to file start
         # and plays it.
         self.timeoffset = max(0, start)
-        start = max(0, int(start * self.format.sampleRate() // 1000))
-        stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
-        segment = audiodata[start:stop]
+
+        print(self.sp)
+        if self.sp is not None:
+            start = max(0, int(start * self.sp.audioFormat.sampleRate() // 1000))
+            stop = min(int(stop * self.sp.audioFormat.sampleRate() // 1000), len(self.sp.data))
+            segment = self.sp.data[start:stop]
+        else:
+            start = max(0, int(start * self.audioFormat.sampleRate() // 1000))
+            stop = min(int(stop * self.audioFormat.sampleRate() // 1000), len(audiodata))
+            segment = audiodata[start:stop]
+        #segment = audiodata[start:stop]
         if speed != 1.0:
-           segment = SignalProc.wsola(segment,speed) 
+           segment = sp.wsola(segment,speed) 
+           #segment = SignalProc.wsola(segment,speed) 
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
@@ -833,7 +860,10 @@ class ControllableAudio(QAudioSink):
             #print("ERROR: sampleSize %d not supported" % self.format().sampleSize())
             #return
         # double mono sound to get two channels - simplifies reading
-        if self.format.channelCount()==2:
+        if self.sp is not None:
+            if self.sp.audioFormat.channelCount()==2:
+                audiodata = np.column_stack((audiodata, audiodata))
+        elif self.audioFormat.channelCount()==2:
             audiodata = np.column_stack((audiodata, audiodata))
 
         # write filtered output to a BytesIO buffer
@@ -846,7 +876,10 @@ class ControllableAudio(QAudioSink):
         #else:
             #scale = None
         #wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=None, sampwidth=2)
+        if self.sp is not None:
+            wavio.write(self.tempout, audiodata, self.sp.audioFormat.sampleRate(), scale=None, sampwidth=2)
+        else:
+            wavio.write(self.tempout, audiodata, self.audioFormat.sampleRate(), scale=None, sampwidth=2)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])
@@ -1029,7 +1062,7 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -1072,11 +1105,11 @@ class PicButton(QAbstractButton):
         # if not self.cluster:
         self.clicked.connect(self.changePic)
         # fixed size
-        self.setSizePolicy(0,0)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed)
         self.setMinimumSize(self.im1.size())
 
         # playback things
-        self.media_obj = ControllableAudio(format)
+        self.media_obj = ControllableAudio(None,audioFormat=audioFormat)
         self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.audiodata = audiodata

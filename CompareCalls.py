@@ -51,7 +51,8 @@ class CompareCalls(QMainWindow):
         self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.setMinimumSize(170, 40)
-        self.w_browse.setSizePolicy(QSizePolicy(1,1))
+        #self.w_browse.setSizePolicy(QSizePolicy(1,1))
+        self.w_browse.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
         self.w_browse.clicked.connect(self.browse)
 
         # area showing the selected folder
@@ -59,7 +60,8 @@ class CompareCalls(QMainWindow):
         self.w_dir.setReadOnly(True)
         self.w_dir.setFixedHeight(40)
         self.w_dir.setPlainText('')
-        self.w_dir.setSizePolicy(QSizePolicy(3,1))
+        #self.w_dir.setSizePolicy(QSizePolicy(3,1))
+        self.w_dir.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Minimum)
 
         # feedback label
         self.labelDatasIcon = QLabel()

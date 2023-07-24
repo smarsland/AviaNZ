@@ -1232,7 +1232,6 @@ class AviaNZ_reviewAll(QMainWindow):
         #quitMenu.addAction("Restart program", self.restart)
         #quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
-
     def restart(self):
         print("Restarting")
         QApplication.exit(1)
@@ -1792,6 +1791,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
         self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
+        #self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
