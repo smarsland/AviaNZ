@@ -319,7 +319,7 @@ class SplitData(QMainWindow):
         """ This function is connected to the main button press """
         # setup progress bar etc
         print("Starting to split...")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         totalfiles = len(self.listOfDataFiles) + len(self.listOfWavs)
         dlg = QProgressDialog("Splitting...", "", 0, totalfiles, self)
         donefiles = 0

@@ -11,17 +11,18 @@ Cython==0.29.32
 h5py==3.2.1
 jsonschema==4.17.3
 librosa==0.10.0
-numpy==1.23.5  # scikit-image overwrites this w/ a newer version
+lxml
+#numpy==1.23.5  # scikit-image overwrites this w/ a newer version
 openpyxl==3.0.10
 pyFFTW==0.13.1
-PyQt5==5.15.7
+#PyQt5==5.15.7
 pyqtgraph==0.13.2
 scikit-image==0.19.3
 six==1.16.0
 scipy==1.9.3
 setuptools==56.1.0
 spectrum==0.8.1
-tensorflow==2.11.1
+tensorflow==2.12.1
 
 ## These dependencies are important, but should be installed by the main packages:
 # joblib==0.13.2

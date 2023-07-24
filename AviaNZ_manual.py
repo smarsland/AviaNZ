@@ -762,7 +762,7 @@ class AviaNZ(QMainWindow):
         if self.MouseDrawingButton==Qt.MouseButton.RightButton:
             self.p_ampl.unsetCursor()
             self.specPlot.unsetCursor()
-            self.bar.setCursor(Qt.OpenHandCursor)
+            self.bar.setCursor(Qt.CursorShape.OpenHandCursor)
         else:
             self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
             self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
@@ -3493,7 +3493,7 @@ class AviaNZ(QMainWindow):
                 return
 
             # maybe the genus is already listed?
-            index = self.model.findItems(match.group(1), Qt.MatchFixedString)
+            index = self.model.findItems(match.group(1), Qt.MatchFlag.MatchFixedString)
             if len(index) == 0:
                 # Genus isn't in list
                 item = QStandardItem(match.group(1))
@@ -3942,7 +3942,7 @@ class AviaNZ(QMainWindow):
     def annotJumper(self, maxcert):
         """ Scrolls to next annotation of no more than maxcert certainty. """
         # (this is just a manual pg.BusyCursor)
-        QApplication.setOverrideCursor(QtGui.QCursor(Qt.WaitCursor))
+        QApplication.setOverrideCursor(QtGui.QCursor(Qt.CursorShape.WaitCursor))
         # Identify the "current" annotation: selected or whatever is on screen
         if self.box1id > -1:
             currx = self.segments[self.box1id][0]
@@ -6195,7 +6195,7 @@ class AviaNZ(QMainWindow):
                     self.MouseDrawingButton = Qt.MouseButton.RightButton
                     self.specPlot.unsetCursor()
                     self.p_ampl.unsetCursor()
-                    self.bar.setCursor(Qt.OpenHandCursor)
+                    self.bar.setCursor(Qt.CursorShape.OpenHandCursor)
                 else:
                     self.MouseDrawingButton = Qt.MouseButton.LeftButton
                     self.bar.unsetCursor()
@@ -6611,7 +6611,7 @@ class AviaNZ(QMainWindow):
                     else:
                         self.p_ampl.unsetCursor()
                         self.specPlot.unsetCursor()
-                        self.bar.setCursor(Qt.OpenHandCursor)
+                        self.bar.setCursor(Qt.CursorShape.OpenHandCursor)
                     return True
             elif event.type()==QtCore.QEvent.Type.KeyRelease:
                 if event.key() == Qt.Key.Key_Meta and platform.system() == 'Darwin':
@@ -6619,7 +6619,7 @@ class AviaNZ(QMainWindow):
                     if self.MouseDrawingButton==Qt.MouseButton.RightButton:
                         self.p_ampl.unsetCursor()
                         self.specPlot.unsetCursor()
-                        self.bar.setCursor(Qt.OpenHandCursor)
+                        self.bar.setCursor(Qt.CursorShape.OpenHandCursor)
                     else:
                         self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
                         self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))

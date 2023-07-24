@@ -1192,7 +1192,7 @@ class PicButton(QAbstractButton):
             self.playButton.hide()
 
     def mouseMoveEvent(self, ev):
-        if ev.buttons() != Qt.LeftButton:
+        if ev.buttons() != Qt.MouseButton.LeftButton:
             return
 
         mimeData = QMimeData()
@@ -1200,7 +1200,7 @@ class PicButton(QAbstractButton):
         drag = QDrag(self)
         drag.setMimeData(mimeData)
         drag.setPixmap(QPixmap("./img/Owl_thinking.png"))
-        dropAction = drag.exec(Qt.MoveAction)
+        dropAction = drag.exec(Qt.DropAction.MoveAction)
 
     def playImage(self):
         if self.media_obj.isPlaying():
@@ -1264,7 +1264,7 @@ class Layout(pg.LayoutWidget):
 
     def dropEvent(self, ev):
         self.buttonDragged.emit(ev.pos().y(),ev.source())
-        ev.setDropAction(Qt.MoveAction)
+        ev.setDropAction(Qt.DropAction.MoveAction)
         ev.accept()
 
 

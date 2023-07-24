@@ -13,6 +13,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Additional spectrogram normalization options, including PCEN
 
 ### Changed
+- PyQt6 instead of PyQt5
 - Training will now include subdirectories when searching for data
 - Node selection in training faster, more stable, and produces ROCs more closely consistent with testing/processing
 - Wind noise removal only available for changepoint detectors now

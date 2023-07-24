@@ -1612,7 +1612,7 @@ class HumanClassify1(QDialog):
 
         # playback line
         self.bar = pg.InfiniteLine(angle=90, movable=False, pen={'color':'c', 'width': 3})
-        self.bar.btn = Qt.RightButton
+        self.bar.btn = Qt.MouseButton.RightButton
         self.bar.setValue(0)
         self.pPlot.addItem(self.bar)
 
@@ -2812,7 +2812,7 @@ class FilterManager(QDialog):
         labDirName = QLineEdit()
         labDirName.setText(filtdir)
         labDirName.setReadOnly(True)
-        labDirName.setFocusPolicy(Qt.NoFocus)
+        labDirName.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         labDirName.setStyleSheet("background-color: #e0e0e0")
 
         # filter dir contents

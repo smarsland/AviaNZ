@@ -451,7 +451,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.dlg.show()
         self.dlg.setLabelText("Stopping...")
         self.statusBar().showMessage("Stopping...")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
     def stopped_fileproc(self):
         # Processing gently stopped (worker thread has now halted, and UI can continue).
@@ -629,7 +629,7 @@ class AviaNZ_batchWindow(QMainWindow):
                 it = self.w_spe1.item(i)
                 # Stop them being selected
                 it.setSelected(False)
-                it.setFlags(it.flags() & ~Qt.ItemIsSelectable)
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             #currfilt = self.FilterDicts[currname]
             #currmethod = currfilt.get("method", "wv")
             # (can't use AllSp with any other filter)
@@ -655,7 +655,7 @@ class AviaNZ_batchWindow(QMainWindow):
         else:
             for i in range(2,self.w_spe1.count()):
                 it = self.w_spe1.item(i)
-                it.setFlags(it.flags() | Qt.ItemIsSelectable)
+                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsSelectable)
 
             if "Any sound" in selectedNames:
                 self.minlen.show()

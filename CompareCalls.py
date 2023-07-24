@@ -673,11 +673,11 @@ class ReviewAdjustments(QDialog):
         # middle section
         # The buttons to move through the overview
         self.leftBtn = QToolButton()
-        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.leftBtn.setArrowType(Qt.ArrowType.LeftArrow)
         self.leftBtn.clicked.connect(self.moveLeft)
         self.leftBtn.setToolTip("View previous pair")
         self.rightBtn = QToolButton()
-        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.rightBtn.setArrowType(Qt.ArrowType.RightArrow)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("View next pair")
         self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
@@ -828,11 +828,11 @@ class CompareCallsDialog(QDialog):
 
         # The buttons to move through the overview
         self.leftBtn = QToolButton()
-        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.leftBtn.setArrowType(Qt.ArrowType.LeftArrow)
         self.leftBtn.clicked.connect(self.moveLeft)
         self.leftBtn.setToolTip("View previous pair")
         self.rightBtn = QToolButton()
-        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.rightBtn.setArrowType(Qt.ArrowType.RightArrow)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("View next pair")
         self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
