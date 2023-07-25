@@ -84,7 +84,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
 
-        self.w_browse = QPushButton("  Browse Folder")
+        self.w_browse = QPushButton("  Choose Folder")
         self.w_browse.setToolTip("Select a folder to process (may contain sub folders)")
         self.w_browse.setFixedSize(165, 50)
         self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
@@ -107,7 +107,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.usefilters.setChecked(True)
         self.anysound = QRadioButton("Any sound")
         self.process.addButton(self.anysound)
+        self.batfilter = QRadioButton("NZ Bats")
+        self.process.addButton(self.batfilter)
         self.anysound.clicked.connect(self.useFilters)
+        self.batfilter.clicked.connect(self.useFilters)
         self.usefilters.clicked.connect(self.useFilters)
         self.hasFilters = False
         self.hasFiles = False
@@ -137,10 +140,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.intermittentLabel = QLabel("Specify the length and frequency of the sections to process")
         self.protocolSize = QSpinBox()
         self.protocolSize.setRange(1, 180)
-        self.protocolSize.setValue(self.config['protocolSize'])
+        self.protocolSize.setValue(int(self.config['protocolSize']))
         self.protocolInterval = QSpinBox()
         self.protocolInterval.setRange(5, 3600)
-        self.protocolInterval.setValue(self.config['protocolInterval'])
+        self.protocolInterval.setValue(int(self.config['protocolInterval']))
 
         self.windfilter = QCheckBox("Perform wind filtering")
         self.windfilter.setChecked(True)
@@ -198,6 +201,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.buttonSp = QHBoxLayout()
         self.buttonSp.addWidget(self.usefilters)
         self.buttonSp.addWidget(self.anysound)
+        self.buttonSp.addWidget(self.batfilter)
         self.formSp.addLayout(self.buttonSp)
         self.formSp.addWidget(self.w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
@@ -328,8 +332,13 @@ class AviaNZ_batchWindow(QMainWindow):
         #species = list(species)
         if self.anysound.isChecked():
             species = "Any sound"
+            self.w_processButton.setEnabled(True)
+        elif self.batfilter.isChecked():
+            species = "NZ Bats"
+            self.w_processButton.setEnabled(True)
         else:
             selected = self.w_spe1.selectedItems()
+            self.w_processButton.setEnabled(False)
             species = []
             for s in selected:
                 species.append(s.text())
@@ -513,15 +522,18 @@ class AviaNZ_batchWindow(QMainWindow):
             self.w_spe1.setEnabled(True)
             self.hasFilters = False
         else:
+            # Bats or Any Sound
             self.w_speLabel1.setStyleSheet("color: gray")
             for i in range(self.w_spe1.count()):
                 it = self.w_spe1.item(i)
                 it.setSelected(False)
             self.w_spe1.setDisabled(True)
-            self.hasFilters = True
+        self.countFilters()
+            #self.w_processButton.setEnabled(True)
+            #self.hasFilters = True
 
     def countFilters(self):
-        if len(self.w_spe1.selectedItems()) > 0:
+        if len(self.w_spe1.selectedItems()) > 0 or self.batfilter.isChecked() or self.anysound.isChecked():
             self.hasFilters = True
         else:
             self.hasFilters = False

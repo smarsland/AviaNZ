@@ -328,7 +328,7 @@ class Excel2Annotation(QDialog):
         self.txtExcel = QLineEdit()
         self.txtExcel.setMinimumWidth(400)
         self.txtExcel.setText('')
-        self.btnBrowseExcel = QPushButton("&Browse Excel")
+        self.btnBrowseExcel = QPushButton("&Choose Excel file")
         self.btnBrowseExcel.setFixedWidth(220)
         self.btnBrowseExcel.clicked.connect(self.browseExcel)
 
@@ -343,7 +343,7 @@ class Excel2Annotation(QDialog):
         self.txtAudio = QLineEdit()
         self.txtAudio.setMinimumWidth(400)
         self.txtAudio.setText('')
-        self.btnBrowseAudio = QPushButton("Browse Corresponding Audio")
+        self.btnBrowseAudio = QPushButton("Choose Corresponding Audio")
         self.btnBrowseAudio.setFixedWidth(220)
         self.btnBrowseAudio.setToolTip("Select corresponding .wav")
         self.btnBrowseAudio.clicked.connect(self.browseAudio)
@@ -362,7 +362,7 @@ class Excel2Annotation(QDialog):
         tableWidget.setRowCount(4)
         tableWidget.setColumnCount(4)
         tableWidget.setHorizontalHeaderLabels("A;B;C;D".split(";"))
-        tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         tableWidget.setItem(0, 0, QTableWidgetItem("Start time (sec)"))
         tableWidget.setItem(0, 1, QTableWidgetItem("End time (sec)"))
         tableWidget.setItem(0, 2, QTableWidgetItem("Lower frequency (Hz)"))
@@ -429,7 +429,7 @@ class Excel2Annotation(QDialog):
         if self.txtSpecies.text() and self.txtExcel.text() and self.txtAudio.text():
             return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text(), self.headers[self.comboStart.currentIndex()], self.headers[self.comboEnd.currentIndex()], self.headers[self.comboLow.currentIndex()], self.headers[self.comboHigh.currentIndex()]]
         else:
-            msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg = SupportClasses_GUI.MessagePopup("t", "All fields are required ", "All fields are required ")
             msg.exec()
             return []
 
@@ -489,7 +489,7 @@ class Tag2Annotation(QDialog):
         self.txtSession = QLineEdit()
         self.txtSession.setMinimumWidth(400)
         self.txtSession.setText('')
-        self.btnBrowseSession = QPushButton("&Browse Session")
+        self.btnBrowseSession = QPushButton("&Choose Session")
         self.btnBrowseSession.setFixedWidth(220)
         self.btnBrowseSession.clicked.connect(self.browseSession)
 
@@ -531,10 +531,10 @@ class Tag2Annotation(QDialog):
         #dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
         d = QFileDialog(self)
         d.setFilter(QDir.Filter.AllDirs | QDir.Filter.Hidden | QDir.Filter.NoDotAndDotDot)
-        d.setFileMode(QFileDialog.Directory)
+        d.setFileMode(QFileDialog.FileMode.Directory)
         if(d.exec()):
             dirName = d.selectedFiles()[0]
-        self.txtSession.setText(dirName)
+            self.txtSession.setText(dirName)
 
 #======
 class BackupAnnotation(QDialog):
@@ -549,14 +549,14 @@ class BackupAnnotation(QDialog):
         self.txtSrc = QLineEdit()
         self.txtSrc.setMinimumWidth(400)
         self.txtSrc.setText('')
-        self.btnBrowseSrc = QPushButton("&Browse Source Directory")
+        self.btnBrowseSrc = QPushButton("&Choose Source Directory")
         self.btnBrowseSrc.setFixedWidth(220)
         self.btnBrowseSrc.clicked.connect(self.browseSrc)
 
         self.txtDst = QLineEdit()
         self.txtDst.setMinimumWidth(400)
         self.txtDst.setText('')
-        self.btnBrowseDst = QPushButton("&Browse Destination Directory")
+        self.btnBrowseDst = QPushButton("&Choose Destination Directory")
         self.btnBrowseDst.setFixedWidth(220)
         self.btnBrowseDst.clicked.connect(self.browseDst)
 
@@ -583,7 +583,7 @@ class BackupAnnotation(QDialog):
         if self.txtSrc.text() and self.txtDst.text():
             return [self.txtSrc.text(), self.txtDst.text()]
         else:
-            msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg = SupportClasses_GUI.MessagePopup("t", "All fields are required ", "All fields are required ")
             msg.exec()
             return []
 
@@ -2838,12 +2838,12 @@ class FilterManager(QDialog):
                 if not input.endswith('.txt'):
                     input = input+'.txt'
                 if input==".txt" or input=="":
-                    return(QValidator.Intermediate, input, pos)
+                    return(QValidator.State.Intermediate, input, pos)
                 if self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                     print("duplicated input", input)
-                    return(QValidator.Intermediate, input, pos)
+                    return(QValidator.State.Intermediate, input, pos)
                 else:
-                    return(QValidator.Acceptable, input, pos)
+                    return(QValidator.State.Acceptable, input, pos)
 
         renameFiltValid = FiltValidator()
         renameFiltValid.listFiles = self.listFiles
@@ -3026,12 +3026,14 @@ class FilterManager(QDialog):
                     msg.addButton("Overwrite", QMessageBox.ButtonRole.YesRole)
                     msg.addButton("Skip", QMessageBox.ButtonRole.RejectRole)
                     reply = msg.exec()
-                if reply==0:
+                #print(reply,QMessageBox.ButtonRole.YesRole.value,QMessageBox.ButtonRole.RejectRole.value)
+                if reply==QMessageBox.ButtonRole.YesRole.value:
                     # no problems, or chose to overwrite
                     print("Copying", sources[i], "->", targets[i])
                     shutil.copy2(sources[i], targets[i])
-                elif reply==4194304:
+                elif reply==QMessageBox.ButtonRole.RejectRole.value: #4194304:
                     # cancelled the entire copy
+                    print("Cancelled")
                     return
             msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported","Import complete. Now you can use the recogniser %s" % os.path.basename(targets[0]))
             msg.exec()

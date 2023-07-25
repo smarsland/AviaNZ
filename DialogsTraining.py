@@ -173,10 +173,10 @@ class BuildRecAdvWizard(QWizard):
             layout2.addWidget(self.params)
             layout2.addWidget(self.warnLabel)
             self.setLayout(layout2)
-            self.setButtonText(QWizard.NextButton, 'Cluster >')
+            self.setButtonText(QWizard.WizardButton.NextButton, 'Cluster >')
 
         def initializePage(self):
-            self.wizard().button(QWizard.NextButton).setDefault(False)
+            self.wizard().button(QWizard.WizardButton.NextButton).setDefault(False)
             self.wizard().saveTestBtn.setVisible(False)
             # parse some params
             fs = int(self.field("fs"))//4000*4000
@@ -253,7 +253,7 @@ class BuildRecAdvWizard(QWizard):
             self.flowLayout = SupportClasses_GUI.Layout()
             self.flowLayout.setMinimumSize(380, 247)
             self.flowLayout.buttonDragged.connect(self.moveSelectedSegs)
-            self.flowLayout.layout.setSizeConstraint(QLayout.SetMinimumSize)
+            self.flowLayout.layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
 
             self.scrollArea = QScrollArea(self)
             #self.scrollArea.setWidgetResizable(True)
@@ -301,6 +301,7 @@ class BuildRecAdvWizard(QWizard):
                                 window = 2
                                 duration = max(int(calls[j][1][1]-calls[j][1][0]),window)
                                 audiodata = self.cluster.loadFile(calls[j][0],duration,calls[j][1][0])
+                                sp = SignalProc.SignalProc(512, 256)
                                 sp.data = audiodata
                                 sp.sampleRate = 16000
                                 _= sp.spectrogram(256, 128)
@@ -338,7 +339,7 @@ class BuildRecAdvWizard(QWizard):
 
                 # Create and show the buttons
                 self.clearButtons()
-                self.addButtons(callsgs,audios,callIDs)
+                self.addButtons(callsgs,audios,callIDs,sp)
                 self.updateButtons()
                 print("buttons added")
                 self.segsChanged = True
@@ -970,7 +971,7 @@ class BuildRecAdvWizard(QWizard):
             layout_step4.addLayout(form1_step4)
             self.setLayout(layout_step4)
 
-            self.setButtonText(QWizard.NextButton, 'Train >')
+            self.setButtonText(QWizard.WizardButton.NextButton, 'Train >')
 
         def fLowChange(self, value):
             value = value//10*10
@@ -1351,15 +1352,15 @@ class BuildRecAdvWizard(QWizard):
                     if not input.endswith('.txt'):
                         input = input+'.txt'
                     if input==".txt" or input=="":
-                        return(QValidator.Intermediate, input, pos)
+                        return(QValidator.State.Intermediate, input, pos)
                     elif input=="M.txt":
                         print("filter name \"M\" reserved for manual annotations")
-                        return(QValidator.Intermediate, input, pos)
+                        return(QValidator.State.Intermediate, input, pos)
                     elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                         print("duplicated input", input)
-                        return(QValidator.Intermediate, input, pos)
+                        return(QValidator.State.Intermediate, input, pos)
                     else:
-                        return(QValidator.Acceptable, input, pos)
+                        return(QValidator.State.Acceptable, input, pos)
 
             trainFiltValid = FiltValidator()
             trainFiltValid.listFiles = self.listFiles
@@ -1386,7 +1387,7 @@ class BuildRecAdvWizard(QWizard):
             layout.addWidget(QLabel("Enter file name (must be unique)"))
             layout.addWidget(self.enterFiltName)
 
-            self.setButtonText(QWizard.FinishButton, 'Save and Finish')
+            self.setButtonText(QWizard.WizardButton.FinishButton, 'Save and Finish')
             self.setLayout(layout)
 
         def initializePage(self):
@@ -1479,13 +1480,13 @@ class BuildRecAdvWizard(QWizard):
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
-        self.setWizardStyle(QWizard.ModernStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
 
         # add the Save & Test button
         self.saveTestBtn = QPushButton("Save and Test")
-        self.setButton(QWizard.CustomButton1, self.saveTestBtn)
-        self.setButtonLayout([QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton, QWizard.CancelButton])
-        self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
+        self.setButton(QWizard.WizardButton.CustomButton1, self.saveTestBtn)
+        self.setButtonLayout([QWizard.WizardButton.Stretch, QWizard.WizardButton.BackButton, QWizard.WizardButton.NextButton, QWizard.WizardButton.CustomButton1, QWizard.WizardButton.FinishButton, QWizard.WizardButton.CancelButton])
+        self.setOptions(QWizard.WizardOption.NoBackButtonOnStartPage | QWizard.WizardOption.HaveCustomButton1)
 
         self.filtersDir = filtdir
 
@@ -1515,7 +1516,7 @@ class BuildRecAdvWizard(QWizard):
         self.saveTestBtn.setVisible(False)
         self.currentIdChanged.connect(self.pageChangeResize)
         # try to deal with buttons catching Enter presses
-        self.buttons = [self.button(t) for t in (1, 3, 6)]
+        self.buttons = [self.button(t) for t in (QWizard.WizardButton.NextButton, QWizard.WizardButton.FinishButton, QWizard.WizardButton.CustomButton1)]
         for btn in self.buttons:
             btn.installEventFilter(self)
 
@@ -1619,7 +1620,7 @@ class BuildRecAdvWizard(QWizard):
 
     def eventFilter(self, obj, event):
         # disable accidentally pressing Enter
-        if obj in self.buttons and event.type() == QEvent.Show:
+        if obj in self.buttons and event.type() == QEvent.Type.Show:
             obj.setDefault(False)
         return super(BuildRecAdvWizard, self).eventFilter(obj, event)
 
@@ -1669,7 +1670,7 @@ class TestRecWizard(QWizard):
             layout.addWidget(self.species)
             layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             self.setLayout(layout)
-            self.setButtonText(QWizard.NextButton, 'Test >')
+            self.setButtonText(QWizard.WizardButton.NextButton, 'Test >')
 
         def initializePage(self):
             filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
@@ -1787,8 +1788,8 @@ class TestRecWizard(QWizard):
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
-        self.setWizardStyle(QWizard.ModernStyle)
-        self.setOptions(QWizard.NoBackButtonOnStartPage)
+        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
+        self.setOptions(QWizard.WizardOption.NoBackButtonOnStartPage)
 
         cl = SupportClasses.ConfigLoader()
         self.filterlist = cl.filters(filtdir, bats=False)
@@ -1878,8 +1879,8 @@ class BuildCNNWizard(QWizard):
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
-        self.setWizardStyle(QWizard.ModernStyle)
-        self.setOptions(QWizard.NoBackButtonOnStartPage)
+        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
+        self.setOptions(QWizard.WizardOption.NoBackButtonOnStartPage)
 
         self.rocpages = []
 
@@ -1905,9 +1906,9 @@ class BuildCNNWizard(QWizard):
 
         # add the Save & Test button
         self.saveTestBtn = QPushButton("Save and Test")
-        self.setButton(QWizard.CustomButton1, self.saveTestBtn)
-        self.setButtonLayout( [QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton, QWizard.CancelButton])
-        self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
+        self.setButton(QWizard.WizardButton.CustomButton1, self.saveTestBtn)
+        self.setButtonLayout( [QWizard.WizardButton.Stretch, QWizard.WizardButton.BackButton, QWizard.WizardButton.NextButton, QWizard.WizardButton.CustomButton1, QWizard.WizardButton.FinishButton, QWizard.WizardButton.CancelButton])
+        self.setOptions(QWizard.WizardOption.NoBackButtonOnStartPage | QWizard.WizardOption.HaveCustomButton1)
         self.saveTestBtn.setVisible(False)
 
     # page 1 - select train data
@@ -2340,7 +2341,7 @@ class BuildCNNWizard(QWizard):
             layout1.addLayout(layout2)
             layout1.addWidget(self.cbAutoThr)
             self.setLayout(layout1)
-            self.setButtonText(QWizard.NextButton, 'Generate CNN images and Train>')
+            self.setButtonText(QWizard.WizardButton.NextButton, 'Generate CNN images and Train>')
 
         def initializePage(self):
             self.cnntrain = self.wizard().confirminputPage.cnntrain
@@ -2360,7 +2361,7 @@ class BuildCNNWizard(QWizard):
             self.f2text.setEnabled(False)
             self.f2.setEnabled(False)
 
-            self.wizard().button(QWizard.NextButton).setDefault(False)
+            self.wizard().button(QWizard.WizardButton.NextButton).setDefault(False)
             self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
 
             if self.field("trainDir1"):
@@ -2659,7 +2660,7 @@ class BuildCNNWizard(QWizard):
             self.layout.addWidget(self.msgspp, 1, 0)
             self.layout.addWidget(self.space, 2, 0)
 
-            self.setButtonText(QWizard.NextButton, 'Save the Recogniser>')
+            self.setButtonText(QWizard.WizardButton.NextButton, 'Save the Recogniser>')
             self.setLayout(self.layout)
 
         def initializePage(self):
@@ -2728,15 +2729,15 @@ class BuildCNNWizard(QWizard):
                     if not input.endswith('.txt'):
                         input = input+'.txt'
                     if input==".txt" or input=="":
-                        return(QValidator.Intermediate, input, pos)
+                        return(QValidator.State.Intermediate, input, pos)
                     elif input=="M.txt":
                         print("filter name \"M\" reserved for manual annotations")
-                        return(QValidator.Intermediate, input, pos)
+                        return(QValidator.State.Intermediate, input, pos)
                     elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                         print("duplicated input", input)
-                        return(QValidator.Intermediate, input, pos)
+                        return(QValidator.State.Intermediate, input, pos)
                     else:
-                        return(QValidator.Acceptable, input, pos)
+                        return(QValidator.State.Acceptable, input, pos)
 
             trainFiltValid = FiltValidator()
             trainFiltValid.listFiles = self.listFiles
@@ -2774,7 +2775,7 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(QLabel("Enter file name if you choose to save the recogniser as a new file (must be unique)"), 10, 0, 1, 2)
             layout.addWidget(self.enterFiltName, 12, 0, 1, 2)
 
-            self.setButtonText(QWizard.FinishButton, 'Save and Finish')
+            self.setButtonText(QWizard.WizardButton.FinishButton, 'Save and Finish')
             self.setLayout(layout)
 
         def initializePage(self):
@@ -2895,8 +2896,8 @@ class FilterCustomiseROC(QDialog):
 
             if slider:
                 slid = QSlider(Qt.Orientation.Horizontal)
-                slid.setMinimum(minimum*1000)
-                slid.setMaximum(maximum*1000)
+                slid.setMinimum(int(minimum*1000))
+                slid.setMaximum(int(maximum*1000))
                 slid.setValue(round(initial*1000))
                 slid.setTickInterval(1000)
                 slid.setTickPosition(QSlider.TickPosition.TicksBelow)
@@ -2956,15 +2957,15 @@ class FilterCustomiseROC(QDialog):
                 if not input.endswith('.txt'):
                     input = input+'.txt'
                 if input==".txt" or input=="":
-                    return(QValidator.Intermediate, input, pos)
+                    return(QValidator.State.Intermediate, input, pos)
                 elif input=="M.txt":
                     print("filter name \"M\" reserved for manual annotations")
-                    return(QValidator.Intermediate, input, pos)
+                    return(QValidator.State.Intermediate, input, pos)
                 elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                     print("duplicated input", input)
-                    return(QValidator.Intermediate, input, pos)
+                    return(QValidator.State.Intermediate, input, pos)
                 else:
-                    return(QValidator.Acceptable, input, pos)
+                    return(QValidator.State.Acceptable, input, pos)
 
         renameFiltValid = FiltValidator()
         renameFiltValid.listFiles = self.listFiles

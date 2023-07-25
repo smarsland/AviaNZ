@@ -44,7 +44,7 @@ from shutil import copyfile
 
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
-from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle#, QActionGroup, QShortcut
+from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard #, QActionGroup, QShortcut
 # The two below moved from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
@@ -1949,14 +1949,16 @@ class AviaNZ(QMainWindow):
             if self.showSpectral.isChecked():
                 self.statusLeft.setText("Drawing spectral derivative...")
                 x, y = self.sp.drawSpectralDeriv()
+            
+                if x is not None:
+                    self.derivPlot = pg.ScatterPlotItem()
+                    self.derivPlot.setData(x, y, pen=pg.mkPen('b', width=5))
 
-                self.derivPlot = pg.ScatterPlotItem()
-                self.derivPlot.setData(x, y, pen=pg.mkPen('b', width=5))
-
-                self.p_spec.addItem(self.derivPlot)
+                    self.p_spec.addItem(self.derivPlot)
             else:
                 self.statusLeft.setText("Removing spectral derivative...")
-                self.p_spec.removeItem(self.derivPlot)
+                if hasattr(self, 'derivPlot'):
+                    self.p_spec.removeItem(self.derivPlot)
             self.statusLeft.setText("Ready")
 
     def showFormants(self):
@@ -4780,7 +4782,7 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
-        self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
+        self.buildRecAdvWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniser(test=False))
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.exec()

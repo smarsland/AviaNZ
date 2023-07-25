@@ -452,7 +452,8 @@ class AviaNZ_batchProcess():
                 except Exception:
                     estr = "Encountered error:\n" + traceback.format_exc()
                     print("ERROR: ", estr)
-                    self.log.file.close()
+                    if hasattr(self, 'log'):
+                        self.log.file.close()
                     raise
 
                 print('Segments in this file: ', self.segments)
@@ -507,9 +508,13 @@ class AviaNZ_batchProcess():
         # Segment over pages separately, to allow dealing with large files smoothly:
         # (page size is shorter for low freq things, i.e. bittern,
         # since those freqs are very noisy and variable)
-        if self.sp.sampleRate<=4000:
-            # Basically bittern
-            samplesInPage = 300*self.sp.sampleRate
+        # TODO: Lots -- SignalProc
+        if hasattr(self, 'sp'):
+            if self.sp.sampleRate<=4000:
+                # Basically bittern
+                samplesInPage = 300*self.sp.sampleRate
+            else:
+                samplesInPage = 900*16000
         elif self.method=="Wavelets":
             # If using changepoints and v short windows,
             # aim to have roughly 5000 windows:
@@ -517,7 +522,9 @@ class AviaNZ_batchProcess():
             winsize = [subf["WaveletParams"].get("win", 1) for f in filters for subf in f["Filters"]]
             winsize = min(winsize)
             if winsize<0.05:
-                samplesInPage = int(4500 * 0.05 * self.sp.sampleRate)
+                # TODO: Needs work
+                samplesInPage = 900*16000
+                #samplesInPage = int(4500 * 0.05 * self.sp.sampleRate)
             else:
                 samplesInPage = 900*16000
         else:
@@ -532,6 +539,7 @@ class AviaNZ_batchProcess():
             print("Segmenting page %d / %d" % (page+1, numPages))
             start = page*samplesInPage
             end = min(start+samplesInPage, self.datalength)
+            # TODO: Still self.sp problems!
             thisPageLen = (end-start) / self.sp.sampleRate
 
             if thisPageLen < 2 and (self.method != "Click" and self.method != "Bats"):

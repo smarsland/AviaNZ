@@ -998,6 +998,7 @@ class SignalProc:
     def drawSpectralDeriv(self):
         # helper function to parse output for plotting spectral derivs.
         sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
+        print(np.shape(sd))
         if sd is not None:
             x, y = np.where(sd > 0)
             #print(y)
@@ -1013,6 +1014,8 @@ class SignalProc:
             y = [i - valminfrq for i in y]
 
             return x, y
+        else:
+            return None, None
 
     def drawFundFreq(self, seg):
         """ Produces marks of fundamental freq to be drawn on the spectrogram.

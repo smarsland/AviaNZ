@@ -174,7 +174,7 @@ class SplitData(QMainWindow):
         #outputGroup.setSizePolicy(QSizePolicy(1,5))
         outputGroup.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.MinimumExpanding)
         outputGroup.setMinimumSize(400, 180)
-        grid.setSizeConstraint(QLayout.SetMinimumSize)
+        grid.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         #area.setSizePolicy(QSizePolicy(1,5))
         area.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.MinimumExpanding)
         area.setMinimumSize(400, 400)
