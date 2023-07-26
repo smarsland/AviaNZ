@@ -394,10 +394,10 @@ class AviaNZ(QMainWindow):
         #self.showFundamental = markMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(True)
-        self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
-        self.showSpectral.setCheckable(True)
-        self.showSpectral.setChecked(False)
         if not self.DOC:
+            self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
+            self.showSpectral.setCheckable(True)
+            self.showSpectral.setChecked(False)
             self.showFormant = markMenu.addAction("Formants", self.showFormants)
             self.showFormant.setCheckable(True)
             self.showFormant.setChecked(False)
@@ -4795,7 +4795,7 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
-        self.buildRecAdvWizard.button(3).clicked.connect(lambda: self.saveRecogniser(test=False))
+        self.buildRecAdvWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniser(test=False))
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.exec()
@@ -5740,7 +5740,9 @@ class AviaNZ(QMainWindow):
         # TODO: Probably broken!
         if len(self.segments) > 1:
             cl = Clustering.Clustering([], [], 5)
-            segments, nclasses, duration = cl.cluster(self.filename, self.sp.sampleRate, None, feature='we')
+            # TODO: This is the signature
+            #def cluster(self, dataset, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
+            segments, nclasses, duration = cl.cluster(dataset,self.sp.sampleRate, None, feature='we')
             self.clusterD = Dialogs.Cluster(segments, self.sp.sampleRate, nclasses, self.config)
             self.clusterD.show()
         else:

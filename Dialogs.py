@@ -852,7 +852,8 @@ class Segmentation(QDialog):
             self.algs.addItems(["WV Changepoint", "Wavelet Filter", "FIR", "Median Clipping"])
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Harma","Power","WV Changepoint","Wavelet Filter","Cross-Correlation"])
-        self.algs.currentIndexChanged[str].connect(self.changeBoxes)
+        self.algs.currentTextChanged.connect(self.changeBoxes)
+        #self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")

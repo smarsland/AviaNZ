@@ -1099,6 +1099,8 @@ class PicButton(QAbstractButton):
         # when color map changes. Initialize with full colour scale,
         # then we expect to call setImage soon again to update.
         self.lut = lut
+        print(np.shape(self.spec))
+        print(np.min(self.spec), np.max(self.spec))
         self.setImage([np.min(self.spec), np.max(self.spec)])
 
         self.buttonClicked = False

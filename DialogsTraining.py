@@ -281,6 +281,7 @@ class BuildRecAdvWizard(QWizard):
                 calls, calltypes  = self.cluster.getCalls(self.field("trainDir"),self.field("species"),self.field("fs"))
                 #self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
 
+                # TODO: SRM: So this won't work until I've tidied it up quite a bit. Get things in the right format, sort and make neat!!!!
                 if len(calltypes) > 0:
                     self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
                     # Seed clusters 
@@ -308,9 +309,14 @@ class BuildRecAdvWizard(QWizard):
                                 sg = sp.normalisedSpec("Log")
                                 length = window*np.shape(sg)[0]//duration
                                 # TODO: Only use the relevant freqs?
-                                for k in range(duration):
+                                print(duration, (duration+1)*length, np.shape(sg))
+                                k=0
+                                while (k+1)*length < np.shape(sg)[0]:
+                                #for k in range(duration):
                                     sgs.append(sg[k*length:(k+1)*length,:])
                                     audio.append(audiodata[k*window*sp.sampleRate//2:(k+1)*window*sp.sampleRate//2])
+                                    k+=1
+                                print(k)
                         callsgs.append(sgs)
                         audios.append(audio)
 
@@ -338,6 +344,9 @@ class BuildRecAdvWizard(QWizard):
                 #self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
 
                 # Create and show the buttons
+                # TODO: !
+                self.nclasses=1
+
                 self.clearButtons()
                 self.addButtons(callsgs,audios,callIDs,sp)
                 self.updateButtons()
@@ -759,10 +768,20 @@ class BuildRecAdvWizard(QWizard):
             """
             self.picbuttons = []
             # TODO: Here
+            #print(len(ims))
+            #print(len(ims[0]))
+            #print(np.shape(calls[0][0]))
+            self.minsg = 1
+            self.maxsg = 1
             if ims is not None:
                 for i in range(len(ims)):
                     for j in range(len(ims[i])):
-                        newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
+                        self.minsg = min(self.minsg, np.min(ims[i][j]))
+                        self.maxsg = max(self.maxsg, np.max(ims[i][j]))
+                        # TODO: get length right
+    #def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
+                        newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), calls[i][j], sp.audioFormat, len(calls[i][j])/sp.sampleRate, 0, len(calls[i][j]), self.lut, cluster=True)
+                        #newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
                         self.picbuttons.append(newButton)
                         self.clusters = calltypes
             else:
@@ -839,6 +858,7 @@ class BuildRecAdvWizard(QWizard):
                 self.flowLayout.addWidget(self.cboxes[-1], r, c)
                 c += 1
                 # Find the segments under this class and show them
+                print(len(self.segments))
                 for segix in range(len(self.segments)):
                     if self.segments[segix][-1] == r:
                         self.flowLayout.addWidget(self.picbuttons[segix], r, c)
