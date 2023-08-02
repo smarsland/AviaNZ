@@ -1,4 +1,11 @@
-Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
+<div align="center">
+
+![Logo]{img/AviaNZ_SW_V2.jpg}
+#### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
+
+</div>
+
+---
 
 This software enables you to: 
 * review and listen to wav files from acoustic field recorders, 
@@ -14,7 +21,7 @@ For more information about the project, see http://www.avianz.net
 
 If you use this software, please credit us in any papers that you write. An appropriate reference is:
 
-```
+```python
 @article{Marsland19,
   title = "AviaNZ: A future-proofed program for annotation and recognition of animal sounds in long-time field recordings",
   author = "{Marsland}, Stephen and {Priyadarshani}, Nirosha and {Juodakis}, Julius and {Castro}, Isabel",
