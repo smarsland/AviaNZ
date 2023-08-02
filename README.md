@@ -1,6 +1,7 @@
 <div align="center">
 
-![Logo](img/AviaNZ_SW_V2.jpg)
+<!--![Logo](img/AviaNZ_SW_V2.jpg)-->
+![Banner](https://www.avianz.net/images/banners/Banner.jpg)
 ### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
 
 </div>
