@@ -1,6 +1,5 @@
 <div align="center">
 
-<!--![Logo](img/AviaNZ_SW_V2.jpg)-->
 ![Banner](https://www.avianz.net/images/banners/Banner.jpg)
 ### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
 
@@ -57,10 +56,16 @@ sudo apt-get install git
 ```
 4. Install the required packages by running `pip3 install -r requirements.txt --user` at the command line. (On Ubuntu and some other systems, `python` and `pip` refer to the Python 2 versions. If you are sure these refer to version 3 of the language, use `python` and `pip` in steps 4-6.)  
 5. Build the Cython extensions by running `cd ext; python3 setup.py build_ext -i; cd..`  
-6. Done! Launch the software with `python3 AviaNZ.py`  
+6. Done! Launch the software with `python3 AviaNZ.py`
+
 
 # Acknowledgements
 
 AviaNZ is based on PyQtGraph and PyQt, and uses Librosa and Scikit-learn amongst others.
 
 Development of this software was supported by the RSNZ Marsden Fund, and the NZ Department of Conservation.
+
+
+<div align="center>
+  <img src='img/AviaNZ_SW_V2.jpg' width='100%'>
+</div>
