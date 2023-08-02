@@ -1,7 +1,7 @@
 <div align="center">
 
-![Logo]{img/AviaNZ_SW_V2.jpg}
-#### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
+![Logo](img/AviaNZ_SW_V2.jpg)
+### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
 
 </div>
 
