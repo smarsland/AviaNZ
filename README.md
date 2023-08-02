@@ -1,7 +1,7 @@
 <div align="center">
-
-![Banner](https://www.avianz.net/images/banners/Banner.jpg)
-### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
+  <img src='img/AviaNZ_SW_V2.jpg' width='50%' alt="Logo">
+  
+  ### Welcome to AviaNZ, an open-source project for manual and automatic analysis of bio-acoustic recordings.
 
 </div>
 
@@ -65,7 +65,8 @@ AviaNZ is based on PyQtGraph and PyQt, and uses Librosa and Scikit-learn amongst
 
 Development of this software was supported by the RSNZ Marsden Fund, and the NZ Department of Conservation.
 
+---
 
-<div align="center>
-  <img src='img/AviaNZ_SW_V2.jpg' width='100%'>
+<div align="center">
+    <img src='https://www.avianz.net/images/banners/Banner.jpg' width='100%' alt="Banner">
 </div>
