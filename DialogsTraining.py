@@ -198,6 +198,7 @@ class BuildRecAdvWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             self.adjustSize()
 
+            # TODO: SRM: (1) selected icon is wrong, (2) resample
             instr = QLabel("To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.")
             instr.setWordWrap(True)
 
@@ -213,6 +214,7 @@ class BuildRecAdvWizard(QWizard):
             self.nclasses = 0
             self.config = config
             self.segsChanged = False
+            self.hasCTannotations = True
 
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
@@ -275,80 +277,36 @@ class BuildRecAdvWizard(QWizard):
 
             with pg.BusyCursor():
                 print("Processing. Please wait...")
-                # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
-                # TODO: SRM: Fix this bit...
-                self.cluster = Clustering.Clustering([], [], 0)
-                calls, calltypes  = self.cluster.getCalls(self.field("trainDir"),self.field("species"),self.field("fs"))
-                #self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
-
-                # TODO: SRM: So this won't work until I've tidied it up quite a bit. Get things in the right format, sort and make neat!!!!
-                if len(calltypes) > 0:
+                # Check if the annotations come with call type labels, if so skip auto clustering
+                self.CTannotations()
+                if self.hasCTannotations:
+                    # self.segments: [parent_audio_file, [segment], class_label]
+                    self.segments, self.nclasses, self.duration = self.getClustersGT()
                     self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
-                    # Seed clusters 
-                    callsgs = []
-                    audios = []
-                    callIDs = {}
-                    for i in range(len(calltypes)):
-                        sgs = []
-                        audio = []
-                        callIDs.update({i:list(calltypes)[i]})
-                        for j in range(len(calls)):
-                            if calls[j][2] == list(calltypes)[i]:
-                                # Get the spectrogram, append to the calls list
-                                # TODO: Options: break into fixed length pieces, or get syllables
-                                # Both have parameters :(
-                                # For now, try 1 second pieces, no overlap, skip last TODO!!
-                                # Make sure there is at least 1, though
-                                window = 2
-                                duration = max(int(calls[j][1][1]-calls[j][1][0]),window)
-                                audiodata = self.cluster.loadFile(calls[j][0],duration,calls[j][1][0])
-                                sp = SignalProc.SignalProc(512, 256)
-                                sp.data = audiodata
-                                sp.sampleRate = 16000
-                                _= sp.spectrogram(256, 128)
-                                sg = sp.normalisedSpec("Log")
-                                length = window*np.shape(sg)[0]//duration
-                                # TODO: Only use the relevant freqs?
-                                print(duration, (duration+1)*length, np.shape(sg))
-                                k=0
-                                while (k+1)*length < np.shape(sg)[0]:
-                                #for k in range(duration):
-                                    sgs.append(sg[k*length:(k+1)*length,:])
-                                    audio.append(audiodata[k*window*sp.sampleRate//2:(k+1)*window*sp.sampleRate//2])
-                                    k+=1
-                                print(k)
-                        callsgs.append(sgs)
-                        audios.append(audio)
+                else:
+                    # return format:
+                    # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
+                    # self.nclasses: number of class_labels
+                    # duration: median length of segments
+                    self.cluster = Clustering.Clustering([], [], 5)
+                    self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                    # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                    # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                    #                                                                              self.field("species"),
+                    #                                                                              feature=self.feature,
+                    #                                                                              max_clusters=5,
+                    #                                                                              single=True)
+                    self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
 
-                #self.cluster.setnClusters(max(self.nclasses,len(self.calltypes)))
-
-                # TODO: So now to rewrite the clustering to take a set of things with labels and things without
-                # TODO: Also, remember that need to update the filter if the calltype labels came from manual annotation
-                # TODO: Having got the segments, we don't use them...
-                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
-
-                ## return format:
-                ## self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
-                ## self.nclasses: number of class_labels
-                ## duration: median length of segments
-                ## TODO: That 5 is arbitrary max number of classes...
-                #self.cluster = Clustering.Clustering([], [], 5)
-                #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
-                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                ## self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
-                ##                                                                              self.field("species"),
-                ##                                                                              feature=self.feature,
-                ##                                                                              max_clusters=5,
-                ##                                                                              single=True)
-                #self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
+                # Start of better code from here at bottom of file
 
                 # Create and show the buttons
                 # TODO: !
-                self.nclasses=1
+                #self.nclasses=1
 
                 self.clearButtons()
-                self.addButtons(callsgs,audios,callIDs,sp)
+                self.addButtons()
+                #self.addButtons(callsgs,audios,callIDs,sp)
                 self.updateButtons()
                 print("buttons added")
                 self.segsChanged = True
@@ -360,6 +318,7 @@ class BuildRecAdvWizard(QWizard):
                 return False
 
             # Duplicate cluster names aren't updated:
+            print("nclasses: ", self.nclasses, len(self.clusters), len(self.tboxes))
             for ID in range(self.nclasses):
                 if self.clusters[ID] != self.tboxes[ID].text():
                     return False
@@ -406,6 +365,58 @@ class BuildRecAdvWizard(QWizard):
                                 calltypes.update({label["calltype"]:1})
             print(calltypes)                     
             return calltypes
+
+        def getClustersGT(self):
+            """ Gets call type clusters from annotations
+             returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
+            """
+            # Should be in Clustering...
+            ctTexts = []
+            CTsegments = []
+            duration = []
+            cl = Clustering.Clustering([], [], 5)
+
+            listOfDataFiles = []
+            listOfWavFiles = []
+            for root, dirs, files in os.walk(self.field("trainDir")):
+                for file in files:
+                    if file[-5:].lower() == '.data':
+                        listOfDataFiles.append(os.path.join(root, file))
+                    elif file[-4:].lower() == '.wav':
+                        listOfWavFiles.append(os.path.join(root, file))
+
+            for file in listOfDataFiles:
+                if file[:-5] in listOfWavFiles:
+                    # Read the annotation
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(file)
+                    SpSegs = segments.getSpecies(self.field("species"))
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        for label in seg[4]:
+                            if label["species"] == self.field("species") and "calltype" in label:
+                                if label["calltype"] not in ctTexts:
+                                    ctTexts.append(label["calltype"])
+            for i in range(len(ctTexts)):
+                self.clusters[i] = ctTexts[i]
+
+            for file in listOfDataFiles:
+                if file[:-5] in listOfWavFiles:
+                    # Read the annotation
+                    segments = Segment.SegmentList()
+                    wavfile = os.path.join(self.field("trainDir"), file[:-5])
+                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                    SpSegs = segments.getSpecies(self.field("species"))
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        for label in seg[4]:
+                            if label["species"] == self.field("species") and "calltype" in label:
+                                # Find the syllables inside this segment
+                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
+                                syls = cl.findSyllablesSeg(wavfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
+                                CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                duration.append(seg[1]-seg[0])
+            return CTsegments, len(self.clusters), np.median(duration)
 
         def backupDatafiles(self):
             # Backup original data files before updating them
@@ -763,7 +774,46 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
-        def addButtons(self,ims=None,calls=None,calltypes=None,sp=None):
+        def addButtons(self):
+            """ Only makes the PicButtons and self.clusters dict
+            """
+            self.picbuttons = []
+            if not self.hasCTannotations:
+                self.clusters = []
+                for i in range(self.nclasses):
+                    self.clusters.append((i, 'Cluster_' + str(i)))
+                self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
+
+            # largest spec will be this wide
+            if len(self.segments)<=1:
+                return
+            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
+
+            # Create the buttons for each segment
+            self.minsg = 1
+            self.maxsg = 1
+            for seg in self.segments:
+                sp = SignalProc.SignalProc(512, 256)
+                sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+
+                # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
+                incr = 256 * sp.sampleRate // self.field("fs")
+                _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
+                sg = sp.normalisedSpec("Log")
+
+                # buffer the image to largest spec size, so that the resulting buttons would have equal scale
+                if sg.shape[0]<maxspecsize:
+                    padlen = int(maxspecsize - sg.shape[0])//2
+                    sg = np.pad(sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(sg, 0.1))
+
+                self.minsg = min(self.minsg, np.min(sg))
+                self.maxsg = max(self.maxsg, np.max(sg))
+
+                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+                self.picbuttons.append(newButton)
+            # (updateButtons will place them in layouts and show them)
+
+        def addButtons_TBD(self,ims=None,calls=None,calltypes=None,sp=None):
             """ Only makes the PicButtons and self.clusters dict
             """
             self.picbuttons = []
@@ -3307,3 +3357,80 @@ class FilterCustomiseROC(QDialog):
             widget = item.widget()
             widget.deleteLater()
             widget.setParent(None)
+
+
+            """
+This is the start of better code...
+            with pg.BusyCursor():
+                print("Processing. Please wait...")
+                # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
+                # TODO: SRM: Fix this bit...
+                self.cluster = Clustering.Clustering([], [], 0)
+                calls, calltypes  = self.cluster.getCalls(self.field("trainDir"),self.field("species"),self.field("fs"))
+                self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
+                #self.cluster.getClustersGT_OLD()
+
+
+                # TODO: SRM: So this won't work until I've tidied it up quite a bit. Get things in the right format, sort and make neat!!!!
+                if len(calltypes) > 0:
+                    self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
+                    # Seed clusters 
+                    callsgs = []
+                    audios = []
+                    callIDs = {}
+                    for i in range(len(calltypes)):
+                        sgs = []
+                        audio = []
+                        callIDs.update({i:list(calltypes)[i]})
+                        for j in range(len(calls)):
+                            if calls[j][2] == list(calltypes)[i]:
+                                # Get the spectrogram, append to the calls list
+                                # TODO: Options: break into fixed length pieces, or get syllables
+                                # Both have parameters :(
+                                # For now, try 1 second pieces, no overlap, skip last TODO!!
+                                # Make sure there is at least 1, though
+                                window = 2
+                                duration = max(int(calls[j][1][1]-calls[j][1][0]),window)
+                                audiodata = self.cluster.loadFile(calls[j][0],duration,calls[j][1][0])
+                                sp = SignalProc.SignalProc(512, 256)
+                                sp.data = audiodata
+                                sp.sampleRate = 16000
+                                _= sp.spectrogram(256, 128)
+                                sg = sp.normalisedSpec("Log")
+                                length = window*np.shape(sg)[0]//duration
+                                # TODO: Only use the relevant freqs?
+                                print(duration, (duration+1)*length, np.shape(sg))
+                                k=0
+                                while (k+1)*length < np.shape(sg)[0]:
+                                #for k in range(duration):
+                                    sgs.append(sg[k*length:(k+1)*length,:])
+                                    audio.append(audiodata[k*window*sp.sampleRate//2:(k+1)*window*sp.sampleRate//2])
+                                    k+=1
+                                print(k)
+                        callsgs.append(sgs)
+                        audios.append(audio)
+
+                self.cluster.setnClusters(max(self.nclasses,len(self.calltypes)))
+
+                # TODO: So now to rewrite the clustering to take a set of things with labels and things without
+                # TODO: Also, remember that need to update the filter if the calltype labels came from manual annotation
+                # TODO: Having got the segments, we don't use them...
+                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+
+                ## return format:
+                ## self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
+                ## self.nclasses: number of class_labels
+                ## duration: median length of segments
+                ## TODO: That 5 is arbitrary max number of classes...
+                self.cluster = Clustering.Clustering([], [], 5)
+                self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                ## self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                ##                                                                              self.field("species"),
+                ##                                                                              feature=self.feature,
+                ##                                                                              max_clusters=5,
+                ##                                                                              single=True)
+                self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
+                """
+

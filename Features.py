@@ -376,7 +376,7 @@ def genCluterData(dir, duration=1, sampRate=16000):
                 data, fs = loadFile(filename)
                 # resample where necessary
                 if fs != sampRate:
-                    data = librosa.resample(data, fs, sampRate)
+                    data = librosa.resample(data, orig_sr=fs, target_sr=sampRate)
                     fs = sampRate
                 # get the middle 'duration' secs
                 middle_duration = int(duration * fs)

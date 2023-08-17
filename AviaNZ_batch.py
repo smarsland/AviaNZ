@@ -541,6 +541,7 @@ class AviaNZ_batchProcess():
             end = min(start+samplesInPage, self.datalength)
             # TODO: Still self.sp problems!
             thisPageLen = (end-start) / self.sp.sampleRate
+            #thisPageLen = (end-start) /16000 # self.sp.sampleRate
 
             if thisPageLen < 2 and (self.method != "Click" and self.method != "Bats"):
                 print("Warning: can't process short file ends (%.2f s)" % thisPageLen)

@@ -254,7 +254,7 @@ class WaveletSegment:
 
         # 2a. prefilter audio to species freq range
         for filenum in range(len(self.audioList)):
-            self.audioList[filenum] = self.sp.bandpassFilter(self.audioList[filenum],
+            self.audioList[filenum] = SignalProc.bandpassFilter(self.audioList[filenum],
                                             self.spInfo['SampleRate'],
                                             start=subfilter['FreqRange'][0],
                                             end=subfilter['FreqRange'][1])
@@ -1017,7 +1017,7 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = self.sp.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
+                C = SignalProc.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
 
             C = np.abs(C)
             N = len(C)
@@ -1512,9 +1512,9 @@ class WaveletSegment:
         if sampleRate != fsOut:
             print("Resampling from", sampleRate, "to", fsOut)
             if not fastRes:
-                data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+                data = librosa.resample(data, orig_sr=sampleRate, target_sr=fsOut, res_type='kaiser_best')
             else:
-                data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+                data = librosa.resample(data, orig_sr=sampleRate, target_sr=fsOut, res_type='kaiser_fast')
 
         # Get the five level wavelet decomposition
         if d:
