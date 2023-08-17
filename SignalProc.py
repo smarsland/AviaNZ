@@ -603,40 +603,6 @@ class SignalProc:
         diag_con = diag_con[1:width + 1, :]  
         return np.flipud(fft.ifft(diag_con * window, axis=1))
 
-    def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
-        """ FIR bandpass filter
-        128 taps, Hamming window, very basic.
-        """
-
-        if data is None:
-            data = self.data
-        if sampleRate is None:
-            sampleRate = self.sampleRate
-        if end is None:
-            end = sampleRate/2
-        start = max(start,0)
-        end = min(end,sampleRate/2)
-
-        if start == 0 and end == sampleRate/2:
-            print("No filter needed!")
-            return data
-
-        nyquist = sampleRate/2
-        ntaps = 129
-
-        if start == 0:
-            # Low pass
-            taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
-        elif end == sampleRate/2:
-            # High pass
-            taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
-        else:
-            # Bandpass
-            taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
-        #ntaps, beta = signal.kaiserord(ripple_db, width)
-        #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
-        return signal.lfilter(taps, 1.0, data)
-
     def ButterworthBandpass(self,data,sampleRate,low=0,high=None,band=0.005):
         """ Basic IIR bandpass filter.
             Identifies order of filter, max 10. If single-stage polynomial is unstable,
@@ -1509,6 +1475,35 @@ class SignalProc:
         featuress = featuress[:i, :, :, :]
         return featuress
 
+def bandpassFilter(data,sampleRate,start,end):
+    """ FIR bandpass filter
+    128 taps, Hamming window, very basic.
+    """
+
+    start = max(start,0)
+    end = min(end,sampleRate/2)
+
+    if start == 0 and end == sampleRate/2:
+        print("No filter needed!")
+        return data
+
+    nyquist = sampleRate/2
+    ntaps = 129
+
+    if start == 0:
+        # Low pass
+        taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
+    elif end == sampleRate/2:
+        # High pass
+        taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
+    else:
+        # Bandpass
+        taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
+    print("Taps:", taps)
+    #ntaps, beta = signal.kaiserord(ripple_db, width)
+    #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
+    return signal.lfilter(taps, 1.0, data)
+
 def wsola(x, s, win_type='hann', win_size=1024, syn_hop_size=512, tolerance=512):
     from scipy.interpolate import interp1d
     """Modify length of the audio sequence using WSOLA algorithm.
@@ -1608,4 +1603,40 @@ def wsola(x, s, win_type='hann', win_size=1024, syn_hop_size=512, tolerance=512)
         y[c, :] = np.int_(y_chan)
 
     return y.squeeze()
+
+"""
+    def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
+         FIR bandpass filter
+        128 taps, Hamming window, very basic.
+        
+
+        if data is None:
+            data = self.data
+        if sampleRate is None:
+            sampleRate = self.sampleRate
+        if end is None:
+            end = sampleRate/2
+        start = max(start,0)
+        end = min(end,sampleRate/2)
+
+        if start == 0 and end == sampleRate/2:
+            print("No filter needed!")
+            return data
+
+        nyquist = sampleRate/2
+        ntaps = 129
+
+        if start == 0:
+            # Low pass
+            taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
+        elif end == sampleRate/2:
+            # High pass
+            taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
+        else:
+            # Bandpass
+            taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
+        #ntaps, beta = signal.kaiserord(ripple_db, width)
+        #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
+        return signal.lfilter(taps, 1.0, data)
+        """
 

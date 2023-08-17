@@ -38,6 +38,8 @@
 # 10. Test and test again. And again.
 # 11. Qt6
 # 12. Check minimal things carried between objects
+# 13. If a .data file is empty, delete, restart
+# 14. Improve call type selection
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -1037,7 +1039,7 @@ class AviaNZ(QMainWindow):
 
         self.showInvSpec.setVisible(self.batmode)
         self.showFundamental.setEnabled(not self.batmode)
-        self.showSpectral.setEnabled(not self.batmode)
+        #self.showSpectral.setEnabled(not self.batmode)
         self.showEnergies.setEnabled(not self.batmode)
 
         self.addRegularAction.setEnabled(not self.batmode)
@@ -1186,10 +1188,17 @@ class AviaNZ(QMainWindow):
             if not hasattr(self, 'segments') or self.box1id<0:
                 return
 
+            print("call type labels")
             thisSeg = self.segments[self.box1id]
+            print(len(thisSeg[4]))
             for lab in thisSeg[4]:
                 if lab["species"]=="Don't Know":
-                    continue
+                    if len(thisSeg[4])==1:
+                        spMenu = self.menuBirdList.addAction("None")
+                        #TODO: Make non-selectable
+                        continue
+                    else:
+                        continue
                 # add the species menu
                 spMenu = self.menuBirdList.addMenu(lab["species"])
 
@@ -1269,6 +1278,7 @@ class AviaNZ(QMainWindow):
                         bird.setChecked(True)
                     self.menuBird2.addAction(bird)
 
+                print(self.shortBirdList)
                 self.fullbirdlist = self.makeFullBirdList(unsure=unsure)  # a QComboBox
                 self.showFullbirdlist = QWidgetAction(self.menuBirdList)
                 self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
@@ -1353,8 +1363,8 @@ class AviaNZ(QMainWindow):
                 pass
 
         # Remove spectral derivatives
-        self.showSpectral.setChecked(False)
         try:
+            self.showSpectral.setChecked(False)
             self.p_spec.removeItem(self.derivPlot)
         except Exception:
             pass
@@ -1742,7 +1752,7 @@ class AviaNZ(QMainWindow):
 
             if not self.CLI:
                 # Load the file for playback
-                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp)
+                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
                 audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
                 self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
@@ -2330,8 +2340,8 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # preprocess
-            data = librosa.resample(self.sp.data, orig_sf=self.sp.sampleRate, target_sr=16000)
-            data = self.sp.bandpassFilter(data, self.sp.sampleRate, 100, 16000)
+            data = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=16000)
+            data = SignalProc.bandpassFilter(data, self.sp.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
@@ -3179,6 +3189,7 @@ class AviaNZ(QMainWindow):
         it is separated for clarity.
         """
         pos = evt.scenePos()
+        print("in mouse clicked")
 
         # if any box is selected, deselect (wherever clicked)
         wasSelected = self.box1id
@@ -3357,29 +3368,35 @@ class AviaNZ(QMainWindow):
 
                     # User clicked in a segment:
                     if box1id > -1:
+                        print("segment selected")
                         # select the segment:
                         self.selectSegment(box1id)
                         # if this segment is clicked again, pop up bird menu:
                         if wasSelected==box1id:
+                            print("got here")
                             modifiers = QApplication.keyboardModifiers()
                             if modifiers == Qt.KeyboardModifier.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             elif modifiers == Qt.KeyboardModifier.MetaModifier:
-                                # TODO: SRM: Check
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                                 if self.viewCallType is False:
                                     self.viewCallType = True
-                                    # Calltype context menu
                                     self.fillBirdList()
                                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                                     self.viewCallType = False
                                 else:
+                                    self.fillBirdList()
                                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                             else:
+                                print("and here")
                                 self.fillBirdList()
-                            # SRM int
-                            self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                                self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                print(self.menuBirdList)
+                                print("??")
+                            # TODO: SRM: What's in the list?
+                            print("there")
+                            #self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
     def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
@@ -3429,6 +3446,7 @@ class AviaNZ(QMainWindow):
             self.menuBirdList.triggered.connect(self.callSelectedMenu)
             self.viewSpButton.setIcon(QIcon('img/sp-ctlarge.png'))
 
+        print("view call type",self.viewCallType)
         for seg in range(len(self.listLabels)):
             if self.listLabels[seg] is not None:
                 self.updateText(seg)
@@ -3597,7 +3615,7 @@ class AviaNZ(QMainWindow):
         if ctitem is None or ctitem=="":
             return
 
-        spmenu = ctitem.parentWidget().title()
+        spmenu = ctitem.parent().title()
         if type(ctitem) is not str:
             ctitem = ctitem.text()
         print("Call Type ",ctitem, spmenu)
@@ -4105,7 +4123,7 @@ class AviaNZ(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                C = self.sp.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
+                C = SignalProc.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -4546,7 +4564,7 @@ class AviaNZ(QMainWindow):
                 bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
                 top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
                 print("Extracting samples between %d-%d Hz" % (bottom, top))
-                denoised = self.sp.bandpassFilter(denoised, sampleRate=None, start=bottom, end=top)
+                denoised = SignalProc.bandpassFilter(denoised, sampleRate=self.sp.sampleRate, start=bottom, end=top)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -4698,7 +4716,7 @@ class AviaNZ(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
-                tosave = self.sp.bandpassFilter(self.sp.data[int(x1):int(x2)], start=y1, end=y2)
+                tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.sampleRate,start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.slowSpeed) 
                 wavio.write(filename, tosave.astype('int16'), self.sp.sampleRate, scale='dtype-limits', sampwidth=2)
@@ -5763,16 +5781,16 @@ class AviaNZ(QMainWindow):
             self.pausePlayback()
         else:
             self.playSpeed = 1.0
-            if self.media_obj.state() != QAudio.State.SuspendedState and not self.media_obj.keepSlider:
-                #print("restart playback")
+            if self.media_obj.state() != QAudio.State.SuspendedState:
+                print("(re)start playback")
                 # restart playback
                 start,end = self.p_ampl.viewRange()[0]
                 # SRM
                 self.setPlaySliderLimits(start*1000, end*1000)
                 # (else keep play slider range from before)
             else:
-                #print("resume playback")
-                print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
+                print("resume playback")
+                #print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
             self.bar.setMovable(False)
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
@@ -5784,6 +5802,7 @@ class AviaNZ(QMainWindow):
             self.playBandLimitedSegButton.repaint()
             QApplication.processEvents()
 
+            # TODO: Why is this segmentStart?
             #self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
             # if bar was moved under pause, update the playback
             # start position based on the bar:
@@ -5826,7 +5845,7 @@ class AviaNZ(QMainWindow):
                 QApplication.processEvents()
 
                 #print("filterseg")
-                self.media_obj.filterSeg(start, stop, self.playSpeed) #self.sp.data,self.playSpeed)
+                self.media_obj.selectPlaySound(start, stop, self.playSpeed) #self.sp.data,self.playSpeed)
                 #self.media_obj.filterSeg(start, stop, self.sp.data,self.playSpeed)
             else:
                 print("Can't play, no segment selected")
@@ -5864,7 +5883,8 @@ class AviaNZ(QMainWindow):
 
                 # filter the data into a temporary file or buffer
                 #print("bandseg")
-                self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top)
+                self.media_obj.selectPlaySound(self.segmentStart, self.segmentStop, low=bottom, high=top)
+                #self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top)
             else:
                 print("Can't play, no segment selected")
 
@@ -5910,10 +5930,7 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        #print("yep", self.media_obj.processedUSecs())
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
-        #eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
-            
         bufsize = 0.02
 
         # listener for playback finish. Note small buffer for catching up
@@ -5960,6 +5977,7 @@ class AviaNZ(QMainWindow):
         #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
         print("Resetting playback")
         self.media_obj.reset()
+        self.media_obj.keepSlider=False
         #self.media_slow.reset()
 
     def setOperatorReviewerDialog(self):

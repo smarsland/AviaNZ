@@ -17,6 +17,7 @@ openpyxl==3.0.10
 pyFFTW==0.13.1
 #PyQt5==5.15.7
 pyqtgraph==0.13.2
+resampy
 scikit-image==0.19.3
 six==1.16.0
 scipy==1.9.3

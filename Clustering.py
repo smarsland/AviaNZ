@@ -544,7 +544,7 @@ class Clustering:
                                 else:
                                     ct = None
 
-                            CTsegments.append([wavfile, seg, syls, ct])
+                                CTsegments.append([wavfile, seg, syls, ct])
                 
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
@@ -607,7 +607,7 @@ class Clustering:
                         if label["species"] == self.field("species") and "calltype" in label:
                             # Find the syllables inside this segment
                             # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                            syls = self.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), denoise=False, minlen=0.2)
+                            syls = self.findSyllablesSeg(wavfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
                             CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                             duration.append(seg[1]-seg[0])
         return CTsegments, len(self.clusters), np.median(duration)
@@ -743,14 +743,14 @@ class Clustering:
                         dataset.append([dirname, seg, syl])
         return dataset
 
-    def findSyllablesSeg(self, audiodata, seg, fs=None, denoise=False, minlen=10):
+    def findSyllablesSeg(self, wavfile, seg, fs=None, denoise=False, minlen=10):
         """ Find syllables in the segment using median clipping - single segment
         :return: syllables list
         """
         # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
         # And should avoid opening file more than once
         # And since have made spectrogram, pass it back
-        audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
+        audiodata = self.loadFile(filename=wavfile, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
         start = seg[0]
         #self.sp = SignalProc.SignalProc()
         self.sp.data = audiodata
@@ -914,7 +914,7 @@ class Clustering:
 
         if f1 != 0 and f2 != 0:
             # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
-            audiodata = self.sp.bandpassFilter(audiodata, sampleRate, f1, f2)
+            audiodata = SignalProc.bandpassFilter(audiodata, sampleRate, f1, f2)
 
         return audiodata
 
