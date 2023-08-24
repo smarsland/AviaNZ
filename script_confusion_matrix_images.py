@@ -59,12 +59,18 @@ def heatmap(A, lab, savefile):
 #              "Reassigned_Mel\\Test_837\\Labels_comparison_pure.csv"
 # label_file = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_syllable_TFR_experiment\\" \
 #              "Multitapered_Linear\\Test_627\\Labels_comparison_combine3.csv
+# label_file = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_syllable_TFR_experiment\\" \
+#              "Multitapered_Mel\\Test_1001\\Labels_comparison_df.csv"
 label_file = "C:\\Users\\Virginia\\Documents\\Work\\Individual recognition\\Kiwi_syllable_TFR_experiment\\" \
-             "Multitapered_Mel\\Test_1001\\Labels_comparison_df.csv"
-save_fold = "C:\\Users\\Virginia\\Documents\\Work\\Thesis_images\\Chapter 5"
-save_file = "Multitapered_mel_conf_matrix.jpg"
+             "Thesys_Review_April_2023\\Reassigned_Linear\\Test_1059\\Labels_comparison_combine2.csv"
+# save_fold = "C:\\Users\\Virginia\\Documents\\Work\\Thesis_images\\Chapter 5"
+save_fold = "C:\\Users\\Virginia\Documents\\Work\\Individual recognition\\Kiwi_syllable_TFR_experiment\\" \
+            "Thesys_Review_April_2023\\Confusion_matrix\\Test_1059"
+# save_file = "Multitapered_mel_conf_matrix.jpg"
+save_file = "Reassign_linear_conf_matrix.jpg"
 save_path = save_fold + "\\" +save_file
-label_list = ['D', 'E', 'J', 'K', 'L', 'M','O', 'R', 'Z']
+# label_list = ['D', 'E', 'J', 'K', 'L', 'M','O', 'R', 'Z']
+label_list = ['D', 'E', 'J', 'K', 'L', 'M','O', 'Z']
 field = []
 rows = []
 with open(label_file, 'r') as csvfile:
@@ -86,7 +92,7 @@ true_labels_list = []
 assigned_labels_list = []
 for i in range(N):
     true_labels_list.append(rows[i][1])
-    assigned_labels_list.append(rows[i][4])
+    assigned_labels_list.append(rows[i][6])
 
 # print(true_labels_list)
 # print(assigned_labels_list)
@@ -102,22 +108,22 @@ print(number_label)
 
 #confusion matrix: rows assigned labels columns real labels
 
-confusion_matrix = np.zeros((9,9))
+confusion_matrix = np.zeros((8,8))
 
 for i in range(N):
     true_index = label_list.index(true_labels_list[i])
     assigned_index = label_list.index(assigned_labels_list[i])
     confusion_matrix[assigned_index, true_index] += 1
 
-confusion_matrix[:,0]/=8
-confusion_matrix[:,1]/=5
-confusion_matrix[:, 2]/=6
-confusion_matrix[:, 3]/=5
-confusion_matrix[:, 4]/=7
-confusion_matrix[:, 5]/=5
+confusion_matrix[:,0]/=3
+confusion_matrix[:,1]/=4
+confusion_matrix[:, 2]/=4
+confusion_matrix[:, 3]/=4
+confusion_matrix[:, 4]/=5
+confusion_matrix[:, 5]/=4
 confusion_matrix[:, 6]/=5
-confusion_matrix[:, 7]/=3
-confusion_matrix[:,8]/=5
+confusion_matrix[:, 7]/=4
+# confusion_matrix[:,8]/=5
 
 confusion_matrix*=100
 
