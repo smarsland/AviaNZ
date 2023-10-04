@@ -744,6 +744,42 @@ class SignalProc:
 
         return data
 
+    def bandpassFilter(self,data=None,sampleRate=None,start=0,end=-1):
+        """ FIR bandpass filter
+        128 taps, Hamming window, very basic.
+        """
+
+        if data is None:
+            data = self.data
+        if sampleRate is None:
+            sampleRate = self.sampleRate
+        if end==-1:
+            end = sampleRate/2
+
+        start = max(start,0)
+        end = min(end,sampleRate/2)
+
+        if start == 0 and end == sampleRate/2:
+            print("No filter needed!")
+            return data
+
+        nyquist = sampleRate/2
+        ntaps = 129
+
+        if start == 0:
+            # Low pass
+            taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
+        elif end == sampleRate/2:
+            # High pass
+            taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
+        else:
+            # Bandpass
+            taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
+        print("Taps:", taps)
+        #ntaps, beta = signal.kaiserord(ripple_db, width)
+        #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
+        return signal.lfilter(taps, 1.0, data)
+    
     # The next functions perform spectrogram inversion
     def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10, window='Hann'):
         # Assumes that this is the plain (not power) spectrogram
@@ -1475,6 +1511,7 @@ class SignalProc:
         featuress = featuress[:i, :, :, :]
         return featuress
 
+# TODO: why is this here outside the class?
 def bandpassFilter(data,sampleRate,start,end):
     """ FIR bandpass filter
     128 taps, Hamming window, very basic.

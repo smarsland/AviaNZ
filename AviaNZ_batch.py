@@ -133,7 +133,9 @@ class AviaNZ_batchProcess():
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
             if len(samplerate)>1:
-                raise ValueError("ERROR: multiple sample rates found in selected recognisers, change selection")
+                # TODO: SRM: What the best way -- convert all and store? -> space issues
+                print("Multiple sample rates: ",samplerate)
+                #raise ValueError("ERROR: multiple sample rates found in selected recognisers, change selection")
 
             # convert list to string
             speciesStr = " & ".join(self.species)

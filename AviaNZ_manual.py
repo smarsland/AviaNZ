@@ -1411,8 +1411,10 @@ class AviaNZ(QMainWindow):
         if success==1:
             print("Warning: could not load file, reloading current file")
             self.SoundFileDir = SoundFileDirOld
-            self.filename = os.path.join(self.SoundFileDir, fileNameOld)
-            self.listLoadFile(fileNameOld)
+            # TODO: Is this sufficient?
+            if hasattr(self, 'fileNameOld'):
+                self.filename = os.path.join(self.SoundFileDir, fileNameOld)
+                self.listLoadFile(fileNameOld)
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
@@ -3273,7 +3275,7 @@ class AviaNZ(QMainWindow):
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList(unsure=True)
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 elif modifiers == Qt.KeyboardModifier.MetaModifier:
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
@@ -3282,15 +3284,15 @@ class AviaNZ(QMainWindow):
                         self.viewCallType = True
                         # Calltype context menu
                         self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                         self.viewCallType = False
                     else:
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 self.p_spec.setFocus()
 
                 # select the new segment/box
@@ -3383,20 +3385,20 @@ class AviaNZ(QMainWindow):
                                 if self.viewCallType is False:
                                     self.viewCallType = True
                                     self.fillBirdList()
-                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                                     self.viewCallType = False
                                 else:
                                     self.fillBirdList()
-                                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 print("and here")
                                 self.fillBirdList()
-                                self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                                self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                                 print(self.menuBirdList)
                                 print("??")
                             # TODO: SRM: What's in the list?
                             print("there")
-                            #self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                            #self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
 
     def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
