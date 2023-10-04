@@ -1730,7 +1730,7 @@ class HumanClassify1(QDialog):
         # Audio playback object
         #self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
         self.media_obj2 = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
-        self.media_obj2.NotifyTimer.timeout.connect(self.endListener)
+        #self.media_obj2.NotifyTimer.timeout.connect(self.endListener)
         #self.media_obj2.notify.connect(self.endListener)
         self.media_obj2.loop = loop
         self.autoplay = autoplay

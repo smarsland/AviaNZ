@@ -270,6 +270,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
+        # TODO: Remove?
         self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
