@@ -47,6 +47,7 @@ from shutil import copyfile
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
 from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard #, QActionGroup, QShortcut
+from PyQt6.QtWidgets import QGraphicsBlurEffect
 # The two below moved from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
@@ -80,6 +81,8 @@ import openpyxl
 # TODO: Check this
 from lxml import etree as ET
 #import xml.etree.ElementTree as ET
+
+pg.setConfigOption('useNumba', True)
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -761,6 +764,11 @@ class AviaNZ(QMainWindow):
         self.amplPlot = pg.PlotDataItem()
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
+        # TODO: Useful?
+        self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
+        self.specPlot.setGraphicsEffect(self.blurEffect)
+        # TODO: ---
+
         self.p_spec.addItem(self.specPlot)
         if self.MouseDrawingButton==Qt.MouseButton.RightButton:
             self.p_ampl.unsetCursor()
