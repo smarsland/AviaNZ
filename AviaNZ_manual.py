@@ -1314,8 +1314,9 @@ class AviaNZ(QMainWindow):
 
         # Check if media is playing and stop it if so
         if hasattr(self,'media_obj'):
-            if self.media_obj.isPlaying():
+            if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
+                
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -1765,6 +1766,7 @@ class AviaNZ(QMainWindow):
                 self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
                 audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
+                # TODO: replace
                 self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
 
                 # Reset the media player
@@ -2154,7 +2156,7 @@ class AviaNZ(QMainWindow):
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
         if hasattr(self, 'media_obj'):
-            if self.media_obj.state() == QAudio.State.ActiveState or self.media_obj.state() == QAudio.State.SuspendedState:
+            if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
 
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -3809,7 +3811,7 @@ class AviaNZ(QMainWindow):
         Loads them from the file as appropriate and sets the lookup table.
         """
         if not self.CLI:
-            if self.media_obj.isPlaying():
+            if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
 
         self.config['cmap'] = cmap
@@ -3846,7 +3848,7 @@ class AviaNZ(QMainWindow):
         Translates the brightness and contrast values into appropriate image levels.
         """
         if not self.CLI:
-            if self.media_obj.isPlaying():
+            if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
         if brightness is None:
             brightness = self.specControls.brightSlider.value()
@@ -4544,7 +4546,7 @@ class AviaNZ(QMainWindow):
             print("Can't play, no segment selected")
             return
 
-        if self.media_obj.isPlaying():
+        if self.media_obj.isPlayingorPaused():
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
@@ -5794,12 +5796,13 @@ class AviaNZ(QMainWindow):
             if self.media_obj.state() != QAudio.State.SuspendedState:
                 print("(re)start playback")
                 # restart playback
-                start,end = self.p_ampl.viewRange()[0]
-                # SRM
-                self.setPlaySliderLimits(start*1000, end*1000)
+                #start,end = self.p_ampl.viewRange()[0]
+                self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+                self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
+                start = self.segmentStart
                 # (else keep play slider range from before)
             else:
-                print("resume playback")
+                print("resume playback",self.bar.value()*1000)
                 #print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
             self.bar.setMovable(False)
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
@@ -5812,36 +5815,34 @@ class AviaNZ(QMainWindow):
             self.playBandLimitedSegButton.repaint()
             QApplication.processEvents()
 
-            # TODO: Why is this segmentStart?
-            #self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
             # if bar was moved under pause, update the playback
             # start position based on the bar:
             if self.bar.value()>0:
                 start = self.convertSpectoAmpl(self.bar.value())*1000  # in ms
                 print("found bar at %d ms" % start)
             else:
-                #print("segStart")
                 start = self.segmentStart
+                #print("segStart")
             # (will not be used if resuming without touching the bar)
 
             self.media_obj.pressedPlay(start=start, stop=self.segmentStop) #, audiodata=self.sp.data)
             #self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.sp.data)
 
-    def playSelectedSegment(self):
-        """ Listener for PlaySegment button.
+    def playSelectedSegment(self,low=None,high=None):
+        """ Listener for PlaySegment button (and called by playBandLimitedSegment)
         Get selected segment start and end (or return if no segment selected).
         On PLAY, all three buttons turn to STOPs.
         """
-        if self.media_obj.isPlaying():
+        if self.media_obj.isPlayingorPaused():
             self.stopPlayback()
         else:
             if self.box1id > -1:
-                self.stopPlayback()
+                #self.stopPlayback()
                 self.playSpeed=self.slowSpeed
-                # restart playback
-                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-                self.setPlaySliderLimits(start, stop)
+
+                self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+                self.segmentStop  = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+                #self.setPlaySliderLimits(start, stop)
 
                 self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
@@ -5854,17 +5855,24 @@ class AviaNZ(QMainWindow):
                 self.playBandLimitedSegButton.repaint()
                 QApplication.processEvents()
 
-                #print("filterseg")
-                self.media_obj.selectPlaySound(start, stop, self.playSpeed) #self.sp.data,self.playSpeed)
+                #if low is False or low is None:
+                    #self.media_obj.selectPlaySound(self.segmentStart, self.segmentStop, speed=self.playSpeed) 
+                #else:
+                    #self.media_obj.selectPlaySound(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high) 
+                self.media_obj.selectPlaySound(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high) 
                 #self.media_obj.filterSeg(start, stop, self.sp.data,self.playSpeed)
-            else:
-                print("Can't play, no segment selected")
+            #else:
+                #print("Can't play, no segment selected")
 
     def playBandLimitedSegment(self):
         """ Listener for PlayBandlimitedSegment button.
-        Gets the band limits of the segment, bandpass filters, then plays that.
-        Currently uses FIR bandpass filter -- Butterworth is commented out.
-        On PLAY, all three buttons turn to STOPs.
+        Gets the band limits of the segment and passes them on.
+        """
+        if self.box1id > -1:
+            low = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
+            high = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
+            self.playSelectedSegment(low,high)
+
         """
         if self.media_obj.isPlaying():
             self.stopPlayback()
@@ -5877,9 +5885,9 @@ class AviaNZ(QMainWindow):
                 top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
 
                 print("Extracting samples between %d-%d Hz" % (bottom, top))
-                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-                self.setPlaySliderLimits(start, stop)
+                self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+                self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+                #self.setPlaySliderLimits(start, stop)
                 self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
@@ -5897,6 +5905,7 @@ class AviaNZ(QMainWindow):
                 #self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top)
             else:
                 print("Can't play, no segment selected")
+        """
 
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
@@ -5919,7 +5928,9 @@ class AviaNZ(QMainWindow):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         #print("stop")
         self.bar.setMovable(True)
-        self.media_obj.pressedStop()
+        # TODO??
+        #self.media_obj.pressedStop()
+        self.media_obj.reset()
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
         #self.playSlider.setValue(-1000)
@@ -5940,6 +5951,7 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
+        # TODO: offset?
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
         bufsize = 0.02
 
@@ -5958,9 +5970,10 @@ class AviaNZ(QMainWindow):
             #print(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
             self.bar.setValue(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
 
+    """
     def setPlaySliderLimits(self, start, end):
-        """ Uses start/end in ms, relative to page start
-        """
+         Uses start/end in ms, relative to page start
+        
         # SRM int
         #offset = (self.startRead + self.startTime) * 1000 # in ms, absolute
         #self.playSlider.setRange(int(start + offset), int(end + offset))
@@ -5968,6 +5981,7 @@ class AviaNZ(QMainWindow):
         #self.segmentStop = self.playSlider.maximum() - offset # relative to file start
         self.segmentStart = start
         self.segmentStop = end
+    """
 
     def floorSliderMoved(self,value):
         self.noisefloor = value
@@ -5977,17 +5991,18 @@ class AviaNZ(QMainWindow):
         # sm: ?
 
     def volSliderMoved(self, value):
+        """ Listener for when the volume slide moves
+        """
         self.media_obj.applyVolSlider(value)
 
     def barMoved(self, evt):
-        """ Listener for when the bar showing playback position moves.
-            Resets both QAudioOutputs so that they don't try to resume
+        """ Listener for when the bar showing playback position is moved.
         """
         #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
         #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
         print("Resetting playback")
         self.media_obj.reset()
-        self.media_obj.keepSlider=False
+        #self.media_obj.keepSlider=False
         #self.media_slow.reset()
 
     def setOperatorReviewerDialog(self):
@@ -6434,7 +6449,7 @@ class AviaNZ(QMainWindow):
         Updates the overview segments as well.
         """
         print("deleting id:", id)
-        if self.media_obj.isPlaying():
+        if self.media_obj.isPlayingorPaused():
             # includes resetting playback buttons
             self.stopPlayback()
 
