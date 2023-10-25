@@ -254,7 +254,7 @@ class WaveletSegment:
 
         # 2a. prefilter audio to species freq range
         for filenum in range(len(self.audioList)):
-            self.audioList[filenum] = SignalProc.bandpassFilter(self.audioList[filenum],
+            self.audioList[filenum] = self.sp.bandpassFilter(self.audioList[filenum],
                                             self.spInfo['SampleRate'],
                                             start=subfilter['FreqRange'][0],
                                             end=subfilter['FreqRange'][1])
@@ -1017,7 +1017,7 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = SignalProc.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
+                C = self.sp.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
 
             C = np.abs(C)
             N = len(C)
