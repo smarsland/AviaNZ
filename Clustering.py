@@ -913,8 +913,8 @@ class Clustering:
             audiodata = WF.waveletDenoise(thresholdType='soft', maxLevel=10)
 
         if f1 != 0 and f2 != 0:
-            # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
-            audiodata = SignalProc.bandpassFilter(audiodata, sampleRate, f1, f2)
+            # audiodata = self.sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
+            audiodata = self.sp.bandpassFilter(audiodata, sampleRate, f1, f2)
 
         return audiodata
 

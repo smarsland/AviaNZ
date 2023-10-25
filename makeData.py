@@ -11,9 +11,10 @@ def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=False):
     # You need to say how many images to make, which is a bit crap
 
     # PARAM: # noise images
-    nnoise = 15
+    blank = False
+    nnoise = 60
 
-    lots = 100000
+    lots = 1000
     train_x = np.zeros((lots,imgWidth,imgHeight))
     train_y = []
     train_y2 = []
@@ -48,15 +49,21 @@ def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=False):
                             if classname != "LT" and classname != "ST":
                                 # Different for noise
                                 # Random param: number of noise sections
-                                starts = np.random.randint(np.shape(sp.sg)[1]-2*imgWidth,size=nnoise)+imgWidth
+                                starts = np.random.randint(np.shape(sp.sg)[1]-imgWidth,size=nnoise)
                                 y=2
                                 for s in starts:
                                     if img: 
                                         if imgHeight==64:
                                             np.save(os.path.join(imgsavepath,str(y) + '_' + "%06d" % count + '.npy'), sp.sg[:,s:s+imgWidth].T)
-                                        else:
+                                        elif blank:
                                             # Blank section at top
                                             x[:,:64] = sp.sg[:,s:s+imgWidth].T
+                                            np.save(os.path.join(imgsavepath,str(y) + '_' + "%06d" % count + '.npy'), x)
+                                        else:
+                                            # Repeat
+                                            nreps = int(np.floor(imgHeight/64))
+                                            for i in range(nreps-1):
+                                                x[:,i*64:(i+1)*64] = sp.sg[:,s:s+imgWidth].T
                                             np.save(os.path.join(imgsavepath,str(y) + '_' + "%06d" % count + '.npy'), x)
                                     else:
                                         train_x[count,:,:] = sp.sg[:,s:s+imgWidth].T
@@ -96,7 +103,11 @@ def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=False):
                                             else:
                                                 train_x[count,:,:] = sp.sg[:,start+i*imgWidth:start+(i+1)*imgWidth].T
                                             count+=1
-                                        start = start+incr
+                                        if y==0:
+                                            start = start+incr
+                                        else:
+                                            start = start+incr//2
+                
                                 #else:
                                     #print(classname,"None")
                                     #start = int(0.2*np.shape(sp.sg)[1])
@@ -119,5 +130,70 @@ def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=False):
     #nN = np.shape(np.where(train_y==2))[1]
     #print(count,nLT,nST,nN)
 
-makeBatData('Full',imgWidth=128,imgHeight=64,incr=32,img=True,scale=False)
-#makeBatData('Check',imgWidth=128,imgHeight=64,incr=32,img=True,scale=True)
+def makeNoiseData(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
+    # Given a set of wav files, make spectrograms of the right size
+    # Parameters matter!
+    # TODO
+    sp = SignalProc.SignalProc(128,64)
+    imgsavepath = os.path.join(dirName,'noise'+str(imgWidth)+"_"+str(imgHeight))
+    if not os.path.exists(imgsavepath):
+            os.makedirs(imgsavepath)
+    x = np.zeros((imgWidth,imgHeight))
+    count=0
+    blank=True
+    for root, dirs, files in os.walk(str(dirName)):
+        for filename in files:
+            if filename.lower().endswith('.wav'):
+                filename = os.path.join(root, filename)
+                sp.readWav(filename)
+                sg = sp.spectrogram().T
+                #print(np.shape(sg),imgWidth)
+                starts = np.random.randint(np.shape(sg)[1]-imgWidth,size=nnoise)
+                #print(starts)
+                y=2
+                for s in starts:
+                    x = sg[:,s:s+imgWidth].T
+                    np.save(os.path.join(imgsavepath,str(y) + '_' + "%06d" % count + '.npy'), x)
+                    count+=1
+
+def makeNoiseDataBats(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
+    # Given a set of wav files, make spectrograms of the right size
+    # This is a mess for bats, because they have to be 64 bits high and then repeated
+    # Note that this repeats the same noise, could do better
+    # These parameters work
+    sp = SignalProc.SignalProc(128,64)
+    imgsavepath = os.path.join(dirName,'noise'+str(imgWidth)+"_"+str(imgHeight))
+    if not os.path.exists(imgsavepath):
+            os.makedirs(imgsavepath)
+    x = np.zeros((imgWidth,imgHeight))
+    count=0
+    blank=True
+    for root, dirs, files in os.walk(str(dirName)):
+        for filename in files:
+            if filename.lower().endswith('.wav'):
+                filename = os.path.join(root, filename)
+                sp.readWav(filename)
+                sg = sp.spectrogram().T
+                #print(np.shape(sg),imgWidth)
+                starts = np.random.randint(np.shape(sg)[1]-imgWidth,size=nnoise)
+                #print(starts)
+                y=2
+                for s in starts:
+                    if blank:
+                        # Blank section at top
+                        x[:,:64] = sg[:,s:s+imgWidth].T
+                        np.save(os.path.join(imgsavepath,str(y) + '_' + "%06d" % count + '.npy'), x)
+                    else:
+                        # Repeat
+                        nreps = int(np.floor(imgHeight/64))
+                        for i in range(nreps-1):
+                            x[:,i*64:(i+1)*64] = sg[:,s:s+imgWidth].T
+                        np.save(os.path.join(imgsavepath,str(y) + '_' + "%06d" % count + '.npy'), x)
+                    count+=1
+
+#makeBatData('Bats/Full',imgWidth=246,imgHeight=256,incr=32,img=True,scale=False)
+##makeBatData('Full',imgWidth=128,imgHeight=64,incr=16,img=True,scale=False)
+##makeBatData('Check',imgWidth=224,imgHeight=64,incr=16,img=True,scale=False)
+
+#makeNoiseDataBats('AviaNZ_CNN/NoiseFiles/','NoiseBats',246,256,12)
+makeNoiseData('AviaNZ_CNN/NoiseFiles/','Noise',246,256,12)
