@@ -37,7 +37,7 @@ import pyqtgraph as pg
 import numpy as np
 import colourMaps
 import SupportClasses_GUI
-import SignalProc
+import Spectrogram
 import SupportClasses
 import openpyxl
 import json
@@ -1728,7 +1728,7 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        #self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
+        #self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
         self.media_obj2 = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
         #self.media_obj2.NotifyTimer.timeout.connect(self.endListener)
         #self.media_obj2.notify.connect(self.endListener)
@@ -2384,7 +2384,7 @@ class HumanClassify2(QDialog):
         Allows quick confirm/leave/delete check over many segments.
 
         Construction:
-        1. a list of SignalProcs containing spectrograms for ALL the segments in arg2
+        1. a list of Spectrogram containing spectrograms for ALL the segments in arg2
         2. SegmentList. Just provide full versions of this,
           and this dialog will select the needed segments.
         3. indices of segments to show (i.e. the selected species and current page)
@@ -3144,7 +3144,7 @@ class Cluster(QDialog):
         self.minsg = 1
         self.maxsg = 1
         for seg in self.segments:
-            sp = SignalProc.SignalProc(512, 256)
+            sp = Spectrogram.Spectrogram(512, 256)
             sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
             _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             self.sg = sp.normalisedSpec("Log")

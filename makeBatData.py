@@ -1,7 +1,7 @@
 
 import os,math
 import numpy as np
-import SignalProc
+import Spectrogram
 
 def ClickSearch(imspec, sampleRate):
     """
@@ -93,7 +93,7 @@ def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=True):
     train_y = np.zeros(lots)
     count = 0
 
-    sp = SignalProc.SignalProc(1024,512)
+    sp = Spectrogram.Spectrogram(1024,512)
     dt=0.002909090909090909
     if img:
         imgsavepath = os.path.join(dirName,'img'+str(imgWidth)+"_"+str(imgHeight)+"_"+str(incr))

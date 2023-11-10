@@ -24,8 +24,9 @@ import librosa
 import copy
 import numpy as np
 import time, os, math, csv, gc
-import SignalProc
+import Spectrogram
 import Segment
+import SignalProc
 from ext import ce_denoise as ce
 from ext import ce_detect
 from itertools import combinations
@@ -42,7 +43,7 @@ class WaveletSegment:
             # for now, we default to the first subfilter:
             print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
 
-        self.sp = SignalProc.SignalProc(256, 128)
+        self.sp = Spectrogram.Spectrogram(256, 128)
 
     def readBatch(self, data, sampleRate, d, spInfo, wpmode="new", wind=False):
         """ File (or page) loading for batch mode. Must be followed by self.waveletSegment.
@@ -254,7 +255,7 @@ class WaveletSegment:
 
         # 2a. prefilter audio to species freq range
         for filenum in range(len(self.audioList)):
-            self.audioList[filenum] = self.sp.bandpassFilter(self.audioList[filenum],
+            self.audioList[filenum] = SignalProc.bandpassFilter(self.audioList[filenum],
                                             self.spInfo['SampleRate'],
                                             start=subfilter['FreqRange'][0],
                                             end=subfilter['FreqRange'][1])
@@ -1017,7 +1018,7 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = self.sp.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
+                C = SignalProc.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
 
             C = np.abs(C)
             N = len(C)

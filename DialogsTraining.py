@@ -45,7 +45,7 @@ import pyqtgraph as pg
 import numpy as np
 import colourMaps
 import SupportClasses, SupportClasses_GUI
-import SignalProc
+import Spectrogram
 import WaveletSegment
 import WaveletFunctions
 import Segment
@@ -793,7 +793,7 @@ class BuildRecAdvWizard(QWizard):
             self.minsg = 1
             self.maxsg = 1
             for seg in self.segments:
-                sp = SignalProc.SignalProc(512, 256)
+                sp = Spectrogram.Spectrogram(512, 256)
                 sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
@@ -847,7 +847,7 @@ class BuildRecAdvWizard(QWizard):
                 self.minsg = 1
                 self.maxsg = 1
                 for seg in self.segments:
-                    sp = SignalProc.SignalProc(512, 256)
+                    sp = Spectrogram.Spectrogram(512, 256)
                     sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
     
                     # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
@@ -3392,7 +3392,7 @@ This is the start of better code...
                                 window = 2
                                 duration = max(int(calls[j][1][1]-calls[j][1][0]),window)
                                 audiodata = self.cluster.loadFile(calls[j][0],duration,calls[j][1][0])
-                                sp = SignalProc.SignalProc(512, 256)
+                                sp = Spectrogram.Spectrogram(512, 256)
                                 sp.data = audiodata
                                 sp.sampleRate = 16000
                                 _= sp.spectrogram(256, 128)

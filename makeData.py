@@ -1,6 +1,6 @@
 import os, math
 import numpy as np
-import SignalProc 
+import Spectrogram 
 
 def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=False):
     # Make bat data matrix. It will be size nimages * imgHeight * imgWidth
@@ -134,7 +134,7 @@ def makeNoiseData(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
     # Given a set of wav files, make spectrograms of the right size
     # Parameters matter!
     # TODO
-    sp = SignalProc.SignalProc(128,64)
+    sp = Spectrogram.Spectrogram(128,64)
     imgsavepath = os.path.join(dirName,'noise'+str(imgWidth)+"_"+str(imgHeight))
     if not os.path.exists(imgsavepath):
             os.makedirs(imgsavepath)
@@ -161,7 +161,7 @@ def makeNoiseDataBats(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
     # This is a mess for bats, because they have to be 64 bits high and then repeated
     # Note that this repeats the same noise, could do better
     # These parameters work
-    sp = SignalProc.SignalProc(128,64)
+    sp = Spectrogram.Spectrogram(128,64)
     imgsavepath = os.path.join(dirName,'noise'+str(imgWidth)+"_"+str(imgHeight))
     if not os.path.exists(imgsavepath):
             os.makedirs(imgsavepath)

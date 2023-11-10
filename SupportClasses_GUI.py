@@ -824,7 +824,7 @@ class ControllableAudio(QAudioSink):
         segment = audiodata[start:stop]
         if low is not None and high is not None:
             # TODO: Check self.sp exists
-            segment = self.sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
+            segment = SignalProc.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         self.loadArray(segment)
 
     def pressedPause(self):
@@ -1048,7 +1048,7 @@ class ControllableAudio_qt5(QAudioOutput):
         start = max(0, start * self.format().sampleRate() // 1000)
         stop = min(stop * self.format().sampleRate() // 1000, len(audiodata))
         segment = audiodata[int(start):int(stop)]
-        segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
+        segment = SignalProc.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         self.loadArray(segment)
 
     def filterSeg(self, start, stop, audiodata):
