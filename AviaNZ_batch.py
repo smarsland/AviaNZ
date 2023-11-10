@@ -23,7 +23,7 @@ import gc, os, re, fnmatch
 
 import numpy as np
 
-import SignalProc
+import Spectrogram
 import Segment
 import WaveletSegment
 import SupportClasses
@@ -510,7 +510,7 @@ class AviaNZ_batchProcess():
         # Segment over pages separately, to allow dealing with large files smoothly:
         # (page size is shorter for low freq things, i.e. bittern,
         # since those freqs are very noisy and variable)
-        # TODO: Lots -- SignalProc
+        # TODO: Lots -- Spectrogram
         if hasattr(self, 'sp'):
             if self.sp.sampleRate<=4000:
                 # Basically bittern
@@ -553,7 +553,7 @@ class AviaNZ_batchProcess():
             if speciesStr == "Any sound":
                 # Create spectrogram for median clipping etc
                 if not hasattr(self, 'sp'):
-                    self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+                    self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
                 self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
                 _ = self.sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True)
@@ -839,9 +839,9 @@ class AviaNZ_batchProcess():
         """ species: list of recognizer names, or ["Any sound"].
             Species names will be wiped based on these. """
         print(self.filename)
-        # Create an instance of the Signal Processing class
+        # Create an instance of the Spectrogram class
         if not hasattr(self, 'sp'):
-            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+            self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
 
         # Read audiodata or spectrogram
         if self.method == "Click":  # old bat method
@@ -849,7 +849,7 @@ class AviaNZ_batchProcess():
             #self.sampleRate = self.sp.sampleRate
             self.datalength = self.sp.fileLength
         elif self.method == "Bats":
-            self.sp = SignalProc.SignalProc(512, 256)
+            self.sp = Spectrogram.Spectrogram(512, 256)
             self.sp.readBmp(self.filename, rotate=True, repeat=False)
             #self.sampleRate = self.sp.sampleRate
             self.datalength = self.sp.fileLength
@@ -1147,7 +1147,7 @@ class AviaNZ_batchProcess():
     def outputBatPasses(self,dirName,savefile='BatPasses.csv'):
         # A bit ad hoc for now. Assumes that the directory structure ends with 'Bat detname date/date/'
         if not hasattr(self, 'sp'):
-            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+            self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
         start = "Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n"
         output = start
         dt=0.002909090909090909

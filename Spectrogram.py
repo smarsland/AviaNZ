@@ -29,6 +29,7 @@ import wavio
 import librosa
 import copy
 import gc
+import SignalProc
 
 from PyQt6.QtGui import QImage
 
@@ -1011,12 +1012,12 @@ class Spectrogram:
             print("Don't use this interface for wavelets")
             return
         elif str(alg) == "Bandpass":
-            self.data = self.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
+            self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
         elif str(alg) == "Butterworth Bandpass":
-            self.data = self.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
+            self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
         else:
             # Median Filter
-            self.data = self.medianFilter(self.data,int(str(width)))
+            self.data = SignalProc.medianFilter(self.data,int(str(width)))
 
     def impMask(self, engp=90, fp=0.75):
         """

@@ -72,8 +72,8 @@ for root, dirs, files in os.walk('Freebird'):
             except:
                 print("Can't read %s.p or missing data" %tagFile[:-4])
                 # Otherwise, load the wav file
-                import SignalProc 
-                sp = SignalProc.SignalProc(512,256, 0, 0)
+                import Spectrogram 
+                sp = Spectrogram.Spectrogram(512,256, 0, 0)
                 sp.readWav(tagFile[:-4] + '.wav', 0, 0)
                 duration = sp.fileLength / sp.sampleRate
 

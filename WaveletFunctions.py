@@ -28,7 +28,7 @@ import pyfftw
 from ext import ce_denoise as ce
 import time
 import Wavelet
-import SignalProc
+import Spectrogram
 
 # A pair of helper functions that are often useful:
 def graycode(n):
@@ -441,7 +441,7 @@ class WaveletFunctions:
         """
         wv = self.wavelet
         data = self.tree[node]
-        sp = SignalProc.SignalProc()
+        sp = Spectrogram.Spectrogram()
 
         lvl = math.floor(math.log2(node+1))
         # position of node in its level (0-based)

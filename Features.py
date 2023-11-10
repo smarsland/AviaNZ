@@ -23,7 +23,7 @@
 
 import numpy as np
 import librosa
-import SignalProc
+import Spectrogram
 import SupportClasses
 import WaveletSegment
 import wavio
@@ -118,7 +118,7 @@ class Features:
         self.sampleRate = sampleRate
         self.window_width=window_width
         self.incr = incr
-        sp = SignalProc.SignalProc(window_width=self.window_width, incr=self.incr)
+        sp = Spectrogram.Spectrogram(window_width=self.window_width, incr=self.incr)
         sp.data = self.data
         sp.sampleRate = self.sampleRate
         # The next lines are to get a spectrogram that *should* precisely match the Raven one
@@ -323,8 +323,8 @@ class Features:
 
     def get_SAP_features(self,data,fs,window_width=256,incr=128,K=2):
         """ Compute the Sound Analysis Pro features, i.e., Wiener entropy, spectral derivative, and their variants.
-        Most of the code is in SignalProc.py"""
-        sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+        Most of the code is in Spectrogram.py"""
+        sp = Spectrogram.Spectrogram(sampleRate=fs, window_width=256, incr=128)
     
         spectral_deriv, sg, freq_mod, wiener_entropy, mean_freq, contours = sp.spectral_derivative(data, fs,
                                             window_width=window_width, incr=incr, K=2, threshold=0.5, returnAll=True)
@@ -563,7 +563,7 @@ def testFeatures():
     if np.shape(np.shape(data))[0] > 1:
         data = data[:, 0]
 
-    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+    sp = Spectrogram.Spectrogram(sampleRate=fs, window_width=256, incr=128)
     # The next lines are to get a spectrogram that *should* precisely match the Raven one
     #sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Ones')
     #sg = sg ** 2

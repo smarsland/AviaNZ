@@ -20,7 +20,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import SignalProc
+import Spectrogram
 import SupportClasses
 import Shapes
 
@@ -622,7 +622,7 @@ class Segmenter:
     """
 
     def __init__(self, sp=None, fs=0, mingap=0.3, minlength=0.2):
-        # This is the reference to SignalProc
+        # This is the reference to Spectrogram
         self.sp = sp
         self.fs = fs
         # Spectrogram
@@ -1321,7 +1321,7 @@ class PostProcess:
             data = self.audioData[int(seg[0][0] * self.sampleRate):int(seg[0][1] * self.sampleRate)]
 
             # Generate features for CNN, overlapped windows
-            sp = SignalProc.SignalProc(window_width=self.CNNwindowInc[0],
+            sp = Spectrogram.Spectrogram(window_width=self.CNNwindowInc[0],
                                         incr=self.CNNwindowInc[1])
             sp.data = data
             sp.sampleRate = self.sampleRate
@@ -1402,7 +1402,7 @@ class PostProcess:
                 # data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
                 data = self.audioData
             # generate features for CNN
-            sp = SignalProc.SignalProc(window_width=self.CNNwindowInc[0],
+            sp = Spectrogram.Spectrogram(window_width=self.CNNwindowInc[0],
                                         incr=self.CNNwindowInc[1])
             sp.data = data
             sp.sampleRate = self.sampleRate
@@ -1503,7 +1503,7 @@ class PostProcess:
         newSegments = copy.deepcopy(self.segments)
         if newSegments.__len__() > 1:
             # Get avg energy
-            sp = SignalProc.SignalProc()
+            sp = Spectrogram.Spectrogram()
             sp.data = self.audioData
             sp.sampleRate = self.sampleRate
             rawsg = sp.spectrogram()
@@ -1542,7 +1542,7 @@ class PostProcess:
             # read the sound segment and check fundamental frq.
             secs = int(seg[1] - seg[0])
             # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
-            sp = SignalProc.SignalProc(256, 128)
+            sp = Spectrogram.Spectrogram(256, 128)
             if fileName:
                 sp.readWav(fileName, secs, seg[0])
                 self.sampleRate = sp.sampleRate
