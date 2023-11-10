@@ -450,7 +450,7 @@ class ExcelIO():
             timeStrFormat = "hh:mm:ss.zzz"
         else:
             timeStrFormat = "hh:mm:ss"
-        from PyQt6.QtCore import QTime
+        from PyQt5.QtCore import QTime
         ws = wb['Time Stamps']
         r = ws.max_row + 1
 

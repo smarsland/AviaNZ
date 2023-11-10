@@ -29,6 +29,7 @@
 # 3c -> size of filter box
 # 3d -> WTF merge segments things
 # 3e -> tidy code
+# 3f -> make call type an extra menu without button (and add to params)
 # 4. Finish Neural Networks
 # 5. Finish clustering
 # 6. Colour maps
@@ -46,12 +47,12 @@ from shutil import copyfile
 
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
-from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard #, QActionGroup, QShortcut
+from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard#, QActionGroup, QShortcut
 from PyQt6.QtWidgets import QGraphicsBlurEffect
-# The two below moved from QtWidgets
+# The two below will move from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
-from PyQt6.QtMultimedia import QAudio, QAudioDevice, QMediaDevices, QAudioFormat
+from PyQt6.QtMultimedia import QAudio#, QAudioDevice, QMediaDevices, QAudioFormat
 
 import wavio
 import numpy as np
@@ -66,13 +67,14 @@ from pyqtgraph.parametertree import Parameter, ParameterTree
 import SupportClasses, SupportClasses_GUI
 import Dialogs
 import DialogsTraining
-import SignalProc
+import Spectrogram
 import Segment
 import WaveletSegment
 import WaveletFunctions
 import Clustering
 import colourMaps
 import Shapes
+import SignalProc
 
 import librosa
 import webbrowser, copy, math
@@ -157,6 +159,7 @@ class AviaNZ(QMainWindow):
         self.startTime = 0
         self.segmentsToSave = False
         self.viewCallType = False
+        self.CallTypeMenu = False
         self.batmode = False
 
         # Spectrogram default settings
@@ -174,6 +177,7 @@ class AviaNZ(QMainWindow):
         self.DOC = self.config['DOC']
         self.extra = "none"
         self.playSpeed = 1.0
+        self.playingVisible = False 
 
         self.noisefloor = 0
 
@@ -312,7 +316,169 @@ class AviaNZ(QMainWindow):
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
 
+    def createMenu_qt5(self):
+        """ Create the menu entries at the top of the screen and link them as appropriate.
+        Some of them are initialised according to the data in the configuration file."""
+
+        fileMenu = self.menuBar().addMenu("&File")
+        openIcon = self.style().standardIcon(QStyle.SP_DialogOpenButton)
+        fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
+        # fileMenu.addAction("&Change Directory", self.chDir)
+        fileMenu.addAction("Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
+        fileMenu.addSeparator()
+        for recentfile in self.config['RecentFiles']:
+            fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
+        fileMenu.addSeparator()
+        fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
+        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit",QApplication.quit,"Ctrl+Q")
+
+        # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
+        # Add it a second time, then it appears!
+        if platform.system() == 'Darwin':
+            fileMenu.addAction("&Quit",QApplication.quit,"Ctrl+Q")
+
+        specMenu = self.menuBar().addMenu("&Appearance")
+
+        self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
+        self.useAmplitudeTick.setCheckable(True)
+        self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
+        self.useAmplitude = True
+
+        self.useFilesTick = specMenu.addAction("Show file list", self.useFilesCheck)
+        self.useFilesTick.setCheckable(True)
+        self.useFilesTick.setChecked(self.config['showListofFiles'])
+
+        # this can go under "Change interface settings"
+        self.showOverviewSegsTick = specMenu.addAction("Show annotation overview", self.showOverviewSegsCheck)
+        self.showOverviewSegsTick.setCheckable(True)
+        self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
+
+        self.showPointerDetails = specMenu.addAction("Show pointer details in spectrogram", self.showPointerDetailsCheck)
+        self.showPointerDetails.setCheckable(True)
+        self.showPointerDetails.setChecked(self.config['showPointerDetails'])
+
+        specMenu.addSeparator()
+
+        colMenu = specMenu.addMenu("Choose colour map")
+        colGroup = QActionGroup(self)
+        for colour in self.config['ColourList']:
+            cm = colMenu.addAction(colour)
+            cm.setCheckable(True)
+            if colour==self.config['cmap']:
+                cm.setChecked(True)
+            receiver = lambda checked, cmap=colour: self.setColourMap(cmap)
+            cm.triggered.connect(receiver)
+            colGroup.addAction(cm)
+        self.invertcm = specMenu.addAction("Invert colour map",self.invertColourMap)
+        self.invertcm.setCheckable(True)
+        self.invertcm.setChecked(self.config['invertColourMap'])
+
+        # specMenu.addSeparator()
+        specMenu.addAction("&Change spectrogram parameters",self.showSpectrogramDialog, "Ctrl+C")
+
+        if not self.DOC:
+            specMenu.addSeparator()
+            self.showDiagnosticTick = specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
+            self.showDiagnosticCNN = specMenu.addAction("Show CNN training diagnostics", self.showDiagnosticDialogCNN)
+            self.extraMenu = specMenu.addMenu("Diagnostic plots")
+            extraGroup = QActionGroup(self)
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Wind adjustment", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
+                em = self.extraMenu.addAction(ename)
+                em.setCheckable(True)
+                if ename == self.extra:
+                    em.setChecked(True)
+                receiver = lambda checked, ename=ename: self.setExtraPlot(ename)
+                em.triggered.connect(receiver)
+                extraGroup.addAction(em)
+
+        specMenu.addSeparator()
+        markMenu = specMenu.addMenu("Mark on spectrogram")
+        self.showFundamental = markMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental.setCheckable(True)
+        self.showFundamental.setChecked(True)
+        self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
+        self.showSpectral.setCheckable(True)
+        self.showSpectral.setChecked(False)
+        if not self.DOC:
+            self.showFormant = markMenu.addAction("Formants", self.showFormants)
+            self.showFormant.setCheckable(True)
+            self.showFormant.setChecked(False)
+        self.showEnergies = markMenu.addAction("Maximum energies", self.showMaxEnergy)
+        self.showEnergies.setCheckable(True)
+        self.showEnergies.setChecked(False)
+
+        # if not self.DOC:
+        #     cqt = specMenu.addAction("Show CQT", self.showCQT)
+
+        specMenu.addSeparator()
+
+        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly)
+        self.readonly.setCheckable(True)
+        self.readonly.setChecked(self.config['readOnly'])
+
+        specMenu.addSeparator()
+        specMenu.addAction("Interface settings", self.changeSettings)
+        specMenu.addAction("Put docks back",self.dockReplace)
+
+        actionMenu = self.menuBar().addMenu("&Actions")
+        actionMenu.addAction("Delete all segments", self.deleteAll, "Ctrl+D")
+        self.addRegularAction = actionMenu.addAction("Mark regular segments", self.addRegularSegments, "Ctrl+M")
+
+        actionMenu.addSeparator()
+        self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
+        actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
+        #actionMenu.addAction("Find matches",self.findMatches)
+
+        if not self.DOC:
+            actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
+            actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
+
+        actionMenu.addSeparator()
+        self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+
+        if not self.DOC:
+            actionMenu.addAction("Calculate segment statistics", self.calculateStats)
+            actionMenu.addAction("Analyse shapes", self.showShapesDialog)
+            actionMenu.addAction("Cluster segments", self.classifySegments)
+
+        actionMenu.addSeparator()
+        self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
+
+        actionMenu.addSeparator()
+
+        if not self.DOC:
+            actionMenu.addAction("Export spectrogram image", self.saveImageRaw)
+        actionMenu.addAction("&Export current view as image",self.saveImage,"Ctrl+I")
+
+        # "Recognisers" menu
+        recMenu = self.menuBar().addMenu("&Recognisers")
+        extrarecMenu = recMenu.addMenu("Train an automated recogniser")
+        extrarecMenu.addAction("Train a changepoint recogniser", self.buildChpRecogniser)
+        if not self.DOC:
+            extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
+
+        extrarecMenu.addAction("Extend a recogniser with CNN", self.buildCNN)
+        recMenu.addAction("Test a recogniser", self.testRecogniser)
+        recMenu.addAction("Manage recognisers", self.manageFilters)
+        recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
+
+        # "Utilities" menu
+        utilMenu = self.menuBar().addMenu("&Utilities")
+        utilMenu.addAction("Import from Excel", self.excel2Annotation)
+        utilMenu.addAction("Import from Freebird", self.tag2Annotation)
+        utilMenu.addAction("Backup annotations", self.backupAnnotations)
+        utilMenu.addAction("&Split WAV/DATA files", self.launchSplitter)
+
+        helpMenu = self.menuBar().addMenu("&Help")
+        helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
+        helpMenu.addAction("&Cheat Sheet", self.showCheatSheet)
+        helpMenu.addSeparator()
+        helpMenu.addAction("About", self.showAbout, "Ctrl+A")
+        if platform.system() == 'Darwin':
+            helpMenu.addAction("About", self.showAbout, "Ctrl+A")
+
     def createMenu(self):
+        # In Qt6 the order of addAction changes
         """ Create the menu entries at the top of the screen and link them as appropriate.
         Some of them are initialised according to the data in the configuration file."""
 
@@ -1312,10 +1478,14 @@ class AviaNZ(QMainWindow):
         self.removeSegments()
 
         # Check if media is playing and stop it if so
-        if hasattr(self,'AudioPlayer'):
-            if self.AudioPlayer.isPlayingorPaused():
+        if hasattr(self,'media_obj'):
+            if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
-            self.SoundBuffer.close() 
+
+        #if hasattr(self,'AudioPlayer'):
+            #if self.AudioPlayer.isPlayingorPaused():
+                #self.stopPlayback()
+            #self.SoundBuffer.close() 
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -1529,9 +1699,9 @@ class AviaNZ(QMainWindow):
                 # Create an instance of the Signal Processing class
                 if not hasattr(self, 'sp'):
                     if self.cheatsheet:
-                        self.sp = SignalProc.SignalProc(512,256, 0, 0)
+                        self.sp = Spectrogram.Spectrogram(512,256, 0, 0)
                     else:
-                        self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
+                        self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
 
                 self.currentFileSection = 0
 
@@ -1596,7 +1766,7 @@ class AviaNZ(QMainWindow):
 
                 self.sp.readWav(self.filename, lenRead, self.startRead)
 
-                # resample to 16K if needed (SignalProc will determine)
+                # resample to 16K if needed (Spectrogram will determine)
                 if self.cheatsheet:
                     self.sp.resample(16000)
                     self.sp.maxFreqShow = 8000
@@ -1609,7 +1779,7 @@ class AviaNZ(QMainWindow):
                 # self.sp.audioFormat will be set
                 # self.sp.fileLength will be determined from wav header
                 # self.sp.minFreq and maxFreq will be set based on sample rate
-                # self.sp.*Show will be set based on SignalProc settings
+                # self.sp.*Show will be set based on Spectrogram settings
 
             dlg += 1
             dlg.update()
@@ -1764,17 +1934,22 @@ class AviaNZ(QMainWindow):
             if not self.CLI:
                 # TODO
                 # Load the file for playback
-                self.AudioPlayer = SupportClasses_GUI.AudioPlayer(self.sp,useBar=True)
-                audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
+                #self.AudioPlayer = SupportClasses_GUI.AudioPlayer(self.sp,useBar=True)
+                #audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
                 # this responds to audio output timer
-                self.AudioPlayer.NotifyTimer.timeout.connect(self.movePlaySlider)
+                #self.AudioPlayer.NotifyTimer.timeout.connect(self.movePlaySlider)
                 # TODO: Magic number
-                self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+                #self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
+                self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+                #self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
+                # this responds to audio output timer
+                #self.media_obj.notify.connect(self.movePlaySlider)
 
                 # Reset the media player
                 # TODO: Might need a guard?
-                if hasattr(self, 'AudioPlayer'):
-                    self.stopPlayback()
+                #if hasattr(self, 'AudioPlayer'):
+                    #self.stopPlayback()
                 #self.volSliderMoved(0)
                 #self.segmentStop = 50
                 #self.media_obj.filterSeg(0, 50, self.audiodata)
@@ -1932,7 +2107,7 @@ class AviaNZ(QMainWindow):
 
 
     def showFundamentalFreq(self):
-        """ Calls the SignalProc class to compute, and then draws the fundamental frequency.
+        """ Calls the Spectrogram class to compute, and then draws the fundamental frequency.
         Uses the yin algorithm. """
 
         with pg.BusyCursor():
@@ -2159,8 +2334,11 @@ class AviaNZ(QMainWindow):
         """ Listener for when the overview box is changed. Other functions call it indirectly by setRegion.
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
-        if hasattr(self, 'AudioPlayer'):
-            if self.AudioPlayer.isPlayingorPaused():
+        #if hasattr(self, 'AudioPlayer'):
+            #if self.AudioPlayer.isPlayingorPaused():
+                #self.stopPlayback()
+        if hasattr(self, 'media_obj'):
+            if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
 
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -2356,8 +2534,9 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # preprocess
+            # TODO: resampy
             data = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=16000)
-            data = self.sp.bandpassFilter(data, self.sp.sampleRate, 100, 16000)
+            data = SignalProc.bandpassFilter(data, self.sp.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
@@ -2527,7 +2706,7 @@ class AviaNZ(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(self.datalength/self.sp.sampleRate)):
                 data = self.sp.data[int(w*self.sp.sampleRate):int((w+1)*self.sp.sampleRate)]
-                tempsp = SignalProc.SignalProc()
+                tempsp = Spectrogram.Spectrogram()
                 tempsp.data = data
                 sgRaw = tempsp.spectrogram()
                 # Normalise
@@ -2585,7 +2764,7 @@ class AviaNZ(QMainWindow):
             # so we upsample to get equal sized spectrograms
             if self.sp.sampleRate != 16000:
                 C = librosa.resample(C, orig_sr=16000, target_sr=self.sp.sampleRate)
-            tempsp = SignalProc.SignalProc()
+            tempsp = Spectrogram.Spectrogram()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
             sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.sampleRate
@@ -3389,7 +3568,6 @@ class AviaNZ(QMainWindow):
                         self.selectSegment(box1id)
                         # if this segment is clicked again, pop up bird menu:
                         if wasSelected==box1id:
-                            print("got here")
                             modifiers = QApplication.keyboardModifiers()
                             if modifiers == Qt.KeyboardModifier.ControlModifier:
                                 self.fillBirdList(unsure=True)
@@ -3405,13 +3583,9 @@ class AviaNZ(QMainWindow):
                                     self.fillBirdList()
                                     self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
-                                print("and here")
                                 self.fillBirdList()
                                 self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                                print(self.menuBirdList)
-                                print("??")
-                            # TODO: SRM: What's in the list?
-                            print("there")
+                                #print(self.menuBirdList)
                             #self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
 
     def GrowBox_ampl(self,pos):
@@ -3815,9 +3989,11 @@ class AviaNZ(QMainWindow):
         Loads them from the file as appropriate and sets the lookup table.
         """
         if not self.CLI:
-            if hasattr(self, 'AudioPlayer'):
-                if self.AudioPlayer.isPlayingorPaused():
-                    self.stopPlayback()
+            if self.media_obj.isPlayingorPaused():
+                self.stopPlayback()
+            #if hasattr(self, 'AudioPlayer'):
+                #if self.AudioPlayer.isPlayingorPaused():
+                    #self.stopPlayback()
 
         self.config['cmap'] = cmap
         lut = colourMaps.getLookupTable(self.config['cmap'])
@@ -3853,9 +4029,11 @@ class AviaNZ(QMainWindow):
         Translates the brightness and contrast values into appropriate image levels.
         """
         if not self.CLI:
-            if hasattr(self, 'AudioPlayer'):
-                if self.AudioPlayer.isPlayingorPaused():
-                    self.stopPlayback()
+            if self.media_obj.isPlayingorPaused():
+                self.stopPlayback()
+            #if hasattr(self, 'AudioPlayer'):
+                #if self.AudioPlayer.isPlayingorPaused():
+                    #self.stopPlayback()
         if brightness is None:
             brightness = self.specControls.brightSlider.value()
         if contrast is None:
@@ -4141,7 +4319,7 @@ class AviaNZ(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                C = self.sp.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
+                C = SignalProc.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -4379,7 +4557,7 @@ class AviaNZ(QMainWindow):
             print(startInSpecPixels, endInSpecPixels)
             # self.sg[startInSpecPixels:endInSpecPixels, ]
 
-            # if needed, there's already a SignalProc instance self.sp with the full data on it,
+            # if needed, there's already a Spectrogram instance self.sp with the full data on it,
             # so can also do something like:
             # self.sp.calculateMagicStatistic(starttime, endtime)
 
@@ -4552,9 +4730,12 @@ class AviaNZ(QMainWindow):
             print("Can't play, no segment selected")
             return
 
-        if hasattr(self, 'AudioPlayer'):
-            if self.AudioPlayer.isPlayingorPaused():
-                self.stopPlayback()
+        #if hasattr(self, 'AudioPlayer'):
+            #if self.AudioPlayer.isPlayingorPaused():
+                #self.stopPlayback()
+
+        if self.media_obj.isPlayingorPaused():
+            self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
         noiseest = "ols" # or qr, or const
@@ -4583,7 +4764,7 @@ class AviaNZ(QMainWindow):
                 bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
                 top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
                 print("Extracting samples between %d-%d Hz" % (bottom, top))
-                denoised = self.sp.bandpassFilter(denoised, sampleRate=self.sp.sampleRate, start=bottom, end=top)
+                denoised = SignalProc.bandpassFilter(denoised, sampleRate=self.sp.sampleRate, start=bottom, end=top)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -4648,7 +4829,7 @@ class AviaNZ(QMainWindow):
                     self.sp.data = self.waveletDenoiser.waveletDenoise("soft", 3, aaRec=True, aaWP=False, costfn="fixed", noiseest="ols")
 
             else:
-                # SignalProc will deal with denoising
+                # Spectrogram will deal with denoising
                 self.sp.denoise(alg, start=start, end=end, width=width)
             #self.audiodata = self.sp.data
 
@@ -4735,9 +4916,9 @@ class AviaNZ(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
-                tosave = self.sp.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.sampleRate,start=y1, end=y2)
+                tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.sampleRate,start=y1, end=y2)
                 if changespeed:
-                    tosave = self.sp.wsola(tosave,self.playSpeed) 
+                    tosave = SignalProc.wsola(tosave,self.playSpeed) 
                 wavio.write(filename, tosave.astype('int16'), self.sp.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
@@ -5113,8 +5294,8 @@ class AviaNZ(QMainWindow):
                         print("Can't read %s.p or missing data" %tagFile[:-4])
                         # Otherwise, load the wav file
                         # TODO: Test
-                        import SignalProc 
-                        sp = SignalProc.SignalProc(512,256, 0, 0)
+                        import Spectrogram 
+                        sp = Spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readWav(tagFile[:-4] + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate
            
@@ -5233,8 +5414,8 @@ class AviaNZ(QMainWindow):
                     except:
                         print("Can't read %s.p or missing data" %tagFile[:-4])
                         # Otherwise, load the wav file
-                        import SignalProc 
-                        sp = SignalProc.SignalProc(512,256, 0, 0)
+                        import Spectrogram 
+                        sp = Spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readWav(tagFile[:-4] + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate
         
@@ -5694,7 +5875,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Finding matches...")
             print("Reading template/s")
             # Todo: do more than one template and merge result?
-            sp_temp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+            sp_temp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
             sp_temp.readWav('Sound Files/'+species+'/train1_1.wav')
 
             # Parse wav format details based on file header:
@@ -5718,7 +5899,7 @@ class AviaNZ(QMainWindow):
             else:
                 data1 = self.sp.data
                 sampleRate1 = self.sp.sampleRate
-            # TODO utilize self.sp / SignalProc more here
+            # TODO utilize self.sp / Spectrogram more here
             sp_temp.data = data1
             sp_temp.sampleRate = sampleRate1
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
@@ -5755,7 +5936,7 @@ class AviaNZ(QMainWindow):
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             # Get the data for the spectrogram
-            # TODO utilize self.sp / SignalProc more here
+            # TODO utilize self.sp / Spectrogram more here
             sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
             segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sp.sampleRate
@@ -5796,9 +5977,213 @@ class AviaNZ(QMainWindow):
 # Tidy
 # Check timer start and stop
 
+# ===============
+# Code for playing sounds
+    def playVisible(self):
+        """ Listener for button to play the visible area.
+        On PLAY, turns to PAUSE and two other buttons turn to STOPs.
+        """
+        if self.batmode:
+            # Currently playback disabled in this mode - also takes care of spacebar signal
+            return
+
+        if self.media_obj.isPlaying():
+            self.pausePlayback()
+        else:
+            #self.playSpeed = 1.0
+            self.setSpeed(1.0)
+            #if self.media_obj.state() != QAudio.State.SuspendedState:# and not self.media_obj.keepSlider:
+                ## restart playback
+                ##start,end = self.p_ampl.viewRange()[0]
+                ##self.setPlaySliderLimits(start*1000, end*1000)
+                #self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+                #self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
+                ## (else keep play slider range from before)
+            #else:
+                #print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
+            self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+            self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
+
+            self.bar.setMovable(False)
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+
+            # OS X doesn't repaint them by default smh
+            self.playButton.repaint()
+            self.playSegButton.repaint()
+            self.playBandLimitedSegButton.repaint()
+            QApplication.processEvents()
+
+            #self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
+            # if bar was moved under pause, update the playback
+            # start position based on the bar:
+            if self.bar.value()>0:
+                start = self.convertSpectoAmpl(self.bar.value())*1000  # in ms
+                print("found bar at %d ms" % start)
+            else:
+                start = self.segmentStart
+            # (will not be used if resuming without touching the bar)
+
+            self.media_obj.pressedPlay(start=start, stop=self.segmentStop) #, audiodata=self.sp.data)
+
+    def playSelectedSegment(self,low=None,high=None):
+        """ Listener for PlaySegment button.
+        Get selected segment start and end (or return if no segment selected).
+        On PLAY, all three buttons turn to STOPs.
+        """
+        if not low:
+            low = None
+
+        if self.media_obj.isPlayingorPaused():
+            self.stopPlayback()
+
+        if self.box1id > -1:
+            if self.media_obj.isPlaying():
+                self.stopPlayback()
+            self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+
+            self.bar.setMovable(False)
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+
+            # OS X doesn't repaint them by default smh
+            self.playButton.repaint()
+            self.playSegButton.repaint()
+            self.playBandLimitedSegButton.repaint()
+            QApplication.processEvents()
+
+            self.media_obj.playSeg(self.segmentStart, self.segmentStop, low, high, self.sp.data, self.playSpeed)
+            #self.media_obj.filterSeg(self.segmentStart, self.segmentStop, self.sp.data,self.playSpeed)
+            #self.media_obj.filterSeg(start, stop, self.audiodata,self.playSpeed)
+        #else:
+            #print("Can't play, no segment selected")
+
+    def playBandLimitedSegment(self):
+        """ Listener for PlayBandlimitedSegment button.
+        Gets the band limits of the segment and passes them on.
+        """
+        if self.box1id > -1:
+            low = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
+            high = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
+            self.playSelectedSegment(low,high)
+
+    def pausePlayback(self):
+        """ Restores the PLAY buttons, calls media_obj to pause playing."""
+        self.media_obj.pressedPause()
+        self.bar.setMovable(True)
+
+        # Reset all button icons:
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+        self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
+
+        # OS X doesn't repaint them by default smh
+        self.playButton.repaint()
+        self.playSegButton.repaint()
+        self.playBandLimitedSegButton.repaint()
+        QApplication.processEvents()
+
+    def stopPlayback(self):
+        """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
+        self.bar.setMovable(True)
+        self.media_obj.pressedStop()
+        if not hasattr(self, 'segmentStart') or self.segmentStart is None:
+            self.segmentStart = 0
+        #self.playSlider.setValue(-1000)
+        self.bar.setValue(-1000)
+
+        # Reset all button icons:
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+        self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
+
+        # OS X doesn't repaint them by default smh
+        self.playButton.repaint()
+        self.playSegButton.repaint()
+        self.playBandLimitedSegButton.repaint()
+        QApplication.processEvents()
+
+    def movePlaySlider(self):
+        """ Listener called on sound notify (every 20 ms).
+        Controls the slider, text timer, and listens for playback finish.
+        """
+        # sm: todo -- not always playSpeed?
+        eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
+        #eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
+            
+        # listener for playback finish. Note small buffer for catching up
+        if eltime > (self.segmentStop-10):
+            # TODO: allow the user to set looping somehow?
+            if self.media_obj.loop:
+                self.media_obj.restart()
+            else:
+                print("Stopped at %d ms" % eltime)
+                self.stopPlayback()
+        else:
+            # playSlider.value() is in ms, need to convert this into spectrogram pixels
+            # Note small buffer 
+            self.bar.setValue(int(self.convertAmpltoSpec(eltime / 1000.0 - 0.02)))
+
+    def volSliderMoved(self, value):
+        self.media_obj.applyVolSlider(value)
+
+    def barMoved(self, evt):
+        """ Listener for when the bar showing playback position moves.
+            Resets both QAudioOutputs so that they don't try to resume
+        """
+        #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
+        #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
+        print("Resetting playback")
+        self.media_obj.reset()
+
+#+++++
+    def makePlaybackDevice(self):
+
+        # Remove any media that already exist
+        if hasattr(self,'AudioPlayer'):
+            if self.AudioPlayer.isPlayingorPaused():
+                self.stopPlayback()
+            del self.AudioPlayer
+
+        # Make the player
+        self.AudioPlayer = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
+        # Connect to output device
+        audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
+        # Connect the timer notifications for moving the bar
+        self.AudioPlayer.NotifyTimer.timeout.connect(self.movePlaySlider)
+        # Make a sound buffer
+        # TODO: Magic number
+        #self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+
+    def makePlaybackDevice2(self):
+
+        # Remove any media that already exist
+        if hasattr(self,'AudioPlayer'):
+            if self.AudioPlayer.isPlayingorPaused():
+                self.stopPlayback()
+            self.SoundBuffer.close() 
+            del self.AudioPlayer
+            del self.SoundBuffer
+
+        # Make the player
+        self.AudioPlayer = SupportClasses_GUI.AudioPlayer(self.sp,useBar=True)
+        # Connect to output device
+        audioOutput = QAudioDevice(QMediaDevices.defaultAudioOutput())
+        # Connect the timer notifications for moving the bar
+        self.AudioPlayer.NotifyTimer.timeout.connect(self.movePlaySlider)
+        # Make a sound buffer
+        # TODO: Magic number
+        self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+
     def setSelectedSound(self, start, stop, speed = 1.0, audiodata=None, low=None, high=None):
         # Selects the data between start-stop ms, relative to file start
         # and plays it, optionally at a different speed and after bandpassing
+
+        self.makePlaybackDevice()
+
         self.timeoffset = max(0, start)
 
         #print(self.sp)
@@ -5813,18 +6198,49 @@ class AviaNZ(QMainWindow):
 
         # TODO: Require sp?
         if low is not None:
-            if self.sp is None:
-                self.sp = SignalProc.SignalProc(512,256,0,0)
-            segment = self.sp.bandpassFilter(segment, sampleRate=self.sp.audioFormat.sampleRate(), start=low, end=high)
+            #if self.sp is None:
+                #self.sp = Spectrogram.Spectrogram(512,256,0,0)
+            segment = SignalProc.bandpassFilter(segment, sampleRate=self.sp.audioFormat.sampleRate(), start=low, end=high)
 
         if speed != 1.0:
-            if self.sp is None:
-                self.sp = SignalProc.SignalProc(512,256,0,0)
-            segment = self.sp.wsola(segment,speed) 
+            #if self.sp is None:
+                #self.sp = Spectrogram.Spectrogram(512,256,0,0)
+            segment = SignalProc.wsola(segment,speed) 
+
+        self.AudioPlayer.loadArray(segment)
+
+    def setSelectedSound2(self, start, stop, speed = 1.0, audiodata=None, low=None, high=None):
+        # Selects the data between start-stop ms, relative to file start
+        # and plays it, optionally at a different speed and after bandpassing
+
+        self.makePlaybackDevice()
+
+        self.timeoffset = max(0, start)
+
+        #print(self.sp)
+        start = max(0, int(start * self.sp.audioFormat.sampleRate() // 1000))
+
+        if audiodata is None:
+            stop = min(int(stop * self.sp.audioFormat.sampleRate() // 1000), len(self.sp.data))
+            segment = self.sp.data[start:stop]
+        else:
+            stop = min(int(stop * self.sp.audioFormat.sampleRate() // 1000), len(audiodata))
+            segment = audiodata[start:stop]
+
+        # TODO: Require sp?
+        if low is not None:
+            #if self.sp is None:
+                #self.sp = Spectrogram.Spectrogram(512,256,0,0)
+            segment = SignalProc.bandpassFilter(segment, sampleRate=self.sp.audioFormat.sampleRate(), start=low, end=high)
+
+        if speed != 1.0:
+            #if self.sp is None:
+                #self.sp = Spectrogram.Spectrogram(512,256,0,0)
+            segment = SignalProc.wsola(segment,speed) 
 
         self.SoundBuffer.generateData(segment)
 
-    def playVisible(self):
+    def playVisible3(self):
         """ Listener for button to play the visible area.
         On PLAY, turns to PAUSE and two other buttons turn to STOPs.
         """
@@ -5832,9 +6248,12 @@ class AviaNZ(QMainWindow):
             # Currently playback disabled in this mode - also takes care of spacebar signal
             return
 
-        # TODO: Wrong -- exists
-        #if hasattr(self, 'SoundBuffer'):
-        if self.SoundBuffer.isOpen():
+        # Flag is to check playing the right thing
+        #if hasattr(self,'SoundBuffer') and not self.playingVisible:
+            #self.SoundBuffer.stop()
+
+        if hasattr(self,'AudioPlayer'): # and self.SoundBuffer.isOpen():
+            print("Continuing playback",self.AudioPlayer.state())
             if self.AudioPlayer.state() == QAudio.State.SuspendedState:
                 print("Play")
                 self.AudioPlayer.pressedPlay()
@@ -5848,8 +6267,8 @@ class AviaNZ(QMainWindow):
             elif self.AudioPlayer.state() == QAudio.State.IdleState:
                 print("Idle")
         else:
+            print("Start playback")
             # Set the volume
-            self.volSliderMoved(self.specControls.volSlider.value())
 
             self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
             self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
@@ -5890,8 +6309,91 @@ class AviaNZ(QMainWindow):
             # TODO: magic number
             # TODO: need to remake each time?
             #self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+            self.playingVisible=True
             self.setSelectedSound(start, self.segmentStop) #, audiodata=None, low=None, high=None):
 
+            self.volSliderMoved(self.specControls.volSlider.value())
+            #self.SoundBuffer.start()
+            #self.AudioPlayer.start(self.SoundBuffer)
+            #self.AudioPlayer.NotifyTimer.start(30)
+            #self.AudioPlayer.NotifyTimer.timeout.connect(self.movePlaySlider)
+
+            #self.media_obj.pressedPlay(start=start, stop=self.segmentStop) #, audiodata=self.sp.data)
+            #self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.sp.data)
+
+    def playVisible2(self):
+        """ Listener for button to play the visible area.
+        On PLAY, turns to PAUSE and two other buttons turn to STOPs.
+        """
+        if self.batmode:
+            # Currently playback disabled in this mode - also takes care of spacebar signal
+            return
+
+        # Flag is to check playing the right thing
+        if hasattr(self,'SoundBuffer') and not self.playingVisible:
+            self.SoundBuffer.stop()
+
+        if hasattr(self,'SoundBuffer') and self.SoundBuffer.isOpen():
+            print("Continuing playback",self.AudioPlayer.state())
+            if self.AudioPlayer.state() == QAudio.State.SuspendedState:
+                print("Play")
+                self.AudioPlayer.pressedPlay()
+            elif self.AudioPlayer.state() == QAudio.State.ActiveState:
+                print("Pause")
+                self.pausePlayback()
+                #self.AudioPlayer.pressedPause()
+            elif self.AudioPlayer.state() == QAudio.State.StoppedState:
+                print("Play")
+                self.AudioPlayer.pressedPlay()
+            elif self.AudioPlayer.state() == QAudio.State.IdleState:
+                print("Idle")
+        else:
+            print("Start playback")
+            # Set the volume
+
+            self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+            self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
+
+            #if self.media_obj.state() != QAudio.State.SuspendedState:
+                #print("(re)start playback")
+                ## restart playback
+                #self.media_obj.reset()
+                #self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+                #self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
+                ##start = self.segmentStart
+                ## (else keep play slider range from before)
+            #else:
+                #print("resume playback",self.bar.value()*1000)
+                #print("resuming after pause, on segment:", self.segmentStart, self.segmentStop)
+            self.bar.setMovable(False)
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+
+            # OS X doesn't repaint them by default smh
+            self.playButton.repaint()
+            self.playSegButton.repaint()
+            self.playBandLimitedSegButton.repaint()
+            QApplication.processEvents()
+
+            # if bar was moved under pause, update the playback
+            # start position based on the bar:
+            if self.bar.value()>0:
+                self.segmentStart = self.convertSpectoAmpl(self.bar.value())*1000  # in ms
+                print("found bar at %d ms" % self.segmentStart)
+            #else:
+                #start = self.segmentStart
+                #print("segStart")
+            # (will not be used if resuming without touching the bar)
+
+            # Put the sound in the buffer
+            # TODO: magic number
+            # TODO: need to remake each time?
+            #self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+            self.playingVisible=True
+            self.setSelectedSound(self.segmentStart, self.segmentStop) #, audiodata=None, low=None, high=None):
+
+            self.volSliderMoved(self.specControls.volSlider.value())
             self.SoundBuffer.start()
             self.AudioPlayer.start(self.SoundBuffer)
             self.AudioPlayer.NotifyTimer.start(30)
@@ -5900,7 +6402,7 @@ class AviaNZ(QMainWindow):
             #self.media_obj.pressedPlay(start=start, stop=self.segmentStop) #, audiodata=self.sp.data)
             #self.media_obj.pressedPlay(start=start, stop=self.segmentStop, audiodata=self.sp.data)
 
-    def playSelectedSegment(self,low=None,high=None):
+    def playSelectedSegment3(self,low=None,high=None):
         """ Listener for PlaySegment button (and called by playBandLimitedSegment)
         Get selected segment start and end (or return if no segment selected).
         On PLAY, all three buttons turn to STOPs.
@@ -5915,7 +6417,7 @@ class AviaNZ(QMainWindow):
                 #self.stopPlayback()
         #else:
         if self.box1id > -1:
-            #self.stopPlayback()
+            self.stopPlayback()
             #self.media_obj.reset()
 
             self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
@@ -5932,21 +6434,57 @@ class AviaNZ(QMainWindow):
             self.playBandLimitedSegButton.repaint()
             QApplication.processEvents()
 
+            self.playingVisible=False
             self.volSliderMoved(self.specControls.volSlider.value())
             #self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
-            self.SoundBuffer.close()
             self.setSelectedSound(self.segmentStart, self.segmentStop, self.playSpeed, low=low, high=high)
 
+            #self.SoundBuffer.start()
+            #self.AudioPlayer.start(self.SoundBuffer)
+            #self.AudioPlayer.NotifyTimer.start(30)
+
+    def playSelectedSegment2(self,low=None,high=None):
+        """ Listener for PlaySegment button (and called by playBandLimitedSegment)
+        Get selected segment start and end (or return if no segment selected).
+        On PLAY, all three buttons turn to STOPs.
+        """
+        # Something gets passed through the signal, comes in as false
+        print("play selected")
+        if not low:
+            low = None
+
+        #if hasattr(self, 'AudioPlayer'):
+            #if self.AudioPlayer.isPlayingorPaused():
+                #self.stopPlayback()
+        #else:
+        if self.box1id > -1:
+            self.stopPlayback()
+            #self.media_obj.reset()
+
+            self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+            self.segmentStop  = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+
+            self.bar.setMovable(False)
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+
+            # OS X doesn't repaint them by default smh
+            self.playButton.repaint()
+            self.playSegButton.repaint()
+            self.playBandLimitedSegButton.repaint()
+            QApplication.processEvents()
+
+            self.playingVisible=False
+            #self.SoundBuffer = SupportClasses_GUI.SoundBuffer(1000000,self.sp.audioFormat,self)
+            self.setSelectedSound(self.segmentStart, self.segmentStop, self.playSpeed, low=low, high=high)
+
+            self.volSliderMoved(self.specControls.volSlider.value())
             self.SoundBuffer.start()
             self.AudioPlayer.start(self.SoundBuffer)
             self.AudioPlayer.NotifyTimer.start(30)
-            #self.AudioPlayer.NotifyTimer.timeout.connect(self.movePlaySlider)
 
-            #self.media_obj.filterSeg(start, stop, self.sp.data,self.playSpeed)
-        #else:
-            #print("Can't play, no segment selected")
-
-    def playBandLimitedSegment(self):
+    def playBandLimitedSegment3(self):
         """ Listener for PlayBandlimitedSegment button.
         Gets the band limits of the segment and passes them on.
         """
@@ -5956,7 +6494,7 @@ class AviaNZ(QMainWindow):
             self.playSelectedSegment(low,high)
 
 
-    def pausePlayback(self):
+    def pausePlayback3(self):
         # Restores the PLAY buttons, calls media_obj to pause playing.
         # Should only be able to get here if media_obj exists
         #print("pause")
@@ -5975,14 +6513,15 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.repaint()
         QApplication.processEvents()
 
-    def stopPlayback(self):
+    def stopPlayback3(self):
         # Restores the PLAY buttons, slider, text, calls media_obj to stop playing.
         # Should only be able to get here if media_obj exists
         #print("stop")
         self.AudioPlayer.pressedStop()
         self.AudioPlayer.reset()
-        self.SoundBuffer.close()
+        #self.SoundBuffer.stop()
         self.bar.setMovable(True)
+        self.playingVisible=False
         # TODO??
         #self.media_obj.pressedStop()
         #self.media_obj.reset()
@@ -6002,21 +6541,50 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.repaint()
         QApplication.processEvents()
 
-    def movePlaySlider(self):
+    def stopPlayback2(self):
+        # Restores the PLAY buttons, slider, text, calls media_obj to stop playing.
+        # Should only be able to get here if media_obj exists
+        #print("stop")
+        if hasattr(self,'SoundBuffer') and not self.playingVisible:
+            self.AudioPlayer.pressedStop()
+            self.AudioPlayer.reset()
+            self.SoundBuffer.stop()
+        self.bar.setMovable(True)
+        self.playingVisible=False
+        # TODO??
+        #self.media_obj.pressedStop()
+        #self.media_obj.reset()
+        if not hasattr(self, 'segmentStart') or self.segmentStart is None:
+            self.segmentStart = 0
+        #self.playSlider.setValue(-1000)
+        self.bar.setValue(-1000)
+
+        # Reset all button icons:
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+        self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
+
+        # OS X doesn't repaint them by default smh
+        self.playButton.repaint()
+        self.playSegButton.repaint()
+        self.playBandLimitedSegButton.repaint()
+        QApplication.processEvents()
+
+    def movePlaySlider3(self):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
         # TODO: offset?
         
-        eltime = self.AudioPlayer.processedUSecs() // 1000 // self.playSpeed 
-        #eltime = self.AudioPlayer.processedUSecs() // 1000 // self.playSpeed + self.AudioPlayer.timeoffset
+        #eltime = self.AudioPlayer.processedUSecs() // 1000 // self.playSpeed 
+        eltime = self.AudioPlayer.processedUSecs() // 1000 // self.playSpeed
         bufsize = 0.02
 
         # listener for playback finish. Note small buffer for catching up
-        if eltime > (self.segmentStop-10):
+        if eltime > (self.segmentStop-5):
             # TODO: allow the user to set looping somehow?
             print("playback finished")
-            self.AudioPlayer.stop()
+            self.stopPlayback()
             #if self.media_obj.loop:
                 #self.media_obj.restart()
             #else:
@@ -6025,45 +6593,42 @@ class AviaNZ(QMainWindow):
         else:
             #self.playSlider.setValue(int(eltime))
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            # SRM: int
             #print(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
-            self.bar.setValue(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)))
+            self.bar.setValue(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize+self.segmentStart)))
+            print(self.segmentStart, eltime, bufsize)
+            #print(int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize+self.segmentStart)), int(self.convertAmpltoSpec(eltime / 1000.0 - bufsize)+self.segmentStart))
 
-    """
-    def setPlaySliderLimits(self, start, end):
-         Uses start/end in ms, relative to page start
-        
-        # SRM int
-        #offset = (self.startRead + self.startTime) * 1000 # in ms, absolute
-        #self.playSlider.setRange(int(start + offset), int(end + offset))
-        #self.segmentStart = self.playSlider.minimum() - offset # relative to file start
-        #self.segmentStop = self.playSlider.maximum() - offset # relative to file start
-        self.segmentStart = start
-        self.segmentStop = end
-    """
+    def volSliderMoved3(self, value):
+        """ Listener for when the volume slide moves
+        """
+        self.AudioPlayer.applyVolSlider(value)
+
+    def barMoved3(self, evt):
+        """ Listener for when the bar showing playback position is moved.
+        """
+        #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
+        #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
+        #self.SoundBuffer.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
+        print("Resetting playback")
+        #self.SoundBuffer.stop()
+        #self.media_obj.reset()
+        #self.media_obj.keepSlider=False
+
+    def barMoved2(self, evt):
+        """ Listener for when the bar showing playback position is moved.
+        """
+        #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
+        #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
+        #self.SoundBuffer.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
+        print("Resetting playback")
+        self.SoundBuffer.stop()
+        #self.media_obj.reset()
+        #self.media_obj.keepSlider=False
 
     def floorSliderMoved(self,value):
         self.noisefloor = value
         self.setSpectrogram()
         self.setfigs()
-        #self.drawfigMain()
-        # sm: ?
-
-    def volSliderMoved(self, value):
-        """ Listener for when the volume slide moves
-        """
-        self.AudioPlayer.applyVolSlider(value)
-
-    def barMoved(self, evt):
-        """ Listener for when the bar showing playback position is moved.
-        """
-        #self.playSlider.setValue(int(self.convertSpectoAmpl(evt.x()) * 1000))
-        #self.media_obj.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
-        self.SoundBuffer.seekToMs(int(self.convertSpectoAmpl(evt.x()) * 1000), self.segmentStart)
-        print("Resetting playback")
-        #self.media_obj.reset()
-        #self.media_obj.keepSlider=False
-        #self.media_slow.reset()
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
