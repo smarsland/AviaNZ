@@ -1,6 +1,11 @@
 
 # SignalProc.py
 # This file holds signal processing functions that don't use the full spectrogram or audio data
+import scipy.signal as signal
+import scipy.fftpack as fft
+import numpy as np
+import copy
+
 
 def ButterworthBandpass(data,sampleRate,low=0,high=None,band=0.005):
     """ Basic IIR bandpass filter.
@@ -185,6 +190,7 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
     #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
     return signal.lfilter(taps, 1.0, data)
 
+# TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
 def invertSpectrogram(sg,window_width=256,incr=64,nits=10, window='Hann'):
     # Assumes that this is the plain (not power) spectrogram
@@ -193,7 +199,7 @@ def invertSpectrogram(sg,window_width=256,incr=64,nits=10, window='Hann'):
 
     sg_best = copy.deepcopy(sg)
     for i in range(nits):
-        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0), window=window)
+        invertedSgram = inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0), window=window)
         self.setData(invertedSgram)
         est = self.spectrogram(window_width, incr, onesided=False,need_even=True, window=window)
         phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
