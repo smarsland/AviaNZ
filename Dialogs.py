@@ -1729,10 +1729,10 @@ class HumanClassify1(QDialog):
 
         # Audio playback object
         #self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
-        self.media_obj2 = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
-        #self.media_obj2.NotifyTimer.timeout.connect(self.endListener)
-        #self.media_obj2.notify.connect(self.endListener)
-        self.media_obj2.loop = loop
+        self.media_obj = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
+        #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
+        #self.media_obj.notify.connect(self.endListener)
+        self.media_obj.loop = loop
         self.autoplay = autoplay
 
         # The four column layouts
@@ -1847,28 +1847,28 @@ class HumanClassify1(QDialog):
         # self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
 
     def playSeg(self):
-        if self.media_obj2.isPlaying():
+        if self.media_obj.isPlayingorPaused():
             self.stopPlayback()
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.playButton.setIconSize(QSize(40, 40))
-            self.media_obj2.loadArray(self.audiodata)
+            self.media_obj.loadArray(self.audiodata)
 
     def stopPlayback(self):
-        self.media_obj2.pressedStop()
+        self.media_obj.pressedStop()
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
 
     def volSliderMoved(self, value):
-        self.media_obj2.applyVolSlider(value)
+        self.media_obj.applyVolSlider(value)
 
     def endListener(self):
         """ Listener to check for playback end.
         Also hijacked to move the playback bar."""
-        time = self.media_obj2.elapsedUSecs() // 1000
+        time = self.media_obj.elapsedUSecs() // 1000
         if time > self.duration:
-            if self.media_obj2.loop:
-                self.media_obj2.restart()
+            if self.media_obj.loop:
+                self.media_obj.restart()
             else:
                 self.stopPlayback()
         else:
