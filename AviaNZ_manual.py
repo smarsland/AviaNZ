@@ -37,10 +37,11 @@
 # 8. Fix OutputBatPasses
 # 9. Mac installation
 # 10. Test and test again. And again.
-# 11. If a .data file is empty, delete, restart
+# 11. If a .data file is empty, delete, restart -- check
 # 12. Improve call type selection
 # 13. Joe buttons
-# 16. Ruth things
+# 14. Ruth things
+# 15. Is librosa used?
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -76,7 +77,6 @@ import colourMaps
 import Shapes
 import SignalProc
 
-import librosa
 import webbrowser, copy, math
 import time
 import openpyxl
@@ -2444,7 +2444,7 @@ class AviaNZ(QMainWindow):
             print("Will use window of", chpwin, "s")
             # Resample and generate WP w/ all nodes for the current page
             if self.sp.sampleRate != TGTSAMPLERATE:
-                datatoplot = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=TGTSAMPLERATE)
+                datatoplot = self.sp.resample(TGTSAMPLERATE)
             else:
                 datatoplot = self.sp.data
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
@@ -2633,8 +2633,9 @@ class AviaNZ(QMainWindow):
 
             # Reconstructed signal was @ 16 kHz,
             # so we upsample to get equal sized spectrograms
+            # TODO: Check this one
             if self.sp.sampleRate != 16000:
-                C = librosa.resample(C, orig_sr=16000, target_sr=self.sp.sampleRate)
+                C = self.sp.resample(self.sp.sampleRate, C)
             tempsp = Spectrogram.Spectrogram()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
@@ -4147,7 +4148,7 @@ class AviaNZ(QMainWindow):
             # 1. decompose
             # if needed, adjusting sampling rate to match filter
             if self.sp.sampleRate != spInfo['SampleRate']:
-                datatoplot = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=spInfo['SampleRate'])
+                datatoplot = self.sp.resample(spInfo['SampleRate'])
             else:
                 datatoplot = self.sp.data
 
@@ -5749,7 +5750,7 @@ class AviaNZ(QMainWindow):
 
             # Get the data for the spectrogram
             if self.sp.sampleRate != self.sppInfo[str(species)][4]:
-                data1 = librosa.resample(self.sp.data, orig_sr=self.sp.sampleRate, target_sr=self.sppInfo[str(species)][4])
+                data1 = self.sp.resample(self.sppInfo[str(species)][4])
                 sampleRate1 = self.sppInfo[str(species)][4]
             else:
                 data1 = self.sp.data

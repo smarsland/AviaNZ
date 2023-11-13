@@ -1728,10 +1728,8 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        #self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
         self.media_obj = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
-        #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
-        #self.media_obj.notify.connect(self.endListener)
+        self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
         self.media_obj.loop = loop
         self.autoplay = autoplay
 
@@ -1862,9 +1860,9 @@ class HumanClassify1(QDialog):
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
 
-    def endListener(self):
-        """ Listener to check for playback end.
-        Also hijacked to move the playback bar."""
+    def movePlaySlider(self):
+        """ Move the playback bar. And hijacked to detect the end of playback. """
+
         time = self.media_obj.elapsedUSecs() // 1000
         if time > self.duration:
             if self.media_obj.loop:
@@ -1872,6 +1870,7 @@ class HumanClassify1(QDialog):
             else:
                 self.stopPlayback()
         else:
+            # TODO: Check
             barx = time / 1000 * self.sampleRate / self.incr
             self.bar.setValue(barx)
             self.bar.update()
@@ -1894,13 +1893,13 @@ class HumanClassify1(QDialog):
         xyratio = np.shape(self.sg)
         # self.pPlot.setYRange(0, xyratio[1], padding=0.02)
         xyratio = xyratio[0] / xyratio[1]
-        # resize the white area around the spectrogram if it's under 500
+        # Resize the white area around the spectrogram if it's under 500
         self.wPlot.plotAspect = self.plotAspect * xyratio
         self.wPlot.forceResize()
 
     def updateButtonList(self):
-        # refreshes bird button names
-        # to be used when bird list updates
+        # Refreshes bird button names
+        # To be used when bird list updates
         if self.batmode:
             for i in range(len(self.birdbtns)):
                 self.birdbtns[i].setChecked(False)
@@ -1947,7 +1946,7 @@ class HumanClassify1(QDialog):
         self.specControls.volIcon.setEnabled(len(audiodata))
         self.specControls.volSlider.setEnabled(len(audiodata))
 
-        # fill up a rectangle with dark grey to act as background if the segment is small
+        # Fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
         # sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
         # sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
@@ -1977,7 +1976,7 @@ class HumanClassify1(QDialog):
         self.wPlot.plotAspect = self.plotAspect * xyratio
         self.wPlot.forceResize()
 
-        # add marks to separate actual segment from buffer zone
+        # Add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
         try:
             self.stopPlayback()
@@ -1988,8 +1987,7 @@ class HumanClassify1(QDialog):
         stopV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStop, 0)).x()
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
-        # add time markers next to the lines
-        # SRM int
+        # Add time markers next to the lines
         time1 = QTime(0,0,0).addSecs(int(time1)).toString('hh:mm:ss')
         time2 = QTime(0,0,0).addSecs(int(time2)).toString('hh:mm:ss')
         self.segTimeText1.setText(time1)
@@ -1997,7 +1995,7 @@ class HumanClassify1(QDialog):
         self.segTimeText1.setPos(startV, SgSize)
         self.segTimeText2.setPos(stopV, SgSize)
 
-        # bat mode freq guides
+        # Bat mode freq guides
         if guides is not None:
             for i in range(len(self.guidelines)):
                 self.guidelines[i].setPos(guides[i])
@@ -2008,7 +2006,7 @@ class HumanClassify1(QDialog):
         self.specControls.emitAll()
 
         # DEAL WITH SPECIES NAMES
-        # extract a string of current species names
+        # Extract a string of current species names
         specnames = []
         for lab in labels:
             if 0<lab["certainty"]<100:
@@ -2020,15 +2018,14 @@ class HumanClassify1(QDialog):
         # Update the "currently" labels
         self.species.setText(','.join(specnames))
 
-        # extract the call type of the (first) species
+        # Extract the call type of the (first) species
         if "calltype" in labels[0]:
             self.ctLabel.setText(labels[0]["calltype"])
         else:
             self.ctLabel.setText("")
 
         # Drop question marks, and reorder the short list if needed.
-        # Question marks are displayed on the first pass,
-        # but any clicking sets certainty to 100 in effect.
+        # Question marks are displayed on the first pass, but any clicking sets certainty to 100 in effect.
         for lsp_ix in range(len(specnames)):
             if specnames[lsp_ix] != "-To Be Deleted-":
                 if specnames[lsp_ix].endswith('?'):
@@ -2048,7 +2045,7 @@ class HumanClassify1(QDialog):
                             del self.shortBirdList[-1]
                         self.shortBirdList.insert(0, specnames[lsp_ix])
 
-        # clear selection and update the btn names (based on short list)
+        # Clear selection and update the btn names (based on short list)
         self.birds3.clearSelection()
         self.updateButtonList()
         self.clearSearch()
@@ -2056,12 +2053,12 @@ class HumanClassify1(QDialog):
         # Select the right species tickboxes / buttons
         for lsp in specnames:
             if lsp != "-To Be Deleted-":
-                # add ticks to the right checkboxes
+                # Add ticks to the right checkboxes
                 if self.batmode:
                     ind = self.batList.index(lsp)
                     self.birdbtns[ind].setChecked(True)
 
-                    # since there is no long list or birds3 box, we ignore those parts.
+                    # Since there is no long list or birds3 box, we ignore those parts.
                 else:
                     if lsp in self.shortBirdList[:29]:
                         ind = self.shortBirdList.index(lsp)
@@ -2071,20 +2068,20 @@ class HumanClassify1(QDialog):
                         self.birds3.setEnabled(True)
                         self.update()
 
-                    # mark this species in the long list box
+                    # Mark this species in the long list box
                     if lsp not in self.longBirdList:
-                        # try genus>species instead of genus (species)
+                        # Try genus>species instead of genus (species)
                         if '(' in lsp:
                             ind = lsp.index('(')
                             lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
-                        # add to long bird list then
+                        # Add to long bird list then
                         if lsp not in self.longBirdList:
                             print("Species", lsp, "not found in long bird list, adding")
                             self.longBirdList.append(lsp)
                             self.birds3.addBird(lsp)
                             self.saveBirdList = True
 
-                    # all species by now are in the long bird list
+                    # All species by now are in the long bird list
                     if self.longBirdList is not None:
                         ind = self.longBirdList.index(lsp)
                         self.birds3.selectBird(ind)
@@ -2101,7 +2098,7 @@ class HumanClassify1(QDialog):
         self.birds3.searchline.clear()
 
     def checkCallTypes(self):
-        # parses current annotations to determine if call type review allowed
+        # Parses current annotations to determine if call type review allowed
         # should be allowed, updates GUI accordingly
         spWithCalltypes = [filt["species"] for filt in self.parent.FilterDicts.values()]
         self.viewSpButton.setEnabled(False)
@@ -2118,7 +2115,7 @@ class HumanClassify1(QDialog):
             # keep UI in the same SP/CT mode as it was before
             showCt = self.viewingct
 
-        # this part actually refreshes the buttons (even if mode is the same, names
+        # This part actually refreshes the buttons (even if mode is the same, names
         # or number of cts may have changed)
         self.refreshCtUI(showCt)
 
@@ -2127,12 +2124,12 @@ class HumanClassify1(QDialog):
         # and updates calltype button lists (in case sp changed)
         # will also update self.viewingct to reflect current state
         if not (self.viewingct or showCt):
-            # everything was hidden and stays hidden
+            # Everything was hidden and stays hidden
             return
         elif showCt:
-            # show calltype, hide species boxes
+            # Show calltype, hide species boxes
 
-            # extract all possible call types for selected species
+            # Extract all possible call types for selected species
             possibleCts = set()
             for filt in self.parent.FilterDicts.values():
                 if filt["species"]==self.label[0]:
@@ -2140,7 +2137,7 @@ class HumanClassify1(QDialog):
                     possibleCts.update(ctsinthisfilt)
             possibleCts = list(possibleCts)
 
-            # show and update call type names to match selected species
+            # Show and update call type names to match selected species
             for cti in range(len(possibleCts)):
                 btn = self.ctbtns[cti]
                 btn.show()
@@ -2154,7 +2151,7 @@ class HumanClassify1(QDialog):
                     btn.setChecked(False)
                 btn.setAutoExclusive(True)
             self.ctLabel.show()
-            # hide remaining CT buttons in case more were shown before
+            # Hide remaining CT buttons in case more were shown before
             for ctbtn in self.ctbtns[len(possibleCts):]:
                 ctbtn.hide()
                 ctbtn.setChecked(False)
@@ -2163,7 +2160,7 @@ class HumanClassify1(QDialog):
             self.birds3.hide()
             self.viewSpButton.setIcon(QIcon('img/sp-ctlarge.png'))
         else:
-            # show species, hide call type boxes
+            # Show species, hide call type boxes
             for ctbtn in self.ctbtns:
                 ctbtn.hide()
             self.ctLabel.hide()
@@ -2176,7 +2173,7 @@ class HumanClassify1(QDialog):
         self.viewingct = showCt
 
     def tickOtherClicked(self, checked):
-        # just toggle the long list box
+        # Just toggle the long list box
         self.birds3.setEnabled(checked)
         self.update()   # for Mac updating
         self.repaint()
@@ -2189,24 +2186,24 @@ class HumanClassify1(QDialog):
         dontknowButton = None
         for button in self.birds.buttons():
             if button.text() == "Other:":
-                # ignore this as it has its own slot
+                # Ignore this as it has its own slot
                 continue
             if button.text() == "Don't Know":
                 dontknowButton = button
-            # figure out which one was changed now
+            # Figure out which one was changed now
             if button.isChecked():
                 if button.text() not in self.label:
-                    # this was just ticked ON
+                    # This was just ticked ON
                     checkedButton = button
             else:
                 if button.text() in self.label:
-                    # this was just ticked OFF
+                    # This was just ticked OFF
                     checkedButton = button
         if checkedButton is None:
             print("Warning: unrecognised check event")
             return
         if checkedButton.isChecked():
-            # if label was empty, just change from DontKnow:
+            # If label was empty, just change from DontKnow:
             if self.label == ["Don't Know"] or self.label == ["-To Be Deleted-"]:
                 self.label = [checkedButton.text()]
                 if dontknowButton is not None:
@@ -2214,10 +2211,10 @@ class HumanClassify1(QDialog):
             else:
                 self.label.append(checkedButton.text())
         else:
-            # a button was unchecked:
+            # A button was unchecked:
             if checkedButton.text() in self.label:
                 self.label.remove(checkedButton.text())
-            # if this erased everything, revert to don't know:
+            # If this erased everything, revert to don't know:
             if self.label == []:
                 self.label = ["Don't Know"]
                 if dontknowButton is not None:
@@ -2228,7 +2225,7 @@ class HumanClassify1(QDialog):
 
         self.species.setText(','.join(self.label))
 
-        # enable/disable CT mode button
+        # Enable/disable CT mode button
         self.checkCallTypes()
         self.update()   # for Mac updating
         self.repaint()
@@ -2248,7 +2245,7 @@ class HumanClassify1(QDialog):
                     if self.longBirdList is not None:
                         self.birds3.selectBird(button.text())
 
-        # enable/disable CT mode button
+        # Enable/disable CT mode button
         self.checkCallTypes()
         self.update()   # for Mac updating
         self.repaint()
@@ -2268,7 +2265,7 @@ class HumanClassify1(QDialog):
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds.
         species = str(item.text())
-        # move the label to the top of the short list (btns)
+        # Move the label to the top of the short list (btns)
         if self.parent.config['ReorderList']:
             if self.batmode:   # (batmode currently has no long list but leaving in case it is enabled)
                 if species in self.batList:
@@ -2282,18 +2279,17 @@ class HumanClassify1(QDialog):
                 else:
                     del self.shortBirdList[-1]
                 self.shortBirdList.insert(0, species)
-            # update btn names based on the changed list (also clears marks)
+            # Update btn names based on the changed list (also clears marks)
             self.updateButtonList()
-            # update btn marking (to match the label BEFORE any changes,
-            # b/c btns got reordered)
+            # Update btn marking (to match the label BEFORE any changes, because btns got reordered)
             if self.multipleBirds:
                 for btn in self.birdbtns:
                     inlabel = btn.text() in self.label
                     btn.setChecked(inlabel)
-            # up to parent to update the file, based on this flag
+            # Up to parent to update the file, based on this flag
             self.saveBirdList = True
 
-        # check for a corresponding button in the short list
+        # Check for a corresponding button in the short list
         # (this is necessary if the user is silly enough to click here when it's there as well)
         thisSpButton = None
         dontknowButton = None
@@ -2305,9 +2301,9 @@ class HumanClassify1(QDialog):
 
         # Save the entry
         if self.multipleBirds:
-            # mark this
+            # Mark this
             if item.isSelected() and species not in self.label:
-                # if label was empty, just change from DontKnow:
+                # If label was empty, just change from DontKnow:
                 if self.label == ["Don't Know"]:
                     self.label = [species]
                     if dontknowButton is not None:
@@ -2317,36 +2313,35 @@ class HumanClassify1(QDialog):
                     if thisSpButton is not None:
                         thisSpButton.setChecked(True)
 
-            # unmark this
+            # Unmark this
             if not item.isSelected() and species in self.label:
                 self.label.remove(species)
                 if thisSpButton is not None:
                     thisSpButton.setChecked(False)
-            # if this erased everything, revert to don't know:
+            # If this erased everything, revert to don't know:
             if self.label == []:
                 self.label = ["Don't Know"]
                 if dontknowButton is not None:
                     dontknowButton.setChecked(True)
         else:
             self.label = [species]
-            # for radio buttons, only "Other" will be selected at this point.
-            # If a new btn was added (due to short list reorder),
-            # select that one.
+            # For radio buttons, only "Other" will be selected at this point.
+            # If a new btn was added (due to short list reorder), select that one.
             if thisSpButton is not None:
                 thisSpButton.setChecked(True)
 
         self.species.setText(','.join(self.label))
 
-        # clear search box on the right
+        # Clear search box on the right
         self.clearSearch()
 
-        # enable/disable CT mode button
+        # Enable/disable CT mode button
         self.checkCallTypes()
         self.update()   # for Mac updating
         self.repaint()
 
     def birdTextEntered(self, species):
-        # receives signal that a new bird was added
+        # Receives signal that a new bird was added
         # so the full list needs to be changed and updated
         # (up to the parent window to write the actual file)
         # TODO: does not know about adding the '>' marker.
@@ -2373,7 +2368,7 @@ class HumanClassify1(QDialog):
 
     def getValues(self):
         # Note: we are reading off the calltypes from the label
-        # and not from radio buttons, b/c when no ct is present,
+        # and not from radio buttons, because when no ct is present,
         # radio buttons cannot be all disabled.
         return [self.label, self.saveBirdList, self.ctLabel.text()]
 
@@ -2409,7 +2404,7 @@ class HumanClassify2(QDialog):
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
-        # let the user quit without bothering rest of it
+        # Let the user quit without bothering rest of it
 
         self.sps = sps
         # Check if playback is possible (e.g. for batmode):
@@ -2418,7 +2413,7 @@ class HumanClassify2(QDialog):
         self.lut = lut
         self.cmapInverted = cmapInverted
 
-        # filter segments for the requested species
+        # Filter segments for the requested species
         self.segments = segments
         self.indices2show = indicestoshow
 
@@ -2433,7 +2428,7 @@ class HumanClassify2(QDialog):
         self.specControls.volChanged.connect(self.volSliderMoved)
         self.specControls.layout().addStretch(3) # add a big stretchable outer margin
 
-        # batmode customizations:
+        # Batmode customizations:
         self.guidefreq = guidefreq
         self.guidecol = guidecol
         if not haveaudio:
@@ -2448,7 +2443,7 @@ class HumanClassify2(QDialog):
         font.setBold(True)
         species.setFont(font)
 
-        # species label and sliders
+        # Species label and sliders
         vboxTop = QVBoxLayout()
         vboxTop.addWidget(label1)
         vboxTop.addWidget(species)
@@ -2482,7 +2477,7 @@ class HumanClassify2(QDialog):
         self.finish.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         self.finish.setMaximumSize(250, 30)
 
-        # movement buttons and page numbers
+        # Movement buttons and page numbers
         self.vboxBot = QHBoxLayout()
         # vboxBot.addWidget(self.buttonPrev)
         # vboxBot.addSpacing(20)
@@ -2491,22 +2486,22 @@ class HumanClassify2(QDialog):
         self.vboxBot.addWidget(self.none)
         self.vboxBot.addWidget(self.next)
 
-        # set up the middle section of images
+        # Set up the middle section of images
         self.numPicsV = 0
         self.numPicsH = 0
-        # create the button objects, and we'll show them as needed
+        # Create the button objects, and we'll show them as needed
         # (fills self.buttons)
         # self.flowLayout = QGridLayout()
         self.flowLayout = pg.LayoutWidget()
         self.flowLayout.layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
 
-        # these sizes ensure at least one image fits:
+        # These sizes ensure at least one image fits:
         self.specV = 0
         self.specH = 0
         self.createButtons()
         self.specControls.emitAll()  # applies initial colour, volume levels
 
-        # sets a lot of self properties needed before showing anything
+        # Sets a lot of self properties needed before showing anything
         self.butStart = 0
         self.countPages()
 
@@ -2531,7 +2526,7 @@ class HumanClassify2(QDialog):
         gridFlowAndAxes.setRowStretch(0, 10)
         gridFlowAndAxes.setRowStretch(1, 0)
 
-        # set overall layout of the dialog
+        # Set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
         # self.vboxFull.setSpacing(0)
         self.vboxFull.addLayout(vboxTop)
@@ -2539,19 +2534,19 @@ class HumanClassify2(QDialog):
         self.vboxFull.addItem(self.vboxSpacer)
         self.vboxFull.addLayout(gridFlowAndAxes)
         self.vboxFull.addLayout(self.vboxBot)
-        # must be fixed size!
+        # Must be fixed size!
         vboxTop.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
-        # must be fixed size!
+        # Must be fixed size!
         self.vboxBot.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
 
-        # we need to know the true size of space available for flowLayout.
-        # the idea is that spacer absorbs all height changes
+        # We need to know the true size of space available for flowLayout.
+        # The idea is that spacer absorbs all height changes
         #self.setSizePolicy(1,1)
         self.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
         self.setMinimumSize(self.specH+100, self.specV+100)
         self.setLayout(self.vboxFull)
         self.vboxFull.setStretch(1, 100)
-        # plan B could be to measure the sizes of the top/bottom boxes and subtract them
+        # Plan B could be to measure the sizes of the top/bottom boxes and subtract them
         # self.boxSpaceAdjustment = vboxTop.sizeHint().height() + vboxBot.sizeHint().height()
 
     def createButtons(self):
@@ -2574,7 +2569,7 @@ class HumanClassify2(QDialog):
             self.minsg = min(self.minsg, np.min(sp.sg))
             self.maxsg = max(self.maxsg, np.max(sp.sg))
 
-            # batmode guides, in y of this particular spectrogram:
+            # Batmode guides, in y of this particular spectrogram:
             if self.guidefreq is not None:
                 gy = [0]*len(self.guidefreq)
                 for gix in range(len(self.guidefreq)):
@@ -2582,7 +2577,7 @@ class HumanClassify2(QDialog):
             else:
                 gy = None
 
-            # create the button:
+            # Create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
             newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop)
             if newButton.im1.size().width() > self.specH:

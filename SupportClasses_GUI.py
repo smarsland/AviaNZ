@@ -750,11 +750,13 @@ class ControllableAudio(QAudioSink):
         # this should only be called if there's some misalignment between GUI and Audio
         # Should deal with underrun errors somehow
         # TODO: eventually, remove
-        print("endlistener",self.state(),self.error())
+        #print("endlistener",self.state(),self.error())
         # This is to catch when things finish
         if self.state() == QAudio.State.StoppedState:
             self.pressedStop()
             self.reset()
+        return
+        # NOTE: code below is under return!
         elif self.state() == QAudio.State.IdleState and self.error() == QAudio.Error.NoError:
             print("ended",self.loop)
             if self.loop:
@@ -762,8 +764,6 @@ class ControllableAudio(QAudioSink):
             else:
                 self.pressedStop()
                 self.reset()
-        return
-        # NOTE: code below is under return!
         # give some time for GUI to catch up and stop
         print(self.error(), QAudio.Error.UnderrunError, self.error() == QAudio.Error.UnderrunError)
         if self.error() == QAudio.Error.UnderrunError:
