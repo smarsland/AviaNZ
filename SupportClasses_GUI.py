@@ -879,7 +879,7 @@ class ControllableAudio(QAudioSink):
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
-        value = QAudio.convertVolume(value / 100, QAudio.LogarithmicVolumeScale, QAudio.LinearVolumeScale)
+        value = QAudio.convertVolume(value / 100, QAudio.VolumeScale.LogarithmicVolumeScale, QAudio.VolumeScale.LinearVolumeScale)
         # value = (math.exp(value/50)-1)/(math.exp(2)-1)
         self.setVolume(value)
 
