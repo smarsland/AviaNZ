@@ -49,7 +49,8 @@ class AviaNZ_batchProcess():
     # Also called by the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=0, maxgap=1.0, minlen=0.5, maxlen=10.0):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, subset=False, intermittent=False, wind=0, mergeSyllables=False):
+
         # read config and filters from user location
         # recogniser - filter file name without ".txt"
         self.configdir = configdir
@@ -83,11 +84,6 @@ class AviaNZ_batchProcess():
         # TODO: get all the UI params here
         self.dirName = sdir
         self.wind = wind
-
-        # Parameters for "Any sound" post-proc:
-        self.maxgap = maxgap
-        self.minlen = minlen
-        self.maxlen = maxlen
 
         # In CLI/test modes, immediately run detection on init.
         # Otherwise GUI will ping that once it is moved to the right thread
