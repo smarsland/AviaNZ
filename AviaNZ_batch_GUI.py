@@ -42,7 +42,6 @@ import colourMaps
 
 import webbrowser, copy
 
-
 class AviaNZ_batchWindow(QMainWindow):
     def __init__(self, configdir=''):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
@@ -99,7 +98,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # SRM: TODO 
         # There will be some effort needed to tidy up the sampling rate, etc.
         # How to get the size of the filter list right?
-        # Make bats separate?
+        # Make AnySound separate? Or just in list?
         self.process = QButtonGroup()
         self.process.setExclusive(True)
         self.usefilters = QRadioButton("Specify filters")
@@ -145,13 +144,12 @@ class AviaNZ_batchWindow(QMainWindow):
         self.protocolInterval.setRange(5, 3600)
         self.protocolInterval.setValue(int(self.config['protocolInterval']))
 
-        self.windfilter = QCheckBox("Perform wind filtering")
-        self.windfilter.setChecked(True)
-        self.windfilter2 = QCheckBox("Choose wind filter")
-        self.windfilter2.setChecked(False)
-        self.windfilter2.clicked.connect(self.showWind)
-        self.w_wind = QComboBox()
-        self.w_wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"])
+        #self.windfilter = QCheckBox("Perform wind filtering")
+        #self.windfilter.setChecked(True)
+        #self.windfilter.clicked.connect(self.showWind)
+        windlabel = QLabel("Specify wind filter (or select None)")
+        self.windfilter = QComboBox()
+        self.windfilter.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"])
         # TODO: make sure first is checked
 
         # TODO: check all these!
@@ -159,7 +157,6 @@ class AviaNZ_batchWindow(QMainWindow):
         self.mergesyllables.setChecked(True)
         self.mergesyllables2 = QCheckBox("Specify merge parameters")
         self.mergesyllables2.setChecked(False)
-        self.mergesyllables2.clicked.connect(self.showPost)
         self.maxgap = QDoubleSpinBox()
         self.maxgap.setRange(0.05, 10.0)
         self.maxgap.setSingleStep(0.5)
@@ -233,15 +230,16 @@ class AviaNZ_batchWindow(QMainWindow):
         self.boxIntermittent.hide()
 
         # Post Proc checkbox group
-        self.d_detection.addWidget(self.windfilter,row=6,col=0, colspan=2)
-        self.d_detection.addWidget(self.windfilter2,row=6,col=2, colspan=2)
-        self.boxWind = QGroupBox()
-        #self.boxPost = QGroupBox("Post processing")
-        formWind = QGridLayout()
-        formWind.addWidget(self.w_wind, 0, 1)
-        self.boxWind.setLayout(formWind)
-        self.d_detection.addWidget(self.boxWind, row=8, col=0, colspan=4)
-        self.boxWind.hide()
+        self.d_detection.addWidget(windlabel,row=6,col=0)
+        self.d_detection.addWidget(self.windfilter,row=6,col=1, colspan=2)
+        #self.d_detection.addWidget(self.windfilter2,row=6,col=2, colspan=2)
+        #self.boxWind = QGroupBox()
+        ##self.boxPost = QGroupBox("Post processing")
+        #formWind = QGridLayout()
+        #formWind.addWidget(self.w_wind, 0, 1)
+        #self.boxWind.setLayout(formWind)
+        #self.d_detection.addWidget(self.boxWind, row=8, col=0, colspan=4)
+        #self.boxWind.hide()
 
         self.d_detection.addWidget(self.mergesyllables,row=9,col=0, colspan=2)
         self.d_detection.addWidget(self.mergesyllables2,row=9,col=2, colspan=2)
@@ -349,21 +347,25 @@ class AviaNZ_batchWindow(QMainWindow):
         # a bit wacky but maps: 0 (default option, OLS) -> 1
         #                       1 (robust) -> 2
         #                       2 (none) -> 0
-        wind = (self.w_wind.currentIndex()+1)%3
-        print("Wind set to", wind)
+        #wind = self.w_wind.currentIndex()
+        #print("Wind set to", wind)
 
         # Update config file based on provided settings, for reading by the worker
-        # (particularly to store protocol settings for Intermittent,
-        # but could pass any other changes this way as well)
+        # TODO: update schema to match
         self.config['protocolSize'] = self.protocolSize.value()
         self.config['protocolInterval'] = self.protocolInterval.value()
+        self.config['timeStart'] = self.w_timeStart.value()
+        self.config['timeEnd'] = self.w_timeEnd.value()
+        self.config['maxgap']=self.maxgap.value()
+        self.config['minlen']=self.minlen.value()
+        self.config['maxlen']=self.maxlen.value()
         self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
         # TODO: enable post-processing things not to be used!
-        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, wind=wind, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, subset=self.subset.isChecked(), intermittent=self.intermittent.isChecked(), wind=self.w_wind.currentIndex(), mergeSyllables=self.mergeSyllables.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
         self.batchThread = QThread()
@@ -561,11 +563,11 @@ class AviaNZ_batchWindow(QMainWindow):
         else:
             self.boxIntermittent.show()
 
-    def showWind(self):
-        if self.windfilter2.isChecked():
-            self.boxWind.show()
-        else:
-            self.boxWind.hide()
+    #def showWind(self):
+        #if self.windfilter.isChecked():
+            #self.boxWind.show()
+        #else:
+            #self.boxWind.hide()
 
     def showPost(self):
         if self.mergesyllables2.isChecked():
