@@ -154,9 +154,9 @@ class FileDataDialog(QDialog):
         return
 
 #======
-class Spectrogram(QDialog):
+class SpectrogramDialog(QDialog):
     # Class for the spectrogram dialog box
-    # TODO: Steal the graph from Raven (View/Configure Brightness)
+    # TODO: Reproduce the graph from Raven (View/Configure Brightness)
     def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, sgtype='Standard', sgnorm='Log', sgscale='Linear', nfilters=128, batmode=False, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
@@ -1728,8 +1728,10 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        self.media_obj = SupportClasses_GUI.ControllableAudio(None,audioFormat=audioFormat)
-        self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+        #self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
+        self.media_obj = SupportClasses_GUI.ControllableAudio(sp=None,audioFormat=audioFormat,useBar=True)
+        self.media_obj.NotifyTimer.timeout.connect(self.endListener)
+        #self.media_obj.notify.connect(self.endListener)
         self.media_obj.loop = loop
         self.autoplay = autoplay
 

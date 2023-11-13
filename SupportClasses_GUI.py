@@ -755,7 +755,6 @@ class ControllableAudio(QAudioSink):
         if self.state() == QAudio.State.StoppedState:
             self.pressedStop()
             self.reset()
-        return
         # NOTE: code below is under return!
         elif self.state() == QAudio.State.IdleState and self.error() == QAudio.Error.NoError:
             print("ended",self.loop)
@@ -764,6 +763,7 @@ class ControllableAudio(QAudioSink):
             else:
                 self.pressedStop()
                 self.reset()
+        return
         # give some time for GUI to catch up and stop
         print(self.error(), QAudio.Error.UnderrunError, self.error() == QAudio.Error.UnderrunError)
         if self.error() == QAudio.Error.UnderrunError:
@@ -879,7 +879,7 @@ class ControllableAudio(QAudioSink):
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
-        value = QAudio.convertVolume(value / 100, QAudio.LogarithmicVolumeScale, QAudio.LinearVolumeScale)
+        value = QAudio.convertVolume(value / 100, QAudio.VolumeScale.LogarithmicVolumeScale, QAudio.VolumeScale.LinearVolumeScale)
         # value = (math.exp(value/50)-1)/(math.exp(2)-1)
         self.setVolume(value)
 

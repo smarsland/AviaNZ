@@ -22,7 +22,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
-import librosa
+import librosa, resampy
 import Spectrogram
 import SupportClasses
 import WaveletSegment
@@ -349,7 +349,7 @@ def loadFile(filename):
         audiodata = audiodata[:,0]
 
     # if sampleRate != 16000:
-    #     audiodata = librosa.resample(audiodata, sampleRate, 16000)
+    #     audiodata = resampy.resample(audiodata, sampleRate, 16000)
     #     sampleRate=16000
 
     # # pre-process
@@ -357,7 +357,7 @@ def loadFile(filename):
     # audiodata,sampleRate = sc.denoise_filter()
     return audiodata, sampleRate
 
-def genCluterData(dir, duration=1, sampRate=16000):
+def genClusterData(dir, duration=1, sampRate=16000):
     # male, female kiwi syllables from denoising chapter. They are in different lengths ~.87 sec min, therefore get the
     # middle 0.8 sec only to make the features with fixed len.
     f1 = open(dir + '/' + "mfcc.tsv", "w")
@@ -376,7 +376,7 @@ def genCluterData(dir, duration=1, sampRate=16000):
                 data, fs = loadFile(filename)
                 # resample where necessary
                 if fs != sampRate:
-                    data = librosa.resample(data, orig_sr=fs, target_sr=sampRate)
+                    data = resampy.resample(data, orig_sr=fs, target_sr=sampRate)
                     fs = sampRate
                 # get the middle 'duration' secs
                 middle_duration = int(duration * fs)
@@ -408,7 +408,7 @@ def genCluterData(dir, duration=1, sampRate=16000):
                 f1.write("%d\n" % (tgt))
     f1.close()
 
-# genCluterData('D:\AviaNZ\Sound_Files\Denoising_paper_data\demo', duration=0.8)
+# genClusterData('D:\AviaNZ\Sound_Files\Denoising_paper_data\demo', duration=0.8)
 
 
 def mfcc(y1,y2,y3,sr1,sr2,sr3,yTest,srTest):

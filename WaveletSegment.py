@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import WaveletFunctions
-import librosa
+import resampy
 import copy
 import numpy as np
 import time, os, math, csv, gc
@@ -1513,9 +1513,9 @@ class WaveletSegment:
         if sampleRate != fsOut:
             print("Resampling from", sampleRate, "to", fsOut)
             if not fastRes:
-                data = librosa.resample(data, orig_sr=sampleRate, target_sr=fsOut, res_type='kaiser_best')
+                data = resampy.resample(data, orig_sr=sampleRate, target_sr=fsOut, res_type='kaiser_best')
             else:
-                data = librosa.resample(data, orig_sr=sampleRate, target_sr=fsOut, res_type='kaiser_fast')
+                data = resampy.resample(data, orig_sr=sampleRate, target_sr=fsOut, res_type='kaiser_fast')
 
         # Get the five level wavelet decomposition
         if d:
