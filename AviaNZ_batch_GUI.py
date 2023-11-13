@@ -34,7 +34,7 @@ from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
 from AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
-import Spectrogram
+import Spectrogram, SignalProc
 import Segment
 import SupportClasses, SupportClasses_GUI
 import Dialogs
@@ -1914,7 +1914,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.readWav(filename, off=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = sp.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            sp.data = SignalProc.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             _ = sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True,need_even=False)
