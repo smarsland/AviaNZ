@@ -26,7 +26,7 @@ import scipy.signal as signal
 import scipy.fftpack as fft
 from scipy.stats import boxcox
 import wavio
-import librosa
+import resampy
 import copy
 import gc
 import SignalProc
@@ -231,8 +231,10 @@ class Spectrogram:
             print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
         return(0)
 
-    def resample(self, target):
-        if len(self.data)==0:
+    def resample(self, target, data=None):
+        if data is None:
+            data = self.data
+        if len(data)==0:
             print("Warning: no data set to resample")
             return
         if target==self.sampleRate:
@@ -240,7 +242,7 @@ class Spectrogram:
             return
 
         # TODO: this is actually resampy
-        self.data = librosa.resample(self.data, orig_sr=self.sampleRate, target_sr=target)
+        data = resampy.resample(data, orig_sr=self.sampleRate, target_sr=target)
 
         self.sampleRate = target
         if QtMM:

@@ -428,9 +428,9 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
         #actionMenu.addAction("Find matches",self.findMatches)
 
-        if not self.DOC:
-            actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
-            actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
+        #if not self.DOC:
+            #actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
+            #actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
         actionMenu.addSeparator()
         self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
@@ -440,8 +440,8 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Analyse shapes", self.showShapesDialog)
             actionMenu.addAction("Cluster segments", self.classifySegments)
 
-        actionMenu.addSeparator()
-        self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
+        #actionMenu.addSeparator()
+        #self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
 
         actionMenu.addSeparator()
 
@@ -591,9 +591,9 @@ class AviaNZ(QMainWindow):
         self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
         actionMenu.addAction("Add metadata about noise","Ctrl+N",self.addNoiseData)
 
-        if not self.DOC:
-            actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
-            actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
+        #if not self.DOC:
+            #actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
+            #actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
         actionMenu.addSeparator()
         self.segmentAction = actionMenu.addAction("Segment","Ctrl+S",self.segmentationDialog)
@@ -603,9 +603,9 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Analyse shapes", self.showShapesDialog)
             actionMenu.addAction("Cluster segments", self.classifySegments)
 
-        actionMenu.addSeparator()
+        #actionMenu.addSeparator()
         # TODO: Bug
-        self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
+        #self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
 
         actionMenu.addSeparator()
 
@@ -1170,7 +1170,7 @@ class AviaNZ(QMainWindow):
             self.setExtraPlot("none")
             self.showFormant.setEnabled(not self.batmode)
 
-        self.showInvSpec.setVisible(self.batmode)
+        #self.showInvSpec.setVisible(self.batmode)
         self.showFundamental.setEnabled(not self.batmode)
         #self.showSpectral.setEnabled(not self.batmode)
         self.showEnergies.setEnabled(not self.batmode)
@@ -1771,7 +1771,7 @@ class AviaNZ(QMainWindow):
                 self.placeInFileLabel.setText("of %d (%d s in page)" % (self.nFileSections, self.datalengthSec))
             self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
-            self.fileInfoSS.setText("<b>Sample format:</b> %d" % self.sp.audioFormat.sampleFormat())
+            self.fileInfoSS.setText("<b>Sample format:</b> %s" % self.sp.audioFormat.sampleFormat())
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.sampleRate, 60))
 
             if not self.batmode:
@@ -4339,7 +4339,7 @@ class AviaNZ(QMainWindow):
         """ Create spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNormMode, self.sgScale, int(str(self.nfilters)),self.batmode)
+            self.spectrogramDialog = Dialogs.SpectrogramDialog(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNormMode, self.sgScale, int(str(self.nfilters)),self.batmode)
             self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
         # First save the annotations
         self.saveSegments()
@@ -5841,7 +5841,7 @@ class AviaNZ(QMainWindow):
             self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
 
             self.bar.setMovable(False)
-            self.swapPlayButtonState(False):
+            self.swapPlayButtonState(False)
 
             # if bar was moved under pause, update the playback start position based on the bar:
             if self.bar.value()>0:
@@ -5869,7 +5869,7 @@ class AviaNZ(QMainWindow):
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
             self.bar.setMovable(False)
-            self.swapPlayButtonState(False):
+            self.swapPlayButtonState(False)
 
             self.media_obj.playSeg(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high)
         #else:
@@ -5888,7 +5888,7 @@ class AviaNZ(QMainWindow):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
         self.media_obj.pressedPause()
         self.bar.setMovable(True)
-        self.swapPlayButtonState(True):
+        self.swapPlayButtonState(True)
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
@@ -5897,7 +5897,7 @@ class AviaNZ(QMainWindow):
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
         self.bar.setValue(-1000)
-        self.swapPlayButtonState(True):
+        self.swapPlayButtonState(True)
 
     def movePlaySlider(self):
         """ Listener called on sound notify (every 20 ms).
