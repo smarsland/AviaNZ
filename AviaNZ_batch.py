@@ -45,13 +45,12 @@ import copy
 
 class AviaNZ_batchProcess():
     # Main class for batch processing
-    # Contains the algorithms, not the GUI, so that it can be run from commandline
-    # Also called by the GUI
+    # Contains the algorithms, not the GUI, so that it can be run from the commandline or the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
     def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=0, maxgap=1.0, minlen=0.5, maxlen=10.0):
-        # read config and filters from user location
-        # recogniser - filter file name without ".txt"
+        # Read config and filters from user location
+        # Recogniser - filter file name without ".txt"
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
@@ -128,7 +127,7 @@ class AviaNZ_batchProcess():
             else:
                 self.method = "Wavelets"
 
-            # TODO: NOT TRUE NOW!
+            # TODO: NOT TRUE NOW! SRM SRM
             # double-check that all Fs are equal (should already be prevented by UI)
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
