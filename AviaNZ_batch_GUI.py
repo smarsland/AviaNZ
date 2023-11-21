@@ -361,8 +361,8 @@ class AviaNZ_batchWindow(QMainWindow):
         # TODO: update schema to match
         self.config['protocolSize'] = self.protocolSize.value()
         self.config['protocolInterval'] = self.protocolInterval.value()
-        self.config['timeStart'] = self.w_timeStart.value()
-        self.config['timeEnd'] = self.w_timeEnd.value()
+        self.config['timeStart'] = self.w_timeStart.time()
+        self.config['timeEnd'] = self.w_timeEnd.time()
         self.config['maxgap']=self.maxgap.value()
         self.config['minlen']=self.minlen.value()
         self.config['maxlen']=self.maxlen.value()
@@ -1908,8 +1908,9 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.data = SignalProc.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
-                            _ = sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True,need_even=False)
-                            sp.sg = sp.normalisedSpec("Log")
+                            # TODO: Insist on log scale?
+                            sp.sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
+                            #sp.sg = sp.normalisedSpec("Log")
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)

@@ -4357,24 +4357,24 @@ class AviaNZ(QMainWindow):
             if self.batmode:
                 print("Warning: only spectrogram freq. range can be changed in BMP mode")
             else:
-                self.sp.setWidth(int(str(window_width)), int(str(incr)))
+                self.sp.setWidth(window_width, incr)
                 _ = self.sp.spectrogram(window_width=window_width, incr=incr,window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 self.setSpectrogram()
 
                 # If the size of the spectrogram has changed, need to update the positions of things
-                if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
-                    self.config['incr'] = int(str(incr))
-                    self.config['window_width'] = int(str(window_width))
+                if incr != self.config['incr'] or window_width != self.config['window_width']:
+                    self.config['incr'] = incr
+                    self.config['window_width'] = window_width
                     if hasattr(self, 'seg'):
                         self.seg.setNewData(self.sp)
 
                     self.loadFile(self.filename)
 
                     # These two are usually set by redoFreqAxis, but that is called only later in this case
-                    self.spectrogramDialog.low.setValue(minFreq)
-                    self.spectrogramDialog.high.setValue(maxFreq)
+                    self.spectrogramDialog.low.setValue(self.config['minFreq'])
+                    self.spectrogramDialog.high.setValue(self.config['maxFreq'])
 
-        self.redoFreqAxis(minFreq,maxFreq,changedY=changedY)
+        self.redoFreqAxis(self.config['minFreq'],self.config['maxFreq'],changedY=changedY)
 
         self.statusLeft.setText("Ready")
 
@@ -4971,7 +4971,7 @@ class AviaNZ(QMainWindow):
             else:
                 filename = os.path.join(self.filtersDir, self.filterManager.listFiles.currentItem().text() + '.txt')
                 print("Updating the existing recogniser ", filename)
-                msgtext = "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text() + "txt\n\nWe strongly recommend testing the recogniser on a test dataset before actual use."
+                msgtext = "Updated the recogniser: " + self.filterManager.listFiles.currentItem().text()+ "\n\nWe strongly recommend testing the recogniser on a test dataset before actual use."
 
             # store the changed recognizer txt
             with open(filename, 'w') as f:

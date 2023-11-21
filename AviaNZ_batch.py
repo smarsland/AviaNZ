@@ -560,7 +560,7 @@ class AviaNZ_batchProcess():
                 self.sp.data = self.sp.data[start:end]
                 #self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
-                _ = self.sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True)
+                _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 self.seg = Segment.Segmenter(self.sp, self.sp.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
