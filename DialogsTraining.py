@@ -308,7 +308,6 @@ class BuildRecAdvWizard(QWizard):
                 self.addButtons()
                 #self.addButtons(callsgs,audios,callIDs,sp)
                 self.updateButtons()
-                print("buttons added")
                 self.segsChanged = True
                 self.completeChanged.emit()
 
@@ -1743,17 +1742,27 @@ class TestRecWizard(QWizard):
             self.setLayout(layout)
             self.setButtonText(QWizard.WizardButton.NextButton, 'Test >')
 
-        def initializePage(self):
-            filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
-            self.species.addItems(sorted(filternames))
-            if self.initialFilter is not None:
-                self.species.setCurrentText(self.initialFilter)
+        #def initializePage(self):
+            #filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
+            #self.species.addItems(sorted(filternames))
+            #if self.initialFilter is not None:
+                #self.species.setCurrentText(self.initialFilter)
 
         def browseTestData(self):
             dirName = QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
             self.testDirName.setText(dirName)
 
             self.listFiles.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
+
+            # while reading the file, we also collected a list of species present there
+            spList = list(self.listFiles.spList)
+            spList.insert(0, 'Choose species...')
+            self.species.clear()
+            self.species.addItems(spList)
+            if len(spList)==2:
+                self.species.setCurrentIndex(1)
+            if self.initialFilter is not None and self.initialFilter in spList:
+                self.species.setCurrentText(self.initialFilter)
 
     class WPageMain(QWizardPage):
         def __init__(self, configdir, filterdir, parent=None):

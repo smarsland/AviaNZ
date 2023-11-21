@@ -238,8 +238,7 @@ class Spectrogram:
             print("No resampling needed")
             return
 
-        # TODO: this is actually resampy
-        data = resampy.resample(data, orig_sr=self.sampleRate, target_sr=target)
+        data = resampy.resample(data, sr_orig=self.sampleRate, sr_new=target)
 
         self.sampleRate = target
         if QtMM:

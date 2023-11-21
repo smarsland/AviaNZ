@@ -252,13 +252,10 @@ class ConfigLoader(object):
                         json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
                         loaded_model_json = json_file.read()
                         print(loaded_model_json)
-                        print("**")
                         json_file.close()
                         model = model_from_json(loaded_model_json)
                         print(model)
-                        print("***")
                         model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
-                        print("****")
                         print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                         model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
                         if 'fRange' in filt["CNN"]:

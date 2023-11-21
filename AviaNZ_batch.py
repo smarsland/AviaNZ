@@ -556,7 +556,9 @@ class AviaNZ_batchProcess():
                 # Create spectrogram for median clipping etc
                 if not hasattr(self, 'sp'):
                     self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
-                self.sp.data = self.audiodata[start:end]
+                # TODO: What should it be?
+                self.sp.data = self.sp.data[start:end]
+                #self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
                 _ = self.sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True)
                 self.seg = Segment.Segmenter(self.sp, self.sp.sampleRate)
@@ -565,7 +567,9 @@ class AviaNZ_batchProcess():
                 # Post-process
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
+                # TODO: Ditto
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
+                #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 post.joinGaps(self.maxgap)
                 post.deleteShort(self.minlen)
                 # avoid extra long segments (for Isabel)
@@ -589,8 +593,9 @@ class AviaNZ_batchProcess():
             else:
                 if self.method != "Click" and self.method != "Bats":
                     # read in the page and resample as needed
-                    # TODO: correct samplerate?
-                    self.ws.readBatch(self.audiodata[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
+                    # TODO: correct samplerate? And data
+                    self.ws.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
+                    #self.ws.readBatch(self.audiodata[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
 
                 data_test = []
                 click_label = 'None'
@@ -764,7 +769,9 @@ class AviaNZ_batchProcess():
             CNNmodel: None or a CNN
         """
         subfilter = spInfo["Filters"][filtix]
-        post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end],
+        # TODO: data?
+        #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end],
+        post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end],
                             sampleRate=self.sp.sampleRate, tgtsampleRate=spInfo["SampleRate"],
                             segments=segments[filtix], subfilter=subfilter,
                             CNNmodel=CNNmodel, cert=50)
