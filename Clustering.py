@@ -1033,7 +1033,8 @@ class Clustering:
                         sp = Spectrogram.Spectrogram(256, 128)
                         sp.data = audiodata
                         sp.sampleRate = fs
-                        sgRaw = sp.spectrogram(256, 128)
+                        #sgRaw = sp.spectrogram(256, 128)
+                        sgRaw = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                         segment = Segment.Segmenter(sp=sp, fs=fs)
                         syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                         if len(syls) == 0:  # Try again with FIR

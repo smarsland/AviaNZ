@@ -278,7 +278,7 @@ class SpectrogramDialog(QDialog):
             self.window_width.setText('256')
         low = int(self.low.value() // 100 *100)
         high = int(self.high.value() // 100 *100)
-        return [self.windowType.currentText(),self.sgType.currentText(),self.sgNorm.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.window_width.text(),self.incr.text(),low,high,self.sgScale.currentText(),self.nfilters.text()]
+        return [self.windowType.currentText(),self.sgType.currentText(),self.sgNorm.currentText(),self.mean_normalise.isChecked(),self.equal_loudness.isChecked(),int(self.window_width.text()),int(self.incr.text()),int(low),int(high),self.sgScale.currentText(),int(self.nfilters.text())]
 
     def lowChange(self,value):
         # NOTE returned values should also use this rounding
@@ -1730,7 +1730,7 @@ class HumanClassify1(QDialog):
 
         # Audio playback object
         self.media_obj = SupportClasses_GUI.ControllableAudio(sp=None,audioFormat=audioFormat,useBar=True)
-        self.media_obj.NotifyTimer.timeout.connect(self.endListener)
+        #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.autoplay = autoplay
 
@@ -3140,15 +3140,14 @@ class Cluster(QDialog):
         self.minsg = 1
         self.maxsg = 1
         for seg in self.segments:
-            sp = Spectrogram.Spectrogram(512, 256)
+            sp = Spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
             sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
-            _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
-            self.sg = sp.normalisedSpec("Log")
+            #_ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
+            self.sg = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
+            #self.sg = sp.normalisedSpec("Log")
 
-            sg = self.sg
-
-            self.minsg = min(self.minsg, np.min(sg))
-            self.maxsg = max(self.maxsg, np.max(sg))
+            self.minsg = min(self.minsg, np.min(self.sg))
+            self.maxsg = max(self.maxsg, np.max(self.sg))
 
             newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
             self.picbuttons.append(newButton)
