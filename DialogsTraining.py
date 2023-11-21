@@ -451,6 +451,7 @@ class BuildRecAdvWizard(QWizard):
                         for seg2 in self.segments:
                             if seg2[1] == seg:
                                 # find the index of target sp and update call type
+                                # TODO: Bug here
                                 seg[4][[fil["species"] for fil in seg[4]].index(self.field("species"))]["calltype"] = self.clusters[seg2[-1]]
                                 newsegments.addSegment(seg)
                 newsegments.saveJSON(os.path.join(self.field("trainDir"), file))

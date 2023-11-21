@@ -24,6 +24,7 @@ import gc, os, re, fnmatch
 import numpy as np
 
 import Spectrogram
+import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
@@ -438,8 +439,10 @@ class AviaNZ_batchProcess():
                 # initialize empty segmenter
                 if self.method=="Wavelets":
                     self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
-                    del self.sp
-                    gc.collect()
+                    # TODO: Why were the next lines there? 
+                    # TODO: IMPORTANT!!
+                    #del self.sp
+                    #gc.collect()
 
                 # Main work is done here:
                 try:
@@ -875,10 +878,10 @@ class AviaNZ_batchProcess():
                     self.segments.metadata["Operator"] = "Auto"
                     self.segments.metadata["Reviewer"] = ""
             # wipe same species:
-            for sp in species:
+            for spec in species:
                 # shorthand for double-checking that it's not "Any Sound" etc
-                if sp in self.FilterDicts:
-                    spname = self.FilterDicts[sp]["species"]
+                if spec in self.FilterDicts:
+                    spname = self.FilterDicts[spec]["species"]
                     print("Wiping species", spname)
                     oldsegs = self.segments.getSpecies(spname)
                     for i in reversed(oldsegs):
@@ -890,9 +893,9 @@ class AviaNZ_batchProcess():
         # impulse masking (on by default)
         if impMask:
             if anysound:
-                self.sp.data = self.sp.impMask(engp=70, fp=0.50)
+                self.sp.data = SignalProc.impMask(self.sp.data, self.sp.sampleRate, engp=70, fp=0.50)
             else:
-                self.sp.data = self.sp.impMask()
+                self.sp.data = SignalProc.impMask(self.sp.data, self.sp.sampleRate) 
             #self.audiodata = self.sp.data
 
     def ClickSearch(self, imspec, file,virginia=True):
