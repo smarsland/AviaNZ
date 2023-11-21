@@ -89,7 +89,6 @@ class StartScreen(QDialog):
         hbox.addStretch(4)
         hbox.addWidget(b3)
         hbox.addStretch(5)
-        #hbox.addWidget(b4)
 
         vbox = QVBoxLayout()
         vbox.addLayout(hboxclose)
@@ -103,7 +102,6 @@ class StartScreen(QDialog):
         b1.clicked.connect(self.manualSeg)
         b2.clicked.connect(self.findSpecies)
         b3.clicked.connect(self.reviewSeg)
-        #b4.clicked.connect(self.utilities)
 
         self.task = -1
 
@@ -538,7 +536,7 @@ class Tag2Annotation(QDialog):
 
 #======
 class BackupAnnotation(QDialog):
-    # Class for XML Tag to AviaNZ annotation
+    # Backup AviaNZ annotations into another folder. Simply copies all of the .data files with directory hierarchy preserved
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Backup annotations')
@@ -583,7 +581,7 @@ class BackupAnnotation(QDialog):
         if self.txtSrc.text() and self.txtDst.text():
             return [self.txtSrc.text(), self.txtDst.text()]
         else:
-            msg = SupportClasses_GUI.MessagePopup("t", "All fields are required ", "All fields are required ")
+            msg = SupportClasses_GUI.MessagePopup("t", "Need both source and target directories", "Need both source and target directories")
             msg.exec()
             return []
 
@@ -623,13 +621,11 @@ class OperatorReviewer(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        #print(self.name1.text(),self.name2.text())
         return [self.name1.text(),self.name2.text()]
 
 #======
 class addNoiseData(QDialog):
     # Class for the noise data dialog box
-    # TODO: Options are hard-coded for now. Does it matter?
     def __init__(self, noiseLevel, noiseTypes, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
@@ -1728,10 +1724,8 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        #self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
         self.media_obj = SupportClasses_GUI.ControllableAudio(sp=None,audioFormat=audioFormat,useBar=True)
         self.media_obj.NotifyTimer.timeout.connect(self.endListener)
-        #self.media_obj.notify.connect(self.endListener)
         self.media_obj.loop = loop
         self.autoplay = autoplay
 

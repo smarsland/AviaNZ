@@ -104,11 +104,11 @@ class AviaNZ_batchWindow(QMainWindow):
         self.usefilters = QRadioButton("Specify filters")
         self.process.addButton(self.usefilters)
         self.usefilters.setChecked(True)
-        self.anysound = QRadioButton("Any sound")
-        self.process.addButton(self.anysound)
+        #self.anysound = QRadioButton("Any sound")
+        #self.process.addButton(self.anysound)
         self.batfilter = QRadioButton("NZ Bats")
         self.process.addButton(self.batfilter)
-        self.anysound.clicked.connect(self.useFilters)
+        #self.anysound.clicked.connect(self.useFilters)
         self.batfilter.clicked.connect(self.useFilters)
         self.usefilters.clicked.connect(self.useFilters)
         self.hasFilters = False
@@ -121,6 +121,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
         spp = sorted(list(self.FilterDicts.keys()))
         self.w_spe1.addItems(spp)
+        self.w_spe1.addItem("Any sound")
         self.w_spe1.itemClicked.connect(self.countFilters)
 
         self.subset = QCheckBox("Process all recordings") 
@@ -198,7 +199,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.formSp = QVBoxLayout()
         self.buttonSp = QHBoxLayout()
         self.buttonSp.addWidget(self.usefilters)
-        self.buttonSp.addWidget(self.anysound)
+        #self.buttonSp.addWidget(self.anysound)
         self.buttonSp.addWidget(self.batfilter)
         self.formSp.addLayout(self.buttonSp)
         self.formSp.addWidget(self.w_speLabel1)
@@ -322,7 +323,7 @@ class AviaNZ_batchWindow(QMainWindow):
             msg.exec()
             return(1)
 
-        # TODO: SRM: This needs tidying up to use everything from the GUI more clearly
+        # TODO: SRM: Needs testing
 
         # retrieve selected filter(s)
         #species = set()
@@ -330,10 +331,10 @@ class AviaNZ_batchWindow(QMainWindow):
             #if box.currentText() != "":
                 #species.add(box.currentText())
         #species = list(species)
-        if self.anysound.isChecked():
-            species = "Any sound"
-            self.w_processButton.setEnabled(True)
-        elif self.batfilter.isChecked():
+        #if self.anysound.isChecked():
+            #species = "Any sound"
+            #self.w_processButton.setEnabled(True)
+        if self.batfilter.isChecked():
             species = "NZ Bats"
             self.w_processButton.setEnabled(True)
         else:
@@ -365,8 +366,6 @@ class AviaNZ_batchWindow(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
-        # TODO: enable post-processing things not to be used!
-        # TODO: Does this deal with a list of species?
         self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, subset=self.subset.isChecked(), intermittent=self.intermittent.isChecked(), wind=self.w_wind.currentIndex(), mergeSyllables=self.mergeSyllables.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
@@ -526,7 +525,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.w_speLabel1.setStyleSheet("color: black")
             self.w_spe1.setEnabled(True)
         else:
-            # Bats or Any Sound
+            # Bats 
             self.w_speLabel1.setStyleSheet("color: gray")
             for i in range(self.w_spe1.count()):
                 it = self.w_spe1.item(i)
@@ -536,7 +535,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def countFilters(self):
         """ Update process message and buttons based on whether filters and files are selected"""
-        if len(self.w_spe1.selectedItems()) > 0 or self.batfilter.isChecked() or self.anysound.isChecked():
+        if len(self.w_spe1.selectedItems()) > 0 or self.batfilter.isChecked(): # or self.anysound.isChecked():
             self.hasFilters = True
         else:
             self.hasFilters = False
