@@ -83,7 +83,10 @@ class AviaNZ_batchProcess():
 
         # TODO: get all the UI params here
         self.dirName = sdir
+        self.subset = subset
+        self.intermittent = intermittent
         self.wind = wind
+        self.mergeSyllables = mergeSyllables
 
         # In CLI/test modes, immediately run detection on init.
         # Otherwise GUI will ping that once it is moved to the right thread
@@ -102,17 +105,17 @@ class AviaNZ_batchProcess():
         # Chooses the filters and sampling regime to use.
         # Then works through the directory list, and processes each file.
 
-        # REQUIRES: species, dirName, and wind must be set on self
+        # REQUIRES: species, dirName, and processing choices (wind, intermittent sampling, time-limited) must be set on self
 
         if "Any sound" in self.species:
             self.method = "Default"
             speciesStr = "Any sound"
             filters = None
         # TODO: Not used?
-        elif "Any sound (Intermittent sampling)" in self.species:
-            self.method = "Intermittent sampling"
-            speciesStr = "Intermittent sampling"
-            filters = None
+        #elif "Any sound (Intermittent sampling)" in self.species:
+            #self.method = "Intermittent sampling"
+            #speciesStr = "Intermittent sampling"
+            #filters = None
         else:
             # TODO: One bat filter!
             if "NZ Bats" in self.species:
