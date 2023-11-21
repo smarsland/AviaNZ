@@ -42,6 +42,11 @@ import colourMaps
 
 import webbrowser, copy
 
+pg.setConfigOption('useNumba', True)
+pg.setConfigOption('background','w')
+pg.setConfigOption('foreground','k')
+pg.setConfigOption('antialias',True)
+
 class AviaNZ_batchWindow(QMainWindow):
     def __init__(self, configdir=''):
         # Allow the user to browse a folder and push a button to process that folder to find a target species

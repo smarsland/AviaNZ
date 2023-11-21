@@ -106,6 +106,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         validate(instance=learnpar, schema=learnparschema)
         print("successfully validated config file")
     except Exception as e:
+        # TODO: Gives a QWidget error instead of this
         print("Warning: config file failed validation with:")
         print(e)
         try:

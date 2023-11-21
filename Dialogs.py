@@ -1573,6 +1573,11 @@ class HumanClassify1(QDialog):
         self.wPlot = SupportClasses_GUI.PartlyResizableGLW()
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
+
+        # TODO: Useful?
+        self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
+        self.plot.setGraphicsEffect(self.blurEffect)
+
         self.pPlot.addItem(self.plot)
         # Fix the aspect ratio to a preset number. Initial view box
         # will be about 2:1, so aspect ratio of 2 means

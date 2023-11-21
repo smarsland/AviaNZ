@@ -20,7 +20,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO: 
-# 0. Sound: tidy the buttons, slightly clearer, check volume
+# 0. Sound: tidy the buttons, slightly clearer, check volume -> check
 # 1. Check Freebird import, BatSearch output
 # 2. Test Harry's overlaps into excel 
 # 2a -> Replace (or not...) the mergeSegments whereever that was
@@ -85,11 +85,10 @@ from lxml import etree as ET
 #import xml.etree.ElementTree as ET
 
 pg.setConfigOption('useNumba', True)
-
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
-print("Package import complete.")
+#print("Package import complete.")
 
 # import pdb
 # from PyQt5.QtCore import pyqtRemoveInputHook
@@ -124,10 +123,12 @@ class AviaNZ(QMainWindow):
         self.ConfigLoader = SupportClasses.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
+        print("Config loaded")
 
         # Load filters
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+        print("Filters loaded")
 
         # Load the birdlists - both are now necessary:
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
@@ -161,17 +162,6 @@ class AviaNZ(QMainWindow):
         self.viewCallType = False
         self.CallTypeMenu = False
         self.batmode = False
-
-        # Spectrogram default settings
-        # TODO: put in config?
-        self.sgOneSided = True
-        self.sgMeanNormalise = True
-        self.sgEqualLoudness = False
-        self.sgType = 'Standard'
-        self.sgNormMode = 'Log'
-        self.sgScale= 'Linear'
-        self.nfilters = 128
-        self.windowType = 'Hann'
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
@@ -1776,7 +1766,7 @@ class AviaNZ(QMainWindow):
 
             if not self.batmode:
                 # Create the main spectrogram
-                _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 # For batmode, the spectrogram is already created.
             # Normalize the spectrogram, appropriately for the current mode and user settings
             self.setSpectrogram()
@@ -2277,10 +2267,10 @@ class AviaNZ(QMainWindow):
         if self.zooniverse:
 
             labels = [0,int(FreqRange//4000),int(FreqRange//2000),int(3*FreqRange//4000),int(FreqRange//1000)]
-            if self.sgScale == 'Mel Frequency':
+            if self.config['sgScale'] == 'Mel Frequency':
                 for i in range(len(labels)):
                     labels[i] = self.sp.convertHztoMel(labels[i])
-            elif self.sgScale == 'Bark Frequency':
+            elif self.config['sgScale'] == 'Bark Frequency':
                 for i in range(len(labels)):
                     labels[i] = self.sp.convertHztoBark(labels[i])
         
@@ -2317,11 +2307,11 @@ class AviaNZ(QMainWindow):
         else:
             labels = [self.sp.minFreqShow, self.sp.minFreqShow+FreqRange/4, self.sp.minFreqShow+FreqRange/2, self.sp.minFreqShow+3*FreqRange/4, self.sp.minFreqShow+FreqRange]
 
-            if self.sgScale == 'Mel Frequency':
+            if self.config['sgScale'] == 'Mel Frequency':
                 for i in range(len(labels)):
                     labels[i] = self.sp.convertHztoMel(labels[i])
                 self.specaxis.setLabel('Mels')
-            elif self.sgScale == 'Bark Frequency':
+            elif self.config['sgScale'] == 'Bark Frequency':
                 for i in range(len(labels)):
                     labels[i] = self.sp.convertHztoBark(labels[i])
                 self.specaxis.setLabel('Barks')
@@ -3885,7 +3875,7 @@ class AviaNZ(QMainWindow):
             # NOTE batmode kind of assumes spectrogram was already on 0-1 scale
             self.sg = self.sp.normalisedSpec("Batmode")
         else:
-            self.sg = self.sp.normalisedSpec(self.sgNormMode)
+            self.sg = self.sp.normalisedSpec(self.config['sgNormMode'])
 
         self.sgMinimum = np.min(self.sg)
         self.sgMaximum = np.max(self.sg)
@@ -4338,8 +4328,9 @@ class AviaNZ(QMainWindow):
     def showSpectrogramDialog(self):
         """ Create spectrogram dialog when the button is pressed.
         """
+        # TODO: Params here -- config or not?
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.SpectrogramDialog(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.sgType, self.sgNormMode, self.sgScale, int(str(self.nfilters)),self.batmode)
+            self.spectrogramDialog = Dialogs.SpectrogramDialog(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['windowType'], self.config['sgType'], self.config['sgNormMode'], self.config['sgScale'], self.config['nfilters'],self.batmode)
             self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
         # First save the annotations
         self.saveSegments()
@@ -4349,14 +4340,15 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.windowType, self.sgType, self.sgNormMode, self.sgMeanNormalise, self.sgEqualLoudness, window_width, incr, minFreq, maxFreq,sgScale,self.nfilters] = self.spectrogramDialog.getValues()
-        if self.sgScale != sgScale:
-            self.sgScale = sgScale
+        # TODO: check types of all these str, int, etc.
+        [self.config['windowType'], self.config['sgType'], self.config['sgNormMode'], self.config['sgMeanNormalise'], self.config['sgEqualLoudness'], window_width, incr, self.config['minFreq'], self.config['maxFreq'],sgScale,self.config['nfilters']] = self.spectrogramDialog.getValues()
+        if self.config['sgScale'] != sgScale:
+            self.config['sgScale'] = sgScale
             changedY = True
         else:  
             changedY = False
 
-        if (minFreq >= maxFreq):
+        if (self.config['minFreq'] >= self.config['maxFreq']):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec()
             return
@@ -4366,7 +4358,7 @@ class AviaNZ(QMainWindow):
                 print("Warning: only spectrogram freq. range can be changed in BMP mode")
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
-                _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                _ = self.sp.spectrogram(window_width=window_width, incr=incr,window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 self.setSpectrogram()
 
                 # If the size of the spectrogram has changed, need to update the positions of things
@@ -4487,7 +4479,7 @@ class AviaNZ(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sp.sampleRate, incr, self.config['window_width'], self.windowType, IFmethod, IFsettings)
+                    segshape = Shapes.instantShaper(sg, self.sp.sampleRate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
                     segshape.tstart += segRelativeStart
@@ -4627,7 +4619,8 @@ class AviaNZ(QMainWindow):
             #self.audiodata[start : stop] = denoised
 
             # recalculate spectrogram
-            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            #_ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.config['sgOneSided'])
+            _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             self.setSpectrogram()
 
             # Update the ampl image
@@ -4689,7 +4682,8 @@ class AviaNZ(QMainWindow):
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
-            _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            #_ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.config['sgOneSided'])
+            _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             self.setSpectrogram()
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.sampleRate,num=self.datalength,endpoint=True),self.sp.data)
@@ -4716,7 +4710,8 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     #self.sp.data = self.audiodata
 
-                    _ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+                    #_ = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.config['sgOneSided'])
+                    _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                     self.setSpectrogram()
 
                     self.amplPlot.setData(
@@ -5746,7 +5741,7 @@ class AviaNZ(QMainWindow):
             len_seg = datalength / sampleRate
 
             sgRaw_temp = sp_temp.spectrogram(mean_normalise=self.sgMeanNormalise,
-                                        equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided)
+                                        equal_loudness=self.sgEqualLoudness, onesided=self.config['sgOneSided'])
 
             # Get the data for the spectrogram
             if self.sp.sampleRate != self.sppInfo[str(species)][4]:
@@ -5758,7 +5753,8 @@ class AviaNZ(QMainWindow):
             # TODO utilize self.sp / Spectrogram more here
             sp_temp.data = data1
             sp_temp.sampleRate = sampleRate1
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            #sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.config['sgOneSided'])
+            sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             indices = self.seg.findCCMatches(sgRaw_temp,sgRaw,thr)
             # scale indices to match with self.samplerate
             indices = [i*self.sp.sampleRate/sampleRate1 for i in indices]
@@ -5793,7 +5789,8 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             # Get the data for the spectrogram
             # TODO utilize self.sp / Spectrogram more here
-            sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided)
+            #sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.config['sgOneSided'])
+            sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sp.sampleRate
             indices = self.seg.findCCMatches(segment,sgRaw,thr)
