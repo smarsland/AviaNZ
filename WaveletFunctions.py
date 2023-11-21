@@ -29,6 +29,7 @@ from ext import ce_denoise as ce
 import time
 import Wavelet
 import Spectrogram
+import SignalProc
 
 # A pair of helper functions that are often useful:
 def graycode(n):
@@ -470,7 +471,7 @@ class WaveletFunctions:
                 low = nodepos / numnodes*2
                 high = (nodepos+1) / numnodes*2
                 print("antialiasing by filtering between %.3f-%.3f FN" %(low, high))
-                data = sp.FastButterworthBandpass(data, low, high)
+                data = SignalProc.FastButterworthBandpass(data, low, high)
             else:
                 # OLD METHOD for antialiasing
                 # just setting image frequencies to 0

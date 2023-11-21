@@ -1172,7 +1172,7 @@ class PicButton(QAbstractButton):
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.hide()
 
-        # SRM: Decided this isn't the right wat
+        # SRM: Decided this isn't the right idea
         #self.plusButton = QToolButton(self)
         #self.plusButton.setText('+')
         #self.plusButton.hide()
@@ -1195,8 +1195,8 @@ class PicButton(QAbstractButton):
         # when color map changes. Initialize with full colour scale,
         # then we expect to call setImage soon again to update.
         self.lut = lut
-        print(np.shape(self.spec))
-        print(np.min(self.spec), np.max(self.spec))
+        #print(np.shape(self.spec))
+        #print(np.min(self.spec), np.max(self.spec))
         self.setImage([np.min(self.spec), np.max(self.spec)])
 
         self.buttonClicked = False
@@ -1208,7 +1208,7 @@ class PicButton(QAbstractButton):
 
         # playback things
         self.media_obj = ControllableAudio(None,audioFormat=audioFormat)
-        # TODO: SRM: update
+        # TODO: SRM: update -- do we want the moving bar?
         #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.audiodata = audiodata
@@ -1294,7 +1294,8 @@ class PicButton(QAbstractButton):
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220, 220, 0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "√")
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "\u2713")
+                #painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "√")
             elif self.mark == "blue":
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(0,0,220)))
@@ -1304,7 +1305,8 @@ class PicButton(QAbstractButton):
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "X")
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "\u274C")
+                #painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "X")
             else:
                 print("ERROR: unrecognised segment mark")
                 return
