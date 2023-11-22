@@ -358,7 +358,6 @@ class AviaNZ_batchWindow(QMainWindow):
         #print("Wind set to", wind)
 
         # Update config file based on provided settings, for reading by the worker
-        # TODO: update schema to match
         self.config['protocolSize'] = self.protocolSize.value()
         self.config['protocolInterval'] = self.protocolInterval.value()
         self.config['timeStart'] = self.w_timeStart.time()

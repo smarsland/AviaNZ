@@ -2257,7 +2257,7 @@ class AviaNZ(QMainWindow):
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
 
         # There are two options for logarithmic axis (Mel/Bark): keep the numbers equally spaced, but correct the labels, or keep the numbers but space the labels correctly.
-        # TODO: I'm doing the first for now. -- SRM: that's crap :(
+        # I'm doing the first for now, although it isn't as good.
 
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sp.sampleRate // 2 / np.shape(self.sg)[1]
@@ -2313,7 +2313,7 @@ class AviaNZ(QMainWindow):
                 self.specaxis.setLabel('Mels')
             elif self.config['sgScale'] == 'Bark Frequency':
                 for i in range(len(labels)):
-                    labels[i] = self.sp.convertHztoBark(labels[i])
+                    labels[i] = self.sp.convertHztoBark(labels[i])*1000
                 self.specaxis.setLabel('Barks')
             else:
                 self.specaxis.setLabel('kHz')
@@ -2343,9 +2343,9 @@ class AviaNZ(QMainWindow):
         QApplication.processEvents()
 
     def setSpeed(self,speed):
-        # TODO: when called from the playback, would ideally set the speed back to 1
+        # TODO: when called from the playback, would ideally set the speed back to 1 -> check this
         # So how to find the right action?
-        #self.speedButton.menu().setChecked("1")
+        self.speedButton.menu().setCurrentIndex(3)
         if type(speed) is str:
             # convert Unicode fractions to floats
             speedchar = ord(speed)
@@ -4328,7 +4328,6 @@ class AviaNZ(QMainWindow):
     def showSpectrogramDialog(self):
         """ Create spectrogram dialog when the button is pressed.
         """
-        # TODO: Params here -- config or not?
         if not hasattr(self,'spectrogramDialog'):
             self.spectrogramDialog = Dialogs.SpectrogramDialog(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['windowType'], self.config['sgType'], self.config['sgNormMode'], self.config['sgScale'], self.config['nfilters'],self.batmode)
             self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -4340,7 +4339,6 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        # TODO: check types of all these str, int, etc.
         [self.config['windowType'], self.config['sgType'], self.config['sgNormMode'], self.config['sgMeanNormalise'], self.config['sgEqualLoudness'], window_width, incr, self.config['minFreq'], self.config['maxFreq'],sgScale,self.config['nfilters']] = self.spectrogramDialog.getValues()
         if self.config['sgScale'] != sgScale:
             self.config['sgScale'] = sgScale
@@ -4415,9 +4413,8 @@ class AviaNZ(QMainWindow):
             # do something with this segment now...
             print("Calculating statistics on this segment...")
 
-            # TODO: Hardcoded for now - add a dialog to read parameters?
             # TODO: Workout the units
-            f = Features.Features(data=data, sampleRate=self.sp.sampleRate, window_width=256, incr=128)
+            f = Features.Features(data=data, sampleRate=self.sp.sampleRate, window_width=self.config['window_width'], incr=self.config['incr'])
             avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             # quartile1, quartile2, quartile3, f5, f95, interquartileRange = f.get_Raven_robust_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)

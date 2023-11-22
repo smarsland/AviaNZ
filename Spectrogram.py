@@ -339,6 +339,7 @@ class Spectrogram:
         try:
             self.sg = np.dot(self.sg,filterbank)
         except:
+            print("Mel conversion problems")
             placeholder = np.zeros(shape=(np.shape(self.sg)[0],np.shape(filterbank)[1],np.shape(self.sg)[2]))
             for i in range(np.shape(self.sg)[2]):
                 placeholder[:,:,i] = np.dot(self.sg[:,:,i],filterbank)
@@ -390,7 +391,7 @@ class Spectrogram:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,stop=None):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=128,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,stop=None,singleIm=True):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -467,8 +468,9 @@ class Spectrogram:
             self.sg -= self.sg.mean()
 
         starts = range(0, len(self.sg) - window_width, incr)
-        # This multi-tapered method does not sum all channels. Each taper equals one channel.
+        # Returns either multiple channels or sums them and returns one
         if sgType=='Multi-tapered':
+            # TODO: hard param -- 3 tapers
             if specExtra:
                 [tapers, eigen] = dpss(window_width, 2.5, 3)
                 counter = 0
@@ -476,12 +478,12 @@ class Spectrogram:
                 for start in starts:
                     Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
                     Sk = abs(Sk)**2
-                    Sk = np.mean(Sk.T * weights, axis=1)
+                    #Sk = np.mean(Sk.T * weights, axis=1)
                     for taper in range(3):
                         out[:,:,taper][counter:counter + 1,:] = Sk[taper][window_width // 2:].T
                     counter += 1  
-                    # The next line is for summing them
-                    #out[counter:counter + 1,:] = Sk[window_width // 2:].T
+                if singleIm:
+                    out = np.squeeze(np.sum(out,axis=2))
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")

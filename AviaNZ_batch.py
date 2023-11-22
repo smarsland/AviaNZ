@@ -519,6 +519,7 @@ class AviaNZ_batchProcess():
                 samplesInPage = 300*self.sp.sampleRate
             else:
                 samplesInPage = 900*16000
+        
         elif self.method=="Wavelets":
             # If using changepoints and v short windows,
             # aim to have roughly 5000 windows:
