@@ -198,7 +198,7 @@ class BuildRecAdvWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             self.adjustSize()
 
-            # TODO: SRM: (1) selected icon is wrong, (2) resample
+            # TODO: SRM: resample
             instr = QLabel("To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.")
             instr.setWordWrap(True)
 
