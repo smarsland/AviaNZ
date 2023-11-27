@@ -1439,7 +1439,7 @@ class AviaNZ(QMainWindow):
         if self.started:
             # This is the second click, so should pay attention and close the segment
             # Stop the mouse motion connection, remove the drawing boxes
-            if self.started_window=='a':
+            if self.startedInAmpl:
                 try:
                     self.p_ampl.scene().sigMouseMoved.disconnect()
                 except Exception:
@@ -1761,7 +1761,7 @@ class AviaNZ(QMainWindow):
                 self.placeInFileLabel.setText("of %d (%d s in page)" % (self.nFileSections, self.datalengthSec))
             self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
-            self.fileInfoSS.setText("<b>Sample format:</b> %s" % self.sp.audioFormat.sampleFormat())
+            self.fileInfoSS.setText("<b>Sample format:</b> %s" % str(self.sp.audioFormat.sampleFormat()).split('.')[-1])
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.sampleRate, 60))
 
             if not self.batmode:
@@ -1865,9 +1865,10 @@ class AviaNZ(QMainWindow):
             self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
 
             if not self.CLI:
-                # Initialise the sound and bar moving timer
-                self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
-                self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+                if not self.batmode:
+                    # Initialise the sound and bar moving timer
+                    self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
+                    self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
 
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,int(np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value())))
@@ -2345,7 +2346,7 @@ class AviaNZ(QMainWindow):
     def setSpeed(self,speed):
         # TODO: when called from the playback, would ideally set the speed back to 1 -> check this
         # So how to find the right action?
-        self.speedButton.menu().setCurrentIndex(3)
+        #self.speedButton.menu().setCurrentIndex(3)
         if type(speed) is str:
             # convert Unicode fractions to floats
             speedchar = ord(speed)
@@ -3848,7 +3849,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the menu item that chooses a colour map.
         Loads them from the file as appropriate and sets the lookup table.
         """
-        if not self.CLI:
+        if not self.CLI and not self.batmode:
             if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
 
@@ -3887,7 +3888,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
         Translates the brightness and contrast values into appropriate image levels.
         """
-        if not self.CLI:
+        if not self.CLI and not self.batmode:
             if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
 
@@ -4577,8 +4578,9 @@ class AviaNZ(QMainWindow):
             print("Can't play, no segment selected")
             return
 
-        if self.media_obj.isPlayingorPaused():
-            self.stopPlayback()
+        if hasattr(self, 'media_obj'):
+            if self.media_obj.isPlayingorPaused():
+                self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
         noiseest = "ols" # or qr, or const

@@ -119,7 +119,8 @@ class Spectrogram:
         if not silent:
             if QtMM:
                 #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
-                print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleFormat()))
+                sf = str(self.audioFormat.sampleFormat())
+                print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
                 #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
