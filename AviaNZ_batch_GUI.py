@@ -357,15 +357,14 @@ class AviaNZ_batchWindow(QMainWindow):
         #wind = self.w_wind.currentIndex()
         #print("Wind set to", wind)
 
-        # Update config file based on provided settings, for reading by the worker
-        self.config['protocolSize'] = self.protocolSize.value()
-        self.config['protocolInterval'] = self.protocolInterval.value()
-        self.config['timeStart'] = self.w_timeStart.time()
-        self.config['timeEnd'] = self.w_timeEnd.time()
-        self.config['maxgap']=self.maxgap.value()
-        self.config['minlen']=self.minlen.value()
-        self.config['maxlen']=self.maxlen.value()
-        self.ConfigLoader.configwrite(self.config, self.configfile)
+        # Count update config file based on provided settings, for reading by the worker
+        # Not at the moment -- worker can read them anyway
+        #self.config['timeStart'] = self.w_timeStart.time()
+        #self.config['timeEnd'] = self.w_timeEnd.time()
+        #self.config['maxgap']=self.maxgap.value()
+        #self.config['minlen']=self.minlen.value()
+        #self.config['maxlen']=self.maxlen.value()
+        #self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread

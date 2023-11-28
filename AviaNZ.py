@@ -50,6 +50,7 @@ import sys
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
 @click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
+
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
     # adapt path to allow this to be launched from wherever
     import sys, os
@@ -106,7 +107,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         validate(instance=learnpar, schema=learnparschema)
         print("successfully validated config file")
     except Exception as e:
-        # TODO: Gives a QWidget error instead of this
+        # NOTE: Gives a QWidget error instead of this
         print("Warning: config file failed validation with:")
         print(e)
         try:

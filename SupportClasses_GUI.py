@@ -728,7 +728,7 @@ class ControllableAudio(QAudioSink):
         self.useBar = useBar
         if self.useBar:
             self.NotifyTimer = QTimer(self)
-        self.stateChanged.connect(self.endListener)
+        #self.stateChanged.connect(self.endListener)
 
         self.InBuffer = QBuffer()
         self.timeoffset = 0  # start time of the played audio, in ms, relative to page start
