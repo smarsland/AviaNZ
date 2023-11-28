@@ -41,6 +41,7 @@ import copy
 # God, this is tedious. self.method needs to be replaced throughout
 # There is a lot that can be tidied up. DULL
 
+# Bats need sorting
 
 # Need to work through this and ensure:
 # 1. everything needed is passed from interface (or command line, or test)
@@ -165,7 +166,7 @@ class AviaNZ_batchProcess():
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 # TODO: Check this
-                if (self.species != "NZ Bats" and filename.lower().endswith('.wav')) or (self.method == "NZ Bats" and filename.lower().endswith('.bmp')):
+                if (self.species != "NZ Bats" and filename.lower().endswith('.wav')) or (self.species == "NZ Bats" and filename.lower().endswith('.bmp')):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
 
@@ -180,7 +181,7 @@ class AviaNZ_batchProcess():
             else:
                 timeWindow_s = self.ui.w_timeStart.time().hour() * 3600 + self.ui.w_timeStart.time().minute() * 60 + self.ui.w_timeStart.time().second()
                 timeWindow_e = self.ui.w_timeEnd.time().hour() * 3600 + self.ui.w_timeEnd.time().minute() * 60 + self.ui.w_timeEnd.time().second()
-                options += ["Subset: ",str(timeWindow_s) , str(timeWindow_e)]
+                options += ["Subset: ",timeWindow_s, timeWindow_e]
         else:
                 options += ["","",""]
         if self.intermittent:
@@ -189,7 +190,7 @@ class AviaNZ_batchProcess():
             else:
                 protocolSize = self.ui.protocolSize.value()
                 protocolInterval = self.ui.protocolInterval.value()
-                options += ["Intermittent: ",str(protocolSize),str(protocolInterval)]
+                options += ["Intermittent: ",protocolSize,protocolInterval]
         else:
             options += ["","",""]
         if self.mergeSyllables:
@@ -199,7 +200,7 @@ class AviaNZ_batchProcess():
                 maxgap=self.ui.maxgap.value()
                 minlen=self.ui.minlen.value()
                 maxlen=self.ui.maxlen.value()
-                options += ["Merge syllables: "+str(maxgap) + ',' + str(minlen) + ',' +str(maxlen)]
+                options += ["Merge syllables: ",maxgap,minlen,maxlen]
         else:
             options += ["","","",""]
 
@@ -286,7 +287,7 @@ class AviaNZ_batchProcess():
             self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
         else:
             # TODO
-            options = [self.wind]
+            options = [self.wind,"","","","","","","","","",""]
 
         if not self.CLI and not self.testmode:
             # clean up the UI before entering the long loop
@@ -355,7 +356,8 @@ class AviaNZ_batchProcess():
             if filename in self.filesDone:
                 # skip the processing:
                 print("File %s processed previously, skipping" % filename)
-                self.log.appendFile(filename)
+                if not self.testmode:
+                    self.log.appendFile(filename)
                 continue
 
             # check if file not empty
@@ -369,8 +371,9 @@ class AviaNZ_batchProcess():
             # TODO: speciesStr or self.species?
             with open(filename, 'br') as f:
                 if (speciesStr == "NZ Bats" and f.read(2) != b'BM') or (speciesStr != "NZ Bats" and f.read(4) != b'RIFF'):
-                    print("Warning: file %s not formatted correctly, skipping" % filename)
-                    self.log.appendFile(filename)
+                    print("File %s not formatted correctly, skipping" % filename)
+                    if not self.testmode:
+                        self.log.appendFile(filename)
                     continue
 
             # test the selected time window if it is a DOC recording
@@ -391,7 +394,7 @@ class AviaNZ_batchProcess():
                 inWindow = True
 
             if DOCRecording and not inWindow:
-                print("Skipping out-of-time-window recording")
+                print("Skipping out-of-time-window recording %s" % filename)
                 if not self.testmode:
                     self.log.appendFile(filename)
                 continue
@@ -403,7 +406,7 @@ class AviaNZ_batchProcess():
                 self.segments_nocnn = Segment.SegmentList()
             if options[5] == "Intermittent: ":
                 try:
-                    self.addRegularSegments()
+                    self.addRegularSegments(options[6],options[7])
                 except Exception:
                     estr = "Encountered error:\n" + traceback.format_exc()
                     print("ERROR: ", estr)
@@ -425,8 +428,8 @@ class AviaNZ_batchProcess():
                 #self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
 
                 # initialize empty segmenter
-                if self.method=="Wavelets":
-                    self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
+                #if self.method=="Wavelets":
+                    #self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
                     # TODO: Why were the next lines there? 
                     # TODO: IMPORTANT!!
                     #del self.sp
@@ -473,7 +476,7 @@ class AviaNZ_batchProcess():
             print("File processed in", processingTime)
             # END of audio batch processing
 
-    def addRegularSegments(self):
+    def addRegularSegments(self,length,interval):
         """ Perform the Hartley bodge: add fixed length segments at specified frequency. """
         # if wav.data exists get the duration
         (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
@@ -483,10 +486,10 @@ class AviaNZ_batchProcess():
         self.segments.metadata["Duration"] = nseconds
         i = 0
         segments = []
-        print("Adding segments (%d s every %d s) to %s" %(self.config['protocolSize'], self.config['protocolInterval'], str(self.filename)))
+        print("Adding segments (%d s every %d s) to %s" %(length,interval, str(self.filename)))
         while i < nseconds:
-            segments.append([i, i + self.config['protocolSize']])
-            i += self.config['protocolInterval']
+            segments.append([i, i + length])
+            i += interval
         post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
         self.makeSegments(self.segments, post.segments)
 
@@ -505,7 +508,7 @@ class AviaNZ_batchProcess():
             else:
                 samplesInPage = 900*16000
         
-        elif self.method=="Wavelets":
+        elif speciesStr!="NZ Bats":
             # If using changepoints and v short windows,
             # aim to have roughly 5000 windows:
             # (4500 = 4 windows in 15 min DoC standard files)
@@ -533,20 +536,17 @@ class AviaNZ_batchProcess():
             thisPageLen = (end-start) / self.sp.sampleRate
             #thisPageLen = (end-start) /16000 # self.sp.sampleRate
 
-            if thisPageLen < 2 and (self.method != "Click" and self.method != "Bats"):
+            if thisPageLen < 2 and (speciesStr != "NZ Bats"):
                 print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
                 continue
 
             # Process
-            if speciesStr == "Any sound":
+            if "Any sound" in speciesStr:
                 # Create spectrogram for median clipping etc
                 if not hasattr(self, 'sp'):
                     self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
                 # TODO: What should it be?
-                self.sp.data = self.sp.data[start:end]
-                #self.sp.data = self.audiodata[start:end]
-                self.sp.sampleRate = self.sampleRate
-                _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
+                _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'],start=start,end=end)
                 self.seg = Segment.Segmenter(self.sp, self.sp.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
@@ -577,7 +577,7 @@ class AviaNZ_batchProcess():
                         self.log.file.close()
                         raise GentleExitException
             else:
-                if self.method != "Click" and self.method != "Bats":
+                if speciesStr != "NZ Bats":
                     # read in the page and resample as needed
                     # TODO: correct samplerate? And data
                     self.ws.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
@@ -587,12 +587,11 @@ class AviaNZ_batchProcess():
                 click_label = 'None'
                 for speciesix in range(len(filters)):
                     print("Working with recogniser:", filters[speciesix])
-                    if self.method=="Click":
+                    if speciesStr=="NZ Bats":
+                        # TODO: Necessary? Probably not
                         click_label, data_test, gen_spec = self.ClickSearch(self.sp.sg, self.filename)
                         print('number of detected clicks = ', gen_spec)
                         thisPageSegs = []
-                    elif self.method == "Bats":
-                        thisPageSegs = []   # No click search
                     else:
                         # Bird detection by wavelets. Choose the right wavelet method:
                         if "method" not in filters[speciesix] or filters[speciesix]["method"]=="wv":
@@ -608,7 +607,7 @@ class AviaNZ_batchProcess():
                     # Post-process:
                     # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     print("Segments detected (all subfilters): ", thisPageSegs)
-                    if not self.testmode and self.method != "Bats":
+                    if not self.testmode and speciesStr != "NZ Bats":
                         print("Post-processing...")
                     # postProcess currently operates on single-level list of segments,
                     # so we run it over subfilters for wavelets:
@@ -624,7 +623,7 @@ class AviaNZ_batchProcess():
                             # TODO THIS IS FULL POST-PROC PIPELINE FOR BIRDS AND BATS
                             # -- Need to check how this should interact with the testmode
 
-                            if self.method=="Click":
+                            if speciesStr=="NZ Bats":
                                 # bat-style CNN:
                                 model = CNNmodel[0]
                                 thr1 = CNNmodel[5][0]
@@ -659,6 +658,8 @@ class AviaNZ_batchProcess():
                                 else:
                                     # do not create any segments
                                     print("Nothing detected")
+                            """
+                            # TODO: decide what want from these two
                             elif self.method == "Bats":     # Let's do it here - PostProc class is not supporting bats
                                 # TODO review this a bit - my code checker shows errors
                                 model = CNNmodel[0]
@@ -721,6 +722,7 @@ class AviaNZ_batchProcess():
                                     # Convert the annotation into a full segment in self.segments
                                     thisPageStart = start / self.sp.sampleRate
                                     self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
+                            """
                             else:
                                 # bird-style CNN and other processing:
                                 postsegs = self.postProcFull(thisPageSegs, spInfo, filtix, start, end, CNNmodel)
@@ -790,7 +792,7 @@ class AviaNZ_batchProcess():
 
     def makeSegments(self, segmentsList, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segmentsNew to segmentsList """
-        if self.method == "Click" or self.method == "Bats":
+        if species == "NZ Bats":
             # Batmode: segmentsNew should be already prepared as: [x1, x2, labels]
             y1 = 0
             y2 = 0
@@ -822,15 +824,15 @@ class AviaNZ_batchProcess():
             segmentList.metadata = dict()
         segmentList.metadata["Operator"] = "Auto"
         segmentList.metadata["Reviewer"] = ""
-        if self.method != "Intermittent sampling":
-            segmentList.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
+        #if self.method != "Intermittent sampling":
+            #segmentList.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
         segmentList.metadata["noiseLevel"] = None
         segmentList.metadata["noiseTypes"] = []
 
         segmentList.saveJSON(str(self.filename) + suffix)
         return 1
 
-    def loadFile(self, species, anysound=False, impMask=True):
+    def loadFile(self, species, anysound=False, impMask=False):
         """ species: list of recognizer names, or ["Any sound"].
             Species names will be wiped based on these. """
         print(self.filename)
@@ -839,36 +841,27 @@ class AviaNZ_batchProcess():
             self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
 
         # Read audiodata or spectrogram
-        if self.method == "Click":  # old bat method
+        if species == "NZ Bats":  
             self.sp.readBmp(self.filename, rotate=False)
-            #self.sampleRate = self.sp.sampleRate
-            self.datalength = self.sp.fileLength
-        elif self.method == "Bats":
-            self.sp = Spectrogram.Spectrogram(512, 256)
-            self.sp.readBmp(self.filename, rotate=True, repeat=False)
-            #self.sampleRate = self.sp.sampleRate
-            self.datalength = self.sp.fileLength
+            #self.sp.readBmp(self.filename, rotate=True, repeat=False)
         else:
             self.sp.readWav(self.filename)
-            #self.sampleRate = self.sp.sampleRate
-            #self.audiodata = self.sp.data
 
-            self.datalength = np.shape(self.sp.data)[0]
-            print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(self.datalength)/self.sp.sampleRate, self.sp.sampleRate))
+        print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(len(self.sp.data))/self.sp.sampleRate, self.sp.sampleRate))
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
-        if species == ["Any sound"] or not os.path.isfile(self.filename + '.data') or self.method == "Click" or self.method == "Bats":
+        if species == ["Any sound"] or not os.path.isfile(self.filename + '.data') or species == "NZ Bats":
             # Initialize default metadata values
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
             self.segments.metadata["Reviewer"] = ""
-            self.segments.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
+            self.segments.metadata["Duration"] = float(len(self.sp.data))/self.sp.sampleRate
             # wipe all segments:
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sp.sampleRate)
+            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(len(self.sp.data))/self.sp.sampleRate)
             if not hasmetadata:
                     # TODO: Should save this...
                     self.segments.metadata["Operator"] = "Auto"
@@ -886,7 +879,8 @@ class AviaNZ_batchProcess():
                             del self.segments[i]
             print("%d segments loaded from .data file" % len(self.segments))
 
-        # impulse masking (on by default)
+        # impulse masking (off by default)
+        # TODO
         if impMask:
             if anysound:
                 self.sp.data = SignalProc.impMask(self.sp.data, self.sp.sampleRate, engp=70, fp=0.50)
@@ -1037,9 +1031,9 @@ class AviaNZ_batchProcess():
             start_pixel-=end_pixel-ls+1
             end_pixel=ls-1
             # this code above fails for sg less than 4 pixels wide
-        sgRaw=spectrogram[:,start_pixel:end_pixel+1]  # not I am saving the spectrogram in the right dimension
+        sgRaw=spectrogram[:,start_pixel:end_pixel+1]  # note I am saving the spectrogram in the right dimension
         sgRaw=np.repeat(sgRaw,2,axis=1)
-        sgRaw=(np.flipud(sgRaw)).T  # flipped spectrogram to make it consistent with Niro Mewthod
+        sgRaw=(np.flipud(sgRaw)).T  # flipped spectrogram to make it consistent with Niro Method
         featuress.append([sgRaw.tolist(), file_name, count])  # not storing segment and label informations
 
         count += 1
