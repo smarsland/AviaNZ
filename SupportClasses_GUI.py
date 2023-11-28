@@ -756,13 +756,13 @@ class ControllableAudio(QAudioSink):
             self.pressedStop()
             self.reset()
         # NOTE: code below is under return!
-        elif self.state() == QAudio.State.IdleState and self.error() == QAudio.Error.NoError:
-            print("ended",self.loop)
-            if self.loop:
-                self.restart()
-            else:
-                self.pressedStop()
-                self.reset()
+        #elif self.state() == QAudio.State.IdleState and self.error() == QAudio.Error.NoError:
+            #print("ended",self.loop)
+            #if self.loop:
+                #self.restart()
+            #else:
+            #self.pressedStop()
+            #self.reset()
         return
         # give some time for GUI to catch up and stop
         print(self.error(), QAudio.Error.UnderrunError, self.error() == QAudio.Error.UnderrunError)
