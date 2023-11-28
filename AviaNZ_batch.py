@@ -37,6 +37,11 @@ import math
 import copy
 
 # SRM: TODO:
+
+# God, this is tedious. self.method needs to be replaced throughout
+# There is a lot that can be tidied up. DULL
+
+
 # Need to work through this and ensure:
 # 1. everything needed is passed from interface (or command line, or test)
 # 2. one bat method
@@ -49,7 +54,8 @@ class AviaNZ_batchProcess():
     # Contains the algorithms, not the GUI, so that it can be run from the commandline or the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
-        # Recogniser - filter file name without ".txt"
+        # Recogniser - filter file name without ".txt" 
+        # TODO: allow CLI to have multiple recognisers and other options
     def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, subset=False, intermittent=False, wind=0, mergeSyllables=False):
 
         # Read config and filters from user location
@@ -82,14 +88,6 @@ class AviaNZ_batchProcess():
             print("ERROR: unrecognized mode ", mode)
             return
 
-        self.config['protocolSize'] = self.protocolSize.value()
-        self.config['protocolInterval'] = self.protocolInterval.value()
-        self.config['timeStart'] = self.w_timeStart.time()
-        self.config['timeEnd'] = self.w_timeEnd.time()
-        self.config['maxgap']=self.maxgap.value()
-        self.config['minlen']=self.minlen.value()
-        self.config['maxlen']=self.maxlen.value()
-        # TODO: get all the UI params here
         self.dirName = sdir
         self.subset = subset
         self.intermittent = intermittent
@@ -115,15 +113,25 @@ class AviaNZ_batchProcess():
 
         # REQUIRES: species, dirName, and processing choices (wind, intermittent sampling, time-limited) must be set on self
 
+        filters = [self.FilterDicts[name] for name in self.species]
+        samplerate = set([filt["SampleRate"] for filt in filters])
+
+        if len(samplerate)>1:
+            # TODO: Make this more efficient
+            print("Multiple sample rates: ",samplerate)
+
+        # convert list to string
+        speciesStr = " & ".join(self.species)
+
+        # load target CNN models (currently stored in the same dir as filters)
+        # format: {filtername: [model, win, inputdim, output]}
+        self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+
+        """
         if "Any sound" in self.species:
             self.method = "Default"
             speciesStr = "Any sound"
             filters = None
-        # TODO: Not used?
-        #elif "Any sound (Intermittent sampling)" in self.species:
-            #self.method = "Intermittent sampling"
-            #speciesStr = "Intermittent sampling"
-            #filters = None
         else:
             # TODO: One bat filter!
             if "NZ Bats" in self.species:
@@ -140,9 +148,8 @@ class AviaNZ_batchProcess():
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
             if len(samplerate)>1:
-                # TODO: SRM: What the best way -- convert all and store? -> space issues
+                # TODO: Make this more efficient
                 print("Multiple sample rates: ",samplerate)
-                #raise ValueError("ERROR: multiple sample rates found in selected recognisers, change selection")
 
             # convert list to string
             speciesStr = " & ".join(self.species)
@@ -150,36 +157,58 @@ class AviaNZ_batchProcess():
             # load target CNN models (currently stored in the same dir as filters)
             # format: {filtername: [model, win, inputdim, output]}
             self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+        """
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
         # TODO: Will always need to do bats separately
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if (self.method != "Click" and filename.lower().endswith('.wav')) or (self.method == "Click" and filename.lower().endswith('.bmp')) or (self.method == "Bats" and filename.lower().endswith('.bmp')):
+                # TODO: Check this
+                if (self.species != "NZ Bats" and filename.lower().endswith('.wav')) or (self.method == "NZ Bats" and filename.lower().endswith('.bmp')):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
 
-        # Parse the user-set time window to process
-        # TODO: Check if they selected it
-        if self.CLI or self.testmode:
-            timeWindow_s = 0
-            timeWindow_e = 0
+        # Parse the user-set time window and other options from the GUI
+        # A bit cumbersome, but combines passing them through with writing them to the log file
+        # TODO: Work out how to get these for CLI
+        options = ["Wind: ", self.wind]
+        if self.subset:
+            if self.CLI or self.testmode:
+                timeWindow_s = 0
+                timeWindow_e = 0
+            else:
+                timeWindow_s = self.ui.w_timeStart.time().hour() * 3600 + self.ui.w_timeStart.time().minute() * 60 + self.ui.w_timeStart.time().second()
+                timeWindow_e = self.ui.w_timeEnd.time().hour() * 3600 + self.ui.w_timeEnd.time().minute() * 60 + self.ui.w_timeEnd.time().second()
+                options += ["Subset: ",str(timeWindow_s) , str(timeWindow_e)]
         else:
-            timeWindow_s = self.ui.w_timeStart.time().hour() * 3600 + self.ui.w_timeStart.time().minute() * 60 + self.ui.w_timeStart.time().second()
-            timeWindow_e = self.ui.w_timeEnd.time().hour() * 3600 + self.ui.w_timeEnd.time().minute() * 60 + self.ui.w_timeEnd.time().second()
+                options += ["","",""]
+        if self.intermittent:
+            if self.CLI or self.testmode:
+                pass
+            else:
+                protocolSize = self.ui.protocolSize.value()
+                protocolInterval = self.ui.protocolInterval.value()
+                options += ["Intermittent: ",str(protocolSize),str(protocolInterval)]
+        else:
+            options += ["","",""]
+        if self.mergeSyllables:
+            if self.CLI or self.testmode:
+                pass
+            else:
+                maxgap=self.ui.maxgap.value()
+                minlen=self.ui.minlen.value()
+                maxlen=self.ui.maxlen.value()
+                options += ["Merge syllables: "+str(maxgap) + ',' + str(minlen) + ',' +str(maxlen)]
+        else:
+            options += ["","","",""]
 
         # LOG FILE is read here
-        # note: important to log all analysis settings here
+        # note: important to log all analysis options here
         # TODO: This will change a bit
         self.filesDone = []
         if not self.testmode:
-            if self.method != "Intermittent sampling":
-                settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
-            else:
-                settings = [self.method, timeWindow_s, timeWindow_e, self.config["protocolSize"], self.config["protocolInterval"]]
-            print(self.method, settings)
-            self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
+            self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, options)
 
             # Ask for RESUME CONFIRMATION here
             if self.log.possibleAppend:
@@ -219,18 +248,13 @@ class AviaNZ_batchProcess():
 
             # Ask for FINAL USER CONFIRMATION here
             cnt = len(self.filesDone)
-            if self.method == "Intermittent sampling":
-                text = "Method: " + self.method + ".\nNumber of files to analyse: " + str(total) + "\n"
-            else:
-                text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyse: " + str(total) + ", " + str(cnt) + " done so far.\n"
+            opts = ','.join(map(str, options))
+            text = "Species: " + speciesStr + ", options: " + opts + ".\nNumber of files to analyse: " + str(total) + ", " + str(cnt) + " done so far.\n"
 
             text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
-            if speciesStr == "Any sound" or self.method == "Click" or self.method == "Bats":
-                text += "\nWarning: any previous annotations in these files will be deleted!\n"
-            else:
-                text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
+            text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
 
-            text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
+            text = "Analysis will be launched with these options:\n" + text + "\nConfirm?"
 
             if not self.CLI:
                 self.mutex.lock()
@@ -255,13 +279,14 @@ class AviaNZ_batchProcess():
             # print current header (or old if resuming),
             # print old file list if resuming.
             self.log.file = open(self.log.filepath, 'w')
-            if speciesStr not in ["Any sound", "Intermittent sampling"]:
-                self.log.reprintOld()
+            #if speciesStr not in ["Any sound", "Intermittent sampling"]:
+                #self.log.reprintOld()
                 # else single-sp runs should be deleted anyway
 
             self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
         else:
-            settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
+            # TODO
+            options = [self.wind]
 
         if not self.CLI and not self.testmode:
             # clean up the UI before entering the long loop
@@ -273,9 +298,9 @@ class AviaNZ_batchProcess():
 
             import pyqtgraph as pg
             with pg.BusyCursor():
-                self.mainloop(allwavs,total,speciesStr,filters,settings)
+                self.mainloop(allwavs,total,speciesStr,filters,options)
         else:
-            self.mainloop(allwavs,total,speciesStr,filters,settings)
+            self.mainloop(allwavs,total,speciesStr,filters,options)
 
         if not self.testmode:
             # delete old results (xlsx)
@@ -297,74 +322,25 @@ class AviaNZ_batchProcess():
                         os.remove(filenamef)
 
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
-            # TODO: Move into a separate function
-            if self.method == 'Click':
-                self.exportToBatSearch(self.dirName)
-                self.outputBatPasses(self.dirName)
-            elif self.method == 'Bats':
+            if self.species == "NZ Bats":
                 self.exportToBatSearch(self.dirName,threshold1=100,threshold2=None)
                 self.outputBatPasses(self.dirName)
-
-            if self.method=='Click' or self.method=='Bats':
-                if not self.CLI:
-                    # TODO: what if you start from a different folder?
-                    # I think that this is OK, but need to check -- it should (?) put a BatDB file in each folder, just like the log files.
-                    # Then it's up to the user to sort them. Or maybe not?
-                    # TODO: autofill some metadata if user has filled it in once?
-                    easting = ""
-                    northing = ""
-                    try:
-                        f = open(os.path.join(self.dirName,'log.txt'),'r')
-                        # Find a line that contains GPS (lat, long),
-                        # And read the two numbers after it
-                        # This version just returns the last ones
-                        for line in f.readlines():
-                            if 'GPS (lat,long)' in line:
-                                ll = line.strip()
-                                y = ll.split(",")
-                                x = ll[-2].split(":")
-                                easting = x[-1]
-                                northing = y[-1]
-                            elif 'GPS:' in line:
-                                ll = line.strip()
-                                y = ll.split("=")
-                                x = y[-2].split(",")
-                                easting = x[-2]
-                                northing = y[-1]
-                    except FileNotFoundError:
-                        pass
-                    except Exception as e:
-                        print("Warning: could not read GPS data, ", e)
-
-                    recorder = os.path.split(self.dirName)[-1]
-
-                    # ping UI to show the survey form
-                    self.mutex.lock()
-                    self.need_bat_info.emit(self.config['operator'],easting,northing,recorder)
-                    self.ui.msgClosed.wait(self.mutex)
-                    self.mutex.unlock()
-
-                    # now, the form was either rejected, setting results to None, or accepted:
-                    if self.ui.batFormResults is not None:
-                        self.exportBatSurvey(self.dirName, self.ui.batFormResults)
-                else:
-                    self.exportBatSurvey(self.dirName, None)
-
+                self.exportToDOCDB()
             # END of processing and exporting. Final cleanup
             self.log.file.close()
 
         print("Processed all %d files" % total)
         return(0)
 
-    def mainloop(self,allwavs,total,speciesStr,filters,settings):
+    def mainloop(self,allwavs,total,speciesStr,filters,options):
         # MAIN PROCESSING starts here
         # TODO: This will need a bit of work to deal with different filters with non-matching sample rates
         processingTime = 0
         cleanexit = 0
         cnt = 0
 
-        timeWindow_s = settings[1]
-        timeWindow_e = settings[2]
+        timeWindow_s = options[3]
+        timeWindow_e = options[4]
 
         for filename in allwavs:
             # get remaining run time in min
@@ -390,8 +366,9 @@ class AviaNZ_batchProcess():
                 continue
 
             # check if file is formatted correctly
+            # TODO: speciesStr or self.species?
             with open(filename, 'br') as f:
-                if (self.method == "Click" and f.read(2) != b'BM') or (self.method == "Bats" and f.read(2) != b'BM') or (self.method != "Click" and self.method != "Bats" and f.read(4) != b'RIFF'):
+                if (speciesStr == "NZ Bats" and f.read(2) != b'BM') or (speciesStr != "NZ Bats" and f.read(4) != b'RIFF'):
                     print("Warning: file %s not formatted correctly, skipping" % filename)
                     self.log.appendFile(filename)
                     continue
@@ -424,7 +401,7 @@ class AviaNZ_batchProcess():
             self.segments = Segment.SegmentList()
             if self.testmode:
                 self.segments_nocnn = Segment.SegmentList()
-            if self.method == "Intermittent sampling":
+            if options[5] == "Intermittent: ":
                 try:
                     self.addRegularSegments()
                 except Exception:
@@ -436,15 +413,16 @@ class AviaNZ_batchProcess():
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
                 # Impulse masking:   TODO: masking is useful but could be improved
-                if speciesStr=="Any sound":
-                    impMask = True  # Up to debate - could turn this off here
-                elif self.method=="Click" or self.method=="Bats":
-                    impMask = False  # definitely off for bats
-                else:
+                #if speciesStr=="Any sound":
+                    #impMask = True  # Up to debate - could turn this off here
+                #elif self.method=="Click" or self.method=="Bats":
+                    #impMask = False  # definitely off for bats
+                #else:
                     # MUST BE off for changepoints (it introduces discontinuities, which
                     # create large WCs and highly distort means/variances)
-                    impMask = "chp" not in [sf.get("method") for sf in filters]
-                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
+                    #impMask = "chp" not in [sf.get("method") for sf in filters]
+                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
+                #self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
 
                 # initialize empty segmenter
                 if self.method=="Wavelets":
@@ -672,7 +650,7 @@ class AviaNZ_batchProcess():
 
                                     # Create a label (list of dicts with species, certs) for the single segment
                                     print('Assessing file label...')
-                                    label = self.File_label(predictions, thr1=thr1, thr2=thr2)
+                                    label = self.labelBatFile(predictions, thr1=thr1, thr2=thr2)
                                     print('CNN detected: ', label)
                                     if len(label)>0:
                                         # Convert the annotation into a full segment in self.segments
@@ -916,6 +894,7 @@ class AviaNZ_batchProcess():
                 self.sp.data = SignalProc.impMask(self.sp.data, self.sp.sampleRate) 
             #self.audiodata = self.sp.data
 
+    # TODO: One version of this only!
     def ClickSearch(self, imspec, file,virginia=True):
         """
         searches for clicks in the provided imspec, saves dataset
@@ -1067,7 +1046,7 @@ class AviaNZ_batchProcess():
 
         return featuress, count
 
-    def File_label(self, predictions, thr1, thr2):
+    def labelBatFile(self, predictions, thr1, thr2):
         """
         uses the predictions made by the CNN to update the filewise annotations
         when we have 3 labels: 0 (LT), 1(ST), 2 (Noise)
@@ -1627,6 +1606,51 @@ class AviaNZ_batchProcess():
                         rec = root.split('/')[-3]
                         op = 'Moira Pryde'
                     date = '.\\'+root.split('/')[-1]
+
+    def exportToDOCDB(self):
+        if not self.CLI:
+            # TODO: what if you start from a different folder?
+            # I think that this is OK, but need to check -- it should (?) put a BatDB file in each folder, just like the log files.
+            # Then it's up to the user to sort them. Or maybe not?
+            # TODO: autofill some metadata if user has filled it in once?
+            easting = ""
+            northing = ""
+            try:
+                f = open(os.path.join(self.dirName,'log.txt'),'r')
+                # Find a line that contains GPS (lat, long),
+                # And read the two numbers after it
+                # This version just returns the last ones
+                for line in f.readlines():
+                    if 'GPS (lat,long)' in line:
+                        ll = line.strip()
+                        y = ll.split(",")
+                        x = ll[-2].split(":")
+                        easting = x[-1]
+                        northing = y[-1]
+                    elif 'GPS:' in line:
+                        ll = line.strip()
+                        y = ll.split("=")
+                        x = y[-2].split(",")
+                        easting = x[-2]
+                        northing = y[-1]
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                print("Warning: could not read GPS data, ", e)
+
+            recorder = os.path.split(self.dirName)[-1]
+
+            # ping UI to show the survey form
+            self.mutex.lock()
+            self.need_bat_info.emit(self.config['operator'],easting,northing,recorder)
+            self.ui.msgClosed.wait(self.mutex)
+            self.mutex.unlock()
+
+            # now, the form was either rejected, setting results to None, or accepted:
+            if self.ui.batFormResults is not None:
+                self.exportBatSurvey(self.dirName, self.ui.batFormResults)
+        else:
+            self.exportBatSurvey(self.dirName, None)
 
 
 class GentleExitException(Exception):
