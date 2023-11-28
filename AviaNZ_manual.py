@@ -53,7 +53,7 @@ from PyQt6.QtWidgets import QGraphicsBlurEffect
 # The two below will move from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
-from PyQt6.QtMultimedia import QAudio
+from PyQt6.QtMultimedia import QAudio, QAudioFormat
 
 import wavio
 import numpy as np
@@ -4752,6 +4752,8 @@ class AviaNZ(QMainWindow):
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
                 y1 = max(self.sp.minFreq, self.segments[self.box1id][2])
                 y2 = min(self.segments[self.box1id][3], self.sp.maxFreq)
+                y1 = self.sp.minFreq
+                y2 = self.sp.maxFreq
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
                 y1 = self.sp.minFreq
@@ -4764,10 +4766,20 @@ class AviaNZ(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
+                #tosave = self.sp.data[int(x1):int(x2)]
                 tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.sampleRate,start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.playSpeed) 
-                wavio.write(filename, tosave.astype('int16'), self.sp.sampleRate, scale='dtype-limits', sampwidth=2)
+                if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+                    sampwidth = 2
+                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+                    sampwidth = 4
+                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+                    sampwidth = 1
+                else:
+                    print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
+                wavio.write(filename, tosave, self.sp.sampleRate, scale=None, sampwidth=sampwidth)
+                #wavio.write(filename, tosave, self.sp.sampleRate, scale='dtype-limits', sampwidth=samplewidth)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 

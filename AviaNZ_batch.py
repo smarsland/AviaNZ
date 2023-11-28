@@ -82,6 +82,13 @@ class AviaNZ_batchProcess():
             print("ERROR: unrecognized mode ", mode)
             return
 
+        self.config['protocolSize'] = self.protocolSize.value()
+        self.config['protocolInterval'] = self.protocolInterval.value()
+        self.config['timeStart'] = self.w_timeStart.time()
+        self.config['timeEnd'] = self.w_timeEnd.time()
+        self.config['maxgap']=self.maxgap.value()
+        self.config['minlen']=self.minlen.value()
+        self.config['maxlen']=self.maxlen.value()
         # TODO: get all the UI params here
         self.dirName = sdir
         self.subset = subset
