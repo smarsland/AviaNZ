@@ -38,9 +38,6 @@ import copy
 
 # SRM: TODO:
 
-# God, this is tedious. self.method needs to be replaced throughout
-# There is a lot that can be tidied up. DULL
-
 # Bats need sorting
 
 # Need to work through this and ensure:
@@ -57,10 +54,9 @@ class AviaNZ_batchProcess():
     # mode: "GUI/CLI/test". If GUI, must provide the parent
         # Recogniser - filter file name without ".txt" 
         # TODO: allow CLI to have multiple recognisers and other options
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, subset=False, intermittent=False, wind=0, mergeSyllables=False):
-
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind=0, mergeSyllables=False):
         # Read config and filters from user location
-        # recogniser - filter file name without ".txt"
+        # recognisers - list of filter file names without ".txt"
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
@@ -86,7 +82,7 @@ class AviaNZ_batchProcess():
             self.CLI = False
             self.testmode=False
         else:
-            print("ERROR: unrecognized mode ", mode)
+            print("ERROR: unrecognised mode ", mode)
             return
 
         self.dirName = sdir
@@ -98,10 +94,16 @@ class AviaNZ_batchProcess():
         # In CLI/test modes, immediately run detection on init.
         # Otherwise GUI will ping that once it is moved to the right thread
         if self.CLI or self.testmode:
-            self.species = [recogniser]
+            self.species = [recognisers]
             self.detect()
         else:
-            self.species = recogniser
+            self.species = recognisers
+
+        self.anySound = False
+        if "Any sound" in self.species:
+            self.anySound = True
+            self.species.remove("Any sound")
+
         print(self.species)
 
     # from memory_profiler import profile
@@ -109,10 +111,10 @@ class AviaNZ_batchProcess():
     # @profile(stream=fp)
     def detect(self):
         # This is the function that does the work.
-        # Chooses the filters and sampling regime to use.
-        # Then works through the directory list, and processes each file.
+        # Loads the filters and follows the sampling regime. 
+        # Works through the directory list, and processes each file.
 
-        # REQUIRES: species, dirName, and processing choices (wind, intermittent sampling, time-limited) must be set on self
+        # REQUIRES: [species], dirName, and processing choices (wind, intermittent sampling, time-limited) must be set on self
 
         filters = [self.FilterDicts[name] for name in self.species]
         samplerate = set([filt["SampleRate"] for filt in filters])
@@ -161,11 +163,9 @@ class AviaNZ_batchProcess():
         """
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
-        # TODO: Will always need to do bats separately
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                # TODO: Check this
                 if (self.species != "NZ Bats" and filename.lower().endswith('.wav')) or (self.species == "NZ Bats" and filename.lower().endswith('.bmp')):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
@@ -204,11 +204,13 @@ class AviaNZ_batchProcess():
         else:
             options += ["","","",""]
 
+        print(options)
+
         # LOG FILE is read here
         # note: important to log all analysis options here
-        # TODO: This will change a bit
         self.filesDone = []
         if not self.testmode:
+            # TODO: Check
             self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, options)
 
             # Ask for RESUME CONFIRMATION here
@@ -477,7 +479,7 @@ class AviaNZ_batchProcess():
             # END of audio batch processing
 
     def addRegularSegments(self,length,interval):
-        """ Perform the Hartley bodge: add fixed length segments at specified frequency. """
+        """ Perform the Hartley bodge: add fixed length segments at specified interval. """
         # if wav.data exists get the duration
         (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
         self.segments.metadata = dict()
@@ -541,11 +543,10 @@ class AviaNZ_batchProcess():
                 continue
 
             # Process
-            if "Any sound" in speciesStr:
+            if self.anySound:
                 # Create spectrogram for median clipping etc
                 if not hasattr(self, 'sp'):
                     self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
-                # TODO: What should it be?
                 _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'],start=start,end=end)
                 self.seg = Segment.Segmenter(self.sp, self.sp.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
@@ -553,13 +554,13 @@ class AviaNZ_batchProcess():
                 # Post-process
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                # TODO: Ditto
                 post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
-                post.joinGaps(self.maxgap)
-                post.deleteShort(self.minlen)
-                # avoid extra long segments (for Isabel)
-                post.splitLong(self.maxlen)
+                if **
+                    post.joinGaps(self.maxgap)
+                    post.deleteShort(self.minlen)
+                    # avoid extra long segments 
+                    post.splitLong(self.maxlen)
 
                 # adjust segment starts for 15min "pages"
                 if start != 0:
@@ -580,7 +581,9 @@ class AviaNZ_batchProcess():
                 if speciesStr != "NZ Bats":
                     # read in the page and resample as needed
                     # TODO: correct samplerate? And data
-                    self.ws.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
+                    # TODO: make efficient for resampling
+                    # TODO: need to init class somewhere
+                    self.ws.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind<2)
                     #self.ws.readBatch(self.audiodata[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
 
                 data_test = []
@@ -601,16 +604,13 @@ class AviaNZ_batchProcess():
                             # note that only allowing alg2 = nuisance-robust chp detection
                             thisPageSegs = self.ws.waveletSegmentChp(speciesix, alg=2, wind=self.wind)
                         else:
-                            print("ERROR: unrecognized method", filters[speciesix]["method"])
+                            print("ERROR: unrecognised method", filters[speciesix]["method"])
                             raise Exception
 
-                    # Post-process:
-                    # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     print("Segments detected (all subfilters): ", thisPageSegs)
                     if not self.testmode and speciesStr != "NZ Bats":
                         print("Post-processing...")
-                    # postProcess currently operates on single-level list of segments,
-                    # so we run it over subfilters for wavelets:
+                    # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     spInfo = filters[speciesix]
                     for filtix in range(len(spInfo['Filters'])):
                         CNNmodel = None
@@ -833,7 +833,7 @@ class AviaNZ_batchProcess():
         return 1
 
     def loadFile(self, species, anysound=False, impMask=False):
-        """ species: list of recognizer names, or ["Any sound"].
+        """ species: list of recogniser names, or ["Any sound"].
             Species names will be wiped based on these. """
         print(self.filename)
         # Create an instance of the Spectrogram class
