@@ -65,6 +65,8 @@ class AviaNZ_batchWindow(QMainWindow):
 
         filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(filtersDir)
+        if "NZ Bats" in self.FilterDicts:
+            del self.FilterDicts["NZ Bats"]
 
         self.dirName=''
         self.statusBar().showMessage("Select a directory to process")
@@ -121,7 +123,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
         self.w_speLabel1 = QLabel("Select one or more recognisers to use:")
         self.w_spe1 = QListWidget()
-        self.w_spe1.setMinimumSize(800,500)
+        #self.w_spe1.setMinimumSize(800,500)
         self.w_spe1.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
 
         spp = sorted(list(self.FilterDicts.keys()))
@@ -369,7 +371,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
-        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, subset=self.subset.isChecked(), intermittent=self.intermittent.isChecked(), wind=self.w_wind.currentIndex(), mergeSyllables=self.mergeSyllables.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentIndex(), mergeSyllables=self.mergesyllables.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
         self.batchThread = QThread()
