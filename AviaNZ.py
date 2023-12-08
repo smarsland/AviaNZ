@@ -151,7 +151,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         if batchmode:
             import AviaNZ_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recogniser=recogniser, wind=wind)
+                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recognisers=recogniser, wind=wind)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
