@@ -178,8 +178,9 @@ class ConfigLoader(object):
             return config
         except ValueError:
             # if JSON looks corrupt, quit:
-            msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
-            msg.exec()
+            #msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            #msg.exec()
+            print("ERROR: file " + file + " corrupt, delete it to restore default")
             raise
 
     def filters(self, dir, bats=True):
