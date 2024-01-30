@@ -1434,6 +1434,7 @@ class AviaNZ(QMainWindow):
         if hasattr(self,'media_obj'):
             if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
+            del self.media_obj
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -3850,8 +3851,9 @@ class AviaNZ(QMainWindow):
         Loads them from the file as appropriate and sets the lookup table.
         """
         if not self.CLI and not self.batmode:
-            if self.media_obj.isPlayingorPaused():
-                self.stopPlayback()
+            if hasattr(self, 'media_obj'):
+                if self.media_obj.isPlayingorPaused():
+                    self.stopPlayback()
 
         self.config['cmap'] = cmap
         lut = colourMaps.getLookupTable(self.config['cmap'])

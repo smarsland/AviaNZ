@@ -88,7 +88,7 @@ class Spectrogram:
             self.data = self.data.astype('float')
 
         # total file length in s read from header (useful for paging)
-        self.fileLength = wavobj.nframes
+        self.fileLength = wavobj.nseconds
 
         self.sampleRate = wavobj.rate
 

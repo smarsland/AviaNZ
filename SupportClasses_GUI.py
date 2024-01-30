@@ -728,7 +728,7 @@ class ControllableAudio(QAudioSink):
         self.useBar = useBar
         if self.useBar:
             self.NotifyTimer = QTimer(self)
-        #self.stateChanged.connect(self.endListener)
+        self.stateChanged.connect(self.endListener)
 
         self.InBuffer = QBuffer()
         self.timeoffset = 0  # start time of the played audio, in ms, relative to page start
@@ -736,8 +736,8 @@ class ControllableAudio(QAudioSink):
         self.sp = sp
 
         # set small buffer (10 ms) and use processed time
-        # This is actually a pain. sampwidth*8 is the sampleSize, the 10 is a hack that makes it work OK
-        self.setBufferSize(int(10*sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+        # This is actually a pain. sampwidth*8 is the sampleSize
+        self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
     def isPlaying(self):
@@ -750,11 +750,12 @@ class ControllableAudio(QAudioSink):
         # this should only be called if there's some misalignment between GUI and Audio
         # Should deal with underrun errors somehow
         # TODO: eventually, remove
-        #print("endlistener",self.state(),self.error())
+        print(self.bufferSize(),self.bytesFree(), self.elapsedUSecs())
+        print("endlistener",self.state(),self.error())
         # This is to catch when things finish
-        if self.state() == QAudio.State.StoppedState:
-            self.pressedStop()
-            self.reset()
+        #if self.state() == QAudio.State.StoppedState:
+            #self.pressedStop()
+            #self.reset()
         # NOTE: code below is under return!
         #elif self.state() == QAudio.State.IdleState and self.error() == QAudio.Error.NoError:
             #print("ended",self.loop)
@@ -765,9 +766,23 @@ class ControllableAudio(QAudioSink):
             #self.reset()
         return
         # give some time for GUI to catch up and stop
-        print(self.error(), QAudio.Error.UnderrunError, self.error() == QAudio.Error.UnderrunError)
-        if self.error() == QAudio.Error.UnderrunError:
-            print("yes")
+        # this should only be called if there's some misalignment between GUI and Audio
+        if self.state() == QAudio.State.IdleState:
+            # give some time for GUI to catch up and stop
+            sleepCycles = 0
+            while(self.state() != QAudio.State.StoppedState and sleepCycles < 30):
+                sleep(0.03)
+                sleepCycles += 1
+                # This loop stops when timeoffset+processedtime > designated stop position.
+                # By adding this offset, we ensure the loop stops even if
+                # processed audio timer breaks somehow.
+                self.timeoffset += 30
+                #self.notify.emit()
+            self.pressedStop()
+
+        #print(self.error(), QAudio.Error.UnderrunError, self.error() == QAudio.Error.UnderrunError)
+        #if self.error() == QAudio.Error.UnderrunError:
+            #print("yes")
         #sleepCycles = 0
         #while(self.state() != QAudio.State.StoppedState and sleepCycles < 30):
             #print("sleeping")
@@ -825,12 +840,15 @@ class ControllableAudio(QAudioSink):
         if speed != 1.0:
             segment = SignalProc.wsola(segment,speed) 
 
+        print("Play starting")
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
         # Plays the entire audiodata 
         # Gets the format, then puts the data in a buffer
         # and then starts the QAudioOutput from that buffer
+        # TODO: Is there an error here?
+        #print(type(audiodata),audiodata.dtype,self.audioFormat.sampleFormat())
         if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
             audiodata = audiodata.astype('int16')  
             sampwidth = 2
@@ -842,6 +860,7 @@ class ControllableAudio(QAudioSink):
             sampwidth = 1
         else:
             print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
+        print(type(audiodata),audiodata.dtype,self.audioFormat.sampleFormat())
 
         # double mono sound to get two channels -- simplifies reading
         if self.audioFormat.channelCount()==2:
@@ -856,6 +875,7 @@ class ControllableAudio(QAudioSink):
         else:
             scale = None
 
+        print(self.audioFormat.sampleRate(),sampwidth)
         wavio.write(self.audioBuffer, audiodata, self.audioFormat.sampleRate(), scale=scale, sampwidth=sampwidth)
 
         # copy BytesIO@write to QBuffer@read for playing
@@ -866,16 +886,34 @@ class ControllableAudio(QAudioSink):
             self.InBuffer.close()
         self.InBuffer.setBuffer(self.audioByteArray)
         self.InBuffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        sleep(0.2)
+        #self.InBuffer.readyRead().emit()
         self.start(self.InBuffer)
 
         if self.useBar:
             self.NotifyTimer.start(30)
+        """
+        wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
 
-    def restart(self):
-        self.InBuffer.seek(0)
-        self.start(self.InBuffer)
-        if self.useBar:
-            self.NotifyTimer.start(30)
+        # copy BytesIO@write to QBuffer@read for playing
+        self.temparr = QByteArray(self.tempout.getvalue()[44:])
+        # self.tempout.close()
+        if self.tempin.isOpen():
+            self.tempin.close()
+        self.tempin.setBuffer(self.temparr)
+        self.tempin.open(QIODevice.ReadOnly)
+
+        # actual timer is launched here, with time offset set asynchronously
+        sleep(0.2)
+        self.start(self.tempin)
+        """
+
+
+    #def restart(self):
+        #self.InBuffer.seek(0)
+        #self.start(self.InBuffer)
+        #if self.useBar:
+            #self.NotifyTimer.start(30)
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
