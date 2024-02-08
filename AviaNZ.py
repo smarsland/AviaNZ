@@ -60,9 +60,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         appdir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(appdir)
 
-    # print("Using python at", sys.path)
-    # print(os.environ)
-    # print("Version", sys.version)
+    #print("Using python at", sys.path)
+    #print(os.environ)
+    #print("Version", sys.version)
 
     try:
         import platform, json, shutil
@@ -82,7 +82,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     else:
         print("ERROR: what OS is this? %s" % platform.system())
         raise
-    print(configdir)
+    #print(configdir)
 
     # if config and bird files not found, copy from distributed backups.
     # so these files will always exist on load (although they could be corrupt)
