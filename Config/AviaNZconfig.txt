@@ -30,6 +30,6 @@
 "protocolLineCol": [148, 0, 211, 255],
 "guidepos": [20000, 60000, 36000, 50000], "guidelinesOn": "bat",
 "guidecol": [[255, 232, 140, 255], [255, 232, 140, 255], [239, 189, 124, 255], [239, 189, 124, 255]],
-"FiltersDir": "Filters",
+"FiltersDir": "Filters"
 }
 
