@@ -277,6 +277,7 @@ class BuildRecAdvWizard(QWizard):
                 print("Processing. Please wait...")
                 # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
                 # TODO: SRM: Fix this bit...
+                sp = SignalProc.SignalProc(512, 256)
                 self.cluster = Clustering.Clustering([], [], 0)
                 calls, calltypes  = self.cluster.getCalls(self.field("trainDir"),self.field("species"),self.field("fs"))
                 #self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))

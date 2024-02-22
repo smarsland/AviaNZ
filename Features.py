@@ -166,31 +166,31 @@ class Features:
         # Short-time energy in the 12 pitch classes
         # CQT is constant-Q
         # Windows size is again 512
-        cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
-        ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
-        cens = librosa.feature.chroma_cens(self.data,self.sampleRate)
+        cstft = librosa.feature.chroma_stft(y=self.data,sr=self.sampleRate)
+        ccqt = librosa.feature.chroma_cqt(y=self.data,sr=self.sampleRate)
+        cens = librosa.feature.chroma_cens(y=self.data,sr=self.sampleRate)
         return[cstft, ccqt, cens]
 
     def get_tonnetz(self):
         # Use librosa to get the 6 tonnetz coefficients
         # This is an alternative pitch representation to chroma
-        tonnetz = librosa.feature.tonnetz(self.data,self.sampleRate)
+        tonnetz = librosa.feature.tonnetz(y=self.data,sr=self.sampleRate)
         return tonnetz
 
     def get_spectral_features(self):
-        s1 = librosa.feature.spectral_bandwidth(self.data,self.sampleRate)
-        s2 = librosa.feature.spectral_centroid(self.data,self.sampleRate)
-        s3 = librosa.feature.spectral_contrast(self.data,self.sampleRate)
-        s4 = librosa.feature.spectral_rolloff(self.data,self.sampleRate)
-        s5 = librosa.feature.spectral_flatness(self.data,self.sampleRate)
+        s1 = librosa.feature.spectral_bandwidth(y=self.data,sr=self.sampleRate)
+        s2 = librosa.feature.spectral_centroid(y=self.data,sr=self.sampleRate)
+        s3 = librosa.feature.spectral_contrast(y=self.data,sr=self.sampleRate)
+        s4 = librosa.feature.spectral_rolloff(y=self.data,sr=self.sampleRate)
+        s5 = librosa.feature.spectral_flatness(y=self.data)
 
-        zcr = librosa.feature.zero_crossing_rate(self.data,self.sampleRate)
+        zcr = librosa.feature.zero_crossing_rate(y=self.data)
         return [s1,s2,s3,s4,s5,zcr]
 
-    def get_lpc(self,data,order=44):
+    def get_lpc(self,order=44):
         # Use talkbox to get the linear predictive coding
         from scikits.talkbox import lpc
-        coefs = lpc(data,order)
+        coefs = lpc(self.data,order)
         return coefs[0]
 
     # The Raven Features (27 of them)
@@ -199,7 +199,7 @@ class Features:
     # Power: average, peak, max
     # Other: peak lag, max bearing, energy, peak correlation
 
-    def get_Raven_spectrogram_measurements(self, f1, f2):
+    def get_Raven_spectrogram_measurements(self, f1, f2,t1,t2):
         """ The first set of Raven features.
         energy, aggregate+average entropy, average power, delta power, max+peak freq, max+peak power
 
@@ -243,7 +243,7 @@ class Features:
         maxFreq = (np.unravel_index(np.argmax(sg[:, f1:f2]), np.shape(sg[:, f1:f2]))[1] + f1) * self.sampleRate/2 /np.shape(sg)[1]
         return avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq
 
-    def get_Raven_robust_measurements(self, f1, f2):
+    def get_Raven_robust_measurements(self, f1, f2,t1,t2):
         """ The second set of Raven features.
         1st, 2nd (centre), 3rd quartile, 5%, 95% frequency, inter-quartile range, bandwidth 90%
         Ditto for time
@@ -289,7 +289,7 @@ class Features:
         timeindices = (timeindices+0) * self.incr / self.sampleRate
         return (freqindices, freqindices[3] - freqindices[1], freqindices[4] - freqindices[0], timeindices, timeindices[3] - timeindices[1], timeindices[4] - timeindices[0])
 
-    def get_Raven_waveform_measurements(self,data,fs,t1,t2):
+    def get_Raven_waveform_measurements(self,t1,t2):
         """ The third set of Raven features. These are based on the waveform instead of the spectrogram.
 
         Min, max, peak, RMS, filtered RMS amplitude (and times for the first 3), high, low, delta frequency, length of time
@@ -301,13 +301,13 @@ class Features:
         t1 = t1 * self.incr
         t2 = t2 * self.incr
 
-        mina = np.min(data[t1:t2])
-        mint = np.argmin(data[t1:t2])+t1 / fs
-        maxa = np.max(data[t1:t2])
-        maxt = np.argmax(data[t1:t2])+t1 / fs
-        peaka = np.max(np.abs(data[t1:t2]))
-        peakt = np.argmax(np.abs(data[t1:t2]))+t1 / fs
-        rmsa = np.sqrt(np.sum(data[t1:t2]**2)/len(data[t1:t2]))
+        mina = np.min(self.data[t1:t2])
+        mint = np.argmin(self.data[t1:t2])+t1 / self.sampleRate
+        maxa = np.max(self.data[t1:t2])
+        maxt = np.argmax(self.data[t1:t2])+t1 / self.sampleRate
+        peaka = np.max(np.abs(self.data[t1:t2]))
+        peakt = np.argmax(np.abs(self.data[t1:t2]))+t1 / self.sampleRate
+        rmsa = np.sqrt(np.sum(self.data[t1:t2]**2)/len(self.data[t1:t2]))
         # Filtered rmsa (bandpass filtered first)
         # TODO
         # Also? max bearing, peak correlation, peak lag
@@ -343,8 +343,8 @@ def loadFile(filename):
     audiodata = wavobj.data
 
     # None of the following should be necessary for librosa
-    if audiodata.dtype is not 'float':
-        audiodata = audiodata.astype('float')   #/ 32768.0
+    #if audiodata.dtype is not 'float':
+        #audiodata = audiodata.astype('float')   #/ 32768.0
     if np.shape(np.shape(audiodata))[0]>1:
         audiodata = audiodata[:,0]
 
@@ -553,41 +553,35 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
 #print dList
 
 def testFeatures():
-    wavobj = wavio.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
-    fs = wavobj.rate
-    data = wavobj.data
-
-    if data.dtype is not 'float':
-        data = data.astype('float')         # / 32768.0
-
-    if np.shape(np.shape(data))[0] > 1:
-        data = data[:, 0]
-
-    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+    sp = SignalProc.SignalProc(window_width=256, incr=128)
+    sp.readWav('./Sound Files/tril1.wav')
     # The next lines are to get a spectrogram that *should* precisely match the Raven one
     #sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Ones')
     #sg = sg ** 2
-    sg = sp.spectrogram(data, sgType='Standard',window_width=256, incr=128, window='Hann')
+    fs = sp.sampleRate
+    sg = sp.spectrogram(sgType='Standard',window_width=256, incr=128, window='Hann')
 
-    f = Features(data, fs, 256, 128)
+    f = Features(sp.data, fs, 256, 128)
 
     features = []
     # Loop over the segments (and time slices within?)
     mfcc = f.get_mfcc().tolist()
     # features.append(mfcc.tolist())
-    we = f.get_WE()
-    we = we.transpose().tolist()
+    #we = f.get_WE()
+    #we = we.transpose().tolist()
     # how to combine features with different resolution?
 
-    features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.wiener_entropy(sg)])
+    features.append([f.get_Raven_spectrogram_measurements(f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(0,len(sp.data))])#,f.get_SAP_features
 
     # Will need to think about feature vector length for the librosa features, since they are on fixed windows
     f.get_chroma()
     f.get_mfcc()
     f.get_tonnetz()
     f.get_spectral_features()
-    f.get_lpc(data,order=44)
+    #f.get_lpc(order=44)
     # DCT
+
+    return features
 
 # testFeatures()
 
