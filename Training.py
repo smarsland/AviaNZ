@@ -832,9 +832,9 @@ class CNNtest:
         if d[-1] == []:
             d = d[:-1]
         if len(d) != length:
-            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), length))
+            print("ERROR: annotation length %d does not match file duration %d %s!" % (len(d), length,filename))
             self.annotation = []
-            return False
+            #return False
 
         # for each second, store 0/1 presence:
         for row in d:

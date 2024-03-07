@@ -43,7 +43,7 @@ import sys
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.option('-b', '--batchmode', is_flag=True, help='Batch processing')
 @click.option('-t', '--training', is_flag=True, help='Train a CNN recogniser')
-@click.option('-u', '--testing', is_flag=True, help='Train a recogniser')
+@click.option('-u', '--testing', is_flag=True, help='Test a recogniser')
 @click.option('-d', '--sdir1', type=click.Path(), help='Input sound directory, training or batch processing')
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
 @click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')

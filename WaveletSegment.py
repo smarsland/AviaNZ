@@ -798,7 +798,7 @@ class WaveletSegment:
         """
         if len(annotation)!=np.shape(waveletCoefs)[1]:
             print("ERROR: wavelet and annotation lengths must match")
-            return
+            #return
 
         w0 = np.where(annotation == 0)[0]
         w1 = np.where(annotation == 1)[0]
@@ -1659,9 +1659,9 @@ class WaveletSegment:
         resol = 1.0
         n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
         if len(d) != n:
-            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
+            print("ERROR: annotation length %d does not match file duration %d! %s" % (len(d), n, filename))
             self.annotation = []
-            return False
+            #return False
 
         # for each second, store 0/1 presence:
         presblocks = 0
