@@ -1810,17 +1810,20 @@ class TestRecWizard(QWizard):
             #testresfile = os.path.join(self.field("testDir"), "test-results.txt")
             # Run the actual testing here:
             with pg.BusyCursor():
-                self.currfilt = self.wizard().filterlist[self.field("species")[:-4]]
+                self.currfilt = self.wizard().filterlist[self.field("species")]
+                #self.currfilt = self.wizard().filterlist[self.field("species")[:-4]]
 
                 self.lblTestDir.setText(self.field("testDir"))
                 self.lblTestFilter.setText(self.field("species"))
                 self.lblSpecies.setText(self.currfilt['species'])
 
-                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
+                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species"), self.configdir,self.filterdir)
+                #test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
                 text = test.getOutput()
 
             if text == 0:
-                self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species")[:-4])
+                self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species"))
+                #self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species")[:-4])
                 return
 
             self.lblWFsummary.setText(text)

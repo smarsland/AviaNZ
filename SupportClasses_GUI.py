@@ -1521,7 +1521,9 @@ class LightedFileList(QListWidget):
                                 if readFmt:
                                     if filename.lower().endswith('.wav'):
                                         try:
-                                            samplerate = wavio.readFmt(filenamef)[0]
+                                            #samplerate = wavio.readFmt(filenamef)[0]
+                                            wavobj = wavio.read(filenamef, 0, 0)
+                                            samplerate = wavobj.rate
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
@@ -1560,7 +1562,9 @@ class LightedFileList(QListWidget):
                     if readFmt:
                         if file.fileName().lower().endswith('.wav'):
                             try:
-                                samplerate = wavio.readFmt(fullname)[0]
+                                #samplerate = wavio.readFmt(fullname)[0]
+                                wavobj = wavio.read(fullname, 0, 0)
+                                samplerate = wavobj.rate
                                 self.fsList.add(samplerate)
                             except Exception as e:
                                 print("Warning: could not parse format of WAV file", fullname)

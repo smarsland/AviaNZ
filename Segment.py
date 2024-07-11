@@ -271,7 +271,9 @@ class SegmentList(list):
                 else:
                     # fallback to reading the wav:
                     try:
-                        self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                        #self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                        wavobj = wavio.read(file[:-5], 0, 0)
+                        self.metadata["Duration"] = wavobj.nseconds
                     except Exception as e:
                         print("ERROR: duration not found in metadata, arguments, or read from wav")
                         print(file)
@@ -288,7 +290,9 @@ class SegmentList(list):
             else:
                 # Very old version
                 try:
-                    self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                    #self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                    wavobj = wavio.read(file[:-5], 0, 0)
+                    self.metadata["Duration"] = wavobj.nseconds
                 except Exception as e:
                     print("ERROR: can't read duration from wav")
                     print(file)
@@ -305,7 +309,9 @@ class SegmentList(list):
             if "Operator" not in self.metadata or "Reviewer" not in self.metadata or "Duration" not in self.metadata:
                 if "Duration" not in self.metadata:
                     try:
-                        self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                        #self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                        wavobj = wavio.read(file[:-5], 0, 0)
+                        self.metadata["Duration"] = wavobj.nseconds
                     except Exception as e:
                         print("ERROR: can't read duration from wav")
                         print(file)
@@ -338,7 +344,9 @@ class SegmentList(list):
             # The .1 is to take care of rounding errors
             if 0 < annot[2] < 1.1 and 0 < annot[3] < 1.1:
                 print("Warning: updating old-format frequency marks")
-                rate = wavio.readFmt(file[:-5])[0]//2
+                #rate = wavio.readFmt(file[:-5])[0]//2
+                wavobj = wavio.read(file[:-5], 0, 0)
+                rate = wavobj.rate//2
                 annot[2] *= rate
                 annot[3] *= rate
 

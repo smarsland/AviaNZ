@@ -119,11 +119,8 @@ class AviaNZ_batchProcess():
 
         print(self.options)
 
-        # In CLI/test modes, immediately run detection on init.
-        # Otherwise GUI will ping that once it is moved to the right thread
         if self.CLI or self.testmode:
             self.species = [recognisers]
-            self.detect()
         else:
             if isinstance(recognisers, list):
                 self.species = recognisers
@@ -136,6 +133,11 @@ class AviaNZ_batchProcess():
             self.species.remove("Any sound")
 
         print(self.species)
+
+        # In CLI/test modes, immediately run detection on init.
+        # Otherwise GUI will ping that once it is moved to the right thread
+        if self.CLI or self.testmode:
+            self.detect()
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -472,7 +474,10 @@ class AviaNZ_batchProcess():
     def addRegularSegments(self,filename,length,interval):
         """ Perform the Hartley bodge: add fixed length segments at specified interval. """
         # if wav.data exists get the duration
-        (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(filename)
+        #(rate, nseconds, nchannels, sampwidth) = wavio.readFmt(filename)
+        wavobj = wavio.read(filename, 0, 0)
+        rate = wavobj.rate
+        nseconds = wavobj.nseconds
         self.segments.metadata = dict()
         self.segments.metadata["Operator"] = "Auto"
         self.segments.metadata["Reviewer"] = ""
@@ -1145,6 +1150,8 @@ class AviaNZ_batchProcess():
                     if filename.endswith('.data'):
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
+                        # TODO:Should be able to remove this...
+                        label = 'Non-bat'
                         if len(segments)>0:
                             # Get the length of the clicks from the spectrogram
                             fn = filename[:-5]
@@ -1233,6 +1240,8 @@ class AviaNZ_batchProcess():
                         s1 = etree.SubElement(start,"BatRecording")
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
+                        # TODO:Should be able to remove this...
+                        label = 'Non-bat'
                         if len(segments)>0:
                             seg = segments[0]
                             #print(seg)
@@ -1272,7 +1281,9 @@ class AviaNZ_batchProcess():
                         s7 = etree.SubElement(s1,"RecordingFolderName")
                         s8 = etree.SubElement(s1,"MeasureTimeFrom")
 
-                        s2.text = str(namedict[label])
+                        # TODO: which?
+                        s2.text = str(label)
+                        #s2.text = str(namedict[label])
                         s3.text = site
                         s4.text = operator
                         # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
@@ -1323,6 +1334,8 @@ class AviaNZ_batchProcess():
                     if filename.endswith('.data'):
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
+                        # TODO:Should be able to remove this...
+                        label = 'Non-bat'
                         if len(segments)>0:
                             seg = segments[0]
                             print(seg)
@@ -1411,6 +1424,8 @@ class AviaNZ_batchProcess():
                     if filename.endswith('.data'):
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
+                        # TODO:Should be able to remove this...
+                        label = 'Non-bat'
                         if len(segments) > 0:
                             seg = segments[0]
                             print(seg)

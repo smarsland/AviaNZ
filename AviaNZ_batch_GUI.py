@@ -1848,7 +1848,10 @@ class AviaNZ_reviewAll(QMainWindow):
                     duration = self.segments.metadata["Duration"]
                 else:
                     # Determine the sample rate and set some file-level parameters
-                    samplerate, duration, _, _ = wavio.readFmt(filename)
+                    wavobj = wavio.read(filename, 0, 0)
+                    #samplerate, duration, _, _ = wavio.readFmt(filename)
+                    samplerate = wavobj.rate
+                    duration = wavobj.nseconds
 
                 minFreq = max(self.fLow.value(), 0)
                 maxFreq = min(self.fHigh.value(), samplerate//2)
@@ -1894,7 +1897,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
                         # Actual loading of the wav/bmp/spectrogram
                         if self.batmode:
-                            sp.readBmp(filename, off=x1, len=x2-x1, silent=segix>1)
+                            sp.readBmp(filename, off=x1, duration=x2-x1, silent=segix>1)
                             # sg was already normalised to 0-1 when loading
                             # with 1 being loudest
                             sp.sg = sp.normalisedSpec("Batmode")

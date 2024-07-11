@@ -949,7 +949,9 @@ class Clustering:
         for root, dirs, files in os.walk(str(dir)):
             for file in files:
                 if file.lower().endswith('.wav') and file + '.data' in files:
-                    wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                    #wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                    wavobj = wavioread(os.path.join(root, file), 0, 0)
+                    wavrate = wavobj.rate
                     srlist.append(wavrate)
                     # Read the annotation
                     segments = Segment.SegmentList()

@@ -690,7 +690,7 @@ class CNNtest:
             return
 
         # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
-        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test", sdir=self.testDir, recogniser=filtname, wind=1)
+        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test", sdir=self.testDir, recognisers=filtname, wind=1)
         # NOTE: will use wind-robust detection
 
         # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)

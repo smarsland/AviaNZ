@@ -3891,8 +3891,9 @@ class AviaNZ(QMainWindow):
         Translates the brightness and contrast values into appropriate image levels.
         """
         if not self.CLI and not self.batmode:
-            if self.media_obj.isPlayingorPaused():
-                self.stopPlayback()
+            if hasattr(self, 'media_obj'):
+                if self.media_obj.isPlayingorPaused():
+                    self.stopPlayback()
 
         if brightness is None:
             brightness = self.specControls.brightSlider.value()
@@ -5038,7 +5039,9 @@ class AviaNZ(QMainWindow):
             flow = sheet[collow+'2': collow + str(sheet.max_row)]
             fhigh = sheet[colhigh+'2': colhigh + str(sheet.max_row)]
 
-            _, duration, _, _ = wavio.readFmt(audiofile)
+            #_, duration, _, _ = wavio.readFmt(audiofile)
+            wavobj = wavio.read(filename, 0, 0)
+            duration = wavobj.nseconds
 
             annotation = []
             for i in range(len(starttime)):
