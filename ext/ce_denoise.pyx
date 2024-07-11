@@ -274,7 +274,8 @@ def FundFreqYin(np.ndarray data, int W, double thr, double fs):
 
 def reconstruct(np.ndarray data, int node, np.ndarray wv_rec_hi, np.ndarray wv_rec_lo, int lvl):
     assert data.dtype==np.float64
-    cdef np.ndarray datau = np.zeros(2**(lvl-1) * len(data), dtype=np.float64)
+    print(len(data), lvl, node) 
+    cdef np.ndarray datau = np.zeros(int(2**(lvl-1) * len(data)), dtype=np.float64)
     cdef int datau_len, wv_hi_len, wv_lo_len, data_len
 
     if lvl==0:
