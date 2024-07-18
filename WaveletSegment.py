@@ -55,7 +55,7 @@ class WaveletSegment:
             5. wpmode - old/new/aa to indicate no/partial/full antialias
             6. wind - if True, will produce a WP with all nodes to be used in de-winding
         """
-        if data is None or data == [] or len(data) == 0:
+        if data is None or len(data) == 0:
             print("ERROR: data must be provided for WS")
             return
 
