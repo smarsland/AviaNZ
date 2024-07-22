@@ -50,6 +50,7 @@ import sys
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
 @click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
+
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
     # adapt path to allow this to be launched from wherever
     import sys, os
@@ -59,9 +60,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         appdir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(appdir)
 
-    # print("Using python at", sys.path)
-    # print(os.environ)
-    # print("Version", sys.version)
+    #print("Using python at", sys.path)
+    #print(os.environ)
+    #print("Version", sys.version)
 
     try:
         import platform, json, shutil
@@ -81,7 +82,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     else:
         print("ERROR: what OS is this? %s" % platform.system())
         raise
-    print(configdir)
+    #print(configdir)
 
     # if config and bird files not found, copy from distributed backups.
     # so these files will always exist on load (although they could be corrupt)
@@ -106,6 +107,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         validate(instance=learnpar, schema=learnparschema)
         print("successfully validated config file")
     except Exception as e:
+        # NOTE: Gives a QWidget error instead of this
         print("Warning: config file failed validation with:")
         print(e)
         try:
@@ -149,7 +151,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         if batchmode:
             import AviaNZ_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recogniser=recogniser, wind=wind)
+                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recognisers=recogniser, wind=wind)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
@@ -174,7 +176,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 raise
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):
-                from PyQt6.QtWidgets import QApplication
+                from PyQt5.QtWidgets import QApplication
                 import AviaNZ_manual
                 app = QApplication(sys.argv)
                 avianz = AviaNZ_manual.AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
@@ -185,9 +187,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     else:
         task = None
         print("Starting AviaNZ in GUI mode")
-        from PyQt6.QtWidgets import QApplication
-        from PyQt6 import QtCore
-        #QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5 import QtCore
+        QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         app = QApplication(sys.argv)
         # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
         QApplication.setFont(QApplication.font("QMenu"))

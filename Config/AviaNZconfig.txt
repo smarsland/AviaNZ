@@ -1,5 +1,6 @@
-{"window_width": 256, "incr": 128, "minFreq": 0, "maxFreq": 24000,
+{"window_width": 256, "incr": 128, "windowType": "Hann", "minFreq": 0, "maxFreq": 24000,
 "minFreqBats": 0, "maxFreqBats": 88000,
+"sgOneSided": true, "sgMeanNormalise": true, "sgEqualLoudness": false, "sgType": "Standard", "sgNormMode": "Log", "sgScale": "Linear", "nfilters": 128, 
 "maxSearchDepth": 20, "minSegment": 50,
 "drawingRightBtn": false, "specMouseAction": 3,
 "StartMaximized": true,
@@ -29,4 +30,5 @@
 "protocolLineCol": [148, 0, 211, 255],
 "guidepos": [20000, 60000, 36000, 50000], "guidelinesOn": "bat",
 "guidecol": [[255, 232, 140, 255], [255, 232, 140, 255], [239, 189, 124, 255], [239, 189, 124, 255]],
-"fs_start": 0, "fs_end": 0, "window": "Hann", "FiltersDir": "Filters"}
+"FiltersDir": "Filters"
+}

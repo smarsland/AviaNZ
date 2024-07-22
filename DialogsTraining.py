@@ -31,9 +31,9 @@ import copy
 from shutil import copyfile
 import json
 
-from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
-from PyQt6.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
+from PyQt5.QtGui import QIcon, QValidator, QPixmap, QColor
+from PyQt5.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -45,7 +45,7 @@ import pyqtgraph as pg
 import numpy as np
 import colourMaps
 import SupportClasses, SupportClasses_GUI
-import SignalProc
+import Spectrogram
 import WaveletSegment
 import WaveletFunctions
 import Segment
@@ -777,7 +777,7 @@ class BuildRecAdvWizard(QWizard):
                 self.minsg = 1
                 self.maxsg = 1
                 for seg in self.segments:
-                    sp = SignalProc.SignalProc(512, 256)
+                    sp = Spectrogram.Spectrogram(512, 256)
                     sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
     
                     # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
