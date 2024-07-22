@@ -715,6 +715,7 @@ class ControllableAudio(QAudioOutput):
         self.useBar = useBar
         if self.useBar:
             self.NotifyTimer = QTimer(self)
+            self.NotifyTimer.setTimerType(Qt.PreciseTimer)
         ##self.NotifyTimer.timeout.connect(self.NotifyTimerTick)
         #self.stateChanged.connect(self.endListener)
 
