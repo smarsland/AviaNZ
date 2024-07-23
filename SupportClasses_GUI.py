@@ -45,6 +45,8 @@ import os
 import io
 import Spectrogram
 
+import threading
+
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as hh:mm:ss, and can add an offset
@@ -736,8 +738,8 @@ class ControllableAudio(QAudioSink):
         self.sp = sp
 
         # set small buffer (10 ms) and use processed time
-        # This is actually a pain. sampwidth*8 is the sampleSize
-        self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+        # sampwidth*8 is the sampleSize
+        #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
     def isPlaying(self):
@@ -889,6 +891,7 @@ class ControllableAudio(QAudioSink):
         sleep(0.2)
         #self.InBuffer.readyRead().emit()
         self.start(self.InBuffer)
+        self.thread = threading.Thread(target=self.fillBuffer)
 
         if self.useBar:
             self.NotifyTimer.start(30)
@@ -908,6 +911,10 @@ class ControllableAudio(QAudioSink):
         self.start(self.tempin)
         """
 
+    def fillBuffer(self):
+        while self.InBuffer.bytesAvailable() > 0:
+            data = self.InBuffer.read(4096)
+            self.write(data)
 
     #def restart(self):
         #self.InBuffer.seek(0)
