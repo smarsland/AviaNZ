@@ -641,7 +641,8 @@ class Segmenter:
         # These are the spectrogram params. Needed to compute times.
         if sp:
             self.data = sp.data
-            self.fs = sp.sampleRate
+            self.fs = sp.audioFormat.sampleRate()
+            #self.fs = sp.sampleRate
             self.window_width = sp.window_width
             self.incr = sp.incr
         self.mingap = mingap
@@ -651,7 +652,8 @@ class Segmenter:
         # To be called when a new sound file is loaded
         self.sp = sp
         self.data = sp.data
-        self.fs = sp.sampleRate
+        self.fs = sp.audioFormat.sampleRate()
+        #self.fs = sp.sampleRate
         self.sg = sp.sg
         self.window_width = sp.window_width
         self.incr = sp.incr
@@ -1413,11 +1415,11 @@ class PostProcess:
             sp = Spectrogram.Spectrogram(window_width=self.CNNwindowInc[0],
                                         incr=self.CNNwindowInc[1])
             sp.data = data
-            sp.sampleRate = self.sampleRate
+            sp.audioFormat.setSampleRate(self.sampleRate)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
-            specFrameWidth = len(range(0, int(self.CNNwindow * sp.sampleRate - sp.window_width), sp.incr))
+            specFrameWidth = len(range(0, int(self.CNNwindow * sp.audioFormat.sampleRate() - sp.window_width), sp.incr))
 
             # frame_hop can be set to self.CNNhop for overlap
             featuress = sp.generateFeaturesCNN(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.CNNwindow, frame_hop=None, CNNfRange=self.CNNfRange)
@@ -1513,7 +1515,7 @@ class PostProcess:
             # Get avg energy
             sp = Spectrogram.Spectrogram()
             sp.data = self.audioData
-            sp.sampleRate = self.sampleRate
+            sp.audioFormat.setSampleRate(self.sampleRate)
             rawsg = sp.spectrogram()
             # Normalise
             rawsg -= np.mean(rawsg, axis=0)
@@ -1553,23 +1555,23 @@ class PostProcess:
             sp = Spectrogram.Spectrogram(256, 128)
             if fileName:
                 sp.readWav(fileName, secs, seg[0])
-                self.sampleRate = sp.sampleRate
+                self.sampleRate = sp.audioFormat.sampleRate()
                 self.audioData = sp.data
             else:
                 sp.data = self.audioData
-                sp.sampleRate = self.sampleRate
+                sp.audioFormat.setSampleRate(self.sampleRate)
 
             # TODO: could denoise before fundamental frq. extraction
 
             # Ensure window width W is at least 3*period:
             # (generally fine for 100 Hz minfreq = 0.3 s minwin)
-            minwin = 3 * sp.sampleRate / minfreq
+            minwin = 3 * sp.audioFormat.sampleRate() / minfreq
             if Wsamples < minwin:
                 print("Extending window width to ", minwin)
                 Wsamples = int(minwin)
 
             # returns pitch in Hz for each window of Wsamples/2.
-            pitch = Shapes.fundFreqShaper(sp.data, Wsamples, thr, sp.sampleRate)
+            pitch = Shapes.fundFreqShaper(sp.data, Wsamples, thr, sp.audioFormat.sampleRate())
             pitch = pitch.y
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]

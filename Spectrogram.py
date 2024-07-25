@@ -32,13 +32,14 @@ import gc
 import SignalProc
 
 from PyQt6.QtGui import QImage
+from PyQt6.QtMultimedia import QAudioFormat
 
-QtMM = True
-try:
-    from PyQt6.QtMultimedia import QAudioFormat
-except ImportError:
-    print("No QtMM")
-    QtMM = False
+#QtMM = True
+#try:
+    #from PyQt6.QtMultimedia import QAudioFormat
+#except ImportError:
+    #print("No QtMM")
+    #QtMM = False
 
 # for multitaper spec:
 specExtra = True
@@ -66,11 +67,11 @@ class Spectrogram:
         self.data = []
 
         # only accepting wav files of this format
-        if QtMM:
-            self.audioFormat = QAudioFormat()
-            # TODO!!
-            #self.audioFormat.setCodec("audio/pcm")
-            #self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+        #if QtMM:
+        self.audioFormat = QAudioFormat()
+        # TODO!!
+        #self.audioFormat.setCodec("audio/pcm")
+        #self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -80,8 +81,8 @@ class Spectrogram:
         # take only left channel
         if np.shape(np.shape(self.data))[0] > 1:
             self.data = self.data[:, 0]
-        if QtMM:
-            self.audioFormat.setChannelCount(1)
+        #if QtMM:
+        self.audioFormat.setChannelCount(1)
 
         # force float type
         if self.data.dtype != 'float':
@@ -90,38 +91,39 @@ class Spectrogram:
         # total file length in s read from header (useful for paging)
         self.fileLength = wavobj.nseconds
 
-        self.sampleRate = wavobj.rate
+        #self.sampleRate = wavobj.rate
 
-        if QtMM:
-            self.audioFormat.setSampleRate(self.sampleRate)
-            #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
-            # Only 8-bit WAVs are unsigned:
-            # TODO!! Int16/Int32
-            if wavobj.sampwidth==1:
-                self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
-            elif wavobj.sampwidth==2:
-                self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-            else:
-                self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
-            #if wavobj.sampwidth==1:
-                #self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
-            #else:
-                #self.audioFormat.setSampleType(QAudioFormat.SignedInt)
+        self.audioFormat.setSampleRate(wavobj.rate)
+        #self.audioFormat.setSampleRate(self.sampleRate)
+        #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+        # Only 8-bit WAVs are unsigned:
+        # TODO!! Int16/Int32
+        if wavobj.sampwidth==1:
+            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
+        elif wavobj.sampwidth==2:
+            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+        else:
+            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
+        #if wavobj.sampwidth==1:
+            #self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
+        #else:
+            #self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
-        self.maxFreq = self.sampleRate // 2
+        self.maxFreq = self.audioFormat.sampleRate() // 2
+        #self.maxFreq = self.sampleRate // 2
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
 
         #print("a",self.sampleRate, self.fileLength, np.shape(self.data))
 
         if not silent:
-            if QtMM:
-                #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
-                sf = str(self.audioFormat.sampleFormat())
-                print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
-                #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+            #if QtMM:
+            #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
+            sf = str(self.audioFormat.sampleFormat())
+            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
+            #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
@@ -130,7 +132,8 @@ class Spectrogram:
                 otherwise preserves normal orientation (cols=time)
         """
         # !! Important to set these, as they are used in other functions
-        self.sampleRate = 176000
+        self.audioFormat.setSampleRate(176000)
+        #self.sampleRate = 176000
         # TODO: why was this here?
         #if not repeat:
             #self.incr = 512
@@ -210,18 +213,19 @@ class Spectrogram:
 
         self.sg = img2
 
-        if QtMM:
-            self.audioFormat.setChannelCount(0)
+        #if QtMM:
+        self.audioFormat.setChannelCount(0)
             #self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
             #self.audioFormat.setSampleSize(0)
-            self.audioFormat.setSampleRate(self.sampleRate)
+            #self.audioFormat.setSampleRate(self.sampleRate)
         #else:
             #self.audioFormat['channelCount'] = 0
             #self.audioFormat['sampleFormat'] = 0
             #self.audioFormat['sampleRate'] = self.sampleRate
 
         self.minFreq = 0
-        self.maxFreq = self.sampleRate //2
+        #self.maxFreq = self.sampleRate //2
+        self.maxFreq = self.audioFormat.sampleRate() // 2
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
 
@@ -235,30 +239,36 @@ class Spectrogram:
         if len(data)==0:
             print("Warning: no data set to resample")
             return
-        if target==self.sampleRate:
+        if target==self.audioFormat.sampleRate():
+        #if target==self.sampleRate:
             print("No resampling needed")
             return
 
-        data = resampy.resample(data, sr_orig=self.sampleRate, sr_new=target)
+        data = resampy.resample(data, sr_orig=self.audioFormat.sampleRate(), sr_new=target)
+        #data = resampy.resample(data, sr_orig=self.sampleRate, sr_new=target)
 
-        self.sampleRate = target
-        if QtMM:
-            self.audioFormat.setSampleRate(target)
+        self.audioFormat.setSampleRate(target)
+        #self.sampleRate = target
+        #if QtMM:
+            #self.audioFormat.setSampleRate(target)
         #else:
             #self.audioFormat['sampleRate'] = target
 
         self.minFreq = 0
-        self.maxFreq = self.sampleRate // 2
+        #self.maxFreq = self.sampleRate // 2
+        self.maxFreq = self.audioFormat.sampleRate() // 2
 
         self.fileLength = len(self.data)
 
     def convertAmpltoSpec(self, x):
         """ Unit conversion, for easier use wherever spectrograms are needed """
-        return x*self.sampleRate/self.incr
+        return x*self.audioFormat.sampleRate()/self.incr
+        #return x*self.sampleRate/self.incr
 
     def convertSpectoAmpl(self,x):
         """ Unit conversion """
-        return x*self.incr/self.sampleRate
+        return x*self.incr/self.audioFormat.sampleRate()
+        #return x*self.incr/self.sampleRate
 
     def convertFreqtoY(self,f):
         """ Unit conversion """
@@ -301,7 +311,8 @@ class Spectrogram:
     def mel_filter(self,filter='mel',nfilters=40,minfreq=0,maxfreq=None,normalise=True):
         # Transform the spectrogram to mel or bark scale
         if maxfreq is None:
-            maxfreq = self.sampleRate/2
+            maxfreq = self.audioFormat.sampleRate()/2
+            #maxfreq = self.sampleRate/2
         print(filter,nfilters,minfreq,maxfreq,normalise)
 
         if filter=='mel':
@@ -355,7 +366,8 @@ class Spectrogram:
     def setData(self,audiodata,sampleRate=None):
         self.data = audiodata
         if sampleRate is not None:
-            self.sampleRate = sampleRate
+            self.audioFormat.setSampleRate(sampleRate)
+            #self.sampleRate = sampleRate
 
     def SnNR(self,startSignal,startNoise):
         # Compute the estimated signal-to-noise ratio
@@ -503,7 +515,8 @@ class Spectrogram:
 
             # Messiness. Need to work out where to put each pixel
             # I wish I could think of a way that didn't need a histogram
-            times = np.tile(np.arange(0, (len(data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
+            times = np.tile(np.arange(0, (len(data) - window_width)/self.audioFormat.sampleRate(), incr/self.audioFormat.sampleRate()) + window_width/self.audioFormat.sampleRate()/2,(np.shape(delay)[1],1)).T + delay*window_width/self.audioFormat.sampleRate()
+            #times = np.tile(np.arange(0, (len(data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
             self.sg = np.absolute(self.sg[:, :window_width //2]) #+ 0.1
@@ -589,7 +602,8 @@ class Spectrogram:
             power=0.25
             t=0.060
             eps=1e-6
-            s = 1 - np.exp( -self.incr / (t*self.sampleRate))
+            s = 1 - np.exp( -self.incr / (t*self.audioFormat.sampleRate()))
+            #s = 1 - np.exp( -self.incr / (t*self.sampleRate))
             M = signal.lfilter([s],[1,s-1],self.sg)
             smooth = (eps + M)**(-gain)
             return (self.sg*smooth+bias)**power - bias**power
@@ -618,6 +632,7 @@ class Spectrogram:
         return np.sum(np.log(sg),1)/np.shape(sg)[1] - np.log(np.sum(sg,1)/np.shape(sg)[1])
 
     def mean_frequency(self,sampleRate,timederiv,freqderiv):
+        # TODO: samplerate
         freqs = sampleRate//2 / np.shape(timederiv)[1] * (np.arange(np.shape(timederiv)[1])+1)
         mfd = np.sum(timederiv**2 + freqderiv**2,axis=1)
         mfd = np.where(mfd==0,1,mfd)
@@ -673,7 +688,8 @@ class Spectrogram:
 
         # Noise reduction using a threshold
         we = np.abs(self.wiener_entropy(sg))
-        freqs, mf = self.mean_frequency(self.sampleRate, timederiv, freqderiv)
+        freqs, mf = self.mean_frequency(self.audioFormat.sampleRate(), timederiv, freqderiv)
+        #freqs, mf = self.mean_frequency(self.sampleRate, timederiv, freqderiv)
 
         # Given a time and frequency bin
         contours = np.zeros(np.shape(spectral_deriv))
@@ -705,9 +721,11 @@ class Spectrogram:
             #print(y)
 
             # remove points beyond frq range to show
-            y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+            y1 = [i * self.audioFormat.sampleRate()//2/np.shape(self.sg)[1] for i in y]
+            #y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
             y1 = np.asarray(y1)
-            valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+            valminfrq = self.minFreqShow/(self.audioFormat.sampleRate()//2/np.shape(self.sg)[1])
+            #valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
     
             inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
             x = x[inds]
@@ -729,12 +747,14 @@ class Spectrogram:
         # No set minfreq cutoff here, but warn of the lower limit for
         # reliable estimation (i.e max period such that 3 periods
         # fit in the F0 window):
-        minReliableFreq = self.sampleRate / (Wsamples/3)
+        minReliableFreq = self.audioFormat.sampleRate() / (Wsamples/3)
+        #minReliableFreq = self.sampleRate / (Wsamples/3)
         print("Warning: F0 estimation below %d Hz will be unreliable" % minReliableFreq)
         # returns pitch in Hz for each window of Wsamples/2
         # over the entire data provided (so full page here)
         thr = 0.5
-        pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.sampleRate)
+        pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.audioFormat.sampleRate())
+        #pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.sampleRate)
         pitch = pitchshape.y  # pitch is a shape with y in Hz
 
         # find out which marks should be visible
@@ -751,12 +771,14 @@ class Spectrogram:
         # extra round to delete those which didn't merge with any longer segments
         segs = seg.deleteShort(segs, 4)
 
-        yadjfact = 2/self.sampleRate*np.shape(self.sg)[1]
+        yadjfact = 2/self.audioFormat.sampleRate()*np.shape(self.sg)[1]
+        #yadjfact = 2/self.sampleRate*np.shape(self.sg)[1]
 
         # then create the x sequence (in spec coordinates)
         starts = np.arange(len(pitch)) * pitchshape.tunit + pitchshape.tstart # in seconds
         # (pitchshape.tstart should always be 0 here as it used full data)
-        starts = starts * self.sampleRate / self.incr  # in spec columns
+        starts = starts * self.audioFormat.sampleRate() / self.incr  # in spec columns
+        #starts = starts * self.sampleRate / self.incr  # in spec columns
 
         # then convert segments back to positions in each array:
         out = []
@@ -798,9 +820,11 @@ class Spectrogram:
             for f in range(len(ys[t])):
                 if (ys[t][f] >= self.minFreqShow) & (ys[t][f] <= self.maxFreqShow):
                     x.append(starts[t])
-                    y.append(ys[t][f]/self.sampleRate*2*np.shape(self.sg)[1])
+                    y.append(ys[t][f]/self.audioFormat.sampleRate()*2*np.shape(self.sg)[1])
+                    #y.append(ys[t][f]/self.sampleRate*2*np.shape(self.sg)[1])
 
-        valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+        valminfrq = self.minFreqShow/(self.audioFormat.sampleRate()//2/np.shape(self.sg)[1])
+        #valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
         y = [i - valminfrq for i in y]
 
         return x, y
@@ -827,7 +851,8 @@ class Spectrogram:
         x, y = np.where(points > 0)
 
         # convert points y coord from spec units to Hz
-        yfr = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+        yfr = [i * self.audioFormat.sampleRate()//2/np.shape(self.sg)[1] for i in y]
+        #yfr = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
         yfr = np.asarray(yfr)
 
         # remove points beyond frq range to show
@@ -836,7 +861,8 @@ class Spectrogram:
         y = y[inds]
 
         # adjust y pos for when spec doesn't start at 0
-        specstarty = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
+        specstarty = self.minFreqShow / (self.audioFormat.sampleRate() // 2 / np.shape(self.sg)[1])
+        #specstarty = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
         y = [i - specstarty for i in y]
 
         return x, y
@@ -847,7 +873,8 @@ class Spectrogram:
 
         if ncoeff is None:
             # TODO
-            ncoeff = 2 + self.sampleRate // 1000
+            ncoeff = 2 + self.audioFormat.sampleRate() // 1000
+            #ncoeff = 2 + self.sampleRate // 1000
 
         window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
         starts = range(0, len(self.data) - self.window_width, self.window_width)
@@ -866,7 +893,8 @@ class Spectrogram:
             roots = [r for r in roots if np.imag(r) >= 0]
             angles = np.arctan2(np.imag(roots), np.real(roots))
 
-            freqs.append(sorted(angles / 2 / np.pi * self.sampleRate))
+            freqs.append(sorted(angles / 2 / np.pi * self.audioFormat.sampleRate()))
+            #freqs.append(sorted(angles / 2 / np.pi * self.sampleRate))
 
         return freqs
 
@@ -889,7 +917,8 @@ class Spectrogram:
         import math
         imspec = self.sg[:,::8].T
         print('click',np.shape(imspec))
-        df=self.sampleRate//2 /(np.shape(imspec)[0]+1)  # frequency increment
+        df=self.audioFormat.sampleRate()//2 /(np.shape(imspec)[0]+1)  # frequency increment
+        #df=self.sampleRate//2 /(np.shape(imspec)[0]+1)  # frequency increment
         # up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
         up_len=17
         # up_len=math.ceil((0.5/11)/dt)
@@ -1013,9 +1042,11 @@ class Spectrogram:
             print("Don't use this interface for wavelets")
             return
         elif str(alg) == "Bandpass":
-            self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
+            self.data = SignalProc.bandpassFilter(self.data,self.audioFormat.sampleRate(), start=start, end=end)
+            #self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
         elif str(alg) == "Butterworth Bandpass":
-            self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
+            self.data = SignalProc.ButterworthBandpass(self.data, self.audioFormat.sampleRate(), low=start, high=end)
+            #self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
         else:
             # Median Filter
             self.data = SignalProc.medianFilter(self.data,int(str(width)))
@@ -1047,7 +1078,8 @@ class Spectrogram:
         # Mask out of band elements
         spec_height = np.shape(self.sg)[1]
         if CNNfRange is not None:
-            bin_width = self.sampleRate / 2 / spec_height
+            bin_width = self.audioFormat.sampleRate() / 2 / spec_height
+            #bin_width = self.sampleRate / 2 / spec_height
             lb = int(np.ceil(CNNfRange[0] / bin_width))
             ub = int(np.floor(CNNfRange[1] / bin_width))
             self.sg[:, 0:lb] = 0.0
@@ -1056,7 +1088,8 @@ class Spectrogram:
         # extract each frame:
         featuress = np.empty((n, spec_height, real_spec_width, 1), dtype=np.float32)
         for i in range(n):
-            sgstart = int(frame_hop * i * self.sampleRate / self.incr)
+            sgstart = int(frame_hop * i * self.audioFormat.sampleRate() / self.incr)
+            #sgstart = int(frame_hop * i * self.sampleRate / self.incr)
             sgend = sgstart + real_spec_width
             # Skip the last bits if they don't comprise a full frame:
             if sgend > np.shape(self.sg)[0]:
@@ -1103,7 +1136,8 @@ class Spectrogram:
         featuress = np.empty((n, spec_height, real_spec_width, 3))
 
         for i in range(n):
-            sgstart = int(frame_hop * i * self.sampleRate / self.incr)
+            sgstart = int(frame_hop * i * self.audioFormat.sampleRate() / self.incr)
+            #sgstart = int(frame_hop * i * self.sampleRate / self.incr)
             sgend = sgstart + real_spec_width
             # Skip the last bits if they don't comprise a full frame:
             if sgend > np.shape(self.sg)[0]:
