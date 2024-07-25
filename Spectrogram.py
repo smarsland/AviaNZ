@@ -69,9 +69,6 @@ class Spectrogram:
         # only accepting wav files of this format
         #if QtMM:
         self.audioFormat = QAudioFormat()
-        # TODO!!
-        #self.audioFormat.setCodec("audio/pcm")
-        #self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -104,10 +101,6 @@ class Spectrogram:
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
         else:
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
-        #if wavobj.sampwidth==1:
-            #self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
-        #else:
-            #self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -215,7 +208,7 @@ class Spectrogram:
 
         #if QtMM:
         self.audioFormat.setChannelCount(0)
-            #self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+        self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
             #self.audioFormat.setSampleSize(0)
             #self.audioFormat.setSampleRate(self.sampleRate)
         #else:

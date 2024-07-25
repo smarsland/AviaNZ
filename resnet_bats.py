@@ -220,7 +220,7 @@ def useNet(netName,dirName,imgWidth,imgHeight,incr,nClasses,thr1,thr2,channels=3
                                     sp.readBmp(filename,repeat=False,rotate=False,silent=True)
                                     # Should probably only do this between clicks?
                                     # Or not?!
-                                    res = ClickSearch(sp.sg,sp.sampleRate)
+                                    res = ClickSearch(sp.sg,sp.audioFormat.sampleRate())
                                     #print(filename,np.shape(sp.sg))
                                     if res is not None:
                                         starts = range(res[0], res[1]-imgWidth, incr)

@@ -1730,6 +1730,7 @@ class HumanClassify1(QDialog):
 
         # Audio playback object
         self.media_obj = SupportClasses_GUI.ControllableAudio(sp=None,audioFormat=audioFormat,useBar=True)
+        self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
         #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.autoplay = autoplay
@@ -2563,7 +2564,7 @@ class HumanClassify2(QDialog):
         for i in self.indices2show:
             # This will contain pre-made slices of spec and audio
             sp = self.sps[i]
-            duration = len(sp.data)/sp.sampleRate
+            duration = len(sp.data)/sp.audioFormat.sampleRate()
 
             # Seems that image is backwards?
             sp.sg = np.fliplr(sp.sg)
@@ -2623,11 +2624,11 @@ class HumanClassify2(QDialog):
         minFreq = exampleSP.minFreqShow
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
-            maxFreq = exampleSP.sampleRate // 2
+            maxFreq = exampleSP.audioFormat.sampleRate() // 2
         #SgSize = np.shape(exampleSP.sg)[1]  # in spec units
         SgSize = self.specV
         if len(exampleSP.data)>0:
-            duration = len(exampleSP.data)/exampleSP.sampleRate
+            duration = len(exampleSP.data)/exampleSP.audioFormat.sampleRate()
         else:
             duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
         print("Found duration", duration, "px", self.specH)

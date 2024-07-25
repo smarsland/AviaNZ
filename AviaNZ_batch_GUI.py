@@ -1908,7 +1908,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.readWav(filename, off=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = SignalProc.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            sp.data = SignalProc.bandpassFilter(sp.data, sp.audioFormat.sampleRate(), minFreq, maxFreq)
 
                             # Generate the spectrogram
                             # TODO: Insist on log scale?
@@ -1925,7 +1925,7 @@ class AviaNZ_reviewAll(QMainWindow):
                         sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
 
                         # trim the spectrogram
-                        height = sp.sampleRate//2 / np.shape(sp.sg)[1]
+                        height = sp.audioFormat.sampleRate()//2 / np.shape(sp.sg)[1]
                         pixelstart = int(minFreq/height)
                         pixelend = int(maxFreq/height)
                         sp.sg = sp.sg[:,pixelstart:pixelend]
@@ -2000,7 +2000,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # these pass the axis limits set by slider
             minFreq = max(self.fLow.value(), 0)
-            maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
+            maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
 
             if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
                 guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
@@ -2011,7 +2011,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # then true time to display start, end,
             # NOTE: might be good to pass copy.deepcopy(seg[4])
             # instead of seg[4], if any bugs come up due to Dialog1 changing the label
-            self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.sampleRate, sp.incr,
+            self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
                                                seg[4], sp.x1nobspec, sp.x2nobspec,
                                                seg[0], seg[1], guides, minFreq, maxFreq)
         else:

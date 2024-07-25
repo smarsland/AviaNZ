@@ -75,7 +75,7 @@ for root, dirs, files in os.walk('Freebird'):
                 import Spectrogram 
                 sp = Spectrogram.Spectrogram(512,256, 0, 0)
                 sp.readWav(tagFile[:-4] + '.wav', 0, 0)
-                duration = sp.fileLength / sp.sampleRate
+                duration = sp.fileLength / sp.audioFormat.sampleRate()
 
             tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                 

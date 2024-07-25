@@ -120,7 +120,7 @@ class Features:
         self.incr = incr
         sp = Spectrogram.Spectrogram(window_width=self.window_width, incr=self.incr)
         sp.data = self.data
-        sp.sampleRate = self.sampleRate
+        sp.audioFormat.setSampleRate(self.sampleRate)
         # The next lines are to get a spectrogram that *should* precisely match the Raven one
         self.sg = sp.spectrogram(sgType='Standard',window_width=self.window_width,incr=self.incr,window='Ones')
         self.sg = self.sg**2

@@ -137,7 +137,7 @@ def makeBatData(dirName,imgWidth,imgHeight,incr,img,scale=True):
                             else:
                                 # What if no clicks found? 
                                 # For now: ignore that file
-                                res = ClickSearch(sp.sg,sp.sampleRate)
+                                res = ClickSearch(sp.sg,sp.audioFormat.sampleRate())
                                 if res is not None:
                                     # Assemble a set of images
                                     # PARAM: Start a bit before the start, finish a bit before the last, if possible

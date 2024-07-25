@@ -797,7 +797,7 @@ class BuildRecAdvWizard(QWizard):
                 sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                incr = 256 * sp.sampleRate // self.field("fs")
+                incr = 256 * sp.audioFormat.sampleRate() // self.field("fs")
                 #_ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                 sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 #sg = sp.normalisedSpec("Log")
@@ -831,7 +831,7 @@ class BuildRecAdvWizard(QWizard):
                         self.maxsg = max(self.maxsg, np.max(ims[i][j]))
                         # TODO: get length right
     #def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
-                        newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), calls[i][j], sp.audioFormat, len(calls[i][j])/sp.sampleRate, 0, len(calls[i][j]), self.lut, cluster=True)
+                        newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), calls[i][j], sp.audioFormat, len(calls[i][j])/sp.audioFormat.sampleRate(), 0, len(calls[i][j]), self.lut, cluster=True)
                         #newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
                         self.picbuttons.append(newButton)
                         self.clusters = calltypes
@@ -852,7 +852,7 @@ class BuildRecAdvWizard(QWizard):
                     sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
     
                     # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                    incr = 256 * sp.sampleRate // self.field("fs")
+                    incr = 256 * sp.audioFormat.sampleRate() // self.field("fs")
                     #_ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                     sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                     #sg = sp.normalisedSpec("Log")
@@ -2529,7 +2529,7 @@ class BuildCNNWizard(QWizard):
             for ind in self.indx:
                 audiodata = self.loadFile(filename=self.cnntrain.traindata[ind][0], duration=self.imgsec.value()/100, offset=self.cnntrain.traindata[ind][1][0], fs=self.cnntrain.fs)
                 self.cnntrain.sp.data = audiodata
-                self.cnntrain.sp.sampleRate = self.cnntrain.fs
+                self.cnntrain.sp.audioFormat.setSampleRate(self.cnntrain.fs)
                 # TODO: Params?!
                 sgRaw = self.cnntrain.sp.spectrogram(window_width=self.cnntrain.windowWidth, incr=self.cnntrain.windowInc)
                 # Frequency masking

@@ -462,7 +462,7 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
 
     sp = Spectrogram.Spectrogram(window, window)     # No overlap
     sp.data = data
-    sp.sampleRate = sampleRate
+    sp.audioFormat.setSampleRate(sampleRate)
     sg = sp.spectrogram()
 
     # For each frq band get sections where energy exceeds some (90%) percentile, engp

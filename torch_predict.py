@@ -13,7 +13,7 @@ def classify(file,sp,imgWidth,device,model):
     # Split into pieces
     useClicks = False
     if useClicks:
-        res = ClickSearch(sp.sg,sp.sampleRate)
+        res = ClickSearch(sp.sg,sp.audioFormat.sampleRate())
         if res is not None:
             starts = range(res[0], res[1]-imgWidth, imgWidth//2)
     else:

@@ -120,7 +120,7 @@ class CNN:
         ''' Generate spectrogram image'''
         sp = SignalProc.SignalProc(self.windowwidth, self.inc)
         sp.data = audiodata
-        sp.sampleRate = self.fs
+        sp.audioFormat.setSampleRate(self.fs)
         sgRaw = sp.spectrogram(self.windowwidth, self.inc)
         maxg = np.max(sgRaw)
         return np.rot90(sgRaw / maxg).tolist()
@@ -616,7 +616,7 @@ class GenerateData:
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
         N = [0 for i in range(len(self.calltypes) + 1)]
         sp = SignalProc.SignalProc(self.windowwidth, self.inc)
-        sp.sampleRate = self.fs
+        sp.audioFormat.setSampleRate(self.fs)
 
         for record in dataset:
             # Compute features, also consider tiny segments because this would be the case for song birds.

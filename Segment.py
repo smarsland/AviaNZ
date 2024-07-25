@@ -1334,7 +1334,7 @@ class PostProcess:
             sp = Spectrogram.Spectrogram(window_width=self.CNNwindowInc[0],
                                         incr=self.CNNwindowInc[1])
             sp.data = data
-            sp.sampleRate = self.sampleRate
+            sp.audioFormat.setSampleRate(self.sampleRate)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 

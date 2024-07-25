@@ -5923,8 +5923,9 @@ class AviaNZ(QMainWindow):
 
         if self.media_obj.isPlaying():
             self.pausePlayback()
+            self.swapPlayButtonState(True)
         else:
-            self.setSpeed(1.0)
+            #self.setSpeed(1.0)
             self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
             self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
 
