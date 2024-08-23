@@ -26,7 +26,7 @@
 
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy
-from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot, QThread
 from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
@@ -45,7 +45,6 @@ import os
 import io
 import Spectrogram
 
-import pyaudio
 import threading
 
 class TimeAxisHour(pg.AxisItem):
@@ -916,6 +915,8 @@ class ControllableAudio(QAudioSink):
 
         #print(self.audioFormat.sampleFormat(), self.audioFormat.sampleRate(), self.audioFormat.bytesPerSample(), self.audioFormat.channelCount())
         super(ControllableAudio, self).__init__(format=self.audioFormat)
+        self.media_thread = QThread()
+        self.moveToThread(self.media_thread)
 
         # This is a timer for the moving bar. 
         # On this notify, move slider (connected where called)
