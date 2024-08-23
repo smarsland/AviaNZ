@@ -1878,7 +1878,12 @@ class AviaNZ(QMainWindow):
                 if not self.batmode:
                     # Initialise the sound and bar moving timer
                     self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
-                    self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+                    #self.media_thread = QThread()
+                    #self.media_obj.moveToThread(self.media_thread)
+                    #self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+
+                    self.NotifyTimer = QTimer(self)
+                    self.NotifyTimer.timeout.connect(self.movePlaySlider)
                     #self.mediaThread = threading.Thread(target=self.media_obj.play)
                     #self.mediaThread.start()
 
@@ -5923,7 +5928,6 @@ class AviaNZ(QMainWindow):
 
         if self.media_obj.isPlaying():
             self.pausePlayback()
-            self.swapPlayButtonState(True)
         else:
             #self.setSpeed(1.0)
             self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
@@ -5940,6 +5944,7 @@ class AviaNZ(QMainWindow):
                 start = self.segmentStart
 
             self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
+            self.NotifyTimer.start(30)
 
     def playSelectedSegment(self,low=None,high=None):
         """ Listener for PlaySegment button (also called by listener for PlayBandlimitedSegment).
@@ -5961,6 +5966,7 @@ class AviaNZ(QMainWindow):
             self.swapPlayButtonState(False)
 
             self.media_obj.playSeg(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high)
+            self.NotifyTimer.start(30)
         #else:
             #print("Can't play, no segment selected")
 
@@ -5976,12 +5982,14 @@ class AviaNZ(QMainWindow):
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
         self.media_obj.pressedPause()
+        self.NotifyTimer.stop()
         self.bar.setMovable(True)
         self.swapPlayButtonState(True)
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.media_obj.pressedStop()
+        self.NotifyTimer.stop()
         self.bar.setMovable(True)
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0

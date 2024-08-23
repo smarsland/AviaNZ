@@ -921,6 +921,7 @@ class ControllableAudio(QAudioSink):
         # This is a timer for the moving bar. 
         # On this notify, move slider (connected where called)
         self.useBar = useBar
+        self.useBar = False
         if self.useBar:
             self.NotifyTimer = QTimer(self)
         self.stateChanged.connect(self.endListener)
