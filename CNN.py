@@ -30,7 +30,7 @@ import json, os
 import numpy as np
 import math
 
-import SignalProc
+import Spectrogram
 import WaveletSegment
 import Segment
 import SupportClasses
@@ -118,7 +118,7 @@ class CNN:
 
     def generateImage(self, audiodata):
         ''' Generate spectrogram image'''
-        sp = SignalProc.SignalProc(self.windowwidth, self.inc)
+        sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
         sp.data = audiodata
         sp.audioFormat.setSampleRate(self.fs)
         sgRaw = sp.spectrogram(self.windowwidth, self.inc)
@@ -615,7 +615,7 @@ class GenerateData:
         eps = 0.0005
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
         N = [0 for i in range(len(self.calltypes) + 1)]
-        sp = SignalProc.SignalProc(self.windowwidth, self.inc)
+        sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
         sp.audioFormat.setSampleRate(self.fs)
 
         for record in dataset:

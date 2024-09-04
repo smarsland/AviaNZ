@@ -1877,9 +1877,10 @@ class AviaNZ(QMainWindow):
             if not self.CLI:
                 if not self.batmode:
                     # Initialise the sound and bar moving timer
-                    self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
-                    #self.media_thread = QThread()
-                    #self.media_obj.moveToThread(self.media_thread)
+                    self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp)
+                    self.media_thread = QThread()
+                    self.media_obj.moveToThread(self.media_thread)
+                    self.media_thread.start()
                     #self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
 
                     self.NotifyTimer = QTimer(self)

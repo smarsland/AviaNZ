@@ -2432,12 +2432,12 @@ class BuildCNNWizard(QWizard):
             self.cnntrain = self.wizard().confirminputPage.cnntrain
             self.cnntrain.windowWidth = 512
             self.cnntrain.windowInc = 256
-            self.f1.setRange(0, self.cnntrain.fs/2)
+            self.f1.setRange(0, self.cnntrain.fs//2)
             self.f1.setValue(0)
             self.f1text.setText('Lower frq. limit 0 Hz')
-            self.f2.setRange(0, self.cnntrain.fs/2)
-            self.f2.setValue(self.cnntrain.fs/2)
-            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+            self.f2.setRange(0, self.cnntrain.fs//2)
+            self.f2.setValue(self.cnntrain.fs//2)
+            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
             self.f1.valueChanged.connect(self.f1Change)
             self.f2.valueChanged.connect(self.f2Change)
             self.cbfrange.setChecked(False)
@@ -2457,13 +2457,13 @@ class BuildCNNWizard(QWizard):
             # Ideally, the image length should be bigger than the max gap between syllables
             if np.max(self.cnntrain.maxgaps) * 2 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 2) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 2 * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 2 * 100))
             elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 1.5 * 100))
             elif np.max(self.cnntrain.mincallength) <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.mincallength)) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.mincallength) * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.mincallength) * 100))
             self.cnntrain.imgWidth = self.imgsec.value() / 100
 
             self.setWindowInc()

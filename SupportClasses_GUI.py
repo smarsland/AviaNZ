@@ -893,6 +893,9 @@ class ControllableAudio(QAudioSink):
     # This carries out the audio playback 
     # Pass in either an audioFormat or a ref to Spectrogram
     # If called by main interface, starts a timer for the moving bar
+    #failed = pyqtSignal(str)
+    #need_msg = pyqtSignal(str, str)
+    #need_clean_UI = pyqtSignal(int, int)
 
     def __init__(self, sp=None, loop=False, audioFormat=None,useBar=False):
         # Note the order here is audioFormat passed, otherwise sp.audioFormat
@@ -915,8 +918,8 @@ class ControllableAudio(QAudioSink):
 
         #print(self.audioFormat.sampleFormat(), self.audioFormat.sampleRate(), self.audioFormat.bytesPerSample(), self.audioFormat.channelCount())
         super(ControllableAudio, self).__init__(format=self.audioFormat)
-        self.media_thread = QThread()
-        self.moveToThread(self.media_thread)
+        #self.media_thread = QThread()
+        #self.moveToThread(self.media_thread)
 
         # This is a timer for the moving bar. 
         # On this notify, move slider (connected where called)
@@ -937,9 +940,11 @@ class ControllableAudio(QAudioSink):
         #print("Buffer size: ",self.bufferSize())
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
+    @pyqtSlot()
     def isPlaying(self):
         return(self.state() == QAudio.State.ActiveState)
 
+    @pyqtSlot()
     def isPlayingorPaused(self):
         return(self.state() == QAudio.State.ActiveState or self.state() == QAudio.State.SuspendedState)
 
@@ -992,6 +997,7 @@ class ControllableAudio(QAudioSink):
             #self.notify.emit()
         #self.pressedStop()
 
+    @pyqtSlot()
     def pressedPlay(self, start=0, stop=0):#, audiodata=None):
         # If playback bar has not moved, this can use resume() to continue from the same spot.
         # Otherwise assumes that the QAudioOutput was stopped/reset. In that case the updated 
@@ -1005,11 +1011,13 @@ class ControllableAudio(QAudioSink):
             self.pressedStop()
             self.playSeg(start, stop) 
 
+    @pyqtSlot()
     def pressedPause(self):
         self.suspend()
         if self.useBar:
             self.NotifyTimer.stop()
 
+    @pyqtSlot()
     def pressedStop(self):
         # stop and reset to window/segment start
         self.stop()
@@ -1017,6 +1025,7 @@ class ControllableAudio(QAudioSink):
         if self.useBar:
             self.NotifyTimer.stop()
 
+    @pyqtSlot()
     def playSeg(self, start, stop, speed = 1.0, audiodata=None, low=None, high=None):
         # Selects the data between start-stop ms, relative to file start
         # and plays it, optionally at a different speed and after bandpassing
