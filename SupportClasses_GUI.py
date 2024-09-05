@@ -899,6 +899,8 @@ class ControllableAudio(QAudioSink):
 
     def __init__(self, sp=None, loop=False, audioFormat=None,useBar=False):
         # Note the order here is audioFormat passed, otherwise sp.audioFormat
+        #print(self.audioFormat.sampleFormat(), self.audioFormat.sampleRate(), self.audioFormat.bytesPerSample(), self.audioFormat.channelCount())
+
         if audioFormat is not None:
             self.audioFormat = audioFormat
         else:
@@ -915,19 +917,22 @@ class ControllableAudio(QAudioSink):
             sampwidth = 1
         else:
             print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-
-        #print(self.audioFormat.sampleFormat(), self.audioFormat.sampleRate(), self.audioFormat.bytesPerSample(), self.audioFormat.channelCount())
         super(ControllableAudio, self).__init__(format=self.audioFormat)
+        self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+        #print("buffer: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+
+        #super(ControllableAudio, self).__init__(format=self.audioFormat)
+
         #self.media_thread = QThread()
         #self.moveToThread(self.media_thread)
 
         # This is a timer for the moving bar. 
         # On this notify, move slider (connected where called)
-        self.useBar = useBar
-        self.useBar = False
-        if self.useBar:
-            self.NotifyTimer = QTimer(self)
-        self.stateChanged.connect(self.endListener)
+        #self.useBar = useBar
+        #self.useBar = False
+        #if self.useBar:
+            #self.NotifyTimer = QTimer(self)
+        #self.stateChanged.connect(self.endListener)
 
         self.timeoffset = 0  # start time of the played audio, in ms, relative to page start
         #self.loop = loop
@@ -935,7 +940,7 @@ class ControllableAudio(QAudioSink):
 
         # set small buffer (10 ms) and use processed time
         # sampwidth*8 is the sampleSize
-        self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+        #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         #print("Buffer size: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()),self.bufferSize())
         #print("Buffer size: ",self.bufferSize())
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
@@ -1005,8 +1010,8 @@ class ControllableAudio(QAudioSink):
         #print("---", self.state(),self.keepSlider,start)
         if self.state() == QAudio.State.SuspendedState:
             self.resume()
-            if self.useBar:
-                self.NotifyTimer.start(30)
+            #if self.useBar:
+                #self.NotifyTimer.start(30)
         else:
             self.pressedStop()
             self.playSeg(start, stop) 
@@ -1014,16 +1019,16 @@ class ControllableAudio(QAudioSink):
     @pyqtSlot()
     def pressedPause(self):
         self.suspend()
-        if self.useBar:
-            self.NotifyTimer.stop()
+        #if self.useBar:
+            #self.NotifyTimer.stop()
 
     @pyqtSlot()
     def pressedStop(self):
         # stop and reset to window/segment start
         self.stop()
         self.reset()
-        if self.useBar:
-            self.NotifyTimer.stop()
+        #if self.useBar:
+            #self.NotifyTimer.stop()
 
     @pyqtSlot()
     def playSeg(self, start, stop, speed = 1.0, audiodata=None, low=None, high=None):
@@ -1053,8 +1058,6 @@ class ControllableAudio(QAudioSink):
         # Plays the entire audiodata 
         # Gets the format, then puts the data in a buffer
         # and then starts the QAudioOutput from that buffer
-        # TODO: Is there an error here?
-        #print(type(audiodata),audiodata.dtype,self.audioFormat.sampleFormat())
         if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
             audiodata = audiodata.astype('int16')  
             sampwidth = 2
@@ -1103,8 +1106,8 @@ class ControllableAudio(QAudioSink):
         self.thread = threading.Thread(target=self.fillBuffer)
         self.thread.start()
 
-        if self.useBar:
-            self.NotifyTimer.start(30)
+        #if self.useBar:
+            #self.NotifyTimer.start(30)
         """
         wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
 
@@ -1132,6 +1135,7 @@ class ControllableAudio(QAudioSink):
         #if self.useBar:
             #self.NotifyTimer.start(30)
 
+    @pyqtSlot()
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
         value = QAudio.convertVolume(value / 100, QAudio.VolumeScale.LogarithmicVolumeScale, QAudio.VolumeScale.LinearVolumeScale)
@@ -1596,7 +1600,8 @@ class PicButton(QAbstractButton):
             self.stopPlayback()
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
-            self.media_obj.loadArray(self.audiodata)
+            self.media_obj.playSeg(0,self.duration*1000,audiodata=self.audiodata)
+            #self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
         timeel = self.media_obj.elapsedUSecs() // 1000

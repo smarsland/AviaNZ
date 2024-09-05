@@ -1434,7 +1434,9 @@ class AviaNZ(QMainWindow):
         if hasattr(self,'media_obj'):
             if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
-            del self.media_obj
+                #self.media_thread.quit()
+                #self.media_thread.wait()
+            #del self.media_obj
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -1877,14 +1879,14 @@ class AviaNZ(QMainWindow):
             if not self.CLI:
                 if not self.batmode:
                     # Initialise the sound and bar moving timer
+                    if not hasattr(self,'media_thread'):
+                        self.media_thread = QThread()
+                        self.NotifyTimer = QTimer(self)
+                        self.NotifyTimer.timeout.connect(self.movePlaySlider)
                     self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp)
-                    self.media_thread = QThread()
                     self.media_obj.moveToThread(self.media_thread)
                     self.media_thread.start()
-                    #self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
 
-                    self.NotifyTimer = QTimer(self)
-                    self.NotifyTimer.timeout.connect(self.movePlaySlider)
                     #self.mediaThread = threading.Thread(target=self.media_obj.play)
                     #self.mediaThread.start()
 
@@ -6638,6 +6640,8 @@ class AviaNZ(QMainWindow):
         if hasattr(self, 'media_obj'):
             if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
+                self.media_thread.quit()
+                #self.media_thread.wait()
         QApplication.exit(1)
 
     def closeEvent(self, event=None):

@@ -30,7 +30,7 @@ from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir
+from PyQt6.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
 
 import pyqtgraph as pg
 
@@ -1730,7 +1730,10 @@ class HumanClassify1(QDialog):
 
         # Audio playback object
         self.media_obj = SupportClasses_GUI.ControllableAudio(sp=None,audioFormat=audioFormat,useBar=True)
-        self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+        # TODO: make own timer
+        self.NotifyTimer = QTimer(self)
+        self.NotifyTimer.timeout.connect(self.movePlaySlider)
+        #self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
         #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.autoplay = autoplay
@@ -1853,11 +1856,13 @@ class HumanClassify1(QDialog):
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.playButton.setIconSize(QSize(40, 40))
             self.media_obj.loadArray(self.audiodata)
+            self.NotifyTimer.start(30)
 
     def stopPlayback(self):
         self.media_obj.pressedStop()
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
+        self.NotifyTimer.stop()
 
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
