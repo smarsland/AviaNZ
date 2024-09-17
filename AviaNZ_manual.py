@@ -2325,7 +2325,7 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # preprocess
-            data = librosa.resample(self.audiodata, orig_sf=self.sampleRate, target_sr=16000)
+            data = librosa.resample(self.audiodata, orig_sr=self.sampleRate, target_sr=16000)
             data = self.sp.bandpassFilter(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function

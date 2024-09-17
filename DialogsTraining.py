@@ -999,13 +999,13 @@ class BuildRecAdvWizard(QWizard):
             len_min, len_max, f_low, f_high = pageSegs.getSummaries()
             self.maxlen.setText(str(round(np.max(len_max),2)))
 
-            self.fLow.setRange(0, fs/2)
+            self.fLow.setRange(0, fs//2)
             self.fLow.setValue(max(0, int(np.min(f_low))))
-            self.fHigh.setRange(0, fs/2)
+            self.fHigh.setRange(0, fs//2)
             if np.max(f_high) == 0:
                 # happens when no segments have y limits
-                f_high = fs/2
-            self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
+                f_high = fs//2
+            self.fHigh.setValue(min(fs//2,int(np.max(f_high))))
 
             # this is just the minimum call length:
             self.minlen.setText(str(round(np.min(len_min),2)))
@@ -2346,12 +2346,12 @@ class BuildCNNWizard(QWizard):
             self.cnntrain = self.wizard().confirminputPage.cnntrain
             self.cnntrain.windowWidth = 512
             self.cnntrain.windowInc = 256
-            self.f1.setRange(0, self.cnntrain.fs/2)
+            self.f1.setRange(0, self.cnntrain.fs//2)
             self.f1.setValue(0)
             self.f1text.setText('Lower frq. limit 0 Hz')
-            self.f2.setRange(0, self.cnntrain.fs/2)
-            self.f2.setValue(self.cnntrain.fs/2)
-            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+            self.f2.setRange(0, self.cnntrain.fs//2)
+            self.f2.setValue(self.cnntrain.fs//2)
+            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
             self.f1.valueChanged.connect(self.f1Change)
             self.f2.valueChanged.connect(self.f2Change)
             self.cbfrange.setChecked(False)
@@ -2371,13 +2371,13 @@ class BuildCNNWizard(QWizard):
             # Ideally, the image length should be bigger than the max gap between syllables
             if np.max(self.cnntrain.maxgaps) * 2 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 2) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 2 * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 2 * 100))
             elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 1.5 * 100))
             elif np.max(self.cnntrain.mincallength) <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.mincallength)) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.mincallength) * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.mincallength) * 100))
             self.cnntrain.imgWidth = self.imgsec.value() / 100
 
             self.setWindowInc()
@@ -2400,16 +2400,16 @@ class BuildCNNWizard(QWizard):
                 self.f1text.setEnabled(True)
                 self.f2.setEnabled(True)
                 self.f2text.setEnabled(True)
-                if self.f1.value() == 0 and self.f2.value() == self.cnntrain.fs/2:
+                if self.f1.value() == 0 and self.f2.value() == self.cnntrain.fs//2:
                     self.f1.setValue(self.cnntrain.f1)
                     self.f2.setValue(self.cnntrain.f2)
                     self.f1text.setText('Lower frq. limit ' + str(self.cnntrain.f1) + ' Hz')
                     self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.f2) + ' Hz')
             else:
                 self.f1.setValue(0)
-                self.f2.setValue(self.cnntrain.fs/2)
+                self.f2.setValue(self.cnntrain.fs//2)
                 self.f1text.setText('Lower frq. limit ' + str(0) + ' Hz')
-                self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+                self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
                 self.f1.setEnabled(False)
                 self.f1text.setEnabled(False)
                 self.f2.setEnabled(False)

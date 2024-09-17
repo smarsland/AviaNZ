@@ -1512,9 +1512,11 @@ class WaveletSegment:
         if sampleRate != fsOut:
             print("Resampling from", sampleRate, "to", fsOut)
             if not fastRes:
-                data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+                #data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+                data = librosa.resample(data, orig_sr=sampleRate, target_sr=fsOut, type='kaiser_best')
             else:
-                data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+                data = librosa.resample(data, orig_sr=sampleRate, target_sr=fsOut, type='kaiser_fast')
+                #data = librosa.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
 
         # Get the five level wavelet decomposition
         if d:

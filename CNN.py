@@ -579,6 +579,10 @@ class GenerateData:
             # Compute number of images, also consider tiny segments because this would be the case for song birds.
             duration = record[1][1] - record[1][0]
             hop = dhop[record[-1]]
+            if hop==0: 
+                # Shouldn't happen
+                print("hop error")
+                hop=1
             if duration < self.length:
                 fileduration = wavio.readFmt(record[0])[1]
                 record[1][0] = record[1][0] - (self.length - duration)/2 - eps
