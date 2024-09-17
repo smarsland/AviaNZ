@@ -1573,6 +1573,7 @@ class AviaNZ(QMainWindow):
                     lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
 
                 self.sp.readWav(self.filename, lenRead, self.startRead)
+                self.datalength = np.shape(self.sp.data)[0]
 
                 # resample to 16K if needed (SignalProc will determine)
                 if cs:
@@ -1582,7 +1583,6 @@ class AviaNZ(QMainWindow):
             # Parse wav format details based on file header:
             self.sampleRate = self.sp.sampleRate
             self.audiodata = self.sp.data
-            self.datalength = np.shape(self.sp.data)[0]
 
             # self.sp.audioFormat will be set
             # self.sp.fileLength will be determined from wav header
