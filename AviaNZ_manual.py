@@ -20,6 +20,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO: 
+# -1: Playback
 # 0. Sound: tidy the buttons, slightly clearer, check volume -> check
 # 1. Check Freebird import, BatSearch output
 # 2. Test Harry's overlaps into excel 
@@ -42,6 +43,7 @@
 # 13. Joe buttons
 # 14. Ruth things
 # 15. Is librosa used?
+# 16. Tidy up the flac loader (correct place, check for space) and add a converter
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -211,7 +213,7 @@ class AviaNZ(QMainWindow):
                 raise OSError("No input file, cannot continue")
             else:
                 # pop up a dialog to select file
-                firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
+                firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
                 while firstFile == '':
                     msg = SupportClasses_GUI.MessagePopup("w", "Select Sound File", "Choose a sound file to proceed.\nDo you want to continue?")
                     msg.setStandardButtons(QMessageBox.StandardButton.No)
@@ -219,7 +221,7 @@ class AviaNZ(QMainWindow):
                     msg.button(QMessageBox.StandardButton.No).setText("Exit")
                     reply = msg.exec()
                     if reply == 0:
-                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
+                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
                     else:
                         sys.exit()
 
@@ -1528,7 +1530,7 @@ class AviaNZ(QMainWindow):
 
         if fileName is None:
             # File -> Open or splash screen:
-            fileName, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
+            fileName, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
         # (it is provided when this is called by File -> [recent file clicked])
         success = 1
         SoundFileDirOld = self.SoundFileDir
@@ -1582,6 +1584,8 @@ class AviaNZ(QMainWindow):
                         return(1)
                 self.batmode = True
                 # loadFile will determine mode and update GUI based on self.batmode
+            elif fullcurrent.lower().endswith('.flac'):
+                self.batmode = False
             else:
                 print("Unrecognized format of file %s " % fullcurrent)
                 return(1)
@@ -1715,7 +1719,12 @@ class AviaNZ(QMainWindow):
                 else:
                     lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
 
-                self.sp.readWav(self.filename, lenRead, self.startRead)
+                 
+                if self.filename.lower().endswith('.wav'):
+                    self.sp.readWav(self.filename, lenRead, self.startRead)
+                elif self.filename.lower().endswith('.flac'):
+                    self.sp.readFlac(self.filename)
+                    self.sp.readWav('/home/marslast/output.wav',lenRead,self.startRead)
 
                 # resample to 16K if needed (Spectrogram will determine)
                 if self.cheatsheet:

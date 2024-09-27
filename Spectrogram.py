@@ -25,7 +25,7 @@ import numpy as np
 import scipy.signal as signal
 import scipy.fftpack as fft
 from scipy.stats import boxcox
-import wavio
+import wavio, pyflac
 import resampy
 import copy
 import gc
@@ -69,6 +69,51 @@ class Spectrogram:
         # only accepting wav files of this format
         #if QtMM:
         self.audioFormat = QAudioFormat()
+
+    # TODO: read less of the file
+    def readFlac(self, file,silent=False):
+        wavfile = '/home/marslast/output.wav'
+        pyf = pyflac.FileDecoder(file,wavfile)
+        self.data, fs = pyf.process()
+        return
+
+        # take only left channel
+        if np.shape(np.shape(self.data))[0] > 1:
+            self.data = self.data[:, 0]
+        #if QtMM:
+        self.audioFormat.setChannelCount(1)
+
+        # force float type
+        if self.data.dtype != 'float':
+            self.data = self.data.astype('float')
+
+        # total file length in s read from header (useful for paging)
+        self.fileLength = len(self.data)/fs
+
+        #self.sampleRate = wavobj.rate
+
+        self.audioFormat.setSampleRate(fs)
+        #self.audioFormat.setSampleRate(self.sampleRate)
+        #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+        # Only 8-bit WAVs are unsigned:
+        # TODO!! Int16/Int32
+        self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
+
+        # *Freq sets hard bounds, *Show can limit the spec display
+        self.minFreq = 0
+        self.maxFreq = self.audioFormat.sampleRate() // 2
+        #self.maxFreq = self.sampleRate // 2
+        self.minFreqShow = max(self.minFreq, self.minFreqShow)
+        self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
+
+        #print("a",self.sampleRate, self.fileLength, np.shape(self.data))
+
+        if not silent:
+            #if QtMM:
+            #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
+            sf = str(self.audioFormat.sampleFormat())
+            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
+            #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
