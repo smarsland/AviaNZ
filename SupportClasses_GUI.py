@@ -27,7 +27,7 @@
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy
 from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot, QThread
-from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat
+from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat, QMediaDevices
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
@@ -917,7 +917,7 @@ class ControllableAudio(QAudioSink):
             sampwidth = 1
         else:
             print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-        super(ControllableAudio, self).__init__(format=self.audioFormat)
+        super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=self.audioFormat)
         self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         #print("buffer: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
 
