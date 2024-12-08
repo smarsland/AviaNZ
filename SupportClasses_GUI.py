@@ -1027,25 +1027,28 @@ class ControllableAudio(QAudioSink):
         self.suspend()
         #if self.useBar:
             #self.NotifyTimer.stop()
-    
-    @pyqtSlot()
-    def unpauseBeforeReset(self):
-        self.audioThreadPaused = False
-        self.resume()
 
     @pyqtSlot()
     def pressedStop(self):
         # stop and reset to window/segment start
-        if self.state() == QAudio.State.SuspendedState:
-            self.unpauseBeforeReset()
 
+        # finish the threads
         self.audioThreadLoading = False
         if not self.audioThread is None:
             self.audioThread.join() # finish the thread
             self.audioThread = None
+        
+        # note if the audio was paused
+        audio_was_paused = True if self.state() == QAudio.State.SuspendedState else False
 
-        self.stop()
+        # do the reset
         self.reset()
+        
+        # Now if we were paused we resume. We couldn't do this before the reset, or it would play a short sound.
+        if audio_was_paused:
+            self.audioThreadPaused = False
+            self.resume()
+
         #if self.useBar:
             #self.NotifyTimer.stop()
 
