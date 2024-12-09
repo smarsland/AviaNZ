@@ -2392,6 +2392,7 @@ class AviaNZ(QMainWindow):
             elif speedchar == 190:
                 speed = 0.75
         self.playSpeed = 1/float(speed)
+        self.media_obj.setSpeed(self.playSpeed)
         #print("playback speed:",self.playSpeed)
 
     def setExtraPlot(self, plotname):

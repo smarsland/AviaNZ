@@ -920,7 +920,7 @@ class ControllableAudio(QAudioSink):
         super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=self.audioFormat)
         #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         bytesPerSecond = int(sampwidth * self.audioFormat.sampleRate() * self.audioFormat.channelCount())
-        self.setBufferSize(int(bytesPerSecond/4)) # 250 ms buffer
+        self.setBufferSize(int(bytesPerSecond/0.25)) # 4 s buffer
         #print("buffer: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
 
         #super(ControllableAudio, self).__init__(format=self.audioFormat)
@@ -942,12 +942,16 @@ class ControllableAudio(QAudioSink):
         self.audioThread = None
         self.audioThreadLoading = False
         self.audioThreadPaused = False
+        self.playbackSpeed = 1.0
         # set small buffer (10 ms) and use processed time
         # sampwidth*8 is the sampleSize
         #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         #print("Buffer size: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()),self.bufferSize())
         #print("Buffer size: ",self.bufferSize())
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
+    
+    def setSpeed(self, speed):
+        self.playbackSpeed = speed
 
     @pyqtSlot()
     def isPlaying(self):
@@ -1053,7 +1057,7 @@ class ControllableAudio(QAudioSink):
             #self.NotifyTimer.stop()
 
     @pyqtSlot()
-    def playSeg(self, start, stop, speed = 1.0, audiodata=None, low=None, high=None):
+    def playSeg(self, start, stop, speed=1.0, audiodata=None, low=None, high=None):
         # Selects the data between start-stop ms, relative to file start
         # and plays it, optionally at a different speed and after bandpassing
 
@@ -1070,8 +1074,8 @@ class ControllableAudio(QAudioSink):
         if low is not None:
             segment = SignalProc.bandpassFilter(segment, sampleRate=self.audioFormat.sampleRate(), start=low, end=high)
 
-        if speed != 1.0:
-            segment = SignalProc.wsola(segment,speed) 
+        if self.playbackSpeed != 1.0:
+            segment = SignalProc.wsola(segment,self.playbackSpeed) 
 
         print("Play starting")
         self.loadArray(segment)
