@@ -910,17 +910,17 @@ class ControllableAudio(QAudioSink):
             self.audioFormat = sp.audioFormat
 
         if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
-            sampwidth = 2
+            self.sampwidth = 2
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
-            sampwidth = 4
+            self.sampwidth = 4
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
-            sampwidth = 1
+            self.sampwidth = 1
         else:
             print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
         super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=self.audioFormat)
         #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
-        bytesPerSecond = int(sampwidth * self.audioFormat.sampleRate() * self.audioFormat.channelCount())
-        self.setBufferSize(int(bytesPerSecond/0.25)) # 4 s buffer
+        self.bytesPerSecond = int(self.sampwidth * self.audioFormat.sampleRate() * self.audioFormat.channelCount())
+        self.setBufferSize(int(self.bytesPerSecond/0.25)) # 4 s buffer
         #print("buffer: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
 
         #super(ControllableAudio, self).__init__(format=self.audioFormat)
@@ -943,6 +943,7 @@ class ControllableAudio(QAudioSink):
         self.audioThreadLoading = False
         self.audioThreadPaused = False
         self.playbackSpeed = 1.0
+        self.bytesWritten = 0
         # set small buffer (10 ms) and use processed time
         # sampwidth*8 is the sampleSize
         #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
@@ -1086,13 +1087,10 @@ class ControllableAudio(QAudioSink):
         # and then starts the QAudioOutput from that buffer
         if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
             audiodata = audiodata.astype('int16')  
-            sampwidth = 2
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
             audiodata = audiodata.astype('int32')  
-            sampwidth = 4
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
             audiodata = audiodata.astype('uint8')  
-            sampwidth = 1
         else:
             print("ERROR: sampleFormat %s not supported" % self.audioFormat.sampleFormat())
         #print(type(audiodata),audiodata.dtype,self.audioFormat.sampleFormat())
@@ -1125,6 +1123,7 @@ class ControllableAudio(QAudioSink):
         #print("QBuffer: ",self.InBuffer.size())
         #self.InBuffer.setBuffer(self.audioByteArray)
         self.InBuffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        self.bytesWritten = 0
         sleep(0.2)
         #self.start(self.InBuffer)
         self.audioThreadLoading = True
@@ -1157,6 +1156,7 @@ class ControllableAudio(QAudioSink):
                 data = self.InBuffer.read(self.bytesFree())
                 if data:
                     self.audioBuffer.write(data)
+                    self.bytesWritten += len(data)
 
     #def restart(self):
         #self.InBuffer.seek(0)
