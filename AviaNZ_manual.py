@@ -5934,6 +5934,7 @@ class AviaNZ(QMainWindow):
     def playVisible(self):
         """ Listener for button to play the visible area.
         On PLAY, turns to PAUSE and two other buttons turn to STOPs.
+        If PAUSED, we just want to unpause.
         """
         if self.batmode:
             # Currently playback disabled in this mode - also takes care of spacebar signal
@@ -5942,21 +5943,25 @@ class AviaNZ(QMainWindow):
         if self.media_obj.isPlaying():
             self.pausePlayback()
         else:
-            #self.setSpeed(1.0)
-            self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
-            self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
-
             self.bar.setMovable(False)
             self.swapPlayButtonState(False)
 
-            # if bar was moved under pause, update the playback start position based on the bar:
-            if self.bar.value()>0:
-                start = self.convertSpectoAmpl(self.bar.value())*1000  
-                #print("found bar at %d ms" % start)
+            if self.media_obj.isPlayingorPaused():
+                self.media_obj.pressedPlay()
             else:
-                start = self.segmentStart
+                self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+                self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
 
-            self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
+                # if bar was moved under pause, update the playback start position based on the bar:
+                if self.bar.value()>0:
+                    start = self.convertSpectoAmpl(self.bar.value())*1000  
+                    #print("found bar at %d ms" % start)
+                else:
+                    start = self.segmentStart
+                    
+                self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
+            
+            self.speedButton.setEnabled(False)
             self.NotifyTimer.start(30)
 
     def playSelectedSegment(self,low=None,high=None):
@@ -5970,8 +5975,7 @@ class AviaNZ(QMainWindow):
 
         if self.media_obj.isPlayingorPaused():
             self.stopPlayback()
-
-        if self.box1id > -1:
+        elif self.box1id > -1:
             self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
@@ -5979,6 +5983,7 @@ class AviaNZ(QMainWindow):
             self.swapPlayButtonState(False)
 
             self.media_obj.playSeg(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high)
+            self.speedButton.setEnabled(False)
             self.NotifyTimer.start(30)
         #else:
             #print("Can't play, no segment selected")
@@ -5987,10 +5992,13 @@ class AviaNZ(QMainWindow):
         """ Listener for PlayBandlimitedSegment button.
         Gets the band limits of the segment and passes them on.
         """
-        if self.box1id > -1:
+        if self.media_obj.isPlayingorPaused():
+            self.stopPlayback()
+        elif self.box1id > -1:
             low = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
             high = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
             self.playSelectedSegment(low,high)
+            self.speedButton.setEnabled(False)
 
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
@@ -6008,13 +6016,13 @@ class AviaNZ(QMainWindow):
             self.segmentStart = 0
         self.bar.setValue(-1000)
         self.swapPlayButtonState(True)
+        self.speedButton.setEnabled(True)
 
     def movePlaySlider(self):
         """ Listener called on sound notify (every 30 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
-        #eltime = self.media_obj.elapsedtime // 1000 // self.playSpeed + self.media_obj.timeoffset
             
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
