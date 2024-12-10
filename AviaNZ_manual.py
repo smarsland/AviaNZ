@@ -1744,7 +1744,6 @@ class AviaNZ(QMainWindow):
 
             self.datalengthSec = self.datalength / self.sp.audioFormat.sampleRate()
             #self.datalengthSec = self.datalength / self.sp.sampleRate
-            print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.audioFormat.sampleRate(), "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.audioFormat.sampleRate(), " Hz.")
             #print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.sampleRate, " Hz.")
 
             if name is not None:  # i.e. starting a new file, not next section
@@ -1793,7 +1792,7 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
                 # Populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.audioFormat.sampleRate())
+                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.datalength / self.sp.audioFormat.sampleRate())
                 #hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                 if not hasmetadata:
                     self.segments.metadata["Operator"] = self.operator
@@ -1812,8 +1811,8 @@ class AviaNZ(QMainWindow):
                             self.multipleBirds = True
                             self.menuBird2.triggered.connect(self.birdSelectedMenu)
             else:
-                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.audioFormat.sampleRate()}
-                #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
+                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
+                #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.sampleRate}
 
             # Bat mode: initialize with an empty segment for the entire file
             if self.batmode and len(self.segments)==0:
@@ -1827,11 +1826,11 @@ class AviaNZ(QMainWindow):
                         end = self.convertSpectoAmpl(result[1])
                     else:
                         start = 0
-                        end = self.sp.fileLength / self.sp.audioFormat.sampleRate()
+                        end = self.datalength / self.sp.audioFormat.sampleRate()
                         #end = self.sp.fileLength / self.sp.sampleRate
                 else:
                     start = 0
-                    end = self.sp.fileLength / self.sp.audioFormat.sampleRate()
+                    end = self.datalength / self.sp.audioFormat.sampleRate()
                     #end = self.sp.fileLength / self.sp.sampleRate
                 newSegment = Segment.Segment([start, end, 0, 0, species])
                 self.segments.append(newSegment)
@@ -5451,7 +5450,7 @@ class AviaNZ(QMainWindow):
                         # Otherwise, read file in
                         # TODO
 
-                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.audioFormat.sampleRate()}
+                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
                         #tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
                         
                         tree = ET.parse(tagFile)
@@ -6618,6 +6617,9 @@ class AviaNZ(QMainWindow):
         if self.segmentsToSave:
             self.segments.metadata["Operator"] = self.operator
             self.segments.metadata["Reviewer"] = self.reviewer
+
+            print("SAVING JSON")
+            print(self.segments.metadata)
 
             self.segments.saveJSON(str(self.filename) + '.data')
 
