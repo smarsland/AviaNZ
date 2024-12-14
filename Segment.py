@@ -592,6 +592,9 @@ class SegmentList(list):
                 GT[i,2] = species
         GT = GT.tolist()
 
+        if len(GT)==1:
+            print("Warning: no annotations found in file!!!")
+
         # now save the resulting txt:
         with open(eFile, "w") as f:
             for l, el in enumerate(GT):
