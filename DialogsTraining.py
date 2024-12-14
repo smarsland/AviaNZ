@@ -1698,7 +1698,7 @@ class BuildRecAdvWizard(QWizard):
 
 class TestRecWizard(QWizard):
     class WPageData(QWizardPage):
-        def __init__(self, config, filter=None, parent=None):
+        def __init__(self, config, filterlist, filter=None, parent=None):
             super(TestRecWizard.WPageData, self).__init__(parent)
             self.setTitle('Testing data')
             self.setSubTitle('Select the folder with testing data, then choose species')
@@ -1709,6 +1709,9 @@ class TestRecWizard(QWizard):
 
             # the combobox will default to this filter initially if provided
             self.initialFilter = filter
+
+            # grab the full filter list
+            self.filterlist = filterlist
 
             self.testDirName = QLineEdit()
             self.testDirName.setReadOnly(True)
@@ -1723,8 +1726,8 @@ class TestRecWizard(QWizard):
             self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             selectSpLabel = QLabel("Choose the recogniser that you want to test")
-            self.species = QComboBox()  # fill during browse
-            self.species.addItems(['Choose recogniser...'])
+            self.recognisers = QComboBox()  # fill during browse
+            self.recognisers.addItems(['Choose recogniser...'])
 
             space = QLabel()
             space.setFixedHeight(20)
@@ -1739,16 +1742,16 @@ class TestRecWizard(QWizard):
             layout.addWidget(self.listFiles)
             layout.addWidget(space)
             layout.addWidget(selectSpLabel)
-            layout.addWidget(self.species)
+            layout.addWidget(self.recognisers)
             layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             self.setLayout(layout)
             self.setButtonText(QWizard.WizardButton.NextButton, 'Test >')
 
         #def initializePage(self):
             #filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
-            #self.species.addItems(sorted(filternames))
+            #self.recognisers.addItems(sorted(filternames))
             #if self.initialFilter is not None:
-                #self.species.setCurrentText(self.initialFilter)
+                #self.recognisers.setCurrentText(self.initialFilter)
 
         def browseTestData(self):
             dirName = QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
@@ -1758,13 +1761,22 @@ class TestRecWizard(QWizard):
 
             # while reading the file, we also collected a list of species present there
             spList = list(self.listFiles.spList)
-            spList.insert(0, 'Choose species...')
-            self.species.clear()
-            self.species.addItems(spList)
+
+            recogniserList = []
+            # loop through the filters and get every filter where the species is in spList
+            for key, value in self.filterlist.items():
+                if value['species'] in spList:
+                    recogniserList.append(key)
+            
+            print("found recognisers",recogniserList)
+
+            recogniserList.insert(0, 'Choose recogniser...')
+            self.recognisers.clear()
+            self.recognisers.addItems(recogniserList)
             if len(spList)==2:
-                self.species.setCurrentIndex(1)
+                self.recognisers.setCurrentIndex(1)
             if self.initialFilter is not None and self.initialFilter in spList:
-                self.species.setCurrentText(self.initialFilter)
+                self.recognisers.setCurrentText(self.initialFilter)
 
     class WPageMain(QWizardPage):
         def __init__(self, configdir, filterdir, parent=None):
@@ -1810,20 +1822,20 @@ class TestRecWizard(QWizard):
             #testresfile = os.path.join(self.field("testDir"), "test-results.txt")
             # Run the actual testing here:
             with pg.BusyCursor():
-                self.currfilt = self.wizard().filterlist[self.field("species")]
-                #self.currfilt = self.wizard().filterlist[self.field("species")[:-4]]
+                self.currfilt = self.wizard().filterlist[self.field("recognisers")]
+                #self.currfilt = self.wizard().filterlist[self.field("recognisers")[:-4]]
 
                 self.lblTestDir.setText(self.field("testDir"))
-                self.lblTestFilter.setText(self.field("species"))
+                self.lblTestFilter.setText(self.field("recognisers"))
                 self.lblSpecies.setText(self.currfilt['species'])
 
-                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species"), self.configdir,self.filterdir)
-                #test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
+                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("recognisers"), self.configdir,self.filterdir)
+                #test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("recognisers")[:-4], self.configdir,self.filterdir)
                 text = test.getOutput()
 
             if text == 0:
-                self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species"))
-                #self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species")[:-4])
+                self.lblWFsummary.setText("No segments for recognisers \'%s\' found!" % self.field("recognisers"))
+                #self.lblWFsummary.setText("No segments for recognisers \'%s\' found!" % self.field("recognisers")[:-4])
                 return
 
             self.lblWFsummary.setText(text)
@@ -1833,7 +1845,7 @@ class TestRecWizard(QWizard):
         def cleanupPage(self):
             self.lblWFsummary.setText('')
             # self.lblWFCNNsummary.setText('')
-            self.lblSpecies.setText('')
+            self.lblRecognisers.setText('')
             self.lblTestDir.setText('')
             self.lblTestFilter.setText('')
 
@@ -1881,9 +1893,9 @@ class TestRecWizard(QWizard):
         configfile = os.path.join(configdir, "AviaNZconfig.txt")
         ConfigLoader = SupportClasses.ConfigLoader()
         config = ConfigLoader.config(configfile)
-        browsedataPage = TestRecWizard.WPageData(config, filter=filter)
+        browsedataPage = TestRecWizard.WPageData(config, self.filterlist, filter=filter)
         browsedataPage.registerField("testDir*", browsedataPage.testDirName)
-        browsedataPage.registerField("species*", browsedataPage.species, "currentText", browsedataPage.species.currentTextChanged)
+        browsedataPage.registerField("recognisers*", browsedataPage.recognisers, "currentText", browsedataPage.recognisers.currentTextChanged)
         self.addPage(browsedataPage)
 
         pageMain = TestRecWizard.WPageMain(configdir, filtdir)
