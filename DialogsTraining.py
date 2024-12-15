@@ -801,7 +801,8 @@ class BuildRecAdvWizard(QWizard):
                 #_ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                 sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 #sg = sp.normalisedSpec("Log")
-
+                sg = sp.normalisedSpec(self.config['sgNormMode'])
+                
                 # buffer the image to largest spec size, so that the resulting buttons would have equal scale
                 if sg.shape[0]<maxspecsize:
                     padlen = int(maxspecsize - sg.shape[0])//2
