@@ -6631,7 +6631,8 @@ class AviaNZ(QMainWindow):
     def closeFile(self):
         """ Calls the appropriate functions when a file is gently closed (on quit or change of file). """
         # stop playing the file
-        self.media_obj.pressedStop()
+        if hasattr(self, 'media_obj'): # check in case we are looking at a bat
+            self.media_obj.pressedStop()
 
         # Save noise data if the user requires it
         if self.config['RequireNoiseData']:
