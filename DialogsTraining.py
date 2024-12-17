@@ -784,9 +784,9 @@ class BuildRecAdvWizard(QWizard):
                     self.clusters.append((i, 'Cluster_' + str(i)))
                 self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
-            # largest spec will be this wide
-            if len(self.segments)<=1:
-                return
+            # # largest spec will be this wide
+            # if len(self.segments)<=1:
+            #     return
             maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
             # Create the buttons for each segment
