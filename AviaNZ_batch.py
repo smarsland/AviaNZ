@@ -821,6 +821,7 @@ class AviaNZ_batchProcess():
             segmentList.metadata = dict()
         segmentList.metadata["Operator"] = "Auto"
         segmentList.metadata["Reviewer"] = ""
+        segmentList.metadata["Duration"] = float(len(self.sp.data))/self.sp.audioFormat.sampleRate()
         #if self.method != "Intermittent sampling":
             #segmentList.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
         segmentList.metadata["noiseLevel"] = None

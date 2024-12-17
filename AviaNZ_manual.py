@@ -1744,7 +1744,6 @@ class AviaNZ(QMainWindow):
 
             self.datalengthSec = self.datalength / self.sp.audioFormat.sampleRate()
             #self.datalengthSec = self.datalength / self.sp.sampleRate
-            print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.audioFormat.sampleRate(), "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.audioFormat.sampleRate(), " Hz.")
             #print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.sampleRate, " Hz.")
 
             if name is not None:  # i.e. starting a new file, not next section
@@ -1793,7 +1792,7 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
                 # Populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.audioFormat.sampleRate())
+                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.datalength / self.sp.audioFormat.sampleRate())
                 #hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                 if not hasmetadata:
                     self.segments.metadata["Operator"] = self.operator
@@ -1812,8 +1811,8 @@ class AviaNZ(QMainWindow):
                             self.multipleBirds = True
                             self.menuBird2.triggered.connect(self.birdSelectedMenu)
             else:
-                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.audioFormat.sampleRate()}
-                #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
+                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
+                #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.sampleRate}
 
             # Bat mode: initialize with an empty segment for the entire file
             if self.batmode and len(self.segments)==0:
@@ -1827,11 +1826,11 @@ class AviaNZ(QMainWindow):
                         end = self.convertSpectoAmpl(result[1])
                     else:
                         start = 0
-                        end = self.sp.fileLength / self.sp.audioFormat.sampleRate()
+                        end = self.datalength / self.sp.audioFormat.sampleRate()
                         #end = self.sp.fileLength / self.sp.sampleRate
                 else:
                     start = 0
-                    end = self.sp.fileLength / self.sp.audioFormat.sampleRate()
+                    end = self.datalength / self.sp.audioFormat.sampleRate()
                     #end = self.sp.fileLength / self.sp.sampleRate
                 newSegment = Segment.Segment([start, end, 0, 0, species])
                 self.segments.append(newSegment)
@@ -2392,6 +2391,7 @@ class AviaNZ(QMainWindow):
             elif speedchar == 190:
                 speed = 0.75
         self.playSpeed = 1/float(speed)
+        self.media_obj.setSpeed(self.playSpeed)
         #print("playback speed:",self.playSpeed)
 
     def setExtraPlot(self, plotname):
@@ -5450,7 +5450,7 @@ class AviaNZ(QMainWindow):
                         # Otherwise, read file in
                         # TODO
 
-                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.audioFormat.sampleRate()}
+                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
                         #tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
                         
                         tree = ET.parse(tagFile)
@@ -5933,6 +5933,7 @@ class AviaNZ(QMainWindow):
     def playVisible(self):
         """ Listener for button to play the visible area.
         On PLAY, turns to PAUSE and two other buttons turn to STOPs.
+        If PAUSED, we just want to unpause.
         """
         if self.batmode:
             # Currently playback disabled in this mode - also takes care of spacebar signal
@@ -5941,21 +5942,25 @@ class AviaNZ(QMainWindow):
         if self.media_obj.isPlaying():
             self.pausePlayback()
         else:
-            #self.setSpeed(1.0)
-            self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
-            self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
-
             self.bar.setMovable(False)
             self.swapPlayButtonState(False)
 
-            # if bar was moved under pause, update the playback start position based on the bar:
-            if self.bar.value()>0:
-                start = self.convertSpectoAmpl(self.bar.value())*1000  
-                #print("found bar at %d ms" % start)
+            if self.media_obj.isPlayingorPaused():
+                self.media_obj.pressedPlay()
             else:
-                start = self.segmentStart
+                self.segmentStart = self.p_ampl.viewRange()[0][0]*1000
+                self.segmentStop = self.p_ampl.viewRange()[0][1]*1000
 
-            self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
+                # if bar was moved under pause, update the playback start position based on the bar:
+                if self.bar.value()>0:
+                    start = self.convertSpectoAmpl(self.bar.value())*1000  
+                    #print("found bar at %d ms" % start)
+                else:
+                    start = self.segmentStart
+                    
+                self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
+            
+            self.speedButton.setEnabled(False)
             self.NotifyTimer.start(30)
 
     def playSelectedSegment(self,low=None,high=None):
@@ -5969,8 +5974,7 @@ class AviaNZ(QMainWindow):
 
         if self.media_obj.isPlayingorPaused():
             self.stopPlayback()
-
-        if self.box1id > -1:
+        elif self.box1id > -1:
             self.segmentStart = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
@@ -5978,6 +5982,7 @@ class AviaNZ(QMainWindow):
             self.swapPlayButtonState(False)
 
             self.media_obj.playSeg(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high)
+            self.speedButton.setEnabled(False)
             self.NotifyTimer.start(30)
         #else:
             #print("Can't play, no segment selected")
@@ -5986,10 +5991,13 @@ class AviaNZ(QMainWindow):
         """ Listener for PlayBandlimitedSegment button.
         Gets the band limits of the segment and passes them on.
         """
-        if self.box1id > -1:
+        if self.media_obj.isPlayingorPaused():
+            self.stopPlayback()
+        elif self.box1id > -1:
             low = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
             high = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
             self.playSelectedSegment(low,high)
+            self.speedButton.setEnabled(False)
 
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
@@ -6007,13 +6015,13 @@ class AviaNZ(QMainWindow):
             self.segmentStart = 0
         self.bar.setValue(-1000)
         self.swapPlayButtonState(True)
+        self.speedButton.setEnabled(True)
 
     def movePlaySlider(self):
         """ Listener called on sound notify (every 30 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
         eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
-        #eltime = self.media_obj.elapsedtime // 1000 // self.playSpeed + self.media_obj.timeoffset
             
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
@@ -6610,6 +6618,9 @@ class AviaNZ(QMainWindow):
             self.segments.metadata["Operator"] = self.operator
             self.segments.metadata["Reviewer"] = self.reviewer
 
+            print("SAVING JSON")
+            print(self.segments.metadata)
+
             self.segments.saveJSON(str(self.filename) + '.data')
 
             # Refresh this file's icon in file list dock
@@ -6619,6 +6630,9 @@ class AviaNZ(QMainWindow):
 
     def closeFile(self):
         """ Calls the appropriate functions when a file is gently closed (on quit or change of file). """
+        # stop playing the file
+        if hasattr(self, 'media_obj'): # check in case we are looking at a bat
+            self.media_obj.pressedStop()
 
         # Save noise data if the user requires it
         if self.config['RequireNoiseData']:

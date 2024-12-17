@@ -26,8 +26,8 @@
 
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy
-from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot, QThread
-from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat
+from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot, QThread, QEvent
+from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat, QMediaDevices
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
@@ -910,15 +910,17 @@ class ControllableAudio(QAudioSink):
             self.audioFormat = sp.audioFormat
 
         if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
-            sampwidth = 2
+            self.sampwidth = 2
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
-            sampwidth = 4
+            self.sampwidth = 4
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
-            sampwidth = 1
+            self.sampwidth = 1
         else:
             print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-        super(ControllableAudio, self).__init__(format=self.audioFormat)
-        self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+        super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=self.audioFormat)
+        #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
+        self.bytesPerSecond = int(self.sampwidth * self.audioFormat.sampleRate() * self.audioFormat.channelCount())
+        self.setBufferSize(int(self.bytesPerSecond/0.25)) # 4 s buffer
         #print("buffer: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
 
         #super(ControllableAudio, self).__init__(format=self.audioFormat)
@@ -937,13 +939,20 @@ class ControllableAudio(QAudioSink):
         self.timeoffset = 0  # start time of the played audio, in ms, relative to page start
         #self.loop = loop
         self.sp = sp
-
+        self.audioThread = None
+        self.audioThreadLoading = False
+        self.audioThreadPaused = False
+        self.playbackSpeed = 1.0
+        self.bytesWritten = 0
         # set small buffer (10 ms) and use processed time
         # sampwidth*8 is the sampleSize
         #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         #print("Buffer size: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()),self.bufferSize())
         #print("Buffer size: ",self.bufferSize())
         #self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
+    
+    def setSpeed(self, speed):
+        self.playbackSpeed = speed
 
     @pyqtSlot()
     def isPlaying(self):
@@ -1009,6 +1018,7 @@ class ControllableAudio(QAudioSink):
         # position is passed as start, and playing starts anew from there.
         #print("---", self.state(),self.keepSlider,start)
         if self.state() == QAudio.State.SuspendedState:
+            self.audioThreadPaused = False
             self.resume()
             #if self.useBar:
                 #self.NotifyTimer.start(30)
@@ -1018,6 +1028,7 @@ class ControllableAudio(QAudioSink):
 
     @pyqtSlot()
     def pressedPause(self):
+        self.audioThreadPaused = True
         self.suspend()
         #if self.useBar:
             #self.NotifyTimer.stop()
@@ -1025,13 +1036,29 @@ class ControllableAudio(QAudioSink):
     @pyqtSlot()
     def pressedStop(self):
         # stop and reset to window/segment start
-        self.stop()
+
+        # finish the threads
+        self.audioThreadLoading = False
+        if not self.audioThread is None:
+            self.audioThread.join() # finish the thread
+            self.audioThread = None
+        
+        # note if the audio was paused
+        audio_was_paused = True if self.state() == QAudio.State.SuspendedState else False
+
+        # do the reset
         self.reset()
+        
+        # Now if we were paused we resume. We couldn't do this before the reset, or it would play a short sound.
+        if audio_was_paused:
+            self.audioThreadPaused = False
+            self.resume()
+
         #if self.useBar:
             #self.NotifyTimer.stop()
 
     @pyqtSlot()
-    def playSeg(self, start, stop, speed = 1.0, audiodata=None, low=None, high=None):
+    def playSeg(self, start, stop, speed=1.0, audiodata=None, low=None, high=None):
         # Selects the data between start-stop ms, relative to file start
         # and plays it, optionally at a different speed and after bandpassing
 
@@ -1048,8 +1075,8 @@ class ControllableAudio(QAudioSink):
         if low is not None:
             segment = SignalProc.bandpassFilter(segment, sampleRate=self.audioFormat.sampleRate(), start=low, end=high)
 
-        if speed != 1.0:
-            segment = SignalProc.wsola(segment,speed) 
+        if self.playbackSpeed != 1.0:
+            segment = SignalProc.wsola(segment,self.playbackSpeed) 
 
         print("Play starting")
         self.loadArray(segment)
@@ -1060,13 +1087,10 @@ class ControllableAudio(QAudioSink):
         # and then starts the QAudioOutput from that buffer
         if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
             audiodata = audiodata.astype('int16')  
-            sampwidth = 2
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
             audiodata = audiodata.astype('int32')  
-            sampwidth = 4
         elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
             audiodata = audiodata.astype('uint8')  
-            sampwidth = 1
         else:
             print("ERROR: sampleFormat %s not supported" % self.audioFormat.sampleFormat())
         #print(type(audiodata),audiodata.dtype,self.audioFormat.sampleFormat())
@@ -1099,12 +1123,14 @@ class ControllableAudio(QAudioSink):
         #print("QBuffer: ",self.InBuffer.size())
         #self.InBuffer.setBuffer(self.audioByteArray)
         self.InBuffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        self.bytesWritten = 0
         sleep(0.2)
         #self.start(self.InBuffer)
+        self.audioThreadLoading = True
         self.audioBuffer = self.start()
         #print("Actual size: ",self.bufferSize(), self.bytesFree())
-        self.thread = threading.Thread(target=self.fillBuffer)
-        self.thread.start()
+        self.audioThread = threading.Thread(target=self.fillBuffer)
+        self.audioThread.start()
 
         #if self.useBar:
             #self.NotifyTimer.start(30)
@@ -1125,9 +1151,12 @@ class ControllableAudio(QAudioSink):
         """
 
     def fillBuffer(self):
-        while self.InBuffer.bytesAvailable() > 0:
-            data = self.InBuffer.read(self.bufferSize())
-            self.audioBuffer.write(data)
+        while self.InBuffer.bytesAvailable() > 0 and self.audioThreadLoading:
+            if self.bytesFree() > 0 and not self.audioThreadPaused:
+                data = self.InBuffer.read(self.bytesFree())
+                if data:
+                    self.audioBuffer.write(data)
+                    self.bytesWritten += len(data)
 
     #def restart(self):
         #self.InBuffer.seek(0)
@@ -1431,6 +1460,8 @@ class PicButton(QAbstractButton):
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.hide()
 
+        self.mouseIn = False
+
         # SRM: Decided this isn't the right idea
         #self.plusButton = QToolButton(self)
         #self.plusButton.setText('+')
@@ -1472,6 +1503,8 @@ class PicButton(QAbstractButton):
         self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
+        self.NotifyTimer = QTimer(self)
+        self.NotifyTimer.timeout.connect(self.endListener)
 
     def setImage(self, colRange):
         # takes in a piece of spectrogram and produces a pair of images
@@ -1572,6 +1605,7 @@ class PicButton(QAbstractButton):
 
     def enterEvent(self, QEvent):
         # to reset the icon if it didn't stop cleanly
+        self.mouseIn = True
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
@@ -1579,6 +1613,7 @@ class PicButton(QAbstractButton):
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
+        self.mouseIn = False
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
@@ -1601,6 +1636,7 @@ class PicButton(QAbstractButton):
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.media_obj.playSeg(0,self.duration*1000,audiodata=self.audiodata)
+            self.NotifyTimer.start(30)
             #self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
@@ -1610,10 +1646,12 @@ class PicButton(QAbstractButton):
                 self.media_obj.restart()
             else:
                 self.stopPlayback()
+                if not self.mouseIn:
+                    self.playButton.hide()
 
     def stopPlayback(self):
         self.media_obj.pressedStop()
-        self.playButton.hide()
+        self.NotifyTimer.stop()
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def sizeHint(self):
