@@ -35,7 +35,7 @@
 # 5. Finish clustering
 # 6. Colour maps
 # 7. Check merge with main cf media playback cleanup, CompareCalls dialog bugs changes
-# 8. Fix OutputBatPasses
+# 8. Fix OutputBatPasses -- JSON
 # 9. Mac installation
 # 10. Test and test again. And again.
 # 11. If a .data file is empty, delete, restart -- check
