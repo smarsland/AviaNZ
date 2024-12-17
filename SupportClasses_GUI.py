@@ -1460,6 +1460,8 @@ class PicButton(QAbstractButton):
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
         self.playButton.hide()
 
+        self.mouseIn = False
+
         # SRM: Decided this isn't the right idea
         #self.plusButton = QToolButton(self)
         #self.plusButton.setText('+')
@@ -1501,6 +1503,8 @@ class PicButton(QAbstractButton):
         self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
+        self.NotifyTimer = QTimer(self)
+        self.NotifyTimer.timeout.connect(self.endListener)
 
     def setImage(self, colRange):
         # takes in a piece of spectrogram and produces a pair of images
@@ -1601,6 +1605,7 @@ class PicButton(QAbstractButton):
 
     def enterEvent(self, QEvent):
         # to reset the icon if it didn't stop cleanly
+        self.mouseIn = True
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
@@ -1608,6 +1613,7 @@ class PicButton(QAbstractButton):
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
+        self.mouseIn = False
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
@@ -1630,6 +1636,7 @@ class PicButton(QAbstractButton):
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.media_obj.playSeg(0,self.duration*1000,audiodata=self.audiodata)
+            self.NotifyTimer.start(30)
             #self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
@@ -1639,10 +1646,12 @@ class PicButton(QAbstractButton):
                 self.media_obj.restart()
             else:
                 self.stopPlayback()
+                if not self.mouseIn:
+                    self.playButton.hide()
 
     def stopPlayback(self):
         self.media_obj.pressedStop()
-        self.playButton.hide()
+        self.NotifyTimer.stop()
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def sizeHint(self):
