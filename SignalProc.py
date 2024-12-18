@@ -1,4 +1,7 @@
 
+# Version 3.4 18/12/24
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
+
 # SignalProc.py
 # This file holds signal processing functions that don't use the full spectrogram or audio data
 import scipy.signal as signal
