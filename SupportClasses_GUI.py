@@ -730,6 +730,7 @@ class ControllableAudio(QAudioSink):
         super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=self.audioFormat)
         #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
         self.bytesPerSecond = int(self.sampwidth * self.audioFormat.sampleRate() * self.audioFormat.channelCount())
+        # TODO: or the size of the data if < 4 secs
         self.setBufferSize(int(self.bytesPerSecond/0.25)) # 4 s buffer
         #print("buffer: ",int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
 
@@ -740,10 +741,11 @@ class ControllableAudio(QAudioSink):
 
         # This is a timer for the moving bar. 
         # On this notify, move slider (connected where called)
-        #self.useBar = useBar
+        self.useBar = useBar
         #self.useBar = False
-        #if self.useBar:
-            #self.NotifyTimer = QTimer(self)
+        if self.useBar:
+            self.NotifyTimer = QTimer(self)
+            #self.NotifyTimer.timeout.connect(self.NotifyTimerTick)
         #self.stateChanged.connect(self.endListener)
 
         self.timeoffset = 0  # start time of the played audio, in ms, relative to page start
@@ -826,12 +828,12 @@ class ControllableAudio(QAudioSink):
         # If playback bar has not moved, this can use resume() to continue from the same spot.
         # Otherwise assumes that the QAudioOutput was stopped/reset. In that case the updated 
         # position is passed as start, and playing starts anew from there.
-        #print("---", self.state(),self.keepSlider,start)
+        print("---", self.state(),start)
         if self.state() == QAudio.State.SuspendedState:
             self.audioThreadPaused = False
             self.resume()
-            #if self.useBar:
-                #self.NotifyTimer.start(30)
+            if self.useBar:
+                self.NotifyTimer.start(30)
         else:
             self.pressedStop()
             self.playSeg(start, stop) 
@@ -840,8 +842,8 @@ class ControllableAudio(QAudioSink):
     def pressedPause(self):
         self.audioThreadPaused = True
         self.suspend()
-        #if self.useBar:
-            #self.NotifyTimer.stop()
+        if self.useBar:
+            self.NotifyTimer.stop()
 
     @pyqtSlot()
     def pressedStop(self):
@@ -864,8 +866,8 @@ class ControllableAudio(QAudioSink):
             self.audioThreadPaused = False
             self.resume()
 
-        #if self.useBar:
-            #self.NotifyTimer.stop()
+        if self.useBar:
+            self.NotifyTimer.stop()
 
     @pyqtSlot()
     def playSeg(self, start, stop, speed=1.0, audiodata=None, low=None, high=None):
@@ -888,7 +890,7 @@ class ControllableAudio(QAudioSink):
         if self.playbackSpeed != 1.0:
             segment = SignalProc.wsola(segment,self.playbackSpeed) 
 
-        print("Play starting")
+        print("Play starting ",start)
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
@@ -942,8 +944,8 @@ class ControllableAudio(QAudioSink):
         self.audioThread = threading.Thread(target=self.fillBuffer)
         self.audioThread.start()
 
-        #if self.useBar:
-            #self.NotifyTimer.start(30)
+        if self.useBar:
+            self.NotifyTimer.start(30)
         """
         wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
 
@@ -1170,14 +1172,14 @@ class PicButton(QAbstractButton):
         self.setMinimumSize(self.im1.size())
 
         # playback things
-        self.media_obj = ControllableAudio(None,audioFormat=audioFormat)
+        self.media_obj = ControllableAudio(None,audioFormat=audioFormat,useBar=True)
         # TODO: SRM: update -- do we want the moving bar?
         #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
-        self.NotifyTimer = QTimer(self)
-        self.NotifyTimer.timeout.connect(self.endListener)
+        #self.NotifyTimer = QTimer(self)
+        self.media_obj.NotifyTimer.timeout.connect(self.endListener)
 
     def setImage(self, colRange):
         # takes in a piece of spectrogram and produces a pair of images
@@ -1309,7 +1311,7 @@ class PicButton(QAbstractButton):
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.media_obj.playSeg(0,self.duration*1000,audiodata=self.audiodata)
-            self.NotifyTimer.start(30)
+            #self.NotifyTimer.start(30)
             #self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
@@ -1324,7 +1326,7 @@ class PicButton(QAbstractButton):
 
     def stopPlayback(self):
         self.media_obj.pressedStop()
-        self.NotifyTimer.stop()
+        #self.NotifyTimer.stop()
         self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def sizeHint(self):

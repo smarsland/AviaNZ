@@ -1,10 +1,10 @@
-# Version 3.0 14/09/20
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
+# Version 3.4 18/12/24
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 # This is the main class for the AviaNZ interface.
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2020
+#    Copyright (C) 2017--2024
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,8 +20,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO: 
-# -1: Playback
-# 0. Sound: tidy the buttons, slightly clearer, check volume -> check
 # 1. Check Freebird import, BatSearch output
 # 2. Test Harry's overlaps into excel 
 # 2a -> Replace (or not...) the mergeSegments whereever that was
@@ -39,11 +37,11 @@
 # 9. Mac installation
 # 10. Test and test again. And again.
 # 11. If a .data file is empty, delete, restart -- check
-# 12. Improve call type selection
-# 13. Joe buttons
-# 14. Ruth things
-# 15. Is librosa used?
-# 16. Tidy up the flac loader (correct place, check for space) and add a converter
+# 12. Replace call type selection with dropdown from species
+# 13. Ruth things
+# 14. Is librosa used?
+# 15. Tidy up the flac loader (correct place, check for space) and add a converter
+# 16. Check the splitting with data files properly
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -54,7 +52,7 @@ from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow
 from PyQt6.QtWidgets import QGraphicsBlurEffect
 # The two below will move from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
-from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF, QThread
+from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF #, QThread
 from PyQt6.QtMultimedia import QAudio, QAudioFormat
 
 import wavio
@@ -1434,8 +1432,11 @@ class AviaNZ(QMainWindow):
 
         # Check if media is playing and stop it if so
         if hasattr(self,'media_obj'):
-            if self.media_obj.isPlayingorPaused():
-                self.stopPlayback()
+            self.stopPlayback()
+            #print(self.media_obj.isPlayingorPaused(),self.media_obj.state())
+            #if self.media_obj.isPlayingorPaused():
+                #print("stopping")
+                #self.stopPlayback()
                 #self.media_thread.quit()
                 #self.media_thread.wait()
             #del self.media_obj
@@ -1887,13 +1888,16 @@ class AviaNZ(QMainWindow):
             if not self.CLI:
                 if not self.batmode:
                     # Initialise the sound and bar moving timer
-                    if not hasattr(self,'media_thread'):
-                        self.media_thread = QThread()
-                        self.NotifyTimer = QTimer(self)
-                        self.NotifyTimer.timeout.connect(self.movePlaySlider)
-                    self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp)
-                    self.media_obj.moveToThread(self.media_thread)
-                    self.media_thread.start()
+                    #if not hasattr(self,'media_thread'):
+                        #self.media_thread = QThread()
+                        #self.NotifyTimer = QTimer(self)
+                        #self.NotifyTimer.timeout.connect(self.movePlaySlider)
+                    self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
+                    self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+
+                    #self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+                    #self.media_obj.moveToThread(self.media_thread)
+                    #self.media_thread.start()
 
                     #self.mediaThread = threading.Thread(target=self.media_obj.play)
                     #self.mediaThread.start()
@@ -5943,7 +5947,7 @@ class AviaNZ(QMainWindow):
             self.pausePlayback()
         else:
             self.bar.setMovable(False)
-            self.swapPlayButtonState(False)
+            self.swapPlayButtonState(True)
 
             if self.media_obj.isPlayingorPaused():
                 self.media_obj.pressedPlay()
@@ -5954,14 +5958,14 @@ class AviaNZ(QMainWindow):
                 # if bar was moved under pause, update the playback start position based on the bar:
                 if self.bar.value()>0:
                     start = self.convertSpectoAmpl(self.bar.value())*1000  
-                    #print("found bar at %d ms" % start)
+                    print("found bar at %d ms" % start)
                 else:
                     start = self.segmentStart
                     
                 self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
             
             self.speedButton.setEnabled(False)
-            self.NotifyTimer.start(30)
+            #self.NotifyTimer.start(30)
 
     def playSelectedSegment(self,low=None,high=None):
         """ Listener for PlaySegment button (also called by listener for PlayBandlimitedSegment).
@@ -5979,11 +5983,11 @@ class AviaNZ(QMainWindow):
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
             self.bar.setMovable(False)
-            self.swapPlayButtonState(False)
+            self.swapPlayButtonState(True)
 
             self.media_obj.playSeg(self.segmentStart, self.segmentStop, speed=self.playSpeed, low=low, high=high)
             self.speedButton.setEnabled(False)
-            self.NotifyTimer.start(30)
+            #self.NotifyTimer.start(30)
         #else:
             #print("Can't play, no segment selected")
 
@@ -6002,19 +6006,20 @@ class AviaNZ(QMainWindow):
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
         self.media_obj.pressedPause()
-        self.NotifyTimer.stop()
+        #self.NotifyTimer.stop()
         self.bar.setMovable(True)
-        self.swapPlayButtonState(True)
+        #self.swapPlayButtonState(False)
+        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.media_obj.pressedStop()
-        self.NotifyTimer.stop()
+        #self.NotifyTimer.stop()
         self.bar.setMovable(True)
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
         self.bar.setValue(-1000)
-        self.swapPlayButtonState(True)
+        self.swapPlayButtonState(False)
         self.speedButton.setEnabled(True)
 
     def movePlaySlider(self):
@@ -6038,19 +6043,19 @@ class AviaNZ(QMainWindow):
         """ Listener for when the bar showing playback position moves.
             Resets player so that it won't try to resume
         """
-        #print("Resetting playback")
+        print("Resetting playback")
         self.media_obj.reset()
 
     def swapPlayButtonState(self,newStateisPlay):
         # Swap all button icons between play and pause/stop
         if newStateisPlay:
-            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
-            self.playSegButton.setIcon(QIcon('img/playsegment.png'))
-            self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
-        else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+        else:
+            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+            self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+            self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
         # OS X doesn't repaint them by default smh
         self.playButton.repaint()
@@ -6663,7 +6668,7 @@ class AviaNZ(QMainWindow):
         if hasattr(self, 'media_obj'):
             if self.media_obj.isPlayingorPaused():
                 self.stopPlayback()
-                self.media_thread.quit()
+                #self.media_thread.quit()
                 #self.media_thread.wait()
         QApplication.exit(1)
 
