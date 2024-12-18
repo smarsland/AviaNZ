@@ -6044,6 +6044,7 @@ class AviaNZ(QMainWindow):
             Resets player so that it won't try to resume
         """
         print("Resetting playback")
+        self.media_obj.pressedStop()
         self.media_obj.reset()
 
     def swapPlayButtonState(self,newStateisPlay):
