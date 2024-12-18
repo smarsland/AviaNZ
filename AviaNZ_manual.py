@@ -5961,7 +5961,7 @@ class AviaNZ(QMainWindow):
                     print("found bar at %d ms" % start)
                 else:
                     start = self.segmentStart
-                    
+
                 self.media_obj.pressedPlay(start=start, stop=self.segmentStop)
             
             self.speedButton.setEnabled(False)
@@ -6045,7 +6045,6 @@ class AviaNZ(QMainWindow):
         """
         print("Resetting playback")
         self.media_obj.pressedStop()
-        self.media_obj.reset()
 
     def swapPlayButtonState(self,newStateisPlay):
         # Swap all button icons between play and pause/stop
