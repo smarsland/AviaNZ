@@ -2,13 +2,13 @@
 # colourMaps.py
 # Set of colour maps for the AviaNZ interface.
 
-# Version 3.0 14/09/20
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
+# Version 3.4 18/12/24
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 # These were made using cmaps.py in test
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2020
+#    Copyright (C) 2017--2024
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
