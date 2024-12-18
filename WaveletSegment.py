@@ -1645,7 +1645,7 @@ class WaveletSegment:
 
         # Do impulse masking by default
         if impMask:
-            self.sp.data = self.SignalProc.impMask(self.sp.data,self.sp.audioFormat.sampleRate())
+            self.sp.data = SignalProc.impMask(self.sp.data,self.sp.audioFormat.sampleRate())
 
         fileAnnotations = []
         # Get the segmentation from the txt file
