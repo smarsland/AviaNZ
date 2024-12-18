@@ -238,12 +238,12 @@ def nsdual(multiscale, shift, window_lens):
         idx = np.arange(-np.floor(filt_len / 2), np.ceil(filt_len / 2))
         win_range.append((posit[ii] + idx) % seq_len)
         subdiag = window_lens[ii] * np.fft.fftshift(multiscale[ii]) ** 2
-        ind = win_range[ii].astype(np.int)
+        ind = win_range[ii].astype(np.int64)
         diagonal[ind] = diagonal[ind] + subdiag
 
     dual_multiscale = multiscale
     for ii in range(N):
-        ind = win_range[ii].astype(np.int)
+        ind = win_range[ii].astype(np.int64)
         dual_multiscale[ii] = np.fft.ifftshift(
             np.fft.fftshift(dual_multiscale[ii]) / diagonal[ind])
     return dual_multiscale
@@ -287,7 +287,7 @@ def nsgitf_real(c, c_dc, c_nyq, multiscale, shift):
         filt_len = len(multiscale[ii])
         win_range = posit[ii] + np.arange(-np.floor(filt_len / 2),
                                           np.ceil(filt_len / 2))
-        win_range = (win_range % seq_len).astype(np.int)
+        win_range = (win_range % seq_len).astype(np.int64)
         temp = np.fft.fft(c_l[ii]) * len(c_l[ii])
 
         fs_new_bins = len(c_l[ii])
@@ -296,16 +296,16 @@ def nsgitf_real(c, c_dc, c_nyq, multiscale, shift):
         temp = np.roll(temp, -displace)
         l = np.arange(len(temp) - np.floor(filt_len / 2), len(temp))
         r = np.arange(np.ceil(filt_len / 2))
-        temp_idx = (np.concatenate((l, r)) % len(temp)).astype(np.int)
+        temp_idx = (np.concatenate((l, r)) % len(temp)).astype(np.int64)
         temp = temp[temp_idx]
         lf = np.arange(filt_len - np.floor(filt_len / 2), filt_len)
         rf = np.arange(np.ceil(filt_len / 2))
-        filt_idx = np.concatenate((lf, rf)).astype(np.int)
+        filt_idx = np.concatenate((lf, rf)).astype(np.int64)
         m = multiscale[ii][filt_idx]
         out[win_range] = out[win_range] + m * temp
 
     nyq_bin = int(np.floor(seq_len // 2) + 1)
-    out_idx = np.arange( nyq_bin - np.abs(1 - seq_len % 2) - 1, 0, -1).astype(np.int)
+    out_idx = np.arange( nyq_bin - np.abs(1 - seq_len % 2) - 1, 0, -1).astype(np.int64)
     out[nyq_bin:] = np.conj(out[out_idx])
     t_out = np.real(np.fft.ifft(out)).astype(np.float64)
     return t_out
