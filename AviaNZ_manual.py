@@ -1287,14 +1287,14 @@ class AviaNZ(QMainWindow):
         # Create menu items and mark them
         # (we assume that bat list is always short enough to fit in one column)
         for item in self.batList:
-            item_parsed, cert, call = self.parse_short_list_item(item,unsure)
+            species, cert, call = self.parse_short_list_item(item,unsure)
 
-            if not call is None:
-                bird = self.menuBirdList.addAction(item_parsed)
-                bird.setCheckable(True)
-                if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
-                    bird.setChecked(True)
-                self.menuBirdList.addAction(bird)
+            bat = self.menuBirdList.addAction(species)
+            bat.setCheckable(True)
+            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
+                bat.setChecked(True)
+            bat.triggered.connect(partial(self.batSelected, species))
+            self.menuBirdList.addAction(bat)
     
     def makeShortBirdLists(self,unsure=False):        
         # reorder
@@ -1344,7 +1344,6 @@ class AviaNZ(QMainWindow):
                 bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
 
     def makeFullBirdListByLetter(self,unsure=False):
-        print("known Calls:",self.knownCalls)
         allBirdTree = {}
         if self.longBirdList is not None:
             for bird in self.longBirdList:
@@ -1401,6 +1400,8 @@ class AviaNZ(QMainWindow):
         This is called a lot because the order of birds in the list changes since the last choice is moved to the top of the list.
         When calltype-level display is on, fills the list with possible call types from a filter (if available)
         """
+        print("running FILLBIRDLIST",self.batmode)
+
         self.menuBirdList.clear()
         self.menuBirdOther.clear()
         self.menuBirdAll.clear()
@@ -3780,6 +3781,9 @@ class AviaNZ(QMainWindow):
         self.updateText()
         self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
+    
+    def batSelected(self,species):
+        self.birdSelectedMenu(species)
     
     def birdAndCallSelected(self,species,call):
         self.birdSelectedMenu(species)
