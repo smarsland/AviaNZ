@@ -92,7 +92,7 @@ class Segment(list):
         if len(self.keys)>len(set(self.keys)):
             print("ERROR: non-unique species/certainty combo detected")
             return
-
+    
     def hasLabel(self, species, certainty):
         """ Check if label identified by species-cert combo is present in this segment. """
         return (species, certainty) in self.keys
@@ -127,6 +127,16 @@ class Segment(list):
             if lab["species"]==species and lab["certainty"]==certainty:
                 lab.update({"filter": "M", "calltype":calltype})
         print(lab)
+    
+    def getKeysWithCalltypes(self):
+        return [(lab['species'], lab['certainty'], lab['calltype'] if 'calltype' in lab else None) for lab in self[4]]
+    
+    def getCalltype(self,species,certainty): # a species can only have 1 calltype in a segment
+        for lab in self[4]:
+            if lab["species"]==species and lab["certainty"]==certainty:
+                if 'calltype' in lab:
+                    return lab['calltype']
+        return None
 
     ### --- couple functions to process all labels for a given species ---
 

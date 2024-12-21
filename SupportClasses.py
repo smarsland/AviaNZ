@@ -211,7 +211,8 @@ class ConfigLoader(object):
                 if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
                     raise ValueError("Filter JSON format wrong, skipping")
                 # note that method may be empty for backwards compatibility:
-                if "method" in filt and filt["method"] not in ["wv", "chp"]:
+                if "method" in filt and (filt["method"] not in ["wv", "chp"] and filt["method"] is not None):
+                    print(type(filt["method"]),filt["method"])
                     raise ValueError("Filter JSON format wrong (unrecognised method), skipping")
                 for subfilt in filt["Filters"]:
                     if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
