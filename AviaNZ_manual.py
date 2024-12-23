@@ -152,7 +152,7 @@ class AviaNZ(QMainWindow):
                 self.knownCalls[filt["species"]]=[]
             
             for subf in filt["Filters"]:
-                if not subf["calltype"] in self.knownCalls[filt["species"]]:
+                if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
                     self.knownCalls[filt["species"]].append(subf["calltype"])
 
         # avoid comma/point problem in number parsing
@@ -1300,7 +1300,7 @@ class AviaNZ(QMainWindow):
         # reorder
         if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id>-1:
             for species,certainty,calltype in self.segments[self.box1id].getKeysWithCalltypes():
-                label = "" if calltype is None else species+" ["+calltype+"]"
+                label = species if calltype is None else species+" ["+calltype+"]"
                 # Either move the label to the top of the list, or delete the last
                 if label in self.shortBirdList:
                     self.shortBirdList.remove(label)
@@ -1308,89 +1308,91 @@ class AviaNZ(QMainWindow):
                     del self.shortBirdList[-1]
                 self.shortBirdList.insert(0,label)
         
-        for i in range(len(self.shortBirdList)):
-            if re.search(r' \[(.*?)\]$',self.shortBirdList[i]) is None:
-                self.shortBirdList[i]=""
+        self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""] # just put the blanks at the end
 
         # Create menu items
         for item in self.shortBirdList[:15]:
-            species, cert, calltype = self.parse_short_list_item(item,unsure)
-            if not calltype is None:
-                label = species+" ["+calltype+"]"
+            if not item=="":
+                species, cert, calltype = self.parse_short_list_item(item,unsure)
+                label = species if calltype is None else species+" ["+calltype+"]"
                 bird = self.menuBirdList.addAction(label)
                 bird.setCheckable(True)
                 if calltype is None:
                     if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
-                        if self.segments[self.box1id].getCalltype(species, cert) is None: # we don't want to mark the species in the menu if it has a calltype.
+                        if self.segments[self.box1id].getCalltype(species, cert) is None: # we only want to mark the species in the menu if doesn't have a calltype.
                             bird.setChecked(True)
+                        bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any"))
                 else:
                     if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
                         bird.setChecked(True)
-                bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
+                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
         
         for item in self.shortBirdList[15:]:
-            species, cert, calltype = self.parse_short_list_item(item,unsure)
-            if not calltype is None:
-                label = species+" ["+calltype+"]"
+            if not item=="":
+                species, cert, calltype = self.parse_short_list_item(item,unsure)
+                label = species if calltype is None else species+" ["+calltype+"]"
                 bird = self.menuBirdOther.addAction(label)
                 bird.setCheckable(True)
                 if calltype is None:
                     if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
                         if self.segments[self.box1id].getCalltype(species, cert) is None: # we don't want to mark the species in the menu if it has a calltype.
                             bird.setChecked(True)
+                        bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any"))
                 else:
                     if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
                         bird.setChecked(True)
-                bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
+                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
 
     def makeFullBirdListByLetter(self,unsure=False):
         allBirdTree = {}
         if self.longBirdList is not None:
-            for bird in self.longBirdList:
+            for longBirdEntry in self.longBirdList:
                 # Add ? marks if Ctrl menu is called
-                if unsure and bird != "Don't Know" and bird != "Other":
-                    bird = bird+'?'
+                if unsure and longBirdEntry != "Don't Know" and longBirdEntry != "Other":
+                    longBirdEntry = longBirdEntry+'?'
 
-                if '>' in bird:
-                    genus,species = bird.split('>')
+                if '>' in longBirdEntry:
+                    speciesLevel1,speciesLevel2 = longBirdEntry.split('>')
                 else:
-                    genus,species = bird, ""
+                    speciesLevel1,speciesLevel2 = longBirdEntry, ""
                 
-                fullLabel = genus if species=="" else genus + " ("+species+")"
-                calls = [] if fullLabel not in self.knownCalls else self.knownCalls[fullLabel].copy()
+                species = speciesLevel1 if speciesLevel2=="" else speciesLevel1 + " ("+speciesLevel2+")"
+                calls = ["Any"]
+                if species in self.knownCalls:
+                    calls+=self.knownCalls[species].copy()
                 calls.append("Other")
 
-                letter = genus[0].upper()
+                firstLetter = speciesLevel1[0].upper()
+
+                if not firstLetter in allBirdTree:
+                    allBirdTree[firstLetter] = {}
                 
-                if not letter in allBirdTree:
-                    allBirdTree[letter] = {}
+                if not speciesLevel1 in allBirdTree[firstLetter]:
+                    allBirdTree[firstLetter][speciesLevel1] = {}
                 
-                if not genus in allBirdTree[letter]:
-                    allBirdTree[letter][genus] = {}
-                
-                if species == "":
-                    allBirdTree[letter][genus] = {None: calls}
+                if speciesLevel2 == "":
+                    allBirdTree[firstLetter][speciesLevel1] = {None: calls}
                 else:
-                    if not species in allBirdTree[letter][genus]:
-                        allBirdTree[letter][genus][species] = calls
+                    if not speciesLevel2 in allBirdTree[firstLetter][speciesLevel1]:
+                        allBirdTree[firstLetter][speciesLevel1][speciesLevel2] = calls
 
         for letter in allBirdTree:
             letterMenu = QMenu(letter,self.menuBirdAll)
-            for genus in allBirdTree[letter]:
-                genusMenu = QMenu(genus,letterMenu)
-                if None in allBirdTree[letter][genus]: # no species, go straight to call
-                    for call in allBirdTree[letter][genus][None]:
-                        callAction = genusMenu.addAction(call)
-                        callAction.triggered.connect(partial(self.birdAndCallSelected, genus, call))
+            for speciesLevel1 in allBirdTree[letter]:
+                speciesLevel1Menu = QMenu(speciesLevel1,letterMenu)
+                if None in allBirdTree[letter][speciesLevel1]: # no species, go straight to call
+                    for call in allBirdTree[letter][speciesLevel1][None]:
+                        callAction = speciesLevel1Menu.addAction(call)
+                        callAction.triggered.connect(partial(self.birdAndCallSelected, speciesLevel1, call))
                 else:
-                    for species in allBirdTree[letter][genus]:
-                        speciesMenu = QMenu(species,genusMenu)
-                        for call in allBirdTree[letter][genus][species]:
-                            callAction = speciesMenu.addAction(call)
-                            combinedLabel = genus + " (" + species + ")"
-                            callAction.triggered.connect(partial(self.birdAndCallSelected, combinedLabel, call))
-                        genusMenu.addMenu(speciesMenu)
-                letterMenu.addMenu(genusMenu)
+                    for speciesLevel2 in allBirdTree[letter][speciesLevel1]:
+                        species = speciesLevel1 + " (" + speciesLevel2 + ")"
+                        speciesLevel2Menu = QMenu(speciesLevel2,speciesLevel1Menu)
+                        for call in allBirdTree[letter][speciesLevel1][speciesLevel2]:
+                            callAction = speciesLevel2Menu.addAction(call)
+                            callAction.triggered.connect(partial(self.birdAndCallSelected, species, call))
+                        speciesLevel1Menu.addMenu(speciesLevel2Menu)
+                letterMenu.addMenu(speciesLevel1Menu)
             self.menuBirdAll.addMenu(letterMenu)
         
     def fillBirdList(self,unsure=False):
@@ -3686,7 +3688,7 @@ class AviaNZ(QMainWindow):
         """ Simplified version of the above for dealing with calltype selection
         from the popup context menu. """
 
-        if callname is None or callname=="":
+        if callname is None or callname=="" or callname=="Any":
             return
 
         if callname == 'Other': 
