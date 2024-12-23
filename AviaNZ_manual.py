@@ -1321,7 +1321,7 @@ class AviaNZ(QMainWindow):
                     if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
                         if self.segments[self.box1id].getCalltype(species, cert) is None: # we only want to mark the species in the menu if doesn't have a calltype.
                             bird.setChecked(True)
-                        bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any"))
+                    bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any"))
                 else:
                     if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
                         bird.setChecked(True)
@@ -1402,8 +1402,6 @@ class AviaNZ(QMainWindow):
         This is called a lot because the order of birds in the list changes since the last choice is moved to the top of the list.
         When calltype-level display is on, fills the list with possible call types from a filter (if available)
         """
-        print("running FILLBIRDLIST",self.batmode)
-
         self.menuBirdList.clear()
         self.menuBirdOther.clear()
         self.menuBirdAll.clear()
@@ -3543,7 +3541,7 @@ class AviaNZ(QMainWindow):
                 # Making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
 
-    def birdSelectedMenu(self,birditem):
+    def birdSelectedMenu(self,birditem, callname):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Copes with two level names (with a > in).
@@ -3623,6 +3621,8 @@ class AviaNZ(QMainWindow):
             species = birdname
             certainty = 0
             self.prevBoxCol = self.ColourNone
+            for action in self.menuBirdOther.actions():
+                action.setChecked(False)
         elif birdname[-1] == '?':
             species = birdname[:-1]
             certainty = 50
@@ -3634,11 +3634,36 @@ class AviaNZ(QMainWindow):
 
         workingSeg = self.segments[self.box1id]
         self.refreshOverviewWith(workingSeg, delete=True)
-
-        # Toggle the actual label in the segment list
+        
+        # Toggle the actual label in the segment list. 
+        addLabel = True
         if workingSeg.hasLabel(species, certainty):
+            segCall = workingSeg.getCalltype(species,certainty)
+
+            if segCall is None:
+                segCall = "Any"
+
+            if segCall=="Any":
+                currentLongLabel = species
+            else:
+                currentLongLabel = species+" ["+segCall+"]"
+            
+            if segCall==callname: # if we are just switching off the old label, then don't add back
+               addLabel = False
+            else:
+                # go through every short list and untick the ones with this label
+                for action in self.menuBirdList.actions():
+                    actionText = action.text()
+                    if actionText==currentLongLabel:
+                        action.setChecked(False)
+                for action in self.menuBirdOther.actions():
+                    actionText = action.text()
+                    if actionText==currentLongLabel:
+                        action.setChecked(False)
+
             workingSeg.removeLabel(species, certainty)
-        else:
+        
+        if addLabel:
             # in case the only label so far was Don't Know,
             # change it to the new bird (to not waste time unticking it)
             if workingSeg.keys == [("Don't Know", 0)]:
@@ -3788,12 +3813,11 @@ class AviaNZ(QMainWindow):
         self.birdSelectedMenu(species)
     
     def birdAndCallSelected(self,species,call):
-        self.birdSelectedMenu(species)
+        self.birdSelectedMenu(species,call)
         if call is None:
             raise ValueError("call has not been provided!")
         self.callSelectedMenu(species,call)
 
-        print("self.multipleBirds",self.multipleBirds)
         if not self.multipleBirds:
             self.menuBirdList.hide()
 
