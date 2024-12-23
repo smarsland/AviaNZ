@@ -183,8 +183,6 @@ class AviaNZ(QMainWindow):
         self.startedInAmpl = False
         self.startTime = 0
         self.segmentsToSave = False
-        self.viewCallType = False
-        self.CallTypeMenu = False
         self.batmode = False
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
@@ -1269,19 +1267,24 @@ class AviaNZ(QMainWindow):
                 genus = beforeCallSplit[0]
         
         if species is None:
-            mergedName = genus
+            mergedSpeciesName = genus
         else:
-            mergedName = genus + " (" + species + ")"
+            mergedSpeciesName = genus + " (" + species + ")"
+        
+        if call is None:
+            mergedFullName = mergedSpeciesName
+        else:
+            mergedFullName = mergedSpeciesName + " ["+call+"]"
 
         if unsure and item != "Don't Know":
             cert = 50
-            mergedName = mergedName+'?'
+            mergedFullName = mergedFullName+'?'
         elif item == "Don't Know":
             cert = 0
         else:
             cert = 100
 
-        return mergedName, cert, call
+        return mergedSpeciesName, call, mergedFullName, cert
     
     def makeBatLists(self,unsure=False):
         # There aren't many options, but anyway...
@@ -1297,7 +1300,7 @@ class AviaNZ(QMainWindow):
         # Create menu items and mark them
         # (we assume that bat list is always short enough to fit in one column)
         for item in self.batList:
-            species, cert, call = self.parse_short_list_item(item,unsure)
+            species, call, fullLabel, cert = self.parse_short_list_item(item,unsure)
 
             bat = self.menuBirdList.addAction(species)
             bat.setCheckable(True)
@@ -1306,7 +1309,7 @@ class AviaNZ(QMainWindow):
             bat.triggered.connect(partial(self.batSelected, species))
             self.menuBirdList.addAction(bat)
     
-    def makeShortBirdLists(self,unsure=False):        
+    def makeShortBirdLists(self,unsure=False):   
         # reorder
         if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id>-1:
             for species,certainty,calltype in self.segments[self.box1id].getKeysWithCalltypes():
@@ -1325,44 +1328,39 @@ class AviaNZ(QMainWindow):
         # Create menu items
         for item in self.shortBirdList[:15]:
             if not item=="" and not item[-6:]==" [Any]":
-                species, cert, calltype = self.parse_short_list_item(item,unsure)
-                label = species if calltype is None else species+" ["+calltype+"]"
+                species, calltype, label, cert = self.parse_short_list_item(item,unsure)
                 bird = self.menuBirdList.addAction(label)
                 bird.setCheckable(True)
                 if calltype is None:
                     if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
                         if self.segments[self.box1id].getCalltype(species, cert) is None: # we only want to mark the species in the menu if doesn't have a calltype.
                             bird.setChecked(True)
-                    bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any"))
+                    bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any", unsure))
                 else:
                     if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
                         bird.setChecked(True)
-                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
+                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
         
         for item in self.shortBirdList[15:]:
             if not item=="" and not item[-6:]==" [Any]":
-                species, cert, calltype = self.parse_short_list_item(item,unsure)
-                label = species if calltype is None else species+" ["+calltype+"]"
+                species, calltype, label, cert = self.parse_short_list_item(item,unsure)
                 bird = self.menuBirdOther.addAction(label)
                 bird.setCheckable(True)
                 if calltype is None:
                     if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
                         if self.segments[self.box1id].getCalltype(species, cert) is None: # we don't want to mark the species in the menu if it has a calltype.
                             bird.setChecked(True)
-                        bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any"))
+                        bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any", unsure))
                 else:
                     if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
                         bird.setChecked(True)
-                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
-
+                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
+    
     def makeFullBirdListByLetter(self,unsure=False):
         allBirdTree = {}
         if self.longBirdList is not None:
             for longBirdEntry in self.longBirdList:
                 # Add ? marks if Ctrl menu is called
-                if unsure and longBirdEntry != "Don't Know" and longBirdEntry != "Other":
-                    longBirdEntry = longBirdEntry+'?'
-
                 if '>' in longBirdEntry:
                     speciesLevel1,speciesLevel2 = longBirdEntry.split('>')
                 else:
@@ -1394,15 +1392,17 @@ class AviaNZ(QMainWindow):
                 speciesLevel1Menu = QMenu(speciesLevel1,letterMenu)
                 if None in allBirdTree[letter][speciesLevel1]: # no species, go straight to call
                     for call in allBirdTree[letter][speciesLevel1][None]:
-                        callAction = speciesLevel1Menu.addAction(call)
-                        callAction.triggered.connect(partial(self.birdAndCallSelected, speciesLevel1, call))
+                        label = call if not unsure else call+'?'
+                        callAction = speciesLevel1Menu.addAction(label)
+                        callAction.triggered.connect(partial(self.birdAndCallSelected, speciesLevel1, call, unsure))
                 else:
                     for speciesLevel2 in allBirdTree[letter][speciesLevel1]:
                         species = speciesLevel1 + " (" + speciesLevel2 + ")"
                         speciesLevel2Menu = QMenu(speciesLevel2,speciesLevel1Menu)
                         for call in allBirdTree[letter][speciesLevel1][speciesLevel2]:
-                            callAction = speciesLevel2Menu.addAction(call)
-                            callAction.triggered.connect(partial(self.birdAndCallSelected, species, call))
+                            label = call if not unsure else call+'?'
+                            callAction = speciesLevel2Menu.addAction(label)
+                            callAction.triggered.connect(partial(self.birdAndCallSelected, species, call, unsure))
                         speciesLevel1Menu.addMenu(speciesLevel2Menu)
                 letterMenu.addMenu(speciesLevel1Menu)
             self.menuBirdAll.addMenu(letterMenu)
@@ -1421,9 +1421,9 @@ class AviaNZ(QMainWindow):
         if self.batmode:
             self.makeBatLists()
         else:
-            self.makeShortBirdLists()
+            self.makeShortBirdLists(unsure)
             self.menuBirdList.addMenu(self.menuBirdOther)
-            self.makeFullBirdListByLetter()
+            self.makeFullBirdListByLetter(unsure)
             self.menuBirdOther.addMenu(self.menuBirdAll)
 
     def fillFileList(self,dir,fileName):
@@ -3213,14 +3213,9 @@ class AviaNZ(QMainWindow):
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                    if self.viewCallType is False:
-                        self.viewCallType = True
-                        # Calltype context menu
-                        self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                        self.viewCallType = False
-                    else:
-                        self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    # Calltype context menu
+                    self.fillBirdList()
+                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -3303,14 +3298,9 @@ class AviaNZ(QMainWindow):
                                 # TODO: SRM: Check
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                                if self.viewCallType is False:
-                                    self.viewCallType = True
-                                    # Calltype context menu
-                                    self.fillBirdList()
-                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                                    self.viewCallType = False
-                                else:
-                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                                # Calltype context menu
+                                self.fillBirdList()
+                                self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
@@ -3409,14 +3399,9 @@ class AviaNZ(QMainWindow):
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                    if self.viewCallType is False:
-                        self.viewCallType = True
-                        # Calltype context menu
-                        self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                        self.viewCallType = False
-                    else:
-                        self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    # Calltype context menu
+                    self.fillBirdList()
+                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
@@ -3509,14 +3494,8 @@ class AviaNZ(QMainWindow):
                             elif modifiers == Qt.KeyboardModifier.MetaModifier:
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                                if self.viewCallType is False:
-                                    self.viewCallType = True
-                                    self.fillBirdList()
-                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                                    self.viewCallType = False
-                                else:
-                                    self.fillBirdList()
-                                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                                self.fillBirdList()
+                                self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
                                 self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
@@ -3553,7 +3532,7 @@ class AviaNZ(QMainWindow):
                 # Making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
 
-    def birdSelectedMenu(self,birditem, callname):
+    def birdSelectedMenu(self,birditem, callname, unsure=False):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Copes with two level names (with a > in).
@@ -3639,8 +3618,8 @@ class AviaNZ(QMainWindow):
             for action in self.menuBirdOther.actions():
                 if not action.text()=="Don't Know":
                     action.setChecked(False)
-        elif birdname[-1] == '?':
-            species = birdname[:-1]
+        elif unsure:
+            species = birdname
             certainty = 50
             self.prevBoxCol = self.ColourPossible
         else:
@@ -3667,6 +3646,9 @@ class AviaNZ(QMainWindow):
             else:
                 currentLongLabel = species+" ["+segCall+"]"
             
+            if unsure:
+                currentLongLabel = currentLongLabel +'?'
+
             if segCall==callname: # if we are just switching off the old label, then don't add back
                addLabel = False
             else:
@@ -3681,7 +3663,7 @@ class AviaNZ(QMainWindow):
                         action.setChecked(False)
 
             workingSeg.removeLabel(species, certainty)
-        
+
         if addLabel:
             # in case the only label so far was Don't Know,
             # change it to the new bird (to not waste time unticking it)
@@ -3728,7 +3710,7 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
-    def callSelectedMenu(self, species, callname):
+    def callSelectedMenu(self, species, callname, unsure):
         """ Simplified version of the above for dealing with calltype selection
         from the popup context menu. """
 
@@ -3810,20 +3792,22 @@ class AviaNZ(QMainWindow):
             
         workingSeg = self.segments[self.box1id]
 
+        certainty = 50 if unsure else 100
+
         # TODO: SRM: Might not be first label
         #for lab in workingSeg[4]:
             #if lab["species"] == species:
                 #lab["calltype"] = callname
         #workingSeg.addLabel(species, 101, filter="M", calltype=callname)
         if 'calltype' not in workingSeg[4]:
-            workingSeg.extendLabel(species,100,callname)
+            workingSeg.extendLabel(species,certainty,callname)
         else:
             for lab in workingSeg[4]:
                 if lab["species"]==species:
-                    workingSeg[4][lab].update({"filter": "M", "certainty": 100, "calltype": callname})
+                    workingSeg[4][lab].update({"filter": "M", "certainty": certainty, "calltype": callname})
 
         # Store the species in case the user wants it for the next segment
-        self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M", "calltype": callname}]
+        self.lastSpecies = [{"species": species, "certainty": certainty, "filter": "M", "calltype": callname}]
         self.updateText()
         self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
@@ -3831,11 +3815,11 @@ class AviaNZ(QMainWindow):
     def batSelected(self,species):
         self.birdSelectedMenu(species)
     
-    def birdAndCallSelected(self,species,call):
-        self.birdSelectedMenu(species,call)
+    def birdAndCallSelected(self,species,call, unsure=False):
+        self.birdSelectedMenu(species,call,unsure)
         if call is None:
             raise ValueError("call has not been provided!")
-        self.callSelectedMenu(species,call)
+        self.callSelectedMenu(species,call,unsure)
 
         if not self.multipleBirds:
             self.menuBirdList.hide()
@@ -3848,23 +3832,14 @@ class AviaNZ(QMainWindow):
             segID = self.box1id
         seg = self.segments[segID]
 
-        if not self.viewCallType:
-            # produce text from list of dicts
-            text = []
-            for lab in seg[4]:
-                if lab["certainty"] == 50:
-                    text.append(lab["species"] + '?')
-                else:
-                    text.append(lab["species"])
-            text = ','.join(text)
-        else:
-            text = []
-            for lab in seg[4]:
-                if "calltype" in lab:
-                    text.append(lab["calltype"])
-                else:
-                    text.append("(Other)")
-            text = ','.join(text)
+        # produce text from list of dicts
+        text = []
+        for lab in seg[4]:
+            if lab["certainty"] == 50:
+                text.append(lab["species"] + '?')
+            else:
+                text.append(lab["species"])
+        text = ','.join(text)
 
         # update the label
         self.listLabels[segID].setText(text,'k')
