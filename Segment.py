@@ -226,6 +226,10 @@ class Segment(list):
         if not deleted:
             print("ERROR: could not find species-certainty combo to remove:", species, certainty)
             return
+    
+    def clearLabels(self):
+        self[4]=[]
+        self.keys =[]
 
     def infoString(self):
         """ Returns a nicely-formatted string of this segment's info."""

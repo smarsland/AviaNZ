@@ -154,6 +154,16 @@ class AviaNZ(QMainWindow):
             for subf in filt["Filters"]:
                 if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
                     self.knownCalls[filt["species"]].append(subf["calltype"])
+        
+        for shortBirdItem in self.shortBirdList:
+            searchForCall = re.search(r' \[(.*?)\]$',shortBirdItem)
+            call = None if searchForCall is None else searchForCall.group(1)
+            species = shortBirdItem if call is None else shortBirdItem.split(" ["+call+"]")[0]
+            if not call is None:
+                if not call=="Any" and not call=="Other":
+                    if not species in self.knownCalls:
+                        self.knownCalls[species]=[]
+                    self.knownCalls[species].append(call)
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.Language.English,QLocale.Country.NewZealand))
@@ -1308,11 +1318,13 @@ class AviaNZ(QMainWindow):
                     del self.shortBirdList[-1]
                 self.shortBirdList.insert(0,label)
         
+        # just some sorting, in case something is odd.
         self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""] # just put the blanks at the end
+        self.shortBirdList = ["Don't Know"] + [x for x in self.shortBirdList if x != "Don't Know"][:29]
 
         # Create menu items
         for item in self.shortBirdList[:15]:
-            if not item=="":
+            if not item=="" and not item[-6:]==" [Any]":
                 species, cert, calltype = self.parse_short_list_item(item,unsure)
                 label = species if calltype is None else species+" ["+calltype+"]"
                 bird = self.menuBirdList.addAction(label)
@@ -1328,7 +1340,7 @@ class AviaNZ(QMainWindow):
                     bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
         
         for item in self.shortBirdList[15:]:
-            if not item=="":
+            if not item=="" and not item[-6:]==" [Any]":
                 species, cert, calltype = self.parse_short_list_item(item,unsure)
                 label = species if calltype is None else species+" ["+calltype+"]"
                 bird = self.menuBirdOther.addAction(label)
@@ -3621,8 +3633,12 @@ class AviaNZ(QMainWindow):
             species = birdname
             certainty = 0
             self.prevBoxCol = self.ColourNone
+            for action in self.menuBirdList.actions():
+                if not action.text()=="Don't Know":
+                    action.setChecked(False)
             for action in self.menuBirdOther.actions():
-                action.setChecked(False)
+                if not action.text()=="Don't Know":
+                    action.setChecked(False)
         elif birdname[-1] == '?':
             species = birdname[:-1]
             certainty = 50
@@ -3634,6 +3650,9 @@ class AviaNZ(QMainWindow):
 
         workingSeg = self.segments[self.box1id]
         self.refreshOverviewWith(workingSeg, delete=True)
+
+        if birdname=="Don't Know":
+            workingSeg.clearLabels()
         
         # Toggle the actual label in the segment list. 
         addLabel = True
