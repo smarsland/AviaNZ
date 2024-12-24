@@ -271,7 +271,7 @@ class Clustering:
 
         return som
 
-    def cluster(self, dataset, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
+    def cluster(self, dataset, dirname, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
         """
         Cluster segments during training to make sub-filters.
 
