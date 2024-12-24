@@ -232,7 +232,7 @@ class Clustering:
             Usecase: many clusters, possibly connectivity constraints, non Euclidean distances.
         """
         model = AgglomerativeClustering(n_clusters=n_clusters, distance_threshold=distance_threshold, linkage=linkage,
-                                        affinity=affinity, compute_full_tree=compute_full_tree)
+                                        metric=affinity, compute_full_tree=compute_full_tree)
         d = pairwise_distances(self.features, self.features, metric=self.custom_dist)
         model.fit(d)
         # model.fit(self.features)
@@ -270,7 +270,7 @@ class Clustering:
 
         return som
 
-    def cluster(self, dataset, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
+    def cluster(self, dataset, dirname, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
         """
         Cluster segments during training to make sub-filters.
 

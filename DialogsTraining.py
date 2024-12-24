@@ -278,7 +278,7 @@ class BuildRecAdvWizard(QWizard):
             with pg.BusyCursor():
                 print("Processing. Please wait...")
                 # Check if the annotations come with call type labels, if so skip auto clustering
-                self.CTannotations()
+                self.hasCTannotations = True if len(self.CTannotations())>0 else False
                 if self.hasCTannotations:
                     # self.segments: [parent_audio_file, [segment], class_label]
                     self.segments, self.nclasses, self.duration = self.getClustersGT()
@@ -289,7 +289,9 @@ class BuildRecAdvWizard(QWizard):
                     # self.nclasses: number of class_labels
                     # duration: median length of segments
                     self.cluster = Clustering.Clustering([], [], 5)
-                    self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                    f1,f2 = self.cluster.getFrqRange(self.field("trainDir"),self.field("species"),self.field("fs"))
+                    dataset = self.cluster.findSyllables(self.field("trainDir"),self.field("species"),0.2,self.field("fs"),f1,f2,False)
+                    self.segments, self.nclasses, self.duration = self.cluster.cluster(dataset, self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
                     # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
                     # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
                     #                                                                              self.field("species"),
@@ -348,12 +350,12 @@ class BuildRecAdvWizard(QWizard):
                     if file[-5:].lower() == '.data':
                         listOfDataFiles.append(os.path.join(root, file))
 
+            calltypes = {}
             for file in listOfDataFiles:
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(file)
                 SpSegs = segments.getSpecies(self.field("species"))
-                calltypes = {}
                 for segix in SpSegs:
                     seg = segments[segix]
                     for label in seg[4]:
