@@ -885,6 +885,7 @@ class CompareCallsDialog(QDialog):
 
         wav1 = currseg1.wavname
         wav2 = currseg2.wavname
+        print("Showing:", wav1, wav2)
 
         wav1start = currseg1[0]
         wav2start = currseg2[0]
