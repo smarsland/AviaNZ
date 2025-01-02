@@ -231,7 +231,8 @@ class Clustering:
             clusters are successively merged together.
             Usecase: many clusters, possibly connectivity constraints, non Euclidean distances.
         """
-        model = AgglomerativeClustering(n_clusters=n_clusters, distance_threshold=distance_threshold, linkage=linkage,
+        min_clusters = min(n_clusters, len(self.features))
+        model = AgglomerativeClustering(n_clusters=min_clusters, distance_threshold=distance_threshold, linkage=linkage,
                                         metric=affinity, compute_full_tree=compute_full_tree)
         d = pairwise_distances(self.features, self.features, metric=self.custom_dist)
         model.fit(d)
