@@ -45,6 +45,8 @@ import os
 import io
 import Spectrogram
 
+import pyflac
+
 import threading
 
 class TimeAxisHour(pg.AxisItem):
