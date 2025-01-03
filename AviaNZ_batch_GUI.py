@@ -821,6 +821,11 @@ class AviaNZ_batchWindow(QMainWindow):
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         return(0)
+    
+    def closeEvent(self, event=None):
+        """ Catch the user closing the window by clicking the Close button or otherwise."""
+        print("Quitting")
+        QApplication.exit(0)
 
 class BatchProcessWorker(AviaNZ_batchProcess, QObject):
     # adds QObject functionality to standard batchProc,
