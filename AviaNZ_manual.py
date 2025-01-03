@@ -82,6 +82,10 @@ import time
 import openpyxl
 # TODO: Check this
 from lxml import etree as ET
+
+import pyflac
+import tempfile
+
 #import xml.etree.ElementTree as ET
 
 pg.setConfigOption('useNumba', True)
@@ -1724,8 +1728,11 @@ class AviaNZ(QMainWindow):
                 if self.filename.lower().endswith('.wav'):
                     self.sp.readWav(self.filename, lenRead, self.startRead)
                 elif self.filename.lower().endswith('.flac'):
-                    self.sp.readFlac(self.filename)
-                    self.sp.readWav('/home/marslast/output.wav',lenRead,self.startRead)
+                    with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
+                        temp_wav_path = temp_wav.name
+                        pyf = pyflac.FileDecoder(self.filename, temp_wav_path)
+                        pyf.process()
+                        self.sp.readWav(temp_wav_path,lenRead,self.startRead)
 
                 # resample to 16K if needed (Spectrogram will determine)
                 if self.cheatsheet:
@@ -1749,7 +1756,7 @@ class AviaNZ(QMainWindow):
 
             if name is not None:  # i.e. starting a new file, not next section
                 if self.datalength != self.sp.fileLength:
-                    self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalength))
+                    self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalengthSec))
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(True)
                     self.movePrev5minsKey.setEnabled(False)
