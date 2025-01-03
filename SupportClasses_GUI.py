@@ -1416,7 +1416,7 @@ class LightedFileList(QListWidget):
 
         with pg.BusyCursor():
             # Read contents of current dir
-            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDot | QDir.Filter.Files,sort=QDir.SortFlag.DirsFirst)
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp','*.flac'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDot | QDir.Filter.Files,sort=QDir.SortFlag.DirsFirst)
             self.soundDir = soundDir
 
             for file in self.listOfFiles:
@@ -1433,16 +1433,20 @@ class LightedFileList(QListWidget):
                         # count wavs in this dir:
                         numbmps = 0
                         numwavs = 0
+                        numflacs = 0
                         for root, dirs, files in os.walk(file.filePath()):
                             numwavs += sum(f.lower().endswith('.wav') for f in files)
                             numbmps += sum(f.lower().endswith('.bmp') for f in files)
+                            numflacs += sum(f.lower().endswith('.flac') for f in files)
                         # keep these strings as short as possible
                         if numbmps==0:
                             item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
                         elif numwavs==0:
                             item.setText("%s/\t\t(%d bmp files)" % (file.fileName(), numbmps))
+                        elif numflacs==0:
+                            item.setText("%s/\t\t(%d flac files)" % (file.fileName(), numflacs))
                         else:
-                            item.setText("%s/\t\t(%d wav, %d bmp files)" % (file.fileName(), numwavs, numbmps))
+                            item.setText("%s/\t\t(%d wav, %d bmp, %d flac files)" % (file.fileName(), numwavs, numbmps, numflacs))
                     else:
                         item.setText(file.fileName() + "/")
 
@@ -1452,7 +1456,7 @@ class LightedFileList(QListWidget):
                     for root, dirs, files in os.walk(file.filePath()):
                         for filename in files:
                             filenamef = os.path.join(root, filename)
-                            if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp'):
+                            if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp') or filename.lower().endswith('.flac'):
                                 if readFmt:
                                     if filename.lower().endswith('.wav'):
                                         try:
@@ -1462,6 +1466,13 @@ class LightedFileList(QListWidget):
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
+                                            print(e)
+                                    elif filename.lower().endswith('.flac'):
+                                        try:
+                                            samplerate = pyflac.FLAC(filenamef).info.sample_rate
+                                            self.fsList.add(samplerate)
+                                        except Exception as e:
+                                            print("Warning: could not parse format of FLAC file", filenamef)
                                             print(e)
                                     else:
                                         # For bitmaps, using hardcoded samplerate as there's no readFmt
@@ -1495,16 +1506,23 @@ class LightedFileList(QListWidget):
                     self.paintItem(item, fullname+'.data')
                     # format collection only implemented for WAVs currently
                     if readFmt:
-                        if file.fileName().lower().endswith('.wav'):
+                        if filename.lower().endswith('.wav'):
                             try:
-                                #samplerate = wavio.readFmt(fullname)[0]
-                                wavobj = wavio.read(fullname, 0, 0)
+                                #samplerate = wavio.readFmt(filenamef)[0]
+                                wavobj = wavio.read(filenamef, 0, 0)
                                 samplerate = wavobj.rate
                                 self.fsList.add(samplerate)
                             except Exception as e:
-                                print("Warning: could not parse format of WAV file", fullname)
+                                print("Warning: could not parse format of WAV file", filenamef)
                                 print(e)
-                        if file.fileName().lower().endswith('.bmp'):
+                        elif filename.lower().endswith('.flac'):
+                            try:
+                                samplerate = pyflac.FLAC(filenamef).info.sample_rate
+                                self.fsList.add(samplerate)
+                            except Exception as e:
+                                print("Warning: could not parse format of FLAC file", filenamef)
+                                print(e)
+                        else:
                             # For bitmaps, using hardcoded samplerate as there's no readFmt
                             self.fsList.add(176000)
 
