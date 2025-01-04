@@ -39,9 +39,19 @@
 # 11. If a .data file is empty, delete, restart -- check
 # 12. Replace call type selection with dropdown from species
 # 13. Ruth things
-# 14. Is librosa used?
-# 15. Tidy up the flac loader (correct place, check for space) and add a converter
 # 16. Check the splitting with data files properly
+
+# SHOULD BE DONE:
+# 14. Is librosa used? - NO. 
+#     There are two places where it might get used. 
+#     It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
+#     DialogsTraining.WPageCluster.
+#     It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
+#     which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
+#     the algorithm is never changed.
+# 15. Tidy up the flac loader (correct place, check for space) and add a converter - Now flac files are loaded into a wav in temp storage.
+#     Still need to check space
+
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
