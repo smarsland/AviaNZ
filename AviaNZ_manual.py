@@ -1000,10 +1000,11 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
 
-        self.floorSlider = QSlider(Qt.Orientation.Horizontal)
+        self.floorSlider = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
         self.floorSlider.setMinimum(0)
         self.floorSlider.setMaximum(100)
-        self.floorSlider.valueChanged.connect(self.floorSliderMoved)
+        self.floorSlider.sliderClicked.connect(self.floorSliderMoved)
+        self.floorSlider.sliderReleased.connect(self.floorSliderMoved)
 
         # Volume, brightness and contrast sliders.
         # Need to pass true (config) values to set up correct initial positions
@@ -6080,7 +6081,8 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.repaint()
         QApplication.processEvents()
 
-    def floorSliderMoved(self,value):
+    def floorSliderMoved(self):
+        value = self.floorSlider.value()
         self.noisefloor = value
         self.setSpectrogram()
         self.setfigs()

@@ -1662,7 +1662,7 @@ class BrightContrVol(QWidget):
         super(BrightContrVol, self).__init__(parent, **kwargs)
 
         # Sliders and signals
-        self.brightSlider = QSlider(Qt.Orientation.Horizontal)
+        self.brightSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.brightSlider.setMinimum(0)
         self.brightSlider.setMaximum(100)
         if inverted:
@@ -1670,20 +1670,23 @@ class BrightContrVol(QWidget):
         else:
             self.brightSlider.setValue(100-brightness)
         self.brightSlider.setTickInterval(1)
-        self.brightSlider.valueChanged.connect(self.emitCol)
+        self.brightSlider.sliderClicked.connect(self.emitCol)
+        self.brightSlider.sliderReleased.connect(self.emitCol)
 
-        self.contrSlider = QSlider(Qt.Orientation.Horizontal)
+        self.contrSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.contrSlider.setMinimum(0)
         self.contrSlider.setMaximum(100)
         self.contrSlider.setValue(contrast)
         self.contrSlider.setTickInterval(1)
-        self.contrSlider.valueChanged.connect(self.emitCol)
+        self.contrSlider.sliderClicked.connect(self.emitCol)
+        self.contrSlider.sliderReleased.connect(self.emitCol)
 
         # Volume control
-        self.volSlider = QSlider(Qt.Orientation.Horizontal)
+        self.volSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
-        self.volSlider.valueChanged.connect(self.volChanged.emit)
+        self.volSlider.sliderClicked.connect(self.emitVol)
+        self.volSlider.sliderReleased.connect(self.emitVol)
 
         # static labels
         labelBr = QLabel()
@@ -1746,10 +1749,26 @@ class BrightContrVol(QWidget):
             programmatically, when a colour refresh is needed)
         """
         self.colChanged.emit(self.brightSlider.value(), self.contrSlider.value())
+    
+    def emitVol(self):
+        self.volChanged.emit(self.volSlider.value())
 
     def emitAll(self):
         """ Emit both colour and volume signals (useful for initialization)
         """
         self.emitCol()
-        self.volChanged.emit(self.volSlider.value())
+        self.emitVol()
 
+class CustomSlider(QSlider):
+    sliderClicked = pyqtSignal()
+
+    def __init__(self,*args):
+        super().__init__(*args)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position().x() if self.orientation() == Qt.Orientation.Horizontal else event.position().y()
+            new_value = self.minimum() + (pos / self.width() * (self.maximum() - self.minimum())) if self.orientation() == Qt.Orientation.Horizontal else self.minimum() + ((self.height() - pos) / self.height() * (self.maximum() - self.minimum()))
+            self.setValue(int(new_value))
+            self.sliderClicked.emit()
+        super().mousePressEvent(event)
