@@ -1508,21 +1508,21 @@ class LightedFileList(QListWidget):
                     self.paintItem(item, fullname+'.data')
                     # format collection only implemented for WAVs currently
                     if readFmt:
-                        if filename.lower().endswith('.wav'):
+                        if fullname.lower().endswith('.wav'):
                             try:
-                                #samplerate = wavio.readFmt(filenamef)[0]
-                                wavobj = wavio.read(filenamef, 0, 0)
+                                #samplerate = wavio.readFmt(fullname)[0]
+                                wavobj = wavio.read(fullname, 0, 0)
                                 samplerate = wavobj.rate
                                 self.fsList.add(samplerate)
                             except Exception as e:
-                                print("Warning: could not parse format of WAV file", filenamef)
+                                print("Warning: could not parse format of WAV file", fullname)
                                 print(e)
-                        elif filename.lower().endswith('.flac'):
+                        elif fullname.lower().endswith('.flac'):
                             try:
-                                samplerate = pyflac.FLAC(filenamef).info.sample_rate
+                                samplerate = pyflac.FLAC(fullname).info.sample_rate
                                 self.fsList.add(samplerate)
                             except Exception as e:
-                                print("Warning: could not parse format of FLAC file", filenamef)
+                                print("Warning: could not parse format of FLAC file", fullname)
                                 print(e)
                         else:
                             # For bitmaps, using hardcoded samplerate as there's no readFmt
