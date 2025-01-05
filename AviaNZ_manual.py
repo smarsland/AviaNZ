@@ -1805,7 +1805,7 @@ class AviaNZ(QMainWindow):
             #self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
             self.fileInfoSS.setText("<b>Sample format:</b> %s" % str(self.sp.audioFormat.sampleFormat()).split('.')[-1])
-            self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.audioFormat.sampleRate(), 60))
+            self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.datalengthSec, 60))
             #self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.sampleRate, 60))
 
             if not self.batmode:
