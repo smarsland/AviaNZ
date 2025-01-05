@@ -50,7 +50,7 @@
 #     which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
 #     the algorithm is never changed.
 # 15. Tidy up the flac loader (correct place, check for space) and add a converter - Now flac files are loaded into a wav in temp storage.
-#     Still need to check space
+#     Will check if there is roughly enough space to continue and then use a try catch to deal with any errors.
 
 
 import sys, os, json, platform, re, shutil, csv
@@ -1735,15 +1735,25 @@ class AviaNZ(QMainWindow):
                 else:
                     lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
 
-                 
                 if self.filename.lower().endswith('.wav'):
                     self.sp.readWav(self.filename, lenRead, self.startRead)
                 elif self.filename.lower().endswith('.flac'):
                     with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
                         temp_wav_path = temp_wav.name
-                        pyf = pyflac.FileDecoder(self.filename, temp_wav_path)
-                        pyf.process()
-                        self.sp.readWav(temp_wav_path,lenRead,self.startRead)
+                        temp_dir = os.path.dirname(temp_wav.name)
+                        estimated_wav_size = os.path.getsize(self.filename) * 10
+                        total, used, free = shutil.disk_usage(temp_dir)
+                        if free < estimated_wav_size:
+                            print("Error: Insufficient disk space for the WAV file")
+                            return
+                        else:
+                            try:
+                                pyf = pyflac.FileDecoder(self.filename, temp_wav_path)
+                                pyf.process()
+                                self.sp.readWav(temp_wav_path,lenRead,self.startRead)
+                            except Exception as e:
+                                print("Error: %s" % e)
+                                return
 
                 # resample to 16K if needed (Spectrogram will determine)
                 if self.cheatsheet:
