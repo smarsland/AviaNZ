@@ -232,7 +232,7 @@ class AviaNZ(QMainWindow):
                     msg.addButton("Choose a file", QMessageBox.ButtonRole.YesRole)
                     msg.button(QMessageBox.StandardButton.No).setText("Exit")
                     reply = msg.exec()
-                    if reply == 0:
+                    if reply == 2:
                         firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
                     else:
                         sys.exit()
