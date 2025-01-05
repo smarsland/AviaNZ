@@ -1765,10 +1765,14 @@ class CustomSlider(QSlider):
     def __init__(self,*args):
         super().__init__(*args)
 
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.sliderClicked.emit()
+        super().mouseReleaseEvent(event)
+    
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.position().x() if self.orientation() == Qt.Orientation.Horizontal else event.position().y()
             new_value = self.minimum() + (pos / self.width() * (self.maximum() - self.minimum())) if self.orientation() == Qt.Orientation.Horizontal else self.minimum() + ((self.height() - pos) / self.height() * (self.maximum() - self.minimum()))
             self.setValue(int(new_value))
-            self.sliderClicked.emit()
         super().mousePressEvent(event)
