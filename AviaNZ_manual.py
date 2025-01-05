@@ -1776,7 +1776,7 @@ class AviaNZ(QMainWindow):
             #print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.sampleRate, " Hz.")
 
             if name is not None:  # i.e. starting a new file, not next section
-                if self.datalength != self.sp.fileLength:
+                if self.datalengthSec != self.sp.fileLength:
                     self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalengthSec))
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(True)
@@ -4037,6 +4037,8 @@ class AviaNZ(QMainWindow):
         Have to check if the buttons should be disabled or not,
         save the segments and reset the arrays, then call loadFile.
         """
+        print("MOVING TO NEXT 5 MINS")
+        print(self.currentFileSection,self.nFileSections)
         self.currentFileSection += 1
         self.prev5mins.setEnabled(True)
         self.movePrev5minsKey.setEnabled(True)
