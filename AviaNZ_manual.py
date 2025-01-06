@@ -1105,6 +1105,9 @@ class AviaNZ(QMainWindow):
         self.menuBirdList = QMenu()
         self.menuBirdOther = QMenu('Other',self.menuBirdList)
         self.menuBirdAll = QMenu('All',self.menuBirdOther)
+        self.menuBirdList.installEventFilter(self)
+        self.menuBirdOther.installEventFilter(self)
+
         # New line to allow multiple selections
         self.menuBirdList.installEventFilter(self)
         self.menuBirdOther.installEventFilter(self)
@@ -1335,6 +1338,7 @@ class AviaNZ(QMainWindow):
                     calltypes = self.knownCalls[species] if species in self.knownCalls else []
                     calltypes = ["Any"] + calltypes + ["Other"]
                     birdMenu = QMenu(species,self.menuBirdList)
+                    birdMenu.installEventFilter(self)
                     anyChecked = False
                     for calltype in calltypes:
                         label = calltype if not unsure else calltype+'?'
@@ -1361,6 +1365,7 @@ class AviaNZ(QMainWindow):
                 calltypes = self.knownCalls[species] if species in self.knownCalls else []
                 calltypes = ["Any"] + calltypes + ["Other"]
                 birdMenu = QMenu(species,self.menuBirdOther)
+                birdMenu.installEventFilter(self)
                 anyChecked = False
                 for calltype in calltypes:
                     label = calltype if not unsure else calltype+'?'
