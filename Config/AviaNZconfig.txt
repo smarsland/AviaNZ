@@ -13,6 +13,7 @@
 "brightness": 50, "contrast": 50, "overlap_allowed": 5, "reviewSpecBuffer": 1,
 "BirdListShort": "ListCommonBirds.txt",
 "BirdListLong": "ListDOCBirds.txt",
+"KnownCallsList": "ListKnownCalls.txt",
 "BatList": "ListBats.txt",
 "FreebirdList": "Freebird_species_list.xlsx",
 "RecentFiles": [],

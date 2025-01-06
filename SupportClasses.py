@@ -343,6 +343,41 @@ class ConfigLoader(object):
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
+    
+    def knownCalls(self, file, configdir):
+        print("Loading known calls from file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                knowncallsfile = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                knowncallsfile = os.path.join(configdir, file)
+            if not os.path.isfile(knowncallsfile):
+                print("Warning: file %s not found, falling back to default" % knowncallsfile)
+                knowncallsfile = os.path.join(configdir, "ListKnownCalls.txt")
+            try:
+                knownCalls = {}
+                with open(knowncallsfile, 'r') as f:
+                    for line in f:
+                        if not len(line)==0:
+                            key, value = line.strip().split(' > ')
+                            if not key in knownCalls:
+                                knownCalls[key]=[]
+                            knownCalls[key].append(value)
+                return knownCalls
+            except ValueError as e:
+                print(e)
+                msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + knowncallsfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg.exec()
+                return None
+
+        except Exception as e:
+            print(e)
+            msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg.exec()
+            return None
 
     def batl(self, file, configdir):
         print("Loading bat list from file %s" % file)
@@ -407,6 +442,29 @@ class ConfigLoader(object):
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
+            msg.exec()
+    
+    # Dumps the provided dictionary into the corresponding known calls file
+    def knownCallsWrite(self, content, file, configdir):
+        print("Updating known calls list in file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                file = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                file = os.path.join(configdir, file)
+
+            # no fallback in case file not found - don't want to write to random places.
+            with open(file, 'w') as f:
+                for key, values in sorted(content.items()):  # Sort keys
+                    for value in sorted(values):  # Sort values
+                        f.write(f"{key} > {value}\n")
+
+        except Exception as e:
+            print(e)
+            msg = SupportClasses_GUI.MessagePopup("w", "Unwriteable known calls list", "Warning: Failed to write known calls list to " + file)
             msg.exec()
 
     # Dumps the provided JSON array to the corresponding config file.

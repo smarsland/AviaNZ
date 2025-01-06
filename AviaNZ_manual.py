@@ -155,20 +155,25 @@ class AviaNZ(QMainWindow):
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], configdir)
         if self.longBirdList is None:
             raise OSError("Long bird list missing, cannot continue")
-        self.batList = self.ConfigLoader.batl(self.config['BatList'], configdir)
-        if self.batList is None:
-            raise OSError("Bat list missing, cannot continue")
+        self.knownCalls = self.ConfigLoader.knownCalls(self.config['KnownCallsList'], configdir)
+        if self.knownCalls is None:
+            raise OSError("Known calls list missing, cannot continue")
         
-        # Load the known calls so far
-        self.knownCalls = {}
+        print("Searching filters for other known calls...")
         for filt in self.FilterDicts.values():
             if not filt["species"] in self.knownCalls:
                 self.knownCalls[filt["species"]]=[]
-            
             for subf in filt["Filters"]:
                 if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
                     self.knownCalls[filt["species"]].append(subf["calltype"])
         
+        print("LOADED KNOWN CALLS B")
+        print(self.knownCalls)
+
+        self.batList = self.ConfigLoader.batl(self.config['BatList'], configdir)
+        if self.batList is None:
+            raise OSError("Bat list missing, cannot continue")
+
         for shortBirdItem in self.shortBirdList:
             searchForCall = re.search(r' \[(.*?)\]$',shortBirdItem)
             call = None if searchForCall is None else searchForCall.group(1)
@@ -6177,12 +6182,15 @@ class AviaNZ(QMainWindow):
         fn2 = self.config['BirdListLong']
         if fn2 is not None and '/' in fn2:
             fn2 = os.path.basename(fn2)
-        fn3 = self.config['BatList']
+        fn3 = self.config['KnownCallsList']
         if fn3 is not None and '/' in fn3:
             fn3 = os.path.basename(fn3)
-        fn4 = self.config['FreebirdList']
+        fn4 = self.config['BatList']
         if fn4 is not None and '/' in fn4:
             fn4 = os.path.basename(fn4)
+        fn5 = self.config['FreebirdList']
+        if fn5 is not None and '/' in fn5:
+            fn5 = os.path.basename(fn5)
         hasMultipleSegments = False
         for s in self.segments:
             if len(s[4])>1:
@@ -6266,12 +6274,16 @@ class AviaNZ(QMainWindow):
                      #'tip': "If you don't have a long list of birds"},
                     {'name': 'Choose File', 'type': 'action'}
                 ]},
-                {'name': 'Bat List', 'type': 'group', 'children': [
+                {'name': 'Known Calls List', 'type': 'group', 'children': [
                     {'name': 'Filename', 'type': 'str', 'value': fn3, 'readonly': True},
+                    {'name': 'Choose File', 'type': 'action'},
+                ]},
+                {'name': 'Bat List', 'type': 'group', 'children': [
+                    {'name': 'Filename', 'type': 'str', 'value': fn4, 'readonly': True},
                     {'name': 'Choose File', 'type': 'action'}
                 ]},
                 {'name': 'Freebird List', 'type': 'group', 'children': [
-                    {'name': 'Filename', 'type': 'str', 'value': fn4, 'readonly': True},
+                    {'name': 'Filename', 'type': 'str', 'value': fn5, 'readonly': True},
                     {'name': 'Choose File', 'type': 'action'}
                 ]},
                 {'name': 'Dynamically reorder bird list', 'type': 'bool', 'value': self.config['ReorderList']},
@@ -6362,6 +6374,8 @@ class AviaNZ(QMainWindow):
                 self.config['BirdListLong'] = data
             elif childName=='Bird List.Bat List.Filename':
                 self.config['BatList'] = data
+            elif childName=='Bird List.Known Calls List.Filename':
+                self.config['KnownCallsList'] = data
             elif childName=='Bird List.Freebird List.Filename':
                 self.config['FreebirdList'] = data
             elif childName=='Annotation.Segment colours.Confirmed segments':
@@ -6464,6 +6478,30 @@ class AviaNZ(QMainWindow):
                         self.p['Bird List','Full Bird List','Filename'] = filename
                     else:
                         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
+            elif childName=='Bird List.Known Calls List.Choose File':
+                filename, drop = QFileDialog.getOpenFileName(self, 'Choose Known Calls List', self.SoundFileDir, "Text files (*.txt)")
+                if filename == '':
+                    print("no list file selected")
+                    return
+                else:
+                    self.knownCalls = self.ConfigLoader.knownCalls(filename, self.configdir)
+                    if self.knownCalls is not None:
+                        self.config['KnownCallsList'] = filename
+                        self.p['Bird List','Known Calls List','Filename'] = filename
+                    else:
+                        self.knownCalls = self.ConfigLoader.knownCalls(self.config['KnownCallsList'], self.configdir)
+                    
+                    print("Searching filters for other known calls...")
+                    for filt in self.FilterDicts.values():
+                        if not filt["species"] in self.knownCalls:
+                            self.knownCalls[filt["species"]]=[]
+                        for subf in filt["Filters"]:
+                            if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
+                                self.knownCalls[filt["species"]].append(subf["calltype"])
+                    
+                    print("LOADED KNOWN CALLS A")
+                    print(self.knownCalls)
+
             elif childName=='Bird List.Bat List.Choose File':
                 filename, drop = QFileDialog.getOpenFileName(self, 'Choose Bat List', self.SoundFileDir, "Text files (*.txt)")
                 if filename == '':
@@ -6690,6 +6728,9 @@ class AviaNZ(QMainWindow):
 
         # Save the shortBirdList
         self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
+
+        # Save the known calls
+        self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
 
     def restart(self):
         """ Listener for the restart option, which uses exit(1) to restart the program at the splash screen """
