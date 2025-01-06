@@ -167,9 +167,6 @@ class AviaNZ(QMainWindow):
                 if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
                     self.knownCalls[filt["species"]].append(subf["calltype"])
         
-        print("LOADED KNOWN CALLS B")
-        print(self.knownCalls)
-
         self.batList = self.ConfigLoader.batl(self.config['BatList'], configdir)
         if self.batList is None:
             raise OSError("Bat list missing, cannot continue")
@@ -6499,9 +6496,6 @@ class AviaNZ(QMainWindow):
                             if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
                                 self.knownCalls[filt["species"]].append(subf["calltype"])
                     
-                    print("LOADED KNOWN CALLS A")
-                    print(self.knownCalls)
-
             elif childName=='Bird List.Bat List.Choose File':
                 filename, drop = QFileDialog.getOpenFileName(self, 'Choose Bat List', self.SoundFileDir, "Text files (*.txt)")
                 if filename == '':
