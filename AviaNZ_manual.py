@@ -39,9 +39,19 @@
 # 11. If a .data file is empty, delete, restart -- check
 # 12. Replace call type selection with dropdown from species
 # 13. Ruth things
-# 14. Is librosa used?
-# 15. Tidy up the flac loader (correct place, check for space) and add a converter
 # 16. Check the splitting with data files properly
+
+# SHOULD BE DONE:
+# 14. Is librosa used? - NO. 
+#     There are two places where it might get used. 
+#     It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
+#     DialogsTraining.WPageCluster.
+#     It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
+#     which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
+#     the algorithm is never changed.
+# 15. Tidy up the flac loader (correct place, check for space) and add a converter - Now flac files are loaded into a wav in temp storage.
+#     Will check if there is roughly enough space to continue and then use a try catch to deal with any errors.
+
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
@@ -86,6 +96,10 @@ import time
 import openpyxl
 # TODO: Check this
 from lxml import etree as ET
+
+import pyflac
+import tempfile
+
 #import xml.etree.ElementTree as ET
 
 pg.setConfigOption('useNumba', True)
@@ -240,7 +254,7 @@ class AviaNZ(QMainWindow):
                     msg.addButton("Choose a file", QMessageBox.ButtonRole.YesRole)
                     msg.button(QMessageBox.StandardButton.No).setText("Exit")
                     reply = msg.exec()
-                    if reply == 0:
+                    if reply == 2:
                         firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
                     else:
                         sys.exit()
@@ -999,10 +1013,11 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
 
-        self.floorSlider = QSlider(Qt.Orientation.Horizontal)
+        self.floorSlider = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
         self.floorSlider.setMinimum(0)
         self.floorSlider.setMaximum(100)
-        self.floorSlider.valueChanged.connect(self.floorSliderMoved)
+        self.floorSlider.sliderClicked.connect(self.floorSliderMoved)
+        self.floorSlider.sliderReleased.connect(self.floorSliderMoved)
 
         # Volume, brightness and contrast sliders.
         # Need to pass true (config) values to set up correct initial positions
@@ -1731,12 +1746,25 @@ class AviaNZ(QMainWindow):
                 else:
                     lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
 
-                 
                 if self.filename.lower().endswith('.wav'):
                     self.sp.readWav(self.filename, lenRead, self.startRead)
                 elif self.filename.lower().endswith('.flac'):
-                    self.sp.readFlac(self.filename)
-                    self.sp.readWav('/home/marslast/output.wav',lenRead,self.startRead)
+                    with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
+                        temp_wav_path = temp_wav.name
+                        temp_dir = os.path.dirname(temp_wav.name)
+                        estimated_wav_size = os.path.getsize(self.filename) * 10
+                        total, used, free = shutil.disk_usage(temp_dir)
+                        if free < estimated_wav_size:
+                            print("Error: Insufficient disk space for the WAV file")
+                            return
+                        else:
+                            try:
+                                pyf = pyflac.FileDecoder(self.filename, temp_wav_path)
+                                pyf.process()
+                                self.sp.readWav(temp_wav_path,lenRead,self.startRead)
+                            except Exception as e:
+                                print("Error: %s" % e)
+                                return
 
                 # resample to 16K if needed (Spectrogram will determine)
                 if self.cheatsheet:
@@ -1759,8 +1787,8 @@ class AviaNZ(QMainWindow):
             #print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sp.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sp.sampleRate, " Hz.")
 
             if name is not None:  # i.e. starting a new file, not next section
-                if self.datalength != self.sp.fileLength:
-                    self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalength))
+                if self.datalengthSec != self.sp.fileLength:
+                    self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalengthSec))
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(True)
                     self.movePrev5minsKey.setEnabled(False)
@@ -1788,7 +1816,7 @@ class AviaNZ(QMainWindow):
             #self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
             self.fileInfoSS.setText("<b>Sample format:</b> %s" % str(self.sp.audioFormat.sampleFormat()).split('.')[-1])
-            self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.audioFormat.sampleRate(), 60))
+            self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.datalengthSec, 60))
             #self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sp.sampleRate, 60))
 
             if not self.batmode:
@@ -4007,6 +4035,8 @@ class AviaNZ(QMainWindow):
         Have to check if the buttons should be disabled or not,
         save the segments and reset the arrays, then call loadFile.
         """
+        print("MOVING TO NEXT 5 MINS")
+        print(self.currentFileSection,self.nFileSections)
         self.currentFileSection += 1
         self.prev5mins.setEnabled(True)
         self.movePrev5minsKey.setEnabled(True)
@@ -6061,7 +6091,8 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.repaint()
         QApplication.processEvents()
 
-    def floorSliderMoved(self,value):
+    def floorSliderMoved(self):
+        value = self.floorSlider.value()
         self.noisefloor = value
         self.setSpectrogram()
         self.setfigs()

@@ -45,6 +45,8 @@ import os
 import io
 import Spectrogram
 
+import pyflac
+
 import threading
 
 class TimeAxisHour(pg.AxisItem):
@@ -1416,7 +1418,7 @@ class LightedFileList(QListWidget):
 
         with pg.BusyCursor():
             # Read contents of current dir
-            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDot | QDir.Filter.Files,sort=QDir.SortFlag.DirsFirst)
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp','*.flac'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDot | QDir.Filter.Files,sort=QDir.SortFlag.DirsFirst)
             self.soundDir = soundDir
 
             for file in self.listOfFiles:
@@ -1433,16 +1435,20 @@ class LightedFileList(QListWidget):
                         # count wavs in this dir:
                         numbmps = 0
                         numwavs = 0
+                        numflacs = 0
                         for root, dirs, files in os.walk(file.filePath()):
                             numwavs += sum(f.lower().endswith('.wav') for f in files)
                             numbmps += sum(f.lower().endswith('.bmp') for f in files)
+                            numflacs += sum(f.lower().endswith('.flac') for f in files)
                         # keep these strings as short as possible
                         if numbmps==0:
                             item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
                         elif numwavs==0:
                             item.setText("%s/\t\t(%d bmp files)" % (file.fileName(), numbmps))
+                        elif numflacs==0:
+                            item.setText("%s/\t\t(%d flac files)" % (file.fileName(), numflacs))
                         else:
-                            item.setText("%s/\t\t(%d wav, %d bmp files)" % (file.fileName(), numwavs, numbmps))
+                            item.setText("%s/\t\t(%d wav, %d bmp, %d flac files)" % (file.fileName(), numwavs, numbmps, numflacs))
                     else:
                         item.setText(file.fileName() + "/")
 
@@ -1452,7 +1458,7 @@ class LightedFileList(QListWidget):
                     for root, dirs, files in os.walk(file.filePath()):
                         for filename in files:
                             filenamef = os.path.join(root, filename)
-                            if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp'):
+                            if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp') or filename.lower().endswith('.flac'):
                                 if readFmt:
                                     if filename.lower().endswith('.wav'):
                                         try:
@@ -1462,6 +1468,13 @@ class LightedFileList(QListWidget):
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
+                                            print(e)
+                                    elif filename.lower().endswith('.flac'):
+                                        try:
+                                            samplerate = pyflac.FLAC(filenamef).info.sample_rate
+                                            self.fsList.add(samplerate)
+                                        except Exception as e:
+                                            print("Warning: could not parse format of FLAC file", filenamef)
                                             print(e)
                                     else:
                                         # For bitmaps, using hardcoded samplerate as there's no readFmt
@@ -1495,7 +1508,7 @@ class LightedFileList(QListWidget):
                     self.paintItem(item, fullname+'.data')
                     # format collection only implemented for WAVs currently
                     if readFmt:
-                        if file.fileName().lower().endswith('.wav'):
+                        if fullname.lower().endswith('.wav'):
                             try:
                                 #samplerate = wavio.readFmt(fullname)[0]
                                 wavobj = wavio.read(fullname, 0, 0)
@@ -1504,7 +1517,14 @@ class LightedFileList(QListWidget):
                             except Exception as e:
                                 print("Warning: could not parse format of WAV file", fullname)
                                 print(e)
-                        if file.fileName().lower().endswith('.bmp'):
+                        elif fullname.lower().endswith('.flac'):
+                            try:
+                                samplerate = pyflac.FLAC(fullname).info.sample_rate
+                                self.fsList.add(samplerate)
+                            except Exception as e:
+                                print("Warning: could not parse format of FLAC file", fullname)
+                                print(e)
+                        else:
                             # For bitmaps, using hardcoded samplerate as there's no readFmt
                             self.fsList.add(176000)
 
@@ -1642,7 +1662,7 @@ class BrightContrVol(QWidget):
         super(BrightContrVol, self).__init__(parent, **kwargs)
 
         # Sliders and signals
-        self.brightSlider = QSlider(Qt.Orientation.Horizontal)
+        self.brightSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.brightSlider.setMinimum(0)
         self.brightSlider.setMaximum(100)
         if inverted:
@@ -1650,20 +1670,23 @@ class BrightContrVol(QWidget):
         else:
             self.brightSlider.setValue(100-brightness)
         self.brightSlider.setTickInterval(1)
-        self.brightSlider.valueChanged.connect(self.emitCol)
+        self.brightSlider.sliderClicked.connect(self.emitCol)
+        self.brightSlider.sliderReleased.connect(self.emitCol)
 
-        self.contrSlider = QSlider(Qt.Orientation.Horizontal)
+        self.contrSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.contrSlider.setMinimum(0)
         self.contrSlider.setMaximum(100)
         self.contrSlider.setValue(contrast)
         self.contrSlider.setTickInterval(1)
-        self.contrSlider.valueChanged.connect(self.emitCol)
+        self.contrSlider.sliderClicked.connect(self.emitCol)
+        self.contrSlider.sliderReleased.connect(self.emitCol)
 
         # Volume control
-        self.volSlider = QSlider(Qt.Orientation.Horizontal)
+        self.volSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
-        self.volSlider.valueChanged.connect(self.volChanged.emit)
+        self.volSlider.sliderClicked.connect(self.emitVol)
+        self.volSlider.sliderReleased.connect(self.emitVol)
 
         # static labels
         labelBr = QLabel()
@@ -1726,10 +1749,30 @@ class BrightContrVol(QWidget):
             programmatically, when a colour refresh is needed)
         """
         self.colChanged.emit(self.brightSlider.value(), self.contrSlider.value())
+    
+    def emitVol(self):
+        self.volChanged.emit(self.volSlider.value())
 
     def emitAll(self):
         """ Emit both colour and volume signals (useful for initialization)
         """
         self.emitCol()
-        self.volChanged.emit(self.volSlider.value())
+        self.emitVol()
 
+class CustomSlider(QSlider):
+    sliderClicked = pyqtSignal()
+
+    def __init__(self,*args):
+        super().__init__(*args)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.sliderClicked.emit()
+        super().mouseReleaseEvent(event)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position().x() if self.orientation() == Qt.Orientation.Horizontal else event.position().y()
+            new_value = self.minimum() + (pos / self.width() * (self.maximum() - self.minimum())) if self.orientation() == Qt.Orientation.Horizontal else self.minimum() + ((self.height() - pos) / self.height() * (self.maximum() - self.minimum()))
+            self.setValue(int(new_value))
+        super().mousePressEvent(event)
