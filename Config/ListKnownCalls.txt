@@ -1,5 +1,3 @@
-Bittern > Bittern
-Cuckoo (Long-tailed) > Cluster_0
 Kakapo > Boom
 Kakapo > Ching
 Kiwi (Great Spotted) > Female
