@@ -25,7 +25,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt6 import QtCore, QtGui
-from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy
+from PyQt6.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy, QMenu
 from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot, QThread, QEvent
 from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat, QMediaDevices
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag

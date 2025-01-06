@@ -1254,44 +1254,34 @@ class AviaNZ(QMainWindow):
     def parse_short_list_item(self,item,unsure=False):
         # Determine certainty
         # Add ? marks if Ctrl menu is called
-        
-        searchForCall = re.search(r' \[(.*?)\]$',item)
-        call = None if searchForCall is None else searchForCall.group(1)
-        beforeCall = item if call is None else item.split(" ["+call+"]")[0]
-
-        searchForSpecies = re.search(r' \((.*?)\)$',beforeCall)
+        searchForSpecies = re.search(r' \((.*?)\)$',item)
         if searchForSpecies is not None:
             species = searchForSpecies.group(1)
-            genus = beforeCall.split(" ("+species+")")[0]
+            genus = item.split(" ("+species+")")[0]
         else:
             # try > format
-            beforeCallSplit = beforeCall.split('>')
-            if len(beforeCallSplit)==1:
+            itemSplit = item.split('>')
+            if len(itemSplit)==1:
                 species = None
-                genus = beforeCall
+                genus = item
             else:
-                species = beforeCallSplit[1]
-                genus = beforeCallSplit[0]
+                species = itemSplit[1]
+                genus = itemSplit[0]
         
         if species is None:
             mergedSpeciesName = genus
         else:
             mergedSpeciesName = genus + " (" + species + ")"
-        
-        if call is None:
-            mergedFullName = mergedSpeciesName
-        else:
-            mergedFullName = mergedSpeciesName + " ["+call+"]"
 
         if unsure and item != "Don't Know":
             cert = 50
-            mergedFullName = mergedFullName+'?'
+            mergedSpeciesName = mergedSpeciesName+'?'
         elif item == "Don't Know":
             cert = 0
         else:
             cert = 100
 
-        return mergedSpeciesName, call, mergedFullName, cert
+        return mergedSpeciesName, cert
     
     def makeBatLists(self,unsure=False):
         # There aren't many options, but anyway...
@@ -1307,7 +1297,7 @@ class AviaNZ(QMainWindow):
         # Create menu items and mark them
         # (we assume that bat list is always short enough to fit in one column)
         for item in self.batList:
-            species, call, fullLabel, cert = self.parse_short_list_item(item,unsure)
+            species, cert = self.parse_short_list_item(item,unsure)
 
             bat = self.menuBirdList.addAction(species)
             bat.setCheckable(True)
@@ -1319,14 +1309,13 @@ class AviaNZ(QMainWindow):
     def makeShortBirdLists(self,unsure=False):   
         # reorder
         if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id>-1:
-            for species,certainty,calltype in self.segments[self.box1id].getKeysWithCalltypes():
-                label = species if calltype is None else species+" ["+calltype+"]"
+            for species,certainty in self.segments[self.box1id].getKeys():
                 # Either move the label to the top of the list, or delete the last
-                if label in self.shortBirdList:
-                    self.shortBirdList.remove(label)
+                if species in self.shortBirdList:
+                    self.shortBirdList.remove(species)
                 else:
                     del self.shortBirdList[-1]
-                self.shortBirdList.insert(0,label)
+                self.shortBirdList.insert(0,species)
         
         # just some sorting, in case something is odd.
         self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""] # just put the blanks at the end
@@ -1334,34 +1323,63 @@ class AviaNZ(QMainWindow):
 
         # Create menu items
         for item in self.shortBirdList[:15]:
-            if not item=="" and not item[-6:]==" [Any]":
-                species, calltype, label, cert = self.parse_short_list_item(item,unsure)
-                bird = self.menuBirdList.addAction(label)
-                bird.setCheckable(True)
-                if calltype is None:
-                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
-                        if self.segments[self.box1id].getCalltype(species, cert) is None: # we only want to mark the species in the menu if doesn't have a calltype.
-                            bird.setChecked(True)
-                    bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any", unsure))
+            if not item=="":
+                if item=="Don't Know":
+                    action = self.menuBirdList.addAction("Don't Know")
+                    action.triggered.connect(partial(self.birdSelectedMenu, "Don't Know", None, unsure))
+                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel("Don't Know", 0):
+                        action.setText("✔ Don't Know")
+                    self.menuBirdList.addAction(action)
                 else:
-                    if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
-                        bird.setChecked(True)
-                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
+                    species, cert = self.parse_short_list_item(item,unsure)
+                    calltypes = self.knownCalls[species] if species in self.knownCalls else []
+                    calltypes = ["Any"] + calltypes + ["Other"]
+                    birdMenu = QMenu(species,self.menuBirdList)
+                    anyChecked = False
+                    for calltype in calltypes:
+                        label = calltype if not unsure else calltype+'?'
+                        action = birdMenu.addAction(label)
+                        action.setCheckable(True)
+                        action.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
+                        if hasattr(self,'segments'):
+                            if calltype == "Any":
+                                if self.segments[self.box1id].hasLabel(species, cert):
+                                    if self.segments[self.box1id].getCalltype(species, cert) is None:
+                                        action.setChecked(True)
+                                        anyChecked = True
+                            else:
+                                if self.segments[self.box1id].getCalltype(species, cert)==calltype:
+                                    action.setChecked(True)
+                                    anyChecked = True
+                    if anyChecked:
+                        birdMenu.setTitle("✔ "+species)
+                    self.menuBirdList.addMenu(birdMenu)
         
         for item in self.shortBirdList[15:]:
-            if not item=="" and not item[-6:]==" [Any]":
-                species, calltype, label, cert = self.parse_short_list_item(item,unsure)
-                bird = self.menuBirdOther.addAction(label)
-                bird.setCheckable(True)
-                if calltype is None:
-                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(species, cert):
-                        if self.segments[self.box1id].getCalltype(species, cert) is None: # we don't want to mark the species in the menu if it has a calltype.
-                            bird.setChecked(True)
-                        bird.triggered.connect(partial(self.birdAndCallSelected, species, "Any", unsure))
-                else:
-                    if hasattr(self,'segments') and self.segments[self.box1id].getCalltype(species, cert)==calltype:
-                        bird.setChecked(True)
-                    bird.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
+            if not item=="":
+                species, cert = self.parse_short_list_item(item,unsure)
+                calltypes = self.knownCalls[species] if species in self.knownCalls else []
+                calltypes = ["Any"] + calltypes + ["Other"]
+                birdMenu = QMenu(species,self.menuBirdOther)
+                anyChecked = False
+                for calltype in calltypes:
+                    label = calltype if not unsure else calltype+'?'
+                    action = birdMenu.addAction(label)
+                    action.setCheckable(True)
+                    action.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
+                    if hasattr(self,'segments'):
+                        if calltype == "Any":
+                            if self.segments[self.box1id].hasLabel(species, cert):
+                                if self.segments[self.box1id].getCalltype(species, cert) is None:
+                                    action.setChecked(True)
+                                    anyChecked = True
+                        else:
+                            if self.segments[self.box1id].getCalltype(species, cert)==calltype:
+                                action.setChecked(True)
+                                anyChecked = True
+                if anyChecked:
+                    birdMenu.setTitle("✔ "+species)
+                self.menuBirdOther.addMenu(birdMenu)
     
     def makeFullBirdListByLetter(self,unsure=False):
         allBirdTree = {}
@@ -3627,17 +3645,25 @@ class AviaNZ(QMainWindow):
             self.longBirdList.append('Unidentifiable')
             self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
-        # parse birdname to certainty
+        # parse birdname to certainty and update the toggle
         if birdname=="Don't Know":
             species = birdname
             certainty = 0
             self.prevBoxCol = self.ColourNone
+            for birdMenu in self.menuBirdList.findChildren(QMenu):
+                for action in birdMenu.actions():
+                    action.setChecked(False)
+                if birdMenu.title().startswith("✔ "):
+                    birdMenu.setTitle(birdMenu.title().split("✔ ")[1])
+            for birdMenu in self.menuBirdOther.findChildren(QMenu):
+                for action in birdMenu.actions():
+                    action.setChecked(False)
+                if birdMenu.title().startswith("✔ "):
+                    birdMenu.setTitle(birdMenu.title().split("✔ ")[1])
+            # now set the "Don't Know" to checked
             for action in self.menuBirdList.actions():
-                if not action.text()=="Don't Know":
-                    action.setChecked(False)
-            for action in self.menuBirdOther.actions():
-                if not action.text()=="Don't Know":
-                    action.setChecked(False)
+                if action.text()=="Don't Know":
+                    action.setText("✔ Don't Know")
         elif unsure:
             species = birdname
             certainty = 50
@@ -3657,30 +3683,21 @@ class AviaNZ(QMainWindow):
         addLabel = True
         if workingSeg.hasLabel(species, certainty):
             segCall = workingSeg.getCalltype(species,certainty)
-
-            if segCall is None:
-                segCall = "Any"
-
-            if segCall=="Any":
-                currentLongLabel = species
-            else:
-                currentLongLabel = species+" ["+segCall+"]"
-            
-            if unsure:
-                currentLongLabel = currentLongLabel +'?'
-
+            if segCall is None: segCall = "Any"
             if segCall==callname: # if we are just switching off the old label, then don't add back
                addLabel = False
             else:
                 # go through every short list and untick the ones with this label
-                for action in self.menuBirdList.actions():
-                    actionText = action.text()
-                    if actionText==currentLongLabel:
+                for birdMenu in self.menuBirdList.findChildren(QMenu):
+                    for action in birdMenu.actions():
                         action.setChecked(False)
-                for action in self.menuBirdOther.actions():
-                    actionText = action.text()
-                    if actionText==currentLongLabel:
+                        if action.text()==callname:
+                            action.setChecked(True)
+                for birdMenu in self.menuBirdOther.findChildren(QMenu):
+                    for action in birdMenu.actions():
                         action.setChecked(False)
+                        if action.text()==callname:
+                            action.setChecked(True)
 
             workingSeg.removeLabel(species, certainty)
 

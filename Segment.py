@@ -128,6 +128,9 @@ class Segment(list):
                 lab.update({"filter": "M", "calltype":calltype})
         print(lab)
     
+    def getKeys(self):
+        return [(lab['species'], lab['certainty']) for lab in self[4]]
+    
     def getKeysWithCalltypes(self):
         return [(lab['species'], lab['certainty'], lab['calltype'] if 'calltype' in lab else None) for lab in self[4]]
     
