@@ -148,7 +148,7 @@ class AviaNZ(QMainWindow):
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
         print("Filters loaded")
 
-        # Load the birdlists - both are now necessary:
+        # Load the birdlists - all are now necessary:
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
         if self.shortBirdList is None:
             raise OSError("Short bird list missing, cannot continue")
@@ -170,16 +170,6 @@ class AviaNZ(QMainWindow):
         self.batList = self.ConfigLoader.batl(self.config['BatList'], configdir)
         if self.batList is None:
             raise OSError("Bat list missing, cannot continue")
-
-        for shortBirdItem in self.shortBirdList:
-            searchForCall = re.search(r' \[(.*?)\]$',shortBirdItem)
-            call = None if searchForCall is None else searchForCall.group(1)
-            species = shortBirdItem if call is None else shortBirdItem.split(" ["+call+"]")[0]
-            if not call is None:
-                if not call=="Any" and not call=="Other":
-                    if not species in self.knownCalls:
-                        self.knownCalls[species]=[]
-                    self.knownCalls[species].append(call)
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.Language.English,QLocale.Country.NewZealand))
