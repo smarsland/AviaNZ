@@ -164,7 +164,7 @@ class AviaNZ(QMainWindow):
             if not filt["species"] in self.knownCalls:
                 self.knownCalls[filt["species"]]=[]
             for subf in filt["Filters"]:
-                if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
+                if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Not Specified" and not subf["calltype"]=="Add":
                     self.knownCalls[filt["species"]].append(subf["calltype"])
         
         self.batList = self.ConfigLoader.batl(self.config['BatList'], configdir)
@@ -1103,14 +1103,14 @@ class AviaNZ(QMainWindow):
         # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.menuBirdList = QMenu()
-        self.menuBirdOther = QMenu('Other',self.menuBirdList)
-        self.menuBirdAll = QMenu('All',self.menuBirdOther)
+        #self.menuBirdOther = QMenu('See all',self.menuBirdList)
+        self.menuBirdAll = QMenu('See all',self.menuBirdList)
         self.menuBirdList.installEventFilter(self)
-        self.menuBirdOther.installEventFilter(self)
+        #self.menuBirdOther.installEventFilter(self)
 
         # New line to allow multiple selections
         self.menuBirdList.installEventFilter(self)
-        self.menuBirdOther.installEventFilter(self)
+        #self.menuBirdOther.installEventFilter(self)
         self.menuBirdAll.installEventFilter(self)
         self.fillBirdList()
         # Hack to get the type of an ROI
@@ -1336,7 +1336,7 @@ class AviaNZ(QMainWindow):
                 else:
                     species, cert = self.parse_short_list_item(item,unsure)
                     calltypes = self.knownCalls[species] if species in self.knownCalls else []
-                    calltypes = ["Any"] + calltypes + ["Other"]
+                    calltypes = ["Not Specified"] + calltypes + ["Add"]
                     birdMenu = QMenu(species,self.menuBirdList)
                     birdMenu.installEventFilter(self)
                     anyChecked = False
@@ -1346,7 +1346,7 @@ class AviaNZ(QMainWindow):
                         action.setCheckable(True)
                         action.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
                         if hasattr(self,'segments'):
-                            if calltype == "Any":
+                            if calltype == "Not Specified":
                                 if self.segments[self.box1id].hasLabel(species, cert):
                                     if self.segments[self.box1id].getCalltype(species, cert) is None:
                                         action.setChecked(True)
@@ -1363,8 +1363,9 @@ class AviaNZ(QMainWindow):
             if not item=="":
                 species, cert = self.parse_short_list_item(item,unsure)
                 calltypes = self.knownCalls[species] if species in self.knownCalls else []
-                calltypes = ["Any"] + calltypes + ["Other"]
-                birdMenu = QMenu(species,self.menuBirdOther)
+                calltypes = ["Not Specified"] + calltypes + ["Add"]
+                birdMenu = QMenu(species,self.menuBirdAll)
+                #birdMenu = QMenu(species,self.menuBirdOther)
                 birdMenu.installEventFilter(self)
                 anyChecked = False
                 for calltype in calltypes:
@@ -1373,7 +1374,7 @@ class AviaNZ(QMainWindow):
                     action.setCheckable(True)
                     action.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
                     if hasattr(self,'segments'):
-                        if calltype == "Any":
+                        if calltype == "Not Specified":
                             if self.segments[self.box1id].hasLabel(species, cert):
                                 if self.segments[self.box1id].getCalltype(species, cert) is None:
                                     action.setChecked(True)
@@ -1384,7 +1385,8 @@ class AviaNZ(QMainWindow):
                                 anyChecked = True
                 if anyChecked:
                     birdMenu.setTitle("✔ "+species)
-                self.menuBirdOther.addMenu(birdMenu)
+                self.menuBirdList.addMenu(birdMenu)
+                #self.menuBirdOther.addMenu(birdMenu)
     
     def makeFullBirdListByLetter(self,unsure=False):
         allBirdTree = {}
@@ -1397,10 +1399,10 @@ class AviaNZ(QMainWindow):
                     speciesLevel1,speciesLevel2 = longBirdEntry, ""
                 
                 species = speciesLevel1 if speciesLevel2=="" else speciesLevel1 + " ("+speciesLevel2+")"
-                calls = ["Any"]
+                calls = ["Not Specified"]
                 if species in self.knownCalls:
                     calls+=self.knownCalls[species].copy()
-                calls.append("Other")
+                calls.append("Add")
 
                 firstLetter = speciesLevel1[0].upper()
 
@@ -1445,16 +1447,17 @@ class AviaNZ(QMainWindow):
         When calltype-level display is on, fills the list with possible call types from a filter (if available)
         """
         self.menuBirdList.clear()
-        self.menuBirdOther.clear()
+        #self.menuBirdOther.clear()
         self.menuBirdAll.clear()
 
         if self.batmode:
             self.makeBatLists()
         else:
             self.makeShortBirdLists(unsure)
-            self.menuBirdList.addMenu(self.menuBirdOther)
+            #self.menuBirdList.addMenu(self.menuBirdOther)
             self.makeFullBirdListByLetter(unsure)
-            self.menuBirdOther.addMenu(self.menuBirdAll)
+            #self.menuBirdOther.addMenu(self.menuBirdAll)
+            self.menuBirdList.addMenu(self.menuBirdAll)
 
     def fillFileList(self,dir,fileName):
         """ Generates the list of files for the file listbox.
@@ -3589,7 +3592,7 @@ class AviaNZ(QMainWindow):
             return
                 
         # special dialog for manual name entry
-        if birdname == 'Other':
+        if birdname == 'Add':
             # Ask the user for the new name, and save it
             birdname, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
             if not ok:
@@ -3660,7 +3663,8 @@ class AviaNZ(QMainWindow):
                     action.setChecked(False)
                 if birdMenu.title().startswith("✔ "):
                     birdMenu.setTitle(birdMenu.title().split("✔ ")[1])
-            for birdMenu in self.menuBirdOther.findChildren(QMenu):
+            #for birdMenu in self.menuBirdOther.findChildren(QMenu):
+            for birdMenu in self.menuBirdAll.findChildren(QMenu):
                 for action in birdMenu.actions():
                     action.setChecked(False)
                 if birdMenu.title().startswith("✔ "):
@@ -3688,7 +3692,7 @@ class AviaNZ(QMainWindow):
         addLabel = True
         if workingSeg.hasLabel(species, certainty):
             segCall = workingSeg.getCalltype(species,certainty)
-            if segCall is None: segCall = "Any"
+            if segCall is None: segCall = "Not Specified"
             if segCall==callname: # if we are just switching off the old label, then don't add back
                addLabel = False
             else:
@@ -3698,7 +3702,8 @@ class AviaNZ(QMainWindow):
                         action.setChecked(False)
                         if action.text()==callname:
                             action.setChecked(True)
-                for birdMenu in self.menuBirdOther.findChildren(QMenu):
+                #for birdMenu in self.menuBirdOther.findChildren(QMenu):
+                for birdMenu in self.menuBirdAll.findChildren(QMenu):
                     for action in birdMenu.actions():
                         action.setChecked(False)
                         if action.text()==callname:
@@ -3713,7 +3718,8 @@ class AviaNZ(QMainWindow):
                 workingSeg.addLabel(species, certainty, filter="M")
                 workingSeg.removeLabel("Don't Know", 0)
                 # also need to untick that context menu item manually
-                for act in self.menuBirdList.actions() + self.menuBirdOther.actions():
+                #for act in self.menuBirdList.actions() + self.menuBirdOther.actions():
+                for act in self.menuBirdList.actions() + self.menuBirdAll.actions():
                     if act.text()=="Don't Know":
                         act.setChecked(False)
             else:
@@ -3756,10 +3762,10 @@ class AviaNZ(QMainWindow):
         """ Simplified version of the above for dealing with calltype selection
         from the popup context menu. """
 
-        if callname is None or callname=="" or callname=="Any":
+        if callname is None or callname=="" or callname=="Not Specified":
             return
 
-        if callname == 'Other': 
+        if callname == 'Add': 
             # Ask the user for the new name, and save it
             callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
             if not ok:
@@ -6505,7 +6511,7 @@ class AviaNZ(QMainWindow):
                         if not filt["species"] in self.knownCalls:
                             self.knownCalls[filt["species"]]=[]
                         for subf in filt["Filters"]:
-                            if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Any" and not subf["calltype"]=="Other":
+                            if not subf["calltype"] in self.knownCalls[filt["species"]] and not subf["calltype"]=="Not Specified" and not subf["calltype"]=="Add":
                                 self.knownCalls[filt["species"]].append(subf["calltype"])
                     
             elif childName=='Bird List.Bat List.Choose File':
