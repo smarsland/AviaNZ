@@ -1408,9 +1408,9 @@ class AviaNZ(QMainWindow):
                             callAction.triggered.connect(partial(self.birdAndCallSelected, species, call, unsure))
                         speciesLevel1Menu.addMenu(speciesLevel2Menu)
                 letterMenu.addMenu(speciesLevel1Menu)
-            new_species_action = letterMenu.addAction("Add")
-            new_species_action.triggered.connect(partial(self.birdAndCallSelected, "Add", "Not Specified", unsure))
             self.menuBirdAll.addMenu(letterMenu)
+        new_species_action = self.menuBirdAll.addAction("Add")
+        new_species_action.triggered.connect(partial(self.birdAndCallSelected, "Add", "Not Specified", unsure))
         
     def fillBirdList(self,unsure=False):
         """ Sets the contents of the context menu.
