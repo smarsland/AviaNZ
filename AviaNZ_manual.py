@@ -1408,6 +1408,8 @@ class AviaNZ(QMainWindow):
                             callAction.triggered.connect(partial(self.birdAndCallSelected, species, call, unsure))
                         speciesLevel1Menu.addMenu(speciesLevel2Menu)
                 letterMenu.addMenu(speciesLevel1Menu)
+            new_species_action = letterMenu.addAction("Add")
+            new_species_action.triggered.connect(partial(self.birdAndCallSelected, "Add", "Not Specified", unsure))
             self.menuBirdAll.addMenu(letterMenu)
         
     def fillBirdList(self,unsure=False):
@@ -3593,33 +3595,17 @@ class AviaNZ(QMainWindow):
                 print("Warning: not adding species %s as it is already present" % species)
                 return
 
-            # maybe the genus is already listed?
-            index = self.model.findItems(match.group(1), Qt.MatchFlag.MatchFixedString)
-            if len(index) == 0:
-                # Genus isn't in list
-                item = QStandardItem(match.group(1))
-                item.setSelectable(True)
-                self.model.appendRow(item)
-                # store as typed
-                nametostore = species
-            else:
-                # Get the species item
-                item = index[0]
-                if match.group(2) is None:
-                    print("ERROR: genus %s already exists, please provide species as well" % match.group(1))
-                    return
-                # Store in two-level format
-                nametostore = twolevelname
-                subitem = QStandardItem(match.group(2))
-                item.setSelectable(False)
-                item.appendRow(subitem)
-                subitem.setSelectable(True)
-
             # update the main list:
+            nametostore = species
+            pattern = r"^(.*) \((.*)\)$"
+            match = re.match(pattern, species)
+            if match:
+                A = match.group(1)
+                B = match.group(2)
+                nametostore = A + '>' + B
+            
             self.longBirdList.append(nametostore)
-            self.longBirdList.remove('Unidentifiable')
             self.longBirdList = sorted(self.longBirdList, key=str.lower)
-            self.longBirdList.append('Unidentifiable')
             self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
         
         # parse species to certainty and update the toggle

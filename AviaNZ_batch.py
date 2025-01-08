@@ -119,13 +119,10 @@ class AviaNZ_batchProcess():
 
         print(self.options)
 
-        if self.CLI or self.testmode:
-            self.species = [recognisers]
+        if isinstance(recognisers, list):
+            self.species = recognisers
         else:
-            if isinstance(recognisers, list):
-                self.species = recognisers
-            else:
-                self.species = [recognisers]
+            self.species = [recognisers]
 
         self.anySound = False
         if "Any sound" in self.species:
