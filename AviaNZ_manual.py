@@ -1329,7 +1329,7 @@ class AviaNZ(QMainWindow):
             if not item=="":
                 if item=="Don't Know":
                     action = self.menuBirdList.addAction("Don't Know")
-                    action.triggered.connect(partial(self.birdSelectedMenu, "Don't Know", None, unsure))
+                    action.triggered.connect(partial(self.birdAndCallSelected, "Don't Know", "Not Specified", unsure))
                     if hasattr(self,'segments') and self.segments[self.box1id].hasLabel("Don't Know", 0):
                         action.setText("✓ Don't Know")
                     self.menuBirdList.addAction(action)
@@ -3549,50 +3549,48 @@ class AviaNZ(QMainWindow):
                 # Making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
 
-    def birdSelectedMenu(self,birditem, callname, unsure=False):
+    def birdAndCallSelected(self,species, callname, unsure=False):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Copes with two level names (with a > in).
         Also handles getting the name through a message box if necessary.
         """
-        if type(birditem) is not str:
-            birdname = birditem.text()
-        else:
-            birdname = birditem
-        if birdname is None or birdname=='':
+        if type(species) is not str:
+            species = species.text()
+        if species is None or species=='':
             return
                 
         # special dialog for manual name entry
-        if birdname == 'Add':
+        if species == 'Add':
             # Ask the user for the new name, and save it
-            birdname, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
+            species, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
             if not ok:
                 return
 
-            birdname = str(birdname).title()
+            species = str(species).title()
             # splits "A (B)", with B optional, into groups A and B
-            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', birdname)
+            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', species)
             if not match:
-                print("ERROR: provided name %s does not match format requirements" % birdname)
+                print("ERROR: provided name %s does not match format requirements" % species)
                 return
 
-            #if birdname.lower()=="don't know" or birdname.lower()=="other":
-            if birdname.lower()=="don't know" or birdname.lower()=="other" or birdname.lower()=="(other)":
-                print("ERROR: provided name %s is reserved, cannot create" % birdname)
+            #if species.lower()=="don't know" or species.lower()=="other":
+            if species.lower()=="don't know" or species.lower()=="other" or species.lower()=="(other)":
+                print("ERROR: provided name %s is reserved, cannot create" % species)
                 return
 
-            if "?" in birdname:
-                print("ERROR: provided name %s contains reserved symbol '?'" % birdname)
+            if "?" in species:
+                print("ERROR: provided name %s contains reserved symbol '?'" % species)
                 return
 
-            if len(birdname)==0 or len(birdname)>150:
+            if len(species)==0 or len(species)>150:
                 print("ERROR: provided name appears to be too short or too long")
                 return
 
             twolevelname = '>'.join(match.groups(default=''))
-            if birdname in self.longBirdList or twolevelname in self.longBirdList:
+            if species in self.longBirdList or twolevelname in self.longBirdList:
                 # bird is already listed
-                print("Warning: not adding species %s as it is already present" % birdname)
+                print("Warning: not adding species %s as it is already present" % species)
                 return
 
             # maybe the genus is already listed?
@@ -3603,7 +3601,7 @@ class AviaNZ(QMainWindow):
                 item.setSelectable(True)
                 self.model.appendRow(item)
                 # store as typed
-                nametostore = birdname
+                nametostore = species
             else:
                 # Get the species item
                 item = index[0]
@@ -3623,20 +3621,58 @@ class AviaNZ(QMainWindow):
             self.longBirdList = sorted(self.longBirdList, key=str.lower)
             self.longBirdList.append('Unidentifiable')
             self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
-
-        # parse birdname to certainty and update the toggle
-        if birdname=="Don't Know":
-            species = birdname
+        
+        # parse species to certainty and update the toggle
+        if species=="Don't Know":
             certainty = 0
             self.prevBoxCol = self.ColourNone
         elif unsure:
-            species = birdname
+            species = species[:-1]
             certainty = 50
             self.prevBoxCol = self.ColourPossible
         else:
-            species = birdname
             certainty = 100
             self.prevBoxCol = self.ColourNamed
+        
+        # Now process the calltype
+        if callname == 'Add':
+            # Ask the user for the new name, and save it
+            callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
+            if not ok:
+                return
+
+            callname = str(callname).title()
+            # splits "A (B)", with B optional, into groups A and B
+            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
+            if not match:
+                print("ERROR: provided name %s does not match format requirements" % callname)
+                return
+
+            if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
+                print("ERROR: provided name %s is reserved, cannot create" % callname)
+                return
+
+            if "?" in callname:
+                print("ERROR: provided name %s contains reserved symbol '?'" % callname)
+                return
+
+            if len(callname)==0 or len(callname)>150:
+                print("ERROR: provided name appears to be too short or too long")
+                return
+            
+            self.possibleCTs = set()
+            self.filters = []
+            for filt in self.FilterDicts.values():
+                if filt["species"]==species:
+                    self.possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+                    self.filters.append(filt)
+            
+            if callname in self.possibleCTs:
+                print("Warning: not adding call type %s as it is already present" % callname)
+                return
+
+            if not species in self.knownCalls: self.knownCalls[species] = []
+            self.knownCalls[species].append(callname)
 
         workingSeg = self.segments[self.box1id]
         self.refreshOverviewWith(workingSeg, delete=True)
@@ -3645,7 +3681,6 @@ class AviaNZ(QMainWindow):
         if workingSeg.hasLabel(species, certainty): # we had the species
             segCall = workingSeg.getCalltype(species,certainty)
             if segCall is None: segCall = "Not Specified"
-            print("segCall",segCall,"callname",callname)
             if segCall==callname:
                 workingSeg.removeLabel(species, certainty)
             else:
@@ -3720,7 +3755,10 @@ class AviaNZ(QMainWindow):
 
         # Store the species in case the user wants it for the next segment
         # TODO SRM: correct certainty and filter?
-        self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
+        if callname=="Not Specified":
+            self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
+        else:
+            self.lastSpecies = [{"species": species, "certainty": certainty, "filter": "M", "calltype": callname}]
         self.updateText()
         self.updateColour()
         self.segInfo.setText(workingSeg.infoString())
@@ -3728,86 +3766,12 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
-    def callSelectedMenu(self, species, callname, unsure):
-        """ Simplified version of the above for dealing with calltype selection
-        from the popup context menu. """
-
-        if callname is None or callname=="" or callname=="Not Specified":
-            return
-
-        if callname == 'Add': 
-            # Ask the user for the new name, and save it
-            callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
-            if not ok:
-                return
-
-            callname = str(callname).title()
-            # splits "A (B)", with B optional, into groups A and B
-            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
-            if not match:
-                print("ERROR: provided name %s does not match format requirements" % callname)
-                return
-
-            if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
-                print("ERROR: provided name %s is reserved, cannot create" % callname)
-                return
-
-            if "?" in callname:
-                print("ERROR: provided name %s contains reserved symbol '?'" % callname)
-                return
-
-            if len(callname)==0 or len(callname)>150:
-                print("ERROR: provided name appears to be too short or too long")
-                return
-            
-            self.possibleCTs = set()
-            self.filters = []
-            for filt in self.FilterDicts.values():
-                if filt["species"]==species:
-                    self.possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
-                    self.filters.append(filt)
-            
-            if callname in self.possibleCTs:
-                print("Warning: not adding call type %s as it is already present" % callname)
-                return
-
-            if not species in self.knownCalls: self.knownCalls[species] = []
-            self.knownCalls[species].append(callname)
-            
-        workingSeg = self.segments[self.box1id]
-
-        certainty = 50 if unsure else 100
-
-        # TODO: SRM: Might not be first label
-        #for lab in workingSeg[4]:
-            #if lab["species"] == species:
-                #lab["calltype"] = callname
-        #workingSeg.addLabel(species, 101, filter="M", calltype=callname)
-        if 'calltype' not in workingSeg[4]:
-            workingSeg.extendLabel(species,certainty,callname)
-        else:
-            for lab in workingSeg[4]:
-                if lab["species"]==species:
-                    workingSeg[4][lab].update({"filter": "M", "certainty": certainty, "calltype": callname})
-
-        # Store the species in case the user wants it for the next segment
-        self.lastSpecies = [{"species": species, "certainty": certainty, "filter": "M", "calltype": callname}]
-        self.updateText()
-        self.segInfo.setText(workingSeg.infoString())
-        self.segmentsToSave = True
-    
-    def batSelected(self,species):
-        self.birdSelectedMenu(species)
-    
-    def birdAndCallSelected(self,species,call, unsure=False):
-        self.birdSelectedMenu(species,call,unsure)
-        if call is None:
-            raise ValueError("call has not been provided!")
-        self.callSelectedMenu(species,call,unsure)
-
         if not self.multipleBirds:
             self.menuBirdList.hide()
-
+    
+    def batSelected(self,species):
+        self.birdAndCallSelected(species, "Not Specified")
+    
     def updateText(self, segID=None):
         """ When the user sets or changes the name in a segment, update the text label.
             Only requires the segment ID, or defaults to the selected one, and
