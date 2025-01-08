@@ -1280,8 +1280,8 @@ class AviaNZ_batchProcess():
                         s8 = etree.SubElement(s1,"MeasureTimeFrom")
 
                         # TODO: which?
-                        s2.text = str(label)
-                        #s2.text = str(namedict[label])
+                        #s2.text = str(label)
+                        s2.text = str(namedict[label])
                         s3.text = site
                         s4.text = operator
                         # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
