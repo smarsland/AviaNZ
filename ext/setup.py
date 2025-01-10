@@ -11,7 +11,10 @@ extensions = [
         sources=["SplitLauncher.pyx", "SplitWav.c"]),
     Extension("ce_detect",
         sources=["ce_detect.pyx", "detector.c"],
-        include_dirs=[numpy.get_include()])
+        include_dirs=[numpy.get_include()]),
+    Extension("mydpss",
+        sources=["mydpss.c"],
+        export_symbols=["multitap"])
 ]
 
 setup(

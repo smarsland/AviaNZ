@@ -43,10 +43,10 @@ from PyQt6.QtMultimedia import QAudioFormat
 
 # for multitaper spec:
 specExtra = True
-try:
-    from spectrum import dpss, pmtm
-except ImportError:
-    specExtra = False
+#try:
+    #from spectrum import dpss, pmtm
+#except ImportError:
+    #specExtra = False
 
 # for fund freq
 from scipy.signal import medfilt
@@ -523,11 +523,12 @@ class Spectrogram:
         if sgType=='Multi-tapered':
             # TODO: hard param -- 3 tapers
             if specExtra:
-                [tapers, eigen] = dpss(window_width, 2.5, 3)
+                import dpss
+                [tapers, eigen] = dpss.dpss(window_width, 2.5, 3)
                 counter = 0
                 out = np.zeros(shape=(len(starts),window_width // 2,3))
                 for start in starts:
-                    Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
+                    Sk, weights, eigen = dpss.pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
                     Sk = abs(Sk)**2
                     #Sk = np.mean(Sk.T * weights, axis=1)
                     for taper in range(3):
