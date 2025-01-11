@@ -579,7 +579,8 @@ class SegmentList(list):
         """
         # number of segments of width window at inc overlap
         duration = int(np.ceil(self.metadata["Duration"] / resolution))
-        eFile = filename[:-4] + '-GT.txt'
+        filenameNoExtension = filename.rsplit('.', 1)[0]
+        eFile = filenameNoExtension + '-GT.txt'
 
         # deal with empty files
         thisSpSegs = self.getSpecies(species)
@@ -1574,7 +1575,7 @@ class PostProcess:
             # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
             sp = Spectrogram.Spectrogram(256, 128)
             if fileName:
-                sp.readWav(fileName, secs, seg[0])
+                sp.readSoundFile(fileName, secs, seg[0])
                 self.sampleRate = sp.audioFormat.sampleRate()
                 self.audioData = sp.data
             else:

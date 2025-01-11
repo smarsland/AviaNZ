@@ -282,6 +282,8 @@ class BuildRecAdvWizard(QWizard):
                 if self.hasCTannotations:
                     # self.segments: [parent_audio_file, [segment], class_label]
                     self.segments, self.nclasses, self.duration = self.getClustersGT()
+                    print("SELF.SEGMENTS: ", len(self.segments))
+                    print("SELF.SEGMENTS: ", self.segments)
                     self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
                 else:
                     # return format:
@@ -378,16 +380,16 @@ class BuildRecAdvWizard(QWizard):
             cl = Clustering.Clustering([], [], 5)
 
             listOfDataFiles = []
-            listOfWavFiles = []
+            listOfSoundFiles = []
             for root, dirs, files in os.walk(self.field("trainDir")):
                 for file in files:
-                    if file[-5:].lower() == '.data':
+                    if file.lower().endswith('.data'):
                         listOfDataFiles.append(os.path.join(root, file))
-                    elif file[-4:].lower() == '.wav':
-                        listOfWavFiles.append(os.path.join(root, file))
+                    elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
+                        listOfSoundFiles.append(os.path.join(root, file))
 
             for file in listOfDataFiles:
-                if file[:-5] in listOfWavFiles:
+                if file[:-5] in listOfSoundFiles:
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(file)
@@ -402,10 +404,10 @@ class BuildRecAdvWizard(QWizard):
                 self.clusters[i] = ctTexts[i]
 
             for file in listOfDataFiles:
-                if file[:-5] in listOfWavFiles:
+                if file[:-5] in listOfSoundFiles:
                     # Read the annotation
                     segments = Segment.SegmentList()
-                    wavfile = os.path.join(self.field("trainDir"), file[:-5])
+                    soundfile = os.path.join(self.field("trainDir"), file[:-5])
                     segments.parseJSON(os.path.join(self.field("trainDir"), file))
                     SpSegs = segments.getSpecies(self.field("species"))
                     for segix in SpSegs:
@@ -414,8 +416,8 @@ class BuildRecAdvWizard(QWizard):
                             if label["species"] == self.field("species") and "calltype" in label:
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                                syls = cl.findSyllablesSeg(wavfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
-                                CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                syls = cl.findSyllablesSeg(soundfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
+                                CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                                 duration.append(seg[1]-seg[0])
             return CTsegments, len(self.clusters), np.median(duration)
 
@@ -789,6 +791,9 @@ class BuildRecAdvWizard(QWizard):
             # # largest spec will be this wide
             # if len(self.segments)<=1:
             #     return
+            print(len(self.segments))
+            print(self.segments)
+
             maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
             # Create the buttons for each segment
@@ -796,7 +801,7 @@ class BuildRecAdvWizard(QWizard):
             self.maxsg = 1
             for seg in self.segments:
                 sp = Spectrogram.Spectrogram(512, 256)
-                sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+                sp.readSoundFile(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
                 incr = 256 * sp.audioFormat.sampleRate() // self.field("fs")
@@ -852,7 +857,7 @@ class BuildRecAdvWizard(QWizard):
                 self.maxsg = 1
                 for seg in self.segments:
                     sp = Spectrogram.Spectrogram(512, 256)
-                    sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+                    sp.readSoundFile(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
     
                     # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
                     incr = 256 * sp.audioFormat.sampleRate() // self.field("fs")
@@ -1296,10 +1301,10 @@ class BuildRecAdvWizard(QWizard):
             with pg.BusyCursor():
                 for root, dirs, files in os.walk(self.field("trainDir")):
                     for file in files:
-                        wavFile = os.path.join(root, file)
-                        if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                        soundFile = os.path.join(root, file)
+                        if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                             pageSegs = Segment.SegmentList()
-                            pageSegs.parseJSON(wavFile + '.data')
+                            pageSegs.parseJSON(soundFile + '.data')
 
                             # CLUSTERS COME IN HERE:
                             # replace segments with the current cluster
@@ -1307,7 +1312,7 @@ class BuildRecAdvWizard(QWizard):
                             pageSegs.clear()
                             for longseg in self.segments:
                                 # long seg has format: [file [segment] clusternum]
-                                if longseg[0] == wavFile:
+                                if longseg[0] == soundFile:
                                     pageSegs.addSegment(longseg[1])
 
                             # So, each page will overwrite a file with the 0/1 annots,
@@ -1315,9 +1320,9 @@ class BuildRecAdvWizard(QWizard):
 
                             # exports 0/1 annotations
                             if self.method=="wv":
-                                pageSegs.exportGT(wavFile, self.field("species"), resolution=1.0)
+                                pageSegs.exportGT(soundFile, self.field("species"), resolution=1.0)
                             elif self.method=="chp":
-                                pageSegs.exportGT(wavFile, self.field("species"), resolution=chpwin)
+                                pageSegs.exportGT(soundFile, self.field("species"), resolution=chpwin)
 
 
             # calculate cluster centres
@@ -1347,6 +1352,10 @@ class BuildRecAdvWizard(QWizard):
                     # Note: using energies averaged over window size set before
                     numthr = 9
                     self.thrList = np.geomspace(0.03, 10, num=numthr)
+                    print("trainDir: ", self.field("trainDir"))
+                    print("thrList: ", self.thrList)
+                    print("maxlen: ", maxlen)
+                    print("chpwin: ", chpwin)
                     self.nodes, TP, FP, TN, FN = ws.waveletSegment_trainChp(self.field("trainDir"),
                                                                     self.thrList,
                                                                     maxlen=maxlen, window=chpwin)
@@ -2300,10 +2309,10 @@ class BuildCNNWizard(QWizard):
             minCertainty = 100
             for root, dirs, files in os.walk(dirname):
                 for file in files:
-                    wavFile = os.path.join(root, file)
-                    if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                    soundFile = os.path.join(root, file)
+                    if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                         segments = Segment.SegmentList()
-                        segments.parseJSON(wavFile + '.data')
+                        segments.parseJSON(soundFile + '.data')
                         cert = [lab["certainty"] if lab["species"] == self.cnntrain.species else 100 for seg in segments for lab in seg[4]]
                         if cert:
                             mincert = min(cert)
@@ -2523,7 +2532,7 @@ class BuildCNNWizard(QWizard):
             if duration == 0:
                 duration = None
 
-            self.cnntrain.sp.readWav(filename, duration, offset)
+            self.cnntrain.sp.readSoundFile(filename, duration, offset)
             self.cnntrain.sp.resample(fs)
 
             return self.cnntrain.sp.data

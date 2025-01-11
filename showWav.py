@@ -3,7 +3,7 @@ import pylab as pl
 import SP as SignalProc
 
 SP = SignalProc.SignalProc()
-SP.readWav('Sound Files/tril1.wav')
+SP.readSoundFile('Sound Files/tril1.wav')
 sg = SP.spectrogram()
 pl.imshow(10*np.log10(np.flipud(sg.T)))
 pl.show()

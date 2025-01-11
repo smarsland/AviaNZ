@@ -19,7 +19,7 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
         duration = None
 
     sp = SignalProc.SignalProc(256, 128)
-    sp.readWav(filename, duration, offset)
+    sp.readSoundFile(filename, duration, offset)
     sp.resample(fs)
     sampleRate = sp.sampleRate
     audiodata = sp.data
@@ -42,7 +42,7 @@ dataset = []
 if os.path.isdir(dir):
     for root, dirs, files in os.walk(str(dir)):
         for file in files:
-            if file.endswith('.wav') and file + '.data' in files:
+            if (file.endswith('.wav') or file.endswith('.flac')) and file + '.data' in files:
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(os.path.join(root, file + '.data'))

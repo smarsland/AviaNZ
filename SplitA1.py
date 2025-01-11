@@ -225,7 +225,7 @@ class SplitData(QMainWindow):
         hr, min = divmod(min, 60)
         self.labelCutLen.setText("= %d hr %02d min %02d s" % (hr, min, s))
         if self.indirOk:
-            self.labelSum.setText("Will split %d WAV files and %d DATA files into pieces of %d min %d s." % (len(self.listOfWavs), len(self.listOfDataFiles), self.cutLen // 60, self.cutLen % 60))
+            self.labelSum.setText("Will split %d WAV files and %d DATA files into pieces of %d min %d s." % (len(self.listOfSoundFiles), len(self.listOfDataFiles), self.cutLen // 60, self.cutLen % 60))
         else:
             self.labelSum.setText("Please select files to split")
 
@@ -236,18 +236,18 @@ class SplitData(QMainWindow):
 
         if not os.path.isdir(self.dirName):
             print("ERROR: directory %s doesn't exist" % self.dirName)
-            self.listOfWavs = []
+            self.listOfSoundFiles = []
             self.listOfDataFiles = []
             listOfDirs = []
         else:
             listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.AllDirs | QDir.NoDotAndDotDot )
-            self.listOfWavs = QDir(self.dirName).entryList(['*.wav'])
+            self.listOfSoundFiles = QDir(self.dirName).entryList(['*.wav'])
             self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data'])
 
         # check if files have timestamps:
         haveTime = 0
-        for f in self.listOfWavs:
-            infilestem = f[:-4]
+        for f in self.listOfSoundFiles:
+            infilestem = f.rsplit('.', 1)[0]
             try:
                 datestamp = infilestem.split("_")[-2:] # get [date, time]
                 datestamp = '_'.join(datestamp) # make "date_time"
@@ -261,7 +261,7 @@ class SplitData(QMainWindow):
                 print("Could not identify timestamp in", f)
 
         for f in self.listOfDataFiles:
-            infilestem = f[:-9]
+            infilestem = f.rsplit('.', 1)[0]
             try:
                 datestamp = infilestem.split("_")[-2:] # get [date, time]
                 datestamp = '_'.join(datestamp) # make "date_time"
@@ -283,14 +283,14 @@ class SplitData(QMainWindow):
         else:
             self.labelDirs.setText("Warning: detected subfolders will not be processed: %s..." % ", ".join(listOfDirs[:3]))
 
-        if len(self.listOfWavs)==0:
+        if len(self.listOfSoundFiles)==0:
             self.labelWavs.setText("ERROR: no WAV files detected!")
             noWav = True
-        elif len(self.listOfWavs)<4:
-            self.labelWavs.setText("Found <b>%d</b> WAV files: %s" % (len(self.listOfWavs), ", ".join(self.listOfWavs)))
+        elif len(self.listOfSoundFiles)<4:
+            self.labelWavs.setText("Found <b>%d</b> WAV files: %s" % (len(self.listOfSoundFiles), ", ".join(self.listOfSoundFiles)))
             noWav = False
         else:
-            self.labelWavs.setText("Found <b>%d</b> WAV files: %s..." % (len(self.listOfWavs), ", ".join(self.listOfWavs[:3])))
+            self.labelWavs.setText("Found <b>%d</b> WAV files: %s..." % (len(self.listOfSoundFiles), ", ".join(self.listOfSoundFiles[:3])))
             noWav = False
 
         if len(self.listOfDataFiles)==0:
@@ -310,7 +310,7 @@ class SplitData(QMainWindow):
             self.indirOk = False
             self.labelSum.setText("ERROR: cannot use the same folder for input and output")
         elif self.indirOk:
-            self.labelSum.setText("Will split %d WAV files and %d DATA files into pieces of %d min %d s." % (len(self.listOfWavs), len(self.listOfDataFiles), self.cutLen // 60, self.cutLen % 60))
+            self.labelSum.setText("Will split %d WAV files and %d DATA files into pieces of %d min %d s." % (len(self.listOfSoundFiles), len(self.listOfDataFiles), self.cutLen // 60, self.cutLen % 60))
         else:
             self.labelSum.setText("Please select files to split")
 
@@ -320,7 +320,7 @@ class SplitData(QMainWindow):
         # setup progress bar etc
         print("Starting to split...")
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        totalfiles = len(self.listOfDataFiles) + len(self.listOfWavs)
+        totalfiles = len(self.listOfDataFiles) + len(self.listOfSoundFiles)
         dlg = QProgressDialog("Splitting...", "", 0, totalfiles, self)
         donefiles = 0
         dlg.setCancelButton(None)
@@ -331,7 +331,7 @@ class SplitData(QMainWindow):
         dlg.forceShow()
 
         # do the wav files
-        for f in self.listOfWavs:
+        for f in self.listOfSoundFiles:
             # output is passed as the same file name in different dir -
             # the splitter will figure out if numbers or times need to be attached
             infile_c = os.path.join(self.dirName, f).encode('ascii')
@@ -340,8 +340,9 @@ class SplitData(QMainWindow):
             # we check the format here - but we can't really pass the C-format struct entirely
             wavHasDt = int(0)
             try:
-                wavstring = f[:-4].split("_")  # get [recorder, date, time]
-                wavdt = '_'.join(wavstring[-2:])  # make "date_time"
+                fNoExtension = f.rsplit('.', 1)[0]
+                soundFileString = fNoExtension.split("_")  # get [recorder, date, time]
+                wavdt = '_'.join(soundFileString[-2:])  # make "date_time"
                 # check both 4-digit and 2-digit codes (century that produces closest year to now is inferred)
                 try:
                     wavdt = dt.datetime.strptime(wavdt, "%Y%m%d_%H%M%S")
@@ -350,7 +351,7 @@ class SplitData(QMainWindow):
                 print(f, "identified as timestamp", wavdt)
                 wavHasDt = int(1)
                 # Here, we remake the out file name to always have 4 digit years, to make life easier in the C part
-                outfile_c = '_'.join(wavstring[:-2])
+                outfile_c = '_'.join(soundFileString[:-2])
                 outfile_c =  outfile_c + '_' + dt.datetime.strftime(wavdt, "%Y%m%d_%H%M%S") + '.wav'
                 outfile_c = os.path.join(self.dirO, outfile_c).encode('ascii')
             except ValueError:

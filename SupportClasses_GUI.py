@@ -45,7 +45,7 @@ import os
 import io
 import Spectrogram
 
-import pyflac
+import soundfile as sf
 
 import threading
 
@@ -1471,7 +1471,8 @@ class LightedFileList(QListWidget):
                                             print(e)
                                     elif filename.lower().endswith('.flac'):
                                         try:
-                                            samplerate = pyflac.FLAC(filenamef).info.sample_rate
+                                            info = sf.info(filename)
+                                            samplerate = info.samplerate
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of FLAC file", filenamef)
@@ -1519,7 +1520,8 @@ class LightedFileList(QListWidget):
                                 print(e)
                         elif fullname.lower().endswith('.flac'):
                             try:
-                                samplerate = pyflac.FLAC(fullname).info.sample_rate
+                                info = sf.info(fullname)
+                                samplerate = info.samplerate
                                 self.fsList.add(samplerate)
                             except Exception as e:
                                 print("Warning: could not parse format of FLAC file", fullname)

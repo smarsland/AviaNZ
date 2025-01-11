@@ -193,7 +193,8 @@ class CNN:
         dataz = np.load(npzfile)
         numarrays = len(dataz)
 
-        labfile = file[:-4] + '_labels.json'
+        fileMinusExtension = file.rsplit('.', 1)[0]
+        labfile = fileMinusExtension + '_labels.json'
         with open(labfile) as f:
             labels = json.load(f)
 
@@ -451,10 +452,10 @@ class GenerateData:
         calltypeSegments = []
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                wavFile = os.path.join(root, file)
-                if file.lower().endswith('.wav') and file + '.data' in files:
+                soundFile = os.path.join(root, file)
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                     segments = Segment.SegmentList()
-                    segments.parseJSON(wavFile + '.data')
+                    segments.parseJSON(soundFile + '.data')
                     if len(self.calltypes) == 1:
                         ctSegments = segments.getSpecies(self.species)
                     else:
@@ -466,7 +467,7 @@ class GenerateData:
                         if cert:
                             mincert = min(cert)
                             if mincert == 100:
-                                calltypeSegments.append([wavFile, seg[:2], calltypei])
+                                calltypeSegments.append([soundFile, seg[:2], calltypei])
 
         return calltypeSegments
 
@@ -482,16 +483,16 @@ class GenerateData:
         print('Generating GT...')
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                wavFile = os.path.join(root, file)
-                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                soundFile = os.path.join(root, file)
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     segments = Segment.SegmentList()
-                    segments.parseJSON(wavFile + '.data')
+                    segments.parseJSON(soundFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
 
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, self.species, resolution=1.0)
+                    segments.exportGT(soundFile, self.species, resolution=1.0)
         if manSegNum == 0:
             print("ERROR: no segments for species %s found" % self.species)
             return
@@ -503,12 +504,12 @@ class GenerateData:
         print("autoSeg", autoSegments)
         for item in autoSegments:
             print(item[0])
-            wavFile = item[0]
-            if os.stat(wavFile).st_size != 0:
+            soundFile = item[0]
+            if os.stat(soundFile).st_size != 0:
                 sppSegments = []
-                if os.path.isfile(wavFile + '.data'):
+                if os.path.isfile(soundFile + '.data'):
                     segments = Segment.SegmentList()
-                    segments.parseJSON(wavFile + '.data')
+                    segments.parseJSON(soundFile + '.data')
                     sppSegments = [segments[i] for i in segments.getSpecies(self.species)]
                 for segAuto in item[1]:
                     overlappedwithGT = False
@@ -517,7 +518,7 @@ class GenerateData:
                             overlappedwithGT = True
                             break
                     if not overlappedwithGT:
-                        noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
+                        noiseSegments.append([soundFile, segAuto, len(self.calltypes)])
         return noiseSegments
 
     def findAllsegments(self, dirName):
@@ -532,17 +533,17 @@ class GenerateData:
         print('Generating GT...')
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                wavFile = os.path.join(root, file)
-                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                soundFile = os.path.join(root, file)
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     # Generate GT files from annotations in dir1
                     segments = Segment.SegmentList()
-                    segments.parseJSON(wavFile + '.data')
+                    segments.parseJSON(soundFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
 
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, self.species, resolution=1.0)
+                    segments.exportGT(soundFile, self.species, resolution=1.0)
 
                     print('Determining noise...')
                     autoseg = Segment.SegmentList()
@@ -550,9 +551,9 @@ class GenerateData:
                         autoseg.addSegment([sec, sec+1, 0, 0, []])
                     autoSegments = segmenter.joinGaps(autoseg, maxgap=0)
 
-                    print("autoSeg, file", wavFile, autoSegments)
+                    print("autoSeg, file", soundFile, autoSegments)
                     for segAuto in autoSegments:
-                        noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
+                        noiseSegments.append([soundFile, segAuto, len(self.calltypes)])
 
         if manSegNum == 0:
             print("ERROR: no segments for species %s found" % self.species)
@@ -646,7 +647,7 @@ class GenerateData:
 
             try:
                 # load file
-                sp.readWav(record[0], duration=duration, off=record[1][0])
+                sp.readSoundFile(record[0], duration=duration, off=record[1][0])
                 sp.resample(self.fs)
                 sgRaw = sp.spectrogram()
                 # Could bandpass here if relevant:
@@ -682,7 +683,7 @@ class GenerateData:
 
                 # Save train data: individual images as npy
                 np.save(os.path.join(dirName, str(record[-1]),
-                        str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split(os.sep)[-1][:-4] + '.npy'),
+                        str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split(os.sep)[-1].rsplit('.', 1)[0] + '.npy'),
                         sgRaw_i)
                 count += 1
 

@@ -303,6 +303,8 @@ class Clustering:
         f1, f2 = self.getFrqRange(dirname, species, fs)
         print("Clustering using sampling rate", fs)
 
+        print("f1",f1,"f2",f2)
+
         # 2. Find the lower and upper bounds (relevant to the frq range)
         if feature == 'mfcc' and f1 != 0 and f2 != 0:
             mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs / 2, htk=False)
@@ -431,6 +433,10 @@ class Clustering:
         for i in range(len(clustered_dataset)):
             clustered_dataset[i].insert(4, dic[labels[i]])
             # clustered_dataset format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+        
+        print("clustered_dataset", clustered_dataset)
+        print("nclasses", nclasses)
+        print("duration", duration)
 
         return clustered_dataset, nclasses, duration
 
@@ -445,26 +451,26 @@ class Clustering:
         duration = []
 
         listOfDataFiles = []
-        listOfWavFiles = []
+        listOfSoundFiles = []
         for root, dirs, files in os.walk(trainDir):
             for file in files:
-                if file[-5:].lower() == '.data':
+                if file.lower().endswith('.data'):
                     listOfDataFiles.append(os.path.join(root, file))
-                elif file[-4:].lower() == '.wav':
-                    listOfWavFiles.append(os.path.join(root, file))
+                elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
+                    listOfSoundFiles.append(os.path.join(root, file))
 
         for file in listOfDataFiles:
-            if file[:-5] in listOfWavFiles:
+            if file[:-5] in listOfSoundFiles:
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(os.path.join(trainDir, file))
-                wavfile = os.path.join(trainDir, file[:-5])
+                soundfile = os.path.join(trainDir, file[:-5])
                 SpSegs = segments.getSpecies(species)
                 #print(SpSegs)
             
                 if len(SpSegs) > 0:
                     # Load the file
-                    #self.sp.readWav(wavfile)
+                    #self.sp.readSoundFile(soundfile)
                     #audiodata = sp.data.tolist()
 
                     # For each segment
@@ -482,17 +488,17 @@ class Clustering:
                                 else:
                                     ct = None
 
-                            calls.append([wavfile, seg, ct])
+                            calls.append([soundfile, seg, ct])
                 
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
                                 # TODO: is median clipping still best option?
                                 # TODO: SRM: HERE
-                                #syls = self.findSyllablesSeg(wavfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
+                                #syls = self.findSyllablesSeg(soundfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
                                 # TODO: Something weird with self.clusters It's a dict except when it isn't...
-                                #CTsegments.append([wavfile, seg, syls, ct])
-                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(ct)]])
-                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                #CTsegments.append([soundfile, seg, syls, ct])
+                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(ct)]])
+                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                                 # TODO: What's the point of this duration?
                                 #duration.append(seg[1]-seg[0])
         #print(calltypes)                     
@@ -509,26 +515,26 @@ class Clustering:
         duration = []
 
         listOfDataFiles = []
-        listOfWavFiles = []
+        listOfSoundFiles = []
         for root, dirs, files in os.walk(trainDir):
             for file in files:
-                if file[-5:].lower() == '.data':
+                if file.lower().endswith('.data'):
                     listOfDataFiles.append(os.path.join(root, file))
-                elif file[-4:].lower() == '.wav':
-                    listOfWavFiles.append(os.path.join(root, file))
+                elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
+                    listOfSoundFiles.append(os.path.join(root, file))
 
         for file in listOfDataFiles:
-            if file[:-5] in listOfWavFiles:
+            if file[:-5] in listOfSoundFiles:
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(os.path.join(trainDir, file))
-                wavfile = os.path.join(trainDir, file[:-5])
+                soundfile = os.path.join(trainDir, file[:-5])
                 SpSegs = segments.getSpecies(species)
                 #print(SpSegs)
             
                 if len(SpSegs) > 0:
                     # Load the file
-                    #self.sp.readWav(wavfile)
+                    #self.sp.readSoundFile(soundfile)
                     #audiodata = sp.data.tolist()
 
                     # For each segment
@@ -546,17 +552,17 @@ class Clustering:
                                 else:
                                     ct = None
 
-                                CTsegments.append([wavfile, seg, syls, ct])
+                                CTsegments.append([soundfile, seg, syls, ct])
                 
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
                                 # TODO: is median clipping still best option?
                                 # TODO: SRM: HERE
-                                #syls = self.findSyllablesSeg(wavfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
+                                #syls = self.findSyllablesSeg(soundfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
                                 # TODO: Something weird with self.clusters It's a dict except when it isn't...
-                                #CTsegments.append([wavfile, seg, syls, ct])
-                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(ct)]])
-                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                #CTsegments.append([soundfile, seg, syls, ct])
+                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(ct)]])
+                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                                 # TODO: What's the point of this duration?
                                 #duration.append(seg[1]-seg[0])
         #print(calltypes)                     
@@ -572,17 +578,17 @@ class Clustering:
         cl = Clustering.Clustering([], [], 5)
 
         listOfDataFiles = []
-        listOfWavFiles = []
+        listOfSoundFiles = []
         for root, dirs, files in os.walk(self.field("trainDir")):
             for file in files:
-                if file[-5:].lower() == '.data':
+                if file.lower().endswith('.data'):
                     listOfDataFiles.append(os.path.join(root, file))
-                elif file[-4:].lower() == '.wav':
-                    listOfWavFiles.append(os.path.join(root, file))
+                elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
+                    listOfSoundFiles.append(os.path.join(root, file))
 
         # TODO Why are there 2 versions of these loops
         for file in listOfDataFiles:
-            if file[:-5] in listOfWavFiles:
+            if file[:-5] in listOfSoundFiles:
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(file)
@@ -597,10 +603,10 @@ class Clustering:
             self.clusters[i] = ctTexts[i]
 
         for file in listOfDataFiles:
-            if file[:-5] in listOfWavFiles:
+            if file[:-5] in listOfSoundFiles:
                 # Read the annotation
                 segments = Segment.SegmentList()
-                wavfile = os.path.join(self.field("trainDir"), file[:-5])
+                soundfile = os.path.join(self.field("trainDir"), file[:-5])
                 segments.parseJSON(os.path.join(self.field("trainDir"), file))
                 SpSegs = segments.getSpecies(self.field("species"))
                 for segix in SpSegs:
@@ -609,8 +615,8 @@ class Clustering:
                         if label["species"] == self.field("species") and "calltype" in label:
                             # Find the syllables inside this segment
                             # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                            syls = self.findSyllablesSeg(wavfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
-                            CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                            syls = self.findSyllablesSeg(soundfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
+                            CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                             duration.append(seg[1]-seg[0])
         return CTsegments, len(self.clusters), np.median(duration)
 
@@ -636,7 +642,7 @@ class Clustering:
         if os.path.isdir(dirname):
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
-                    if file.lower().endswith('.wav') and file + '.data' in files:
+                    if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                         # wavrate = wavio.readFmt(os.path.join(root, file))[0]
                         # srlist.append(wavrate)
                         # Read the annotation
@@ -654,7 +660,7 @@ class Clustering:
 
         # File mode (from the main interface)
         elif os.path.isfile(dirname):
-            if dirname.lower().endswith('.wav') and os.path.exists(dirname + '.data'):
+            if (dirname.lower().endswith('.wav') or dirname.lower().endswith('.flac')) and os.path.exists(dirname + '.data'):
                 # wavrate = wavio.readFmt(dirname)[0]
                 # srlist.append(wavrate)
                 # Read the annotation
@@ -714,7 +720,7 @@ class Clustering:
         if os.path.isdir(dirname):
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
-                    if file.lower().endswith('.wav') and file + '.data' in files:
+                    if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                         # Read the annotation
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
@@ -729,7 +735,7 @@ class Clustering:
                             for syl in syls:
                                 dataset.append([os.path.join(root, file), seg, syl])
         elif os.path.isfile(dirname):
-            if dirname.lower().endswith('.wav') and os.path.exists(dirname + '.data'):
+            if (dirname.lower().endswith('.wav') or dirname.lower().endswith('.flac')) and os.path.exists(dirname + '.data'):
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(dirname + '.data')
@@ -745,14 +751,14 @@ class Clustering:
                         dataset.append([dirname, seg, syl])
         return dataset
 
-    def findSyllablesSeg(self, wavfile, seg, fs=None, denoise=False, minlen=10):
+    def findSyllablesSeg(self, filename, seg, fs=None, denoise=False, minlen=10):
         """ Find syllables in the segment using median clipping - single segment
         :return: syllables list
         """
         # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
         # And should avoid opening file more than once
         # And since have made spectrogram, pass it back
-        audiodata = self.loadFile(filename=wavfile, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
+        audiodata = self.loadFile(filename=filename, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
         start = seg[0]
         #self.sp = Spectrogram.Spectrogram()
         self.sp.data = audiodata
@@ -904,7 +910,8 @@ class Clustering:
 
         self.sp = Spectrogram.Spectrogram(256, 128)
         print(filename,duration,offset)
-        self.sp.readWav(filename, duration, offset, silent=silent)
+        self.sp.readSoundFile(filename, duration, offset, silent=silent)
+        
         #self.sp.resample(fs)
         sampleRate = self.sp.audioFormat.sampleRate()
         audiodata = self.sp.data
@@ -949,7 +956,7 @@ class Clustering:
         srlist = []
         for root, dirs, files in os.walk(str(dir)):
             for file in files:
-                if file.lower().endswith('.wav') and file + '.data' in files:
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                     #wavrate = wavio.readFmt(os.path.join(root, file))[0]
                     wavobj = wavioread(os.path.join(root, file), 0, 0)
                     wavrate = wavobj.rate
@@ -1010,7 +1017,7 @@ class Clustering:
         clusters = []
         for root, dirs, files in os.walk(str(dir)):
             for file in files:
-                if file.lower().endswith('.wav') and file + '.data' in files:
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, file + '.data'))

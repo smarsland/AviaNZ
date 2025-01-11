@@ -188,10 +188,10 @@ class CNNtrain:
         if os.path.isdir(self.folderTrain2):
             for root, dirs, files in os.walk(str(self.folderTrain2)):
                 for file in files:
-                    if file.lower().endswith('.wav') and file + '.corrections' in files:
+                    if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections' in files:
                         # Read the .correction (from allspecies review)
                         cfile = os.path.join(root, file + '.corrections')
-                        wavfile = os.path.join(root, file)
+                        soundfile = os.path.join(root, file)
                         try:
                             f = open(cfile, 'r')
                             annots = json.load(f)
@@ -216,12 +216,12 @@ class CNNtrain:
                                 continue
                             if oldlabel[0]['species'] == self.species and self.species not in newsp:
                                 # store this as "noise" calltype
-                                self.traindata.append([wavfile, seg[0][:2], len(self.calltypes)])
+                                self.traindata.append([soundfile, seg[0][:2], len(self.calltypes)])
                                 self.correction = True
-                    elif file.lower().endswith('.wav') and file + '.corrections_' + self.cleanSpecies(self.species) in files:
+                    elif (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections_' + self.cleanSpecies(self.species) in files:
                         # Read the .correction (from single sp review)
                         cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
-                        wavfile = os.path.join(root, file)
+                        soundfile = os.path.join(root, file)
                         try:
                             f = open(cfile, 'r')
                             annots = json.load(f)
@@ -235,7 +235,7 @@ class CNNtrain:
                                 continue
                             else:
                                 # store this as "noise" calltype
-                                self.traindata.append([wavfile, seg[:2], len(self.calltypes)])
+                                self.traindata.append([soundfile, seg[:2], len(self.calltypes)])
                                 self.correction = True
 
         # Call type segments
@@ -674,14 +674,14 @@ class CNNtest:
         print('Generating GT...')
         for root, dirs, files in os.walk(self.testDir):
             for file in files:
-                wavFile = os.path.join(root, file)
-                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                soundFile = os.path.join(root, file)
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     segments = Segment.SegmentList()
-                    segments.parseJSON(wavFile + '.data')
+                    segments.parseJSON(soundFile + '.data')
                     self.manSegNum += len(segments.getSpecies(species))
                     # Currently, we ignore call types here and just
                     # look for all calls for the target species.
-                    segments.exportGT(wavFile, species, resolution=self.window)
+                    segments.exportGT(soundFile, species, resolution=self.window)
 
         if self.manSegNum == 0:
             print("ERROR: no segments for species %s found" % species)
@@ -750,28 +750,29 @@ class CNNtest:
         TP = FP = TN = FN = 0
         for root, dirs, files in os.walk(self.testDir):
             for file in files:
-                wavFile = os.path.join(root, file)
-                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and \
-                        file + '.tmpdata' in files and file[:-4] + '-GT.txt' in files:
+                soundFile = os.path.join(root, file)
+                filenameNoExtension = file.rsplit('.', 1)[0]
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and \
+                        file + '.tmpdata' in files and filenameNoExtension + '-GT.txt' in files:
                     # Extract all segments and back-convert to 0/1:
-                    _, duration, _, _ = wavio.readFmt(wavFile)
+                    _, duration, _, _ = wavio.readFmt(soundFile)
                     duration = math.ceil(duration)
                     det01 = np.zeros(duration)
 
                     for i in range(len(self.calltypes)):
                         if CNN:
                             # read segments
-                            ctsegments = self.findCTsegments(wavFile+'.tmpdata', i)
+                            ctsegments = self.findCTsegments(soundFile+'.tmpdata', i)
                         else:
                             # read segments from an identical postproc pipeline w/o CNN
-                            ctsegments = self.findCTsegments(wavFile+'.tmp2data', i)
+                            ctsegments = self.findCTsegments(soundFile+'.tmp2data', i)
                         autoSegCTnum[i] += len(ctsegments)
 
                         for seg in ctsegments:
                             det01[math.floor(seg[0]):math.ceil(seg[1])] = 1
 
                     # get and parse the agreement metrics
-                    GT = self.loadGT(os.path.join(root, file[:-4] + '-GT.txt'), duration)
+                    GT = self.loadGT(os.path.join(root, filenameNoExtension + '-GT.txt'), duration)
                     _, _, tp, fp, tn, fn = ws.fBetaScore(GT, det01)
                     TP += tp
                     FP += fp

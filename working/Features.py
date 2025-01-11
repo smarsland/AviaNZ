@@ -362,7 +362,7 @@ def genCluterData(dir, duration=1, sampRate=16000):
     f1 = open(dir + '/' + "mfcc.tsv", "w")
     for root, dirs, files in os.walk(str(dir)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if filename.endswith('.wav') or filename.endswith('.flac'):
                 filename = root + '/' + filename
                 # determin call type from the folder name
                 type = root.split("\\")[-1]
@@ -536,7 +536,7 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
     dList=[]
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if filename.endswith('.wav') or filename.endswith('.flac'):
                 filename = root + '/' + filename #[:-4]
                 y, sr = loadFile(filename)
                 d = mfcc_dtw(y=y, sr=sr, yTest=yTest, srTest=srTest)
@@ -627,11 +627,12 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
 
     for root, dirs, files in os.walk(str(dir_src)):
         for file in files:
-            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res1.0sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
+            fileNoExtension = file.rsplit('.', 1)[0]
+            if (file.endswith('.wav') or file.endswith('.flac')) and os.stat(root + '/' + file).st_size != 0 and fileNoExtension + '-res1.0sec.txt' in files or (file.endswith('.wav') or file.endswith('.flac')) and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
                 opstartingtime = time.time()
-                wavFile = root + '/' + file[:-4]
-                print(wavFile)
-                data, currentannotation, sampleRate = loadData(wavFile, filemode)
+                soundFile = root + '/' + fileNoExtension
+                print(soundFile)
+                data, currentannotation, sampleRate = loadData(soundFile, filemode)
 
                 ws = WaveletSegment.WaveletSegment(data=data, sampleRate=sampleRate)
                 if feature == 'WEraw_all' or feature == 'MFCCraw_all' or feature == 'WE+MFCCraw_all':

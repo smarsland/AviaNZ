@@ -218,7 +218,7 @@ def cluster_ruru(sampRate):
             vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
             im = pg.ImageItem(enableMouse=False)
-            txt = fnames[i].split("/")[-1][:-4]
+            txt = fnames[i].split("/")[-1].rsplit('.', 1)[0]
             lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
             vb.addItem(lbl)
             vb2.addItem(im)
@@ -283,7 +283,7 @@ def within_cluster_dist(dir):
     features = []
     for root, dirs, files in os.walk(str(dir)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if (filename.endswith('.wav') or filename.endswith('.flac')):
                 filename = os.path.join(root, filename)
                 print(filename)
                 data, fs = loadFile(filename)
@@ -345,7 +345,7 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
     srlist = []
     for root, dirs, files in os.walk(str(dir)):
         for file in files:
-            if file.endswith('.wav') and file+'.data' in files:
+            if (file.endswith('.wav') or file.endswith('.flac')) and file+'.data' in files:
                 wavobj = wavio.read(os.path.join(root, file))
                 srlist.append(wavobj.rate)
                 # Read the annotation
@@ -398,7 +398,7 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
     clusters = []
     for root, dirs, files in os.walk(str(dir)):
         for file in files:
-            if file.endswith('.wav') and file+'.data' in files:
+            if (file.endswith('.wav') or file.endswith('.flac')) and file+'.data' in files:
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(os.path.join(root, file+'.data'))

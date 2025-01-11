@@ -34,6 +34,12 @@ import SignalProc
 from PyQt6.QtGui import QImage
 from PyQt6.QtMultimedia import QAudioFormat
 
+import pyflac
+import tempfile
+
+import os
+import shutil
+
 #QtMM = True
 #try:
     #from PyQt6.QtMultimedia import QAudioFormat
@@ -72,8 +78,8 @@ class Spectrogram:
 
     # # TODO: read less of the file
     # def readFlac(self, file,silent=False):
-    #     wavfile = '/home/marslast/output.wav'
-    #     pyf = pyflac.FileDecoder(file,wavfile)
+    #     soundfile = '/home/marslast/output.wav'
+    #     pyf = pyflac.FileDecoder(file,soundfile)
     #     self.data, fs = pyf.process()
     #     return
 
@@ -162,6 +168,32 @@ class Spectrogram:
             sf = str(self.audioFormat.sampleFormat())
             print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
             #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+    
+    def readFlac(self, file, duration=None, off=0, silent=False):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
+            temp_wav_path = temp_wav.name
+            temp_dir = os.path.dirname(temp_wav.name)
+            estimated_wav_size = os.path.getsize(file) * 10
+            total, used, free = shutil.disk_usage(temp_dir)
+            if free < estimated_wav_size:
+                print("Error: Insufficient disk space for the WAV file")
+                return
+            else:
+                try:
+                    pyf = pyflac.FileDecoder(file, temp_wav_path)
+                    pyf.process()
+                    return self.readWav(temp_wav_path,duration,off,silent)
+                except Exception as e:
+                    print("Error: %s" % e)
+                    return
+    
+    def readSoundFile(self, file, duration=None, off=0, silent=False):
+        if file.endswith(".wav"):
+            return self.readWav(file, duration, off, silent)
+        elif file.endswith(".flac"):
+            return self.readFlac(file, duration, off, silent)
+        else:
+            raise ValueError("Unsupported file format")
 
     def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.

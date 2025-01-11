@@ -87,6 +87,6 @@ for file in ['/Users/marslast/20191106_022512.bmp']:
         wave = a.invertSpectrogram(spec2, 1024, 512)
 
         #wave = a.bandpassFilter(wave, samplerate, 1000, 22000) bandpass?
-        wavFile = 'test.wav'
-        #wavFile=bmpFile+'_audible.wav' #Other option
-        wavio.write(wavFile, wave, samplerate, sampwidth=2)
+        soundFile = 'test.wav'
+        #soundFile=bmpFile+'_audible.wav' #Other option
+        wavio.write(soundFile, wave, samplerate, sampwidth=2)

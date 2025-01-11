@@ -620,7 +620,8 @@ class WaveletSegment:
         # find audio files with 0/1 annotations:
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
+                fileNoExtension = file.rsplit('.', 1)[0]
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(os.path.join(root, file)).st_size != 0 and fileNoExtension + '-GT.txt' in files:
                     filenames.append(os.path.join(root, file))
         if len(filenames) < 1:
             print("ERROR: no suitable files")
@@ -1550,15 +1551,16 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
+                filenameNoExtension = file.rsplit('.', 1)[0]
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(os.path.join(root, file)).st_size != 0 and filenameNoExtension + '-GT.txt' in files:
                     opstartingtime = time.time()
-                    wavFile = os.path.join(root, file)
-                    self.filenames.append(wavFile)
+                    soundFile = os.path.join(root, file)
+                    self.filenames.append(soundFile)
 
                     # adds to self.annotation array, also sets self.sp data and sampleRate
-                    succ = self.loadData(wavFile, impMask=impMask)
+                    succ = self.loadData(soundFile, impMask=impMask)
                     if not succ:
-                        print("ERROR: failed to load file", wavFile)
+                        print("ERROR: failed to load file", soundFile)
                         return
 
                     # resample, denoise and store the resulting audio data:
@@ -1599,13 +1601,14 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-GT.txt' in files:
+                fileNoExtension = file.rsplit('.', 1)[0]
+                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(os.path.join(root, file)).st_size != 0 and fileNoExtension + '-GT.txt' in files:
                     opstartingtime = time.time()
-                    wavFile = os.path.join(root, file)
-                    self.filenames.append(wavFile)
+                    soundFile = os.path.join(root, file)
+                    self.filenames.append(soundFile)
 
                     # adds to self.annotation array, also sets self.sp data and sampleRate
-                    self.loadDataChp(wavFile, window)
+                    self.loadDataChp(soundFile, window)
 
                     # resample, denoise and store the resulting audio data:
                     # note: preprocessing is a side effect on data
@@ -1639,9 +1642,10 @@ class WaveletSegment:
             catch this and immediately stop the process otherwise
         """
         print('\nLoading:', filename)
-        filenameAnnotation = filename[:-4] + '-GT.txt'
+        filenameNoExtension = filename.rsplit('.', 1)[0]
+        filenameAnnotation = filenameNoExtension + '-GT.txt'
 
-        self.sp.readWav(filename)
+        self.sp.readSoundFile(filename)
 
         # Do impulse masking by default
         if impMask:
@@ -1684,10 +1688,11 @@ class WaveletSegment:
             catch this and immediately stop the process otherwise
         """
         print('Loading file:', filename)
-        filenameAnnotation = filename[:-4] + '-GT.txt'
+        filenameNoExtension = filename.rsplit('.', 1)[0]
+        filenameAnnotation = filenameNoExtension + '-GT.txt'
 
         # Read data. No impulse masking
-        self.sp.readWav(filename)
+        self.sp.readSoundFile(filename)
 
         # Get the segmentation from the txt file
         with open(filenameAnnotation) as f:
