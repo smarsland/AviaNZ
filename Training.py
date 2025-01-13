@@ -42,6 +42,8 @@ import Segment, WaveletSegment
 import AviaNZ_batch
 import wavio
 
+import soundfile as sf
+
 class CNNtrain:
 
     def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
@@ -755,7 +757,12 @@ class CNNtest:
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and \
                         file + '.tmpdata' in files and filenameNoExtension + '-GT.txt' in files:
                     # Extract all segments and back-convert to 0/1:
-                    _, duration, _, _ = wavio.readFmt(soundFile)
+                    if file.lower().endswith('.wav'):
+                        _, duration, _, _ = wavio.readFmt(soundFile)
+                    else:
+                        with sf.SoundFile(soundFile) as f:
+                            duration = len(f) / f.samplerate
+
                     duration = math.ceil(duration)
                     det01 = np.zeros(duration)
 

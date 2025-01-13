@@ -168,7 +168,7 @@ class Spectrogram:
             sf = str(self.audioFormat.sampleFormat())
             print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
             #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-    
+
     def readFlac(self, file, duration=None, off=0, silent=False):
         with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
             temp_wav_path = temp_wav.name

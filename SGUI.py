@@ -41,6 +41,8 @@ import numpy as np
 import os
 import io
 
+import soundfile as sf
+
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as hh:mm:ss, and can add an offset
@@ -1275,6 +1277,12 @@ class LightedFileList(QListWidget):
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
                                             print(e)
+                                    elif filename.lower().endswith('.flac'):
+                                        try:
+                                            samplerate = sf.info(filenamef).samplerate
+                                            self.fsList.add(samplerate)
+                                        except Exception as e:
+                                            print("Warning: could not parse format of FLAC file", filenamef)
                                     else:
                                         # For bitmaps, using hardcoded samplerate as there's no readFmt
                                         self.fsList.add(176000)
@@ -1314,6 +1322,12 @@ class LightedFileList(QListWidget):
                             except Exception as e:
                                 print("Warning: could not parse format of WAV file", fullname)
                                 print(e)
+                        elif filename.lower().endswith('.flac'):
+                            try:
+                                samplerate = sf.info(filenamef).samplerate
+                                self.fsList.add(samplerate)
+                            except Exception as e:
+                                print("Warning: could not parse format of FLAC file", filenamef)
                         if file.fileName().lower().endswith('.bmp'):
                             # For bitmaps, using hardcoded samplerate as there's no readFmt
                             self.fsList.add(176000)

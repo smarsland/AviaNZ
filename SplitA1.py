@@ -241,8 +241,8 @@ class SplitData(QMainWindow):
             listOfDirs = []
         else:
             listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.AllDirs | QDir.NoDotAndDotDot )
-            self.listOfSoundFiles = QDir(self.dirName).entryList(['*.wav'])
-            self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data'])
+            self.listOfSoundFiles = QDir(self.dirName).entryList(['*.wav','*.flac'])
+            self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data','*.flac.data'])
 
         # check if files have timestamps:
         haveTime = 0
@@ -362,7 +362,8 @@ class SplitData(QMainWindow):
             if os.path.isfile(infile_c) and os.stat(infile_c).st_size>100:
                 # check if file is formatted correctly
                 with open(infile_c, 'br') as f:
-                    if f.read(4) != b'RIFF':
+                    first4char = f.read(4)
+                    if first4char != b'RIFF' and first4char != b'fLaC':
                         print("Warning: file %s not formatted correctly, skipping" % infile_c)
                         return
 

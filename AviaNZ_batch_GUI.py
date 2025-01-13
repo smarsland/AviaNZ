@@ -1424,6 +1424,9 @@ class AviaNZ_reviewAll(QMainWindow):
                         continue
                 self.batmode = False
             elif filename.lower().endswith('.flac'):
+                if f.read(4) != b'fLaC':
+                    print("Warning: FLAC file %s not formatted correctly, skipping" % filename)
+                    continue
                 self.batmode = False
             elif filename.lower().endswith('.bmp'):
                 with open(filename, 'br') as f:

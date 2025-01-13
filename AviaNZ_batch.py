@@ -362,7 +362,10 @@ class AviaNZ_batchProcess():
             # check if file is formatted correctly
             # TODO: speciesStr or self.species?
             with open(filename, 'br') as f:
-                if ("NZ Bats" in self.species and f.read(2) != b'BM') or (not("NZ Bats" in self.species) and f.read(4) != b'RIFF'):
+                first2char = f.read(2)
+                f.seek(0)
+                first4char = f.read(4)
+                if ("NZ Bats" in self.species and first2char != b'BM') or (not("NZ Bats" in self.species) and first4char != b'RIFF' and first4char != b'fLaC'):
                     print("File %s not formatted correctly, skipping" % filename)
                     if not self.testmode:
                         self.log.appendFile(filename)

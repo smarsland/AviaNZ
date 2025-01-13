@@ -1594,6 +1594,10 @@ class AviaNZ(QMainWindow):
                         return(1)
                 self.batmode = False
             elif fullcurrent.lower().endswith('.flac'):
+                with open(fullcurrent, 'br') as f:
+                    if f.read(4) != b'fLaC':
+                        print("FLAC file %s not formatted correctly" % fullcurrent)
+                        return(1)
                 self.batmode = False
             elif fullcurrent.lower().endswith('.bmp'):
                 with open(fullcurrent, 'br') as f:
@@ -1829,7 +1833,8 @@ class AviaNZ(QMainWindow):
                             if not calltype in self.knownCalls[species]:
                                 self.knownCalls[species].append(calltype)
             else:
-                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
+                print("SETTING DURATION A",self.sp.fileLength)
+                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength}
                 #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.sampleRate}
 
             # Bat mode: initialize with an empty segment for the entire file
@@ -5041,6 +5046,7 @@ class AviaNZ(QMainWindow):
                 annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
                                    float(fhigh[i][0].value),
                                    [{"species": species, "certainty": 100.0, "filter": "M", "calltype": species}]])
+            print("SETTING DURATION B")
             annotation.insert(0, {"Operator": "", "Reviewer": "", "Duration": duration})
             file = open(audiofile + '.data', 'w')
             json.dump(annotation, file)
@@ -5159,6 +5165,7 @@ class AviaNZ(QMainWindow):
                         duration = sp.fileLength / sp.audioFormat.sampleRate()
                         #duration = sp.fileLength / sp.sampleRate
            
+                    print("SETTING DURATION C")
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                                 
                     try:
@@ -5281,6 +5288,7 @@ class AviaNZ(QMainWindow):
                         duration = sp.fileLength / sp.sampleRate
                         #duration = sp.fileLength / sp.sampleRate
         
+                    print("SETTING DURATION D")
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                         
                     try:
@@ -5369,13 +5377,15 @@ class AviaNZ(QMainWindow):
                                 operator = elem.text
                             if elem.tag == 'Reviewer' and elem.text:
                                 reviewer = elem.text
+                        print("SETTING DURATION E")
                         annotation.insert(0, {"Operator": operator, "Reviewer": reviewer, "Duration": duration})
                         # Read the duration from the sample if possible
                         # TODO
                         # Otherwise, read file in
                         # TODO
 
-                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
+                        print("SETTING DURATION F")
+                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength}
                         #tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
                         
                         tree = ET.parse(tagFile)
