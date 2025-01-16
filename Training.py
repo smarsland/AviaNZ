@@ -40,7 +40,6 @@ import Spectrogram
 import CNN
 import Segment, WaveletSegment
 import AviaNZ_batch
-import wavio
 
 import soundfile as sf
 
@@ -249,7 +248,10 @@ class CNNtrain:
                 self.traindata.append(x)
 
         # How many of each class
+        print("TRAIN DATA",self.traindata)
         target = np.array([rec[-1] for rec in self.traindata])
+        print("SETTING trainN", target)
+        print("CALLTYPES", self.calltypes)
         self.trainN = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
     def genImgDataset(self, hop):
@@ -758,10 +760,12 @@ class CNNtest:
                         file + '.tmpdata' in files and filenameNoExtension + '-GT.txt' in files:
                     # Extract all segments and back-convert to 0/1:
                     if file.lower().endswith('.wav'):
-                        _, duration, _, _ = wavio.readFmt(soundFile)
+                        #_, duration, _, _ = wavio.readFmt(soundFile)
+                        info = sf.info(soundFile)
+                        duration = info.frames / info.samplerate
                     else:
-                        with sf.SoundFile(soundFile) as f:
-                            duration = len(f) / f.samplerate
+                        info = sf.info(soundFile)
+                        duration = info.frames / info.samplerate
 
                     duration = math.ceil(duration)
                     det01 = np.zeros(duration)

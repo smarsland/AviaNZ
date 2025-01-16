@@ -26,11 +26,11 @@ import librosa, resampy
 import Spectrogram
 import SupportClasses
 import WaveletSegment
-import wavio
 from scipy import signal
 import math
 import os
 import re
+import soundfile as sf
 
 # TODO:
 # First thing is to get my head around everything that is going on, which is:
@@ -338,9 +338,7 @@ class Features:
 
 
 def loadFile(filename):
-    wavobj = wavio.read(filename)
-    sampleRate = wavobj.rate
-    audiodata = wavobj.data
+    audiodata, sampleRate = sf.read(filename)
 
     # None of the following should be necessary for librosa
     if audiodata.dtype is not 'float':
@@ -553,9 +551,7 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
 #print dList
 
 def testFeatures():
-    wavobj = wavio.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
-    fs = wavobj.rate
-    data = wavobj.data
+    data, fs = sf.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
 
     if data.dtype is not 'float':
         data = data.astype('float')         # / 32768.0

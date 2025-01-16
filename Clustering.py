@@ -23,7 +23,7 @@
 
 import numpy as np
 import random
-import os, wavio
+import os
 import librosa
 
 import WaveletSegment
@@ -51,6 +51,8 @@ from sklearn import metrics
 from sklearn.manifold import TSNE
 from statistics import mode
 from sklearn.metrics.pairwise import pairwise_distances
+
+import soundfile as sf
 
 
 class Clustering:
@@ -958,9 +960,9 @@ class Clustering:
             for file in files:
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                     #wavrate = wavio.readFmt(os.path.join(root, file))[0]
-                    wavobj = wavioread(os.path.join(root, file), 0, 0)
-                    wavrate = wavobj.rate
-                    srlist.append(wavrate)
+                    info = sf.info(os.path.join(root, file))
+                    rate = info.samplerate
+                    srlist.append(rate)
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, file + '.data'))

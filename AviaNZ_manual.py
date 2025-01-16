@@ -65,7 +65,6 @@ from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF #, QThread
 from PyQt6.QtMultimedia import QAudio, QAudioFormat
 
-import wavio
 import numpy as np
 from scipy.ndimage.filters import median_filter
 
@@ -90,6 +89,8 @@ import SignalProc
 from functools import partial
 
 import re
+
+import soundfile as sf
 
 import webbrowser, copy, math
 import time
@@ -1809,7 +1810,8 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
                 # Populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.datalength / self.sp.audioFormat.sampleRate())
+                print("SETTING DURATION TO",self.sp.fileLength)
+                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength)
                 #hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                 if not hasmetadata:
                     self.segments.metadata["Operator"] = self.operator
@@ -4728,7 +4730,8 @@ class AviaNZ(QMainWindow):
         extension = self.filename.rsplit('.', 1)[0]
         before_extension = self.filename[:-len(extension)-1]
         filename = before_extension + '_d' + extension
-        wavio.write(filename,self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate(),scale='dtype-limits', sampwidth=2)
+        sf.write(filename, self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate())
+        #wavio.write(filename,self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate(),scale='dtype-limits', sampwidth=2)
         #wavio.write(filename,self.sp.data.astype('int16'),self.sp.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
@@ -4778,7 +4781,8 @@ class AviaNZ(QMainWindow):
                     sampwidth = 1
                 else:
                     print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-                wavio.write(filename, tosave, self.sp.audioFormat.sampleRate(), scale=None, sampwidth=sampwidth)
+                sf.write(filename, tosave, self.sp.audioFormat.sampleRate())
+                #wavio.write(filename, tosave, self.sp.audioFormat.sampleRate(), scale=None, sampwidth=sampwidth)
                 #wavio.write(filename, tosave, self.sp.sampleRate, scale=None, sampwidth=sampwidth)
                 #wavio.write(filename, tosave, self.sp.sampleRate, scale='dtype-limits', sampwidth=samplewidth)
             # update the file list box
@@ -5038,8 +5042,9 @@ class AviaNZ(QMainWindow):
             fhigh = sheet[colhigh+'2': colhigh + str(sheet.max_row)]
 
             #_, duration, _, _ = wavio.readFmt(audiofile)
-            wavobj = wavio.read(filename, 0, 0)
-            duration = wavobj.nseconds
+            info = sf.info(audiofile)
+            samplerate = info.samplerate
+            duration = info.frames / samplerate
 
             annotation = []
             for i in range(len(starttime)):

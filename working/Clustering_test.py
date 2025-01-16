@@ -29,6 +29,7 @@ import librosa
 from sklearn.preprocessing import scale
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+import soundfile as sf
 
 def testClustering():
     # Simple test using Iris data
@@ -200,9 +201,7 @@ def cluster_ruru(sampRate):
         col = 0
 
         for i in inds:
-            wavobj = wavio.read(fnames[i])
-            fs = wavobj.rate
-            audiodata = wavobj.data
+            audiodata,fs = sf.read(fnames[i])
             if audiodata.dtype is not 'float':
                 audiodata = audiodata.astype('float')
             if np.shape(np.shape(audiodata))[0] > 1:
@@ -247,11 +246,12 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
     import WaveletFunctions
     import SignalProc
     if offset == 0 and duration == 0:
-        wavobj = wavio.read(filename)
+        audiodata, sampleRate = sf.read(filename)
     else:
-        wavobj = wavio.read(filename, duration, offset)
-    sampleRate = wavobj.rate
-    audiodata = wavobj.data
+        sampleRate = sf.info(file).samplerate
+        start_frame = int(offset * sampleRate)
+        stop_frame = int((offset + duration) * sampleRate)
+        audiodata, _ = sf.read(filename, start=start_frame, stop=stop_frame)
 
     if audiodata.dtype is not 'float':
         audiodata = audiodata.astype('float')   #/ 32768.0
@@ -346,8 +346,8 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
     for root, dirs, files in os.walk(str(dir)):
         for file in files:
             if (file.endswith('.wav') or file.endswith('.flac')) and file+'.data' in files:
-                wavobj = wavio.read(os.path.join(root, file))
-                srlist.append(wavobj.rate)
+                rate = sf.info(os.path.join(root, file)).samplerate
+                srlist.append(rate)
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(os.path.join(root, file+'.data'))

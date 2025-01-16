@@ -28,13 +28,14 @@ import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
-import wavio
 
 import traceback
 import time
 
 import math
 import copy
+
+import soundfile as sf
 
 # SRM: TODO:
 
@@ -475,9 +476,9 @@ class AviaNZ_batchProcess():
         """ Perform the Hartley bodge: add fixed length segments at specified interval. """
         # if wav.data exists get the duration
         #(rate, nseconds, nchannels, sampwidth) = wavio.readFmt(filename)
-        wavobj = wavio.read(filename, 0, 0)
-        rate = wavobj.rate
-        nseconds = wavobj.nseconds
+        info = sf.info(filename)
+        samplerate = info.samplerate
+        nseconds = info.frames / samplerate
         self.segments.metadata = dict()
         self.segments.metadata["Operator"] = "Auto"
         self.segments.metadata["Reviewer"] = ""

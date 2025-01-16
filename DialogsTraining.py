@@ -2292,6 +2292,9 @@ class BuildCNNWizard(QWizard):
                 self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.cnntrain.calltypes[i], self.cnntrain.trainN[i]))
             self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.cnntrain.trainN[-1]))
 
+            print("CALLTYPES",self.cnntrain.calltypes)
+            print(self.cnntrain.trainN)
+
             # We need at least some number of segments from each class to proceed
             if min(self.cnntrain.trainN) < self.LearningDict['minPerClass']:
                 print('Warning: Need at least %d segments from each class to train CNN' % self.LearningDict['minPerClass'])

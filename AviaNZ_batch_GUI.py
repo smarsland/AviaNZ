@@ -27,7 +27,6 @@ from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMut
 import fnmatch, gc, sys, os, json, re
 
 import numpy as np
-import wavio
 import traceback
 
 from pyqtgraph.dockarea import Dock, DockArea
@@ -41,6 +40,8 @@ import Dialogs
 import colourMaps
 
 import webbrowser, copy
+
+import soundfile as sf
 
 pg.setConfigOption('useNumba', True)
 pg.setConfigOption('background','w')
@@ -1424,9 +1425,10 @@ class AviaNZ_reviewAll(QMainWindow):
                         continue
                 self.batmode = False
             elif filename.lower().endswith('.flac'):
-                if f.read(4) != b'fLaC':
-                    print("Warning: FLAC file %s not formatted correctly, skipping" % filename)
-                    continue
+                with open(filename, 'br') as f:
+                    if f.read(4) != b'fLaC':
+                        print("Warning: FLAC file %s not formatted correctly, skipping" % filename)
+                        continue
                 self.batmode = False
             elif filename.lower().endswith('.bmp'):
                 with open(filename, 'br') as f:
@@ -1858,10 +1860,13 @@ class AviaNZ_reviewAll(QMainWindow):
                     duration = self.segments.metadata["Duration"]
                 else:
                     # Determine the sample rate and set some file-level parameters
-                    wavobj = wavio.read(filename, 0, 0)
+                    #wavobj = wavio.read(filename, 0, 0)
                     #samplerate, duration, _, _ = wavio.readFmt(filename)
-                    samplerate = wavobj.rate
-                    duration = wavobj.nseconds
+                    #samplerate = wavobj.rate
+                    #duration = wavobj.nseconds
+                    info = sf.info(filename)
+                    samplerate = info.samplerate
+                    duration = info.frames / samplerate
 
                 minFreq = max(self.fLow.value(), 0)
                 maxFreq = min(self.fHigh.value(), samplerate//2)

@@ -36,7 +36,6 @@ import pyqtgraph.functions as fn
 import Segment
 import SignalProc
 
-import wavio
 from time import sleep
 import time
 import math
@@ -1463,15 +1462,17 @@ class LightedFileList(QListWidget):
                                     if filename.lower().endswith('.wav'):
                                         try:
                                             #samplerate = wavio.readFmt(filenamef)[0]
-                                            wavobj = wavio.read(filenamef, 0, 0)
-                                            samplerate = wavobj.rate
+                                            #wavobj = wavio.read(filenamef, 0, 0)
+                                            #samplerate = wavobj.rate
+                                            info = sf.info(filenamef)
+                                            samplerate = info.samplerate
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
                                             print(e)
                                     elif filename.lower().endswith('.flac'):
                                         try:
-                                            info = sf.info(filename)
+                                            info = sf.info(filenamef)
                                             samplerate = info.samplerate
                                             self.fsList.add(samplerate)
                                         except Exception as e:
@@ -1512,8 +1513,8 @@ class LightedFileList(QListWidget):
                         if fullname.lower().endswith('.wav'):
                             try:
                                 #samplerate = wavio.readFmt(fullname)[0]
-                                wavobj = wavio.read(fullname, 0, 0)
-                                samplerate = wavobj.rate
+                                info = sf.info(fullname)
+                                samplerate = info.samplerate
                                 self.fsList.add(samplerate)
                             except Exception as e:
                                 print("Warning: could not parse format of WAV file", fullname)

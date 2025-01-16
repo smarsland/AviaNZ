@@ -251,8 +251,8 @@ class SplitData(QMainWindow):
             listOfDirs = []
         else:
             listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot )
-            self.listOfSoundFiles = QDir(self.dirName).entryList(['*.wav','*.flac'])
-            self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data','*.flac.data'])
+            self.listOfSoundFiles = QDir(self.dirName).entryList(['*.wav'])
+            self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data'])
 
         # check if files have timestamps:
         haveTime = 0

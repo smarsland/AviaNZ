@@ -308,7 +308,7 @@ class CompareCalls(QMainWindow):
         print("Detected recorders:", self.allrecs)
         return(0)
 
-   def updateShiftSpinbox(self, text):
+    def updateShiftSpinbox(self, text):
         """ Updates the shift selection spinbox, when the selected
             recorder pair or estimated shift change.
         """

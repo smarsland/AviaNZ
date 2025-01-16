@@ -35,7 +35,8 @@ import WaveletSegment
 import Segment
 import SupportClasses
 import librosa
-import wavio
+
+import soundfile as sf
 
 # from sklearn.metrics import confusion_matrix
 # from numpy import expand_dims
@@ -582,8 +583,11 @@ class GenerateData:
             hop = dhop[record[-1]]
             if duration < self.length:
                 #fileduration = wavio.readFmt(record[0])[1]
-                wavobj = wavio.read(record[0], 0, 0)
-                fileduration = wavobj.nseconds
+                #wavobj = wavio.read(record[0], 0, 0)                
+                info = sf.info(record[0])
+                sample_rate = info.samplerate
+                fileduration = info.frames / sample_rate
+                
                 record[1][0] = record[1][0] - (self.length - duration)/2 - eps
                 record[1][1] = record[1][1] + (self.length - duration)/2 + eps
                 if record[1][0] < 0:
@@ -625,8 +629,10 @@ class GenerateData:
             hop = dhop[record[-1]]
             if duration < self.length:
                 #fileduration = wavio.readFmt(record[0])[1]
-                wavobj = wavio.read(record[0], 0, 0)
-                fileduration = wavobj.nseconds
+                info = sf.info(record[0])
+                sample_rate = info.samplerate
+                fileduration = info.frames / sample_rate
+
                 record[1][0] = record[1][0] - (self.length - duration) / 2 - eps
                 record[1][1] = record[1][1] + (self.length - duration) / 2 + eps
                 if record[1][0] < 0:

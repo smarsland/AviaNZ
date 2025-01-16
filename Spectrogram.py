@@ -25,7 +25,7 @@ import numpy as np
 import scipy.signal as signal
 import scipy.fftpack as fft
 from scipy.stats import boxcox
-import wavio, pyflac
+import pyflac
 import resampy
 import copy
 import gc
@@ -39,6 +39,8 @@ import tempfile
 
 import os
 import shutil
+
+import soundfile as sf
 
 #QtMM = True
 #try:
@@ -123,8 +125,18 @@ class Spectrogram:
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        wavobj = wavio.read(file, duration, off)
-        self.data = wavobj.data
+        #wavobj = wavio.read(file, duration, off)
+        sampleRate = sf.info(file).samplerate
+        self.fileLength = sf.info(file).frames/sampleRate
+
+        start_frame = int(off * sampleRate)
+        if duration is None:
+            stop_frame = None
+        else:
+            stop_frame = int((off + duration) * sampleRate)
+
+        self.data, _ = sf.read(file, start=start_frame, stop=stop_frame)
+        #self.data = wavobj.data
 
         # take only left channel
         if np.shape(np.shape(self.data))[0] > 1:
@@ -136,22 +148,29 @@ class Spectrogram:
         if self.data.dtype != 'float':
             self.data = self.data.astype('float')
 
-        # total file length in s read from header (useful for paging)
-        self.fileLength = wavobj.nseconds
-
         #self.sampleRate = wavobj.rate
 
-        self.audioFormat.setSampleRate(wavobj.rate)
+        self.audioFormat.setSampleRate(sampleRate)
         #self.audioFormat.setSampleRate(self.sampleRate)
         #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
         # Only 8-bit WAVs are unsigned:
         # TODO!! Int16/Int32
-        if wavobj.sampwidth==1:
+
+        sampwidth = sf.info(file).subtype
+
+        print("SAMPWIDTH", sampwidth)
+
+        if sampwidth=="PCM_U8":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
-        elif wavobj.sampwidth==2:
+        elif sampwidth=="PCM_16":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-        else:
+        elif sampwidth=="PCM_S8":
+            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int8)
+        elif sampwidth=="PCM_32":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
+        else:
+            print("ERROR: Unsupported sample format")
+            return
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -165,8 +184,8 @@ class Spectrogram:
         if not silent:
             #if QtMM:
             #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
-            sf = str(self.audioFormat.sampleFormat())
-            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
+            sf_name = str(self.audioFormat.sampleFormat())
+            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf_name.split('.')[-1]))
             #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def readFlac(self, file, duration=None, off=0, silent=False):
