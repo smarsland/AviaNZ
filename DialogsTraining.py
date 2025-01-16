@@ -282,8 +282,6 @@ class BuildRecAdvWizard(QWizard):
                 if self.hasCTannotations:
                     # self.segments: [parent_audio_file, [segment], class_label]
                     self.segments, self.nclasses, self.duration = self.getClustersGT()
-                    print("SELF.SEGMENTS: ", len(self.segments))
-                    print("SELF.SEGMENTS: ", self.segments)
                     self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
                 else:
                     # return format:
@@ -2291,9 +2289,6 @@ class BuildCNNWizard(QWizard):
             for i in range(len(self.cnntrain.calltypes)):
                 self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.cnntrain.calltypes[i], self.cnntrain.trainN[i]))
             self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.cnntrain.trainN[-1]))
-
-            print("CALLTYPES",self.cnntrain.calltypes)
-            print(self.cnntrain.trainN)
 
             # We need at least some number of segments from each class to proceed
             if min(self.cnntrain.trainN) < self.LearningDict['minPerClass']:

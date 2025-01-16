@@ -248,10 +248,7 @@ class CNNtrain:
                 self.traindata.append(x)
 
         # How many of each class
-        print("TRAIN DATA",self.traindata)
         target = np.array([rec[-1] for rec in self.traindata])
-        print("SETTING trainN", target)
-        print("CALLTYPES", self.calltypes)
         self.trainN = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
     def genImgDataset(self, hop):

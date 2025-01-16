@@ -158,8 +158,6 @@ class Spectrogram:
 
         sampwidth = sf.info(file).subtype
 
-        print("SAMPWIDTH", sampwidth)
-
         if sampwidth=="PCM_U8":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
         elif sampwidth=="PCM_16":

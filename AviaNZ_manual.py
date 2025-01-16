@@ -1810,7 +1810,6 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
                 # Populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                print("SETTING DURATION TO",self.sp.fileLength)
                 hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength)
                 #hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                 if not hasmetadata:
@@ -1835,7 +1834,6 @@ class AviaNZ(QMainWindow):
                             if not calltype in self.knownCalls[species]:
                                 self.knownCalls[species].append(calltype)
             else:
-                print("SETTING DURATION A",self.sp.fileLength)
                 self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength}
                 #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.sampleRate}
 
@@ -3930,7 +3928,6 @@ class AviaNZ(QMainWindow):
         Have to check if the buttons should be disabled or not,
         save the segments and reset the arrays, then call loadFile.
         """
-        print("MOVING TO NEXT 5 MINS")
         print(self.currentFileSection,self.nFileSections)
         self.currentFileSection += 1
         self.prev5mins.setEnabled(True)
@@ -5051,7 +5048,6 @@ class AviaNZ(QMainWindow):
                 annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
                                    float(fhigh[i][0].value),
                                    [{"species": species, "certainty": 100.0, "filter": "M", "calltype": species}]])
-            print("SETTING DURATION B")
             annotation.insert(0, {"Operator": "", "Reviewer": "", "Duration": duration})
             file = open(audiofile + '.data', 'w')
             json.dump(annotation, file)
@@ -5170,7 +5166,6 @@ class AviaNZ(QMainWindow):
                         duration = sp.fileLength / sp.audioFormat.sampleRate()
                         #duration = sp.fileLength / sp.sampleRate
            
-                    print("SETTING DURATION C")
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                                 
                     try:
@@ -5293,7 +5288,6 @@ class AviaNZ(QMainWindow):
                         duration = sp.fileLength / sp.sampleRate
                         #duration = sp.fileLength / sp.sampleRate
         
-                    print("SETTING DURATION D")
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                         
                     try:
@@ -5382,14 +5376,12 @@ class AviaNZ(QMainWindow):
                                 operator = elem.text
                             if elem.tag == 'Reviewer' and elem.text:
                                 reviewer = elem.text
-                        print("SETTING DURATION E")
                         annotation.insert(0, {"Operator": operator, "Reviewer": reviewer, "Duration": duration})
                         # Read the duration from the sample if possible
                         # TODO
                         # Otherwise, read file in
                         # TODO
 
-                        print("SETTING DURATION F")
                         tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength}
                         #tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
                         
@@ -6591,7 +6583,6 @@ class AviaNZ(QMainWindow):
             self.segments.metadata["Operator"] = self.operator
             self.segments.metadata["Reviewer"] = self.reviewer
 
-            print("SAVING JSON")
             print(self.segments.metadata)
 
             self.segments.saveJSON(str(self.filename) + '.data')
