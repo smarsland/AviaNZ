@@ -41,6 +41,8 @@ import numpy as np
 import os
 import io
 
+import soundfile as sf
+
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as hh:mm:ss, and can add an offset
@@ -804,6 +806,7 @@ class ControllableAudio(QAudioOutput):
             scale = (audiodata.min()/2, audiodata.max()*2)
         else:
             scale = None
+        
         wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
@@ -1270,11 +1273,18 @@ class LightedFileList(QListWidget):
                                 if readFmt:
                                     if filename.lower().endswith('.wav'):
                                         try:
-                                            samplerate = wavio.readFmt(filenamef)[0]
+                                            #samplerate = wavio.readFmt(filenamef)[0]
+                                            samplerate = sf.info(filenamef).samplerate
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
                                             print(e)
+                                    elif filename.lower().endswith('.flac'):
+                                        try:
+                                            samplerate = sf.info(filenamef).samplerate
+                                            self.fsList.add(samplerate)
+                                        except Exception as e:
+                                            print("Warning: could not parse format of FLAC file", filenamef)
                                     else:
                                         # For bitmaps, using hardcoded samplerate as there's no readFmt
                                         self.fsList.add(176000)
@@ -1309,11 +1319,17 @@ class LightedFileList(QListWidget):
                     if readFmt:
                         if file.fileName().lower().endswith('.wav'):
                             try:
-                                samplerate = wavio.readFmt(fullname)[0]
+                                samplerate = sf.info(fullname).samplerate
                                 self.fsList.add(samplerate)
                             except Exception as e:
                                 print("Warning: could not parse format of WAV file", fullname)
                                 print(e)
+                        elif filename.lower().endswith('.flac'):
+                            try:
+                                samplerate = sf.info(filenamef).samplerate
+                                self.fsList.add(samplerate)
+                            except Exception as e:
+                                print("Warning: could not parse format of FLAC file", filenamef)
                         if file.fileName().lower().endswith('.bmp'):
                             # For bitmaps, using hardcoded samplerate as there's no readFmt
                             self.fsList.add(176000)

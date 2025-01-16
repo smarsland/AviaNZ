@@ -9,24 +9,24 @@ s, c = cluster.getSyllables('/home/marslast/Projects/AviaNZ/Sound Files/TrainX',
 
 trainDir = '/home/marslast/Projects/AviaNZ/Sound Files/TrainX'
 listOfDataFiles = []
-listOfWavFiles = []
+listOfSoundFiles = []
 for root, dirs, files in os.walk(trainDir):
     for file in files:
-        if file[-5:].lower() == '.data':
+        if file.lower().endswith('.data'):
             listOfDataFiles.append(os.path.join(root, file))
-        elif file[-4:].lower() == '.wav':
-            listOfWavFiles.append(os.path.join(root, file))
+        elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
+            listOfSoundFiles.append(os.path.join(root, file))
 
 print(listOfDataFiles)
-print(listOfWavFiles)
+print(listOfSoundFiles)
 
 species = 'Kiwi (Nth Is Brown)'
 import Segment
 for file in listOfDataFiles:
-    if file[:-5] in listOfWavFiles:
+    if file[:-5] in listOfSoundFiles:
         segments = Segment.SegmentList()
         segments.parseJSON(os.path.join(trainDir, file))
-        wavfile = os.path.join(trainDir, file[:-5])
+        soundfile = os.path.join(trainDir, file[:-5])
         SpSegs = segments.getSpecies(species)
 	print(SpSegs)
 

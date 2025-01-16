@@ -2,6 +2,7 @@
 import wavio
 import numpy as np
 import pylab as pl
+import soundfile as sf
 
 def nsgcwin(fmin, fmax, n_bins, fs, signal_len, gamma):
     """
@@ -386,8 +387,8 @@ def icqt(X_cq, c_dc, c_nyq, multiscale, shift, window_lens):
 
 
 def run_cqt_example():
-    wavobj = wavio.read("/Users/marslast/Projects/AviaNZ/Sound Files/kiwi_1min.wav")
-    d = np.squeeze(wavobj.data)
+    data, fs = sf.read("/Users/marslast/Projects/AviaNZ/Sound Files/kiwi_1min.wav")
+    d = np.squeeze(data)
 
     # take only left channel
     #if np.shape(np.shape(d))[0] > 1:
@@ -396,8 +397,6 @@ def run_cqt_example():
     # force float type
     if d.dtype != 'float':
         d = d.astype('float')
-
-    fs = wavobj.rate
 
     X = d[:,0]
     #X = d[:44100]

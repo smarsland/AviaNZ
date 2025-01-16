@@ -65,7 +65,6 @@ from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF #, QThread
 from PyQt6.QtMultimedia import QAudio, QAudioFormat
 
-import wavio
 import numpy as np
 from scipy.ndimage.filters import median_filter
 
@@ -91,14 +90,13 @@ from functools import partial
 
 import re
 
+import soundfile as sf
+
 import webbrowser, copy, math
 import time
 import openpyxl
 # TODO: Check this
 from lxml import etree as ET
-
-import pyflac
-import tempfile
 
 #import xml.etree.ElementTree as ET
 
@@ -285,13 +283,14 @@ class AviaNZ(QMainWindow):
                 # Read folders and sub-folders
                 for root, dirs, files in os.walk(firstFile):
                     for f in files:
-                        if f[-4:].lower() == '.wav':
+                        if f.lower().endswith('.wav') or f.lower().endswith('.flac'):
                             print(os.path.join(root, f))
                             self.loadFile(os.path.join(root, f), cs=True)
                             self.widthWindow.setValue(60)  # self.datalengthSec)
-                            print('file path: ', os.path.join(root, f[:-4]))
+                            fileMinusExtension = f.rsplit('.', 1)[0]
+                            print('file path: ', os.path.join(root, fileMinusExtension))
                             self.setColourLevels(20, 50)
-                            self.saveImage(os.path.join(root, f[:-4]+'.png'))
+                            self.saveImage(os.path.join(root, fileMinusExtension+'.png'))
             else:
                 self.loadFile(firstFile)
                 while command!=():
@@ -1595,6 +1594,12 @@ class AviaNZ(QMainWindow):
                         print("WAV file %s not formatted correctly" % fullcurrent)
                         return(1)
                 self.batmode = False
+            elif fullcurrent.lower().endswith('.flac'):
+                with open(fullcurrent, 'br') as f:
+                    if f.read(4) != b'fLaC':
+                        print("FLAC file %s not formatted correctly" % fullcurrent)
+                        return(1)
+                self.batmode = False
             elif fullcurrent.lower().endswith('.bmp'):
                 with open(fullcurrent, 'br') as f:
                     if f.read(2) != b'BM':
@@ -1737,26 +1742,8 @@ class AviaNZ(QMainWindow):
                 else:
                     lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
 
-                if self.filename.lower().endswith('.wav'):
-                    self.sp.readWav(self.filename, lenRead, self.startRead)
-                elif self.filename.lower().endswith('.flac'):
-                    with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
-                        temp_wav_path = temp_wav.name
-                        temp_dir = os.path.dirname(temp_wav.name)
-                        estimated_wav_size = os.path.getsize(self.filename) * 10
-                        total, used, free = shutil.disk_usage(temp_dir)
-                        if free < estimated_wav_size:
-                            print("Error: Insufficient disk space for the WAV file")
-                            return
-                        else:
-                            try:
-                                pyf = pyflac.FileDecoder(self.filename, temp_wav_path)
-                                pyf.process()
-                                self.sp.readWav(temp_wav_path,lenRead,self.startRead)
-                            except Exception as e:
-                                print("Error: %s" % e)
-                                return
-
+                self.sp.readSoundFile(self.filename, lenRead, self.startRead)
+                
                 # resample to 16K if needed (Spectrogram will determine)
                 if self.cheatsheet:
                     self.sp.resample(16000)
@@ -1823,7 +1810,8 @@ class AviaNZ(QMainWindow):
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
                 # Populate it, add the metadata attribute
                 # (note: we're overwriting the JSON duration with actual full wav size)
-                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.datalength / self.sp.audioFormat.sampleRate())
+                print("SETTING DURATION TO",self.sp.fileLength)
+                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength)
                 #hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                 if not hasmetadata:
                     self.segments.metadata["Operator"] = self.operator
@@ -1847,7 +1835,8 @@ class AviaNZ(QMainWindow):
                             if not calltype in self.knownCalls[species]:
                                 self.knownCalls[species].append(calltype)
             else:
-                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
+                print("SETTING DURATION A",self.sp.fileLength)
+                self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength}
                 #self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalength / self.sp.sampleRate}
 
             # Bat mode: initialize with an empty segment for the entire file
@@ -4377,8 +4366,8 @@ class AviaNZ(QMainWindow):
 
         import Features
         #print("segs", self.segments)
-
-        cs = open(self.filename[:-4] + '_features.csv', "w")
+        fileMinusExtension = self.filename.rsplit('.', 1)[0]
+        cs = open(fileMinusExtension + '_features.csv', "w")
         cs.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
 
         for seg in self.segments:
@@ -4738,8 +4727,11 @@ class AviaNZ(QMainWindow):
         """ Listener for save button in denoising dialog.
         Adds _d to the filename and saves it as a new sound file.
         """
-        filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        wavio.write(filename,self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate(),scale='dtype-limits', sampwidth=2)
+        extension = self.filename.rsplit('.', 1)[0]
+        before_extension = self.filename[:-len(extension)-1]
+        filename = before_extension + '_d' + extension
+        sf.write(filename, self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate())
+        #wavio.write(filename,self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate(),scale='dtype-limits', sampwidth=2)
         #wavio.write(filename,self.sp.data.astype('int16'),self.sp.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
@@ -4789,7 +4781,8 @@ class AviaNZ(QMainWindow):
                     sampwidth = 1
                 else:
                     print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-                wavio.write(filename, tosave, self.sp.audioFormat.sampleRate(), scale=None, sampwidth=sampwidth)
+                sf.write(filename, tosave, self.sp.audioFormat.sampleRate())
+                #wavio.write(filename, tosave, self.sp.audioFormat.sampleRate(), scale=None, sampwidth=sampwidth)
                 #wavio.write(filename, tosave, self.sp.sampleRate, scale=None, sampwidth=sampwidth)
                 #wavio.write(filename, tosave, self.sp.sampleRate, scale='dtype-limits', sampwidth=samplewidth)
             # update the file list box
@@ -5049,14 +5042,16 @@ class AviaNZ(QMainWindow):
             fhigh = sheet[colhigh+'2': colhigh + str(sheet.max_row)]
 
             #_, duration, _, _ = wavio.readFmt(audiofile)
-            wavobj = wavio.read(filename, 0, 0)
-            duration = wavobj.nseconds
+            info = sf.info(audiofile)
+            samplerate = info.samplerate
+            duration = info.frames / samplerate
 
             annotation = []
             for i in range(len(starttime)):
                 annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
                                    float(fhigh[i][0].value),
                                    [{"species": species, "certainty": 100.0, "filter": "M", "calltype": species}]])
+            print("SETTING DURATION B")
             annotation.insert(0, {"Operator": "", "Reviewer": "", "Duration": duration})
             file = open(audiofile + '.data', 'w')
             json.dump(annotation, file)
@@ -5139,6 +5134,7 @@ class AviaNZ(QMainWindow):
             for file in files:
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
+                    tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
                     #print(tagFile)
                     tagSegments = Segment.SegmentList()
 
@@ -5147,7 +5143,7 @@ class AviaNZ(QMainWindow):
                     reviewer = ""
                     duration = ""
                     try:
-                        stree = ET.parse(tagFile[:-4] + '.setting')
+                        stree = ET.parse(tagFileMinusExtension + '.setting')
                         stroot = stree.getroot()
                         for elem in stroot:
                             if elem.tag == 'Operator':
@@ -5155,25 +5151,26 @@ class AviaNZ(QMainWindow):
                             if elem.tag == 'Reviewer' and elem.text:
                                 reviewer = elem.text
                     except:
-                        print("Can't read %s.setting or missing data" %tagFile[:-4])
+                        print("Can't read %s.setting or missing data" %tagFileMinusExtension)
                     try:
                         # Read the duration from the sample if possible
-                        ptree = ET.parse(tagFile[:-4] + '.p')
+                        ptree = ET.parse(tagFileMinusExtension + '.p')
                         ptroot = ptree.getroot()
                         for elem in ptroot:
                             for elem2 in elem:
                                 if elem2.tag == 'DurationSecond':
                                     duration = elem2.text
                     except:
-                        print("Can't read %s.p or missing data" %tagFile[:-4])
+                        print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
                         # TODO: Test
                         import Spectrogram 
                         sp = Spectrogram.Spectrogram(512,256, 0, 0)
-                        sp.readWav(tagFile[:-4] + '.wav', 0, 0)
+                        sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.audioFormat.sampleRate()
                         #duration = sp.fileLength / sp.sampleRate
            
+                    print("SETTING DURATION C")
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                                 
                     try:
@@ -5201,8 +5198,8 @@ class AviaNZ(QMainWindow):
                        di = root[:-8] 
                     else:
                         di = root
-                    tagSegments.saveJSON(os.path.join(di,file[:-4] + '.wav.data'))
-                    #print("saving to",os.path.join(di,file[:-4] + '.wav.data'))
+                    tagSegments.saveJSON(os.path.join(di,tagFileMinusExtension + '.wav.data'))
+                    #print("saving to",os.path.join(di,tagFileMinusExtension + '.wav.data'))
          
         #self.tag2AnnotationDialog.txtDuration.setText('')
         self.tag2AnnotationDialog.txtSession.setText('')
@@ -5262,6 +5259,7 @@ class AviaNZ(QMainWindow):
             for file in files:
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
+                    tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
                     tagSegments = Segment.SegmentList()
 
                     # First get the metadata
@@ -5269,7 +5267,7 @@ class AviaNZ(QMainWindow):
                     reviewer = ""
                     duration = ""
                     try:
-                        stree = ET.parse(tagFile[:-4] + '.setting')
+                        stree = ET.parse(tagFileMinusExtension + '.setting')
                         stroot = stree.getroot()
                         for elem in stroot:
                             if elem.tag == 'Operator':
@@ -5277,24 +5275,25 @@ class AviaNZ(QMainWindow):
                             if elem.tag == 'Reviewer' and elem.text:
                                 reviewer = elem.text
                     except:
-                        print("Can't read %s.setting or missing data" %tagFile[:-4])
+                        print("Can't read %s.setting or missing data" %tagFileMinusExtension)
                     try:
                         # Read the duration from the sample if possible
-                        ptree = ET.parse(tagFile[:-4] + '.p')
+                        ptree = ET.parse(tagFileMinusExtension + '.p')
                         ptroot = ptree.getroot()
                         for elem in ptroot:
                             for elem2 in elem:
                                 if elem2.tag == 'DurationSecond':
                                     duration = elem2.text
                     except:
-                        print("Can't read %s.p or missing data" %tagFile[:-4])
+                        print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
                         import Spectrogram 
                         sp = Spectrogram.Spectrogram(512,256, 0, 0)
-                        sp.readWav(tagFile[:-4] + '.wav', 0, 0)
+                        sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate
                         #duration = sp.fileLength / sp.sampleRate
         
+                    print("SETTING DURATION D")
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                         
                     try:
@@ -5317,7 +5316,7 @@ class AviaNZ(QMainWindow):
                         print(e)
         
                     # save .data, possible over-writing *TODO
-                    tagSegments.saveJSON('../' + tagFile[:-4] + '.wav.data')
+                    tagSegments.saveJSON('../' + tagFileMinusExtension + '.wav.data')
         
             #self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
@@ -5370,25 +5369,28 @@ class AviaNZ(QMainWindow):
             for file in files:
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
+                    tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
                     tagSegments = Segment.SegmentList()
                     try:
                         # First get the metadata
                         operator = ""
                         reviewer = ""
-                        stree = ET.parse(tagFile[:-4] + '.setting')
+                        stree = ET.parse(tagFileMinusExtension + '.setting')
                         stroot = stree.getroot()
                         for elem in stroot:
                             if elem.tag == 'Operator':
                                 operator = elem.text
                             if elem.tag == 'Reviewer' and elem.text:
                                 reviewer = elem.text
+                        print("SETTING DURATION E")
                         annotation.insert(0, {"Operator": operator, "Reviewer": reviewer, "Duration": duration})
                         # Read the duration from the sample if possible
                         # TODO
                         # Otherwise, read file in
                         # TODO
 
-                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.datalength / self.sp.audioFormat.sampleRate()}
+                        print("SETTING DURATION F")
+                        tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength}
                         #tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
                         
                         tree = ET.parse(tagFile)
@@ -5406,7 +5408,7 @@ class AviaNZ(QMainWindow):
                         # save .data, possible over-writing
                         # TODO!!
                         self.segments.saveJSON(str(self.filename) + '.data')
-                        #file = open(tagFile[:-4] + '.wav.data', 'w')
+                        #file = open(tagFileMinusExtension + '.wav.data', 'w')
                         #json.dump(annotation, file)
                         #file.close()
                     except Exception as e:
@@ -5760,7 +5762,7 @@ class AviaNZ(QMainWindow):
             print("Reading template/s")
             # Todo: do more than one template and merge result?
             sp_temp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
-            sp_temp.readWav('Sound Files/'+species+'/train1_1.wav')
+            sp_temp.readSoundFile('Sound Files/'+species+'/train1_1.wav')
 
             # Parse wav format details based on file header:
             sampleRate = sp_temp.audioFormat.sampleRate()
@@ -6069,7 +6071,8 @@ class AviaNZ(QMainWindow):
             print(e)
 
     def saveImageRaw(self):
-        imageFile = self.filename[:-4] + '.png'
+        fileMinusExtension = self.filename.rsplit('.', 1)[0]
+        imageFile = fileMinusExtension + '.png'
         print("Exporting raw spectrogram to file %s" % imageFile)
         self.specPlot.save(imageFile)
 

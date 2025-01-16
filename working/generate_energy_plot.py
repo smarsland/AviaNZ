@@ -16,10 +16,11 @@ for root, dirs, files in os.walk('/home/listanvirg/Filter test/Second slot/Preli
             #Read energy file
             with open(str(root+'/'+file)) as f:
                 energy = [map(float, row) for row in csv.reader(f)]
-            fig_name=root+'/'+file[:-4]+'.jpg'
+            fileNoExtension = file.rsplit('.', 1)[0]
+            fig_name=root+'/'+fileNoExtension+'.jpg'
             #plot energy
             fig, axes = plt.subplots(2,2,sharex=True, sharey=True)
-            fig.set_title('Energy plot'+str(file[:-11]))
+            fig.set_title('Energy plot'+str(fileNoExtension))
             axes[0,0].plot(energy[0,:])
             axes[0,0].set_title('Node 35')
             axes[0, 1].plot(energy[1, :])

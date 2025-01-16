@@ -41,17 +41,14 @@ def genGT(dirName,species='Kiwi',duration=0,window=1, inc=None):
     #☺duration=900
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if filename.endswith('.wav') or filename.endswith('.flac'):
             #1if filename.endswith('.data'):
                 filename = root + '/' + filename
                 annotation2GT_OvWin(filename,species,duration=duration,window=window,inc=inc)
     print ("Generated GT")
 
-def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notargetsp=False):
-<<<<<<< Updated upstream
-=======
-#def annotation2GT_OvWin(datFile, species, duration=0,window=1, inc=None, notargetsp=False):
->>>>>>> Stashed changes
+def annotation2GT_OvWin(soundFile, species, duration=0,window=1, inc=None, notargetsp=False):
+    #def annotation2GT_OvWin(datFile, species, duration=0,window=1, inc=None, notargetsp=False):
     """
     This generates the ground truth for a given sound file
     Given the AviaNZ annotation, returns the ground truth as a txt file
@@ -67,13 +64,13 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     # 75% overlap
         resol=(math.gcd(int(100*window),int(100*inc)))/100
 
-    datFile = wavFile + '.data'
+    datFile = soundFile + '.data'
     #Virginia:changed file name appearence
     eFile = datFile[:-9] +'-res'+str(float(resol))+'sec.txt'
     print(eFile)
 
     if duration == 0:
-        wavobj = wavio.read(wavFile)
+        wavobj = wavio.read(soundFile)
         sampleRate = wavobj.rate
         # Virginia: number of sample for increment
         res_sr= resol*sampleRate

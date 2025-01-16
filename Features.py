@@ -26,11 +26,11 @@ import librosa, resampy
 import Spectrogram
 import SupportClasses
 import WaveletSegment
-import wavio
 from scipy import signal
 import math
 import os
 import re
+import soundfile as sf
 
 # TODO:
 # First thing is to get my head around everything that is going on, which is:
@@ -338,9 +338,7 @@ class Features:
 
 
 def loadFile(filename):
-    wavobj = wavio.read(filename)
-    sampleRate = wavobj.rate
-    audiodata = wavobj.data
+    audiodata, sampleRate = sf.read(filename)
 
     # None of the following should be necessary for librosa
     if audiodata.dtype is not 'float':
@@ -363,7 +361,7 @@ def genClusterData(dir, duration=1, sampRate=16000):
     f1 = open(dir + '/' + "mfcc.tsv", "w")
     for root, dirs, files in os.walk(str(dir)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if filename.endswith('.wav') or filename.endswith('.flac'):
                 filename = root + '/' + filename
                 # determin call type from the folder name
                 type = root.split("\\")[-1]
@@ -537,7 +535,7 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
     dList=[]
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if filename.endswith('.wav') or filename.endswith('.flac'):
                 filename = root + '/' + filename #[:-4]
                 y, sr = loadFile(filename)
                 d = mfcc_dtw(y=y, sr=sr, yTest=yTest, srTest=srTest)
@@ -553,9 +551,7 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
 #print dList
 
 def testFeatures():
-    wavobj = wavio.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
-    fs = wavobj.rate
-    data = wavobj.data
+    data, fs = sf.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
 
     if data.dtype is not 'float':
         data = data.astype('float')         # / 32768.0
@@ -628,11 +624,12 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
 
     for root, dirs, files in os.walk(str(dir_src)):
         for file in files:
-            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-GT.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
+            fileMinusExtension = file.rsplit('.', 1)[0]
+            if (file.endswith('.wav') or file.endswith('.flac')) and os.stat(root + '/' + file).st_size != 0 and fileMinusExtension + '-GT.txt' in files or (file.endswith('.wav') or file.endswith('.flac')) and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
                 opstartingtime = time.time()
-                wavFile = root + '/' + file[:-4]
-                print(wavFile)
-                data, currentannotation, sampleRate = loadData(wavFile, filemode)
+                soundFile = root + '/' + fileMinusExtension
+                print(soundFile)
+                data, currentannotation, sampleRate = loadData(soundFile, filemode)
 
                 ws = WaveletSegment.WaveletSegment(data=data, sampleRate=sampleRate)
                 if feature == 'WEraw_all' or feature == 'MFCCraw_all' or feature == 'WE+MFCCraw_all':

@@ -25,7 +25,7 @@ import numpy as np
 import scipy.signal as signal
 import scipy.fftpack as fft
 from scipy.stats import boxcox
-import wavio, pyflac
+import pyflac
 import resampy
 import copy
 import gc
@@ -33,6 +33,14 @@ import SignalProc
 
 from PyQt6.QtGui import QImage
 from PyQt6.QtMultimedia import QAudioFormat
+
+import pyflac
+import tempfile
+
+import os
+import shutil
+
+import soundfile as sf
 
 #QtMM = True
 #try:
@@ -72,8 +80,8 @@ class Spectrogram:
 
     # # TODO: read less of the file
     # def readFlac(self, file,silent=False):
-    #     wavfile = '/home/marslast/output.wav'
-    #     pyf = pyflac.FileDecoder(file,wavfile)
+    #     soundfile = '/home/marslast/output.wav'
+    #     pyf = pyflac.FileDecoder(file,soundfile)
     #     self.data, fs = pyf.process()
     #     return
 
@@ -117,8 +125,18 @@ class Spectrogram:
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        wavobj = wavio.read(file, duration, off)
-        self.data = wavobj.data
+        #wavobj = wavio.read(file, duration, off)
+        sampleRate = sf.info(file).samplerate
+        self.fileLength = sf.info(file).frames/sampleRate
+
+        start_frame = int(off * sampleRate)
+        if duration is None:
+            stop_frame = None
+        else:
+            stop_frame = int((off + duration) * sampleRate)
+
+        self.data, _ = sf.read(file, start=start_frame, stop=stop_frame)
+        #self.data = wavobj.data
 
         # take only left channel
         if np.shape(np.shape(self.data))[0] > 1:
@@ -130,22 +148,29 @@ class Spectrogram:
         if self.data.dtype != 'float':
             self.data = self.data.astype('float')
 
-        # total file length in s read from header (useful for paging)
-        self.fileLength = wavobj.nseconds
-
         #self.sampleRate = wavobj.rate
 
-        self.audioFormat.setSampleRate(wavobj.rate)
+        self.audioFormat.setSampleRate(sampleRate)
         #self.audioFormat.setSampleRate(self.sampleRate)
         #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
         # Only 8-bit WAVs are unsigned:
         # TODO!! Int16/Int32
-        if wavobj.sampwidth==1:
+
+        sampwidth = sf.info(file).subtype
+
+        print("SAMPWIDTH", sampwidth)
+
+        if sampwidth=="PCM_U8":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
-        elif wavobj.sampwidth==2:
+        elif sampwidth=="PCM_16":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-        else:
+        elif sampwidth=="PCM_S8":
+            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int8)
+        elif sampwidth=="PCM_32":
             self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
+        else:
+            print("ERROR: Unsupported sample format")
+            return
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -159,9 +184,35 @@ class Spectrogram:
         if not silent:
             #if QtMM:
             #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
-            sf = str(self.audioFormat.sampleFormat())
-            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
+            sf_name = str(self.audioFormat.sampleFormat())
+            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf_name.split('.')[-1]))
             #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+
+    def readFlac(self, file, duration=None, off=0, silent=False):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
+            temp_wav_path = temp_wav.name
+            temp_dir = os.path.dirname(temp_wav.name)
+            estimated_wav_size = os.path.getsize(file) * 10
+            total, used, free = shutil.disk_usage(temp_dir)
+            if free < estimated_wav_size:
+                print("Error: Insufficient disk space for the WAV file")
+                return
+            else:
+                try:
+                    pyf = pyflac.FileDecoder(file, temp_wav_path)
+                    pyf.process()
+                    return self.readWav(temp_wav_path,duration,off,silent)
+                except Exception as e:
+                    print("Error: %s" % e)
+                    return
+    
+    def readSoundFile(self, file, duration=None, off=0, silent=False):
+        if file.endswith(".wav"):
+            return self.readWav(file, duration, off, silent)
+        elif file.endswith(".flac"):
+            return self.readFlac(file, duration, off, silent)
+        else:
+            raise ValueError("Unsupported file format")
 
     def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.

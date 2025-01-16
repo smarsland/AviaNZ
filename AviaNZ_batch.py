@@ -28,13 +28,14 @@ import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
-import wavio
 
 import traceback
 import time
 
 import math
 import copy
+
+import soundfile as sf
 
 # SRM: TODO:
 
@@ -192,12 +193,12 @@ class AviaNZ_batchProcess():
         """
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
-        allwavs = []
+        allsoundfiles = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if (not ("NZ Bats" in self.species) and filename.lower().endswith('.wav')) or ("NZ Bats" in self.species  and filename.lower().endswith('.bmp')):
-                    allwavs.append(os.path.join(root, filename))
-        total = len(allwavs)
+                if (not ("NZ Bats" in self.species) and (filename.lower().endswith('.wav') or filename.lower().endswith('.flac'))) or ("NZ Bats" in self.species  and filename.lower().endswith('.bmp')):
+                    allsoundfiles.append(os.path.join(root, filename))
+        total = len(allsoundfiles)
 
         # LOG FILE is read here
         # note: important to log all analysis options here
@@ -208,7 +209,7 @@ class AviaNZ_batchProcess():
 
             # Ask for RESUME CONFIRMATION here
             if self.log.possibleAppend:
-                filesExistAndDone = self.log.getDoneFiles(allwavs)
+                filesExistAndDone = self.log.getDoneFiles(allsoundfiles)
                 text = "Previous analysis found in this folder (analysed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
                 if not self.CLI:
                     # this is super noodly but it assumes that self.CLI always means
@@ -291,9 +292,9 @@ class AviaNZ_batchProcess():
 
             import pyqtgraph as pg
             with pg.BusyCursor():
-                self.mainloop(allwavs,total,speciesStr,filters)
+                self.mainloop(allsoundfiles,total,speciesStr,filters)
         else:
-            self.mainloop(allwavs,total,speciesStr,filters)
+            self.mainloop(allsoundfiles,total,speciesStr,filters)
 
         if not self.testmode:
             # delete old results (xlsx)
@@ -325,7 +326,7 @@ class AviaNZ_batchProcess():
         print("Processed all %d files" % total)
         return(0)
 
-    def mainloop(self,allwavs,total,speciesStr,filters):
+    def mainloop(self,allsoundfiles,total,speciesStr,filters):
         # MAIN PROCESSING starts here
         # TODO: This will need a bit of work to deal with different filters with non-matching sample rates
         processingTime = 0
@@ -335,7 +336,7 @@ class AviaNZ_batchProcess():
         timeWindow_s = self.options[3]
         timeWindow_e = self.options[4]
 
-        for filename in allwavs:
+        for filename in allsoundfiles:
             # get remaining run time in min
             processingTimeStart = time.time()
             hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
@@ -362,7 +363,10 @@ class AviaNZ_batchProcess():
             # check if file is formatted correctly
             # TODO: speciesStr or self.species?
             with open(filename, 'br') as f:
-                if ("NZ Bats" in self.species and f.read(2) != b'BM') or (not("NZ Bats" in self.species) and f.read(4) != b'RIFF'):
+                first2char = f.read(2)
+                f.seek(0)
+                first4char = f.read(4)
+                if ("NZ Bats" in self.species and first2char != b'BM') or (not("NZ Bats" in self.species) and first4char != b'RIFF' and first4char != b'fLaC'):
                     print("File %s not formatted correctly, skipping" % filename)
                     if not self.testmode:
                         self.log.appendFile(filename)
@@ -472,9 +476,9 @@ class AviaNZ_batchProcess():
         """ Perform the Hartley bodge: add fixed length segments at specified interval. """
         # if wav.data exists get the duration
         #(rate, nseconds, nchannels, sampwidth) = wavio.readFmt(filename)
-        wavobj = wavio.read(filename, 0, 0)
-        rate = wavobj.rate
-        nseconds = wavobj.nseconds
+        info = sf.info(filename)
+        samplerate = info.samplerate
+        nseconds = info.frames / samplerate
         self.segments.metadata = dict()
         self.segments.metadata["Operator"] = "Auto"
         self.segments.metadata["Reviewer"] = ""
@@ -839,7 +843,7 @@ class AviaNZ_batchProcess():
             self.sp.readBmp(filename, rotate=False)
             #self.sp.readBmp(self.filename, rotate=True, repeat=False)
         else:
-            self.sp.readWav(filename)
+            self.sp.readSoundFile(filename)
 
         print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(len(self.sp.data))/self.sp.audioFormat.sampleRate(), self.sp.audioFormat.sampleRate()))
 

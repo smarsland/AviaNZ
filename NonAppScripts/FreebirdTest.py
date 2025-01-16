@@ -45,6 +45,7 @@ for root, dirs, files in os.walk('Freebird'):
     for file in files:
         if file.endswith('.tag'):
             tagFile = os.path.join(root, file)
+            fagFileMinusExtension = file.rsplit('.', 1)[0]
             tagSegments = Segment.SegmentList()
 
             # First get the metadata
@@ -52,7 +53,7 @@ for root, dirs, files in os.walk('Freebird'):
             reviewer = ""
             duration = ""
             try:
-                stree = ET.parse(tagFile[:-4] + '.setting')
+                stree = ET.parse(tagFileMinusExtension + '.setting')
                 stroot = stree.getroot()
                 for elem in stroot:
                     if elem.tag == 'Operator':
@@ -60,21 +61,21 @@ for root, dirs, files in os.walk('Freebird'):
                     if elem.tag == 'Reviewer' and elem.text:
                         reviewer = elem.text
             except:
-                print("Can't read %s.setting or missing data" %tagFile[:-4])
+                print("Can't read %s.setting or missing data" %tagFileMinusExtension)
             try:
                 # Read the duration from the sample if possible
-                ptree = ET.parse(tagFile[:-4] + '.p')
+                ptree = ET.parse(tagFileMinusExtension + '.p')
                 ptroot = ptree.getroot()
                 for elem in ptroot:
                     for elem2 in elem:
                         if elem2.tag == 'DurationSecond':
                             duration = elem2.text
             except:
-                print("Can't read %s.p or missing data" %tagFile[:-4])
+                print("Can't read %s.p or missing data" %tagFileMinusExtension)
                 # Otherwise, load the wav file
                 import Spectrogram 
                 sp = Spectrogram.Spectrogram(512,256, 0, 0)
-                sp.readWav(tagFile[:-4] + '.wav', 0, 0)
+                sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                 duration = sp.fileLength / sp.audioFormat.sampleRate()
 
             tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
@@ -102,7 +103,7 @@ for root, dirs, files in os.walk('Freebird'):
                 print(e)
 
             # save .data, possible over-writing
-            tagSegments.saveJSON(tagFile[:-4] + '.wav.data')
+            tagSegments.saveJSON(tagFileMinusExtension + '.wav.data')
             #file = open(tagFile[:-4] + '.wav.data', 'w')
             #json.dump(annotation, file)
             #file.close()

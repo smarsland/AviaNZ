@@ -55,7 +55,7 @@ main_dir="C:\\Users\\Virginia\\Documents\\Work\\IF_extraction"
 test_fold="1024_256_Test2"
 
 for f in os.listdir(main_dir):
-    if f.endswith('.wav'):
+    if f.endswith('.wav') or f.endswith('.flac'):
         file_name = f
         data_file = main_dir + "\\" + file_name
         print(file_name)
@@ -63,7 +63,7 @@ for f in os.listdir(main_dir):
             song_flag = True
         else:
             song_flag=False
-        sp.readWav(data_file)
+        sp.readSoundFile(data_file)
         fs = sp.sampleRate
         IF = IFreq.IF(method=1)
         #FOR JULIUS: check if window is Hann

@@ -176,10 +176,8 @@ def test6():
     a,b = tf.ridges(s,t,smoothed=True)
     
 def test7():
-    import wavio
-    wavobj = wavio.read('Sound Files/tril1.wav')
-    sampleRate = wavobj.rate
-    sig = wavobj.data
+    import soundfile as sf
+    sig,sampleRate = sf.read('Sound Files/tril1.wav')
 
     # None of the following should be necessary for librosa
     if sig.dtype is not 'float':

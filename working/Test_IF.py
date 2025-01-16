@@ -73,7 +73,7 @@ plt.show()
 #             song_flag = True
 #         else:
 #             song_flag=False
-#         sp.readWav(data_file)
+#         sp.readSoundFile(data_file)
 #         fs = sp.sampleRate
 #         IF = IFreq.IF(method=1)
 #         #FOR JULIUS: check if window is Hann

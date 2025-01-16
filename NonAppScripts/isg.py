@@ -29,8 +29,9 @@ import os  # linux shell comands
 from scipy import misc
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-import wavio
+#import wavio
 from PyQt5.QtGui import QImage
+import soundfile as sf
 
 """
 This script works in batch. It generate sound files from .bmp spectrogram images.
@@ -87,6 +88,7 @@ for file in ['/Users/marslast/20191106_022512.bmp']:
         wave = a.invertSpectrogram(spec2, 1024, 512)
 
         #wave = a.bandpassFilter(wave, samplerate, 1000, 22000) bandpass?
-        wavFile = 'test.wav'
-        #wavFile=bmpFile+'_audible.wav' #Other option
-        wavio.write(wavFile, wave, samplerate, sampwidth=2)
+        soundFile = 'test.wav'
+        #soundFile=bmpFile+'_audible.wav' #Other option
+        sf.write(soundFile, wave, samplerate)
+        #wavio.write(soundFile, wave, samplerate, sampwidth=2)

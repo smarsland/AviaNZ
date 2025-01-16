@@ -101,7 +101,7 @@ def excel2data(dir, excelFile, sub=False):
     # generate the .data files from excel
     for root, dirs, files in os.walk(str(dir)):
         for f1 in files:
-            if f1.endswith('.wav'):
+            if f1.endswith('.wav') or f1.endswith('.flac'):
                 if not sub:
                     DOCRecording = re.search('(\d{6})_(\d{6})', f1)
                 else:
@@ -166,7 +166,8 @@ def tag2data(dir,birdlist):
                     sp = spDict[int(elem[0].text)]
                     annotation.append([float(elem[1].text),float(elem[1].text)+float(elem[2].text),500,7500,sp])
                 annotation.insert(0,[-1, startTime, "Doc_Operator", "Doc_Reviewer", -1])
-                file = open(tagFile[:-4] + '.wav.data', 'w')
+                tagFileNoExtension = tagFile.rsplit('.', 1)[0]
+                file = open(tagFileNoExtension + '.wav.data', 'w')
                 json.dump(annotation, file)
 
 
@@ -244,13 +245,13 @@ def delEmpAnn(dir):
                     cnt += 1
     print("#files deleted: ", cnt)
 
-def extractSegments(wavFile, destination, copyName, species):
+def extractSegments(soundFile, destination, copyName, species):
     """
     This extracts the sound segments given the annotation and the corresponding wav file. (Isabel's experiment data extraction)
     """
-    datFile = wavFile+'.data'
+    datFile = soundFile+'.data'
     try:
-        wavobj = wavio.read(wavFile)
+        wavobj = wavio.read(soundFile)
         sampleRate = wavobj.rate
         data = wavobj.data
         if os.path.isfile(datFile):
@@ -267,24 +268,24 @@ def extractSegments(wavFile, destination, copyName, species):
                     temp = data[s:e]
                     wavio.write(filename, temp.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
                 elif not species:   # extract all - extracted sounds are saved with the original file name followed by an index starting 1
-                    ind = wavFile.rindex('/')
-                    filename = destination + '\\' + str(wavFile[ind + 1:-4]) + '-' + str(cnt) + '.wav'
+                    ind = soundFile.rindex('/')
+                    filename = destination + '\\' + str(soundFile[ind + 1:-4]) + '-' + str(cnt) + '.wav'
                     cnt += 1
                     s = int(seg[0] * sampleRate)
                     e = int(seg[1] * sampleRate)
                     temp = data[s:e]
                     wavio.write(filename, temp.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
                 elif species == seg[4][0]:   # extract only specific calls - extracted sounds are saved with with the original file name followed by an index starting 1
-                    ind = wavFile.rindex('/')
-                    ind2 = wavFile.rindex('\\')
-                    filename = destination + '\\' + str(wavFile[ind2+1:ind]) + '-' + str(wavFile[ind + 1:-4]) + '-' + str(seg[4][0]) + '-' + str(cnt) + '.wav'
+                    ind = soundFile.rindex('/')
+                    ind2 = soundFile.rindex('\\')
+                    filename = destination + '\\' + str(soundFile[ind2+1:ind]) + '-' + str(soundFile[ind + 1:-4]) + '-' + str(seg[4][0]) + '-' + str(cnt) + '.wav'
                     cnt += 1
                     s = int((seg[0]-1) * sampleRate)
                     e = int((seg[1]+1) * sampleRate)
                     temp = data[s:e]
                     wavio.write(filename, temp.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
     except:
-        print ("unsupported file: ", wavFile)
+        print ("unsupported file: ", soundFile)
         # pass
 
 # extractSegments('E:\ISABEL\Rawhiti Experiment Data Sorting NP\Station7-DOC16-Night-Expert\St7-Night-Expert-Trial1to7.wav', 'E:\ISABEL\Rawhiti Experiment Data Sorting NP\Station7-DOC16-Night-Expert\songs')
@@ -297,7 +298,7 @@ def extractSegments_batch(dirName, destination, copyName = True, species = None)
     """
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav') and filename+'.data' in files:
+            if (filename.endswith('.wav') or filename.endswith('.flac')) and filename+'.data' in files:
                 filename = root + '/' + filename
                 extractSegments(filename, destination, copyName=copyName, species = species)
 
@@ -324,16 +325,16 @@ def renameAnnotation(dirName, frm, to):
                     json.dump(segments, file)
                     file.close()
 
-def annotation2GT(wavFile, species, duration=0):
+def annotation2GT(soundFile, species, duration=0):
     """
     This generates the ground truth for a given sound file (currently for kiwi and bittern).
     Given the AviaNZ annotation, returns the ground truth as a txt file
     """
-    datFile = wavFile+'.data'
+    datFile = soundFile+'.data'
     print(datFile)
     eFile = datFile[:-9]+'-1sec.txt'
     if duration == 0:
-        wavobj = wavio.read(wavFile)
+        wavobj = wavio.read(soundFile)
         sampleRate = wavobj.rate
         data = wavobj.data
         duration = len(data)/sampleRate   # number of secs
@@ -350,7 +351,7 @@ def annotation2GT(wavFile, species, duration=0):
                 continue
             if not 'Kiwi' in seg[4][0]:
                 if seg[4][0][-1] == '?':
-                    print("**", wavFile)
+                    print("**", soundFile)
                 continue
             elif species == 'Kiwi (Nth Is Brown)' or species == 'Kiwi' or species == 'Kiwi_Tokoeka_Haast' or species == 'Kiwi_Brown' or species == 'Kiwi_spp' or species == 'Kiwi_Okarito_Brown' or species == 'Kiwi_Tokoeka_Stewart_Is':
                 # check M/F
@@ -416,7 +417,7 @@ def genGT(dirName,species='Kiwi',duration=0):
     """
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if (filename.endswith('.wav') or filename.endswith('.flac')):
                 filename = root + '/' + filename
                 annotation2GT(filename,species,duration=duration)
     print("Generated GT")
@@ -499,7 +500,7 @@ def length(dirName):
     durations = []
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav'):
+            if (filename.endswith('.wav') or filename.endswith('.flac')):
                 filename = root + '/' + filename
                 wavobj = wavio.read(filename)
                 sampleRate = wavobj.rate
@@ -523,7 +524,8 @@ def mp3ToWav(dirName):
             if filename.endswith('.mp3'):
                 src = root + '/' + filename
                 sound = AudioSegment.from_mp3(src)
-                sound.export(src[:-4]+'.wav', format="wav")
+                srcNoExtension = src.rsplit('.', 1)[0]
+                sound.export(srcNoExtension+'.wav', format="wav")
 
 def selectRandom(dirName, n, outDir):
     '''
@@ -538,7 +540,7 @@ def selectRandom(dirName, n, outDir):
     filelist2 = []
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.endswith('.wav') and filename + '.data' in files:
+            if (filename.endswith('.wav') or filename.endswith('.flac')) and filename + '.data' in files:
                 filelist2.append(filename)
                 filename = root + '/' + filename
                 filelist.append(filename)
@@ -638,9 +640,9 @@ def anotherFilter(dir1, dir2):
 
     for root, dirs, files in os.walk(dir1):
         for file in files:
-            if file.endswith('.wav') and file + '.data' not in files:
+            if (file.endswith('.wav') or file.endswith('.flac')) and file + '.data' not in files:
                 print('Done')
-            elif file.endswith('.wav') and file + '.data' in files:
+            elif (file.endswith('.wav') or file.endswith('.flac')) and file + '.data' in files:
                 with open(root + '/' + file + '.data') as f1:
                     print(root + '/' + file)
                     segments = json.load(f1)
@@ -791,12 +793,12 @@ def FiordlandSummary(dir):
                    torev_date = 0
                    for file in fileList2:
                        print('\t%s' % dirName2 + '\\' + file)
-                       if file.endswith('.wav') and os.path.getsize(dirName2 + '/' + file) < 100*1000:
+                       if (file.endswith('.wav') or file.endswith('.flac')) and os.path.getsize(dirName2 + '/' + file) < 100*1000:
                            continue
-                       if file.endswith('.wav') and file + '.data' not in fileList2:  # no need to review
+                       if (file.endswith('.wav') or file.endswith('.flac')) and file + '.data' not in fileList2:  # no need to review
                            done_date += 1
                            done_rec += 1
-                       elif file.endswith('.wav') and file + '.data' in fileList2:
+                       elif (file.endswith('.wav') or file.endswith('.flac')) and file + '.data' in fileList2:
                            torev_date += 1
                            torev_rec += 1
                            with open(dirName2 + '/' + file + '.data') as f:
@@ -994,7 +996,7 @@ def extract_1min(indir, outdir):
     '''
     for root, dirs, files in os.walk(indir):
         for file in files:
-            if file.endswith('.wav'):
+            if file.endswith('.wav') or file.endswith('.flac'):
                 try:
                     wavobj = wavio.read(root + '/' + file, 60, 0)
                     sampleRate = wavobj.rate
@@ -1010,7 +1012,7 @@ def classify_wind(dir, len):
     '''
     for root, dirs, files in os.walk(dir):
         for file in files:
-            if file.endswith('.wav'):
+            if file.endswith('.wav') or file.endswith('.flac'):
                 try:
                     wavobj = wavio.read(root + '/' + file, len, 1)
                     sampleRate = wavobj.rate
@@ -1092,9 +1094,10 @@ def prepareCARTdata(dirAudio, dirEng):
     '''
     for root, dirs, files in os.walk(dirAudio):
         for file in files:
-            if file.endswith('.wav') and file[:-4] + '-sec.txt' in files:
+            fileNoExtension = file.rsplit('.', 1)[0]
+            if (file.endswith('.wav') or file.endswith('.flac')) and fileNoExtension + '-sec.txt' in files:
                 GT = []
-                f1 = open(root + '/' + file[:-4] + '-sec.txt', "r")
+                f1 = open(root + '/' + fileNoExtension + '-sec.txt', "r")
                 for line in f1:
                     if line != '\n':
                         fields = line.split('\t')

@@ -503,7 +503,8 @@ def trainNet_loadAllData(filename):
         history = head_model.fit(x, y, batch_size=12, epochs=10, validation_data=(x_val, y_val)) 
 
         head_model.evaluate(x_test, y_test)
-        head_model.save(filename[:-4])
+        filenameNoExtension = filename.rsplit('.', 1)[0]
+        head_model.save(filenameNoExtension)
 
         # Fine tuning
         # Size bug here

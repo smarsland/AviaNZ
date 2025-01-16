@@ -9,6 +9,7 @@ import numpy as np
 import json
 import os
 import click
+import soundfile as sf
 
 def loadFile(filename):
 
@@ -26,14 +27,18 @@ def loadFile(filename):
         return None, None, 0, 0, 0, 0
 
     if os.stat(filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
-        wavobj = wavio.read(filename)
+        #wavobj = wavio.read(filename)
 
-        # Parse wav format details based on file header:
-        sampleRate = wavobj.rate
-        audiodata = wavobj.data
+        info = sf.info(filename)
+        audiodata, sampleRate = sf.read(filename)
+
+        # # Parse wav format details based on file header:
+        # sampleRate = wavobj.rate
+        # audiodata = wavobj.data
         minFreq = 0
         maxFreq = sampleRate / 2.
-        fileLength = wavobj.nframes
+        #fileLength = wavobj.nframes
+        fileLength = info.frames
 
         if audiodata.dtype is not 'float':
             audiodata = audiodata.astype('float')  # / 32768.0
@@ -50,7 +55,8 @@ def save_selected_sound(audiodata,sampleRate,t1,t2,filename):
         # t1, t2 in seconds
         t1 = math.floor(t1 * sampleRate)
         t2 = math.floor(t2 * sampleRate)
-        wavio.write(str(filename) + '.wav', audiodata[int(t1):int(t2)].astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
+        sf.write(str(filename) + '.wav', audiodata[int(t1):int(t2)], sampleRate)
+        #wavio.write(str(filename) + '.wav', audiodata[int(t1):int(t2)].astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
 
 @click.command()
 @click.option('-s', '--species', type=str, help='Species')
@@ -66,7 +72,7 @@ def make_zooniverse(species,infile,outfile):
     # Read folders and sub-folders
     for root, dirs, files in os.walk(infile):
         for f in files:
-            if f[-4:]=='.wav' and f + '.data' in files:
+            if (f.lower.endswith(".wav") or f.lower.endswith(".flac")) and f + '.data' in files:
                 segmentcount = 1
                 segments, audiodata, sampleRate, minFreq, maxFreq, datalengthSec = loadFile(os.path.join(root, f))
 
@@ -89,15 +95,17 @@ def make_zooniverse(species,infile,outfile):
                                     t1 = s[0] - excess
                                     t2 = s[1] + excess
 
-                                filename = outfile+str(f[:-4])+"_"+str(segmentcount)
+                                fNoExtension = f.rsplit('.', 1)[0]
+                                filename = outfile+str(fNoExtension)+"_"+str(segmentcount)
                                 save_selected_sound(audiodata,sampleRate,t1,t2,filename)
                                 segmentcount += 1
                             else:
                                 # Otherwise, take the first 10s and the last 10s as 2 segments
                                 # TODO: Maybe take a bit out of the middle?
-                                filename = outfile+str(f[:-4])+"_"+str(segmentcount)
+                                fNoExtension = f.rsplit('.', 1)[0]
+                                filename = outfile+str(fNoExtension)+"_"+str(segmentcount)
                                 save_selected_sound(audiodata,sampleRate,s[0],s[0]+10,filename)
-                                filename = outfile+str(f[:-4])+"_"+str(segmentcount+1)
+                                filename = outfile+str(fNoExtension)+"_"+str(segmentcount+1)
                                 save_selected_sound(audiodata,sampleRate,s[1]-10,s[1],filename)
                                 segmentcount += 2
 
@@ -125,11 +133,12 @@ def upload(infile,species):
     for f in files:
         subject = panoptes_client.subject.Subject()
         subject.links.project = project
-        subject.add_location(os.path.join(infile,f)) 
-        subject.add_location(os.path.join(infile,f[:-4]+'.png'))
+        subject.add_location(os.path.join(infile,f))
+        fNoExtension = f.rsplit('.', 1)[0]
+        subject.add_location(os.path.join(infile,fNoExtension+'.png'))
 
-        subject.metadata.update({'#audio': f, "#image": f[:-4]+'.png'})
-        csvfile.write(f+','+f[:-4]+'.png\n')
+        subject.metadata.update({'#audio': f, "#image": fNoExtension+'.png'})
+        csvfile.write(f+','+fNoExtension+'.png\n')
 
         subject.save()
         subjectgroup.append(subject)

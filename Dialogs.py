@@ -3147,7 +3147,7 @@ class Cluster(QDialog):
         self.maxsg = 1
         for seg in self.segments:
             sp = Spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
-            sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
+            sp.readSoundFile(seg[0], seg[1][1] - seg[1][0], seg[1][0])
             #_ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             self.sg = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             #self.sg = sp.normalisedSpec("Log")

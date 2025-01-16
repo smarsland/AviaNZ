@@ -143,9 +143,9 @@ def makeNoiseData(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
     blank=True
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.lower().endswith('.wav'):
+            if filename.lower().endswith('.wav') or filename.lower().endswith('.flac'):
                 filename = os.path.join(root, filename)
-                sp.readWav(filename)
+                sp.readSoundFile(filename)
                 sg = sp.spectrogram().T
                 #print(np.shape(sg),imgWidth)
                 starts = np.random.randint(np.shape(sg)[1]-imgWidth,size=nnoise)
@@ -170,9 +170,9 @@ def makeNoiseDataBats(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
     blank=True
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
-            if filename.lower().endswith('.wav'):
+            if filename.lower().endswith('.wav') or filename.lower().endswith('.flac'):
                 filename = os.path.join(root, filename)
-                sp.readWav(filename)
+                sp.readSoundFile(filename)
                 sg = sp.spectrogram().T
                 #print(np.shape(sg),imgWidth)
                 starts = np.random.randint(np.shape(sg)[1]-imgWidth,size=nnoise)

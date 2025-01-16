@@ -89,7 +89,7 @@ for root, dirs, files in os.walk(str(dirName)):
             wave = a.invertSpectrogram(spec2, 1024, 512, window='Blackman')
 
             #wave = a.bandpassFilter(wave, samplerate, 1000, 22000) bandpass?
-            wavFile = bmpFile + '.wav'
-            #wavFile=bmpFile+'_audible.wav' #Other option
-            wavio.write(wavFile, wave, samplerate, sampwidth=2)
+            soundFile = bmpFile + '.wav'
+            #soundFile=bmpFile+'_audible.wav' #Other option
+            wavio.write(soundFile, wave, samplerate, sampwidth=2)
 

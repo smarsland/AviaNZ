@@ -27,7 +27,6 @@ from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMut
 import fnmatch, gc, sys, os, json, re
 
 import numpy as np
-import wavio
 import traceback
 
 from pyqtgraph.dockarea import Dock, DockArea
@@ -41,6 +40,8 @@ import Dialogs
 import colourMaps
 
 import webbrowser, copy
+
+import soundfile as sf
 
 pg.setConfigOption('useNumba', True)
 pg.setConfigOption('background','w')
@@ -1386,13 +1387,13 @@ class AviaNZ_reviewAll(QMainWindow):
         self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # LIST ALL WAV + DATA pairs that can be processed
-        allwavs = []
+        allsoundfiles = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 filenamef = os.path.join(root, filename)
-                if (filename.lower().endswith('.wav') or filename.lower().endswith('.bmp')) and os.path.isfile(filenamef + '.data'):
-                    allwavs.append(filenamef)
-        total = len(allwavs)
+                if (filename.lower().endswith('.wav') or filename.lower().endswith('.flac') or filename.lower().endswith('.bmp')) and os.path.isfile(filenamef + '.data'):
+                    allsoundfiles.append(filenamef)
+        total = len(allsoundfiles)
         #print(total, "files found")
 
         # main file review loop
@@ -1403,7 +1404,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.update()
         self.repaint()
 
-        for filename in allwavs:
+        for filename in allsoundfiles:
             self.filename = filename
 
             cnt=cnt+1
@@ -1421,6 +1422,12 @@ class AviaNZ_reviewAll(QMainWindow):
                 with open(filename, 'br') as f:
                     if f.read(4) != b'RIFF':
                         print("Warning: WAV file %s not formatted correctly, skipping" % filename)
+                        continue
+                self.batmode = False
+            elif filename.lower().endswith('.flac'):
+                with open(filename, 'br') as f:
+                    if f.read(4) != b'fLaC':
+                        print("Warning: FLAC file %s not formatted correctly, skipping" % filename)
                         continue
                 self.batmode = False
             elif filename.lower().endswith('.bmp'):
@@ -1853,10 +1860,13 @@ class AviaNZ_reviewAll(QMainWindow):
                     duration = self.segments.metadata["Duration"]
                 else:
                     # Determine the sample rate and set some file-level parameters
-                    wavobj = wavio.read(filename, 0, 0)
+                    #wavobj = wavio.read(filename, 0, 0)
                     #samplerate, duration, _, _ = wavio.readFmt(filename)
-                    samplerate = wavobj.rate
-                    duration = wavobj.nseconds
+                    #samplerate = wavobj.rate
+                    #duration = wavobj.nseconds
+                    info = sf.info(filename)
+                    samplerate = info.samplerate
+                    duration = info.frames / samplerate
 
                 minFreq = max(self.fLow.value(), 0)
                 maxFreq = min(self.fHigh.value(), samplerate//2)
@@ -1910,7 +1920,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             maxsg = 1
                         else:
                             # segix>1 to print the format details only once for each file
-                            sp.readWav(filename, off=x1, duration=x2-x1, silent=segix>1)
+                            sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
                             sp.data = SignalProc.bandpassFilter(sp.data, sp.audioFormat.sampleRate(), minFreq, maxFreq)

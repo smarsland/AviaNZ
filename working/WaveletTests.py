@@ -103,7 +103,7 @@ def showNoiseEnergies():
 
     for root, dirs, files in os.walk(str('Sound Files/Noise examples/Noise_10s')):
         for filename in files:
-            if filename.endswith('.wav'):
+            if filename.endswith('.wav') or filename.endswith('.flac'):
                 filename = root + '/' + filename
                 wavobj = wavio.read(filename)
                 sampleRate = wavobj.rate

@@ -3,8 +3,9 @@ import numpy as np
 import pylab as pl
 import scipy.signal as signal
 import scipy.fftpack as fft
-import wavio
+#import wavio
 import gc
+import soundfile as sf
 
 def spectrogram(data,window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
     sg = np.copy(data.squeeze())
@@ -25,5 +26,5 @@ def spectrogram(data,window_width=None,incr=None,window='Hann',equal_loudness=Fa
     pl.imshow(10.0*np.log10(sg.T),cmap='gray_r')
     pl.show()
 
-data = wavio.read('Sound Files/tril1.wav')
-spectrogram(data.data,256,128)
+data, fs = sf.read('Sound Files/lsk_1min.wav')
+spectrogram(data,256,128)

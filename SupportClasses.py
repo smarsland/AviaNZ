@@ -222,7 +222,8 @@ class ConfigLoader(object):
 
                 # if filter passed checks, store it,
                 # using filename (without extension) as the key
-                goodfilters[filtfile[:-4]] = filt
+                filtfileNoExtension = filtfile.rsplit('.', 1)[0]
+                goodfilters[filtfileNoExtension] = filt
             except Exception as e:
                 print("Could not load filter:", filtfile, e)
         print("Loaded filters:", list(goodfilters.keys()))
