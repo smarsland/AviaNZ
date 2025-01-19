@@ -37,11 +37,12 @@
 # 9. Mac installation
 # 10. Test and test again. And again.
 # 11. If a .data file is empty, delete, restart -- check
-# 12. Replace call type selection with dropdown from species
 # 13. Ruth things
 # 16. Check the splitting with data files properly
 
-# SHOULD BE DONE:
+# DONE:
+# 12. Replace call type selection with dropdown from species
+#     This is done now.
 # 14. Is librosa used? - NO. 
 #     There are two places where it might get used. 
 #     It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
@@ -4561,10 +4562,12 @@ class AviaNZ(QMainWindow):
     def buildCNN(self):
         """Listener for 'Build a CNN'
         """
+        print("BUILDING CNN")
         self.saveSegments()
         self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
         #self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
         self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
+        self.buildCNNWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniserCNN(test=False))
         self.buildCNNWizard.activateWindow()
         self.buildCNNWizard.exec()
 
@@ -4601,6 +4604,7 @@ class AviaNZ(QMainWindow):
             self.buildRecAdvWizard.done(0)
 
     def saveRecogniserCNN(self, test=False):
+        print("SAVING THE RECOGNISER")
         # Actually write out the filter and CNN model
         modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
         CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
@@ -4613,42 +4617,40 @@ class AviaNZ(QMainWindow):
         self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
         rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
-        try:
-            if self.buildCNNWizard.savePage.saveoption == 'New':
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
-                print("Saving a new recogniser", filename)
-                # save ROC
-                with open(rocfilename, 'w') as f:
-                    f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
-            else:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
-                print("Updating the existing recogniser ", filename)
-                # save ROC
-                # TODO this was disabled here for some reason,
-                # not sure what is the intended behaviour
-                # with open(rocfilename, 'w') as f:
-                #     f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+        if self.buildCNNWizard.savePage.saveoption == 'New':
+            filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
+            print("Saving a new recogniser", filename)
+            # save ROC
+            with open(rocfilename, 'w') as f:
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+        else:
+            filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
+            print("Updating the existing recogniser ", filename)
+            # save ROC
+            # TODO this was disabled here for some reason,
+            # not sure what is the intended behaviour
+            # with open(rocfilename, 'w') as f:
+            #     f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
 
-            # Store the recognizer txt
-            with open(filename, 'w') as f:
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt, indent=4))
-            # Actually copy the model
-            copyfile(modelsrc, modelfile)
-            copyfile(weightsrc, weightfile)
-            # And remove temp dirs
-            self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-            self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
-            # prompt the user
-            if test:
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
-            else:
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
-            msg.exec()
-            self.buildCNNWizard.done(1)
-            if test:
-                self.testRecogniser(filter=os.path.basename(filename))
-        except Exception as e:
-            print("ERROR: could not save recogniser because:", e)
+        # Store the recognizer txt
+        with open(filename, 'w') as f:
+            f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt, indent=4))
+        # Actually copy the model
+        copyfile(modelsrc, modelfile)
+        copyfile(weightsrc, weightfile)
+        # And remove temp dirs
+        print("REMOVING THE TEMP DIRS")
+        self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+        self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+        # prompt the user
+        if test:
+            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+        else:
+            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+        msg.exec()
+        self.buildCNNWizard.done(1)
+        if test:
+            self.testRecogniser(filter=os.path.basename(filename))
 
     def saveRecogniserROC(self):
         # nothing to worry about CNN files, they are untouched

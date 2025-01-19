@@ -336,18 +336,19 @@ class CNN:
         '''
         Sets self.model
         '''
+        apply_same_padding = "Same" if (self.imageheight < 120 or self.imagewidth < 120) else None
         self.model = tf.keras.models.Sequential()
         self.model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[self.imageheight, self.imagewidth, 1], padding='Same'))
-        self.model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu'))
+        self.model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu', padding=apply_same_padding))
         self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(3, 3)))
         self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu'))
+        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding=apply_same_padding))
         self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
         self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu'))
+        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding=apply_same_padding))
         self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
         self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
+        self.model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding=apply_same_padding))
         self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
         self.model.add(tf.keras.layers.Dropout(0.2))
         # Flatten the results to one dimension for passing into our final layer
