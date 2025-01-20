@@ -42,6 +42,8 @@ import shutil
 
 import soundfile as sf
 
+import wavio
+
 #QtMM = True
 #try:
     #from PyQt6.QtMultimedia import QAudioFormat
@@ -125,18 +127,18 @@ class Spectrogram:
 
     def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        #wavobj = wavio.read(file, duration, off)
         sampleRate = sf.info(file).samplerate
         self.fileLength = sf.info(file).frames/sampleRate
 
-        start_frame = int(off * sampleRate)
-        if duration is None:
-            stop_frame = None
-        else:
-            stop_frame = int((off + duration) * sampleRate)
+        # start_frame = int(off * sampleRate)
+        # if duration is None:
+        #     stop_frame = None
+        # else:
+        #     stop_frame = int((off + duration) * sampleRate)
+        #self.data, _ = sf.read(file, start=start_frame, stop=stop_frame)
 
-        self.data, _ = sf.read(file, start=start_frame, stop=stop_frame)
-        #self.data = wavobj.data
+        wavobj = wavio.read(file, duration, off)
+        self.data = wavobj.data
 
         # take only left channel
         if np.shape(np.shape(self.data))[0] > 1:
