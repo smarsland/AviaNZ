@@ -4604,7 +4604,6 @@ class AviaNZ(QMainWindow):
             self.buildRecAdvWizard.done(0)
 
     def saveRecogniserCNN(self, test=False):
-        print("SAVING THE RECOGNISER")
         # Actually write out the filter and CNN model
         modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
         CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
