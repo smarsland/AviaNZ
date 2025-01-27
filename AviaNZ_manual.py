@@ -21,7 +21,6 @@
 
 # TODO: 
 # 1. Check Freebird import, BatSearch output
-# 2a -> Replace (or not...) the mergeSegments whereever that was
 # 3. James' filters list
 # 3a -> replace warning about deleting excels?
 # 3b -> sort out logic for actually running multiple filters (e.g. for resampling)
@@ -41,6 +40,8 @@
 # DONE:
 # 2.  Test Harry's overlaps into excel 
 #       The excel import seems to be working now. 
+# 2a -> Replace (or not...) the mergeSegments whereever that was
+#       It doesn't seem to be used. At least not in the app. Maybe in the command version in the segment() method. 
 # 12. Replace call type selection with dropdown from species
 #       This is done now.
 # 14. Is librosa used? - NO. 
