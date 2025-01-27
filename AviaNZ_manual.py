@@ -4638,7 +4638,6 @@ class AviaNZ(QMainWindow):
         copyfile(modelsrc, modelfile)
         copyfile(weightsrc, weightfile)
         # And remove temp dirs
-        print("REMOVING THE TEMP DIRS")
         self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
         self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
         # prompt the user
@@ -4702,7 +4701,7 @@ class AviaNZ(QMainWindow):
 
         values = self.excel2AnnotationDialog.getValues()
         if values:
-            [excelfile, audiofile, species, colstart, colend, collow, colhigh] = values
+            [excelfile, audiofile, species, calltype, colstart_ind, colend_ind, collow_ind, colhigh_ind] = values
         else:
             return
 
@@ -4710,6 +4709,10 @@ class AviaNZ(QMainWindow):
             # Read excel file
             book = openpyxl.load_workbook(excelfile)
             sheet = book.active
+            colstart = openpyxl.utils.get_column_letter(colstart_ind)
+            colend = openpyxl.utils.get_column_letter(colend_ind)
+            collow = openpyxl.utils.get_column_letter(collow_ind)
+            colhigh = openpyxl.utils.get_column_letter(colhigh_ind)
             starttime = sheet[colstart+'2': colstart + str(sheet.max_row)]
             endtime = sheet[colend+'2': colend + str(sheet.max_row)]
             flow = sheet[collow+'2': collow + str(sheet.max_row)]
@@ -4719,11 +4722,23 @@ class AviaNZ(QMainWindow):
             samplerate = info.samplerate
             duration = info.frames / samplerate
 
+            if calltype=="Add":
+                raise Exception("calltype cannot be 'Add'")
+
+            if species=="Other":
+                raise Exception("species cannot be 'Other'")
+
             annotation = []
             for i in range(len(starttime)):
-                annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
-                                   float(fhigh[i][0].value),
-                                   [{"species": species, "certainty": 100.0, "filter": "M", "calltype": species}]])
+                if calltype == "":
+                    annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
+                                    float(fhigh[i][0].value),
+                                    [{"species": species, "certainty": 100.0, "filter": "M"}]])
+                else:
+                    annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
+                                    float(fhigh[i][0].value),
+                                    [{"species": species, "certainty": 100.0, "filter": "M", "calltype": calltype}]])
+
             annotation.insert(0, {"Operator": "", "Reviewer": "", "Duration": duration})
             file = open(audiofile + '.data', 'w')
             json.dump(annotation, file)
@@ -4734,6 +4749,8 @@ class AviaNZ(QMainWindow):
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",
                                               "Successfully saved the annotation file: " + '\n' + audiofile + '.data')
             msg.exec()
+            if audiofile==self.filename:
+                self.loadFile(self.filename)
         except Exception as e:
             print("ERROR: Generating annotation failed with error:")
             print(e)

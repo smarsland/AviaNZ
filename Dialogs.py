@@ -353,6 +353,13 @@ class Excel2Annotation(QDialog):
         lblSpecies.setFixedWidth(220)
         lblSpecies.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        self.txtCalltype = QLineEdit()
+        self.txtCalltype.setMinimumWidth(400)
+        self.txtCalltype.setText('')
+        lblCalltype = QLabel("Calltype (optional)")
+        lblCalltype.setFixedWidth(220)
+        lblCalltype.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
         # Show a template
@@ -413,6 +420,8 @@ class Excel2Annotation(QDialog):
         Box3 = QHBoxLayout()
         Box3.addWidget(lblSpecies)
         Box3.addWidget(self.txtSpecies)
+        Box3.addWidget(lblCalltype)
+        Box3.addWidget(self.txtCalltype)
         Box.addLayout(Box1)
         Box.addLayout(Box10)
         Box.addLayout(Box2)
@@ -425,7 +434,7 @@ class Excel2Annotation(QDialog):
 
     def getValues(self):
         if self.txtSpecies.text() and self.txtExcel.text() and self.txtAudio.text():
-            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text(), self.headers[self.comboStart.currentIndex()], self.headers[self.comboEnd.currentIndex()], self.headers[self.comboLow.currentIndex()], self.headers[self.comboHigh.currentIndex()]]
+            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text(), self.txtCalltype.text(), self.headers[self.comboStart.currentIndex()], self.headers[self.comboEnd.currentIndex()], self.headers[self.comboLow.currentIndex()], self.headers[self.comboHigh.currentIndex()]]
         else:
             msg = SupportClasses_GUI.MessagePopup("t", "All fields are required ", "All fields are required ")
             msg.exec()
