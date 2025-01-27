@@ -21,7 +21,6 @@
 
 # TODO: 
 # 1. Check Freebird import, BatSearch output
-# 2. Test Harry's overlaps into excel 
 # 2a -> Replace (or not...) the mergeSegments whereever that was
 # 3. James' filters list
 # 3a -> replace warning about deleting excels?
@@ -38,21 +37,23 @@
 # 10. Test and test again. And again.
 # 11. If a .data file is empty, delete, restart -- check
 # 13. Ruth things
-# 16. Check the splitting with data files properly
 
 # DONE:
+# 2.  Test Harry's overlaps into excel 
+#       The excel import seems to be working now. 
 # 12. Replace call type selection with dropdown from species
-#     This is done now.
+#       This is done now.
 # 14. Is librosa used? - NO. 
-#     There are two places where it might get used. 
-#     It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
-#     DialogsTraining.WPageCluster.
-#     It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
-#     which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
-#     the algorithm is never changed.
+#       There are two places where it might get used. 
+#       It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
+#       DialogsTraining.WPageCluster.
+#       It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
+#       which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
+#       the algorithm is never changed.
 # 15. Tidy up the flac loader (correct place, check for space) and add a converter - Now flac files are loaded into a wav in temp storage.
-#     Will check if there is roughly enough space to continue and then use a try catch to deal with any errors.
-
+#       Will check if there is roughly enough space to continue and then use a try catch to deal with any errors.
+# 16. Check the splitting with data files properly
+#       There was a bug where splitting up the annotations looked right but the durations of the saved files were wrong, which is fixed now.
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile

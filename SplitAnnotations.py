@@ -373,7 +373,7 @@ class SplitData(QMainWindow):
                 # check if file is formatted correctly
                 with open(infile_c, 'br') as f:
                     first4char = f.read(4)
-                    if first4char != b'RIFF' and first4char != b'fLaC':
+                    if first4char != b'RIFF':
                         print("Warning: file %s not formatted correctly, skipping" % infile_c)
                         return
 
@@ -444,31 +444,32 @@ class SplitData(QMainWindow):
 
         # repeat initial meta-segment for each output file
         # (output is determined by ceiling division)
-        all = []
+        allSegs = []
         for i in range(int(maxtime-1) // cutlen + 1):
             onelist = Segment.SegmentList()
             onelist.metadata = segs.metadata.copy()
             onelist.metadata["Duration"] = min(self.cutLen, maxtime-i*self.cutLen)
-            all.append(onelist)
+            allSegs.append(onelist)
 
         # separate segments into output files and adjust segment timestamps
         for b in segs:
-            filenum, adjst = divmod(b[0], cutlen)
-            adjend = b[1] - filenum*cutlen
-            # a segment can jut out past the end of a split file, so we trim it:
-            # [a------|---b] -> [a-----f1end] [f2start----b]
-            # If it's super long, it'll go back to the list to be trimmed again.
-            if adjend > cutlen:
-                print("trimming segment")
-                # cut at the end of the starting file
-                adjend = (filenum+1)*cutlen
-                # keep rest for later
-                segs.append([adjend, b[1], b[2], b[3], b[4]])
-
-            all[int(filenum)].addSegment([adjst, adjend, b[2], b[3], b[4]])
+            minfilenum, _ = divmod(b[0], cutlen)
+            maxfilenum, _ = divmod(b[1], cutlen)
+            minfilenum = int(minfilenum)
+            maxfilenum = int(maxfilenum)
+            for filenum in range(minfilenum, maxfilenum+1):
+                if filenum==minfilenum:
+                    adjst = b[0] - filenum*cutlen
+                else:
+                    adjst = 0
+                if filenum==maxfilenum:
+                    adjend = b[1] - filenum*cutlen
+                else:
+                    adjend = cutlen
+                allSegs[int(filenum)].addSegment([adjst, adjend, b[2], b[3], b[4]])
 
         # save files, while increasing the filename datestamps
-        for a in range(len(all)):
+        for a in range(len(allSegs)):
             if time!=0:
                 f2 = str(outprefix) + '_' + dt.datetime.strftime(time, "%Y%m%d_%H%M%S") + '.wav.data'
                 f2 = os.path.join(outdir, f2)
@@ -478,7 +479,7 @@ class SplitData(QMainWindow):
                 f2 = str(outprefix) + '_' + str(a) + '.wav.data'
                 f2 = os.path.join(outdir, f2)
                 print("outputting to", f2)
-            all[a].saveJSON(f2)
+            allSegs[a].saveJSON(f2)
 
 
 #### MAIN LAUNCHER, for standalone exe version:
