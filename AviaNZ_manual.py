@@ -20,7 +20,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO: 
-# 1. Check Freebird import, BatSearch output
 # 3. James' filters list
 # 3a -> replace warning about deleting excels?
 # 3b -> sort out logic for actually running multiple filters (e.g. for resampling)
@@ -38,6 +37,8 @@
 # 13. Ruth things
 
 # DONE:
+# 1. Check Freebird import, BatSearch output
+#       I have fixed the Freebird import, don't know what BatSearch is. 
 # 2.  Test Harry's overlaps into excel 
 #       The excel import seems to be working now. 
 # 2a -> Replace (or not...) the mergeSegments whereever that was
@@ -4801,11 +4802,9 @@ class AviaNZ(QMainWindow):
             try:
                 book = openpyxl.load_workbook(filename)
                 sheet = book.active
-            except:
-                print("Warning: Did not find Freebird species list")
 
                 name = sheet['A2': 'A' + str(sheet.max_row)]
-                code = sheet['B2': 'B' + str(sheet.max_row)]
+                code = sheet['C2': 'C' + str(sheet.max_row)]
     
                 for i in range(len(name)):
                     spName.append(str(name[i][0].value))
@@ -4814,6 +4813,8 @@ class AviaNZ(QMainWindow):
                         spCode.append(int(code[i][0].value))
                     else:
                         spCode.append(-1)
+            except:
+                print("Warning: Did not find Freebird species list")
 
         spDict = dict(zip(spCode, spName))
 
@@ -4866,8 +4867,7 @@ class AviaNZ(QMainWindow):
                         for elem in troot:
                             try:
                                 species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
-                                # TODO: Get the size right! Something weird about the freqs
-                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), 0,0, species])
+                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), float(elem[4].text), float(elem[3].text), species])
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file {1}".format(elem[0].text,tagFile))

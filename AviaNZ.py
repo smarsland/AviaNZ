@@ -119,7 +119,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             raise
 
     # check and if needed copy any other necessary files
-    necessaryFiles = ["ListCommonBirds.txt", "ListDOCBirds.txt", "ListBats.txt", "LearningParams.txt", "ListKnownCalls.txt"]
+    necessaryFiles = ["ListCommonBirds.txt", "ListDOCBirds.txt", "ListBats.txt", "LearningParams.txt", "ListKnownCalls.txt", "Freebird_species_list.xlsx"]
     for f in necessaryFiles:
         if not os.path.isfile(os.path.join(configdir, f)):
             print("File %s not found in config dir, providing default" % f)
