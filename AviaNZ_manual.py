@@ -1562,10 +1562,11 @@ class AviaNZ(QMainWindow):
             dlg += 1
             dlg.update()
 
+            
             self.datalengthSec = self.datalength / self.sp.audioFormat.sampleRate()
             
             if name is not None:  # i.e. starting a new file, not next section
-                if self.datalengthSec != self.sp.fileLength:
+                if self.datalengthSec != self.sp.fileLength and not self.batmode:
                     self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalengthSec))
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(True)
@@ -3641,7 +3642,6 @@ class AviaNZ(QMainWindow):
         Have to check if the buttons should be disabled or not,
         save the segments and reset the arrays, then call loadFile.
         """
-        print(self.currentFileSection,self.nFileSections)
         self.currentFileSection += 1
         self.prev5mins.setEnabled(True)
         self.movePrev5minsKey.setEnabled(True)
