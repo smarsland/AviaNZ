@@ -581,7 +581,7 @@ class AviaNZ_batchProcess():
                 # TODO: correct samplerate? And data
                 # TODO: make efficient for resampling
                 # TODO: need to init class somewhere
-                self.ws.readBatch(self.sp.data[start:end], self.sp.audioFormat.sampleRate(), d=False, spInfo=filters, wpmode="new", wind=self.options[1]<2)
+                self.ws.readBatch(self.sp.data[start:end], self.sp.audioFormat.sampleRate(), d=False, spInfo=filters, wpmode="new", wind=self.options[1]>0)
                 #self.ws.readBatch(self.audiodata[start:end], self.sp.sampleRate, d=False, spInfo=filters, wpmode="new", wind=self.wind>0)
 
             data_test = []

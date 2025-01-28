@@ -158,7 +158,8 @@ class AviaNZ_batchWindow(QMainWindow):
         #self.windfilter.clicked.connect(self.showWind)
         windlabel = QLabel("Specify wind filter (or select None)")
         self.windfilter = QComboBox()
-        self.windfilter.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"])
+        self.windfilter.addItems(["None", "Robust wind filter (experimental, slow)", "OLS wind filter (recommended)"])
+        self.windfilter.setCurrentIndex(2)
         # TODO: make sure first is checked
 
         # TODO: check all these!
