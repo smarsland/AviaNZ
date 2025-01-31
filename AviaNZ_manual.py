@@ -739,9 +739,9 @@ class AviaNZ(QMainWindow):
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
 
-        # TODO: Useful?
-        self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
-        self.specPlot.setGraphicsEffect(self.blurEffect)
+        # # This will slow everything down!!! Would be nice to do the bluring only when the size changes...
+        # self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
+        # self.specPlot.setGraphicsEffect(self.blurEffect)
 
         self.p_spec.addItem(self.specPlot)
         if self.MouseDrawingButton==Qt.MouseButton.RightButton:
