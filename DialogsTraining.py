@@ -2359,19 +2359,22 @@ class BuildCNNWizard(QWizard):
             self.redopages = True
 
             # Parameter/s
-            self.imgsec = QSlider(Qt.Orientation.Horizontal)
+            self.imgsec = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
             self.imgsec.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.imgsec.setTickInterval(25)
             self.imgsec.setRange(0, 600)  # 0-6 sec
             self.imgsec.setValue(25)
             self.imgsec.valueChanged.connect(self.imglenChange)
+            self.imgsec.sliderClicked.connect(self.reloadImgs)
+            self.imgsec.sliderReleased.connect(self.reloadImgs)
+
             self.imgtext = QLabel('0.25 sec')
 
             self.cbfrange = QCheckBox("Limit frequency range")
             self.cbfrange.setStyleSheet("QCheckBox { font-weight: bold; }")
             self.cbfrange.toggled.connect(self.onClickedFrange)
 
-            self.f1 = QSlider(Qt.Orientation.Horizontal)
+            self.f1 = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
             self.f1.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.f1.setTickInterval(1000)
             # self.f1.setRange(0, self.cnntrain.fs)  # 0-6 sec
@@ -2379,7 +2382,7 @@ class BuildCNNWizard(QWizard):
             # self.f1.valueChanged.connect(self.f1Change)
             self.f1text = QLabel('')
 
-            self.f2 = QSlider(Qt.Orientation.Horizontal)
+            self.f2 = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
             self.f2.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.f2.setTickInterval(1000)
             # self.f2.setRange(0, self.cnntrain.fs)  # 0-6 sec
@@ -2462,6 +2465,10 @@ class BuildCNNWizard(QWizard):
             self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
             self.f1.valueChanged.connect(self.f1Change)
             self.f2.valueChanged.connect(self.f2Change)
+            self.f1.sliderClicked.connect(self.reloadImgs)
+            self.f1.sliderReleased.connect(self.reloadImgs)
+            self.f2.sliderReleased.connect(self.reloadImgs)
+            self.f2.sliderReleased.connect(self.reloadImgs)
             self.cbfrange.setChecked(False)
             self.f1text.setEnabled(False)
             self.f1.setEnabled(False)
@@ -2598,30 +2605,33 @@ class BuildCNNWizard(QWizard):
             self.cnntrain.windowInc = int(np.ceil(self.imgsec.value() * self.cnntrain.fs / (self.cnntrain.imgsize[1] - 1)) / 100)
             print('window and increment set: ', self.cnntrain.windowWidth, self.cnntrain.windowInc)
 
-        def imglenChange(self, value):
+        def imglenChange(self):
+            value = self.imgsec.value()
             if value < 10:
                 self.imgsec.setValue(10)
                 self.imgtext.setText('0.1 sec')
             else:
                 self.imgtext.setText(str(value / 100) + ' sec')
             self.cnntrain.imgWidth = self.imgsec.value()/100
-            self.setWindowInc()
-            self.showimg(self.indx)
 
-        def f1Change(self, value):
+        def f1Change(self):
+            value = self.f1.value()
             value = value//10*10
             if value < 0:
                 value = 0
             # self.cnntrain.f1 = value
             self.f1text.setText('Lower frq. limit ' + str(value) + ' Hz')
-            self.showimg(self.indx)
 
-        def f2Change(self, value):
+        def f2Change(self):
+            value = self.f2.value()
             value = value//10*10
             if value < 0:
                 value = 0
             # self.cnntrain.f2 = value
             self.f2text.setText('Upper frq. limit ' + str(value) + ' Hz')
+        
+        def reloadImgs(self):
+            self.setWindowInc()
             self.showimg(self.indx)
 
         def cleanupPage(self):
