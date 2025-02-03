@@ -2467,7 +2467,7 @@ class BuildCNNWizard(QWizard):
             self.f2.valueChanged.connect(self.f2Change)
             self.f1.sliderClicked.connect(self.reloadImgs)
             self.f1.sliderReleased.connect(self.reloadImgs)
-            self.f2.sliderReleased.connect(self.reloadImgs)
+            self.f2.sliderClicked.connect(self.reloadImgs)
             self.f2.sliderReleased.connect(self.reloadImgs)
             self.cbfrange.setChecked(False)
             self.f1text.setEnabled(False)
