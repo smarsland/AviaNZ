@@ -261,7 +261,9 @@ class CompareCalls(QMainWindow):
         # read in all datas to self.annots
         for f in alldatas:
             # must have correct naming format:
-            infilestem = os.path.basename(f)[:-9]
+            pathWithoutDotDataExtension = os.path.splitext(f)[0]
+            pathWithoutExtension = os.path.splitext(pathWithoutDotDataExtension)[0]
+            infilestem = os.path.basename(pathWithoutExtension)
 
             try:
                 if recsInDirNames:
@@ -306,12 +308,17 @@ class CompareCalls(QMainWindow):
                 print("Could not identify timestamp in", f)
                 continue
         print("Detected recorders:", self.allrecs)
+        self.pairwiseShifts = np.zeros((len(self.allrecs), len(self.allrecs)))
         return(0)
 
     def updateShiftSpinbox(self, text):
         """ Updates the shift selection spinbox, when the selected
             recorder pair or estimated shift change.
         """
+        if len(self.allrecs)<2:
+            print("ERROR: not enough recorders for comparison")
+            return
+            
         # find the currently suggested shift for rec2 w.r.t rec1
         rec1, rec2 = text.split("-")
         i = self.allrecs.index(rec1)
@@ -442,6 +449,10 @@ class CompareCalls(QMainWindow):
         self.refreshMainOut()
 
     def showAdjustmentsDialog(self):
+        if len(self.allrecs)<2:
+            print("ERROR: not enough recorders for comparison")
+            return
+        
         self.adjrevdialog = ReviewAdjustments(self.overlaps_forplot, self.hopSpin.value(), self)
         self.adjrevdialog.exec()
 
@@ -451,6 +462,10 @@ class CompareCalls(QMainWindow):
         self.refreshMainOut()
 
     def showComparisonDialog(self):
+        if len(self.allrecs)<2:
+            print("ERROR: not enough recorders for comparison")
+            return
+
         print("Extracting overlapping calls...")
 
         # self.allrecs and annots were set after browsing the input dir,
@@ -929,7 +944,7 @@ class CompareCallsDialog(QDialog):
 
         # axes
         minFreq = 0
-        maxFreq = min(self.sp1.sampleRate, self.sp2.sampleRate)
+        maxFreq = min(self.sp1.audioFormat.sampleRate(), self.sp2.audioFormat.sampleRate())
         FreqRange = (maxFreq-minFreq)/1000.
 
         SgSize1 = np.shape(self.sp1.sg)[1]
