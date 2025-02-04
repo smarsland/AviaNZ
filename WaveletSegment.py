@@ -320,7 +320,7 @@ class WaveletSegment:
         # number of WCs at any level <=5
         estWCperWindow = math.ceil(window * self.spInfo['SampleRate']/32)
         estrealwindow = estWCperWindow / self.spInfo['SampleRate']*32
-        if estrealwindow!=window:
+        if not np.isclose(estrealwindow, window, rtol=0.0001):
             print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
             return
 

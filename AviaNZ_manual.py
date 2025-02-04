@@ -20,17 +20,14 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO: 
-# 3. James' filters list
 # 3a -> replace warning about deleting excels?
-# 3b -> sort out logic for actually running multiple filters (e.g. for resampling)
 # 3c -> size of filter box
 # 3d -> WTF merge segments things
 # 3e -> tidy code
 # 4. Finish Neural Networks
 # 5. Finish clustering
 # 6. Colour maps
-# 7. Check merge with main cf media playback cleanup, CompareCalls dialog bugs changes
-# 8. Fix OutputBatPasses -- JSON
+# 8. Fix OutputBatPasses -- JSON (What does this mean?)
 # 9. Mac installation
 # 10. Test and test again. And again.
 # 11. If a .data file is empty, delete, restart -- check
@@ -38,24 +35,30 @@
 
 # DONE:
 # 1. Check Freebird import, BatSearch output
-#       I have fixed the Freebird import, don't know what BatSearch is. 
+#           I have fixed the Freebird import, don't know what BatSearch is. 
 # 2.  Test Harry's overlaps into excel 
-#       The excel import seems to be working now. 
+#           The excel import seems to be working now. 
 # 2a -> Replace (or not...) the mergeSegments whereever that was
-#       It doesn't seem to be used. At least not in the app. Maybe in the command version in the segment() method. 
+#           It doesn't seem to be used. At least not in the app. Maybe in the command version in the segment() method. 
+# 3. James' filters list
+# 3b -> sort out logic for actually running multiple filters (e.g. for resampling)
+#           I have for now gotten this to work by buliding the wavelet tree for each sample rate.
+#           There is probably a way to do this by changing the filter, but I need to understand how they are using sample rate right now.
+# 7. Check merge with main cf media playback cleanup, CompareCalls dialog bugs changes
+#           I have done some bug fixing for CompareCalls, seems to work.
 # 12. Replace call type selection with dropdown from species
-#       This is done now.
-# 14. Is librosa used? - NO. 
-#       There are two places where it might get used. 
-#       It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
-#       DialogsTraining.WPageCluster.
-#       It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
-#       which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
-#       the algorithm is never changed.
+#           This is done now.
+# 14. Is librosa used? - not really
+#           There are two places where it might get used. 
+#           It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
+#           DialogsTraining.WPageCluster.
+#           It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
+#           which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
+#           the algorithm is never changed.
 # 15. Tidy up the flac loader (correct place, check for space) and add a converter - Now flac files are loaded into a wav in temp storage.
-#       Will check if there is roughly enough space to continue and then use a try catch to deal with any errors.
+#           Will check if there is roughly enough space to continue and then use a try catch to deal with any errors.
 # 16. Check the splitting with data files properly
-#       There was a bug where splitting up the annotations looked right but the durations of the saved files were wrong, which is fixed now.
+#           There was a bug where splitting up the annotations looked right but the durations of the saved files were wrong, which is fixed now.
 
 import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile

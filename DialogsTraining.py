@@ -52,6 +52,8 @@ import Segment
 import Clustering
 import Training
 
+import math
+
 
 class BuildRecAdvWizard(QWizard):
     # page 1 - select training data
@@ -1288,7 +1290,7 @@ class BuildRecAdvWizard(QWizard):
                 # Not reading from the field to avoid rounding errors.
                 # But any change here must be reflected in the training as well!
                 MINCHPWIN = 32/self.wizard().speciesData['SampleRate']
-                chpwin = round(chpwin/MINCHPWIN)*MINCHPWIN
+                chpwin = math.ceil(chpwin/MINCHPWIN)*MINCHPWIN
                 print("Changepoint window was rounded to", chpwin)
 
                 self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, 0.0, 0.0], 'FreqRange': [fLow, fHigh]}]
