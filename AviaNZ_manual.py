@@ -388,7 +388,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             specMenu.addSeparator()
             self.showDiagnosticTick = specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
-            self.showDiagnosticCNN = specMenu.addAction("Show CNN training diagnostics", self.showDiagnosticDialogCNN)
+            self.showDiagnosticNN = specMenu.addAction("Show NN training diagnostics", self.showDiagnosticDialogNN)
             self.extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
             for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Wind adjustment", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
@@ -463,7 +463,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
 
-        extrarecMenu.addAction("Extend a recogniser with CNN", self.buildCNN)
+        extrarecMenu.addAction("Extend a recogniser with NN", self.buildNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
         recMenu.addAction("Customise a recogniser (use existing ROC)", self.customiseFiltersROC)
@@ -3774,15 +3774,15 @@ class AviaNZ(QMainWindow):
         self.diagnosticDialog.show()
         self.diagnosticDialog.activateWindow()
 
-    def showDiagnosticDialogCNN(self):
+    def showDiagnosticDialogNN(self):
         """ Create the dialog to set diagnostic plot parameters.  """
-        if not hasattr(self, 'diagnosticDialogCNN'):
-            self.diagnosticDialogCNN = Dialogs.DiagnosticCNN(self.FilterDicts)
-            self.diagnosticDialogCNN.filter.currentTextChanged.connect(self.setCTDiagnosticsCNN)
-            self.diagnosticDialogCNN.activate.clicked.connect(self.setDiagnosticCNN)
-            self.diagnosticDialogCNN.clear.clicked.connect(self.clearDiagnosticCNN)
-        self.diagnosticDialogCNN.show()
-        self.diagnosticDialogCNN.activateWindow()
+        if not hasattr(self, 'diagnosticDialogNN'):
+            self.diagnosticDialogNN = Dialogs.DiagnosticNN(self.FilterDicts)
+            self.diagnosticDialogNN.filter.currentTextChanged.connect(self.setCTDiagnosticsNN)
+            self.diagnosticDialogNN.activate.clicked.connect(self.setDiagnosticNN)
+            self.diagnosticDialogNN.clear.clicked.connect(self.clearDiagnosticNN)
+        self.diagnosticDialogNN.show()
+        self.diagnosticDialogNN.activateWindow()
 
     def clearDiagnostic(self):
         """ Cleans up diagnostic plot space. Should be called when loading new file/page, or from Diagnostic Dialog.  """
@@ -3928,25 +3928,25 @@ class AviaNZ(QMainWindow):
         self.diagnosticDialog.activate.setEnabled(True)
         self.statusLeft.setText("Ready")
 
-    def setCTDiagnosticsCNN(self):
+    def setCTDiagnosticsNN(self):
         from PyQt6.QtWidgets import QCheckBox
-        filter = self.diagnosticDialogCNN.filter.currentText()
+        filter = self.diagnosticDialogNN.filter.currentText()
         speciesData = self.FilterDicts[filter]
         CTs = []
         for f in speciesData['Filters']:
             CTs.append(f['calltype'])
         CTs.append('Noise')
-        for ch in self.diagnosticDialogCNN.chkboxes:
+        for ch in self.diagnosticDialogNN.chkboxes:
             ch.hide()
-        self.diagnosticDialogCNN.chkboxes = []
+        self.diagnosticDialogNN.chkboxes = []
         for ct in CTs:
-            self.diagnosticDialogCNN.chkboxes.append(QCheckBox(ct))
-        for cb in self.diagnosticDialogCNN.chkboxes:
+            self.diagnosticDialogNN.chkboxes.append(QCheckBox(ct))
+        for cb in self.diagnosticDialogNN.chkboxes:
             if cb.text() != 'Noise':
                 cb.setChecked(True)
-            self.diagnosticDialogCNN.ctbox.addWidget(cb)
+            self.diagnosticDialogNN.ctbox.addWidget(cb)
 
-    def clearDiagnosticCNN(self):
+    def clearDiagnosticNN(self):
         """ Cleans up diagnostic plot space. Should be called
             when loading new file/page, or from Diagnostic Dialog.
         """
@@ -3958,39 +3958,39 @@ class AviaNZ(QMainWindow):
         except Exception as e:
             print(e)
 
-    def setDiagnosticCNN(self):
+    def setDiagnosticNN(self):
         """ Takes parameters returned from DiagnosticDialog
             and draws the training diagnostic plots.
         """
         from itertools import chain, repeat
         with pg.BusyCursor():
-            self.diagnosticDialogCNN.activate.setEnabled(False)
-            self.statusLeft.setText("Making CNN diagnostic plots...")
+            self.diagnosticDialogNN.activate.setEnabled(False)
+            self.statusLeft.setText("Making NN diagnostic plots...")
 
-            # Skip Wavelet filter, and show the raw CNN probabilities for current page, block length depends on CNN input size
-            # load target CNN model if exists
-            [filtername, selectedCTs] = self.diagnosticDialogCNN.getValues()
+            # Skip Wavelet filter, and show the raw NN probabilities for current page, block length depends on NN input size
+            # load target NN model if exists
+            [filtername, selectedCTs] = self.diagnosticDialogNN.getValues()
             print(selectedCTs)
             speciesData = self.FilterDicts[filtername]
             CTs = []
             for f in speciesData['Filters']:
                 CTs.append(f['calltype'])
             CTs.append('Noise')
-            self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtername])
+            self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, [filtername])
 
             segment = [[self.startRead, self.startRead + self.datalengthSec]]
-            CNNmodel = None
+            NNmodel = None
             probs = 0
-            if filtername in self.CNNDicts.keys():
-                CNNmodel = self.CNNDicts[filtername]
+            if filtername in self.NNDicts.keys():
+                NNmodel = self.NNDicts[filtername]
             post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data,
                                        sampleRate=self.sp.audioFormat.sampleRate(),
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
-                                       subfilter=speciesData['Filters'][0], CNNmodel=CNNmodel, cert=50)
-            if CNNmodel:
-                CNNwindow, probs = post.CNNDiagnostic()
+                                       subfilter=speciesData['Filters'][0], NNmodel=NNmodel, cert=50)
+            if NNmodel:
+                NNwindow, probs = post.NNDiagnostic()
             if isinstance(probs, int):
-                self.diagnosticDialogCNN.activate.setEnabled(True)
+                self.diagnosticDialogNN.activate.setEnabled(True)
                 return
 
             # clear plot box and add legend
@@ -4010,13 +4010,13 @@ class AviaNZ(QMainWindow):
                     # basic divergent color palette
                     plotcol = (255 * ct // len(CTs), 127 * (ct % 2), 0)
                     y = Psep[ct, :]
-                    # x = np.linspace(0, CNNwindow*len(y), len(y))
-                    x = np.linspace(CNNwindow/2, CNNwindow*len(y)-CNNwindow/2, len(y))
+                    # x = np.linspace(0, NNwindow*len(y), len(y))
+                    x = np.linspace(NNwindow/2, NNwindow*len(y)-NNwindow/2, len(y))
                     self.plotDiag = pg.PlotDataItem(x, y, pen=fn.mkPen(plotcol, width=2))
                     self.p_plot.addItem(self.plotDiag)
                     self.p_legend.addItem(self.plotDiag, CTs[ct])
             self.d_plot.show()
-        self.diagnosticDialogCNN.activate.setEnabled(True)
+        self.diagnosticDialogNN.activate.setEnabled(True)
         self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
@@ -4565,17 +4565,17 @@ class AviaNZ(QMainWindow):
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-    def buildCNN(self):
-        """Listener for 'Build a CNN'
+    def buildNN(self):
+        """Listener for 'Build a NN'
         """
-        print("BUILDING CNN")
+        print("BUILDING NN")
         self.saveSegments()
-        self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
-        #self.buildCNNWizard.button(3).clicked.connect(lambda: self.RecogniserCNN(test=False))
-        self.buildCNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserCNN(test=True))
-        self.buildCNNWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniserCNN(test=False))
-        self.buildCNNWizard.activateWindow()
-        self.buildCNNWizard.exec()
+        self.buildNNWizard = DialogsTraining.BuildNNWizard(self.filtersDir, self.config, self.configdir)
+        #self.buildNNWizard.button(3).clicked.connect(lambda: self.RecogniserNN(test=False))
+        self.buildNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserNN(test=True))
+        self.buildNNWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniserNN(test=False))
+        self.buildNNWizard.activateWindow()
+        self.buildNNWizard.exec()
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
@@ -4609,55 +4609,55 @@ class AviaNZ(QMainWindow):
             print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
 
-    def saveRecogniserCNN(self, test=False):
-        # Actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
-        self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
-        modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.cnntrain.bestweight
-        weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+    def saveRecogniserNN(self, test=False):
+        # Actually write out the filter and NN model
+        modelsrc = os.path.join(self.buildNNWizard.nntrain.tmpdir2.name, 'model.json')
+        NN_name = self.buildNNWizard.nntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
+        self.buildNNWizard.nntrain.currfilt["NN"]["NN_name"] = NN_name
+        modelfile = os.path.join(self.filtersDir, NN_name + '.json')
+        weightsrc = self.buildNNWizard.nntrain.bestweight
+        weightfile = os.path.join(self.filtersDir, NN_name + '.h5')
         # Also write ROC in to a file
-        rocfilename = self.buildCNNWizard.cnntrain.currfilt["species"] + "_ROCNN" + time.strftime("_%H-%M-%S", time.gmtime())
-        self.buildCNNWizard.cnntrain.currfilt["ROCNN"] = rocfilename
+        rocfilename = self.buildNNWizard.nntrain.currfilt["species"] + "_RONN" + time.strftime("_%H-%M-%S", time.gmtime())
+        self.buildNNWizard.nntrain.currfilt["RONN"] = rocfilename
         rocfilename = os.path.join(self.filtersDir, rocfilename + '.json')
 
-        if self.buildCNNWizard.savePage.saveoption == 'New':
-            filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
+        if self.buildNNWizard.savePage.saveoption == 'New':
+            filename = os.path.join(self.filtersDir, self.buildNNWizard.savePage.enterFiltName.text())
             print("Saving a new recogniser", filename)
             # save ROC
             with open(rocfilename, 'w') as f:
-                f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+                f.write(json.dumps(self.buildNNWizard.nntrain.ROCdata, indent=4))
         else:
-            filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
+            filename = os.path.join(self.filtersDir, self.buildNNWizard.nntrain.filterName)
             print("Updating the existing recogniser ", filename)
             # save ROC
             # TODO this was disabled here for some reason,
             # not sure what is the intended behaviour
             # with open(rocfilename, 'w') as f:
-            #     f.write(json.dumps(self.buildCNNWizard.cnntrain.ROCdata, indent=4))
+            #     f.write(json.dumps(self.buildNNWizard.nntrain.ROCdata, indent=4))
 
         # Store the recognizer txt
         with open(filename, 'w') as f:
-            f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt, indent=4))
+            f.write(json.dumps(self.buildNNWizard.nntrain.currfilt, indent=4))
         # Actually copy the model
         copyfile(modelsrc, modelfile)
         copyfile(weightsrc, weightfile)
         # And remove temp dirs
-        self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
-        self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
+        self.buildNNWizard.nntrain.tmpdir1.cleanup()
+        self.buildNNWizard.nntrain.tmpdir2.cleanup()
         # prompt the user
         if test:
             msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
         else:
             msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
         msg.exec()
-        self.buildCNNWizard.done(1)
+        self.buildNNWizard.done(1)
         if test:
             self.testRecogniser(filter=os.path.basename(filename))
 
     def saveRecogniserROC(self):
-        # nothing to worry about CNN files, they are untouched
+        # nothing to worry about NN files, they are untouched
         try:
             if self.filterManager.saveoption == 'New':
                 filename = os.path.join(self.filtersDir, self.filterManager.enterFiltName.text())
@@ -5253,23 +5253,23 @@ class AviaNZ(QMainWindow):
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print(newSegments)
                 print('Post-processing...')
-                # load target CNN model if exists
-                self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtname])
+                # load target NN model if exists
+                self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, [filtname])
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
                     subfilter = speciesData['Filters'][filtix]
-                    CNNmodel = None
-                    if 'CNN' in speciesData:
-                        CNNmodel = self.CNNDicts.get(speciesData['CNN']['CNN_name'])
+                    NNmodel = None
+                    if 'NN' in speciesData:
+                        NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audioFormat.sampleRate(),
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=subfilter, CNNmodel=CNNmodel, cert=50)
-                    if CNNmodel:
-                        print('Post-processing with CNN')
-                        post.CNN()
-                        print('After CNN: segments: ', len(post.segments))
+                                               subfilter=subfilter, NNmodel=NNmodel, cert=50)
+                    if NNmodel:
+                        print('Post-processing with NN')
+                        post.NN()
+                        print('After NN: segments: ', len(post.segments))
                     if settings["rain"]:
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))

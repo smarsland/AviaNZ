@@ -1248,7 +1248,7 @@ class PostProcess:
     cert:       Default certainty to attach to the segments
     """
 
-    def __init__(self, configdir, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None, cert=0):
+    def __init__(self, configdir, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, NNmodel=None, cert=0):
         self.configdir = configdir
         self.audioData = audioData
         self.sampleRate = sampleRate
@@ -1263,25 +1263,25 @@ class PostProcess:
                 continue
             self.segments.append([seg, cert])
 
-        if CNNmodel:
+        if NNmodel:
             cl = SupportClasses.ConfigLoader()
             self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
-            self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
-            self.CNNwindow = CNNmodel[1][0]  # size of each frame
-            # self.CNNhop = CNNmodel[1][1]
-            self.CNNhop = self.LearningDict['hopScaling']*self.CNNwindow
-            self.CNNinputdim = CNNmodel[2]
-            self.CNNoutputs = CNNmodel[3]
-            self.CNNwindowInc = CNNmodel[4]  # [window,incr] for making the spec
-            self.CNNthrs = CNNmodel[5]
-            if CNNmodel[6]:
-                self.CNNfRange = CNNmodel[7]
+            self.NNmodel = NNmodel[0]    # NNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
+            self.NNwindow = NNmodel[1][0]  # size of each frame
+            # self.NNhop = NNmodel[1][1]
+            self.NNhop = self.LearningDict['hopScaling']*self.NNwindow
+            self.NNinputdim = NNmodel[2]
+            self.NNoutputs = NNmodel[3]
+            self.NNwindowInc = NNmodel[4]  # [window,incr] for making the spec
+            self.NNthrs = NNmodel[5]
+            if NNmodel[6]:
+                self.NNfRange = NNmodel[7]
             else:
-                self.CNNfRange = None
+                self.NNfRange = None
             self.tgtsampleRate = tgtsampleRate
         else:
-            self.CNNmodel = None
+            self.NNmodel = None
 
         if subfilter != {}:
             self.minLen = subfilter['TimeRange'][0]
@@ -1305,26 +1305,26 @@ class PostProcess:
         :param ctkey: current call type key
         :return:
         '''
-        if meanprob[ctkey] >= self.CNNthrs[ctkey][-1]:
+        if meanprob[ctkey] >= self.NNthrs[ctkey][-1]:
             certainty = 90
-        elif meanprob[ctkey] >= self.CNNthrs[ctkey][0]:
+        elif meanprob[ctkey] >= self.NNthrs[ctkey][0]:
             certainty = 50
         else:
             certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
 
         return certainty
 
-    def CNN(self):
+    def NN(self):
         """
-        Post-proc with CNN model, self.segments get updated
+        Post-proc with NN model, self.segments get updated
         """
-        if not self.CNNmodel:
-            print("ERROR: no CNN model specified")
+        if not self.NNmodel:
+            print("ERROR: no NN model specified")
             return
         if len(self.segments) == 0:
-            print("No segments to classify by CNN")
+            print("No segments to classify by NN")
             return
-        ctkey = int(list(self.CNNoutputs.keys())[list(self.CNNoutputs.values()).index(self.calltype)])
+        ctkey = int(list(self.NNoutputs.keys())[list(self.NNoutputs.values()).index(self.calltype)])
         print('call type: ', self.calltype)
 
         batchsize = 5   # TODO: read from learning parameters file
@@ -1334,13 +1334,13 @@ class PostProcess:
         # the last bin: it uses len(data)-window bins
         # so when extracting pieces of a premade spec, we adjust to this
         # length for comparability:
-        specFrameWidth = len(range(0, int(self.CNNwindow * self.tgtsampleRate - self.CNNwindowInc[0]), self.CNNwindowInc[1]))
+        specFrameWidth = len(range(0, int(self.NNwindow * self.tgtsampleRate - self.NNwindowInc[0]), self.NNwindowInc[1]))
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
             print('\n--- Segment', seg)
             # expand the segment if it's smaller than 1 frame
-            mincalllength = self.CNNwindow
+            mincalllength = self.NNwindow
             duration = seg[0][1] - seg[0][0]
             if mincalllength >= duration:
                 extend_by = (mincalllength-duration)/2 + 0.005
@@ -1357,36 +1357,36 @@ class PostProcess:
             # Extract the audiodata corresponding to the segment
             data = self.audioData[int(seg[0][0] * self.sampleRate):int(seg[0][1] * self.sampleRate)]
 
-            # Generate features for CNN, overlapped windows
-            sp = Spectrogram.Spectrogram(window_width=self.CNNwindowInc[0],
-                                        incr=self.CNNwindowInc[1])
+            # Generate features for NN, overlapped windows
+            sp = Spectrogram.Spectrogram(window_width=self.NNwindowInc[0],
+                                        incr=self.NNwindowInc[1])
             sp.data = data
             sp.audioFormat.setSampleRate(self.sampleRate)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
-            featuress = sp.generateFeaturesCNN(seglen=duration, real_spec_width=specFrameWidth, frame_size=self.CNNwindow, frame_hop=self.CNNhop, CNNfRange=self.CNNfRange)
+            featuress = sp.generateFeaturesNN(seglen=duration, real_spec_width=specFrameWidth, frame_size=self.NNwindow, frame_hop=self.NNhop, NNfRange=self.NNfRange)
             featuress = featuress.astype('float32')
 
             # assert shape
-            if featuress.shape != (featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1):
+            if featuress.shape != (featuress.shape[0], self.NNinputdim[0], self.NNinputdim[1], 1):
                 print("ERROR: features shape incorrect", featuress.shape)
                 raise AssertionError
             numframes = featuress.shape[0]
 
-            # predict with CNN
+            # predict with NN
             if numframes > 0:
-                # probs = self.CNNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))  # This might lead to OOM error, therefore show batches
-                probs = np.empty((numframes, len(self.CNNoutputs)))
+                # probs = self.NNmodel(tf.convert_to_tensor(featuress, dtype=tf.float32))  # This might lead to OOM error, therefore show batches
+                probs = np.empty((numframes, len(self.NNoutputs)))
                 for start in range(0, numframes, batchsize):
                     end = min(numframes, start + batchsize)
-                    p = self.CNNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
+                    p = self.NNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
                     probs[start:end, :] = p
 
                 # convert probs to certainties for each frame
-                if self.activelength(probs[:, ctkey], self.CNNthrs[ctkey][-1]) >= self.subfilter['TimeRange'][0]:
+                if self.activelength(probs[:, ctkey], self.NNthrs[ctkey][-1]) >= self.subfilter['TimeRange'][0]:
                     certainty = 90
-                elif self.activelength(probs[:, ctkey], self.CNNthrs[ctkey][0]) >= self.subfilter['TimeRange'][0]:
+                elif self.activelength(probs[:, ctkey], self.NNthrs[ctkey][0]) >= self.subfilter['TimeRange'][0]:
                     certainty = 50
                 else:
                     certainty = 0
@@ -1397,13 +1397,13 @@ class PostProcess:
             print("probabilities: ", probs)
 
             if certainty == 0:
-                print('Deleted by CNN')
+                print('Deleted by NN')
                 del self.segments[ix]
             else:
-                print('Not deleted by CNN')
+                print('Not deleted by NN')
                 self.segments[ix][-1] = certainty
 
-        print("Segments remaining after CNN: ", len(self.segments))
+        print("Segments remaining after NN: ", len(self.segments))
 
     def activelength(self, probs, thr):
         """
@@ -1414,51 +1414,51 @@ class PostProcess:
         subsegs = segmenter.convert01(binaryout)
         lengths = [seg[1]-seg[0] for seg in subsegs]
         if lengths:
-            return max(lengths)*self.CNNhop
+            return max(lengths)*self.NNhop
         else:
             return 0
 
-    def CNNDiagnostic(self):
+    def NNDiagnostic(self):
         """
         Return the raw probabilities
         """
-        if not self.CNNmodel:
-            print("ERROR: no CNN model specified")
+        if not self.NNmodel:
+            print("ERROR: no NN model specified")
             return
         if len(self.segments)==0:
-            print("No segments to classify by CNN")
+            print("No segments to classify by NN")
             return
 
-        self.CNNhop = self.CNNwindow
+        self.NNhop = self.NNwindow
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
 
-            if self.CNNwindow >= seg[0][1] - seg[0][0]:
-                print('Current page is smaller than CNN input (%f)' % (self.CNNwindow))
+            if self.NNwindow >= seg[0][1] - seg[0][0]:
+                print('Current page is smaller than NN input (%f)' % (self.NNwindow))
             else:
                 # data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
                 data = self.audioData
-            # generate features for CNN
-            sp = Spectrogram.Spectrogram(window_width=self.CNNwindowInc[0],
-                                        incr=self.CNNwindowInc[1])
+            # generate features for NN
+            sp = Spectrogram.Spectrogram(window_width=self.NNwindowInc[0],
+                                        incr=self.NNwindowInc[1])
             sp.data = data
             sp.audioFormat.setSampleRate(self.sampleRate)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
-            specFrameWidth = len(range(0, int(self.CNNwindow * sp.audioFormat.sampleRate() - sp.window_width), sp.incr))
+            specFrameWidth = len(range(0, int(self.NNwindow * sp.audioFormat.sampleRate() - sp.window_width), sp.incr))
 
-            # frame_hop can be set to self.CNNhop for overlap
-            featuress = sp.generateFeaturesCNN(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.CNNwindow, frame_hop=None, CNNfRange=self.CNNfRange)
+            # frame_hop can be set to self.NNhop for overlap
+            featuress = sp.generateFeaturesNN(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.NNwindow, frame_hop=None, NNfRange=self.NNfRange)
             # or multichannel:
-            # featuress = sp.generateFeaturesCNN2(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.CNNwindow, frame_hop=None)
+            # featuress = sp.generateFeaturesNN2(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.NNwindow, frame_hop=None)
             featuress = featuress.astype('float32')
-            # predict with CNN
+            # predict with NN
             if np.shape(featuress)[0] > 0:
-                probs = self.CNNmodel.predict(featuress)
+                probs = self.NNmodel.predict(featuress)
             else:
                 probs = 0
-        return self.CNNwindow, probs
+        return self.NNwindow, probs
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind

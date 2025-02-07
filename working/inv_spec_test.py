@@ -19,7 +19,7 @@ NOTE: we need appropriate number of frequency bins in order to make invertSpectr
 
 #dirName='/home/listanvirg/Data/Bat/BAT/TEST_DATA/'
 #dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\TRAIN_DATA\\NONE'
-#dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4'
+#dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\NN experiment\\TRAIN4'
 dirName= "C:\\Users\\Virginia\\Documents\\GitHub\\AviaNZ\\Sound Files\\"
 a = sp.SignalProc(window_width=1024, incr=512)
 

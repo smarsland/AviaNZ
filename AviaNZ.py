@@ -42,13 +42,13 @@ import sys
 @click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory directory in CLI mode)')
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.option('-b', '--batchmode', is_flag=True, help='Batch processing')
-@click.option('-t', '--training', is_flag=True, help='Train a CNN recogniser')
+@click.option('-t', '--training', is_flag=True, help='Train a NN recogniser')
 @click.option('-u', '--testing', is_flag=True, help='Train a recogniser')
 @click.option('-d', '--sdir1', type=click.Path(), help='Input sound directory, training or batch processing')
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
 @click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
-@click.option('-x', '--width', type=float, help='Width of windows for CNN')
+@click.option('-x', '--width', type=float, help='Width of windows for NN')
 @click.argument('command', nargs=-1)
 
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
@@ -159,7 +159,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         elif training:
             import Training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
-                training = Training.CNNtrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
+                training = Training.NNtrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
                 training.cliTrain()
                 print("Training complete, closing AviaNZ")
             else:
@@ -169,7 +169,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             import Training
             filts = confloader.filters(filterdir)
             if os.path.isdir(sdir1) and recogniser in filts:
-                testing = Training.CNNtest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
+                testing = Training.NNtest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
                 print("Testing complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for training")

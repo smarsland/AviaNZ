@@ -1141,9 +1141,9 @@ class Spectrogram:
             # Median Filter
             self.data = SignalProc.medianFilter(self.data,int(str(width)))
 
-    def generateFeaturesCNN(self, seglen, real_spec_width, frame_size, frame_hop=None, CNNfRange=None):
+    def generateFeaturesNN(self, seglen, real_spec_width, frame_size, frame_hop=None, NNfRange=None):
         '''
-        Prepare a syllable to input to the CNN model
+        Prepare a syllable to input to the NN model
         Returns the features (spectrogram for each frame)
         seglen: length of this segment (self.data), in s
         frame_size: length of each frame, in s
@@ -1152,7 +1152,7 @@ class Spectrogram:
              so passing w/ a precalculated adjustment)
         frame_hop: hop between frames, in s, or None to not overlap
             (i.e. hop by 1 frame_size)
-        CNNfRange: frequency list [f1, f2], if not None, sets
+        NNfRange: frequency list [f1, f2], if not None, sets
             spectrogram pixels outside f1:f2 to 0
         '''
         # determine the number of frames:
@@ -1167,11 +1167,11 @@ class Spectrogram:
 
         # Mask out of band elements
         spec_height = np.shape(self.sg)[1]
-        if CNNfRange is not None:
+        if NNfRange is not None:
             bin_width = self.audioFormat.sampleRate() / 2 / spec_height
             #bin_width = self.sampleRate / 2 / spec_height
-            lb = int(np.ceil(CNNfRange[0] / bin_width))
-            ub = int(np.floor(CNNfRange[1] / bin_width))
+            lb = int(np.ceil(NNfRange[0] / bin_width))
+            ub = int(np.floor(NNfRange[1] / bin_width))
             self.sg[:, 0:lb] = 0.0
             self.sg[:, ub:] = 0.0
 
@@ -1199,13 +1199,13 @@ class Spectrogram:
         # NOTE using i to account for possible loop break
         # this may be needed for dealing w/ boundary issues
         # which is maybe possible if the spec window is larger than the
-        # CNN frame size, or due to inconsistent rounding
+        # NN frame size, or due to inconsistent rounding
         featuress = featuress[:(i+1), :, :, :]
         return featuress
 
-    def generateFeaturesCNN2(self, seglen, real_spec_width, frame_size, frame_hop=None):
+    def generateFeaturesNN2(self, seglen, real_spec_width, frame_size, frame_hop=None):
         '''
-        Prepare a syllable to input to the CNN model
+        Prepare a syllable to input to the NN model
         Returns the features (currently the spectrogram)
         '''
         # determine the number of frames:
@@ -1248,7 +1248,7 @@ class Spectrogram:
         # NOTE using i to account for possible loop break
         # this may be needed for dealing w/ boundary issues
         # which is maybe possible if the spec window is larger than the
-        # CNN frame size
+        # NN frame size
         featuress = featuress[:i, :, :, :]
         return featuress
 

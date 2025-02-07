@@ -594,8 +594,8 @@ class WaveletSegment:
 
         return [finalnodes], tpa, fpa, tna, fna
 
-    def waveletSegment_cnn(self, dirName, filt):
-        """ Wrapper for segmentation to be used when generating cnn data.
+    def waveletSegment_nn(self, dirName, filt):
+        """ Wrapper for segmentation to be used when generating nn data.
             Should be identical to processing the files in batch mode,
             + returns annotations.
             Does not do any processing besides basic conversion 0/1 -> [s,e].

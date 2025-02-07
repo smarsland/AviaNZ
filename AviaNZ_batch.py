@@ -156,9 +156,9 @@ class AviaNZ_batchProcess():
         # convert list to string
         speciesStr = " & ".join(self.species)
 
-        # load target CNN models (currently stored in the same dir as filters)
+        # load target NN models (currently stored in the same dir as filters)
         # format: {filtername: [model, win, inputdim, output]}
-        self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+        self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, self.species)
 
         """
         if "Any sound" in self.species:
@@ -170,7 +170,7 @@ class AviaNZ_batchProcess():
             if "NZ Bats" in self.species:
                 # TODO: Should bats only be possible alone?
                 self.method = "Click"   # old bat method
-                #self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+                #self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, self.species)
             elif "NZ Bats_NP" in self.species:
                 self.method = "Bats"
             else:
@@ -187,9 +187,9 @@ class AviaNZ_batchProcess():
             # convert list to string
             speciesStr = " & ".join(self.species)
 
-            # load target CNN models (currently stored in the same dir as filters)
+            # load target NN models (currently stored in the same dir as filters)
             # format: {filtername: [model, win, inputdim, output]}
-            self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+            self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, self.species)
         """
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
@@ -398,7 +398,7 @@ class AviaNZ_batchProcess():
             # ALL SYSTEMS GO: process this file
             self.segments = Segment.SegmentList()
             if self.testmode:
-                self.segments_nocnn = Segment.SegmentList()
+                self.segments_nonn = Segment.SegmentList()
             if self.options[5] == "Intermittent: ":
                 try:
                     self.addRegularSegments(filename,self.options[6],self.options[7])
@@ -447,9 +447,9 @@ class AviaNZ_batchProcess():
             # export segments
             print("%d new segments marked" % len(self.segments))
             if self.testmode:
-                # save separately With and without CNN
+                # save separately With and without NN
                 cleanexit = self.saveAnnotation(filename,self.segments, suffix=".tmpdata")
-                cleanexit = self.saveAnnotation(filename,self.segments_nocnn, suffix=".tmp2data")
+                cleanexit = self.saveAnnotation(filename,self.segments_nonn, suffix=".tmp2data")
             else:
                 cleanexit = self.saveAnnotation(filename,self.segments)
             if cleanexit != 1:
@@ -610,26 +610,26 @@ class AviaNZ_batchProcess():
                     print("Segments detected (all subfilters): ", thisPageSegs)
                     if not self.testmode and not("NZ Bats" in speciesAtSampleRate):
                         print("Post-processing...")
-                    # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
+                    # NN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     spInfo = filtersAtSampleRate[speciesix]
                     for filtix in range(len(spInfo['Filters'])):
-                        CNNmodel = None
-                        if 'CNN' in spInfo:
-                            if spInfo['CNN']['CNN_name'] in self.CNNDicts.keys():
+                        NNmodel = None
+                        if 'NN' in spInfo:
+                            if spInfo['NN']['NN_name'] in self.NNDicts.keys():
                                 # This list contains the model itself, plus parameters for running it
-                                CNNmodel = self.CNNDicts[spInfo['CNN']['CNN_name']]
+                                NNmodel = self.NNDicts[spInfo['NN']['NN_name']]
 
                         if not self.testmode:
                             # TODO THIS IS FULL POST-PROC PIPELINE FOR BIRDS AND BATS
                             # -- Need to check how this should interact with the testmode
 
                             if "NZ Bats" in speciesAtSampleRate:
-                                # bat-style CNN:
-                                model = CNNmodel[0]
-                                thr1 = CNNmodel[5][0]
-                                thr2 = CNNmodel[5][1]
+                                # bat-style NN:
+                                model = NNmodel[0]
+                                thr1 = NNmodel[5][0]
+                                thr2 = NNmodel[5][1]
                                 if click_label=='Click':
-                                    # we enter in the cnn only if we got a click
+                                    # we enter in the nn only if we got a click
                                     sg_test = np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
                                     spec_id=[]
                                     print('Number of file spectrograms = ', np.shape(data_test)[0])
@@ -638,7 +638,7 @@ class AviaNZ_batchProcess():
                                         sg_test[j][:] = data_test[j][0][:]/maxg
                                         spec_id.append(data_test[j][1:3])
 
-                                    # CNN classification of clicks
+                                    # NN classification of clicks
                                     x_test = sg_test
                                     test_images = x_test.reshape(x_test.shape[0],6, 512, 1)
                                     test_images = test_images.astype('float32')
@@ -650,7 +650,7 @@ class AviaNZ_batchProcess():
                                     # Create a label (list of dicts with species, certs) for the single segment
                                     print('Assessing file label...')
                                     label = self.labelBatFile(predictions, thr1=thr1, thr2=thr2)
-                                    print('CNN detected: ', label)
+                                    print('NN detected: ', label)
                                     if len(label)>0:
                                         # Convert the annotation into a full segment in self.segments
                                         thisPageStart = start / self.sp.audioFormat.sampleRate()
@@ -662,22 +662,22 @@ class AviaNZ_batchProcess():
                                 # TODO: decide what want from these two
                                 elif self.method == "Bats":     # Let's do it here - PostProc class is not supporting bats
                                     # TODO review this a bit - my code checker shows errors
-                                    model = CNNmodel[0]
-                                    if thisPageLen < CNNmodel[1][0]:
+                                    model = NNmodel[0]
+                                    if thisPageLen < NNmodel[1][0]:
                                         continue
-                                    elif thisPageLen >= CNNmodel[1][0]:
+                                    elif thisPageLen >= NNmodel[1][0]:
                                         # print('duration:', thisPageLen)
-                                        n = math.ceil((thisPageLen - 0 - CNNmodel[1][0]) / CNNmodel[1][1] + 1)
-                                    # print('* hop:', CNNmodel[1][1], 'n:', n)
+                                        n = math.ceil((thisPageLen - 0 - NNmodel[1][0]) / NNmodel[1][1] + 1)
+                                    # print('* hop:', NNmodel[1][1], 'n:', n)
 
                                     featuress = []
-                                    specFrameSize = len(range(0, int(CNNmodel[1][0] * self.sp.sampleRate - self.sp.window_width), self.sp.incr))
+                                    specFrameSize = len(range(0, int(NNmodel[1][0] * self.sp.sampleRate - self.sp.window_width), self.sp.incr))
                                     for i in range(int(n)):
-                                        # print('**', self.filename, CNNmodel[1][0], 0 + CNNmodel[1][1] * i, self.sp.sampleRate,
+                                        # print('**', self.filename, NNmodel[1][0], 0 + NNmodel[1][1] * i, self.sp.sampleRate,
                                         #       '************************************')
                                         # Sgram images
                                         sgRaw = self.sp.sg
-                                        sgstart = int(CNNmodel[1][1] * i * self.sp.sampleRate / self.sp.incr)
+                                        sgstart = int(NNmodel[1][1] * i * self.sp.sampleRate / self.sp.incr)
                                         sgend = sgstart + specFrameSize
                                         if sgend > np.shape(sgRaw)[0]:
                                             sgend = np.shape(sgRaw)[0]
@@ -689,7 +689,7 @@ class AviaNZ_batchProcess():
                                         # Normalize and rotate
                                         featuress.append([np.rot90(sgRaw_i / maxg).tolist()])
                                     featuress = np.array(featuress)
-                                    featuress = featuress.reshape(featuress.shape[0], CNNmodel[2][0], CNNmodel[2][1], 1)
+                                    featuress = featuress.reshape(featuress.shape[0], NNmodel[2][0], NNmodel[2][1], 1)
                                     featuress = featuress.astype('float32')
                                     if np.shape(featuress)[0] > 0:
                                         probs = model.predict(featuress)
@@ -707,25 +707,25 @@ class AviaNZ_batchProcess():
                                                 np.mean(probs[ind[1][-n // 2:], 1]),
                                                 (np.sum(probs[ind[0][-n // 2:], 2]) + np.sum(probs[ind[1][-n // 2:], 2])) / (n // 2 * 2)]
                                         print(self.filename, prob)
-                                        if prob[0] >= CNNmodel[5][0][-1]:
+                                        if prob[0] >= NNmodel[5][0][-1]:
                                             label = [{"species": "Long-tailed bat", "certainty": 100}]
-                                        elif prob[1] >= CNNmodel[5][1][-1]:
+                                        elif prob[1] >= NNmodel[5][1][-1]:
                                             label = [{"species": "Short-tailed bat", "certainty": 100}]
-                                        elif prob[0] >= CNNmodel[5][0][0]:
+                                        elif prob[0] >= NNmodel[5][0][0]:
                                             label = [{"species": "Long-tailed bat", "certainty": 50}]
-                                        elif prob[1] >= CNNmodel[5][1][0]:
+                                        elif prob[1] >= NNmodel[5][1][0]:
                                             label = [{"species": "Short-tailed bat", "certainty": 50}]
                                         else:
                                             label = []
-                                    print('CNN detected: ', label)
+                                    print('NN detected: ', label)
                                     if len(label) > 0:
                                         # Convert the annotation into a full segment in self.segments
                                         thisPageStart = start / self.sp.sampleRate
                                         self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
                                 """
                             else:
-                                # bird-style CNN and other processing:
-                                postsegs = self.postProcFull(thisPageSegs, spInfo, filtix, start, end, CNNmodel)
+                                # bird-style NN and other processing:
+                                postsegs = self.postProcFull(thisPageSegs, spInfo, filtix, start, end, NNmodel)
                                 # attach filter info and put on self.segments:
                                 self.makeSegments(self.segments, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
@@ -740,21 +740,21 @@ class AviaNZ_batchProcess():
                             # THIS IS testmode. NOT ADAPTED TO BATS: assumes bird-style postproc
                             # TODO adapt to bats?
 
-                            # test without cnn:
-                            postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, CNNmodel=None)
-                            # stash these segments before any CNN/postproc:
-                            self.makeSegments(self.segments_nocnn, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+                            # test without nn:
+                            postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, NNmodel=None)
+                            # stash these segments before any NN/postproc:
+                            self.makeSegments(self.segments_nonn, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
-                            # test with cnn:
-                            postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, CNNmodel)
+                            # test with nn:
+                            postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, NNmodel)
                             # attach filter info and put on self.segments:
                             self.makeSegments(self.segments, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
-    def postProcFull(self, segments, spInfo, filtix, start, end, CNNmodel):
-        """ Full bird-style postprocessing (CNN, joinGaps...)
+    def postProcFull(self, segments, spInfo, filtix, start, end, NNmodel):
+        """ Full bird-style postprocessing (NN, joinGaps...)
             segments: list of segments over calltypes
             start, end: start and end of this page, in samples
-            CNNmodel: None or a CNN
+            NNmodel: None or a NN
         """
         subfilter = spInfo["Filters"][filtix]
         # TODO: data?
@@ -762,12 +762,12 @@ class AviaNZ_batchProcess():
         post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end],
                             sampleRate=self.sp.audioFormat.sampleRate(), tgtsampleRate=spInfo["SampleRate"],
                             segments=segments[filtix], subfilter=subfilter,
-                            CNNmodel=CNNmodel, cert=50)
+                            NNmodel=NNmodel, cert=50)
         print("Segments detected after WF: ", len(segments[filtix]))
 
-        if CNNmodel:
-            print('Post-processing with CNN')
-            post.CNN()
+        if NNmodel:
+            print('Post-processing with NN')
+            post.NN()
 
         # Fund freq and merging. Only do for standard wavelet filter currently:
         # (for median clipping, gap joining and some short segment cleanup was already done in WaveletSegment)
@@ -1043,7 +1043,7 @@ class AviaNZ_batchProcess():
 
     def labelBatFile(self, predictions, thr1, thr2):
         """
-        uses the predictions made by the CNN to update the filewise annotations
+        uses the predictions made by the NN to update the filewise annotations
         when we have 3 labels: 0 (LT), 1(ST), 2 (Noise)
 
         METHOD: evaluation of probability over files combining mean of probability

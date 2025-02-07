@@ -34,8 +34,8 @@ def basic_net():
     loss,acc = model.evaluate(test_images, test_labels)
     print("Restored model, accuracy: {:5.2f}%".format(100*acc))
 
-def cnn(features, labels, mode):
-  """Model function for CNN."""
+def nn(features, labels, mode):
+  """Model function for NN."""
   # Input Layer
   input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
@@ -87,11 +87,11 @@ def cnn(features, labels, mode):
   return tf.estimator.EstimatorSpec(
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
-def useCNN():
+def useNN():
     train_images, train_labels, test_images, test_labels = get_mnist()
 
     # Create the Estimator
-    mnist_classifier = tf.estimator.Estimator(model_fn=cnn, model_dir="/tmp/mnist_convnet_model")
+    mnist_classifier = tf.estimator.Estimator(model_fn=nn, model_dir="/tmp/mnist_convnet_model")
 
     # Set up logging for predictions
     tensors_to_log = {"probabilities": "softmax_tensor"}

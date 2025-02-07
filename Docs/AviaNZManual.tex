@@ -694,9 +694,9 @@ Follow the steps below to train a wavelet recogniser:
 \item Following this, you choose a name to save the recogniser you have trained. It is then a very good idea to test it. 
 \end{itemize}
 
-\subsection{Extending a recogniser with CNN}\label{sec:cnnfilter}
+\subsection{Extending a recogniser with NN}\label{sec:nnfilter}
 
-A wavelet recogniser will usually find most of your bird calls (it has good recall), but the price you pay for this is that it finds a lot of false positives (poor specificity). This leads to a lot of wrong segments that have to be reviewed. You can extend the filter in AviaNZ using a neural network known as a CNN (convolutional neural network). These are often used for image recognition. Training a neural network requires a lot of training data and computational power. The way that you perform the training is as follows:
+A wavelet recogniser will usually find most of your bird calls (it has good recall), but the price you pay for this is that it finds a lot of false positives (poor specificity). This leads to a lot of wrong segments that have to be reviewed. You can extend the filter in AviaNZ using a neural network known as a NN (convolutional neural network). These are often used for image recognition. Training a neural network requires a lot of training data and computational power. The way that you perform the training is as follows:
 
 \begin{description}
 \item[Preparation] You will need to compile a good collection of the calls of your species. 
@@ -710,30 +710,30 @@ A wavelet recogniser will usually find most of your bird calls (it has good reca
 
     Once you are sure that each label is correct, use the `Confirm labels' (\includegraphics[scale=0.5]{Figures/confirmlabels}) button so that the segment turns green. Or at the end of manual correction of the box sizes, you can review the folder in Batch Review and confirm them to make it faster.
     \end{description}
-\item In addition to the batch reviewed recordings, you can also input manually annotated recordings to the CNN training, such as the training data set that you used for the wavelet recogniser training. If you plan to use some other manually annotated recordings (not the train data in wavelet training), make sure to annotate it to include both species and call type. You can use \includegraphics[scale=0.5]{Figures/SPCT} button from the Controls area in the Manual Interface to assign call types. Alternatively, you can annotate the calls to the species level and assign the call type during the review of the folder in the Batch Review All Species review (Section~\ref{sec:batchAll}).
+\item In addition to the batch reviewed recordings, you can also input manually annotated recordings to the NN training, such as the training data set that you used for the wavelet recogniser training. If you plan to use some other manually annotated recordings (not the train data in wavelet training), make sure to annotate it to include both species and call type. You can use \includegraphics[scale=0.5]{Figures/SPCT} button from the Controls area in the Manual Interface to assign call types. Alternatively, you can annotate the calls to the species level and assign the call type during the review of the folder in the Batch Review All Species review (Section~\ref{sec:batchAll}).
 \end{itemize}
 \end{description}
  
 \begin{description}
-\item[Training] Follow the steps below to train your CNN:
+\item[Training] Follow the steps below to train your NN:
 \begin{itemize}
-\item Select `Train an automated recogniser' $\rightarrow$ `Extend a wavelet recogniser with CNN' from the Recognisers menu. 
+\item Select `Train an automated recogniser' $\rightarrow$ `Extend a wavelet recogniser with NN' from the Recognisers menu. 
 \item Follow the instructions to select the folder/s with training data. Use the appropriate `Browse' buttons to load your manually annotated recordings and the Batch Processed and Reviewed recordings. Select the the name of the wavelet recogniser that you will be extending from the list. 
 
 \begin{center}
-    \includegraphics[width=.7\textwidth]{Figures/CNNpage1}
+    \includegraphics[width=.7\textwidth]{Figures/NNpage1}
 \end{center}
 
 \item AviaNZ will confirm these choices before starting the training process. It will also warn you if it cannot find enough data. 
-\item AviaNZ will then suggest an appropriate length of call/segment to feed into the CNN. If the number looks wrong for your species, you can correct it. Ideally this length should be a bit longer than both a syllable of the call, and the gap between syllables. 
+\item AviaNZ will then suggest an appropriate length of call/segment to feed into the NN. If the number looks wrong for your species, you can correct it. Ideally this length should be a bit longer than both a syllable of the call, and the gap between syllables. 
 \item At the end of the training, AviaNZ will show you ROC curves for each call type and ask you to select a point that represents your compromise between True Positive Rate and False Positive Rate. If you select the relevant option then AviaNZ can do this automatically instead.
 
 \begin{center}
-    \includegraphics[width=.7\textwidth]{Figures/CNNpage2}
+    \includegraphics[width=.7\textwidth]{Figures/NNpage2}
 \end{center}
 
 \item It normally takes a long time to train the neural network. 
-\item Following training, AviaNZ will show you a summary of the CNN recogniser, and you can choose to save it either as a new recogniser, or updating an old one. This means that you can train multiple recognisers for a species to see which works best. 
+\item Following training, AviaNZ will show you a summary of the NN recogniser, and you can choose to save it either as a new recogniser, or updating an old one. This means that you can train multiple recognisers for a species to see which works best. 
 \item It is important to test your recogniser on some different data. If the results are not good enough, you will need to rerun the process with more training data and make sure that your labels are good.
 \end{itemize}
 \end{description}

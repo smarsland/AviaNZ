@@ -229,51 +229,51 @@ class ConfigLoader(object):
         print("Loaded filters:", list(goodfilters.keys()))
         return goodfilters
 
-    def CNNmodels(self, filters, dircnn, targetspecies):
-        """ Returns a dict of target CNN models
+    def NNmodels(self, filters, dirnn, targetspecies):
+        """ Returns a dict of target NN models
             Filters - dict of loaded filter files
             Targetspecies - list of species names to load
             """
-        print("Loading CNN models from folder %s" % dircnn)
+        print("Loading NN models from folder %s" % dirnn)
         targetmodels = dict()
         for species in targetspecies:
             filt = filters[species]
-            if "CNN" not in filt:
+            if "NN" not in filt:
                 continue
-            elif filt["CNN"]:
+            elif filt["NN"]:
                 if species == "NZ Bats":
                     try:
-                        model = load_model(os.path.join(dircnn, filt["CNN"]["CNN_name"]+'.h5'))
-                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
-                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
-                        print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        model = load_model(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
+                        targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"],
+                                                 filt["NN"]["windowInc"], filt["NN"]["thr"]]
+                        print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
                     except Exception as e:
-                        print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
+                        print("Could not load NN model from file:", os.path.join(dirnn, filt["NN"]["NN_name"]), e)
                 else:
                     try:
-                        print(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
-                        json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
+                        print(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
+                        json_file = open(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json', 'r')
                         loaded_model_json = json_file.read()
                         print(loaded_model_json)
                         json_file.close()
                         model = model_from_json(loaded_model_json)
                         print(model)
-                        model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
-                        print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
-                        model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                        if 'fRange' in filt["CNN"]:
-                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
-                                                     filt["CNN"]["output"],
-                                                     filt["CNN"]["windowInc"], filt["CNN"]["thr"], True,
-                                                     filt["CNN"]["fRange"]]
+                        model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
+                        print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
+                        model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
+                        if 'fRange' in filt["NN"]:
+                            targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                     filt["NN"]["output"],
+                                                     filt["NN"]["windowInc"], filt["NN"]["thr"], True,
+                                                     filt["NN"]["fRange"]]
                         else:
-                            targetmodels[filt["CNN"]["CNN_name"]] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"],
-                                                     filt["CNN"]["output"], filt["CNN"]["windowInc"],
-                                                     filt["CNN"]["thr"], False]
+                            targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                     filt["NN"]["output"], filt["NN"]["windowInc"],
+                                                     filt["NN"]["thr"], False]
                     except Exception as e:
-                        print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        print("Could not load NN model from file:", os.path.join(dirnn, filt["NN"]["NN_name"]))
                         print(e)
-        print("Loaded CNN models:", list(targetmodels.keys()))
+        print("Loaded NN models:", list(targetmodels.keys()))
         return targetmodels
 
     def shortbl(self, file, configdir):

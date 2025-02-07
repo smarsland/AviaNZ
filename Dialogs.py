@@ -801,11 +801,11 @@ class Diagnostic(QDialog):
     def getValues(self):
         return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
 
-class DiagnosticCNN(QDialog):
-    # Class for the diagnostic dialog box - CNN
+class DiagnosticNN(QDialog):
+    # Class for the diagnostic dialog box - NN
     def __init__(self, filters, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('CNN Diagnostic Plot Options')
+        self.setWindowTitle('NN Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
@@ -2953,14 +2953,14 @@ class FilterManager(QDialog):
         # ROCs
         if "ROCWF" in currfilt:
             sources.append(os.path.join(self.filtdir, currfilt["ROCWF"] + ".json"))
-        if "ROCNN" in currfilt:
-            sources.append(os.path.join(self.filtdir, currfilt["ROCNN"] + ".json"))
+        if "RONN" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["RONN"] + ".json"))
 
-        if "CNN" in currfilt:
-            sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".h5"))
+        if "NN" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".h5"))
             # bat filters do not have jsons:
-            if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
-                sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json"))
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".json")):
+                sources.append(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".json"))
 
         for src in sources:
             if not os.path.isfile(src):
@@ -3006,19 +3006,19 @@ class FilterManager(QDialog):
             if os.path.isfile(JSONsource):
                 sources.append(JSONsource)
                 targets.append(os.path.join(self.filtdir, filt["ROCWF"] + ".json"))
-            if "CNN" in filt:
-                sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".h5"))
-                targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".h5"))
+            if "NN" in filt:
+                sources.append(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".h5"))
+                targets.append(os.path.join(self.filtdir, filt["NN"]["NN_name"] + ".h5"))
                 # bat filters do not have jsons:
-                JSONsource = os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".json")
+                JSONsource = os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".json")
                 if os.path.isfile(JSONsource):
                     sources.append(JSONsource)
-                    targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".json"))
-                # CNN ROC if exists
-                JSONsource = os.path.join(os.path.dirname(source), filt["ROCNN"] + ".json")
+                    targets.append(os.path.join(self.filtdir, filt["NN"]["NN_name"] + ".json"))
+                # NN ROC if exists
+                JSONsource = os.path.join(os.path.dirname(source), filt["RONN"] + ".json")
                 if os.path.isfile(JSONsource):
                     sources.append(JSONsource)
-                    targets.append(os.path.join(self.filtdir, filt["ROCNN"] + ".json"))
+                    targets.append(os.path.join(self.filtdir, filt["RONN"] + ".json"))
         except Exception as e:
             print("Could not load filter:", source, e)
             return
@@ -3065,14 +3065,14 @@ class FilterManager(QDialog):
         # ROCs
         if "ROCWF" in currfilt:
             sources.append(currfilt["ROCWF"] + ".json")
-        if "ROCNN" in currfilt:
-            sources.append(currfilt["ROCNN"] + ".json")
+        if "RONN" in currfilt:
+            sources.append(currfilt["RONN"] + ".json")
 
-        if "CNN" in currfilt:
-            sources.append(currfilt["CNN"]["CNN_name"] + ".h5")
+        if "NN" in currfilt:
+            sources.append(currfilt["NN"]["NN_name"] + ".h5")
             # bat filters do not have jsons:
-            if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
-                sources.append(currfilt["CNN"]["CNN_name"] + ".json")
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".json")):
+                sources.append(currfilt["NN"]["NN_name"] + ".json")
 
         target = QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
         if target != "":

@@ -3,10 +3,10 @@ All notable changes to AviaNZ program will be documented in this file.
 ## Unreleased
 
 ### Added
-- New changepoint detector replaces wavelet filter as the default non-CNN recognition method (wavelet filters still work but considered deprecated)
+- New changepoint detector replaces wavelet filter as the default non-NN recognition method (wavelet filters still work but considered deprecated)
 - Syllable-level detection: trainable filters via the new changepoint pipeline, one example filter for LSK syllables included, and parameter ranges for non-specific detectors adapted
 - New method for wind noise removal by polynomial fitting (OLS or robust options available)
-- Pre-built GPU support for CNN in compiled versions
+- Pre-built GPU support for NN in compiled versions
 - Option to loop playback in both review types
 - Option to autoplay in one-by-one review
 - Non-linear frequency scale spectrograms (Mel, Bark)
@@ -21,9 +21,9 @@ All notable changes to AviaNZ program will be documented in this file.
 - Filter format extended to allow setting segmenter
 - Better UI for adding species in review, search function
 - Shorter pages (5 mins) for low sampling rate files in batch mode
-- CNNs no longer redefine segment boundaries, only accept/reject
-- reduced extension length when applying CNNs to short segments
-- various changes to CNN training
+- NNs no longer redefine segment boundaries, only accept/reject
+- reduced extension length when applying NNs to short segments
+- various changes to NN training
 - Tab shortcut for species/calltype switch
 - different click detection process when training bat detectors
 - ground truth files no longer store resolution in the name
@@ -31,8 +31,8 @@ All notable changes to AviaNZ program will be documented in this file.
 - batch review now has better feedback on input errors
 
 ### Fixed
-- Faster CNN classification
-- Post-processing harmonised between batch mode, testing, testing with CNN
+- Faster NN classification
+- Post-processing harmonised between batch mode, testing, testing with NN
 - Segmenting in manual mode now only overwrites the current page segments
 - Problems when undoing segmentation in multi-page files
 - Bat BMP reading sometimes wasn't setting a parameter
@@ -65,7 +65,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Segment saving feedback now shown in status bar
 - Mouse cursor indicates current mode
 - "Jump to next annotation" buttons
-- Optional frequency masking in CNN training
+- Optional frequency masking in NN training
 - Ability to customise existing recognisers
 - Formant marking in spectrogram
 - Dialog for adjusting thresholds of stored filters
@@ -73,8 +73,8 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Changed
 - Improved processing pipeline for bats
-- Improved CNN recogniser for bats
-- Extended morepork recogniser with CNN
+- Improved NN recogniser for bats
+- Extended morepork recogniser with NN
 - "One-by-one" review (previously All Species) can now be run on single species
 - Batch Review settings separated into Advanced and Simple
 - Simpler dropdown to set review certainty bounds
@@ -93,7 +93,7 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Added
 
 - Visible frequency range in batmode defaults to full
-- Manage Recognisers deals with CNN files as well
+- Manage Recognisers deals with NN files as well
 - ROCs during training show more information, wavelet freq. bands
 
 ### Changed
@@ -110,12 +110,12 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Added
 
-- *CNN training* to improve precision
+- *NN training* to improve precision
 - Call type annotation/correction in manual processing mode
 - Call type review in all species mode
 
 - *Bat mode:* loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
-- NZ bat list and a filter to identify them (click detector and CNN)
+- NZ bat list and a filter to identify them (click detector and NN)
 - Frequency guides for fast bat call annotation
 
 - *Utilities:* importing Freebird or Excel format annotations, backing up data files
@@ -160,9 +160,9 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Added
 
-- CNN layer after wavelet filter in the processing pipeline to improve the precision
-- Certainty improved after CNN post-proc
-- Trained CNN models for NI brown kiwi, ready to use
+- NN layer after wavelet filter in the processing pipeline to improve the precision
+- Certainty improved after NN post-proc
+- Trained NN models for NI brown kiwi, ready to use
 - Separate excel export in Batch Review
 - Intermittent sampling
 - Single Species review now has a frequency axis

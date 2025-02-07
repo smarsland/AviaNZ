@@ -52,6 +52,8 @@ import Segment
 import Clustering
 import Training
 
+import NNModels
+
 import math
 
 
@@ -1811,9 +1813,9 @@ class TestRecWizard(QWizard):
             space.setFixedHeight(25)
 
             self.lblWFsummary = QLabel()
-            # self.lblWFCNNsummary = QLabel()
+            # self.lblWFNNsummary = QLabel()
             # self.lblWFsummary.setStyleSheet("QLabel { color : #808080; }")
-            # self.lblWFCNNsummary.setStyleSheet("QLabel { color : #808080; }")
+            # self.lblWFNNsummary.setStyleSheet("QLabel { color : #808080; }")
             self.lblOutfile = QLabel()
 
             # page layout
@@ -1825,7 +1827,7 @@ class TestRecWizard(QWizard):
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
             vbox.addWidget(self.lblWFsummary)
-            # vbox.addWidget(self.lblWFCNNsummary)
+            # vbox.addWidget(self.lblWFNNsummary)
             vbox.addWidget(self.lblOutfile)
             self.setLayout(vbox)
 
@@ -1841,8 +1843,8 @@ class TestRecWizard(QWizard):
                 self.lblTestFilter.setText(self.field("recognisers"))
                 self.lblSpecies.setText(self.currfilt['species'])
 
-                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("recognisers"), self.configdir,self.filterdir)
-                #test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("recognisers")[:-4], self.configdir,self.filterdir)
+                test = Training.NNtest(self.field("testDir"), self.currfilt, self.field("recognisers"), self.configdir,self.filterdir)
+                #test = Training.NNtest(self.field("testDir"), self.currfilt, self.field("recognisers")[:-4], self.configdir,self.filterdir)
                 text = test.getOutput()
 
             if text == 0:
@@ -1856,7 +1858,7 @@ class TestRecWizard(QWizard):
 
         def cleanupPage(self):
             self.lblWFsummary.setText('')
-            # self.lblWFCNNsummary.setText('')
+            # self.lblWFNNsummary.setText('')
             self.lblRecognisers.setText('')
             self.lblTestDir.setText('')
             self.lblTestFilter.setText('')
@@ -1954,9 +1956,9 @@ class ROCCanvas(FigureCanvas):
         self.ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         # ax.legend()
 
-    def plotmeagain(self, TPR, FPR, CNN=False):
+    def plotmeagain(self, TPR, FPR, NN=False):
         # Update data (with the new _and_ the old points)
-        if CNN:
+        if NN:
             self.lines, = self.ax.plot(FPR, TPR, marker='o')
             self.plotLines.append(self.lines)
         else:
@@ -1977,11 +1979,11 @@ class ROCCanvas(FigureCanvas):
             self.ax.clear()
             # self.draw()
 
-class BuildCNNWizard(QWizard):
-    # Main init of the CNN training wizard
+class BuildNNWizard(QWizard):
+    # Main init of the NN training wizard
     def __init__(self, filtdir, config, configdir, parent=None):
-        super(BuildCNNWizard, self).__init__()
-        self.setWindowTitle("Train CNN")
+        super(BuildNNWizard, self).__init__()
+        self.setWindowTitle("Train NN")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         if platform.system() == 'Linux':
@@ -1993,24 +1995,25 @@ class BuildCNNWizard(QWizard):
 
         self.rocpages = []
 
-        self.cnntrain = Training.CNNtrain(configdir, filtdir)
+        self.nntrain = Training.NNtrain(configdir, filtdir)
 
         # P1
-        self.browsedataPage = BuildCNNWizard.WPageData(self.cnntrain, config)
+        self.browsedataPage = BuildNNWizard.WPageData(self.nntrain, config)
         self.browsedataPage.registerField("trainDir1*", self.browsedataPage.trainDirName1)
         self.browsedataPage.registerField("trainDir2*", self.browsedataPage.trainDirName2)
         self.browsedataPage.registerField("filter*", self.browsedataPage.speciesCombo, "currentText", self.browsedataPage.speciesCombo.currentTextChanged)
         self.addPage(self.browsedataPage)
 
         # P2
-        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.cnntrain, configdir)
+        self.confirminputPage = BuildNNWizard.WPageConfirminput(self.nntrain, configdir)
         self.addPage(self.confirminputPage)
 
         # P3
-        self.parameterPage = BuildCNNWizard.WPageParameters(config)
+        self.parameterPage = BuildNNWizard.WPageParameters(config)
         self.parameterPage.registerField("frqMasked*", self.parameterPage.cbfrange, "isChecked")
         self.parameterPage.registerField("f1*", self.parameterPage.f1, "value", self.parameterPage.f1.valueChanged)
         self.parameterPage.registerField("f2*", self.parameterPage.f2, "value", self.parameterPage.f2.valueChanged)
+        self.parameterPage.registerField("model*", self.parameterPage.modelArchitecture, "value", self.parameterPage.modelArchitecture.currentTextChanged)
         self.addPage(self.parameterPage)
 
         # add the Save & Test button
@@ -2022,16 +2025,16 @@ class BuildCNNWizard(QWizard):
 
     # page 1 - select train data
     class WPageData(QWizardPage):
-        def __init__(self, cnntrain, config, parent=None):
-            super(BuildCNNWizard.WPageData, self).__init__(parent)
+        def __init__(self, nntrain, config, parent=None):
+            super(BuildNNWizard.WPageData, self).__init__(parent)
             self.setTitle('Select data')
-            self.setSubTitle('Choose the recogniser that you want to extend with CNN, then select training data.')
+            self.setSubTitle('Choose the recogniser that you want to extend with NN, then select training data.')
 
             self.setMinimumSize(300, 600)
             self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
-            self.cnntrain = cnntrain
+            self.nntrain = nntrain
 
             self.splist1 = []
             self.splist2 = []
@@ -2083,7 +2086,7 @@ class BuildCNNWizard(QWizard):
             # page layout
             layout = QGridLayout()
             layout.addWidget(QLabel('<b>Recogniser</b>'), 0, 0)
-            layout.addWidget(QLabel("Recogniser that you want to train CNN for"), 1, 0)
+            layout.addWidget(QLabel("Recogniser that you want to train NN for"), 1, 0)
             layout.addWidget(self.speciesCombo, 1, 1)
             layout.addWidget(space, 2, 0)
             layout.addWidget(QLabel('<b>TRAINING data</b>'), 3, 0)
@@ -2103,7 +2106,7 @@ class BuildCNNWizard(QWizard):
             self.setLayout(layout)
 
         def initializePage(self):
-            filternames = [key + ".txt" for key in self.cnntrain.FilterDict.keys()]
+            filternames = [key + ".txt" for key in self.nntrain.FilterDict.keys()]
             self.speciesCombo.addItems(filternames)
 
         def browseTrainData2(self):
@@ -2132,22 +2135,22 @@ class BuildCNNWizard(QWizard):
 
         def isComplete(self):
             if self.speciesCombo.currentText() != "Choose recogniser..." and (self.trainDirName1.text() or self.trainDirName2.text()):
-                self.cnntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.anntlevel)
+                self.nntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.anntlevel)
                 return True
             else:
                 return False
 
     # page 2 - data confirm page
     class WPageConfirminput(QWizardPage):
-        def __init__(self, cnntrain, configdir, parent=None):
-            super(BuildCNNWizard.WPageConfirminput, self).__init__(parent)
+        def __init__(self, nntrain, configdir, parent=None):
+            super(BuildNNWizard.WPageConfirminput, self).__init__(parent)
             self.setTitle('Confirm data input')
-            self.setSubTitle('When ready, press \"Next\" to start preparing images and train the CNN.')
+            self.setSubTitle('When ready, press \"Next\" to start preparing images and train the NN.')
             self.setMinimumSize(350, 275)
             self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
-            self.cnntrain = cnntrain
+            self.nntrain = nntrain
             self.certainty1 = True
             self.certainty2 = True
             self.hasant1 = False
@@ -2228,13 +2231,13 @@ class BuildCNNWizard(QWizard):
             self.certainty2 = True
 
             with pg.BusyCursor():
-                self.cnntrain.readFilter()
+                self.nntrain.readFilter()
 
             # Error checking
 
-            # Check if it already got a CNN model
-            if "CNN" in self.cnntrain.currfilt:
-                self.warnLabel.setText("Warning: This recogniser already has a CNN.")
+            # Check if it already got a NN model
+            if "NN" in self.nntrain.currfilt:
+                self.warnLabel.setText("Warning: This recogniser already has a NN.")
             else:
                 self.warnLabel.setText("")
 
@@ -2247,8 +2250,8 @@ class BuildCNNWizard(QWizard):
 
             # Check if there are annotations from the target species at all
             if self.field("trainDir1"):
-                if self.cnntrain.species not in self.wizard().browsedataPage.splist1:
-                    warn += "Warning: No annotations of " + self.cnntrain.species + " detected\n"
+                if self.nntrain.species not in self.wizard().browsedataPage.splist1:
+                    warn += "Warning: No annotations of " + self.nntrain.species + " detected\n"
                     self.hasant1 = False
                 else:
                     self.hasant1 = True
@@ -2264,8 +2267,8 @@ class BuildCNNWizard(QWizard):
 
             # Check if there are annotations from the target species at all
             if self.field("trainDir2"):
-                if self.cnntrain.species not in self.wizard().browsedataPage.splist2:
-                    warn += "Warning: No annotations of " + self.cnntrain.species + " detected\n"
+                if self.nntrain.species not in self.wizard().browsedataPage.splist2:
+                    warn += "Warning: No annotations of " + self.nntrain.species + " detected\n"
                     self.hasant2 = False
                 else:
                     self.hasant2 = True
@@ -2279,28 +2282,28 @@ class BuildCNNWizard(QWizard):
 
             # Get training data
             with pg.BusyCursor():
-                self.cnntrain.genSegmentDataset(self.hasant1)
+                self.nntrain.genSegmentDataset(self.hasant1)
 
             self.msgrecfilter.setText("<b>Recogniser:</b> %s" % (self.field("filter")))
-            self.msgrecspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
-            self.msgreccts.setText("<b>Call types:</b> %s" % (self.cnntrain.calltypes))
-            self.msgrecclens.setText("<b>Call length:</b> %.2f - %.2f sec" % (self.cnntrain.mincallength, self.cnntrain.maxcallength))
-            self.msgrecfs.setText("<b>Sample rate:</b> %d Hz" % (self.cnntrain.fs))
-            self.msgrecfrange.setText("<b>Frequency range:</b> %d - %d Hz" % (self.cnntrain.f1, self.cnntrain.f2))
+            self.msgrecspp.setText("<b>Species:</b> %s" % (self.nntrain.species))
+            self.msgreccts.setText("<b>Call types:</b> %s" % (self.nntrain.calltypes))
+            self.msgrecclens.setText("<b>Call length:</b> %.2f - %.2f sec" % (self.nntrain.mincallength, self.nntrain.maxcallength))
+            self.msgrecfs.setText("<b>Sample rate:</b> %d Hz" % (self.nntrain.fs))
+            self.msgrecfrange.setText("<b>Frequency range:</b> %d - %d Hz" % (self.nntrain.f1, self.nntrain.f2))
 
-            for i in range(len(self.cnntrain.calltypes)):
-                self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.cnntrain.calltypes[i], self.cnntrain.trainN[i]))
-            self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.cnntrain.trainN[-1]))
+            for i in range(len(self.nntrain.calltypes)):
+                self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.nntrain.calltypes[i], self.nntrain.trainN[i]))
+            self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.nntrain.trainN[-1]))
 
             # We need at least some number of segments from each class to proceed
-            if min(self.cnntrain.trainN) < self.LearningDict['minPerClass']:
-                print('Warning: Need at least %d segments from each class to train CNN' % self.LearningDict['minPerClass'])
-                self.warnseg.setText('<b>Warning: Need at least %d segments from each class to train CNN\n\n</b>' % self.LearningDict['minPerClass'])
+            if min(self.nntrain.trainN) < self.LearningDict['minPerClass']:
+                print('Warning: Need at least %d segments from each class to train NN' % self.LearningDict['minPerClass'])
+                self.warnseg.setText('<b>Warning: Need at least %d segments from each class to train NN\n\n</b>' % self.LearningDict['minPerClass'])
 
-            if not self.cnntrain.correction and self.wizard().browsedataPage.anntlevel == 'Some':
+            if not self.nntrain.correction and self.wizard().browsedataPage.anntlevel == 'Some':
                 self.warnoise.setText('Warning: No segments found for Noise class\n(no correction segments/fully (manual) annotations)')
 
-            freeGB,totalbytes = self.cnntrain.checkDisk()
+            freeGB,totalbytes = self.nntrain.checkDisk()
 
             if freeGB < 10:
                 self.imgDirwarn.setText('Warning: Free space in the user directory is %.2f GB/ %.2f GB, you may run out of space' % (freeGB, totalbytes))
@@ -2313,7 +2316,7 @@ class BuildCNNWizard(QWizard):
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                         segments = Segment.SegmentList()
                         segments.parseJSON(soundFile + '.data')
-                        cert = [lab["certainty"] if lab["species"] == self.cnntrain.species else 100 for seg in segments for lab in seg[4]]
+                        cert = [lab["certainty"] if lab["species"] == self.nntrain.species else 100 for seg in segments for lab in seg[4]]
                         if cert:
                             mincert = min(cert)
                             if minCertainty > mincert:
@@ -2340,20 +2343,20 @@ class BuildCNNWizard(QWizard):
             self.msgrecfs.setText('')
 
         def isComplete(self):
-            return (self.hasant1 or self.hasant2) and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']
+            return (self.hasant1 or self.hasant2) and min(self.nntrain.trainN) >= self.LearningDict['minPerClass']
 
     # page 3 - set parameters, generate data and train
     class WPageParameters(QWizardPage):
         def __init__(self, config, parent=None):
-            super(BuildCNNWizard.WPageParameters, self).__init__(parent)
-            self.setTitle('Choose call length')
-            self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN and training.\nThe process may take a long time.')
+            super(BuildNNWizard.WPageParameters, self).__init__(parent)
+            self.setTitle('Choose call length and model')
+            self.setSubTitle('When ready, press \"Generate NN images and Train\" to start preparing data for NN and training.\nThe process may take a long time.')
 
             self.setMinimumSize(350, 200)
             self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
-            # self.cnntrain = cnntrain
+            # self.nntrain = nntrain
             self.config = config
             self.indx = np.ndarray(0)
 
@@ -2379,18 +2382,21 @@ class BuildCNNWizard(QWizard):
             self.f1 = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
             self.f1.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.f1.setTickInterval(1000)
-            # self.f1.setRange(0, self.cnntrain.fs)  # 0-6 sec
-            # self.f1.setValue(self.cnntrain.f1)
+            # self.f1.setRange(0, self.nntrain.fs)  # 0-6 sec
+            # self.f1.setValue(self.nntrain.f1)
             # self.f1.valueChanged.connect(self.f1Change)
             self.f1text = QLabel('')
 
             self.f2 = SupportClasses_GUI.CustomSlider(Qt.Orientation.Horizontal)
             self.f2.setTickPosition(QSlider.TickPosition.TicksBelow)
             self.f2.setTickInterval(1000)
-            # self.f2.setRange(0, self.cnntrain.fs)  # 0-6 sec
-            # self.f2.setValue(self.cnntrain.f2)
+            # self.f2.setRange(0, self.nntrain.fs)  # 0-6 sec
+            # self.f2.setValue(self.nntrain.f2)
             # self.f2.valueChanged.connect(self.f2Change)
             self.f2text = QLabel('')
+
+            self.modelArchitecture = QComboBox()
+            self.modelArchitecture.addItems(["CNN","SingleLayerNetwork"])
 
             space = QLabel()
             space.setFixedSize(10, 30)
@@ -2411,7 +2417,7 @@ class BuildCNNWizard(QWizard):
             layout0 = QVBoxLayout()
             layout0.addLayout(msglayout)
             # layout0.addWidget(space)
-            layout0.addWidget(QLabel('<b>Choose call length (sec) you want to show to CNN</b>'))
+            layout0.addWidget(QLabel('<b>Choose call length (sec) you want to show to NN</b>'))
             layout0.addWidget(QLabel('Make sure an image covers at least couple of syllables when appropriate'))
             # layout0.addWidget(space)
             layout0.addWidget(self.imgtext)
@@ -2448,23 +2454,28 @@ class BuildCNNWizard(QWizard):
             self.cbAutoThr.setStyleSheet("QCheckBox { font-weight: bold; }")
             self.cbAutoThr.toggled.connect(self.onClicked)
 
+            layout3 = QVBoxLayout()
+            layout3.addWidget(QLabel('<b>Choose model architecture</b>'))
+            layout3.addWidget(self.modelArchitecture)
+
             layout1 = QVBoxLayout()
             layout1.addLayout(layout0)
             layout1.addLayout(layout2)
             layout1.addWidget(self.cbAutoThr)
+            layout1.addLayout(layout3)
             self.setLayout(layout1)
-            self.setButtonText(QWizard.WizardButton.NextButton, 'Generate CNN images and Train>')
+            self.setButtonText(QWizard.WizardButton.NextButton, 'Generate NN images and Train>')
 
         def initializePage(self):
-            self.cnntrain = self.wizard().confirminputPage.cnntrain
-            self.cnntrain.windowWidth = 512
-            self.cnntrain.windowInc = 256
-            self.f1.setRange(0, self.cnntrain.fs//2)
+            self.nntrain = self.wizard().confirminputPage.nntrain
+            self.nntrain.windowWidth = 512
+            self.nntrain.windowInc = 256
+            self.f1.setRange(0, self.nntrain.fs//2)
             self.f1.setValue(0)
             self.f1text.setText('Lower frq. limit 0 Hz')
-            self.f2.setRange(0, self.cnntrain.fs//2)
-            self.f2.setValue(self.cnntrain.fs//2)
-            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
+            self.f2.setRange(0, self.nntrain.fs//2)
+            self.f2.setValue(self.nntrain.fs//2)
+            self.f2text.setText('Upper frq. limit ' + str(self.nntrain.fs//2) + ' Hz')
             self.f1.valueChanged.connect(self.f1Change)
             self.f2.valueChanged.connect(self.f2Change)
             self.f1.sliderClicked.connect(self.reloadImgs)
@@ -2476,9 +2487,10 @@ class BuildCNNWizard(QWizard):
             self.f1.setEnabled(False)
             self.f2text.setEnabled(False)
             self.f2.setEnabled(False)
+            self.modelArchitecture.currentTextChanged.connect(self.modelArchitectureChange)
 
             self.wizard().button(QWizard.WizardButton.NextButton).setDefault(False)
-            self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
+            self.msgspp.setText("<b>Species:</b> %s" % (self.nntrain.species))
 
             if self.field("trainDir1"):
                 self.msgtrain1.setText("<b>Training data (Manually annotated):</b> %s" % (self.field("trainDir1")))
@@ -2486,16 +2498,16 @@ class BuildCNNWizard(QWizard):
                 self.msgtrain2.setText("<b>Training data (Auto processed and reviewed):</b> %s" % (self.field("trainDir2")))
 
             # Ideally, the image length should be bigger than the max gap between syllables
-            if np.max(self.cnntrain.maxgaps) * 2 <= 6:
-                self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 2) + ' sec')
-                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 2 * 100))
-            elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
-                self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
-                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 1.5 * 100))
-            elif np.max(self.cnntrain.mincallength) <= 6:
-                self.imgtext.setText(str(np.max(self.cnntrain.mincallength)) + ' sec')
-                self.imgsec.setValue(int(np.max(self.cnntrain.mincallength) * 100))
-            self.cnntrain.imgWidth = self.imgsec.value() / 100
+            if np.max(self.nntrain.maxgaps) * 2 <= 6:
+                self.imgtext.setText(str(np.max(self.nntrain.maxgaps) * 2) + ' sec')
+                self.imgsec.setValue(int(np.max(self.nntrain.maxgaps) * 2 * 100))
+            elif np.max(self.nntrain.maxgaps) * 1.5 <= 6:
+                self.imgtext.setText(str(np.max(self.nntrain.maxgaps) * 1.5) + ' sec')
+                self.imgsec.setValue(int(np.max(self.nntrain.maxgaps) * 1.5 * 100))
+            elif np.max(self.nntrain.mincallength) <= 6:
+                self.imgtext.setText(str(np.max(self.nntrain.mincallength)) + ' sec')
+                self.imgsec.setValue(int(np.max(self.nntrain.mincallength) * 100))
+            self.nntrain.imgWidth = self.imgsec.value() / 100
 
             self.setWindowInc()
             self.showimg()
@@ -2504,9 +2516,9 @@ class BuildCNNWizard(QWizard):
         def onClicked(self):
             cbutton = self.sender()
             if cbutton.isChecked():
-                self.cnntrain.autoThr = True
+                self.nntrain.autoThr = True
             else:
-                self.cnntrain.autoThr = False
+                self.nntrain.autoThr = False
             self.redopages = True
             self.completeChanged.emit()
 
@@ -2517,16 +2529,16 @@ class BuildCNNWizard(QWizard):
                 self.f1text.setEnabled(True)
                 self.f2.setEnabled(True)
                 self.f2text.setEnabled(True)
-                if self.f1.value() == 0 and self.f2.value() == self.cnntrain.fs/2:
-                    self.f1.setValue(self.cnntrain.f1)
-                    self.f2.setValue(self.cnntrain.f2)
-                    self.f1text.setText('Lower frq. limit ' + str(self.cnntrain.f1) + ' Hz')
-                    self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.f2) + ' Hz')
+                if self.f1.value() == 0 and self.f2.value() == self.nntrain.fs/2:
+                    self.f1.setValue(self.nntrain.f1)
+                    self.f2.setValue(self.nntrain.f2)
+                    self.f1text.setText('Lower frq. limit ' + str(self.nntrain.f1) + ' Hz')
+                    self.f2text.setText('Upper frq. limit ' + str(self.nntrain.f2) + ' Hz')
             else:
                 self.f1.setValue(0)
-                self.f2.setValue(self.cnntrain.fs/2)
+                self.f2.setValue(self.nntrain.fs/2)
                 self.f1text.setText('Lower frq. limit ' + str(0) + ' Hz')
-                self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+                self.f2text.setText('Upper frq. limit ' + str(self.nntrain.fs/2) + ' Hz')
                 self.f1.setEnabled(False)
                 self.f1text.setEnabled(False)
                 self.f2.setEnabled(False)
@@ -2539,35 +2551,35 @@ class BuildCNNWizard(QWizard):
             if duration == 0:
                 duration = None
 
-            self.cnntrain.sp.readSoundFile(filename, duration, offset)
-            self.cnntrain.sp.resample(fs)
+            self.nntrain.sp.readSoundFile(filename, duration, offset)
+            self.nntrain.sp.resample(fs)
 
-            return self.cnntrain.sp.data
+            return self.nntrain.sp.data
 
         def showimg(self, indices=[]):
             ''' Show example spectrogram (random ct segments from train dataset)
             '''
             i = 0
             # SM
-            #trainsegments = self.cnntrain.trainsegments
+            #trainsegments = self.nntrain.trainsegments
             if len(indices) == 0:
-                target = [rec[-1] for rec in self.cnntrain.traindata]
-                indxs = [list(np.where(np.array(target) == i)[0]) for i in range(len(self.cnntrain.calltypes))]
+                target = [rec[-1] for rec in self.nntrain.traindata]
+                indxs = [list(np.where(np.array(target) == i)[0]) for i in range(len(self.nntrain.calltypes))]
                 indxs = [i for sublist in indxs for i in sublist]
                 self.indx = np.random.choice(indxs, 3, replace=False)
             else:
                 self.indx = indices
             for ind in self.indx:
-                audiodata = self.loadFile(filename=self.cnntrain.traindata[ind][0], duration=self.imgsec.value()/100, offset=self.cnntrain.traindata[ind][1][0], fs=self.cnntrain.fs)
-                self.cnntrain.sp.data = audiodata
-                self.cnntrain.sp.audioFormat.setSampleRate(self.cnntrain.fs)
+                audiodata = self.loadFile(filename=self.nntrain.traindata[ind][0], duration=self.imgsec.value()/100, offset=self.nntrain.traindata[ind][1][0], fs=self.nntrain.fs)
+                self.nntrain.sp.data = audiodata
+                self.nntrain.sp.audioFormat.setSampleRate(self.nntrain.fs)
                 # TODO: Params?!
-                sgRaw = self.cnntrain.sp.spectrogram(window_width=self.cnntrain.windowWidth, incr=self.cnntrain.windowInc)
+                sgRaw = self.nntrain.sp.spectrogram(window_width=self.nntrain.windowWidth, incr=self.nntrain.windowInc)
                 # Frequency masking
                 f1 = self.f1.value()
                 f2 = self.f2.value()
                 # Mask out of band elements
-                bin_width = self.cnntrain.fs / 2 / np.shape(sgRaw)[1]
+                bin_width = self.nntrain.fs / 2 / np.shape(sgRaw)[1]
                 lb = int(np.ceil(f1 / bin_width))
                 ub = int(np.floor(f2 / bin_width))
                 maxsg = np.min(sgRaw)
@@ -2578,7 +2590,7 @@ class BuildCNNWizard(QWizard):
                 # determine colour map
                 self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
-                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(sg), self.cnntrain.sp.data, self.cnntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
+                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(sg), self.nntrain.sp.data, self.nntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
                 if i == 0:
                     pic = QPixmap.fromImage(picbtn.im1)
                     self.img1.setPixmap(pic.scaledToHeight(175))
@@ -2603,9 +2615,9 @@ class BuildCNNWizard(QWizard):
                 self.flowLayout.update()
 
         def setWindowInc(self):
-            self.cnntrain.windowWidth = self.cnntrain.imgsize[0] * 2
-            self.cnntrain.windowInc = int(np.ceil(self.imgsec.value() * self.cnntrain.fs / (self.cnntrain.imgsize[1] - 1)) / 100)
-            print('window and increment set: ', self.cnntrain.windowWidth, self.cnntrain.windowInc)
+            self.nntrain.windowWidth = self.nntrain.imgsize[0] * 2
+            self.nntrain.windowInc = int(np.ceil(self.imgsec.value() * self.nntrain.fs / (self.nntrain.imgsize[1] - 1)) / 100)
+            print('window and increment set: ', self.nntrain.windowWidth, self.nntrain.windowInc)
 
         def imglenChange(self):
             value = self.imgsec.value()
@@ -2614,14 +2626,14 @@ class BuildCNNWizard(QWizard):
                 self.imgtext.setText('0.1 sec')
             else:
                 self.imgtext.setText(str(value / 100) + ' sec')
-            self.cnntrain.imgWidth = self.imgsec.value()/100
+            self.nntrain.imgWidth = self.imgsec.value()/100
 
         def f1Change(self):
             value = self.f1.value()
             value = value//10*10
             if value < 0:
                 value = 0
-            # self.cnntrain.f1 = value
+            # self.nntrain.f1 = value
             self.f1text.setText('Lower frq. limit ' + str(value) + ' Hz')
 
         def f2Change(self):
@@ -2629,12 +2641,16 @@ class BuildCNNWizard(QWizard):
             value = value//10*10
             if value < 0:
                 value = 0
-            # self.cnntrain.f2 = value
+            # self.nntrain.f2 = value
             self.f2text.setText('Upper frq. limit ' + str(value) + ' Hz')
         
         def reloadImgs(self):
             self.setWindowInc()
             self.showimg(self.indx)
+        
+        def modelArchitectureChange(self):
+            print("setting training architecture to ",self.modelArchitecture.currentText())
+            self.nntrain.modelArchitecture = self.modelArchitecture.currentText()
 
         def cleanupPage(self):
             self.img1.setText('')
@@ -2643,9 +2659,9 @@ class BuildCNNWizard(QWizard):
 
         def validatePage(self):
             with pg.BusyCursor():
-                self.cnntrain.f1 = self.f1.value()
-                self.cnntrain.f2 = self.f2.value()
-                self.cnntrain.train()
+                self.nntrain.f1 = self.f1.value()
+                self.nntrain.f2 = self.f2.value()
+                self.nntrain.train()
             return True
 
         def isComplete(self):
@@ -2653,20 +2669,20 @@ class BuildCNNWizard(QWizard):
                 return False
             if self.redopages:
                 self.redopages = False
-                self.wizard().redoROCPages(self.cnntrain)
+                self.wizard().redoROCPages(self.nntrain)
             return True
 
     # page 4 - ROC curve
     class WPageROC(QWizardPage):
-        def __init__(self, cnntrain, ct, parent=None):
-            super(BuildCNNWizard.WPageROC, self).__init__(parent)
+        def __init__(self, nntrain, ct, parent=None):
+            super(BuildNNWizard.WPageROC, self).__init__(parent)
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(350, 200)
             self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
-            self.cnntrain = cnntrain
+            self.nntrain = nntrain
             self.ct = ct
 
             self.lblSpecies = QLabel()
@@ -2681,12 +2697,12 @@ class BuildCNNWizard(QWizard):
             self.setLayout(self.layout)
 
         def initializePage(self):
-            # self.cnntrain = self.wizard().parameterPage.cnntrain
-            self.thrs = self.cnntrain.Thrs
-            self.TPR = self.cnntrain.TPRs[self.ct]
-            self.FPR = self.cnntrain.FPRs[self.ct]
-            self.Precision = self.cnntrain.Precisions[self.ct]
-            self.Acc = self.cnntrain.Accs[self.ct]
+            # self.nntrain = self.wizard().parameterPage.nntrain
+            self.thrs = self.nntrain.Thrs
+            self.TPR = self.nntrain.TPRs[self.ct]
+            self.FPR = self.nntrain.FPRs[self.ct]
+            self.Precision = self.nntrain.Precisions[self.ct]
+            self.Acc = self.nntrain.Accs[self.ct]
             print('ROC page, TPR: ', self.TPR)
             print('ROC page, FPR: ', self.FPR)
 
@@ -2696,13 +2712,13 @@ class BuildCNNWizard(QWizard):
 
             self.marker = self.figCanvas.ax.plot([0, 1], [0, 1], marker='o', color='black', linestyle='dotted')[0]
             # self.marker.set_visible(False)
-            self.figCanvas.plotmeagain(self.TPR, self.FPR, CNN=True)
+            self.figCanvas.plotmeagain(self.TPR, self.FPR, NN=True)
 
-            if self.ct == len(self.cnntrain.calltypes):
+            if self.ct == len(self.nntrain.calltypes):
                 self.lblCalltype.setText('Noise (treat same as call types)')
             else:
-                self.lblCalltype.setText('Call type: ' + self.cnntrain.calltypes[self.ct])
-            self.lblSpecies.setText('Species: ' + self.cnntrain.species)
+                self.lblCalltype.setText('Call type: ' + self.nntrain.calltypes[self.ct])
+            self.lblSpecies.setText('Species: ' + self.nntrain.species)
 
             # Figure click handler
             def onclick(event):
@@ -2732,8 +2748,8 @@ class BuildCNNWizard(QWizard):
                         self.TPR[thr_min_ind], self.FPR[thr_min_ind], self.Precision[thr_min_ind], self.Acc[thr_min_ind]))
 
                 # This will save the best lower thr
-                self.cnntrain.bestThr[self.ct][0] = self.cnntrain.thrs[thr_min_ind]
-                self.cnntrain.bestThrInd[self.ct] = thr_min_ind
+                self.nntrain.bestThr[self.ct][0] = self.nntrain.thrs[thr_min_ind]
+                self.nntrain.bestThrInd[self.ct] = thr_min_ind
 
                 self.completeChanged.emit()
 
@@ -2758,15 +2774,15 @@ class BuildCNNWizard(QWizard):
 
     # page 5 - Summary
     class WPageSummary(QWizardPage):
-        def __init__(self, cnntrain, parent=None):
-            super(BuildCNNWizard.WPageSummary, self).__init__(parent)
+        def __init__(self, nntrain, parent=None):
+            super(BuildNNWizard.WPageSummary, self).__init__(parent)
             self.setTitle('Training Summary')
-            self.setSubTitle('If you are happy with the CNN performance, press \"Save the Recogniser.\"')
+            self.setSubTitle('If you are happy with the NN performance, press \"Save the Recogniser.\"')
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
-            self.cnntrain = cnntrain
+            self.nntrain = nntrain
 
             self.space = QLabel('').setFixedSize(20, 20)
             self.msgfilter = QLabel('')
@@ -2785,18 +2801,18 @@ class BuildCNNWizard(QWizard):
 
         def initializePage(self):
             self.msgfilter.setText("<b>Current recogniser:</b> %s" % (self.field("filter")))
-            self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
+            self.msgspp.setText("<b>Species:</b> %s" % (self.nntrain.species))
 
             row = 3
-            for ct in range(len(self.cnntrain.calltypes)):
-                lblct = QLabel('Call type: ' + self.cnntrain.calltypes[ct])
+            for ct in range(len(self.nntrain.calltypes)):
+                lblct = QLabel('Call type: ' + self.nntrain.calltypes[ct])
                 lblct.setStyleSheet("QLabel { color : #808080; font-weight: bold; }")
                 self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignmentFlag.AlignTop)
                 lblctsumy = QLabel('True Positive Rate: %.2f\nFalse Positive Rate: %.2f\nPrecision: %.2f\nAccuracy: %.2f'
-                                   % (self.cnntrain.TPRs[ct][self.cnntrain.bestThrInd[ct]],
-                                      self.cnntrain.FPRs[ct][self.cnntrain.bestThrInd[ct]],
-                                      self.cnntrain.Precisions[ct][self.cnntrain.bestThrInd[ct]],
-                                      self.cnntrain.Accs[ct][self.cnntrain.bestThrInd[ct]]))
+                                   % (self.nntrain.TPRs[ct][self.nntrain.bestThrInd[ct]],
+                                      self.nntrain.FPRs[ct][self.nntrain.bestThrInd[ct]],
+                                      self.nntrain.Precisions[ct][self.nntrain.bestThrInd[ct]],
+                                      self.nntrain.Accs[ct][self.nntrain.bestThrInd[ct]]))
                 lblctsumy.setStyleSheet("QLabel { color : #808080; }")
                 self.layout.addWidget(self.space, row, 1)
                 self.layout.addWidget(lblctsumy, row, 2)
@@ -2805,7 +2821,7 @@ class BuildCNNWizard(QWizard):
 
         def cleanupPage(self):
             wgts = []
-            for ct in range(len(self.cnntrain.calltypes) ):
+            for ct in range(len(self.nntrain.calltypes) ):
                 if self.layout.itemAtPosition(ct+3, 0):
                     wgts.append(self.layout.itemAtPosition(ct+3, 0).widget())
                 if self.layout.itemAtPosition(ct+3, 1):
@@ -2820,15 +2836,15 @@ class BuildCNNWizard(QWizard):
 
     # page 6 - Save Filter
     class WPageSave(QWizardPage):
-        def __init__(self, cnntrain, parent=None):
-            super(BuildCNNWizard.WPageSave, self).__init__(parent)
+        def __init__(self, nntrain, parent=None):
+            super(BuildNNWizard.WPageSave, self).__init__(parent)
             self.setTitle('Save Recogniser')
-            self.setSubTitle('If you are happy with the CNN performance, save the recogniser.')
+            self.setSubTitle('If you are happy with the NN performance, save the recogniser.')
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
-            self.cnntrain = cnntrain
+            self.nntrain = nntrain
             self.filterfile = ''
             self.saveoption = 'New'
 
@@ -2836,7 +2852,7 @@ class BuildCNNWizard(QWizard):
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFiles.setMinimumHeight(200)
-            filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
+            filtdir = QDir(self.nntrain.filterdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file)
@@ -2900,12 +2916,12 @@ class BuildCNNWizard(QWizard):
 
         def initializePage(self):
             self.msgfilter.setText("<b>Current recogniser:</b> %s" % (self.field("filter")))
-            if "CNN" in self.cnntrain.currfilt:
-                self.warnfilter.setText("Warning: The recogniser already has a CNN.")
-            self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
+            if "NN" in self.nntrain.currfilt:
+                self.warnfilter.setText("Warning: The recogniser already has a NN.")
+            self.msgspp.setText("<b>Species:</b> %s" % (self.nntrain.species))
             self.rbtn2.setText('Update existing (' + self.field("filter") + ')')
 
-            self.cnntrain.addCNNFilter()
+            self.nntrain.addNNFilter()
 
             self.wizard().saveTestBtn.setVisible(True)
             self.wizard().saveTestBtn.setEnabled(False)
@@ -2931,7 +2947,7 @@ class BuildCNNWizard(QWizard):
 
         # def validatePage(self):
         #     with pg.BusyCursor():
-        #         self.cnntrain.saveFilter()
+        #         self.nntrain.saveFilter()
         #     return True
 
         def cleanupPage(self):
@@ -2943,34 +2959,34 @@ class BuildCNNWizard(QWizard):
 
         def isComplete(self):
             if self.saveoption == 'New' and self.enterFiltName.text() != '' and self.enterFiltName.text() != '.txt':
-                self.cnntrain.setP6(self.enterFiltName.text())
+                self.nntrain.setP6(self.enterFiltName.text())
                 return True
             elif self.saveoption == "Update":
                 # SM
-                self.cnntrain.setP6(self.enterFiltName.text())
+                self.nntrain.setP6(self.enterFiltName.text())
                 return True
             else:
                 return False
 
-    def redoROCPages(self, cnntrain):
+    def redoROCPages(self, nntrain):
         # clean any existing pages
         for page in self.rocpages:
             # for each calltype, remove roc page
             self.removePage(page)
         self.rocpages = []
 
-        if not cnntrain.autoThr:
-            for i in range(len(cnntrain.calltypes)):
-                print("adding ROC page for class:", cnntrain.calltypes[i])
-                page4 = BuildCNNWizard.WPageROC(cnntrain, i)
+        if not nntrain.autoThr:
+            for i in range(len(nntrain.calltypes)):
+                print("adding ROC page for class:", nntrain.calltypes[i])
+                page4 = BuildNNWizard.WPageROC(nntrain, i)
                 pageid = self.addPage(page4)
                 self.rocpages.append(pageid)
 
-        self.summaryPage = BuildCNNWizard.WPageSummary(cnntrain)
+        self.summaryPage = BuildNNWizard.WPageSummary(nntrain)
         pageid = self.addPage(self.summaryPage)
         self.rocpages.append(pageid)
 
-        self.savePage = BuildCNNWizard.WPageSave(cnntrain)
+        self.savePage = BuildNNWizard.WPageSave(nntrain)
         pageid = self.addPage(self.savePage)
         self.rocpages.append(pageid)
 
@@ -2984,10 +3000,10 @@ class BuildCNNWizard(QWizard):
             self.removePage(page)
         self.rocpages = []
 
-        self.summaryPage = BuildCNNWizard.WPageSummary(self.cnntrain)
+        self.summaryPage = BuildNNWizard.WPageSummary(self.nntrain)
         self.addPage(self.summaryPage)
 
-        self.savePage = BuildCNNWizard.WPageSave(self.cnntrain)
+        self.savePage = BuildNNWizard.WPageSave(self.nntrain)
         self.addPage(self.savePage)
 
         self.parameterPage.setFinalPage(False)
@@ -3053,7 +3069,7 @@ class FilterCustomiseROC(QDialog):
         self.filtdir = filtdir
         self.saveoption = "New"
         self.ROCWF = False
-        self.ROCNN = False
+        self.RONN = False
         self.newthr = 0
         self.calltypes = []
         self.form = QGridLayout()
@@ -3165,20 +3181,20 @@ class FilterCustomiseROC(QDialog):
         self.cbmode.setVisible(False)
         self.cbct.setVisible(False)
         self.ROCWF = False
-        self.ROCNN = False
+        self.RONN = False
         self.btnSave.setEnabled(False)
 
         # Store the widget pointers here
         self.WThrSliders = []
-        self.CNNThr1Sliders = []
-        self.CNNThr2Sliders = []
+        self.NNThr1Sliders = []
+        self.NNThr2Sliders = []
 
         # Check if there is a saved ROC
-        if 'ROCNN' in self.filter:
-            if os.path.exists(os.path.join(self.filtdir, self.filter['ROCNN'] + '.json')):
-                self.ROCNN = True
+        if 'RONN' in self.filter:
+            if os.path.exists(os.path.join(self.filtdir, self.filter['RONN'] + '.json')):
+                self.RONN = True
                 self.lblmodeText.setText('Select mode')
-                self.cbmode.addItem('CNN')
+                self.cbmode.addItem('NN')
                 self.cbmode.setVisible(True)
         if 'ROCWF' in self.filter:
             if os.path.exists(os.path.join(self.filtdir, self.filter['ROCWF'] + '.json')):
@@ -3188,20 +3204,20 @@ class FilterCustomiseROC(QDialog):
                 self.cbmode.setVisible(True)
         lblCT = QLabel('Call type')
         lblWTnew = QLabel('Wavelet threshold')
-        lblCNNTnew = QLabel('Lower CNN threshold')
-        lblCNNT2new = QLabel('Upper CNN threshold')
+        lblNNTnew = QLabel('Lower NN threshold')
+        lblNNT2new = QLabel('Upper NN threshold')
         lblCT.setStyleSheet("QLabel { font-weight: bold}")
         lblWTnew.setStyleSheet("QLabel { font-weight: bold}")
-        lblCNNTnew.setStyleSheet("QLabel { font-weight: bold}")
-        lblCNNT2new.setStyleSheet("QLabel { font-weight: bold}")
+        lblNNTnew.setStyleSheet("QLabel { font-weight: bold}")
+        lblNNT2new.setStyleSheet("QLabel { font-weight: bold}")
 
         self.form.addWidget(lblCT, 0, 0)
         self.form.addWidget(lblWTnew, 0, 1)
-        if 'CNN' in self.filter:
-            self.form.addWidget(lblCNNTnew, 0, 2)
-            self.form.addWidget(lblCNNT2new, 0, 3)
+        if 'NN' in self.filter:
+            self.form.addWidget(lblNNTnew, 0, 2)
+            self.form.addWidget(lblNNT2new, 0, 3)
 
-        ROCyes = self.ROCNN or self.ROCWF
+        ROCyes = self.RONN or self.ROCWF
 
         if ROCyes:
             self.lblctText.setText('Select call type')
@@ -3223,16 +3239,16 @@ class FilterCustomiseROC(QDialog):
             self.form.addWidget(newWThr, i + 1, 1)
             self.WThrSliders.append(newWThr)
 
-            if 'CNN' in self.filter:
-                newCNNThr1 = FilterCustomiseROC.LabelSlider(self.filter['CNN']['thr'][i][0], 0.1, 10.0, slider=not ROCyes)
-                newCNNThr1.valueChanged.connect(self.refreshSaveButton)
-                self.form.addWidget(newCNNThr1, i + 1, 2)
-                self.CNNThr1Sliders.append(newCNNThr1)
+            if 'NN' in self.filter:
+                newNNThr1 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][i][0], 0.1, 10.0, slider=not ROCyes)
+                newNNThr1.valueChanged.connect(self.refreshSaveButton)
+                self.form.addWidget(newNNThr1, i + 1, 2)
+                self.NNThr1Sliders.append(newNNThr1)
 
-                newCNNThr2 = FilterCustomiseROC.LabelSlider(self.filter['CNN']['thr'][i][1], 0.1, 10.0, slider=not ROCyes)
-                newCNNThr2.valueChanged.connect(self.refreshSaveButton)
-                self.form.addWidget(newCNNThr2, i + 1, 3)
-                self.CNNThr2Sliders.append(newCNNThr2)
+                newNNThr2 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][i][1], 0.1, 10.0, slider=not ROCyes)
+                newNNThr2.valueChanged.connect(self.refreshSaveButton)
+                self.form.addWidget(newNNThr2, i + 1, 3)
+                self.NNThr2Sliders.append(newNNThr2)
 
     def loadROC(self):
         if self.cbmode.currentText() == "" or self.cbct.currentText() == "":
@@ -3280,7 +3296,7 @@ class FilterCustomiseROC(QDialog):
                     self.marker.set_visible(True)
                     self.figCanvas.ax.draw_artist(self.marker)
                     self.figCanvas.update()
-                elif self.cbmode.currentText() == 'CNN':
+                elif self.cbmode.currentText() == 'NN':
                     # get thr for closest point
                     distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
                     M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
@@ -3301,7 +3317,7 @@ class FilterCustomiseROC(QDialog):
                     print('nodes: ', self.nodes[thr_min_ind])
                     self.newthr = round(self.thrList[thr_min_ind], 4)
                     self.refreshSaveButton()
-                elif self.cbmode.currentText() == 'CNN':
+                elif self.cbmode.currentText() == 'NN':
                     print('thr: ', self.thrList[thr_min_ind])
                     self.newthr = round(self.thrList[thr_min_ind], 4)
                     self.refreshSaveButton()
@@ -3317,8 +3333,8 @@ class FilterCustomiseROC(QDialog):
                 self.thrList = self.roc["thr"]
                 self.nodes = self.roc[self.cbct.currentText()][2]
                 self.figCanvas.plotmeagain(self.TPR, self.FPR)
-            elif self.cbmode.currentText() == 'CNN':
-                jsonfile = open(os.path.join(self.filtdir, self.filter['ROCNN'] + '.json'), 'r')
+            elif self.cbmode.currentText() == 'NN':
+                jsonfile = open(os.path.join(self.filtdir, self.filter['RONN'] + '.json'), 'r')
                 self.roc = json.loads(jsonfile.read())
                 jsonfile.close()
                 self.TPR = np.asarray([self.roc["TPR"][self.calltypes.index(self.cbct.currentText())]], dtype=np.float32)
@@ -3334,7 +3350,7 @@ class FilterCustomiseROC(QDialog):
             self.lblselected.setVisible(True)
 
     def refreshSaveButton(self):
-        if self.ROCWF or self.ROCNN:
+        if self.ROCWF or self.RONN:
             self.refreshSaveButtonWithROC()
         else:
             self.refreshSaveButtonWithoutROC()
@@ -3343,22 +3359,22 @@ class FilterCustomiseROC(QDialog):
         # only allow saving if any values have changed from the stored one:
         anyChanged = False
 
-        # NOTE: for CNNs, currently ROC adjusts only the lower thr.
+        # NOTE: for NNs, currently ROC adjusts only the lower thr.
 
         if self.newthr != 0:
             for idx in range(len(self.calltypes)):
-                if 'CNN' in self.filter:
-                    sliderCL = self.CNNThr1Sliders[idx]
-                    sliderCU = self.CNNThr2Sliders[idx]
+                if 'NN' in self.filter:
+                    sliderCL = self.NNThr1Sliders[idx]
+                    sliderCU = self.NNThr2Sliders[idx]
                     # parse the ct and mode of currently edited ROC:
-                    if self.filter['Filters'][idx]['calltype'] == self.cbct.currentText() and self.cbmode.currentText() == 'CNN':
+                    if self.filter['Filters'][idx]['calltype'] == self.cbct.currentText() and self.cbmode.currentText() == 'NN':
                         sliderCL.setValue(self.newthr)
                         # sanity check
                         if sliderCL.value() > sliderCU.value():
                             sliderCU.setValue(1.0)
 
-                    self.newfilter['CNN']['thr'][idx][0] = sliderCL.value()
-                    self.newfilter['CNN']['thr'][idx][1] = sliderCU.value()
+                    self.newfilter['NN']['thr'][idx][0] = sliderCL.value()
+                    self.newfilter['NN']['thr'][idx][1] = sliderCU.value()
                     if sliderCL.hasChanged() or sliderCU.hasChanged():
                         anyChanged = True
 
@@ -3380,11 +3396,11 @@ class FilterCustomiseROC(QDialog):
 
         self.btnSave.setEnabled(False)
         for idx in range(len(self.calltypes)):
-            if 'CNN' in self.filter:
-                sliderCL = self.CNNThr1Sliders[idx]
-                sliderCU = self.CNNThr2Sliders[idx]
-                self.newfilter['CNN']['thr'][idx][0] = sliderCL.value()
-                self.newfilter['CNN']['thr'][idx][1] = sliderCU.value()
+            if 'NN' in self.filter:
+                sliderCL = self.NNThr1Sliders[idx]
+                sliderCU = self.NNThr2Sliders[idx]
+                self.newfilter['NN']['thr'][idx][0] = sliderCL.value()
+                self.newfilter['NN']['thr'][idx][1] = sliderCU.value()
                 if sliderCL.hasChanged() or sliderCU.hasChanged():
                     anyChanged = True
             sliderW = self.WThrSliders[idx]

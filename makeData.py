@@ -195,5 +195,5 @@ def makeNoiseDataBats(dirName,imgsavepath,imgWidth,imgHeight,nnoise):
 ##makeBatData('Full',imgWidth=128,imgHeight=64,incr=16,img=True,scale=False)
 ##makeBatData('Check',imgWidth=224,imgHeight=64,incr=16,img=True,scale=False)
 
-#makeNoiseDataBats('AviaNZ_CNN/NoiseFiles/','NoiseBats',246,256,12)
-makeNoiseData('AviaNZ_CNN/NoiseFiles/','Noise',246,256,12)
+#makeNoiseDataBats('AviaNZ_NN/NoiseFiles/','NoiseBats',246,256,12)
+makeNoiseData('AviaNZ_NN/NoiseFiles/','Noise',246,256,12)

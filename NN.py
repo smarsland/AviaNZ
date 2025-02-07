@@ -1,7 +1,7 @@
 
-# CNN.py
+# NN.py
 #
-# CNN for the AviaNZ program
+# NN for the AviaNZ program
 
 # Version 3.4 18/12/24
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
@@ -38,17 +38,19 @@ import librosa
 
 import soundfile as sf
 
+import NNModels
+
 # from sklearn.metrics import confusion_matrix
 # from numpy import expand_dims
 # from keras_preprocessing.image import ImageDataGenerator
 # import pyqtgraph as pg
 # import SupportClasses
 
-class CNN:
-    """ This class implements CNN training and data augmentation in AviaNZ.
+class NN:
+    """ This class implements NN training and data augmentation in AviaNZ.
     """
 
-    def __init__(self, configdir, species, calltypes, fs, length, windowwidth, inc, imageheight, imagewidth):
+    def __init__(self, configdir, species, calltypes, fs, length, windowwidth, inc, imageheight, imagewidth, modelArchitecture):
         self.species = species
         self.length = length
         self.windowwidth = windowwidth
@@ -57,6 +59,7 @@ class CNN:
         self.imagewidth = imagewidth
         self.calltypes = calltypes
         self.fs = fs
+        self.modelArchitecture = modelArchitecture
 
         cl = SupportClasses.ConfigLoader()
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
@@ -337,34 +340,15 @@ class CNN:
         Sets self.model
         '''
         apply_same_padding =  self.imageheight < 120 or self.imagewidth < 120
-        self.model = tf.keras.models.Sequential()
-        self.model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[self.imageheight, self.imagewidth, 1], padding='Same'))
-        self.model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu', padding="Same" if apply_same_padding else "Valid"))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(3, 3)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding="Same" if apply_same_padding else "Valid"))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding="Same" if apply_same_padding else "Valid"))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding="Same" if apply_same_padding else "Valid"))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        # Flatten the results to one dimension for passing into our final layer
-        self.model.add(tf.keras.layers.Flatten())
-        # A hidden layer to learn with
-        self.model.add(tf.keras.layers.Dense(256, activation='relu'))
-        # Another dropout
-        self.model.add(tf.keras.layers.Dropout(0.5))
-        # Final categorization from 0-ct+1 with softmax
-        self.model.add(tf.keras.layers.Dense(len(self.calltypes)+1, activation='softmax'))
-        self.model.summary()
+        if self.modelArchitecture == 'CNN':
+            self.model = NNModels.CNNModel(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+        elif self.modelArchitecture == 'SingleLayerNetwork':
+            self.model = NNModels.SingleLayerNetwork(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+        else:
+            raise ValueError("Model architecture not supported")
 
     def train2(self, modelsavepath):
         ''' Train the model - keep all in memory '''
-
-        self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
@@ -392,9 +376,6 @@ class CNN:
     def train(self, modelsavepath, training_batch_generator, validation_batch_generator):
         ''' Train the model - use image generator '''
 
-        # self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        self.model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'], metrics=self.LearningDict['metrics'])
-
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
         # checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
@@ -417,7 +398,7 @@ class CNN:
         print("Saved model to ", modelsavepath)
 
 class GenerateData:
-    """ This class implements CNN data preparation. There are different ways:
+    """ This class implements NN data preparation. There are different ways:
     1. when manually annotated recordings are presented (.wav and GT.data along with call type info). In this case run
     the existing recogniser (WF) over the data set and get the diff to find FP segments (Noise class). And .data has TP/
     call type segments
@@ -500,7 +481,7 @@ class GenerateData:
             return
 
         ws = WaveletSegment.WaveletSegment(self.filter, 'dmey2')
-        autoSegments = ws.waveletSegment_cnn(dirName, self.filter)  # [(filename, [segments]), ...]
+        autoSegments = ws.waveletSegment_nn(dirName, self.filter)  # [(filename, [segments]), ...]
 
         #  now the diff between segment and autoSegments
         print("autoSeg", autoSegments)
@@ -569,7 +550,7 @@ class GenerateData:
 
     def getImgCount(self, dirName, dataset, hop):
         '''
-        Read the segment library and estimate the number of CNN images per class
+        Read the segment library and estimate the number of NN images per class
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop: list of hops for different classes
         :return: a list
@@ -610,7 +591,7 @@ class GenerateData:
     def generateFeatures(self, dirName, dataset, hop):
         '''
         Read the segment library and generate features, training.
-        Similar to SignalProc.generateFeaturesCNN, except this one saves images
+        Similar to SignalProc.generateFeaturesNN, except this one saves images
             to disk instead of returning them.
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop:
