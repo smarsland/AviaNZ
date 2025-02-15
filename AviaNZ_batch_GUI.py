@@ -166,12 +166,16 @@ class AviaNZ_batchWindow(QMainWindow):
         # CHECKED: In this case mergesyllables is only used when you select 'Any sound'.
         #          Otherwise parameters from the filters themselves are used to do things like 'deleteShort'.
         #          For now I have changed the UI so this is clear. 
+        self.overwrite = QCheckBox("Overwrite existing annotations")
+        self.overwrite.setChecked(True)
+
         self.mergesyllables = QCheckBox("Merge Syllables For 'Any sound'")
         self.mergesyllables.setChecked(False)
         #self.mergesyllables2 = QCheckBox("Specify merge parameters")
         #self.mergesyllables2.setChecked(False)
         self.mergesyllables.clicked.connect(self.showPost)
         self.mergesyllables.setEnabled(False)
+        self.mergesyllables.hide()
         self.maxgap = QDoubleSpinBox()
         self.maxgap.setRange(0.05, 10.0)
         self.maxgap.setSingleStep(0.5)
@@ -255,7 +259,7 @@ class AviaNZ_batchWindow(QMainWindow):
         #self.boxWind.setLayout(formWind)
         #self.d_detection.addWidget(self.boxWind, row=8, col=0, colspan=4)
         #self.boxWind.hide()
-
+        self.d_detection.addWidget(self.overwrite,row=7,col=0, colspan=2)
         self.d_detection.addWidget(self.mergesyllables,row=9,col=0, colspan=2)
         #self.d_detection.addWidget(self.mergesyllables2,row=9,col=2, colspan=2)
         self.boxPost = QGroupBox()
@@ -377,7 +381,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
-        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentIndex(), mergeSyllables=self.mergesyllables.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentIndex(), mergeSyllables=self.mergesyllables.isChecked(), overwrite=self.overwrite.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
         self.batchThread = QThread()
@@ -552,8 +556,13 @@ class AviaNZ_batchWindow(QMainWindow):
             self.hasFilters = False
         
         if 'Any sound' in [x.text() for x in self.w_spe1.selectedItems()]:
-            self.mergesyllables.setEnabled(True)
+            self.mergesyllables.show()
+            if not self.mergesyllables.isEnabled():
+                self.mergesyllables.setEnabled(True)
+                self.mergesyllables.setChecked(True)
+                self.boxPost.show()
         else:
+            self.mergesyllables.hide()
             self.mergesyllables.setEnabled(False)
             self.mergesyllables.setChecked(False)
             self.boxPost.hide()

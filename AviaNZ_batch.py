@@ -56,7 +56,7 @@ class AviaNZ_batchProcess():
         # Recogniser - filter file name without ".txt" 
         # TODO: allow CLI to have multiple recognisers and other options
 
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind=0, mergeSyllables=False):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind=0, mergeSyllables=False, overwrite=True):
         # Read config and filters from user location
         # recognisers - list of filter file names without ".txt"
         self.configdir = configdir
@@ -66,6 +66,8 @@ class AviaNZ_batchProcess():
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+
+        self.overwrite = overwrite
 
         if mode=="GUI":
             self.CLI = False
@@ -249,7 +251,9 @@ class AviaNZ_batchProcess():
             text = "Species: " + speciesStr + ", options: " + opts + ".\nNumber of files to analyse: " + str(total) + ", " + str(cnt) + " done so far.\n"
 
             text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
-            text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
+
+            if self.overwrite:
+                text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
 
             text = "Analysis will be launched with these options:\n" + text + "\nConfirm?"
 
@@ -420,6 +424,10 @@ class AviaNZ_batchProcess():
                     # create large WCs and highly distort means/variances)
                     #impMask = "chp" not in [sf.get("method") for sf in filters]
                 self.loadFile(filename,"NZ Bats" in self.species)
+                
+                if self.overwrite:
+                    print("Clearing old segments")
+                    self.segments = Segment.SegmentList()
                 #self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
 
                 # initialize empty segmenter
