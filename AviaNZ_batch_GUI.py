@@ -163,11 +163,15 @@ class AviaNZ_batchWindow(QMainWindow):
         # TODO: make sure first is checked
 
         # TODO: check all these!
-        self.mergesyllables = QCheckBox("Merge Syllables")
-        self.mergesyllables.setChecked(True)
+        # CHECKED: In this case mergesyllables is only used when you select 'Any sound'.
+        #          Otherwise parameters from the filters themselves are used to do things like 'deleteShort'.
+        #          For now I have changed the UI so this is clear. 
+        self.mergesyllables = QCheckBox("Merge Syllables For 'Any sound'")
+        self.mergesyllables.setChecked(False)
         #self.mergesyllables2 = QCheckBox("Specify merge parameters")
         #self.mergesyllables2.setChecked(False)
         self.mergesyllables.clicked.connect(self.showPost)
+        self.mergesyllables.setEnabled(False)
         self.maxgap = QDoubleSpinBox()
         self.maxgap.setRange(0.05, 10.0)
         self.maxgap.setSingleStep(0.5)
@@ -265,7 +269,7 @@ class AviaNZ_batchWindow(QMainWindow):
         formPost.addWidget(self.maxlen, 4, 1)
         self.boxPost.setLayout(formPost)
         self.d_detection.addWidget(self.boxPost, row=10, col=0, colspan=4)
-        #self.boxPost.hide()
+        self.boxPost.hide()
 
         self.d_detection.addWidget(self.w_processButton, row=11, col=3)
 
@@ -546,6 +550,13 @@ class AviaNZ_batchWindow(QMainWindow):
             self.hasFilters = True
         else:
             self.hasFilters = False
+        
+        if 'Any sound' in [x.text() for x in self.w_spe1.selectedItems()]:
+            self.mergesyllables.setEnabled(True)
+        else:
+            self.mergesyllables.setEnabled(False)
+            self.mergesyllables.setChecked(False)
+            self.boxPost.hide()
 
         if self.hasFiles and self.hasFilters:
             self.statusBar().showMessage("Ready for processing")
@@ -580,205 +591,6 @@ class AviaNZ_batchWindow(QMainWindow):
             self.boxPost.show()
         else:
             self.boxPost.hide()
-
-    # OLD
-    def addSpeciesBox(self):
-        """ Deals with adding and moving species comboboxes """
-        # create a new combobox
-        newSpBox = QComboBox()
-        self.speCombos.append(newSpBox)
-
-        # populate it with possible species (that have same Fs)
-        self.fillSpeciesBoxes()
-
-        # create a "delete" button for it
-        delSpBtn = QPushButton("X")
-        delSpBtn.speciesbox = newSpBox
-        delSpBtn.setFixedWidth(30)
-
-        # connect the listener for deleting
-        delSpBtn.clicked.connect(self.removeSpeciesBox)
-
-        # insert those just above Add button
-        btncombo = QHBoxLayout()
-        delSpBtn.layout = btncombo
-        btncombo.addWidget(newSpBox)
-        btncombo.addWidget(delSpBtn)
-        self.formSp.insertLayout(len(self.speCombos), btncombo)
-
-        self.boxSp.setMinimumHeight(30*len(self.speCombos)+90)
-        self.setMinimumHeight(610+30*len(self.speCombos))
-        self.boxSp.updateGeometry()
-
-    # OLD
-    def removeSpeciesBox(self):
-        """ Deals with removing and moving species comboboxes """
-        # identify the clicked button
-        called = self.sender()
-        lay = called.layout
-
-        # delete the corresponding combobox and button from their HBox
-        self.speCombos.remove(called.speciesbox)
-        lay.removeWidget(called.speciesbox)
-        called.speciesbox.deleteLater()
-        lay.removeWidget(called)
-        called.deleteLater()
-
-        # remove the empty HBox
-        self.formSp.removeItem(lay)
-        lay.deleteLater()
-
-        self.boxSp.setMinimumHeight(30*len(self.speCombos)+90)
-        self.setMinimumHeight(610+30*len(self.speCombos))
-        self.boxSp.updateGeometry()
-
-    # Old
-    def CheckSpeciesBoxes(self):
-        # Show/hide any other UI elements specific to bird filters or AnySound methods
-
-        # setItemHidden() #selectedItems()
-        selected = self.w_spe1.selectedItems()
-        selectedNames = []
-        for s in selected:
-            selectedNames.append(s.text())
-        #print(selectedNames)
-        #print("----")
-        #print(int(self.w_spe1.item[3].flags()))
-        # TODO: second guard
-        if "Any sound" in selectedNames or "Any sound (Intermittent sampling)" in selectedNames: #and self.w_spe1.item[3].flags():
-            for i in range(2,self.w_spe1.count()):
-                it = self.w_spe1.item(i)
-                # Stop them being selected
-                it.setSelected(False)
-                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-            #currfilt = self.FilterDicts[currname]
-            #currmethod = currfilt.get("method", "wv")
-            # (can't use AllSp with any other filter)
-            # Don't add different methods, samplerates, or the same name again
-            # (providing that missing method equals "wv")
-            #for name, filt in self.FilterDicts.items():
-                #if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname and filt.get("method", "wv")==currmethod:
-                    #spp.append(name)
-            self.minlen.hide()
-            self.minlenlbl.hide()
-            self.maxlen.hide()
-            self.maxlenlbl.hide()
-            self.maxgap.hide()
-            self.maxgaplbl.hide()
-            self.boxIntermit.hide()
-            self.boxPost.show()
-            #self.addSp.show()
-            #self.warning.hide()
-            #if currmethod=="chp":
-                #self.w_wind.show()
-            #else:
-                #self.w_wind.hide()
-        else:
-            for i in range(2,self.w_spe1.count()):
-                it = self.w_spe1.item(i)
-                it.setFlags(it.flags() | Qt.ItemFlag.ItemIsSelectable)
-
-            if "Any sound" in selectedNames:
-                self.minlen.show()
-                self.minlenlbl.show()
-                self.maxlen.show()
-                self.maxlenlbl.show()
-                self.maxgap.show()
-                self.maxgaplbl.show()
-                self.boxIntermit.hide()
-                self.boxPost.show()
-                #self.addSp.hide()
-                #self.warning.show()
-                self.w_wind.hide()
-            elif "Any sound (Intermittent sampling)" in selectedNames:
-                self.boxPost.hide()
-                self.boxIntermit.show()
-                #self.addSp.hide()
-                #self.warning.show()
-            self.boxTime.show()
-
-            if "NZ Bats" in selectedNames or "NZ Bats_NP" in selectedNames:
-                #self.addSp.setEnabled(False)
-                #self.addSp.setToolTip("Bat recognisers cannot be combined with others")
-                self.w_wind.setCurrentIndex(0)
-                self.w_wind.setEnabled(False)
-                self.w_wind.setToolTip("Filter not applicable to bats")
-            else:
-                #self.addSp.setEnabled(True)
-                #self.addSp.setToolTip("")
-                self.w_wind.setEnabled(True)
-                self.w_wind.setToolTip("")
-
-    # Old
-    def fillSpeciesBoxes(self):
-        # select filters with Fs matching box 1 selection
-        # and show/hide any other UI elements specific to bird filters or AnySound methods
-        spp = []
-        #currname = self.w_spe1.currentText()
-        currname = "Any sound"
-        if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
-            currfilt = self.FilterDicts[currname]
-            currmethod = currfilt.get("method", "wv")
-            # (can't use AllSp with any other filter)
-            # Don't add different methods, samplerates, or the same name again
-            # (providing that missing method equals "wv")
-            for name, filt in self.FilterDicts.items():
-                if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname and filt.get("method", "wv")==currmethod:
-                    spp.append(name)
-            self.minlen.hide()
-            self.minlenlbl.hide()
-            self.maxlen.hide()
-            self.maxlenlbl.hide()
-            self.maxgap.hide()
-            self.maxgaplbl.hide()
-            self.boxIntermit.hide()
-            self.boxPost.show()
-            #self.addSp.show()
-            #self.warning.hide()
-            if currmethod=="chp":
-                self.w_wind.show()
-            else:
-                self.w_wind.hide()
-        elif currname == "Any sound":
-            self.minlen.show()
-            self.minlenlbl.show()
-            self.maxlen.show()
-            self.maxlenlbl.show()
-            self.maxgap.show()
-            self.maxgaplbl.show()
-            self.boxIntermit.hide()
-            self.boxPost.show()
-            #self.addSp.hide()
-            #self.warning.show()
-            self.w_wind.hide()
-        elif currname == "Any sound (Intermittent sampling)":
-            self.boxPost.hide()
-            self.boxIntermit.show()
-            #self.addSp.hide()
-            #self.warning.show()
-        self.boxTime.show()
-
-        if currname == "NZ Bats" or currname == "NZ Bats_NP":
-            #self.addSp.setEnabled(False)
-            #self.addSp.setToolTip("Bat recognisers cannot be combined with others")
-            self.w_wind.setCurrentIndex(0)
-            self.w_wind.setEnabled(False)
-            self.w_wind.setToolTip("Filter not applicable to bats")
-        else:
-            #self.addSp.setEnabled(True)
-            #self.addSp.setToolTip("")
-            self.w_wind.setEnabled(True)
-            self.w_wind.setToolTip("")
-
-        # (skip first box which is fixed)
-        #for box in self.speCombos[1:]:
-            ## clear old items:
-            #for i in reversed(range(box.count())):
-                #box.removeItem(i)
-            #box.setCurrentIndex(-1)
-            #box.setCurrentText("")
-
-            #box.addItems(sorted(spp))
 
     def fillFileList(self, fileName=None):
         """ Populates the list of files for the file listbox.
