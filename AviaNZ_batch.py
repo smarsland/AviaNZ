@@ -56,7 +56,7 @@ class AviaNZ_batchProcess():
         # Recogniser - filter file name without ".txt" 
         # TODO: allow CLI to have multiple recognisers and other options
 
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind=0, mergeSyllables=False, overwrite=True):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind="None", mergeSyllables=False, overwrite=True):
         # Read config and filters from user location
         # recognisers - list of filter file names without ".txt"
         self.configdir = configdir
@@ -595,7 +595,8 @@ class AviaNZ_batchProcess():
                     # TODO: make efficient for resampling
                     # TODO: need to init class somewhere
                     self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
-                    self.ws.readBatch(self.sp.data[start:end], self.sp.audioFormat.sampleRate(), d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=self.options[1]>0)
+                    useWind = self.options[1] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
+                    self.ws.readBatch(self.sp.data[start:end], self.sp.audioFormat.sampleRate(), d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=useWind)
                 for speciesix in range(len(filtersAtSampleRate)):
                     print("Working with recogniser:", filtersAtSampleRate[speciesix])
                     if "NZ Bats" in speciesAtSampleRate:

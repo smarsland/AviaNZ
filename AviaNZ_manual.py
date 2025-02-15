@@ -5227,7 +5227,8 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.sp.data, self.sp.audioFormat.sampleRate(), d=False, spInfo=[speciesData], wpmode="new", wind=settings["wind"]>0)
+                useWind = settings["wind"] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
+                ws.readBatch(self.sp.data, self.sp.audioFormat.sampleRate(), d=False, spInfo=[speciesData], wpmode="new", wind=useWind)
                 # nuisance-signal changepoint detector (alg 2)
                 # with all params passed:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])

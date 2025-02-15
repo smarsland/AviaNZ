@@ -107,6 +107,10 @@ class AviaNZ_batchWindow(QMainWindow):
         # There will be some effort needed to tidy up the sampling rate, etc.
         # How to get the size of the filter list right?
         # Make AnySound separate? Or just in list?
+        # GMF:  
+        #   I am not sure about what needs tidying on the sample rate front.
+        #   I can't see any issues with the size of the filter list.
+        #   AnySound at the moment is still in the list, I don't think it is an issue.
         self.process = QButtonGroup()
         self.process.setExclusive(True)
         self.usefilters = QRadioButton("Specify filters")
@@ -158,10 +162,7 @@ class AviaNZ_batchWindow(QMainWindow):
         #self.windfilter.clicked.connect(self.showWind)
         windlabel = QLabel("Specify wind filter (or select None)")
         self.windfilter = QComboBox()
-        self.windfilter.addItems(["None", "Robust wind filter (experimental, slow)", "OLS wind filter (recommended)"])
-        self.windfilter.setCurrentIndex(2)
-        # TODO: make sure first is checked
-
+        self.windfilter.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"])
         # TODO: check all these!
         # CHECKED: In this case mergesyllables is only used when you select 'Any sound'.
         #          Otherwise parameters from the filters themselves are used to do things like 'deleteShort'.
@@ -362,13 +363,6 @@ class AviaNZ_batchWindow(QMainWindow):
                 species.append(s.text())
         print("Recognisers:", species)
 
-        # Parse wind box:
-        # a bit wacky but maps: 0 (default option, OLS) -> 1
-        #                       1 (robust) -> 2
-        #                       2 (none) -> 0
-        #wind = self.w_wind.currentIndex()
-        #print("Wind set to", wind)
-
         # Count update config file based on provided settings, for reading by the worker
         # Not at the moment -- worker can read them anyway
         #self.config['timeStart'] = self.w_timeStart.time()
@@ -381,7 +375,7 @@ class AviaNZ_batchWindow(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
-        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentIndex(), mergeSyllables=self.mergesyllables.isChecked(), overwrite=self.overwrite.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentText(), mergeSyllables=self.mergesyllables.isChecked(), overwrite=self.overwrite.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
         self.batchThread = QThread()

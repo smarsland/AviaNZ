@@ -164,7 +164,7 @@ class WaveletSegment:
         print("--- Wavelet segmenting completed in %.3f s ---" % (time.time() - opst))
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, silent=True, wind=0):
+    def waveletSegmentChp(self, filtnum, alg, alpha=None, window=None, maxlen=None, silent=True, wind="None"):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
@@ -175,7 +175,7 @@ class WaveletSegment:
             5. maxlen: maximum allowed length (s) of signal segments
               3-5 can be None, in which case they are retrieved from self.spInfo.
             6. silent: silent (True) or verbose (False) mode
-            7. adjust for wind? 0=no, 1=interpolate by OLS, 2=interpolate by quantreg
+            7. adjust for wind? options are: "OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -1098,7 +1098,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, alpha, maxlen, window=1, alg=1, printing=1, wind=0):
+    def detectCallsChp(self, wf, nodelist, alpha, maxlen, window=1, alg=1, printing=1, wind="None"):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
@@ -1110,11 +1110,10 @@ class WaveletSegment:
         window - energy will be calculated over these windows, in s
         alg - standard (1) or with nuisance segments (2)
         printing - run silent (0) or verbose (1)
-        wind - adjust for wind? 0=no, 1=interpolate by OLS, 2=interpolate by QR
+        wind - "OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
-
         # Verify that the provided window will result in an integer
         # number of WCs at any level <=5.
         # This isn't necessary for detection, but makes life easier.
@@ -1122,7 +1121,7 @@ class WaveletSegment:
         # with nodes at different levels (not clear how to adjust then).
         # (I.e. for any filters w/ any 4th lvl nodes, as wind adj is
         # hardcoded to use 5th lvl nodes anyway).
-        if wind:
+        if not wind=="None":
             # all nodes will be needed for wind adjustment
             dsratio = 2**5
             # for not-wind: dsratio = 2**math.floor(math.log2(max(nodelist)+1))
@@ -1134,7 +1133,7 @@ class WaveletSegment:
                 raise
 
         # Estimate wind noise levels for each window x target node.
-        if wind:
+        if not wind=="None":
             # identify wind nodes, and calculate
             # regression x - node freq centers
             print("identifying wind nodes...")
@@ -1182,7 +1181,7 @@ class WaveletSegment:
             # need to prepare polynomial features manually for non-OLS methods
             # and also add an adjustment factor to QR, calculated assuming
             # quantile 0.2 and roughly 0.1-0.2 s windows
-            if wind==2:
+            if wind=="Robust wind filter (experimental, slow)":
                 regx = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
                 # ideally this should be based on the actual number of WCs
                 # in the window and the gamma function (see paper),
@@ -1195,9 +1194,9 @@ class WaveletSegment:
             for w in range(datalen):
                 regy = windE[w, :]
                 # ---- REGRESSION IS DONE HERE ----
-                if wind==1:
+                if wind=="OLS wind filter (recommended)":
                     pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
-                elif wind==2:
+                elif wind=="Robust wind filter (experimental, slow)":
                     # TODO sklearn will add quantreg in v1.0, see if it is any better
                     pol = WaveletFunctions.QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
                 else:
@@ -1251,7 +1250,7 @@ class WaveletSegment:
             sigma2 = np.percentile(E, 10)
             print("Global var: %.1f, range of E: %.1f-%.1f, Q10: %.1f" % (np.mean(E), np.min(E), np.max(E), sigma2))
 
-            if wind:
+            if not wind=="None":
                 # ---- LOG SP SUB ----
                 # retrieve and adjust for the predicted wind strength
                 print("Wind strength summary: mean %.2f, median %.2f" % (np.mean(pred[:, node_ix]), np.median(pred[:, node_ix])))

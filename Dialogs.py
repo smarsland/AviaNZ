@@ -1062,7 +1062,7 @@ class Segmentation(QDialog):
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
         self.wind = QComboBox()
-        self.wind.addItems(["No wind filter", "OLS wind filter (recommended)", "Robust wind filter (experimental)"])
+        self.wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"])
 
         self.chpLayout = QFormLayout()
         self.chpLayout.addRow("Threshold:", self.chpalpha)
@@ -1203,7 +1203,7 @@ class Segmentation(QDialog):
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "wind": self.wind.currentIndex()}
+                    "wind": self.wind.currentText()}
         return(alg, settings)
 
 #======
