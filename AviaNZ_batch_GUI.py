@@ -109,8 +109,8 @@ class AviaNZ_batchWindow(QMainWindow):
         # Make AnySound separate? Or just in list?
         # GMF:  
         #   I am not sure about what needs tidying on the sample rate front.
-        #   I can't see any issues with the size of the filter list.
-        #   AnySound at the moment is still in the list, I don't think it is an issue.
+        #   I can't see any issues with the size of the filter list, it seems to work with small & large lists for me. 
+        #   AnySound at the moment is still in the list. It might be nice to put it seperately, but for now I don't think it is an issue. 
         self.process = QButtonGroup()
         self.process.setExclusive(True)
         self.usefilters = QRadioButton("Specify filters")
@@ -163,10 +163,6 @@ class AviaNZ_batchWindow(QMainWindow):
         windlabel = QLabel("Specify wind filter (or select None). Only used with chp filters.")
         self.windfilter = QComboBox()
         self.windfilter.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"])
-        # TODO: check all these!
-        # CHECKED: In this case mergesyllables is only used when you select 'Any sound'.
-        #          Otherwise parameters from the filters themselves are used to do things like 'deleteShort'.
-        #          For now I have changed the UI so this is clear. 
         self.overwrite = QCheckBox("Overwrite existing annotations")
         self.overwrite.setChecked(True)
 
@@ -289,6 +285,8 @@ class AviaNZ_batchWindow(QMainWindow):
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
         # TODO: Remove?
+        # GMF: I think this is actually quite nice if the user has a number of folders they want to process.
+        #      Getting rid of it would make things simpler though. I guess in that case the user just has to choose another folder the usual way.
         self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
@@ -342,16 +340,14 @@ class AviaNZ_batchWindow(QMainWindow):
             return(1)
 
         # TODO: SRM: Needs testing
+        # GMF: I have tested this and it seems to work. 
+        #      But I am unsure NZ Bats mode is doing what is intended.
+        #      At the moment the batch worker ends up doing:
+        #           self.exportToBatSearch()
+        #           self.outputBatPasses()
+        #           self.exportToDOCDB()
+        #      Is that what we want? I figured it would just be doing the detection. 
 
-        # retrieve selected filter(s)
-        #species = set()
-        #for box in self.speCombos:
-            #if box.currentText() != "":
-                #species.add(box.currentText())
-        #species = list(species)
-        #if self.anysound.isChecked():
-            #species = "Any sound"
-            #self.w_processButton.setEnabled(True)
         if self.batfilter.isChecked():
             species = "NZ Bats"
             self.w_processButton.setEnabled(True)
@@ -362,15 +358,6 @@ class AviaNZ_batchWindow(QMainWindow):
             for s in selected:
                 species.append(s.text())
         print("Recognisers:", species)
-
-        # Count update config file based on provided settings, for reading by the worker
-        # Not at the moment -- worker can read them anyway
-        #self.config['timeStart'] = self.w_timeStart.time()
-        #self.config['timeEnd'] = self.w_timeEnd.time()
-        #self.config['maxgap']=self.maxgap.value()
-        #self.config['minlen']=self.minlen.value()
-        #self.config['maxlen']=self.maxlen.value()
-        #self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
@@ -495,9 +482,6 @@ class AviaNZ_batchWindow(QMainWindow):
         self.dlg.setLabelText(progrtext)
         self.statusBar().showMessage(progrtext)
         self.dlg.update()
-        # Refresh GUI after each file (only the ProgressDialog which is modal)
-        # TODO see if it repaints properly without this
-        # QApplication.processEvents()
 
     def centre(self):
         # Geometry of the main window

@@ -1319,7 +1319,8 @@ class PicButton(QAbstractButton):
         timeel = self.media_obj.elapsedUSecs() // 1000
         if timeel > self.duration:
             if self.media_obj.loop:
-                self.media_obj.restart()
+                self.media_obj.pressedStop()
+                self.media_obj.loadArray(self.audiodata)
             else:
                 self.stopPlayback()
                 if not self.mouseIn:

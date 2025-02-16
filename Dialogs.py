@@ -1882,7 +1882,8 @@ class HumanClassify1(QDialog):
         time = self.media_obj.elapsedUSecs() // 1000
         if time > self.duration:
             if self.media_obj.loop:
-                self.media_obj.restart()
+                self.media_obj.pressedStop()
+                self.media_obj.loadArray(self.audiodata)
             else:
                 self.stopPlayback()
         else:
