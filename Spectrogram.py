@@ -228,6 +228,14 @@ class Spectrogram:
             #self.incr = 512
         self.incr = 512
 
+        if not os.path.exists(file):
+            print("ERROR: file not found")
+            return(1)
+        
+        if not file.endswith(".bmp"):
+            print("ERROR: file is not a BMP")
+            return(1)
+
         img = QImage(file, "BMP")
         h = img.height()
         w = img.width()
