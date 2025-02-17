@@ -30,7 +30,7 @@ from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
+from PyQt6.QtCore import QPoint, QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
 
 import pyqtgraph as pg
 
@@ -1554,7 +1554,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None):
+    def __init__(self, lut, cmapInverted, brightness, contrast, shortBirdList, longBirdList, knownCalls, batList, multipleBirds, audioFormat, guidecols, plotAspect=2, loop=False, autoplay=False, parent=None, reorderShortList=False):
         # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -1571,10 +1571,12 @@ class HumanClassify1(QDialog):
         self.cmapInverted = cmapInverted
         self.shortBirdList = shortBirdList
         self.longBirdList = longBirdList
+        self.knownCalls = knownCalls
         self.batList = batList
         self.multipleBirds = multipleBirds
         self.saveBirdList = False
         self.viewingct = False
+        self.reorderShortList = reorderShortList
         # exec_ forces the cursor into waiting
 
         # Set up the plot window, then the right and wrong buttons, and a close button
@@ -1667,75 +1669,9 @@ class HumanClassify1(QDialog):
         #self.buttonPlus.setText('+')
         self.buttonPlus.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.birds3 = SearchableBirdWidget(self.multipleBirds)
-        if self.longBirdList is not None and self.longBirdList != 'None':
-            for item in self.longBirdList:
-                if '>' in item:
-                    ind = item.index('>')
-                    item = item[:ind] + " (" + item[ind+1:] + ")"
-                self.birds3.addBird(item)
-        self.birds3.setMaximumWidth(400)
-        self.birds3.fulllist.itemClicked.connect(self.listBirdsClicked)
-
-        # An array of check boxes and a list and a text entry box
-        # Create an array of check boxes for the most common birds
-        self.birds = QButtonGroup()
-        self.birdbtns = []
-        if self.multipleBirds:
-            self.birds.setExclusive(False)
-            if self.batmode:
-                for item in self.batList:
-                    self.birdbtns.append(QCheckBox(item))
-                    self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-                    self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
-            else:
-                for item in self.shortBirdList[:29]:
-                    self.birdbtns.append(QCheckBox(item))
-                    self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-                    self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
-                self.birdbtns.append(QCheckBox('Other:'))
-                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-                self.birdbtns[-1].clicked.connect(self.tickOtherClicked)
-        else:
-            self.birds.setExclusive(True)
-            if self.batmode:
-                for item in self.batList:
-                    btn = QRadioButton(item)
-                    self.birdbtns.append(btn)
-                    self.birds.addButton(btn,len(self.birdbtns)-1)
-                    btn.clicked.connect(self.radioBirdsClicked)
-            else:
-                for item in self.shortBirdList[:29]:
-                    btn = QRadioButton(item)
-                    self.birdbtns.append(btn)
-                    self.birds.addButton(btn,len(self.birdbtns)-1)
-                    btn.clicked.connect(self.radioBirdsClicked)
-                self.birdbtns.append(QRadioButton('Other:'))
-                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-                self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-
-        self.birds3.setEnabled(False)
-        self.birds3.add_requested.connect(self.birdTextEntered)
-
-        # Call type label
         self.ctLabel = QLabel("")
         self.ctLabel.setStyleSheet("QLabel { font-size:16pt; font-weight: bold}")
         self.ctLabel.hide()
-
-        # Call type buttons
-        self.ctbtns = []
-        for ct in range(10):
-            btn = QRadioButton("")
-            btn.clicked.connect(self.radioCtClicked)
-            btn.hide()
-            self.ctbtns.append(btn)
-
-        # button to switch to call type view
-        self.viewSpButton = QToolButton()
-        self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
-        self.viewSpButton.setIconSize(QSize(42, 25))
-        self.viewSpButton.setToolTip("Toggle between species/calltype views")
-        self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
         self.media_obj = SupportClasses_GUI.ControllableAudio(sp=None,audioFormat=audioFormat,useBar=True)
@@ -1746,49 +1682,6 @@ class HumanClassify1(QDialog):
         #self.media_obj.NotifyTimer.timeout.connect(self.endListener)
         self.media_obj.loop = loop
         self.autoplay = autoplay
-
-        # The four column layouts
-        birds1Layout = QVBoxLayout()
-        birds2Layout = QVBoxLayout()
-        birds3Layout = QVBoxLayout()
-        birdListLayout = QGridLayout()
-        birdListLayout.setRowStretch(0, 10)
-        birdListLayout.setRowStretch(1, 0)
-        birdListLayout.setRowStretch(2, 0)
-        count = 0
-        for btn in self.birdbtns:
-            if count<10:
-                birds1Layout.addWidget(btn)
-            elif count<20:
-                birds2Layout.addWidget(btn)
-            elif count<29:  # TODO add one more button here
-                birds3Layout.addWidget(btn)
-            else:
-                # "Other" button
-                birdListLayout.addWidget(btn, 0, 0, 1, 3)
-            count += 1
-
-        # Also add call types to columns 1-2 (either those or SP btns will be shown)
-        for btn in self.ctbtns[:5]:
-            btn.hide()
-            birds1Layout.addWidget(btn)
-        for btn in self.ctbtns[5:]:
-            btn.hide()
-            birds2Layout.addWidget(btn)
-
-        hboxBirds = QHBoxLayout()
-        hboxBirds.addLayout(birds1Layout)
-        hboxBirds.addLayout(birds2Layout)
-        hboxBirds.addLayout(birds3Layout)
-        hboxBirds.addLayout(birdListLayout)
-        # this hides the long list and "Add" options in batmode
-        if self.batmode:
-            self.birds3.hide()
-            self.viewSpButton.hide()
-        else:
-            birdListLayout.addWidget(self.birds3, 1, 0, 1, 3)
-            birdListLayout.addWidget(QLabel(), 4, 0, 1, 2)
-            birdListLayout.addWidget(self.viewSpButton, 4, 2, 1, 1)
 
         # The layouts
         hboxNextPrev = QHBoxLayout()
@@ -1847,16 +1740,25 @@ class HumanClassify1(QDialog):
 
         vboxSpecContr.layout.setColumnStretch(1, 6) # specControls
 
+        changeLabelsLayout = QHBoxLayout()
+        self.menuBirdButton = QPushButton("Change species / calltypes")
+        self.menuBirdButton.clicked.connect(self.showBirdMenu)
+        changeLabelsLayout.addWidget(self.menuBirdButton)
+
         vboxFull = QVBoxLayout()
         vboxFull.addLayout(spNameBox)
         vboxFull.addWidget(vboxSpecContr)
-        vboxFull.addLayout(hboxBirds)
+        vboxFull.addLayout(changeLabelsLayout)
         vboxFull.addSpacing(7)
         vboxFull.addLayout(hboxNextPrev)
 
         self.setLayout(vboxFull)
         # print seg
         # self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
+    
+    def showBirdMenu(self):
+        button_pos = self.menuBirdButton.mapToGlobal(self.menuBirdButton.rect().topLeft())
+        self.menuBirdList.popup(button_pos)
 
     def playSeg(self):
         if self.media_obj.isPlayingorPaused():
@@ -1914,22 +1816,6 @@ class HumanClassify1(QDialog):
         self.wPlot.plotAspect = self.plotAspect * xyratio
         self.wPlot.forceResize()
 
-    def updateButtonList(self):
-        # Refreshes bird button names
-        # To be used when bird list updates
-        if self.batmode:
-            for i in range(len(self.birdbtns)):
-                self.birdbtns[i].setChecked(False)
-                self.birdbtns[i].setText(self.batList[i])
-        else:
-            for i in range(len(self.birdbtns)-1):
-                self.birdbtns[i].setChecked(False)
-                self.birdbtns[i].setText(self.shortBirdList[i])
-        # "other" button
-        self.birdbtns[-1].setChecked(False)
-        self.birds3.setEnabled(False)
-        self.repaint()
-
     def setSegNumbers(self, accepted, deleted, total):
         #print(accepted,deleted,total)
         text1 = "calls accepted: " + str(accepted) + ", deleted: " + str(deleted)
@@ -1941,9 +1827,8 @@ class HumanClassify1(QDialog):
         self.update()
         QApplication.processEvents()
 
-    def setImage(self, sg, audiodata, sampleRate, incr, labels, unbufStart, unbufStop, time1, time2, guides=None, minFreq=0, maxFreq=0):
-        """ labels - simply seg[4] of the current segment.
-            Be careful not to edit it, as it is NOT a deep copy!!
+    def setImage(self, sg, audiodata, sampleRate, incr, segment, unbufStart, unbufStop, time1, time2, guides=None, minFreq=0, maxFreq=0):
+        """ Be careful not to edit it, as it is NOT a deep copy!!
             Used for extracting current species and calltype.
             During review, this updates self.label and self.ctLabel.
         """
@@ -1962,6 +1847,33 @@ class HumanClassify1(QDialog):
         self.playButton.setEnabled(len(audiodata))
         self.specControls.volIcon.setEnabled(len(audiodata))
         self.specControls.volSlider.setEnabled(len(audiodata))
+
+        if self.batmode:
+            self.menuBirdList = SupportClasses_GUI.BatSelectionMenu(
+                batList=self.batList, 
+                currentSegment=segment, 
+                parent=self, 
+                reorderShortBirdList=self.reorderShortList, 
+                unsure=False,
+                multipleBirds=self.multipleBirds
+            )
+            # self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
+            # self.menuBirdList.batListUpdated.connect(self.updateBatList)
+        else:
+            self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
+                shortBirdList=self.shortBirdList, 
+                longBirdList=self.longBirdList,
+                knownCalls=self.knownCalls, 
+                currentSegment=segment, 
+                parent=self, 
+                reorderShortBirdList=self.reorderShortList, 
+                unsure=False,
+                multipleBirds=self.multipleBirds
+            )
+            # self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
+            # self.menuBirdList.knownCallsUpdated.connect(self.updateKnownCalls)
+            # self.menuBirdList.longListUpdated.connect(self.updateLongList)
+            # self.menuBirdList.shortListUpdated.connect(self.updateShortList)
 
         # Fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -2025,6 +1937,7 @@ class HumanClassify1(QDialog):
         # DEAL WITH SPECIES NAMES
         # Extract a string of current species names
         specnames = []
+        labels = segment[4]
         for lab in labels:
             if 0<lab["certainty"]<100:
                 specnames.append(lab["species"]+'?')
@@ -2062,310 +1975,10 @@ class HumanClassify1(QDialog):
                             del self.shortBirdList[-1]
                         self.shortBirdList.insert(0, specnames[lsp_ix])
 
-        # Clear selection and update the btn names (based on short list)
-        self.birds3.clearSelection()
-        self.updateButtonList()
-        self.clearSearch()
-
-        # Select the right species tickboxes / buttons
-        for lsp in specnames:
-            if lsp != "-To Be Deleted-":
-                # Add ticks to the right checkboxes
-                if self.batmode:
-                    ind = self.batList.index(lsp)
-                    self.birdbtns[ind].setChecked(True)
-
-                    # Since there is no long list or birds3 box, we ignore those parts.
-                else:
-                    if lsp in self.shortBirdList[:29]:
-                        ind = self.shortBirdList.index(lsp)
-                        self.birdbtns[ind].setChecked(True)
-                    else:
-                        self.birdbtns[29].setChecked(True)
-                        self.birds3.setEnabled(True)
-                        self.update()
-
-                    # Mark this species in the long list box
-                    if lsp not in self.longBirdList:
-                        # Try genus>species instead of genus (species)
-                        if '(' in lsp:
-                            ind = lsp.index('(')
-                            lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
-                        # Add to long bird list then
-                        if lsp not in self.longBirdList:
-                            print("Species", lsp, "not found in long bird list, adding")
-                            self.longBirdList.append(lsp)
-                            self.birds3.addBird(lsp)
-                            self.saveBirdList = True
-
-                    # All species by now are in the long bird list
-                    if self.longBirdList is not None:
-                        ind = self.longBirdList.index(lsp)
-                        self.birds3.selectBird(ind)
-
         self.label = specnames
-
-        # Determine if we can review call types based on selected annotations
-        self.checkCallTypes()
 
         if self.autoplay:
             self.playSeg()
-
-    def clearSearch(self):
-        self.birds3.searchline.clear()
-
-    def checkCallTypes(self):
-        # Parses current annotations to determine if call type review allowed
-        # should be allowed, updates GUI accordingly
-        spWithCalltypes = [filt["species"] for filt in self.parent.FilterDicts.values()]
-        self.viewSpButton.setEnabled(False)
-        showCt = False
-        if len(self.label)>1:
-            self.viewSpButton.setToolTip("Cannot review call types when >1 species marked")
-        elif self.label[0]=="Don't Know" or self.label[0]=="-To Be Deleted-":
-            self.viewSpButton.setToolTip("No call types possible without species marked")
-        elif self.label[0] not in spWithCalltypes:
-            self.viewSpButton.setToolTip("Cannot review call types as this species has no recogniser")
-        else:
-            self.viewSpButton.setToolTip("Toggle between species/calltype views")
-            self.viewSpButton.setEnabled(True)
-            # keep UI in the same SP/CT mode as it was before
-            showCt = self.viewingct
-
-        # This part actually refreshes the buttons (even if mode is the same, names
-        # or number of cts may have changed)
-        self.refreshCtUI(showCt)
-
-    def refreshCtUI(self, showCt):
-        # Hides/shows species/calltype checkboxes
-        # and updates calltype button lists (in case sp changed)
-        # will also update self.viewingct to reflect current state
-        if not (self.viewingct or showCt):
-            # Everything was hidden and stays hidden
-            return
-        elif showCt:
-            # Show calltype, hide species boxes
-
-            # Extract all possible call types for selected species
-            possibleCts = set()
-            for filt in self.parent.FilterDicts.values():
-                if filt["species"]==self.label[0]:
-                    ctsinthisfilt = [subf["calltype"] for subf in filt["Filters"]]
-                    possibleCts.update(ctsinthisfilt)
-            possibleCts = list(possibleCts)
-
-            # Show and update call type names to match selected species
-            for cti in range(len(possibleCts)):
-                btn = self.ctbtns[cti]
-                btn.show()
-                btn.setText(possibleCts[cti])
-                # (temp disable so that we could have all buttons unchecked if no CT selected)
-                btn.setAutoExclusive(False)
-                # mark current call type:
-                if possibleCts[cti]==self.ctLabel.text():
-                    btn.setChecked(True)
-                else:
-                    btn.setChecked(False)
-                btn.setAutoExclusive(True)
-            self.ctLabel.show()
-            # Hide remaining CT buttons in case more were shown before
-            for ctbtn in self.ctbtns[len(possibleCts):]:
-                ctbtn.hide()
-                ctbtn.setChecked(False)
-            for spbtn in self.birdbtns:
-                spbtn.hide()
-            self.birds3.hide()
-            self.viewSpButton.setIcon(QIcon('img/sp-ctlarge.png'))
-        else:
-            # Show species, hide call type boxes
-            for ctbtn in self.ctbtns:
-                ctbtn.hide()
-            self.ctLabel.hide()
-            for spbtn in self.birdbtns:
-                spbtn.show()
-            if not self.batmode:
-                self.birds3.show()
-                self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
-
-        self.viewingct = showCt
-
-    def tickOtherClicked(self, checked):
-        # Just toggle the long list box
-        self.birds3.setEnabled(checked)
-        self.update()   # for Mac updating
-        self.repaint()
-
-    def tickBirdsClicked(self):
-        # Listener for when the user selects a bird tick box
-        # Update the text and store the data
-        # This makes it easy to switch out of DontKnow-only segments
-        checkedButton = None
-        dontknowButton = None
-        for button in self.birds.buttons():
-            if button.text() == "Other:":
-                # Ignore this as it has its own slot
-                continue
-            if button.text() == "Don't Know":
-                dontknowButton = button
-            # Figure out which one was changed now
-            if button.isChecked():
-                if button.text() not in self.label:
-                    # This was just ticked ON
-                    checkedButton = button
-            else:
-                if button.text() in self.label:
-                    # This was just ticked OFF
-                    checkedButton = button
-        if checkedButton is None:
-            print("Warning: unrecognised check event")
-            return
-        if checkedButton.isChecked():
-            # If label was empty, just change from DontKnow:
-            if self.label == ["Don't Know"] or self.label == ["-To Be Deleted-"]:
-                self.label = [checkedButton.text()]
-                if dontknowButton is not None:
-                    dontknowButton.setChecked(False)
-            else:
-                self.label.append(checkedButton.text())
-        else:
-            # A button was unchecked:
-            if checkedButton.text() in self.label:
-                self.label.remove(checkedButton.text())
-            # If this erased everything, revert to don't know:
-            if self.label == []:
-                self.label = ["Don't Know"]
-                if dontknowButton is not None:
-                    dontknowButton.setChecked(True)
-        # Update the long list widget selection
-        if self.longBirdList is not None:
-            self.birds3.selectBird(checkedButton.text())
-
-        self.species.setText(','.join(self.label))
-
-        # Enable/disable CT mode button
-        self.checkCallTypes()
-        self.update()   # for Mac updating
-        self.repaint()
-
-    def radioBirdsClicked(self):
-        # Listener for when the user selects a radio button
-        # Update the text and store the data
-        for button in self.birdbtns:
-            if button.isChecked():
-                if button.text() == "Other:":
-                    self.birds3.setEnabled(True)
-                else:
-                    self.birds3.setEnabled(False)
-                    self.label = [button.text()]
-                    self.species.setText(button.text())
-                    # Update the long list widget selection
-                    if self.longBirdList is not None:
-                        self.birds3.selectBird(button.text())
-
-        # Enable/disable CT mode button
-        self.checkCallTypes()
-        self.update()   # for Mac updating
-        self.repaint()
-
-    def radioCtClicked(self):
-        # Listener for when the user selects a call type
-        # Update the label and store the new CT as a property on self
-        # to be read when self...Correct is called
-        for btn in self.ctbtns:
-            if btn.isChecked():
-                print("Call type selected:", btn.text())
-                self.ctLabel.setText(btn.text())
-                break
-        self.update()   # for Mac updating
-        self.repaint()
-
-    def listBirdsClicked(self, item):
-        # Listener for clicks in the listbox of birds.
-        species = str(item.text())
-        # Move the label to the top of the short list (btns)
-        if self.parent.config['ReorderList']:
-            if self.batmode:   # (batmode currently has no long list but leaving in case it is enabled)
-                if species in self.batList:
-                    self.batList.remove(species)
-                else:
-                    del self.batList[-1]
-                self.batList.insert(0, species)
-            else:
-                if species in self.shortBirdList:
-                    self.shortBirdList.remove(species)
-                else:
-                    del self.shortBirdList[-1]
-                self.shortBirdList.insert(0, species)
-            # Update btn names based on the changed list (also clears marks)
-            self.updateButtonList()
-            # Update btn marking (to match the label BEFORE any changes, because btns got reordered)
-            if self.multipleBirds:
-                for btn in self.birdbtns:
-                    inlabel = btn.text() in self.label
-                    btn.setChecked(inlabel)
-            # Up to parent to update the file, based on this flag
-            self.saveBirdList = True
-
-        # Check for a corresponding button in the short list
-        # (this is necessary if the user is silly enough to click here when it's there as well)
-        thisSpButton = None
-        dontknowButton = None
-        for button in self.birds.buttons():
-            if button.text() == species:
-                thisSpButton = button
-            if button.text() == "Don't Know":
-                dontknowButton = button
-
-        # Save the entry
-        if self.multipleBirds:
-            # Mark this
-            if item.isSelected() and species not in self.label:
-                # If label was empty, just change from DontKnow:
-                if self.label == ["Don't Know"]:
-                    self.label = [species]
-                    if dontknowButton is not None:
-                        dontknowButton.setChecked(False)
-                else:
-                    self.label.append(species)
-                    if thisSpButton is not None:
-                        thisSpButton.setChecked(True)
-
-            # Unmark this
-            if not item.isSelected() and species in self.label:
-                self.label.remove(species)
-                if thisSpButton is not None:
-                    thisSpButton.setChecked(False)
-            # If this erased everything, revert to don't know:
-            if self.label == []:
-                self.label = ["Don't Know"]
-                if dontknowButton is not None:
-                    dontknowButton.setChecked(True)
-        else:
-            self.label = [species]
-            # For radio buttons, only "Other" will be selected at this point.
-            # If a new btn was added (due to short list reorder), select that one.
-            if thisSpButton is not None:
-                thisSpButton.setChecked(True)
-
-        self.species.setText(','.join(self.label))
-
-        # Clear search box on the right
-        self.clearSearch()
-
-        # Enable/disable CT mode button
-        self.checkCallTypes()
-        self.update()   # for Mac updating
-        self.repaint()
-
-    def birdTextEntered(self, species):
-        # Receives signal that a new bird was added
-        # so the full list needs to be changed and updated
-        # (up to the parent window to write the actual file)
-        # TODO: does not know about adding the '>' marker.
-        self.longBirdList.append(species)
-        self.saveBirdList = True
-        self.update()   # for Mac updating
-        self.repaint()
 
     def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.

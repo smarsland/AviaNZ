@@ -1595,6 +1595,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.shortBirdList = self.shortBirdList[:40]
             else:
                 self.longBirdList = None
+        
+        self.knownCalls = self.ConfigLoader.knownCalls(self.config['KnownCallsList'], self.configdir)
 
         self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
 
@@ -1606,8 +1608,8 @@ class AviaNZ_reviewAll(QMainWindow):
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
-        #self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.knownCalls, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self, reorderShortList=self.config['ReorderList'])
+        #self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self, reorderShortList=self.config['ReorderList'])
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1827,7 +1829,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # NOTE: might be good to pass copy.deepcopy(seg[4])
             # instead of seg[4], if any bugs come up due to Dialog1 changing the label
             self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
-                                               seg[4], sp.x1nobspec, sp.x2nobspec,
+                                               seg, sp.x1nobspec, sp.x2nobspec,
                                                seg[0], seg[1], guides, minFreq, maxFreq)
         else:
             # store dialog properties such as position for the next file

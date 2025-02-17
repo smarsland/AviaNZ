@@ -89,14 +89,14 @@ class Segment(list):
         self[2] = int(self[2])
         self[3] = int(self[3])
 
-        self.keys = [(lab['species'], lab['certainty']) for lab in self[4]]
+        self.keys = [lab['species'] for lab in self[4]]
         if len(self.keys)>len(set(self.keys)):
-            print("ERROR: non-unique species/certainty combo detected")
+            print("ERROR: non-unique species detected")
             return
     
-    def hasLabel(self, species, certainty):
-        """ Check if label identified by species-cert combo is present in this segment. """
-        return (species, certainty) in self.keys
+    def hasLabel(self, species):
+        """ Check if label identified by species is present in this segment. """
+        return species in self.keys
 
     def addLabel(self, species, certainty, **label):
         """ Adds a label to this segment.
@@ -113,31 +113,24 @@ class Segment(list):
         if "filter" in label and label["filter"]!="M" and "calltype" not in label:
             print("ERROR: calltype required when automated filter provided in label")
             return
-        if self.hasLabel(species, certainty):
-            print("ERROR: this species-certainty label already present")
+        if self.hasLabel(species):
+            print("ERROR: this species label already present")
             return
         label["species"] = species
         label["certainty"] = certainty
 
         self[4].append(label)
-        self.keys.append((species, certainty))
-
-    def extendLabel(self, species, certainty, calltype):
-        """ Find a label and add the calltype information to it """
-        for lab in self[4]:
-            if lab["species"]==species and lab["certainty"]==certainty:
-                lab.update({"filter": "M", "calltype":calltype})
-        print(lab)
+        self.keys.append(species)
     
     def getKeys(self):
-        return [(lab['species'], lab['certainty']) for lab in self[4]]
+        return [lab['species'] for lab in self[4]]
     
     def getKeysWithCalltypes(self):
-        return [(lab['species'], lab['certainty'], lab['calltype'] if 'calltype' in lab else None) for lab in self[4]]
+        return [(lab['species'], lab['calltype'] if 'calltype' in lab else None) for lab in self[4]]
     
-    def getCalltype(self,species,certainty): # a species can only have 1 calltype in a segment
+    def getCalltype(self,species): # a species can only have 1 calltype in a segment
         for lab in self[4]:
-            if lab["species"]==species and lab["certainty"]==certainty:
+            if lab["species"]==species:
                 if 'calltype' in lab:
                     return lab['calltype']
         return None
@@ -153,7 +146,7 @@ class Segment(list):
         for lab in reversed(self[4]):
             if lab["species"]==species:
                 print("Wiping label", lab)
-                self.removeLabel(lab["species"], lab["certainty"])
+                self.removeLabel(lab["species"])
         return deletedAll
 
     def confirmLabels(self, species=None):
@@ -172,9 +165,8 @@ class Segment(list):
                     toremove.append(lab)
                 else:
                     lab["certainty"] = 100
-                    self.keys[labix] = (lab["species"], lab["certainty"])
         for trlab in toremove:
-            self.removeLabel(trlab["species"], trlab["certainty"])
+            self.removeLabel(trlab["species"])
 
     def questionLabels(self, species=None):
         """ Lower the certainty of this segment's certain labels to 50.
@@ -196,27 +188,26 @@ class Segment(list):
                     toremove.append(lab)
                 else:
                     lab["certainty"] = 50
-                    self.keys[labix] = (lab["species"], lab["certainty"])
                 anyChanged = True
         for trlab in toremove:
-            self.removeLabel(trlab["species"], trlab["certainty"])
+            self.removeLabel(trlab["species"])
 
         return(anyChanged)
 
-    def removeLabel(self, species, certainty):
+    def removeLabel(self, species):
         """ Removes label from this segment.
             Does not delete the actual segment - that's left for the interface to take care of.
         """
         deleted = False
         for lab in self[4]:
-            if lab["species"]==species and lab["certainty"]==certainty:
+            if lab["species"]==species:
                 self[4].remove(lab)
                 try:
-                    self.keys.remove((species, certainty))
+                    self.keys.remove(species)
                 except Exception as e:
                     text = "************ WARNING ************\n"
                     text += str(e)
-                    text += "\nWhile trying to remove key "+str(species)+"-"+str(certainty) + " from "+ str(self[4])
+                    text += "\nWhile trying to remove key "+str(species)+" from "+ str(self[4])
                     text += "\nWhich had keys" + str(self.keys)
                     import SupportClasses_GUI
                     msg = SupportClasses_GUI.MessagePopup("w", "ERROR - please report", text)
@@ -228,7 +219,7 @@ class Segment(list):
                 break
 
         if not deleted:
-            print("ERROR: could not find species-certainty combo to remove:", species, certainty)
+            print("ERROR: could not find species to remove:", species)
             return
     
     def clearLabels(self):

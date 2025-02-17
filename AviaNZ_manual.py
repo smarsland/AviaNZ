@@ -926,13 +926,6 @@ class AviaNZ(QMainWindow):
 
         # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.menuBirdList = QMenu()
-        self.menuBirdAll = QMenu('See all',self.menuBirdList)
-        self.menuBirdList.installEventFilter(self)
-
-        # New line to allow multiple selections
-        self.menuBirdList.installEventFilter(self)
-        self.menuBirdAll.installEventFilter(self)
         self.fillBirdList()
 
         # Hack to get the type of an ROI
@@ -1070,180 +1063,70 @@ class AviaNZ(QMainWindow):
                     self.confirmButton.setEnabled(True)
                     break
     
-    def parse_short_list_item(self,item,unsure=False):
-        # Determine certainty
-        # Add ? marks if Ctrl menu is called
-        searchForSpecies = re.search(r' \((.*?)\)$',item)
-        if searchForSpecies is not None:
-            species = searchForSpecies.group(1)
-            genus = item.split(" ("+species+")")[0]
+    def segmentWasupdated(self,species,callname,certainty,segment):
+        if certainty==0:
+            self.prevBoxCol = self.ColourNone
+        elif certainty==50:
+            self.prevBoxCol = self.ColourPossibleDark
         else:
-            # try > format
-            itemSplit = item.split('>')
-            if len(itemSplit)==1:
-                species = None
-                genus = item
-            else:
-                species = itemSplit[1]
-                genus = itemSplit[0]
+            self.prevBoxCol = self.ColourNamed
+        #self.refreshOverviewWith(segment, delete=True)
+        self.refreshOverviewWith(segment)
         
-        if species is None:
-            mergedSpeciesName = genus
+        # Store the species in case the user wants it for the next segment
+        # TODO SRM: correct certainty and filter?
+        if callname=="Not Specified":
+            self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
         else:
-            mergedSpeciesName = genus + " (" + species + ")"
+            self.lastSpecies = [{"species": species, "certainty": certainty, "filter": "M", "calltype": callname}]
+        self.updateText()
+        self.updateColour()
+        self.segInfo.setText(segment.infoString())
+        self.segmentsToSave = True
 
-        if unsure and item != "Don't Know":
-            cert = 50
-            mergedSpeciesName = mergedSpeciesName+'?'
-        elif item == "Don't Know":
-            cert = 0
-        else:
-            cert = 100
-
-        return mergedSpeciesName, cert
+        QApplication.processEvents()
     
-    def makeBatLists(self,unsure=False):
-        # There aren't many options, but anyway...
-        if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id>-1:
-            for key in self.segments[self.box1id].keys:
-                # Either move the label to the top of the list, or delete the last
-                if key[0] in self.batList:
-                    self.batList.remove(key[0])
-                else:
-                    del self.batList[-1]
-                self.batList.insert(0,key[0])
-
-        # Create menu items and mark them
-        # (we assume that bat list is always short enough to fit in one column)
-        for item in self.batList:
-            species, cert = self.parse_short_list_item(item,unsure)
-
-            bat = self.menuBirdList.addAction(species)
-            bat.setCheckable(True)
-            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
-                bat.setChecked(True)
-            bat.triggered.connect(partial(self.batSelected, species))
-            self.menuBirdList.addAction(bat)
+    def updateKnownCalls(self,knownCalls):
+        self.knownCalls = knownCalls
     
-    def makeShortBirdLists(self,unsure=False):   
-        # reorder
-        if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id>-1:
-            for species,certainty in self.segments[self.box1id].getKeys():
-                # Either move the label to the top of the list, or delete the last
-                if species in self.shortBirdList:
-                    self.shortBirdList.remove(species)
-                else:
-                    del self.shortBirdList[-1]
-                self.shortBirdList.insert(0,species)
-        
-        # just some sorting, in case something is odd.
-        self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""] # just put the blanks at the end
-        self.shortBirdList = ["Don't Know"] + [x for x in self.shortBirdList if x != "Don't Know"][:29]
-
-        # Create menu items
-        for item in self.shortBirdList[:30]:
-            if not item=="":
-                if item=="Don't Know":
-                    action = self.menuBirdList.addAction("Don't Know")
-                    action.triggered.connect(partial(self.birdAndCallSelected, "Don't Know", "Not Specified", unsure))
-                    if hasattr(self,'segments') and self.segments[self.box1id].hasLabel("Don't Know", 0):
-                        action.setText("✓ Don't Know")
-                    self.menuBirdList.addAction(action)
-                else:
-                    species, cert = self.parse_short_list_item(item,unsure)
-                    calltypes = self.knownCalls[species] if species in self.knownCalls else []
-                    calltypes = ["Not Specified"] + calltypes + ["Add"]
-                    birdMenu = QMenu(species,self.menuBirdList)
-                    birdMenu.installEventFilter(self)
-                    anyChecked = False
-                    for calltype in calltypes:
-                        label = calltype if not unsure else calltype+'?'
-                        action = birdMenu.addAction(label)
-                        action.setCheckable(True)
-                        action.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
-                        if hasattr(self,'segments'):
-                            if calltype == "Not Specified":
-                                if self.segments[self.box1id].hasLabel(species, cert):
-                                    if self.segments[self.box1id].getCalltype(species, cert) is None:
-                                        action.setChecked(True)
-                                        anyChecked = True
-                            else:
-                                if self.segments[self.box1id].getCalltype(species, cert)==calltype:
-                                    action.setChecked(True)
-                                    anyChecked = True
-                    if anyChecked:
-                        birdMenu.setTitle("✓ "+species)
-                    self.menuBirdList.addMenu(birdMenu)
+    def updateLongList(self,longBirdList):
+        self.longBirdList = longBirdList
+        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
     
-    def makeFullBirdListByLetter(self,unsure=False):
-        allBirdTree = {}
-        if self.longBirdList is not None:
-            for longBirdEntry in self.longBirdList:
-                # Add ? marks if Ctrl menu is called
-                if '>' in longBirdEntry:
-                    speciesLevel1,speciesLevel2 = longBirdEntry.split('>')
-                else:
-                    speciesLevel1,speciesLevel2 = longBirdEntry, ""
-                
-                species = speciesLevel1 if speciesLevel2=="" else speciesLevel1 + " ("+speciesLevel2+")"
-                calls = ["Not Specified"]
-                if species in self.knownCalls:
-                    calls+=self.knownCalls[species].copy()
-                calls.append("Add")
+    def updateShortList(self,shortBirdList):
+        self.shortBirdList = shortBirdList
+    
+    def updateBatList(self,batList):
+        self.batList = batList
 
-                firstLetter = speciesLevel1[0].upper()
-
-                if not firstLetter in allBirdTree:
-                    allBirdTree[firstLetter] = {}
-                
-                if not speciesLevel1 in allBirdTree[firstLetter]:
-                    allBirdTree[firstLetter][speciesLevel1] = {}
-                
-                if speciesLevel2 == "":
-                    allBirdTree[firstLetter][speciesLevel1] = {None: calls}
-                else:
-                    if not speciesLevel2 in allBirdTree[firstLetter][speciesLevel1]:
-                        allBirdTree[firstLetter][speciesLevel1][speciesLevel2] = calls
-
-        for letter in allBirdTree:
-            letterMenu = QMenu(letter,self.menuBirdAll)
-            for speciesLevel1 in allBirdTree[letter]:
-                speciesLevel1Menu = QMenu(speciesLevel1,letterMenu)
-                if None in allBirdTree[letter][speciesLevel1]: # no species, go straight to call
-                    for call in allBirdTree[letter][speciesLevel1][None]:
-                        label = call if not unsure else call+'?'
-                        callAction = speciesLevel1Menu.addAction(label)
-                        callAction.triggered.connect(partial(self.birdAndCallSelected, speciesLevel1, call, unsure))
-                else:
-                    for speciesLevel2 in allBirdTree[letter][speciesLevel1]:
-                        species = speciesLevel1 + " (" + speciesLevel2 + ")"
-                        speciesLevel2Menu = QMenu(speciesLevel2,speciesLevel1Menu)
-                        for call in allBirdTree[letter][speciesLevel1][speciesLevel2]:
-                            label = call if not unsure else call+'?'
-                            callAction = speciesLevel2Menu.addAction(label)
-                            callAction.triggered.connect(partial(self.birdAndCallSelected, species, call, unsure))
-                        speciesLevel1Menu.addMenu(speciesLevel2Menu)
-                letterMenu.addMenu(speciesLevel1Menu)
-            self.menuBirdAll.addMenu(letterMenu)
-        new_species_action = self.menuBirdAll.addAction("Add")
-        new_species_action.triggered.connect(partial(self.birdAndCallSelected, "Add", "Not Specified", unsure))
-        
     def fillBirdList(self,unsure=False):
-        """ Sets the contents of the context menu.
-        The first 20 items are in the first menu, the next in a second menu.
-        Any extras go into the combobox at the end of the second list.
-        This is called a lot because the order of birds in the list changes since the last choice is moved to the top of the list.
-        When calltype-level display is on, fills the list with possible call types from a filter (if available)
-        """
-        self.menuBirdList.clear()
-        self.menuBirdAll.clear()
-
+        currentSegment = self.segments[self.box1id] if hasattr(self,'segments') and self.box1id>-1 else None
         if self.batmode:
-            self.makeBatLists()
+            self.menuBirdList = SupportClasses_GUI.BatSelectionMenu(
+                batList=self.batList, 
+                currentSegment=currentSegment, 
+                parent=self, 
+                reorderShortBirdList=self.config['ReorderList'], 
+                unsure=unsure,
+                multipleBirds=self.multipleBirds
+            )
+            self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
+            self.menuBirdList.batListUpdated.connect(self.updateBatList)
         else:
-            self.makeShortBirdLists(unsure)
-            self.makeFullBirdListByLetter(unsure)
-            self.menuBirdList.addMenu(self.menuBirdAll)
+            self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
+                shortBirdList=self.shortBirdList, 
+                longBirdList=self.longBirdList,
+                knownCalls=self.knownCalls, 
+                currentSegment=currentSegment, 
+                parent=self, 
+                reorderShortBirdList=self.config['ReorderList'], 
+                unsure=unsure,
+                multipleBirds=self.multipleBirds
+            )
+            self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
+            self.menuBirdList.knownCallsUpdated.connect(self.updateKnownCalls)
+            self.menuBirdList.longListUpdated.connect(self.updateLongList)
+            self.menuBirdList.shortListUpdated.connect(self.updateShortList)
 
     def fillFileList(self,dir,fileName):
         """ Generates the list of files for the file listbox.
@@ -1625,7 +1508,7 @@ class AviaNZ(QMainWindow):
                     if len(s[4])>1:
                         if not self.multipleBirds:
                             self.multipleBirds = True
-                    for species,certainty,calltype in s.getKeysWithCalltypes():
+                    for species,calltype in s.getKeysWithCalltypes():
                         if not species in self.knownCalls:
                             self.knownCalls[species]=[]
                         if not calltype is None:
@@ -3256,211 +3139,6 @@ class AviaNZ(QMainWindow):
             else:
                 # Making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
-
-    def birdAndCallSelected(self,species, callname, unsure=False):
-        """ Collects the label for a bird from the context menu and processes it.
-        Has to update the overview segments in case their colour should change.
-        Copes with two level names (with a > in).
-        Also handles getting the name through a message box if necessary.
-        """
-        if type(species) is not str:
-            species = species.text()
-        if species is None or species=='':
-            return
-                
-        # special dialog for manual name entry
-        if species == 'Add':
-            # Ask the user for the new name, and save it
-            species, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
-            if not ok:
-                return
-
-            species = str(species).title()
-            # splits "A (B)", with B optional, into groups A and B
-            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', species)
-            if not match:
-                print("ERROR: provided name %s does not match format requirements" % species)
-                return
-
-            if species.lower()=="don't know" or species.lower()=="other" or species.lower()=="(other)":
-                print("ERROR: provided name %s is reserved, cannot create" % species)
-                return
-
-            if "?" in species:
-                print("ERROR: provided name %s contains reserved symbol '?'" % species)
-                return
-
-            if len(species)==0 or len(species)>150:
-                print("ERROR: provided name appears to be too short or too long")
-                return
-
-            twolevelname = '>'.join(match.groups(default=''))
-            if species in self.longBirdList or twolevelname in self.longBirdList:
-                # bird is already listed
-                print("Warning: not adding species %s as it is already present" % species)
-                return
-
-            # update the main list:
-            nametostore = species
-            pattern = r"^(.*) \((.*)\)$"
-            match = re.match(pattern, species)
-            if match:
-                A = match.group(1)
-                B = match.group(2)
-                nametostore = A + '>' + B
-            
-            self.longBirdList.append(nametostore)
-            self.longBirdList = sorted(self.longBirdList, key=str.lower)
-            self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
-        
-        # parse species to certainty and update the toggle
-        if species=="Don't Know":
-            certainty = 0
-            self.prevBoxCol = self.ColourNone
-        elif unsure:
-            species = species[:-1]
-            certainty = 50
-            self.prevBoxCol = self.ColourPossible
-        else:
-            certainty = 100
-            self.prevBoxCol = self.ColourNamed
-        
-        # Now process the calltype
-        if callname == 'Add':
-            # Ask the user for the new name, and save it
-            callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
-            if not ok:
-                return
-
-            callname = str(callname).title()
-            # splits "A (B)", with B optional, into groups A and B
-            match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
-            if not match:
-                print("ERROR: provided name %s does not match format requirements" % callname)
-                return
-
-            if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
-                print("ERROR: provided name %s is reserved, cannot create" % callname)
-                return
-
-            if "?" in callname:
-                print("ERROR: provided name %s contains reserved symbol '?'" % callname)
-                return
-
-            if len(callname)==0 or len(callname)>150:
-                print("ERROR: provided name appears to be too short or too long")
-                return
-            
-            self.possibleCTs = set()
-            self.filters = []
-            for filt in self.FilterDicts.values():
-                if filt["species"]==species:
-                    self.possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
-                    self.filters.append(filt)
-            
-            if callname in self.possibleCTs:
-                print("Warning: not adding call type %s as it is already present" % callname)
-                return
-
-            if not species in self.knownCalls: self.knownCalls[species] = []
-            self.knownCalls[species].append(callname)
-
-        workingSeg = self.segments[self.box1id]
-        self.refreshOverviewWith(workingSeg, delete=True)
-
-        # process changes to the segment
-        if workingSeg.hasLabel(species, certainty): # we had the species
-            segCall = workingSeg.getCalltype(species,certainty)
-            if segCall is None: segCall = "Not Specified"
-            if segCall==callname:
-                workingSeg.removeLabel(species, certainty)
-            else:
-                workingSeg.removeLabel(species, certainty)
-                if callname=="Not Specified":
-                    workingSeg.addLabel(species, certainty)
-                else:
-                    workingSeg.addLabel(species, certainty, calltype=callname)
-                if ("Don't Know", 0) in workingSeg.keys:
-                    workingSeg.removeLabel("Don't Know", 0)
-        elif not species=="Don't Know": # we didn't have the species
-            if not self.multipleBirds:
-                workingSeg.removeLabel(workingSeg[4][0]["species"], workingSeg[4][0]["certainty"])
-            
-            if callname=="Not Specified":
-                workingSeg.addLabel(species, certainty)
-            else:
-                workingSeg.addLabel(species, certainty, calltype=callname)
-
-            if ("Don't Know", 0) in workingSeg.keys:
-                workingSeg.removeLabel("Don't Know", 0)
-        else:
-            workingSeg.clearLabels()
-            workingSeg.addLabel("Don't Know", 0)
-        
-        
-        for birdMenu in self.menuBirdList.findChildren(QMenu):
-            if "✓ " in birdMenu.title():
-                birdMenu.setTitle(birdMenu.title()[2:])
-            if species=="Don't Know":
-                for action in birdMenu.actions():
-                    action.setChecked(False)
-            else:
-                for species_X,certainty_X in workingSeg.keys:
-                    if birdMenu.title() == species_X or birdMenu.title()[2:] == species_X:
-                        for action in birdMenu.actions():
-                            current_calltype = workingSeg.getCalltype(species_X,certainty_X)
-                            current_calltype = "Not Specified" if current_calltype is None else current_calltype
-                            if action.text() == current_calltype:
-                                action.setChecked(True)
-                            else:
-                                action.setChecked(False)
-                        birdMenu.setTitle("✓ " + birdMenu.title())
-        
-        for action in self.menuBirdList.actions():
-            if action.text() == "Don't Know" and ("Don't Know", 0) in workingSeg.keys:
-                action.setText("✓ " + action.text())
-            if action.text() == "✓ Don't Know" and not ("Don't Know", 0) in workingSeg.keys:
-                action.setText(action.text()[2:])
-
-
-        # Put the selected bird name at the top of the list
-        if self.config['ReorderList']:
-            if self.batmode:
-                # Either move the label to the top of the list, or delete the last
-                if species in self.batList:
-                    self.batList.remove(species)
-                else:
-                    del self.batList[-1]
-                self.batList.insert(0,species)
-            else:
-                # Either move the label to the top of the list, or delete the last
-                if species in self.shortBirdList:
-                    self.shortBirdList.remove(species)
-                else:
-                    del self.shortBirdList[-1]
-                self.shortBirdList.insert(0,species)
-
-        # Refresh overview boxes after all updates:
-        self.refreshOverviewWith(workingSeg)
-
-        # Store the species in case the user wants it for the next segment
-        # TODO SRM: correct certainty and filter?
-        if callname=="Not Specified":
-            self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
-        else:
-            self.lastSpecies = [{"species": species, "certainty": certainty, "filter": "M", "calltype": callname}]
-        self.updateText()
-        self.updateColour()
-        self.segInfo.setText(workingSeg.infoString())
-        self.segmentsToSave = True
-
-        QApplication.processEvents()
-
-        if not self.multipleBirds:
-            self.menuBirdList.hide()
-    
-    def batSelected(self,species):
-        self.birdAndCallSelected(species, "Not Specified")
     
     def updateText(self, segID=None):
         """ When the user sets or changes the name in a segment, update the text label.
