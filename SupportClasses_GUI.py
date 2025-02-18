@@ -1798,6 +1798,7 @@ class MenuStayOpen(QMenu):
 class BirdSelectionMenu(QMenu):
     """ Custom menu which has the list of birds"""
     # signal
+    menuClicked = pyqtSignal(object)
     segmentUpdated = pyqtSignal(str,str,int,object)
     knownCallsUpdated = pyqtSignal(object)
     longListUpdated = pyqtSignal(object)
@@ -1817,12 +1818,9 @@ class BirdSelectionMenu(QMenu):
 
         self.installEventFilter(self)
 
-        print("currentSegment")
-        print(currentSegment)
-
         # reorder list based on the existing segment
-        if reorderShortBirdList and not currentSegment is None:
-            for species in currentSegment.getKeys():
+        if reorderShortBirdList and not self.currentSegment is None:
+            for species in self.currentSegment.getKeys():
                 if species in self.shortBirdList:
                     self.shortBirdList.remove(species)
                 else:
@@ -1832,6 +1830,7 @@ class BirdSelectionMenu(QMenu):
         # move any blanks to the end, and 'Don't Know' to the start.
         self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""]
         self.shortBirdList = ["Don't Know"] + [x for x in self.shortBirdList if x != "Don't Know"][:29]
+        self.shortListUpdated.emit(self.shortBirdList)
 
         # Create short menu items
         for item in self.shortBirdList:
@@ -1839,7 +1838,7 @@ class BirdSelectionMenu(QMenu):
                 if item=="Don't Know":
                     action = self.addAction("Don't Know")
                     action.triggered.connect(partial(self.birdAndCallSelected, "Don't Know", "Not Specified", unsure))
-                    if not currentSegment is None and currentSegment.hasLabel("Don't Know"):
+                    if not self.currentSegment is None and self.currentSegment.hasLabel("Don't Know"):
                         action.setText("\u2714 Don't Know")
                     self.addAction(action)
                 else:
@@ -1853,14 +1852,14 @@ class BirdSelectionMenu(QMenu):
                         action = birdMenu.addAction(label)
                         action.setCheckable(True)
                         action.triggered.connect(partial(self.birdAndCallSelected, species, calltype, unsure))
-                        if not currentSegment is None:
+                        if not self.currentSegment is None:
                             if calltype == "Not Specified":
-                                if currentSegment.hasLabel(species):
-                                    if currentSegment.getCalltype(species) is None:
+                                if self.currentSegment.hasLabel(species):
+                                    if self.currentSegment.getCalltype(species) is None:
                                         action.setChecked(True)
                                         anyChecked = True
                             else:
-                                if currentSegment.getCalltype(species)==calltype:
+                                if self.currentSegment.getCalltype(species)==calltype:
                                     action.setChecked(True)
                                     anyChecked = True
                     if anyChecked:
@@ -1962,6 +1961,8 @@ class BirdSelectionMenu(QMenu):
         Copes with two level names (with a > in).
         Also handles getting the name through a message box if necessary.
         """
+        self.menuClicked.emit(self.currentSegment)
+
         if type(species) is not str:
             species = species.text()
         if species is None or species=='':
@@ -2090,7 +2091,7 @@ class BirdSelectionMenu(QMenu):
         else:
             self.currentSegment.clearLabels()
             self.currentSegment.addLabel("Don't Know", 0)
-        
+        self.segmentUpdated.emit(species,callname,certainty,self.currentSegment)        
         
         for birdMenu in self.findChildren(QMenu):
             # remove current checks
@@ -2135,8 +2136,6 @@ class BirdSelectionMenu(QMenu):
         # else:
         #     if not self.position is None:
         #         QTimer.singleShot(0, lambda: self.popup(self.position))
-        
-        self.segmentUpdated.emit(species,callname,certainty,self.currentSegment)
 
     def eventFilter(self, obj, event):
         # don't hide if an action is clicked
@@ -2153,6 +2152,8 @@ class BatSelectionMenu(QMenu):
     # signal
     segmentUpdated = pyqtSignal(str,str,int,object)
     batListUpdated = pyqtSignal(object)
+    menuClicked = pyqtSignal(object)
+
     
     def __init__(self, batList, currentSegment=None, parent=None, reorderShortBirdList=True, unsure=False, multipleBirds=False):
         super(BatSelectionMenu, self).__init__(parent)
@@ -2219,6 +2220,8 @@ class BatSelectionMenu(QMenu):
     
     def batSelected(self,species, unsure=False):
         """ Collects the label for a bat from the context menu and processes it"""
+        self.menuClicked.emit(self.currentSegment)
+
         if type(species) is not str:
             species = species.text()
         if species is None or species=='':

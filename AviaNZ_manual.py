@@ -1063,14 +1063,17 @@ class AviaNZ(QMainWindow):
                     self.confirmButton.setEnabled(True)
                     break
     
-    def segmentWasupdated(self,species,callname,certainty,segment):
+    def birdMenuWasClicked(self, segment):
+        self.refreshOverviewWith(segment,delete=True)
+    
+    def birdMenuSegmentWasUpdated(self,species,callname,certainty,segment):
         if certainty==0:
             self.prevBoxCol = self.ColourNone
         elif certainty==50:
             self.prevBoxCol = self.ColourPossibleDark
         else:
             self.prevBoxCol = self.ColourNamed
-        #self.refreshOverviewWith(segment, delete=True)
+        
         self.refreshOverviewWith(segment)
         
         # Store the species in case the user wants it for the next segment
@@ -1086,47 +1089,52 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
     
-    def updateKnownCalls(self,knownCalls):
+    def birdMenuKnownCallsUpdated(self,knownCalls):
         self.knownCalls = knownCalls
     
-    def updateLongList(self,longBirdList):
+    def birdMenuLongListUpdated(self,longBirdList):
         self.longBirdList = longBirdList
         self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
     
-    def updateShortList(self,shortBirdList):
+    def birdMenuShortListUpdated(self,shortBirdList):
         self.shortBirdList = shortBirdList
     
-    def updateBatList(self,batList):
+    def birdMenuBatListUpdated(self,batList):
         self.batList = batList
 
     def fillBirdList(self,unsure=False):
         currentSegment = self.segments[self.box1id] if hasattr(self,'segments') and self.box1id>-1 else None
-        if self.batmode:
-            self.menuBirdList = SupportClasses_GUI.BatSelectionMenu(
-                batList=self.batList, 
-                currentSegment=currentSegment, 
-                parent=self, 
-                reorderShortBirdList=self.config['ReorderList'], 
-                unsure=unsure,
-                multipleBirds=self.multipleBirds
-            )
-            self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
-            self.menuBirdList.batListUpdated.connect(self.updateBatList)
+        if not currentSegment is None:
+            if self.batmode:
+                self.menuBirdList = SupportClasses_GUI.BatSelectionMenu(
+                    batList=self.batList, 
+                    currentSegment=currentSegment, 
+                    parent=self, 
+                    reorderShortBirdList=self.config['ReorderList'], 
+                    unsure=unsure,
+                    multipleBirds=self.multipleBirds
+                )
+                self.menuBirdList.menuClicked.connect(self.birdMenuWasClicked)
+                self.menuBirdList.segmentUpdated.connect(self.birdMenuSegmentWasUpdated)
+                self.menuBirdList.batListUpdated.connect(self.birdMenuBatListUpdated)
+            else:
+                self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
+                    shortBirdList=self.shortBirdList, 
+                    longBirdList=self.longBirdList,
+                    knownCalls=self.knownCalls, 
+                    currentSegment=currentSegment, 
+                    parent=self, 
+                    reorderShortBirdList=self.config['ReorderList'], 
+                    unsure=unsure,
+                    multipleBirds=self.multipleBirds
+                )
+                self.menuBirdList.menuClicked.connect(self.birdMenuWasClicked)
+                self.menuBirdList.segmentUpdated.connect(self.birdMenuSegmentWasUpdated)
+                self.menuBirdList.knownCallsUpdated.connect(self.birdMenuKnownCallsUpdated)
+                self.menuBirdList.shortListUpdated.connect(self.birdMenuShortListUpdated)
+                self.menuBirdList.longListUpdated.connect(self.birdMenuLongListUpdated)
         else:
-            self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
-                shortBirdList=self.shortBirdList, 
-                longBirdList=self.longBirdList,
-                knownCalls=self.knownCalls, 
-                currentSegment=currentSegment, 
-                parent=self, 
-                reorderShortBirdList=self.config['ReorderList'], 
-                unsure=unsure,
-                multipleBirds=self.multipleBirds
-            )
-            self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
-            self.menuBirdList.knownCallsUpdated.connect(self.updateKnownCalls)
-            self.menuBirdList.longListUpdated.connect(self.updateLongList)
-            self.menuBirdList.shortListUpdated.connect(self.updateShortList)
+            print("Error: no segments detected")
 
     def fillFileList(self,dir,fileName):
         """ Generates the list of files for the file listbox.

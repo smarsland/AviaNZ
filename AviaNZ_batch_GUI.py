@@ -1242,8 +1242,12 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # Load segments
             with pg.BusyCursor():
+                self.allsegments = Segment.SegmentList()
+                self.allsegments.parseJSON(filename+'.data')
+
                 self.segments = Segment.SegmentList()
                 self.segments.parseJSON(filename+'.data')
+
                 # Separate out segments which do not need review
                 self.goodsegments = []
                 for seg in reversed(self.segments):
@@ -1598,6 +1602,17 @@ class AviaNZ_reviewAll(QMainWindow):
         
         self.knownCalls = self.ConfigLoader.knownCalls(self.config['KnownCallsList'], self.configdir)
 
+        # update known calls, short bird list, long bird list etc
+        for segment in self.allsegments:
+            for species,calltype in segment.getKeysWithCalltypes():
+                if species not in self.knownCalls:
+                    self.knownCalls[species] = []
+                if calltype not in self.knownCalls[species] and not calltype is None:
+                    self.knownCalls[species].append(calltype)
+                if species not in self.shortBirdList:
+                    del self.shortBirdList[-1]
+                    self.shortBirdList.append(species)
+
         self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
 
         if self.species=="All species":
@@ -1830,7 +1845,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # instead of seg[4], if any bugs come up due to Dialog1 changing the label
             self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
                                                seg, sp.x1nobspec, sp.x2nobspec,
-                                               seg[0], seg[1], guides, minFreq, maxFreq)
+                                               guides, minFreq, maxFreq)
         else:
             # store dialog properties such as position for the next file
             self.dialogSize = self.humanClassifyDialog1.size()

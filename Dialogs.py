@@ -1826,8 +1826,21 @@ class HumanClassify1(QDialog):
         self.buttonPrev.setEnabled((accepted+deleted)>0)
         self.update()
         QApplication.processEvents()
+    
+    def updateKnownCalls(self,knownCalls):
+        self.knownCalls = knownCalls
+    
+    def updateLongList(self,longBirdList):
+        self.longBirdList = longBirdList
+        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+    
+    def updateShortList(self,shortBirdList):
+        self.shortBirdList = shortBirdList
+    
+    def updateBatList(self,batList):
+        self.batList = batList
 
-    def setImage(self, sg, audiodata, sampleRate, incr, segment, unbufStart, unbufStop, time1, time2, guides=None, minFreq=0, maxFreq=0):
+    def setImage(self, sg, audiodata, sampleRate, incr, segment, unbufStart, unbufStop, guides=None, minFreq=0, maxFreq=0):
         """ Be careful not to edit it, as it is NOT a deep copy!!
             Used for extracting current species and calltype.
             During review, this updates self.label and self.ctLabel.
@@ -1857,8 +1870,7 @@ class HumanClassify1(QDialog):
                 unsure=False,
                 multipleBirds=self.multipleBirds
             )
-            # self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
-            # self.menuBirdList.batListUpdated.connect(self.updateBatList)
+            self.menuBirdList.batListUpdated.connect(self.updateBatList)
         else:
             self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
                 shortBirdList=self.shortBirdList, 
@@ -1870,10 +1882,9 @@ class HumanClassify1(QDialog):
                 unsure=False,
                 multipleBirds=self.multipleBirds
             )
-            # self.menuBirdList.segmentUpdated.connect(self.segmentWasupdated)
-            # self.menuBirdList.knownCallsUpdated.connect(self.updateKnownCalls)
-            # self.menuBirdList.longListUpdated.connect(self.updateLongList)
-            # self.menuBirdList.shortListUpdated.connect(self.updateShortList)
+            self.menuBirdList.knownCallsUpdated.connect(self.updateKnownCalls)
+            self.menuBirdList.longListUpdated.connect(self.updateLongList)
+            self.menuBirdList.shortListUpdated.connect(self.updateShortList)
 
         # Fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -1917,8 +1928,8 @@ class HumanClassify1(QDialog):
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
         # Add time markers next to the lines
-        time1 = QTime(0,0,0).addSecs(int(time1)).toString('hh:mm:ss')
-        time2 = QTime(0,0,0).addSecs(int(time2)).toString('hh:mm:ss')
+        time1 = QTime(0,0,0).addSecs(int(segment[0])).toString('hh:mm:ss')
+        time2 = QTime(0,0,0).addSecs(int(segment[1])).toString('hh:mm:ss')
         self.segTimeText1.setText(time1)
         self.segTimeText2.setText(time2)
         self.segTimeText1.setPos(startV, SgSize)
