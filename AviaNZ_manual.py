@@ -1063,76 +1063,203 @@ class AviaNZ(QMainWindow):
                     self.confirmButton.setEnabled(True)
                     break
     
-    def birdMenuWasClicked(self, segment):
-        self.refreshOverviewWith(segment,delete=True)
+    def reorderShortBirdList(self, segment):
+        # reorder list based on the existing segment
+        if self.config['ReorderList'] and not segment is None:
+            for species in segment.getKeys():
+                if species in self.shortBirdList:
+                    self.shortBirdList.remove(species)
+                else:
+                    del self.shortBirdList[-1]
+                self.shortBirdList.insert(0,species)
+                        
+        # move any blanks to the end, and 'Don't Know' to the start.
+        self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""]
+        self.shortBirdList = ["Don't Know"] + [x for x in self.shortBirdList if x != "Don't Know"][:29]
     
-    def birdMenuSegmentWasUpdated(self,species,callname,certainty,segment):
-        if certainty==0:
+    def batLabelsUpdated(self,new_labels,species_changed,new_certainty):
+        currentSegment = self.segments[self.box1id]
+        self.refreshOverviewWith(currentSegment, delete=True)
+
+        currentSegment[4] = copy.deepcopy(new_labels)        
+        if new_certainty==0:
             self.prevBoxCol = self.ColourNone
-        elif certainty==50:
+        elif new_certainty==50:
             self.prevBoxCol = self.ColourPossibleDark
         else:
             self.prevBoxCol = self.ColourNamed
         
-        self.refreshOverviewWith(segment)
+        self.refreshOverviewWith(currentSegment)
         
-        # Store the species in case the user wants it for the next segment
-        # TODO SRM: correct certainty and filter?
-        if callname=="Not Specified":
-            self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
-        else:
-            self.lastSpecies = [{"species": species, "certainty": certainty, "filter": "M", "calltype": callname}]
+        # Put the selected bird name at the top of the list.
+        if self.config['ReorderList']:
+            if species_changed in self.batList:
+                self.batList.remove(species_changed)
+            else:
+                del self.batList[-1]
+            self.batList.insert(0,species_changed)
+
         self.updateText()
         self.updateColour()
-        self.segInfo.setText(segment.infoString())
+        self.segInfo.setText(currentSegment.infoString())
         self.segmentsToSave = True
-
         QApplication.processEvents()
     
-    def birdMenuKnownCallsUpdated(self,knownCalls):
-        self.knownCalls = knownCalls
+    def birdLabelsUpdated(self,new_labels,species_changed,callname_changed,new_certainty):
+        currentSegment = self.segments[self.box1id]
+        print("new_labels",new_labels)
+        print("segs",currentSegment[4])
+        self.refreshOverviewWith(currentSegment, delete=True)
+
+        currentSegment[4] = copy.deepcopy(new_labels)
+        if new_certainty==0:
+            self.prevBoxCol = self.ColourNone
+        elif new_certainty==50:
+            self.prevBoxCol = self.ColourPossibleDark
+        else:
+            self.prevBoxCol = self.ColourNamed
+        
+        self.refreshOverviewWith(currentSegment)
+        
+        # Put the selected bird name at the top of the list.
+        if self.config['ReorderList']:
+            if species_changed in self.shortBirdList:
+                self.shortBirdList.remove(species_changed)
+            else:
+                del self.shortBirdList[-1]
+            self.shortBirdList.insert(0,species_changed)
+
+        # Store the species in case the user wants it for the next segment
+        # TODO SRM: correct certainty and filter?
+        if callname_changed=="Not Specified":
+            self.lastSpecies = [{"species": species_changed, "certainty": 100, "filter": "M"}]
+        else:
+            self.lastSpecies = [{"species": species_changed, "certainty": new_certainty, "filter": "M", "calltype": callname_changed}]
+        self.updateText()
+        self.updateColour()
+        self.segInfo.setText(currentSegment.infoString())
+        self.segmentsToSave = True
+        QApplication.processEvents()
+
+    def addBirdSpecies(self,certainty):
+        # Ask the user for the new name, and save it
+        species, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
+        if not ok:
+            return
+
+        species = str(species).title()
+        # splits "A (B)", with B optional, into groups A and B
+        match = re.fullmatch(r'(.*?)(?: \((.*)\))?', species)
+        if not match:
+            print("ERROR: provided name %s does not match format requirements" % species)
+            return
+
+        if species.lower()=="don't know" or species.lower()=="other" or species.lower()=="(other)":
+            print("ERROR: provided name %s is reserved, cannot create" % species)
+            return
+
+        if "?" in species:
+            print("ERROR: provided name %s contains reserved symbol '?'" % species)
+            return
+
+        if len(species)==0 or len(species)>150:
+            print("ERROR: provided name appears to be too short or too long")
+            return
+
+        twolevelname = '>'.join(match.groups(default=''))
+        if species in self.longBirdList or twolevelname in self.longBirdList:
+            # bird is already listed
+            print("Warning: not adding species %s as it is already present" % species)
+            return
+
+        # update the main list:
+        nametostore = species
+        pattern = r"^(.*) \((.*)\)$"
+        match = re.match(pattern, species)
+        if match:
+            A = match.group(1)
+            B = match.group(2)
+            nametostore = A + '>' + B
+        
+        self.longBirdList.append(nametostore)
+        self.longBirdList = sorted(self.longBirdList, key=str.lower)
+        self.knownCalls[species] = []
+
+        labels = copy.deepcopy(self.segments[self.box1id][4])
+        labels.append({"species": species, "certainty": certainty})
+        if "Don't Know" in [x["species"] for x in labels]:
+            labels = [x for x in labels if x["species"]!="Don't Know"]
+        self.birdLabelsUpdated(labels,species,None,certainty)
     
-    def birdMenuLongListUpdated(self,longBirdList):
-        self.longBirdList = longBirdList
-        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
-    
-    def birdMenuShortListUpdated(self,shortBirdList):
-        self.shortBirdList = shortBirdList
-    
-    def birdMenuBatListUpdated(self,batList):
-        self.batList = batList
+    def addBirdCallname(self,species,certainty):
+        # Ask the user for the new name, and save it
+        callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
+        if not ok:
+            return
+
+        callname = str(callname).title()
+        # splits "A (B)", with B optional, into groups A and B
+        match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
+        if not match:
+            print("ERROR: provided name %s does not match format requirements" % callname)
+            return
+
+        if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
+            print("ERROR: provided name %s is reserved, cannot create" % callname)
+            return
+
+        if "?" in callname:
+            print("ERROR: provided name %s contains reserved symbol '?'" % callname)
+            return
+
+        if len(callname)==0 or len(callname)>150:
+            print("ERROR: provided name appears to be too short or too long")
+            return
+        
+        if not species in self.knownCalls: self.knownCalls[species] = []
+
+        if species in self.knownCalls:
+            if callname in self.knownCalls[species]:
+                print("Warning: not adding call type %s as it is already present" % callname)
+                return
+
+        self.knownCalls[species].append(callname)
+
+        labels = copy.deepcopy(self.segments[self.box1id][4])
+        if species in [x["species"] for x in labels]:
+            labels = [x for x in labels if x["species"]!=species]
+        labels.append({"species": species, "certainty": certainty, "calltype": callname})
+        if "Don't Know" in [x["species"] for x in labels]:
+            labels = [x for x in labels if x["species"]!="Don't Know"]
+        self.birdLabelsUpdated(labels,species,None,certainty)
 
     def fillBirdList(self,unsure=False):
         currentSegment = self.segments[self.box1id] if hasattr(self,'segments') and self.box1id>-1 else None
         if not currentSegment is None:
+            self.reorderShortBirdList(currentSegment)
+            currentLabels = copy.deepcopy(currentSegment[4])
             if self.batmode:
-                self.menuBirdList = SupportClasses_GUI.BatSelectionMenu(
+                self.menuSpeciesSelection = SupportClasses_GUI.BatSelectionMenu(
                     batList=self.batList, 
-                    currentSegment=currentSegment, 
+                    currentLabels=currentLabels, 
                     parent=self, 
-                    reorderShortBirdList=self.config['ReorderList'], 
                     unsure=unsure,
                     multipleBirds=self.multipleBirds
                 )
-                self.menuBirdList.menuClicked.connect(self.birdMenuWasClicked)
-                self.menuBirdList.segmentUpdated.connect(self.birdMenuSegmentWasUpdated)
-                self.menuBirdList.batListUpdated.connect(self.birdMenuBatListUpdated)
+                self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
             else:
-                self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
+                self.menuSpeciesSelection = SupportClasses_GUI.BirdSelectionMenu(
                     shortBirdList=self.shortBirdList, 
                     longBirdList=self.longBirdList,
                     knownCalls=self.knownCalls, 
-                    currentSegment=currentSegment, 
+                    currentLabels=currentLabels, 
                     parent=self, 
-                    reorderShortBirdList=self.config['ReorderList'], 
                     unsure=unsure,
                     multipleBirds=self.multipleBirds
                 )
-                self.menuBirdList.menuClicked.connect(self.birdMenuWasClicked)
-                self.menuBirdList.segmentUpdated.connect(self.birdMenuSegmentWasUpdated)
-                self.menuBirdList.knownCallsUpdated.connect(self.birdMenuKnownCallsUpdated)
-                self.menuBirdList.shortListUpdated.connect(self.birdMenuShortListUpdated)
-                self.menuBirdList.longListUpdated.connect(self.birdMenuLongListUpdated)
+                self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
+                self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
+                self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
         else:
             print("Error: no segments detected")
 
@@ -1189,8 +1316,7 @@ class AviaNZ(QMainWindow):
         self.prevBoxCol = self.config['ColourNone']
         self.bar.setValue(0)
 
-        if self.multipleBirds:
-            self.multipleBirds = self.config['MultipleSpecies']
+        self.multipleBirds = self.config['MultipleSpecies']
 
         # reset buttons which require segment selection
         self.refreshSegmentControls()
@@ -2825,19 +2951,19 @@ class AviaNZ(QMainWindow):
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList(unsure=True)
-                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 elif modifiers == Qt.KeyboardModifier.MetaModifier:
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                     # Calltype context menu
                     self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 self.p_ampl.setFocus()
 
                 # The new segment is now selected and can be played
@@ -2917,10 +3043,10 @@ class AviaNZ(QMainWindow):
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                                 # Calltype context menu
                                 self.fillBirdList()
-                                self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                                self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
-                            self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                            self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
 
     def mouseClicked_spec(self,evt):
         """ Listener for if the user clicks on the spectrogram plot.
@@ -3011,19 +3137,19 @@ class AviaNZ(QMainWindow):
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList(unsure=True)
-                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 elif modifiers == Qt.KeyboardModifier.MetaModifier:
                     # TODO: SRM: Check
                     # TODO: Check fillBirdList and toggleViewSp and whether they compete
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                     # Calltype context menu
                     self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 self.p_spec.setFocus()
 
                 # Select the new segment/box
@@ -3111,10 +3237,10 @@ class AviaNZ(QMainWindow):
                                 # TODO: Check fillBirdList and toggleViewSp and whether they compete
                                 self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                                 self.fillBirdList()
-                                self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                                self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
-                                self.menuBirdList.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
+                                self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
 
     def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
