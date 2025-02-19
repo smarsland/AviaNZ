@@ -43,6 +43,8 @@ import openpyxl
 import json
 from scipy.stats import boxcox
 
+import copy
+
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
@@ -1758,7 +1760,7 @@ class HumanClassify1(QDialog):
     
     def showBirdMenu(self):
         button_pos = self.menuBirdButton.mapToGlobal(self.menuBirdButton.rect().topLeft())
-        self.menuBirdList.popup(button_pos)
+        self.menuSpeciesSelection.popup(button_pos)
 
     def playSeg(self):
         if self.media_obj.isPlayingorPaused():
@@ -1827,18 +1829,133 @@ class HumanClassify1(QDialog):
         self.update()
         QApplication.processEvents()
     
-    def updateKnownCalls(self,knownCalls):
-        self.knownCalls = knownCalls
+    def reorderShortBirdList(self, segment):
+        # reorder list based on the existing segment
+        if self.reorderShortList and not segment is None:
+            for species in segment.getKeys():
+                if species in self.shortBirdList:
+                    self.shortBirdList.remove(species)
+                else:
+                    del self.shortBirdList[-1]
+                self.shortBirdList.insert(0,species)
+                        
+        # move any blanks to the end, and 'Don't Know' to the start.
+        self.shortBirdList = [x for x in self.shortBirdList if x != ""] + [x for x in self.shortBirdList if x == ""]
+        self.shortBirdList = ["Don't Know"] + [x for x in self.shortBirdList if x != "Don't Know"][:29]
     
-    def updateLongList(self,longBirdList):
-        self.longBirdList = longBirdList
-        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+    def batLabelsUpdated(self,new_labels,species_changed,new_certainty):
+        self.currentSegment[4] = new_labels        
+                
+        # Put the selected bird name at the top of the list.
+        if self.reorderShortList:
+            if species_changed in self.batList:
+                self.batList.remove(species_changed)
+            else:
+                del self.batList[-1]
+            self.batList.insert(0,species_changed)
     
-    def updateShortList(self,shortBirdList):
-        self.shortBirdList = shortBirdList
+    def birdLabelsUpdated(self,new_labels,species_changed,callname_changed,new_certainty):
+        self.currentSegment[4] = new_labels
+        
+        # Put the selected bird name at the top of the list.
+        if self.reorderShortList:
+            if species_changed in self.shortBirdList:
+                self.shortBirdList.remove(species_changed)
+            else:
+                del self.shortBirdList[-1]
+            self.shortBirdList.insert(0,species_changed)
+
+    def addBirdSpecies(self,certainty):
+        # Ask the user for the new name, and save it
+        species, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
+        if not ok:
+            return
+
+        species = str(species).title()
+        # splits "A (B)", with B optional, into groups A and B
+        match = re.fullmatch(r'(.*?)(?: \((.*)\))?', species)
+        if not match:
+            print("ERROR: provided name %s does not match format requirements" % species)
+            return
+
+        if species.lower()=="don't know" or species.lower()=="other" or species.lower()=="(other)":
+            print("ERROR: provided name %s is reserved, cannot create" % species)
+            return
+
+        if "?" in species:
+            print("ERROR: provided name %s contains reserved symbol '?'" % species)
+            return
+
+        if len(species)==0 or len(species)>150:
+            print("ERROR: provided name appears to be too short or too long")
+            return
+
+        twolevelname = '>'.join(match.groups(default=''))
+        if species in self.longBirdList or twolevelname in self.longBirdList:
+            # bird is already listed
+            print("Warning: not adding species %s as it is already present" % species)
+            return
+
+        # update the main list:
+        nametostore = species
+        pattern = r"^(.*) \((.*)\)$"
+        match = re.match(pattern, species)
+        if match:
+            A = match.group(1)
+            B = match.group(2)
+            nametostore = A + '>' + B
+        
+        self.longBirdList.append(nametostore)
+        self.longBirdList = sorted(self.longBirdList, key=str.lower)
+        self.knownCalls[species] = []
+
+        labels = copy.deepcopy(self.segments[self.box1id][4])
+        labels.append({"species": species, "certainty": certainty})
+        if "Don't Know" in [x["species"] for x in labels]:
+            labels = [x for x in labels if x["species"]!="Don't Know"]
+        self.birdLabelsUpdated(labels,species,None,certainty)
     
-    def updateBatList(self,batList):
-        self.batList = batList
+    def addBirdCallname(self,species,certainty):
+        # Ask the user for the new name, and save it
+        callname, ok = QInputDialog.getText(self, 'Call type', 'Enter a label for this call type ')
+        if not ok:
+            return
+
+        callname = str(callname).title()
+        # splits "A (B)", with B optional, into groups A and B
+        match = re.fullmatch(r'(.*?)(?: \((.*)\))?', callname)
+        if not match:
+            print("ERROR: provided name %s does not match format requirements" % callname)
+            return
+
+        if callname.lower()=="don't know" or callname.lower()=="other" or callname.lower()=="(other)":
+            print("ERROR: provided name %s is reserved, cannot create" % callname)
+            return
+
+        if "?" in callname:
+            print("ERROR: provided name %s contains reserved symbol '?'" % callname)
+            return
+
+        if len(callname)==0 or len(callname)>150:
+            print("ERROR: provided name appears to be too short or too long")
+            return
+        
+        if not species in self.knownCalls: self.knownCalls[species] = []
+
+        if species in self.knownCalls:
+            if callname in self.knownCalls[species]:
+                print("Warning: not adding call type %s as it is already present" % callname)
+                return
+
+        self.knownCalls[species].append(callname)
+
+        labels = copy.deepcopy(self.segments[self.box1id][4])
+        if species in [x["species"] for x in labels]:
+            labels = [x for x in labels if x["species"]!=species]
+        labels.append({"species": species, "certainty": certainty, "calltype": callname})
+        if "Don't Know" in [x["species"] for x in labels]:
+            labels = [x for x in labels if x["species"]!="Don't Know"]
+        self.birdLabelsUpdated(labels,species,None,certainty)
 
     def setImage(self, sg, audiodata, sampleRate, incr, segment, unbufStart, unbufStop, guides=None, minFreq=0, maxFreq=0):
         """ Be careful not to edit it, as it is NOT a deep copy!!
@@ -1852,6 +1969,7 @@ class HumanClassify1(QDialog):
         self.sampleRate = sampleRate
         self.incr = incr
         self.bar.setValue(0)
+        self.currentSegment = segment
         if maxFreq==0:
             maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000  # in ms
@@ -1861,31 +1979,31 @@ class HumanClassify1(QDialog):
         self.specControls.volIcon.setEnabled(len(audiodata))
         self.specControls.volSlider.setEnabled(len(audiodata))
 
+        self.reorderShortBirdList(segment)
+        currentLabels = segment[4]
         if self.batmode:
-            self.menuBirdList = SupportClasses_GUI.BatSelectionMenu(
+            self.menuSpeciesSelection = SupportClasses_GUI.BatSelectionMenu(
                 batList=self.batList, 
-                currentSegment=segment, 
+                currentLabels=currentLabels, 
                 parent=self, 
-                reorderShortBirdList=self.reorderShortList, 
                 unsure=False,
                 multipleBirds=self.multipleBirds
             )
-            self.menuBirdList.batListUpdated.connect(self.updateBatList)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
         else:
-            self.menuBirdList = SupportClasses_GUI.BirdSelectionMenu(
+            self.menuSpeciesSelection = SupportClasses_GUI.BirdSelectionMenu(
                 shortBirdList=self.shortBirdList, 
                 longBirdList=self.longBirdList,
                 knownCalls=self.knownCalls, 
-                currentSegment=segment, 
+                currentLabels=currentLabels, 
                 parent=self, 
-                reorderShortBirdList=self.reorderShortList, 
                 unsure=False,
                 multipleBirds=self.multipleBirds
             )
-            self.menuBirdList.knownCallsUpdated.connect(self.updateKnownCalls)
-            self.menuBirdList.longListUpdated.connect(self.updateLongList)
-            self.menuBirdList.shortListUpdated.connect(self.updateShortList)
-
+            self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
+            self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
+        
         # Fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
         # sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
@@ -1972,7 +2090,7 @@ class HumanClassify1(QDialog):
                 if specnames[lsp_ix].endswith('?'):
                     specnames[lsp_ix] = specnames[lsp_ix][:-1]
                 # move the label to the top of the list
-                if self.parent.config['ReorderList']:
+                if self.reorderShortList:
                     if self.batmode:
                         if specnames[lsp_ix] in self.batList:
                             self.batList.remove(specnames[lsp_ix])

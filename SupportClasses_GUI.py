@@ -49,6 +49,8 @@ import soundfile as sf
 import threading
 import re
 
+import copy
+
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as hh:mm:ss, and can add an offset
@@ -1804,7 +1806,7 @@ class BirdSelectionMenu(QMenu):
 
     def __init__(self, shortBirdList, longBirdList, knownCalls, currentLabels, parent=None, unsure=False, multipleBirds=False):
         super(BirdSelectionMenu, self).__init__(parent)
-        self.currentLabels = currentLabels
+        self.currentLabels = copy.deepcopy(currentLabels)
         self.parent = parent
         self.unsure = unsure
         self.multipleBirds = multipleBirds
@@ -2008,7 +2010,7 @@ class BirdSelectionMenu(QMenu):
                     self.currentLabels.pop(currentSpecies.index("Don't Know"))
                     currentSpecies.pop(currentSpecies.index("Don't Know"))                
         
-        self.labelsUpdated.emit(self.currentLabels,species,callname,certainty)
+        self.labelsUpdated.emit(copy.deepcopy(self.currentLabels),species,callname,certainty)
 
     def updateMenu(self,species):
         for birdMenu in self.findChildren(QMenu):
@@ -2057,7 +2059,7 @@ class BatSelectionMenu(QMenu):
 
     def __init__(self, batList, currentLabels, parent=None, unsure=False, multipleBirds=False):
         super(BatSelectionMenu, self).__init__(parent)
-        self.currentLabels = currentLabels
+        self.currentLabels = copy.deepcopy(currentLabels)
         self.parent = parent
         self.unsure = unsure
         self.multipleBirds = multipleBirds
@@ -2157,7 +2159,7 @@ class BatSelectionMenu(QMenu):
                     self.currentLabels.pop(currentSpecies.index("Don't Know"))
                     currentSpecies.pop(currentSpecies.index("Don't Know"))                
         
-        self.labelsUpdated.emit(self.currentLabels,species,certainty)
+        self.labelsUpdated.emit(copy.deepcopy(self.currentLabels),species,certainty)
 
     def updateMenu(self,species):
         for action in self.actions():

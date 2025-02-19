@@ -1081,7 +1081,7 @@ class AviaNZ(QMainWindow):
         currentSegment = self.segments[self.box1id]
         self.refreshOverviewWith(currentSegment, delete=True)
 
-        currentSegment[4] = copy.deepcopy(new_labels)        
+        currentSegment[4] = new_labels        
         if new_certainty==0:
             self.prevBoxCol = self.ColourNone
         elif new_certainty==50:
@@ -1111,7 +1111,7 @@ class AviaNZ(QMainWindow):
         print("segs",currentSegment[4])
         self.refreshOverviewWith(currentSegment, delete=True)
 
-        currentSegment[4] = copy.deepcopy(new_labels)
+        currentSegment[4] = new_labels
         if new_certainty==0:
             self.prevBoxCol = self.ColourNone
         elif new_certainty==50:
@@ -1237,7 +1237,7 @@ class AviaNZ(QMainWindow):
         currentSegment = self.segments[self.box1id] if hasattr(self,'segments') and self.box1id>-1 else None
         if not currentSegment is None:
             self.reorderShortBirdList(currentSegment)
-            currentLabels = copy.deepcopy(currentSegment[4])
+            currentLabels = currentSegment[4]
             if self.batmode:
                 self.menuSpeciesSelection = SupportClasses_GUI.BatSelectionMenu(
                     batList=self.batList, 
