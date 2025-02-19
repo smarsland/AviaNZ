@@ -45,6 +45,8 @@ from scipy.stats import boxcox
 
 import copy
 
+import re
+
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
@@ -1579,6 +1581,7 @@ class HumanClassify1(QDialog):
         self.saveBirdList = False
         self.viewingct = False
         self.reorderShortList = reorderShortList
+        self.needToSaveConfig = False
         # exec_ forces the cursor into waiting
 
         # Set up the plot window, then the right and wrong buttons, and a close button
@@ -1760,6 +1763,7 @@ class HumanClassify1(QDialog):
     
     def showBirdMenu(self):
         button_pos = self.menuBirdButton.mapToGlobal(self.menuBirdButton.rect().topLeft())
+        self.updateSelectionMenu()
         self.menuSpeciesSelection.popup(button_pos)
 
     def playSeg(self):
@@ -1909,11 +1913,12 @@ class HumanClassify1(QDialog):
         self.longBirdList = sorted(self.longBirdList, key=str.lower)
         self.knownCalls[species] = []
 
-        labels = copy.deepcopy(self.segments[self.box1id][4])
+        labels = copy.deepcopy(self.currentSegment[4])
         labels.append({"species": species, "certainty": certainty})
         if "Don't Know" in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!="Don't Know"]
         self.birdLabelsUpdated(labels,species,None,certainty)
+        self.needToSaveConfig = True
     
     def addBirdCallname(self,species,certainty):
         # Ask the user for the new name, and save it
@@ -1949,13 +1954,14 @@ class HumanClassify1(QDialog):
 
         self.knownCalls[species].append(callname)
 
-        labels = copy.deepcopy(self.segments[self.box1id][4])
+        labels = copy.deepcopy(self.currentSegment[4])
         if species in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!=species]
         labels.append({"species": species, "certainty": certainty, "calltype": callname})
         if "Don't Know" in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!="Don't Know"]
         self.birdLabelsUpdated(labels,species,None,certainty)
+        self.needToSaveConfig = True
 
     def setImage(self, sg, audiodata, sampleRate, incr, segment, unbufStart, unbufStop, guides=None, minFreq=0, maxFreq=0):
         """ Be careful not to edit it, as it is NOT a deep copy!!
@@ -1973,36 +1979,14 @@ class HumanClassify1(QDialog):
         if maxFreq==0:
             maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000  # in ms
+        self.segment = segment
 
         # Update UI if no audio (e.g. batmode)
         self.playButton.setEnabled(len(audiodata))
         self.specControls.volIcon.setEnabled(len(audiodata))
         self.specControls.volSlider.setEnabled(len(audiodata))
 
-        self.reorderShortBirdList(segment)
-        currentLabels = segment[4]
-        if self.batmode:
-            self.menuSpeciesSelection = SupportClasses_GUI.BatSelectionMenu(
-                batList=self.batList, 
-                currentLabels=currentLabels, 
-                parent=self, 
-                unsure=False,
-                multipleBirds=self.multipleBirds
-            )
-            self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
-        else:
-            self.menuSpeciesSelection = SupportClasses_GUI.BirdSelectionMenu(
-                shortBirdList=self.shortBirdList, 
-                longBirdList=self.longBirdList,
-                knownCalls=self.knownCalls, 
-                currentLabels=currentLabels, 
-                parent=self, 
-                unsure=False,
-                multipleBirds=self.multipleBirds
-            )
-            self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
-            self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
-            self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
+        self.updateSelectionMenu()
         
         # Fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -2104,10 +2088,34 @@ class HumanClassify1(QDialog):
                             del self.shortBirdList[-1]
                         self.shortBirdList.insert(0, specnames[lsp_ix])
 
-        self.label = specnames
-
         if self.autoplay:
             self.playSeg()
+    
+    def updateSelectionMenu(self):
+        self.reorderShortBirdList(self.segment)
+        currentLabels = self.segment[4]
+        if self.batmode:
+            self.menuSpeciesSelection = SupportClasses_GUI.BatSelectionMenu(
+                batList=self.batList, 
+                currentLabels=currentLabels, 
+                parent=self, 
+                unsure=False,
+                multipleBirds=self.multipleBirds
+            )
+            self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
+        else:
+            self.menuSpeciesSelection = SupportClasses_GUI.BirdSelectionMenu(
+                shortBirdList=self.shortBirdList, 
+                longBirdList=self.longBirdList,
+                knownCalls=self.knownCalls, 
+                currentLabels=currentLabels, 
+                parent=self, 
+                unsure=False,
+                multipleBirds=self.multipleBirds
+            )
+            self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
+            self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
 
     def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
@@ -2124,12 +2132,9 @@ class HumanClassify1(QDialog):
 
         colRange = colourMaps.getColourRange(self.sgMinimum, self.sgMaximum, brightness, contrast, self.cmapInverted)
         self.plot.setLevels(colRange)
-
-    def getValues(self):
-        # Note: we are reading off the calltypes from the label
-        # and not from radio buttons, because when no ct is present,
-        # radio buttons cannot be all disabled.
-        return [self.label, self.saveBirdList, self.ctLabel.text()]
+    
+    def checkIfNeedToSaveConfig(self):
+        return self.needToSaveConfig
 
 
 class HumanClassify2(QDialog):

@@ -1870,66 +1870,21 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Go to next image, keeping this one as it was found
             (so any changes made to it will be discarded, and cert kept) """
         self.humanClassifyDialog1.stopPlayback()
-        currSeg = self.segments[self.indices2show[self.box1id]]
 
-        label, saveConfig, calltype = self.humanClassifyDialog1.getValues()
+        saveConfig = self.humanClassifyDialog1.checkIfNeedToSaveConfig()
 
-        # update the stored bird list if any new birds were added
-        # (such changes will set saveConfig to True).
         if saveConfig:
             self.longBirdList = self.humanClassifyDialog1.longBirdList
             self.longBirdList = sorted(self.longBirdList, key=str.lower)
-            self.longBirdList.remove('Unidentifiable')
-            self.longBirdList.append('Unidentifiable')
+            self.shortBirdList = self.humanClassifyDialog1.shortBirdList
+            self.knownCalls = self.humanClassifyDialog1.knownCalls
             self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
             self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
-
-        # update the actual segment.
-        deleting=False
-        if label != [lab["species"] for lab in currSeg[4]]:
-            # if any species names were changed,
-            # Then, just recreate the label with certainty 50 for all currently selected species:
-            # (not very neat but safer)
-            newlabel = []
-            for species in label:
-                if species == "Don't Know":
-                    newlabel.append({"species": "Don't Know", "certainty": 0})
-                elif species == "-To Be Deleted-":
-                    newlabel.append({"species": "-To Be Deleted-", "certainty": 50})
-                    deleting = True
-                else:
-                    newlabel.append({"species": species, "certainty": 50})
-            # Note: currently only parsing the call type for the first species
-            if calltype!="":
-                newlabel[0]["calltype"] = calltype
-
-            self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
-            #self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
-        elif max([lab["certainty"] for lab in currSeg[4]])==100:
-            # if there are any "green" labels, but all species remained the same,
-            # need to drop certainty on those:
-            currSeg.questionLabels()
-            if self.returned:
-                lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
-                    deleting=True
-        else:
-            # no sp or cert change needed
-            if self.returned:
-                lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
-                    deleting=True
-
-        if deleting:
-            self.segsDeleted+=1
-        else:
-            self.segsAccepted+=1
-        # incorporate selected call type:
-        if calltype!="":
-            # (this will also check if it changed, and store corrections if needed.
-            # If the species changed, the calltype is already updated, so this will do nothing)
-            self.updateCallType(self.indices2show[self.box1id], calltype)
-            #self.updateCallType(self.box1id, calltype)
+            self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
+        
+        currSeg = self.segments[self.indices2show[self.box1id]]
+        # set uncertainty
+        currSeg.questionLabels()
 
         self.returned = False
         self.humanClassifyNextImage1()
@@ -1967,63 +1922,21 @@ class AviaNZ_reviewAll(QMainWindow):
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         self.humanClassifyDialog1.stopPlayback()
-        currSeg = self.segments[self.indices2show[self.box1id]]
 
-        label, saveConfig, calltype = self.humanClassifyDialog1.getValues()
+        saveConfig = self.humanClassifyDialog1.checkIfNeedToSaveConfig()
 
-        # update the stored bird list if any new birds were added
-        # (such changes will set saveConfig to True).
         if saveConfig:
             self.longBirdList = self.humanClassifyDialog1.longBirdList
             self.longBirdList = sorted(self.longBirdList, key=str.lower)
-            self.longBirdList.remove('Unidentifiable')
-            self.longBirdList.append('Unidentifiable')
+            self.shortBirdList = self.humanClassifyDialog1.shortBirdList
+            self.knownCalls = self.humanClassifyDialog1.knownCalls
             self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
             self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
-
-        # update the actual segment.
-        deleting = False
-        if label != [lab["species"] for lab in currSeg[4]]:
-            # Create new segment label, assigning certainty 100 for each species:
-            newlabel = []
-            for species in label:
-                if species == "Don't Know":
-                    newlabel.append({"species": "Don't Know", "certainty": 0})
-                elif species == "-To Be Deleted-":
-                    newlabel.append({"species": "-To Be Deleted-", "certainty": 100})
-                    deleting=True
-                else:
-                    newlabel.append({"species": species, "certainty": 100})
-            # Note: currently only parsing the call type for the first species
-            if calltype!="":
-                newlabel[0]["calltype"] = calltype
-
-            self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
-            #self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
-
-        elif 0 < min([lab["certainty"] for lab in currSeg[4]]) < 100:
-            # If all species remained the same, just raise certainty to 100
-            currSeg.confirmLabels()
-            if self.returned:
-                lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
-                    deleting=True
-        else:
-            # segment info matches, so don't do anything
-            if self.returned:
-                lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
-                    deleting=True
-
-        if deleting:
-            self.segsDeleted+=1
-        else:
-            self.segsAccepted+=1
-        # incorporate selected call type:
-        if calltype!="":
-            # (this will also check if it changed, and store corrections if needed.
-            # If the species changed, the calltype is already updated, so this will do nothing)
-            self.updateCallType(self.indices2show[self.box1id], calltype)
+            self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
+        
+        currSeg = self.segments[self.indices2show[self.box1id]]
+        # set certainty on all labels to 100
+        currSeg.confirmLabels()
 
         self.returned = False
         self.humanClassifyNextImage1()
