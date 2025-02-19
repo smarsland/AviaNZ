@@ -1868,6 +1868,8 @@ class HumanClassify1(QDialog):
             else:
                 del self.shortBirdList[-1]
             self.shortBirdList.insert(0,species_changed)
+        
+        self.updateTitle()
 
     def addBirdSpecies(self,certainty):
         # Ask the user for the new name, and save it
@@ -2049,48 +2051,26 @@ class HumanClassify1(QDialog):
 
         # DEAL WITH SPECIES NAMES
         # Extract a string of current species names
-        specnames = []
-        labels = segment[4]
-        for lab in labels:
-            if 0<lab["certainty"]<100:
-                specnames.append(lab["species"]+'?')
-            else:
-                specnames.append(lab["species"])
-        specnames = list(set(specnames))
-
-        # Update the "currently" labels
-        self.species.setText(','.join(specnames))
+        self.updateTitle()
 
         # Extract the call type of the (first) species
+        labels = self.segment[4]
         if "calltype" in labels[0]:
             self.ctLabel.setText(labels[0]["calltype"])
         else:
             self.ctLabel.setText("")
 
-        # Drop question marks, and reorder the short list if needed.
-        # Question marks are displayed on the first pass, but any clicking sets certainty to 100 in effect.
-        for lsp_ix in range(len(specnames)):
-            if specnames[lsp_ix] != "-To Be Deleted-":
-                if specnames[lsp_ix].endswith('?'):
-                    specnames[lsp_ix] = specnames[lsp_ix][:-1]
-                # move the label to the top of the list
-                if self.reorderShortList:
-                    if self.batmode:
-                        if specnames[lsp_ix] in self.batList:
-                            self.batList.remove(specnames[lsp_ix])
-                        else:
-                            del self.batList[-1]
-                        self.batList.insert(0, specnames[lsp_ix])
-                    else:
-                        if specnames[lsp_ix] in self.shortBirdList:
-                            self.shortBirdList.remove(specnames[lsp_ix])
-                        else:
-                            del self.shortBirdList[-1]
-                        self.shortBirdList.insert(0, specnames[lsp_ix])
-
         if self.autoplay:
             self.playSeg()
     
+    def updateTitle(self):
+        specnames = []
+        labels = self.segment[4]
+        for lab in labels:
+            specnames.append(lab["species"]+" ["+lab["calltype"]+"]" if "calltype" in lab else lab["species"])
+        specnames = list(set(specnames))
+        self.species.setText(','.join(specnames))
+
     def updateSelectionMenu(self):
         self.reorderShortBirdList(self.segment)
         currentLabels = self.segment[4]
