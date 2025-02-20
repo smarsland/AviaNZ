@@ -1185,6 +1185,9 @@ class AviaNZ(QMainWindow):
         self.longBirdList = sorted(self.longBirdList, key=str.lower)
         self.knownCalls[species] = []
 
+        # save long bird list
+        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+
         labels = copy.deepcopy(self.segments[self.box1id][4])
         labels.append({"species": species, "certainty": certainty})
         if "Don't Know" in [x["species"] for x in labels]:
