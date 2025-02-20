@@ -1595,6 +1595,12 @@ class HumanClassify1(QDialog):
         self.plot.setGraphicsEffect(self.blurEffect)
 
         self.pPlot.addItem(self.plot)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidget(self.wPlot)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setMinimumHeight(270)
+
         # Fix the aspect ratio to a preset number. Initial view box
         # will be about 2:1, so aspect ratio of 2 means
         # that a square spectrogram (e.g. 512x512) will fill it
@@ -1703,11 +1709,6 @@ class HumanClassify1(QDialog):
         self.playButton.setIconSize(QSize(40, 40))
         self.playButton.clicked.connect(self.playSeg)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidget(self.wPlot)
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setMinimumHeight(270)
-
         # Volume, brightness and contrast sliders.
         # Need to pass true (config) values to set up correct initial positions
         self.specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
@@ -1803,24 +1804,10 @@ class HumanClassify1(QDialog):
 
     def zoomIn(self):
         # resize the ViewBox with spec, lines, axis
-        self.plotAspect = self.plotAspect * 1.5
-        # self.pPlot.setAspectLocked(ratio=self.plotAspect)
-        xyratio = np.shape(self.sg)
-        # self.pPlot.setYRange(0, xyratio[1], padding=0.02)
-        xyratio = xyratio[0] / xyratio[1]
-        # resize the white area around the spectrogram if it's under 500
-        self.wPlot.plotAspect = self.plotAspect * xyratio
-        self.wPlot.forceResize()
+        self.wPlot.zoomIn()
 
     def zoomOut(self):
-        self.plotAspect = self.plotAspect / 1.5
-        # self.pPlot.setAspectLocked(ratio=self.plotAspect)
-        xyratio = np.shape(self.sg)
-        # self.pPlot.setYRange(0, xyratio[1], padding=0.02)
-        xyratio = xyratio[0] / xyratio[1]
-        # Resize the white area around the spectrogram if it's under 500
-        self.wPlot.plotAspect = self.plotAspect * xyratio
-        self.wPlot.forceResize()
+        self.wPlot.zoomOut()
 
     def setSegNumbers(self, accepted, deleted, total):
         #print(accepted,deleted,total)
@@ -2001,6 +1988,8 @@ class HumanClassify1(QDialog):
         self.specControls.emitCol()
         self.scroll.horizontalScrollBar().setValue(0)
 
+        self.wPlot.forceResize()
+
         FreqRange = (maxFreq-minFreq)/1000.
         SgSize = np.shape(sg2)[1]
         ticks = [(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]
@@ -2014,12 +2003,7 @@ class HumanClassify1(QDialog):
 
         # self.pPlot.setYRange(0, SgSize, padding=0.02)
         self.pPlot.setRange(xRange=(0, np.shape(sg2)[0]), yRange=(0, SgSize))
-        xyratio = np.shape(sg2)
-        xyratio = xyratio[0] / xyratio[1]
-        # self.plotAspect = 2 for x/y pixel aspect ratio
-        self.wPlot.plotAspect = self.plotAspect * xyratio
-        self.wPlot.forceResize()
-
+        
         # Add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
         try:

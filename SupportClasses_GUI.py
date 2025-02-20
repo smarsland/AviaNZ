@@ -674,34 +674,34 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
     # a widget which has a fixed aspect ratio, set by height.
     # useful for horizontal scroll areas.
     def __init__(self):
+        super().__init__()
         self.plotAspect = 5
-        # to prevent infinite loops:
-        self.alreadyResizing = False
         super(PartlyResizableGLW, self).__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def forceResize(self):
-        # this should be doable by postEvent(QResizeEvent),
-        # but somehow doesn't always work.
-        self.alreadyResizing = False
-        self.setMinimumWidth(int(self.height()*self.plotAspect)-10)
-        self.setMaximumWidth(int(self.height()*self.plotAspect)+10)
+        self.setMinimumWidth(0)
+        self.setMaximumWidth(9999)
         self.adjustSize()
 
     def resizeEvent(self, e):
-        if e is not None:
-            # break any infinite loops,
-            # and also processes every second event:
-            if self.alreadyResizing:
-                self.alreadyResizing = False
-                return
+        super().resizeEvent(e)
+        self.plotAspect = self.width() / max(1, self.height())
+        # Optionally enforce aspect ratio on the inner widget
+        if hasattr(self, 'wPlot'):
+            self.wPlot.resize(self.width(), self.height())
 
-            self.alreadyResizing = True
-            # Some buffer for flexibility, so that it could adjust itself
-            # and avoid infinite loops
-            self.setMinimumWidth(int(e.size().height()*self.plotAspect)-10)
-            self.setMaximumWidth(int(e.size().height()*self.plotAspect)+10)
+    def zoomIn(self):
+        # Increase the width by a factor (e.g., 1.1 for 10% zoom in)
+        new_width = int(self.width() * 1.1)
+        self.setFixedWidth(new_width)  # Force the width to change
+        self.updateGeometry()  # Notify the layout system of the change
 
-            pg.GraphicsLayoutWidget.resizeEvent(self, e)
+    def zoomOut(self):
+        # Decrease the width by a factor (e.g., 0.9 for 10% zoom out)
+        new_width = int(self.width() * 0.9)
+        self.setFixedWidth(new_width)  # Force the width to change
+        self.updateGeometry()  # Notify the layout system of the change
 
 class ControllableAudio(QAudioSink):
     # This carries out the audio playback 
