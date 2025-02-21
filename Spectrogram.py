@@ -652,8 +652,7 @@ class Spectrogram:
                         winddata = window * self.sg[i:i + window_width]
                         ft[i // incr, :] = fft.fft(winddata)
                 self.sg = np.absolute(ft)
-            print(np.min(self.sg),np.max(self.sg))
-
+            
             del ft
             gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T

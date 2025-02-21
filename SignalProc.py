@@ -167,7 +167,6 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
         return data
     if end==-1 or end is None:
         end = sampleRate/2
-    print(start,end,sampleRate,len(data))
 
     start = max(start,0)
     end = min(end,sampleRate/2)
