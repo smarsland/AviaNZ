@@ -1843,7 +1843,13 @@ class AviaNZ_reviewAll(QMainWindow):
             # then true time to display start, end,
             # NOTE: might be good to pass copy.deepcopy(seg[4])
             # instead of seg[4], if any bugs come up due to Dialog1 changing the label
-            self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+
+            if self.batmode:
+                sg = sp.normalisedSpec("Batmode")
+            else:
+                sg = sp.normalisedSpec(self.config['sgNormMode'])
+
+            self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
                                                seg, sp.x1nobspec, sp.x2nobspec,
                                                guides, minFreq, maxFreq)
         else:

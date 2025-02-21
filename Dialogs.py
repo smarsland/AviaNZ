@@ -1591,8 +1591,8 @@ class HumanClassify1(QDialog):
         self.plot = pg.ImageItem()
 
         # TODO: Useful?
-        self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
-        self.plot.setGraphicsEffect(self.blurEffect)
+        #self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
+        #self.plot.setGraphicsEffect(self.blurEffect)
 
         self.pPlot.addItem(self.plot)
 
