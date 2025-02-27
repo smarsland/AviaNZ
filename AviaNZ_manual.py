@@ -92,13 +92,10 @@ import Clustering
 import colourMaps
 import Shapes
 import SignalProc
-
 from functools import partial
-
 import re
-
+import resampy
 import soundfile as sf
-
 import webbrowser, copy, math
 import time
 import openpyxl
@@ -2214,7 +2211,8 @@ class AviaNZ(QMainWindow):
 
             # show only leaf nodes:
             #print(np.shape(e))
-            e = np.log(e[30:62,:])
+            e = np.where(e>0, e, 1e-10)
+            e = np.log(e)
 
             self.plotExtra.setLookupTable(colourMaps.getLookupTable("Inferno"))
             self.plotExtra.setImage(e.T)
@@ -2222,12 +2220,16 @@ class AviaNZ(QMainWindow):
 
         # plot wc correlations
         if self.extra == "Wavelet correlations":
+            if len(self.segments)==0:
+                print("ERROR: no segments detected for wavelet correlations graph")
+                return
+
             self.plotExtra = pg.ImageItem()
             self.p_plot.addItem(self.plotExtra)
 
             # Preprocess
             # TODO: Other samplerates?
-            data = self.sp.resample(16000)
+            data = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
             data = SignalProc.bandpassFilter(data, self.sp.audioFormat.sampleRate(), 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
@@ -2265,10 +2267,7 @@ class AviaNZ(QMainWindow):
             chpwin = round(0.25/minchpwin)*minchpwin
             print("Will use window of", chpwin, "s")
             # Resample and generate WP w/ all nodes for the current page
-            if self.sp.audioFormat.sampleRate() != TGTSAMPLERATE:
-                datatoplot = self.sp.resample(TGTSAMPLERATE)
-            else:
-                datatoplot = self.sp.data
+            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=TGTSAMPLERATE)
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
@@ -2283,12 +2282,13 @@ class AviaNZ(QMainWindow):
             i = 0
             for node in range(31, 63):
                 E, _ = WF.extractE(node, chpwin)
-                Es[:,i] = E[:datalen]
+                Es[:min(datalen,len(E)),i] = E[:min(datalen,len(E))]
                 i += 1
                 print("node %d extracted" % node)
 
             # extract unadjusted signal energy
             tgt_node = 46-31
+            Es = np.where(Es > 0, Es, 1e-10)
             Es = np.log(Es)
             sig_lvl = Es[:,tgt_node]
 
@@ -2425,15 +2425,12 @@ class AviaNZ(QMainWindow):
             try:
                 plotNodes = json.load(open(os.path.join(self.filtersDir, 'plotnodes.txt')))
             except:
-                print("Couldn't load file, using default list")
+                print("Couldn't load file plotnodes.txt, using default list")
                 plotNodes = [48, 49, 52]
 
             # resample
-            if self.sp.audioFormat.sampleRate() != 16000:
-                audiodata = self.sp.resample(16000)
-            else:
-                audiodata = self.sp.data
-
+            audiodata = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
+            
             WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
@@ -2457,7 +2454,7 @@ class AviaNZ(QMainWindow):
             # so we upsample to get equal sized spectrograms
             # TODO: Check this one
             if self.sp.audioFormat.sampleRate() != 16000:
-                C = self.sp.resample(self.sp.audioFormat.sampleRate(), C)
+                C = resampy.resample(C, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
             tempsp = Spectrogram.Spectrogram()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
@@ -3604,7 +3601,8 @@ class AviaNZ(QMainWindow):
         try:
             self.p_plot.clear()
             if hasattr(self, "p_legend"):
-                self.p_legend.scene().removeItem(self.p_legend)
+                if not self.p_legend.scene() is None:
+                    self.p_legend.scene().removeItem(self.p_legend)
             if hasattr(self, "diagnosticCalls"):
                 for c in self.diagnosticCalls:
                     self.p_spec.removeItem(c)
@@ -3648,12 +3646,7 @@ class AviaNZ(QMainWindow):
 
             # plot things
             # 1. decompose
-            # if needed, adjusting sampling rate to match filter
-            if self.sp.audioFormat.sampleRate() != spInfo['SampleRate']:
-            #if self.sp.sampleRate != spInfo['SampleRate']:
-                datatoplot = self.sp.resample(spInfo['SampleRate'])
-            else:
-                datatoplot = self.sp.data
+            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
@@ -5247,12 +5240,9 @@ class AviaNZ(QMainWindow):
                                         equal_loudness=self.sgEqualLoudness, onesided=self.config['sgOneSided'])
 
             # Get the data for the spectrogram
-            if self.sp.audioFormat.sampleRate() != self.sppInfo[str(species)][4]:
-                data1 = self.sp.resample(self.sppInfo[str(species)][4])
-                sampleRate1 = self.sppInfo[str(species)][4]
-            else:
-                data1 = self.sp.data
-                sampleRate1 = self.sp.audioFormat.sampleRate()
+            data1 = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=self.sppInfo[str(species)][4])
+            sampleRate1 = self.sppInfo[str(species)][4]
+            
             # TODO utilize self.sp / Spectrogram more here
             sp_temp.data = data1
             sp_temp.audioFormat.setSampleRate(sampleRate1)

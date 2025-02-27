@@ -330,29 +330,18 @@ class Spectrogram:
             print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
         return(0)
 
-    def resample(self, target, data=None):
-        if data is None:
-            data = self.data
-        if len(data)==0:
-            print("Warning: no data set to resample")
+    def resample(self, target):
+        if len(self.data)==0:
+            print("Warning: data is empty")
             return
         if target==self.audioFormat.sampleRate():
-        #if target==self.sampleRate:
             print("No resampling needed")
             return
 
-        data = resampy.resample(data, sr_orig=self.audioFormat.sampleRate(), sr_new=target)
-        #data = resampy.resample(data, sr_orig=self.sampleRate, sr_new=target)
-
+        self.data = resampy.resample(self.data, sr_orig=self.audioFormat.sampleRate(), sr_new=target)
         self.audioFormat.setSampleRate(target)
-        #self.sampleRate = target
-        #if QtMM:
-            #self.audioFormat.setSampleRate(target)
-        #else:
-            #self.audioFormat['sampleRate'] = target
 
         self.minFreq = 0
-        #self.maxFreq = self.sampleRate // 2
         self.maxFreq = self.audioFormat.sampleRate() // 2
 
         self.fileLength = len(self.data)
