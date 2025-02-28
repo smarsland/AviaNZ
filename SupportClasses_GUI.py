@@ -1992,7 +1992,7 @@ class BirdSelectionMenu(QMenu):
                         self.currentLabels.append({'species':species,'calltype':callname,'certainty':certainty})
                         currentSpecies.append(species)
                 if len(self.currentLabels)==0:
-                    self.currentLabels.append({'species':"Don't Know",'certainty':certainty})
+                    self.currentLabels.append({'species':"Don't Know",'certainty':0})
                     currentSpecies.append("Don't Know")
             else: # add
                 if not self.multipleBirds: # clear if new species and not multiple birds
