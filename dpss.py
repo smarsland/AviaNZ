@@ -11,7 +11,8 @@ from numpy.ctypeslib import load_library
 try:
     mtspeclib = load_library('mydpss', './ext')
 except:
-    print("Library mydpss not found. Have you compiled it?")
+    print("ERROR: Library mydpss not found. Have you compiled it?")
+    sys.exit(1)
 
 def pmtm(x, NW=None, k=None, NFFT=None, e=None, v=None, method='adapt', show=False):
     """Multitapering spectral estimation
