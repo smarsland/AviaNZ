@@ -4,24 +4,14 @@
 
 import numpy as np
 import sys
-#import ctypes
 from ctypes import *
-#import ctypes as C
-#from ctypes import POINTER
 import os
 from numpy.ctypeslib import load_library
-# Import shared mtspec library
-#if hasattr(sys, 'frozen'):
-    #p = os.path.abspath(os.path.dirname(sys.executable))
-#else:
-    #p = os.path.abspath(os.path.dirname(__file__))
-#from ext import mydpss as mtspeclib
 
-mtspeclib = load_library('mydpss', './ext')
-#try:
-    #mtspeclib = load_library(lib_name, p)
-#except:
-    #print("Library %s not found" % lib_name)
+try:
+    mtspeclib = load_library('mydpss', './ext')
+except:
+    print("Library mydpss not found. Have you compiled it?")
 
 def pmtm(x, NW=None, k=None, NFFT=None, e=None, v=None, method='adapt', show=False):
     """Multitapering spectral estimation

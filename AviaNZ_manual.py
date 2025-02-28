@@ -1616,6 +1616,8 @@ class AviaNZ(QMainWindow):
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
             self.fileInfoSS.setText("<b>Sample format:</b> %s" % str(self.sp.audioFormat.sampleFormat()).split('.')[-1])
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.datalengthSec, 60))
+
+            QApplication.processEvents() # adding this now to at least show the window as creating the spectrogram might take a long time. 
             
             if not self.batmode:
                 # Create the main spectrogram
