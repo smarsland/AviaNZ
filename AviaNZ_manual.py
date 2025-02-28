@@ -735,9 +735,11 @@ class AviaNZ(QMainWindow):
         self.overviewImageRegion.lines[0].btn = Qt.MouseButton.RightButton
         self.overviewImageRegion.lines[1].btn = Qt.MouseButton.RightButton
         self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
-        self.amplPlot = pg.PlotDataItem()
+        self.amplPlot = pg.PlotDataItem(clipToView=True)
+        self.amplPlot.setDownsampling(auto=True)
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
+        self.specPlot.setAutoDownsample(True)
 
         # # This will slow everything down!!! Would be nice to do the bluring only when the size changes...
         # self.blurEffect = QGraphicsBlurEffect(blurRadius=1.1)
