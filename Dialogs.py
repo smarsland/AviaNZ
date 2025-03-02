@@ -295,16 +295,16 @@ class SpectrogramDialog(QDialog):
 
     def resetValues(self):
         self.windowType.setCurrentText('Hann')
-
+        self.sgType.setCurrentText('Standard')
+        self.sgNorm.setCurrentText('Log')
         self.mean_normalise.setChecked(True)
         self.equal_loudness.setChecked(False)
-        #self.multitaper.setChecked(False)
-        #self.reassigned.setChecked(False)
-
         self.setValues(self.low.minimum(), self.low.maximum(), self.low.minimum(), self.high.maximum())
-
         self.window_width.setText('256')
         self.incr.setText('128')
+        self.sgScale.setCurrentText('Linear')
+        self.nfilters.setText('128')
+        
         self.activate.clicked.emit()
 
     # def closeEvent(self, event):
