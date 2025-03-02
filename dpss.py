@@ -97,9 +97,10 @@ def pmtm(x, NW=None, k=None, NFFT=None, e=None, v=None, method='adapt', show=Fal
         raise ValueError("if e provided, v must be provided as well and viceversa.")
     nwin = len(eigenvalues) # length of the eigen values vector to be used later
 
+    # DISABLED!!!
     # set the NFFT
-    if NFFT==None:
-        NFFT = max(256, 2**nextpow2(N))
+    # if NFFT==None:
+    #     NFFT = max(256, 2**nextpow2(N))
 
     Sk_complex = np.fft.fft(np.multiply(tapers.transpose(), x), NFFT)
     Sk = abs(Sk_complex)**2
