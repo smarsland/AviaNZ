@@ -318,7 +318,7 @@ def mouseDragEventFlexible(self, ev):
 
 
 def mouseDragEventFlexibleLine(self, ev):
-    if self.movable and ev.button() != self.btn:
+    if self.movable and hasattr(self, 'btn') and ev.button() != self.btn:
         if ev.isStart():
             self.moving = True
             self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())

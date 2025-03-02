@@ -739,7 +739,8 @@ class Spectrogram:
 
         # Compute the set of multi-tapered spectrograms
         starts = range(0, len(self.data) - window_width, incr)
-        [tapers, eigen] = dpss(window_width, 2.5, K)
+        import dpss
+        [tapers, eigen] = dpss.dpss(window_width, 2.5, K)
         sg = np.zeros((len(starts), window_width, K), dtype=complex)
         for k in range(K):
             for i in starts:

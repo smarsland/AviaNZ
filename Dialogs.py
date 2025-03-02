@@ -862,7 +862,7 @@ class Segmentation(QDialog):
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Harma","Power","WV Changepoint","Wavelet Filter","Cross-Correlation"])
         self.algs.currentTextChanged.connect(self.changeBoxes)
-        #self.algs.currentIndexChanged[str].connect(self.changeBoxes)
+        #self.algs.currentIndexChanged.connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")
@@ -1231,7 +1231,7 @@ class Denoise(QDialog):
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
-        self.algs.currentIndexChanged[str].connect(self.changeBoxes)
+        self.algs.currentIndexChanged.connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
@@ -1278,7 +1278,7 @@ class Denoise(QDialog):
         self.wblabel = QLabel("Wavelets and Bandpass Filter")
         self.blabel = QLabel("Start and end points of the band")
         self.low = QSlider(Qt.Orientation.Horizontal)
-        self.low.setTickPosition(QSlider.TicksBelow)
+        self.low.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.low.setTickInterval(1000)
         self.low.setRange(minFreq,maxFreq)
         self.low.setSingleStep(100)
@@ -1286,7 +1286,7 @@ class Denoise(QDialog):
         self.low.valueChanged.connect(self.lowChange)
         self.lowtext = QLabel(str(self.low.value()))
         self.high = QSlider(Qt.Orientation.Horizontal)
-        self.high.setTickPosition(QSlider.TicksBelow)
+        self.high.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.high.setTickInterval(1000)
         self.high.setRange(minFreq,maxFreq)
         self.high.setSingleStep(100)
@@ -3014,7 +3014,7 @@ class Shapes(QDialog):
 
         self.detectorCombo = QComboBox()
         self.detectorCombo.addItems(['stupidShaper', 'fundFreqShaper', 'instantShaper1', 'instantShaper2'])
-        self.detectorCombo.currentIndexChanged[str].connect(self.changeBoxes)
+        self.detectorCombo.currentIndexChanged.connect(self.changeBoxes)
 
         self.activate = QPushButton('Detect shapes in segments')
 
