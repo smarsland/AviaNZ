@@ -576,15 +576,15 @@ class Spectrogram:
                 counter = 0
                 out = np.zeros(shape=(len(starts),window_width // 2,3))
                 for start in starts:
-                    Sk, weights, eigen = dpss.pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
+                    Sk, weights, eigen = dpss.pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=window_width)
                     Sk = abs(Sk)**2
                     #Sk = np.mean(Sk.T * weights, axis=1)
                     for taper in range(3):
-                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][window_width // 2:].T
+                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][:window_width // 2].T
                     counter += 1  
                 if singleIm:
                     out = np.squeeze(np.sum(out,axis=2))
-                self.sg = np.fliplr(out)
+                self.sg = out
             else:
                 print("Option not available")
         elif sgType=='Reassigned':
