@@ -1503,7 +1503,11 @@ class AviaNZ(QMainWindow):
                     if self.cheatsheet:
                         self.sp = Spectrogram.Spectrogram(512,256, 0, 0)
                     else:
-                        self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], self.config['minFreq'], self.config['maxFreq'])
+                        minFreqShow = self.config['minFreq']
+                        maxFreqShow = self.config['maxFreq']
+                        if hasattr(self, 'spectrogramDialog'):
+                            [_, _, _, _, _, _, _,minFreqShow,maxFreqShow,_,_] = self.spectrogramDialog.getValues()
+                        self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreqShow, maxFreqShow)
 
                 self.currentFileSection = 0
 
@@ -3845,14 +3849,14 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [self.config['windowType'], self.config['sgType'], self.config['sgNormMode'], self.config['sgMeanNormalise'], self.config['sgEqualLoudness'], window_width, incr, self.config['minFreq'], self.config['maxFreq'],sgScale,self.config['nfilters']] = self.spectrogramDialog.getValues()
+        [self.config['windowType'], self.config['sgType'], self.config['sgNormMode'], self.config['sgMeanNormalise'], self.config['sgEqualLoudness'], window_width, incr,newMinFreqShow,newMaxFreqShow,sgScale,self.config['nfilters']] = self.spectrogramDialog.getValues()
         if self.config['sgScale'] != sgScale:
             self.config['sgScale'] = sgScale
             changedY = True
         else:  
             changedY = False
 
-        if (self.config['minFreq'] >= self.config['maxFreq']):
+        if (newMinFreqShow >= newMaxFreqShow):
             msg = SupportClasses_GUI.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec()
             return
@@ -3873,12 +3877,7 @@ class AviaNZ(QMainWindow):
                         self.seg.setNewData(self.sp)
 
                     self.loadFile(self.filename)
-
-                    # These two are usually set by redoFreqAxis, but that is called only later in this case
-                    self.spectrogramDialog.low.setValue(self.config['minFreq'])
-                    self.spectrogramDialog.high.setValue(self.config['maxFreq'])
-
-        self.redoFreqAxis(self.config['minFreq'],self.config['maxFreq'],changedY=changedY)
+        self.redoFreqAxis(newMinFreqShow,newMaxFreqShow,changedY=changedY)
 
         self.statusLeft.setText("Ready")
 
@@ -4290,14 +4289,6 @@ class AviaNZ(QMainWindow):
         if changedY:
             self.sp.minFreqShow = max(start,self.sp.minFreq)
             self.sp.maxFreqShow = min(end,self.sp.maxFreq)
-
-            if store:
-                if self.batmode:
-                    self.config['minFreqBats'] = start
-                    self.config['maxFreqBats'] = end
-                else:
-                    self.config['minFreq'] = start
-                    self.config['maxFreq'] = end
 
         # SRM: changed
         # draw a spectrogram of proper height:
