@@ -564,8 +564,6 @@ class GenerateData:
             duration = record[1][1] - record[1][0]
             hop = dhop[record[-1]]
             if duration < self.length:
-                #fileduration = wavio.readFmt(record[0])[1]
-                #wavobj = wavio.read(record[0], 0, 0)                
                 info = sf.info(record[0])
                 sample_rate = info.samplerate
                 fileduration = info.frames / sample_rate
@@ -610,7 +608,6 @@ class GenerateData:
             duration = record[1][1] - record[1][0]
             hop = dhop[record[-1]]
             if duration < self.length:
-                #fileduration = wavio.readFmt(record[0])[1]
                 info = sf.info(record[0])
                 sample_rate = info.samplerate
                 fileduration = info.frames / sample_rate

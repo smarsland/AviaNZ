@@ -1677,10 +1677,6 @@ class AviaNZ_reviewAll(QMainWindow):
                     duration = self.segments.metadata["Duration"]
                 else:
                     # Determine the sample rate and set some file-level parameters
-                    #wavobj = wavio.read(filename, 0, 0)
-                    #samplerate, duration, _, _ = wavio.readFmt(filename)
-                    #samplerate = wavobj.rate
-                    #duration = wavobj.nseconds
                     info = sf.info(filename)
                     samplerate = info.samplerate
                     duration = info.frames / samplerate

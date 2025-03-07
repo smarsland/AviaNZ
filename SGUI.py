@@ -1273,7 +1273,6 @@ class LightedFileList(QListWidget):
                                 if readFmt:
                                     if filename.lower().endswith('.wav'):
                                         try:
-                                            #samplerate = wavio.readFmt(filenamef)[0]
                                             samplerate = sf.info(filenamef).samplerate
                                             self.fsList.add(samplerate)
                                         except Exception as e:

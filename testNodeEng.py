@@ -20,9 +20,6 @@ def testNodeEng(file):
                continue
            else:
                #  Read the segment
-                #    wavobj = wavio.read(file, seg[1]-seg[0], seg[0])
-                #    sampleRate = wavobj.rate
-                #    data = wavobj.data
                 sampleRate = sf.info(file).samplerate
                 start_frame = int(seg[0] * sampleRate)
                 stop_frame = int(seg[1] * sampleRate)

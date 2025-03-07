@@ -670,51 +670,6 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
     print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(annotation), len(annotation)))
 
 
-# def loadData(fName, filemode):
-#     '''
-#     Load wav and GT for ML data set generation
-#     :param fName:
-#     :param filemode: 'long' or 'segpos' or 'segneg'
-#     :return: audio data, GT, sampleRate
-#     '''
-#     filename = fName+'.wav'
-#     filenameAnnotation = fName+'-res1.0sec.txt'
-#     try:
-#         wavobj = wavio.read(filename)
-#     except:
-#         print("unsupported file: ", filename)
-#         pass
-#     sampleRate = wavobj.rate
-#     data = wavobj.data
-#     if data.dtype is not 'float':
-#         data = data.astype('float') #/ 32768.0
-#     if np.shape(np.shape(data))[0]>1:
-#         data = np.squeeze(data[:,0])
-#     n = math.ceil(len(data)/sampleRate)
-#
-#     if filemode=='long':
-#         # GT from the txt file
-#         fileAnnotation = []
-#         with open(filenameAnnotation) as f:
-#             reader = csv.reader(f, delimiter="\t")
-#             d = list(reader)
-#         if d[-1]==[]:
-#             d = d[:-1]
-#         if len(d) != n:
-#             print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
-#             return
-#         # for each second, store 0/1 presence:
-#         sum = 0
-#         for row in d:
-#             fileAnnotation.append(int(row[1]))
-#             sum += int(row[1])
-#     elif filemode=='segpos':
-#         fileAnnotation = np.ones((math.ceil(len(data) / sampleRate), 1))
-#     elif filemode=='segneg':
-#         fileAnnotation = np.zeros((math.ceil(len(data) / sampleRate), 1))
-#     return data, np.array(fileAnnotation), sampleRate
-
-
 def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
     '''
     Compute MFCC for each second of data and return as a matrix

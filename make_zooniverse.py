@@ -27,8 +27,6 @@ def loadFile(filename):
         return None, None, 0, 0, 0, 0
 
     if os.stat(filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
-        #wavobj = wavio.read(filename)
-
         info = sf.info(filename)
         audiodata, sampleRate = sf.read(filename)
 

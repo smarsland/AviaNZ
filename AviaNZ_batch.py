@@ -480,8 +480,6 @@ class AviaNZ_batchProcess():
 
     def addRegularSegments(self,filename,length,interval):
         """ Perform the Hartley bodge: add fixed length segments at specified interval. """
-        # if wav.data exists get the duration
-        #(rate, nseconds, nchannels, sampwidth) = wavio.readFmt(filename)
         info = sf.info(filename)
         samplerate = info.samplerate
         nseconds = info.frames / samplerate

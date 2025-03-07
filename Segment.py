@@ -280,7 +280,6 @@ class SegmentList(list):
                 else:
                     # fallback to reading the wav:
                     try:
-                        #self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
                         info = sf.info(file[:-5])
                         sample_rate = info.samplerate
                         fileduration = info.frames / sample_rate
@@ -357,7 +356,6 @@ class SegmentList(list):
             # The .1 is to take care of rounding errors
             if 0 < annot[2] < 1.1 and 0 < annot[3] < 1.1:
                 print("Warning: updating old-format frequency marks")
-                #rate = wavio.readFmt(file[:-5])[0]//2
                 info = sf.info(file[:-5])
                 sample_rate = info.samplerate
                 fileduration = info.frames / sample_rate

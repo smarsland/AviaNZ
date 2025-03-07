@@ -759,7 +759,6 @@ class NNtest:
                         file + '.tmpdata' in files and filenameNoExtension + '-GT.txt' in files:
                     # Extract all segments and back-convert to 0/1:
                     if file.lower().endswith('.wav'):
-                        #_, duration, _, _ = wavio.readFmt(soundFile)
                         info = sf.info(soundFile)
                         duration = info.frames / info.samplerate
                     else:
