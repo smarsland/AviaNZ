@@ -4225,10 +4225,21 @@ class AviaNZ(QMainWindow):
         """ Listener for save button in denoising dialog.
         Adds _d to the filename and saves it as a new sound file.
         """
-        extension = self.filename.rsplit('.', 1)[0]
-        before_extension = self.filename[:-len(extension)-1]
+        before_extension = self.filename.rsplit('.', 1)[0]
+        extension = self.filename[len(before_extension):]
         filename = before_extension + '_d' + extension
-        sf.write(filename, self.sp.data.astype('int16'),self.sp.audioFormat.sampleRate())
+        if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+            normalised_data = (self.sp.data - 128) / 128
+        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+            normalised_data = self.sp.data / 32768
+        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int8:
+            normalised_data = self.sp.data / 128
+        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+            normalised_data = self.sp.data / 2147483648
+        else:
+            print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
+            return
+        sf.write(filename, normalised_data, self.sp.audioFormat.sampleRate())
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
         msg.exec()
