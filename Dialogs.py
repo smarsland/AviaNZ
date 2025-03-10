@@ -1228,9 +1228,10 @@ class Denoise(QDialog):
         self.algs = QComboBox()
         # self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
         if not self.DOC:
-            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
+            self.alg_items = ["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"]
         else:
-            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
+            self.alg_items = ["Wavelets", "Bandpass", "Butterworth Bandpass"]
+        self.algs.addItems(self.alg_items)
         self.algs.currentIndexChanged.connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
@@ -1369,7 +1370,8 @@ class Denoise(QDialog):
         self.high.setMinimum(self.minFreq)
         self.high.setMaximum(self.maxFreq)
 
-    def changeBoxes(self,alg):
+    def changeBoxes(self,algIndex):
+        alg = self.alg_items[algIndex]
         print("changing from", self.prevAlg, " to", alg)
         # This does the hiding and showing of the options as the algorithm changes
         if self.prevAlg == "Wavelets" and not self.DOC:
