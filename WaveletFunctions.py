@@ -405,9 +405,6 @@ class WaveletFunctions:
             nwindows = math.floor(len(self.tree[node]) / WCperWindow)
         maxnumwcs = nwindows * WCperWindow
 
-        print("self.tree[node]",self.tree[node])
-        print("node", node, "nwindows", nwindows, "maxnumwcs", maxnumwcs, "realwindow", realwindow, "WCperWindow", WCperWindow)
-
         # Sanity check for empty node:
         if nwindows <= 0:
             print("ERROR: data length %d shorter than window size %d s" %(len(self.tree[node]), winsize))
