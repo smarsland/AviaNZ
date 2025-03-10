@@ -526,7 +526,7 @@ class WaveletFunctions:
         # Determine the best basis, or use all leaves ("fixed")
         # NOTE: nodes must be sorted here, very important!
         if costfn=="fixed":
-            bestleaves = list(range(2**self.maxLevel-1,2**(self.maxLevel+1)-1))
+            bestleaves = list(range(2**self.maxLevel-1,2**(self.maxLevel+1)-1))[:-1] # exclude the top node
         else:
             # NOTE: using same MAD threshold for basis selection.
             # it isn't even needed if entropy costfn is used here

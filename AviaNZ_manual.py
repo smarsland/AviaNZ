@@ -4240,6 +4240,8 @@ class AviaNZ(QMainWindow):
             print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
             return
         sf.write(filename, normalised_data, self.sp.audioFormat.sampleRate())
+        # update the file list box
+        self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
         self.statusLeft.setText("Saved")
         msg = SupportClasses_GUI.MessagePopup("d", "Saved", "Destination: " + '\n' + filename)
         msg.exec()
@@ -4278,15 +4280,18 @@ class AviaNZ(QMainWindow):
                 tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.audioFormat.sampleRate(),start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.playSpeed) 
-                if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
-                    sampwidth = 2
+                if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+                    normalised_data = (tosave - 128) / 128
+                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+                    normalised_data = tosave / 32768
+                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int8:
+                    normalised_data = tosave / 128
                 elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
-                    sampwidth = 4
-                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
-                    sampwidth = 1
+                    normalised_data = tosave / 2147483648
                 else:
                     print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-                sf.write(filename, tosave, self.sp.audioFormat.sampleRate())
+                    return
+                sf.write(filename, normalised_data, self.sp.audioFormat.sampleRate())
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
