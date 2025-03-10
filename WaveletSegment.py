@@ -657,7 +657,7 @@ class WaveletSegment:
                 if "method" not in filt or filt["method"]=="wv":
                     detected_segs = self.waveletSegment(0, wpmode="new")
                 elif filt["method"]=="chp":
-                    detected_segs = self.waveletSegmentChp(0, alg=2, wind=False)
+                    detected_segs = self.waveletSegmentChp(0, alg=2, wind="None")
 
                 # flatten over the call types and store
                 out = []
