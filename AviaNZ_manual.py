@@ -3789,6 +3789,7 @@ class AviaNZ(QMainWindow):
             [filtername, selectedCTs] = self.diagnosticDialogNN.getValues()
             print(selectedCTs)
             speciesData = self.FilterDicts[filtername]
+            NNname = speciesData['NN']['NN_name']
             CTs = []
             for f in speciesData['Filters']:
                 CTs.append(f['calltype'])
@@ -3798,8 +3799,8 @@ class AviaNZ(QMainWindow):
             segment = [[self.startRead, self.startRead + self.datalengthSec]]
             NNmodel = None
             probs = 0
-            if filtername in self.NNDicts.keys():
-                NNmodel = self.NNDicts[filtername]
+            if NNname in self.NNDicts.keys():
+                NNmodel = self.NNDicts[NNname]
             post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data,
                                        sampleRate=self.sp.audioFormat.sampleRate(),
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
