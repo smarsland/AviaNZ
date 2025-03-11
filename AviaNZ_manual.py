@@ -65,8 +65,7 @@ from shutil import copyfile
 
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
-from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard#, QActionGroup, QShortcut
-from PyQt6.QtWidgets import QGraphicsBlurEffect
+from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard, QGraphicsBlurEffect, QCheckBox
 # The two below will move from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
 from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF #, QThread
@@ -3598,12 +3597,14 @@ class AviaNZ(QMainWindow):
     def showDiagnosticDialogNN(self):
         """ Create the dialog to set diagnostic plot parameters.  """
         if not hasattr(self, 'diagnosticDialogNN'):
-            self.diagnosticDialogNN = Dialogs.DiagnosticNN(self.FilterDicts)
+            validFilters = {k: v for k, v in self.FilterDicts.items() if 'NN' in v}
+            self.diagnosticDialogNN = Dialogs.DiagnosticNN(validFilters)
             self.diagnosticDialogNN.filter.currentTextChanged.connect(self.setCTDiagnosticsNN)
             self.diagnosticDialogNN.activate.clicked.connect(self.setDiagnosticNN)
             self.diagnosticDialogNN.clear.clicked.connect(self.clearDiagnosticNN)
         self.diagnosticDialogNN.show()
         self.diagnosticDialogNN.activateWindow()
+        self.setCTDiagnosticsNN()
 
     def clearDiagnostic(self):
         """ Cleans up diagnostic plot space. Should be called when loading new file/page, or from Diagnostic Dialog.  """
@@ -3655,7 +3656,7 @@ class AviaNZ(QMainWindow):
 
             # plot things
             # 1. decompose
-            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
+            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=spInfo['SampleRate'])
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
@@ -3746,7 +3747,6 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setText("Ready")
 
     def setCTDiagnosticsNN(self):
-        from PyQt6.QtWidgets import QCheckBox
         filter = self.diagnosticDialogNN.filter.currentText()
         speciesData = self.FilterDicts[filter]
         CTs = []
