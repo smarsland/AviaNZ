@@ -1730,6 +1730,7 @@ class AviaNZ(QMainWindow):
                     # Initialise the sound and bar moving timer
                     self.media_obj = SupportClasses_GUI.ControllableAudio(self.sp,useBar=True)
                     self.media_obj.NotifyTimer.timeout.connect(self.movePlaySlider)
+                    self.media_obj.setSpeed(self.playSpeed)
 
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,int(np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value())))
