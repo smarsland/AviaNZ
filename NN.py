@@ -531,7 +531,8 @@ class GenerateData:
                     print('Determining noise...')
                     autoseg = Segment.SegmentList()
                     for sec in range(math.floor(segments.metadata["Duration"])-1):
-                        autoseg.addSegment([sec, sec+1, 0, 0, []])
+                        if not any([sec >= seg[0] and sec <= seg[1] for seg in segments]):
+                            autoseg.addSegment([sec, sec+1, 0, 0, []])
                     autoSegments = segmenter.joinGaps(autoseg, maxgap=0)
 
                     print("autoSeg, file", soundFile, autoSegments)
