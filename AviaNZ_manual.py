@@ -4397,6 +4397,8 @@ class AviaNZ(QMainWindow):
         self.buildNNWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniserNN(test=False))
         self.buildNNWizard.activateWindow()
         self.buildNNWizard.exec()
+        # reread filters list with the new one
+        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """

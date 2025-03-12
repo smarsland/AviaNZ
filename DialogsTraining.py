@@ -2854,8 +2854,9 @@ class BuildNNWizard(QWizard):
             self.listFiles.setMinimumHeight(200)
             filtdir = QDir(self.nntrain.filterdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
             for file in filtdir:
-                item = QListWidgetItem(self.listFiles)
-                item.setText(file)
+                if file.endswith('.txt'):
+                    item = QListWidgetItem(self.listFiles)
+                    item.setText(file)
             # filter file name
             self.enterFiltName = QLineEdit()
             self.enterFiltName.textChanged.connect(self.textChanged)
