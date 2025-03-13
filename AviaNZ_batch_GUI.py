@@ -1902,6 +1902,10 @@ class AviaNZ_reviewAll(QMainWindow):
         currSeg.confirmLabels()
         getNumCopies = Dialogs.getNumberCopiesPlus()
         response = getNumCopies.exec()
+        
+        if response == 0:
+            return
+
         numCopies = getNumCopies.getValues()
 
         for i in range(numCopies):
