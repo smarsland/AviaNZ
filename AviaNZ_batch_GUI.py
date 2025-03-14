@@ -1889,6 +1889,7 @@ class AviaNZ_reviewAll(QMainWindow):
         currSeg.questionLabels()
 
         self.returned = False
+        self.segsAccepted+=1
         self.humanClassifyNextImage1()
 
     def humanClassifyPlus(self):
@@ -1945,6 +1946,7 @@ class AviaNZ_reviewAll(QMainWindow):
         currSeg.confirmLabels()
 
         self.returned = False
+        self.segsAccepted+=1
         self.humanClassifyNextImage1()
 
     def humanClassifyDelete1New(self):
