@@ -168,86 +168,91 @@ class NNtrain:
 
         # For manually annotated data where the user is confident about full annotation, 
         # choose anything else in the spectrograms as noise examples
-        if self.annotatedAll=="All":
-            self.noisedata1 = self.DataGen.findNoisesegments(self.folderTrain1)
-            print('----noise data1:')
-            for x in self.noisedata1:
-                self.traindata.append(x)
-        if self.annotatedAll=="All-nowt":
-            self.noisedata1 = self.DataGen.findAllsegments(self.folderTrain1)
-            print('----noise data1:')
-            for x in self.noisedata1:
-                self.traindata.append(x)
-        # Call type segments
-        print('----CT data1:')
-        if hasAnnotation:
+        if not self.folderTrain1=="":
+            if self.annotatedAll=="All":
+                self.noisedata1 = self.DataGen.findNoisesegments(self.folderTrain1)
+                print('----noise data1:')
+                for x in self.noisedata1:
+                    self.traindata.append(x)
+            if self.annotatedAll=="All-nowt":
+                self.noisedata1 = self.DataGen.findAllsegments(self.folderTrain1)
+                print('----noise data1:')
+                for x in self.noisedata1:
+                    self.traindata.append(x)
+
+            # Call type segments
+            print('----CT data1:')
+            if hasAnnotation:
+                for i in range(len(self.calltypes)):
+                    ctdata = self.DataGen.findCTsegments(self.folderTrain1, i)
+                    print(self.calltypes[i])
+                    for x in ctdata:
+                        self.traindata.append(x)
+
+        if not self.folderTrain2=="":
+            # For wavelet outputs that have been manually verified get noise segments from .corrections
+            if os.path.isdir(self.folderTrain2):
+                for root, dirs, files in os.walk(str(self.folderTrain2)):
+                    for file in files:
+                        print("File: ", file)
+                        if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections' in files:
+                            # Read the .correction (from allspecies review)
+                            print("CORRECTIONS FOUND")
+                            cfile = os.path.join(root, file + '.corrections')
+                            soundfile = os.path.join(root, file)
+                            try:
+                                f = open(cfile, 'r')
+                                annots = json.load(f)
+                                f.close()
+                            except Exception as e:
+                                print("ERROR: file %s failed to load with error:" % file)
+                                print(e)
+                                return
+                            for seg in annots:
+                                if isinstance(seg, dict):
+                                    continue
+                                if len(seg) != 2: # correction not needed
+                                    continue
+                                oldlabel = seg[0][4]
+                                # check in cases like: [kiwi] -> [kiwi, morepork]
+                                # (these will be stored in .corrections, but aren't incorrect detections)
+                                newsp = [lab["species"] for lab in seg[1]]
+                                if len(oldlabel) != 1:
+                                    # this was made manually
+                                    print("Warning: ignoring labels with multiple species")
+                                    continue
+                                if oldlabel[0]['species'] == self.species and self.species not in newsp:
+                                    # store this as "noise" calltype
+                                    print("adding noise")
+                                    self.traindata.append([soundfile, seg[0][:2], len(self.calltypes)])
+                                    self.correction = True
+                        elif (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections_' + self.cleanSpecies(self.species) in files:
+                            # Read the .correction (from single sp review)
+                            cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
+                            soundfile = os.path.join(root, file)
+                            try:
+                                f = open(cfile, 'r')
+                                annots = json.load(f)
+                                f.close()
+                            except Exception as e:
+                                print("ERROR: file %s failed to load with error:" % file)
+                                print(e)
+                                return
+                            for seg in annots:
+                                if isinstance(seg, dict):
+                                    continue
+                                else:
+                                    # store this as "noise" calltype
+                                    self.traindata.append([soundfile, seg[:2], len(self.calltypes)])
+                                    self.correction = True
+
+            # Call type segments
+            print('----CT data2:')
             for i in range(len(self.calltypes)):
-                ctdata = self.DataGen.findCTsegments(self.folderTrain1, i)
+                ctdata = self.DataGen.findCTsegments(self.folderTrain2, i)
                 print(self.calltypes[i])
                 for x in ctdata:
                     self.traindata.append(x)
-
-        # For wavelet outputs that have been manually verified get noise segments from .corrections
-        if os.path.isdir(self.folderTrain2):
-            for root, dirs, files in os.walk(str(self.folderTrain2)):
-                for file in files:
-                    if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections' in files:
-                        # Read the .correction (from allspecies review)
-                        cfile = os.path.join(root, file + '.corrections')
-                        soundfile = os.path.join(root, file)
-                        try:
-                            f = open(cfile, 'r')
-                            annots = json.load(f)
-                            f.close()
-                        except Exception as e:
-                            print("ERROR: file %s failed to load with error:" % file)
-                            print(e)
-                            return
-                        for seg in annots:
-                            if isinstance(seg, dict):
-                                continue
-                            if len(seg) != 2:
-                                print("Warning: old format corrections detected")
-                                continue
-                            oldlabel = seg[0][4]
-                            # check in cases like: [kiwi] -> [kiwi, morepork]
-                            # (these will be stored in .corrections, but aren't incorrect detections)
-                            newsp = [lab["species"] for lab in seg[1]]
-                            if len(oldlabel) != 1:
-                                # this was made manually
-                                print("Warning: ignoring labels with multiple species")
-                                continue
-                            if oldlabel[0]['species'] == self.species and self.species not in newsp:
-                                # store this as "noise" calltype
-                                self.traindata.append([soundfile, seg[0][:2], len(self.calltypes)])
-                                self.correction = True
-                    elif (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections_' + self.cleanSpecies(self.species) in files:
-                        # Read the .correction (from single sp review)
-                        cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
-                        soundfile = os.path.join(root, file)
-                        try:
-                            f = open(cfile, 'r')
-                            annots = json.load(f)
-                            f.close()
-                        except Exception as e:
-                            print("ERROR: file %s failed to load with error:" % file)
-                            print(e)
-                            return
-                        for seg in annots:
-                            if isinstance(seg, dict):
-                                continue
-                            else:
-                                # store this as "noise" calltype
-                                self.traindata.append([soundfile, seg[:2], len(self.calltypes)])
-                                self.correction = True
-
-        # Call type segments
-        print('----CT data2:')
-        for i in range(len(self.calltypes)):
-            ctdata = self.DataGen.findCTsegments(self.folderTrain2, i)
-            print(self.calltypes[i])
-            for x in ctdata:
-                self.traindata.append(x)
 
         # How many of each class
         target = np.array([rec[-1] for rec in self.traindata])

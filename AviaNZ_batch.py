@@ -375,6 +375,11 @@ class AviaNZ_batchProcess():
                     if not self.testmode:
                         self.log.appendFile(filename)
                     continue
+            
+            # check if there is a .corrections file and remove it
+            if os.path.exists(filename + ".corrections"):
+                print("Removing old corrections file")
+                os.remove(filename + ".corrections")
 
             # test the selected time window if it is a DOC recording
             DOCRecording = re.search(r'(\d{6})_(\d{6})', os.path.basename(filename))
