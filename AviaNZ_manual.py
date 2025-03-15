@@ -4389,7 +4389,6 @@ class AviaNZ(QMainWindow):
     def buildNN(self):
         """Listener for 'Build a NN'
         """
-        print("BUILDING NN")
         self.saveSegments()
         self.buildNNWizard = DialogsTraining.BuildNNWizard(self.filtersDir, self.config, self.configdir)
         #self.buildNNWizard.button(3).clicked.connect(lambda: self.RecogniserNN(test=False))

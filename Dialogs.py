@@ -2120,7 +2120,7 @@ class HumanClassify2(QDialog):
         12. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
+    def __init__(self, sps, sgs, segments, indicestoshow, label, lut, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2137,6 +2137,7 @@ class HumanClassify2(QDialog):
         # Let the user quit without bothering rest of it
 
         self.sps = sps
+        self.sgs = sgs
         # Check if playback is possible (e.g. for batmode):
         haveaudio = all(len(sp.data)>0 for sp in sps if sp is not None)
 
@@ -2294,10 +2295,13 @@ class HumanClassify2(QDialog):
             sp = self.sps[i]
             duration = len(sp.data)/sp.audioFormat.sampleRate()
 
+            sg = self.sgs[i]
+            
             # Seems that image is backwards?
-            sp.sg = np.fliplr(sp.sg)
-            self.minsg = min(self.minsg, np.min(sp.sg))
-            self.maxsg = max(self.maxsg, np.max(sp.sg))
+            sg = np.fliplr(sg)
+
+            self.minsg = min(self.minsg, np.min(sg))
+            self.maxsg = max(self.maxsg, np.max(sg))
 
             # Batmode guides, in y of this particular spectrogram:
             if self.guidefreq is not None:
@@ -2309,7 +2313,8 @@ class HumanClassify2(QDialog):
 
             # Create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop)
+
+            newButton = SupportClasses_GUI.PicButton(i, sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:

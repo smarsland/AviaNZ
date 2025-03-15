@@ -49,7 +49,7 @@ class NNtrain:
         # Two important things: 
         # 1. LearningParams.txt, which a dictionary of parameters *** including spectrogram parameters
         # 2. CLI: whether it runs off the command line, which makes picking the ROC curve parameters hard
-        # Qn: what is imgWidth? Why not a learning param?
+        # Qn: what is imgWidth? Why not a learning param? Ans: it is a slider in the UI and sets the input data shape
 
         self.filterdir = filterdir
         self.configdir =configdir

@@ -1442,9 +1442,11 @@ class AviaNZ_reviewAll(QMainWindow):
             guides = self.config['guidepos']
         else:
             guides = None
+        
+        sgs = [sp.normalisedSpec("Batmode") if self.batmode else sp.normalisedSpec(self.config['sgNormMode']) for sp in self.sps]
 
         # Initialize the dialog for this file
-        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments, self.indices2show,
+        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, sgs, self.segments, self.indices2show,
                                                            self.species, self.lut, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'],
                                                            guidefreq=guides, guidecol=self.config['guidecol'],
@@ -1591,7 +1593,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
         if self.config['BirdListLong'] is None:
-            # If don't have a long bird list,
+            # If don't have a long birdreview_all list,
             # check the length of the short bird list is OK, and otherwise split it
             # 40 is a bit random, but 20 in a list is long enough!
             if len(self.shortBirdList) > 40:

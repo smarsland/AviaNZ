@@ -2129,6 +2129,7 @@ class BuildNNWizard(QWizard):
 
         def initializePage(self):
             filternames = [key + ".txt" for key in self.nntrain.FilterDict.keys()]
+            filternames = sorted(filternames)
             self.speciesCombo.addItems(filternames)
 
         def browseTrainData2(self):
