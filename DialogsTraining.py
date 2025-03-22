@@ -2419,7 +2419,7 @@ class BuildNNWizard(QWizard):
             self.f2text = QLabel('')
 
             self.modelArchitecture = QComboBox()
-            self.modelArchitecture.addItems(["CNN","SingleLayerNetwork"])
+            self.modelArchitecture.addItems(["CNN","AudioSpectogramTransformer"])
 
             space = QLabel()
             space.setFixedSize(10, 30)

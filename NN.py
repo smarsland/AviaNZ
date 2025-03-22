@@ -342,8 +342,8 @@ class NN:
         apply_same_padding =  self.imageheight < 120 or self.imagewidth < 120
         if self.modelArchitecture == 'CNN':
             self.model = NNModels.CNNModel(self.imageheight,self.imagewidth,len(self.calltypes)+1)
-        elif self.modelArchitecture == 'SingleLayerNetwork':
-            self.model = NNModels.SingleLayerNetwork(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+        elif self.modelArchitecture == 'AudioSpectogramTransformer':
+            self.model = NNModels.AudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
         else:
             raise ValueError("Model architecture not supported")
 
@@ -587,7 +587,7 @@ class GenerateData:
 
         return N
 
-    def generateFeatures(self, dirName, dataset, hop):
+    def generateFeatures(self, dirName, dataset, hop, verbose=False):
         '''
         Read the segment library and generate features, training.
         Similar to SignalProc.generateFeaturesNN, except this one saves images
@@ -653,7 +653,8 @@ class GenerateData:
             sgRaw[:, ub:] = 0.0
 
             for i in range(int(n)):
-                print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '**')
+                if verbose:
+                    print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '**')
                 # Sgram images
                 sgstart = int(hop * i * self.fs / sp.incr)
                 sgend = sgstart + specFrameSize
