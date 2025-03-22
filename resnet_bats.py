@@ -12,6 +12,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from skimage.transform import resize
 
+import NNModels
+from tensorflow.keras.models import model_from_json
+from tensorflow.keras.utils import custom_object_scope
+
 config = ConfigProto()
 config.gpu_options.allow_growth = True
 session = InteractiveSession(config=config)
@@ -194,7 +198,12 @@ def useNet(netName,dirName,imgWidth,imgHeight,incr,nClasses,thr1,thr2,channels=3
                 json_file = open(os.path.join('/home/marslast/.avianz/Filters/',netName[:-3]) + '.json', 'r')
                 loaded_model_json = json_file.read()
                 json_file.close()
-                head_model = models.model_from_json(loaded_model_json)
+                with custom_object_scope(NNModels.customObjectScopes):
+                    try:
+                        model = model_from_json(loadedmodeljson)
+                    except:
+                        print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
+                        return False
                 head_model.load_weights(os.path.join('/home/marslast/.avianz/Filters/',netName))
                 #head_model = models.load_model(os.path.join('/home/marslast/.avianz/Filters/',netName))
                 imgHeight=64

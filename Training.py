@@ -43,6 +43,9 @@ import AviaNZ_batch
 
 import soundfile as sf
 
+import NNModels
+from tensorflow.keras.utils import custom_object_scope
+
 class NNtrain:
 
     def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
@@ -197,7 +200,6 @@ class NNtrain:
                         print("File: ", file)
                         if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections' in files:
                             # Read the .correction (from allspecies review)
-                            print("CORRECTIONS FOUND")
                             cfile = os.path.join(root, file + '.corrections')
                             soundfile = os.path.join(root, file)
                             try:
@@ -378,7 +380,12 @@ class NNtrain:
         jsonfile = open(model, 'r')
         loadedmodeljson = jsonfile.read()
         jsonfile.close()
-        model = model_from_json(loadedmodeljson)
+        with custom_object_scope(NNModels.customObjectScopes):
+            try:
+                model = model_from_json(loadedmodeljson)
+            except:
+                print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
+                return False
         # Load weights into new model
         model.load_weights(self.bestweight)
         # Compile the model

@@ -39,6 +39,9 @@ import re
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
 
+import NNModels
+from tensorflow.keras.utils import custom_object_scope
+
 class Log(object):
     """ Used for logging info during batch processing.
         Stores most recent analysis for each species, to stay in sync w/ data files.
@@ -256,7 +259,12 @@ class ConfigLoader(object):
                         loaded_model_json = json_file.read()
                         print(loaded_model_json)
                         json_file.close()
-                        model = model_from_json(loaded_model_json)
+                        with custom_object_scope(NNModels.customObjectScopes):
+                            try:
+                                model = model_from_json(loadedmodeljson)
+                            except:
+                                print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
+                                return False
                         print(model)
                         model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
                         print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
