@@ -46,9 +46,9 @@ class PatchLayer(tf.keras.layers.Layer):
         return patches
 
 class PositionalEmbedding(tf.keras.layers.Layer):
-    def __init__(self, num_patches, embed_dim):
+    def __init__(self, num_patches):
         super().__init__()
-        self.pos_emb = self.add_weight("pos_emb", shape=[1, num_patches, embed_dim], initializer="random_normal")
+        self.pos_emb = self.add_weight("pos_emb", shape=[1, num_patches, 1], initializer="random_normal")
 
     def call(self, x):
         return x + self.pos_emb
@@ -81,14 +81,13 @@ def AudioSpectogramTransformer(imageheight, imagewidth, outputdim):
     numtransformerheads = 4
     numtransformerlayers = 4
     num_patches = ((imageheight - patchsize) // (patchsize - patchoverlap) + 1) * ((imagewidth - patchsize) // (patchsize - patchoverlap) + 1)
+
     inputs = tf.keras.layers.Input(shape=(imageheight, imagewidth, 1))
     x = PatchLayer(patchsize, patchoverlap)(inputs)
-    x = tf.keras.layers.Dense(embeddingdim, activation='linear')(x)
-    x = PositionalEmbedding(num_patches=num_patches, embed_dim=embeddingdim)(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embeddingdim, activation='linear'))(x) # embedding of patches
+    x = PositionalEmbedding(num_patches=num_patches)(x) # adding the positions
     for _ in range(numtransformerlayers):
         x = TransformerBlock(embeddingdim, numtransformerheads, embeddingdim)(x)
-    attn_output = tf.keras.layers.MultiHeadAttention(num_heads=numtransformerheads, key_dim=embeddingdim)(x, x)
-    x = tf.keras.layers.Add()([x, attn_output])
     x = tf.keras.layers.Dense(embeddingdim, activation='relu')(x)
     x = tf.keras.layers.GlobalAveragePooling1D()(x)
     outputs = tf.keras.layers.Dense(outputdim, activation='softmax')(x)
