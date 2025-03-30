@@ -42,7 +42,7 @@ class PatchLayer(tf.keras.layers.Layer):
             rates=[1, 1, 1, 1],
             padding='VALID'
         )
-        patches = tf.reshape(patches, [tf.shape(patches)[0], -1, self.patchSize * self.patchSize])
+        patches = tf.reshape(patches, [tf.shape(patches)[0], -1, self.patchSize, self.patchSize, 3])
         return patches
 
 class PositionalEmbedding(tf.keras.layers.Layer):
@@ -54,53 +54,96 @@ class PositionalEmbedding(tf.keras.layers.Layer):
         return x + self.pos_emb
 
 class TransformerBlock(tf.keras.layers.Layer):
-    def __init__(self, keyDim, numHeads, inputDim, ffDim, dropoutRate=0.1):
+    def __init__(self, numHeads, inputDim, ffDim, dropoutRate=0.1):
         super(TransformerBlock, self).__init__()
-        self.attn = tf.keras.layers.MultiHeadAttention(num_heads=numHeads, key_dim=keyDim, dropout=dropoutRate)
-        self.dropout1 = tf.keras.layers.Dropout(dropoutRate)
-        self.layerNorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.layerNormBefore = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.attn = tf.keras.layers.MultiHeadAttention(num_heads=numHeads, key_dim=inputDim//numHeads, dropout=dropoutRate)
+        self.layerNormAfter = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ff = tf.keras.Sequential([
-            tf.keras.layers.Dense(ffDim, activation='relu'),
+            tf.keras.layers.Dense(ffDim, activation=tf.nn.gelu),
             tf.keras.layers.Dense(inputDim)
         ])
-        self.layerNorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.dropout2 = tf.keras.layers.Dropout(dropoutRate)
 
     def call(self, inputs, training=False):
-        attnOutput = self.attn(inputs, inputs, inputs, training=training)
-        attnOutput = self.dropout1(attnOutput, training=training)
-        out = self.layerNorm1(inputs + attnOutput)
-        ffOutput = self.ff(out)
-        ffOutput = self.dropout2(ffOutput, training=training)
-        out = self.layerNorm2(out + ffOutput)
-        return out
+        inputsNorm = self.layerNormBefore(inputs)
+        attnOutput = self.attn(inputsNorm, inputsNorm, inputsNorm, training=training)
+        attnOutputWithResidual = inputs + attnOutput
+        attnOutputWithResidualNorm = self.layerNormAfter(attnOutputWithResidual)
+        ffOutput = self.ff(attnOutputWithResidualNorm)
+        ffOutputWithResidual = attnOutputWithResidual + ffOutput
+        return ffOutputWithResidual
+
+class ClsTokenLayer(tf.keras.layers.Layer):
+    def __init__(self, embedding_dim):
+        super(ClsTokenLayer, self).__init__()
+        self.embedding_dim = embedding_dim
+
+    def build(self, input_shape):
+        # Initialize clsToken as a trainable variable (weight)
+        self.clsToken = self.add_weight(
+            shape=(1, 1, self.embedding_dim),
+            initializer="zeros",
+            trainable=True,
+            name="cls_token"
+        )
+        super(ClsTokenLayer, self).build(input_shape)
+
+    def call(self, inputs):
+        # Concatenate clsToken with inputs (i.e., after patch extraction)
+        # repeat clsToken for each input
+        clsTokenRepeated = tf.repeat(self.clsToken, repeats=tf.shape(inputs)[0], axis=0) 
+        return tf.concat([clsTokenRepeated, inputs], axis=1)
 
 def AudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
     patchSize = 16
-    patchOverlap = 6
+    patchOverlap = 0
     transformerHeads = 12
-    transformerKeyDim = 12 # 64
-    transformerLayers = 4
-    transformerNNDim = 4*transformerKeyDim # have heard that this is a good value
-    dropoutRate = 0.01
+    embeddingDim = 768
+    transformerLayers = 12
+    transformerNNDim = 3072
+    dropoutRate = 0.1
 
-    embeddingDim = transformerHeads*transformerKeyDim
     numPatches = ((imageHeight - patchSize) // (patchSize - patchOverlap) + 1) * ((imageWidth - patchSize) // (patchSize - patchOverlap) + 1)
 
     inputs = tf.keras.layers.Input(shape=(imageHeight, imageWidth, 1))
-    x = PatchLayer(patchSize, patchOverlap)(inputs)
+    # repeat to get 3 dimensions
+    x = tf.keras.layers.Concatenate()([inputs, inputs, inputs])
+    
+    # Extract patches
+    x = PatchLayer(patchSize, patchOverlap)(x)
+
+    # embedding network
+    x = tf.keras.layers.Reshape((-1, patchSize * patchSize * 3))(x)
     x = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embeddingDim, activation='linear'))(x)
-    x = PositionalEmbedding(numPatches=numPatches, embeddingDim=embeddingDim)(x)
-    cls_token = tf.zeros((tf.shape(x)[0], 1, embeddingDim))
-    x = tf.keras.layers.Concatenate(axis=1)([cls_token, x])
+    
+    # Add the ClsTokenLayer after patch extraction
+    x = ClsTokenLayer(embeddingDim)(x)
+
+    # Add positional embedding
+    positionalEmbedding = PositionalEmbedding(numPatches=numPatches+1, embeddingDim=embeddingDim)
+    x = positionalEmbedding(x)
+    
     for _ in range(transformerLayers):
-        x = TransformerBlock(transformerKeyDim, transformerHeads, embeddingDim, transformerNNDim, dropoutRate)(x)
-    x = tf.keras.layers.Flatten()(x)
-    outputs = tf.keras.layers.Dense(outputDim, activation='sigmoid')(x)
+        x = TransformerBlock(transformerHeads, embeddingDim, transformerNNDim, dropoutRate)(x)
+    
+    if outputDim==0: # no head
+        outputs = x
+    else:
+        x = tf.keras.layers.Flatten()(x)
+        outputs = tf.keras.layers.Dense(outputDim, activation='sigmoid')(x)
 
     model = tf.keras.models.Model(inputs, outputs)
     model.summary()
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
+    if not imageHeight==224 or not imageWidth==224:
+        print("Error: pretrained model requires imageHeight and imageWidth are set to 224. Change this in the learning parameters file.")
+        return
+    model = AudioSpectogramTransformer(224,224,outputDim)
+    print("Loading weights...")
+    model.load_weights("pre-trained_ViT_weights.h5", by_name=True)
     return model
 
 customObjectScopes = {'PatchLayer': PatchLayer, 'PositionalEmbedding': PositionalEmbedding, 'TransformerBlock': TransformerBlock}

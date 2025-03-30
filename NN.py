@@ -339,11 +339,12 @@ class NN:
         '''
         Sets self.model
         '''
-        apply_same_padding =  self.imageheight < 120 or self.imagewidth < 120
         if self.modelArchitecture == 'CNN':
             self.model = NNModels.CNNModel(self.imageheight,self.imagewidth,len(self.calltypes)+1)
         elif self.modelArchitecture == 'AudioSpectogramTransformer':
             self.model = NNModels.AudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+        elif self.modelArchitecture == 'AudioSpectogramTransformer (pre-trained ViT)':
+            self.model = NNModels.PretrainedAudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
         else:
             raise ValueError("Model architecture not supported")
 
@@ -599,7 +600,9 @@ class GenerateData:
         count = 0
         dhop = hop
         eps = 0.0005
+        print("self.length",self.length, "self.fs", self.fs, "self.windowwidth", self.windowwidth, "self.inc", self.inc)
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
+        print("specFrameSize", specFrameSize)
         N = [0 for i in range(len(self.calltypes) + 1)]
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
         sp.audioFormat.setSampleRate(self.fs)
@@ -636,6 +639,7 @@ class GenerateData:
                 sp.readSoundFile(record[0], duration=duration, off=record[1][0])
                 sp.resample(self.fs)
                 sgRaw = sp.spectrogram()
+
                 # Could bandpass here if relevant:
                 # if f1 != 0 and f2 != 0:
                 #     audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)

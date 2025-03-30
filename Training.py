@@ -264,7 +264,7 @@ class NNtrain:
         ''' Generate training images  for each calltype and noise'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
-        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
+        _, self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
 
     def train(self):
         # Create temp dir to hold img data and model
