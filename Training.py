@@ -37,7 +37,7 @@ from time import strftime, gmtime
 import math
 
 import SupportClasses
-import SignalProc
+import Spectrogram
 import CNN
 import Segment, WaveletSegment
 import AviaNZ_batch
@@ -56,7 +56,7 @@ class CNNtrain:
         cl = SupportClasses.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
-        self.sp = SignalProc.SignalProc(self.LearningDict['sgramWindowWidth'], self.LearningDict['sgramHop'])
+        self.sp = Spectrogram.Spectrogram(self.LearningDict['sgramWindowWidth'], self.LearningDict['sgramHop'])
 
         self.imgsize = [self.LearningDict['imgX'], self.LearningDict['imgY']]
         self.tmpdir1 = False

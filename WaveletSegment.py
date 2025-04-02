@@ -24,7 +24,7 @@ import librosa
 import copy
 import numpy as np
 import time, os, math, csv, gc
-import SignalProc
+import Spectrogram
 import Segment
 from ext import ce_denoise as ce
 from ext import ce_detect
@@ -42,7 +42,7 @@ class WaveletSegment:
             # for now, we default to the first subfilter:
             print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
 
-        self.sp = SignalProc.SignalProc(256, 128)
+        self.sp = Spectrogram.Spectrogram(256, 128)
 
     def readBatch(self, data, sampleRate, d, spInfo, wpmode="new", wind=False):
         """ File (or page) loading for batch mode. Must be followed by self.waveletSegment.

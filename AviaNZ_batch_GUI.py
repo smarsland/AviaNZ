@@ -34,6 +34,7 @@ from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
 from AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
+import Spectrogram
 import SignalProc
 import Segment
 import SupportClasses, SupportClasses_GUI
@@ -287,13 +288,25 @@ class AviaNZ_batchWindow(QMainWindow):
         #quitMenu.addAction("Restart program", self.restart)
         #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
         helpMenu = self.menuBar().addMenu("&Help")
+<<<<<<< HEAD
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
+=======
+        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
+        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        aboutMenu = self.menuBar().addMenu("&About")
+        #aboutMenu.addAction("About","Ctrl+A", self.showAbout)
+>>>>>>> origin/PyQt5
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
         quitMenu = self.menuBar().addMenu("&Quit")
+        #quitMenu.addAction("Restart program", self.restart)
+        #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
         quitMenu.addAction("Restart program", self.restart)
         quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/PyQt5
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
@@ -1225,10 +1238,14 @@ class AviaNZ_reviewAll(QMainWindow):
         #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
 
         helpMenu = self.menuBar().addMenu("&Help")
+        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
+        #aboutMenu.addAction("About","Ctrl+A", self.showAbout)
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
         quitMenu = self.menuBar().addMenu("&Quit")
+        #quitMenu.addAction("Restart program", self.restart)
+        #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
         quitMenu.addAction("Restart program", self.restart)
         quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
@@ -1816,7 +1833,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Generates spectrograms and audiodatas
             for each segment in self.segments.
             If chunksize is set, will buffer appropriately.
-            The SignalProcs containing these are loaded into self.sps.
+            The Spectrograms containing these are loaded into self.sps.
         """
         with pg.BusyCursor():
             # delete old instances to force release memory
@@ -1862,12 +1879,13 @@ class AviaNZ_reviewAll(QMainWindow):
                 if chunksize is not None:
                     halfChunk = 1.1/2 * chunksize
 
-                # Load data into a list of SignalProcs (with spectrograms) for each segment
+                # Load data into a list of Spectrograms for each segment
                 for segix in range(len(self.segments)):
                     if segix in self.indices2show:
                         seg = self.segments[segix]
                         # note that sp also stores the range of shown freqs
-                        sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
+                        #sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
+                        sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
 
                         if chunksize is not None:
                             mid = (seg[0]+seg[1])/2
@@ -1900,7 +1918,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.readWav(filename, off=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = sp.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            sp.data = SignalProc.bandpassFilter(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             _ = sp.spectrogram(window='Hann', sgType='Standard', mean_normalise=True, onesided=True,need_even=False)
@@ -1986,7 +2004,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # print(self.segsAccepted,self.segsDeleted,self.nsegments)
             self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.nsegments)
 
-            # select the SignalProc with relevant data
+            # select the Spectrogram with relevant data
             sp = self.sps[self.indices2show[self.box1id]]
 
             # these pass the axis limits set by slider

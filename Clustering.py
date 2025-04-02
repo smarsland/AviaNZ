@@ -28,7 +28,7 @@ import librosa
 
 import WaveletSegment
 import WaveletFunctions
-import SignalProc
+import Spectrogram
 import Segment
 
 from sklearn.preprocessing import StandardScaler
@@ -437,7 +437,7 @@ class Clustering:
         """ Gets all labelled segments for the specified species. Those with a calltype annotation are given it, the others have a None label
         Returns [parent_audio_file, [segment], class_label], dict of class labels and counts
         """
-        self.sp = SignalProc.SignalProc(256,128)
+        self.sp = Spectrogram.Spectrogram(256,128)
         calls = []
         calltypes = {}
         duration = []
@@ -501,7 +501,7 @@ class Clustering:
         """ Gets all syllables. Those with a calltype annotation are given it, the others have a None label
         Returns [parent_audio_file, [segment], [syllables], class_label], dict of class labels and counts #, median duration
         """
-        self.sp = SignalProc.SignalProc(256,128)
+        self.sp = Spectrogram.Spectrogram(256,128)
         CTsegments = []
         calltypes = {}
         duration = []
@@ -752,14 +752,14 @@ class Clustering:
         # And since have made spectrogram, pass it back
         audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
         start = seg[0]
-        #self.sp = SignalProc.SignalProc()
+        #self.sp = Spectrogram.Spectrogram()
         self.sp.data = audiodata
         self.sp.sampleRate = fs
         _ = self.sp.spectrogram()
         #if isinstance(audiodata,str):
             #audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
             #start = seg[0]
-            #self.sp = SignalProc.SignalProc()
+            #self.sp = Spectrogram.Spectrogram()
             #self.sp.data = audiodata
             #self.sp.sampleRate = fs
             #_ = self.sp.spectrogram()
@@ -900,7 +900,7 @@ class Clustering:
         if duration == 0:
             duration = None
 
-        self.sp = SignalProc.SignalProc(256, 128)
+        self.sp = Spectrogram.Spectrogram(256, 128)
         print(filename,duration,offset)
         self.sp.readWav(filename, duration, offset, silent=silent)
         #self.sp.resample(fs)
@@ -938,7 +938,7 @@ class Clustering:
         :return: possible clusters
         """
         import Segment
-        import SignalProc
+        import Spectrogram
         from scipy import signal
 
         # Get flow and fhigh for bandpass from annotations
@@ -1029,7 +1029,7 @@ class Clustering:
                         audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
                                                       offset=seg[0], fs=fs, denoise=denoise, f1=f_1, f2=f_2)
                         start = int(seg[0] * fs)
-                        sp = SignalProc.SignalProc(256, 128)
+                        sp = Spectrogram.Spectrogram(256, 128)
                         sp.data = audiodata
                         sp.sampleRate = fs
                         sgRaw = sp.spectrogram(256, 128)
