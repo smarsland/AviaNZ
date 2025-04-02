@@ -179,7 +179,7 @@ class ConfigLoader(object):
         except ValueError:
             # if JSON looks corrupt, quit:
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
-            msg.exec_()
+            msg.exec()
             raise
 
     def filters(self, dir, bats=True):
@@ -304,14 +304,14 @@ class ConfigLoader(object):
                 # if JSON looks corrupt, quit and suggest deleting:
                 print(e)
                 msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
-                msg.exec_()
+                msg.exec()
                 return None
 
         except Exception as e:
             # if file is not found at all, quit, user must recreate the file or change path
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
-            msg.exec_()
+            msg.exec()
             return None
 
     def longbl(self, file, configdir):
@@ -336,13 +336,13 @@ class ConfigLoader(object):
             except ValueError as e:
                 print(e)
                 msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
-                msg.exec_()
+                msg.exec()
                 return None
 
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
-            msg.exec_()
+            msg.exec()
             return None
 
     def batl(self, file, configdir):
@@ -367,13 +367,13 @@ class ConfigLoader(object):
             except ValueError as e:
                 print(e)
                 msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
-                msg.exec_()
+                msg.exec()
                 return None
 
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
-            msg.exec_()
+            msg.exec()
             return None
 
     def learningParams(self, file):
@@ -386,7 +386,7 @@ class ConfigLoader(object):
         except ValueError:
             # if JSON looks corrupt, quit:
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
-            msg.exec_()
+            msg.exec()
             raise
 
     # Dumps the provided JSON array to the corresponding bird file.
@@ -408,7 +408,7 @@ class ConfigLoader(object):
         except Exception as e:
             print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
-            msg.exec_()
+            msg.exec()
 
     # Dumps the provided JSON array to the corresponding config file.
     def configwrite(self, content, file):
@@ -479,13 +479,15 @@ class ExcelIO():
                 startTimeFile = QTime(0,0,0).addSecs(startTime)
 
             # Loop over the segments
-            for seg in speciesSegs:
+            #for seg in speciesSegs:
+            for i in range(len(speciesSegs)):
+                seg = speciesSegs[i]
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(seg[0]*1000).toString(timeStrFormat)))
-                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(seg[1]*1000).toString(timeStrFormat)))
+                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(int(seg[0]*1000)).toString(timeStrFormat)))
+                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(int(seg[1]*1000)).toString(timeStrFormat)))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
@@ -516,6 +518,15 @@ class ExcelIO():
                                 strct.append("-")
                     ws.cell(row=r, column=6, value=", ".join(strcert))
                     ws.cell(row=r, column=7, value=", ".join(strct))
+                    # SRM: As desired for bittern (H. Caley)
+                    # The segments are sorted into order of start time
+                    Previous=1
+                    while i-Previous>=0 and speciesSegs[i-Previous][1] > seg[0]:
+                        Previous += 1
+                    Next = 1
+                    while i+Next<len(speciesSegs) and speciesSegs[i+Next][0] < seg[1]:
+                        Next += 1
+                    ws.cell(row=r, column=8, value=", ".join(str(Next+Previous-2)))
                 r += 1
 
     # This stores pres/abs and max certainty for the species in each file
@@ -646,6 +657,7 @@ class ExcelIO():
                 else:
                     ws.cell(row=1, column=6, value="certainty")
                     ws.cell(row=1, column=7, value="call type")
+                    ws.cell(row=1, column=8, value="number of overlaps")
 
                     # Second sheet
                     wb.create_sheet(title='Presence Absence', index=2)

@@ -701,6 +701,14 @@ class CNNtest:
             cl = SupportClasses.ConfigLoader()
             filterlist = cl.filters(self.filterdir, bats=False)
             CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [filtname])
+            #if len(CNNDicts.keys()) == 1:
+            # SM: CNN testing used wrong name
+            #if filtname in CNNDicts.keys():
+                #for filtname in CNNDicts.keys():
+                    #CNNmodel = CNNDicts[filtname]
+                    #self.text = self.getSummary(CNN=True)
+            #else:
+                #print("ERROR: Couldn't find a matching CNN!")
             # Providing one filter, so only one CNN should be returned:
             if len(CNNDicts)!=1:
                 print("ERROR: Couldn't find a unique matching CNN!")

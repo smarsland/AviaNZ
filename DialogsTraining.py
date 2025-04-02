@@ -31,9 +31,9 @@ import copy
 from shutil import copyfile
 import json
 
-from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor
+from PyQt5.QtGui import QIcon, QValidator, QPixmap, QColor
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -62,7 +62,7 @@ class BuildRecAdvWizard(QWizard):
             self.setSubTitle('To start training, you need labelled calls from your species as training data (see the manual). Select the folder where this data is located. Then select the species.')
 
             self.setMinimumSize(600, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.trainDirName = QLineEdit()
@@ -75,7 +75,7 @@ class BuildRecAdvWizard(QWizard):
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumHeight(225)
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             selectSpLabel = QLabel("Choose the species for which you want to build the recogniser")
             self.species = QComboBox()  # fill during browse
@@ -108,7 +108,7 @@ class BuildRecAdvWizard(QWizard):
             layout.addWidget(selectSpLabel)
             layout.addWidget(self.species)
             layout.addLayout(form1)
-            layout.setAlignment(Qt.AlignVCenter)
+            layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             self.setLayout(layout)
 
         def browseTrainData(self):
@@ -159,7 +159,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Confirm data input')
             self.setSubTitle('When ready, press \"Cluster\" to start clustering. The process may take a long time.')
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             revtop = QLabel("The following parameters were set:")
@@ -195,7 +195,7 @@ class BuildRecAdvWizard(QWizard):
             # start larger than minimumSize, but not bigger than the screen:
             screenresol = QApplication.primaryScreen().availableSize()
             self.manualSizeHint = QSize(min(800, 0.9*screenresol.width()), min(600, 0.9*screenresol.height()))
-            self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+            self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             self.adjustSize()
 
             instr = QLabel("To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.")
@@ -213,7 +213,6 @@ class BuildRecAdvWizard(QWizard):
             self.nclasses = 0
             self.config = config
             self.segsChanged = False
-            self.hasCTannotations = True
 
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
@@ -243,7 +242,7 @@ class BuildRecAdvWizard(QWizard):
             hboxBtns2 = QHBoxLayout()
             hboxBtns2.addWidget(self.btnCreateNewCluster)
             hboxBtns2.addWidget(self.btnDeleteSeg)
-            hboxBtns2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            hboxBtns2.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
             # top part
             vboxTop = QVBoxLayout()
@@ -259,7 +258,7 @@ class BuildRecAdvWizard(QWizard):
             self.scrollArea = QScrollArea(self)
             #self.scrollArea.setWidgetResizable(True)
             self.scrollArea.setWidget(self.flowLayout)
-            self.scrollArea.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+            self.scrollArea.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
 
             # set overall layout of the dialog
             self.vboxFull = QVBoxLayout()
@@ -276,30 +275,70 @@ class BuildRecAdvWizard(QWizard):
 
             with pg.BusyCursor():
                 print("Processing. Please wait...")
-                # Check if the annotations come with call type labels, if so skip auto clustering
-                self.CTannotations()
-                if self.hasCTannotations:
-                    # self.segments: [parent_audio_file, [segment], class_label]
-                    self.segments, self.nclasses, self.duration = self.getClustersGT()
+                # Get whatever labels there are and put those into the clusters and use them, then cluster the rest
+                # TODO: SRM: Fix this bit...
+                self.cluster = Clustering.Clustering([], [], 0)
+                calls, calltypes  = self.cluster.getCalls(self.field("trainDir"),self.field("species"),self.field("fs"))
+                #self.segments, self.calltypes  = self.cluster.getSyllables(self.field("trainDir"),self.field("species"),self.field("fs"))
+
+                if len(calltypes) > 0:
                     self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
-                else:
-                    # return format:
-                    # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
-                    # self.nclasses: number of class_labels
-                    # duration: median length of segments
-                    self.cluster = Clustering.Clustering([], [], 5)
-                    self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
-                    # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                    # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
-                    #                                                                              self.field("species"),
-                    #                                                                              feature=self.feature,
-                    #                                                                              max_clusters=5,
-                    #                                                                              single=True)
-                    self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
+                    # Seed clusters 
+                    callsgs = []
+                    audios = []
+                    callIDs = {}
+                    for i in range(len(calltypes)):
+                        sgs = []
+                        audio = []
+                        callIDs.update({i:list(calltypes)[i]})
+                        for j in range(len(calls)):
+                            if calls[j][2] == list(calltypes)[i]:
+                                # Get the spectrogram, append to the calls list
+                                # TODO: Options: break into fixed length pieces, or get syllables
+                                # Both have parameters :(
+                                # For now, try 1 second pieces, no overlap, skip last TODO!!
+                                # Make sure there is at least 1, though
+                                window = 2
+                                duration = max(int(calls[j][1][1]-calls[j][1][0]),window)
+                                audiodata = self.cluster.loadFile(calls[j][0],duration,calls[j][1][0])
+                                sp.data = audiodata
+                                sp.sampleRate = 16000
+                                _= sp.spectrogram(256, 128)
+                                sg = sp.normalisedSpec("Log")
+                                length = window*np.shape(sg)[0]//duration
+                                # TODO: Only use the relevant freqs?
+                                for k in range(duration):
+                                    sgs.append(sg[k*length:(k+1)*length,:])
+                                    audio.append(audiodata[k*window*sp.sampleRate//2:(k+1)*window*sp.sampleRate//2])
+                        callsgs.append(sgs)
+                        audios.append(audio)
+
+                #self.cluster.setnClusters(max(self.nclasses,len(self.calltypes)))
+
+                # TODO: So now to rewrite the clustering to take a set of things with labels and things without
+                # TODO: Also, remember that need to update the filter if the calltype labels came from manual annotation
+                # TODO: Having got the segments, we don't use them...
+                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+
+                ## return format:
+                ## self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
+                ## self.nclasses: number of class_labels
+                ## duration: median length of segments
+                ## TODO: That 5 is arbitrary max number of classes...
+                #self.cluster = Clustering.Clustering([], [], 5)
+                #self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                ## segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                ## self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                ##                                                                              self.field("species"),
+                ##                                                                              feature=self.feature,
+                ##                                                                              max_clusters=5,
+                ##                                                                              single=True)
+                #self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
 
                 # Create and show the buttons
                 self.clearButtons()
-                self.addButtons()
+                self.addButtons(callsgs,audios,callIDs)
                 self.updateButtons()
                 print("buttons added")
                 self.segsChanged = True
@@ -309,8 +348,8 @@ class BuildRecAdvWizard(QWizard):
             # empty cluster names?
             if len(self.clusters)==0:
                 return False
-            # duplicate cluster names aren't updated:
 
+            # Duplicate cluster names aren't updated:
             for ID in range(self.nclasses):
                 if self.clusters[ID] != self.tboxes[ID].text():
                     return False
@@ -333,8 +372,8 @@ class BuildRecAdvWizard(QWizard):
             self.clusters = {}
 
         def CTannotations(self):
-            """ Check if all the segments from target species has call type annotations"""
-            self.hasCTannotations = True
+            """ Collect any calltype annotations that are present """
+
             listOfDataFiles = []
             for root, dirs, files in os.walk(self.field("trainDir")):
                 for file in files:
@@ -346,66 +385,20 @@ class BuildRecAdvWizard(QWizard):
                 segments = Segment.SegmentList()
                 segments.parseJSON(file)
                 SpSegs = segments.getSpecies(self.field("species"))
+                calltypes = {}
                 for segix in SpSegs:
                     seg = segments[segix]
                     for label in seg[4]:
-                        if label["species"] == self.field("species") and "calltype" not in label:
-                            self.hasCTannotations = False
-                            break
-
-        def getClustersGT(self):
-            """ Gets call type clusters from annotations
-             returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
-            """
-            ctTexts = []
-            CTsegments = []
-            duration = []
-            cl = Clustering.Clustering([], [], 5)
-
-            listOfDataFiles = []
-            listOfWavFiles = []
-            for root, dirs, files in os.walk(self.field("trainDir")):
-                for file in files:
-                    if file[-5:].lower() == '.data':
-                        listOfDataFiles.append(os.path.join(root, file))
-                    elif file[-4:].lower() == '.wav':
-                        listOfWavFiles.append(os.path.join(root, file))
-
-            for file in listOfDataFiles:
-                if file[:-5] in listOfWavFiles:
-                    # Read the annotation
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(file)
-                    SpSegs = segments.getSpecies(self.field("species"))
-                    for segix in SpSegs:
-                        seg = segments[segix]
-                        for label in seg[4]:
-                            if label["species"] == self.field("species") and "calltype" in label:
-                                if label["calltype"] not in ctTexts:
-                                    ctTexts.append(label["calltype"])
-            for i in range(len(ctTexts)):
-                self.clusters[i] = ctTexts[i]
-
-            for file in listOfDataFiles:
-                if file[:-5] in listOfWavFiles:
-                    # Read the annotation
-                    segments = Segment.SegmentList()
-                    wavfile = os.path.join(self.field("trainDir"), file[:-5])
-                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
-                    SpSegs = segments.getSpecies(self.field("species"))
-                    for segix in SpSegs:
-                        seg = segments[segix]
-                        for label in seg[4]:
-                            if label["species"] == self.field("species") and "calltype" in label:
-                                # Find the syllables inside this segment
-                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                                syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), denoise=False, minlen=0.2)
-                                CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
-                                duration.append(seg[1]-seg[0])
-            return CTsegments, len(self.clusters), np.median(duration)
+                        if label["species"] == self.field("species") and "calltype" in label:
+                            if label["calltype"] in calltypes:
+                                calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
+                            else:
+                                calltypes.update({label["calltype"]:1})
+            print(calltypes)                     
+            return calltypes
 
         def backupDatafiles(self):
-            # Backup original data fiels before updating them
+            # Backup original data files before updating them
             print("Backing up files ", self.field("trainDir"))
             listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
             for file in listOfDataFiles:
@@ -667,7 +660,7 @@ class BuildRecAdvWizard(QWizard):
                 self.completeChanged.emit()
             else:
                 msg = SupportClasses_GUI.MessagePopup("t", "Select", "Select calls to make the new cluster")
-                msg.exec_()
+                msg.exec()
                 self.completeChanged.emit()
                 return
 
@@ -744,13 +737,13 @@ class BuildRecAdvWizard(QWizard):
             names = [self.tboxes[ID].text() for ID in range(self.nclasses)]
             if len(names) != len(set(names)):
                 msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
-                msg.exec_()
+                msg.exec()
                 self.completeChanged.emit()
                 return
 
             if "(Other)" in names:
                 msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
-                msg.exec_()
+                msg.exec()
                 self.completeChanged.emit()
                 return
 
@@ -760,41 +753,48 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
-        def addButtons(self):
+        def addButtons(self,ims=None,calls=None,calltypes=None,sp=None):
             """ Only makes the PicButtons and self.clusters dict
             """
             self.picbuttons = []
-            if not self.hasCTannotations:
+            # TODO: Here
+            if ims is not None:
+                for i in range(len(ims)):
+                    for j in range(len(ims[i])):
+                        newButton = SupportClasses_GUI.PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
+                        self.picbuttons.append(newButton)
+                        self.clusters = calltypes
+            else:
                 self.clusters = []
                 for i in range(self.nclasses):
                     self.clusters.append((i, 'Cluster_' + str(i)))
                 self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
-            # largest spec will be this wide
-            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
+                # largest spec will be this wide
+                maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
-            # Create the buttons for each segment
-            self.minsg = 1
-            self.maxsg = 1
-            for seg in self.segments:
-                sp = SignalProc.SignalProc(512, 256)
-                sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+                # Create the buttons for each segment
+                self.minsg = 1
+                self.maxsg = 1
+                for seg in self.segments:
+                    sp = SignalProc.SignalProc(512, 256)
+                    sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+    
+                    # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
+                    incr = 256 * sp.sampleRate // self.field("fs")
+                    _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
+                    sg = sp.normalisedSpec("Log")
 
-                # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                incr = 256 * sp.sampleRate // self.field("fs")
-                _ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
-                sg = sp.normalisedSpec("Log")
+                    # buffer the image to largest spec size, so that the resulting buttons would have equal scale
+                    if sg.shape[0]<maxspecsize:
+                        padlen = int(maxspecsize - sg.shape[0])//2
+                        sg = np.pad(sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(sg, 0.1))
+    
+                    self.minsg = min(self.minsg, np.min(sg))
+                    self.maxsg = max(self.maxsg, np.max(sg))
 
-                # buffer the image to largest spec size, so that the resulting buttons would have equal scale
-                if sg.shape[0]<maxspecsize:
-                    padlen = int(maxspecsize - sg.shape[0])//2
-                    sg = np.pad(sg, ((padlen, padlen), (0,0)), 'constant', constant_values=np.quantile(sg, 0.1))
-
-                self.minsg = min(self.minsg, np.min(sg))
-                self.maxsg = max(self.maxsg, np.max(sg))
-
-                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
-                self.picbuttons.append(newButton)
+                    newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+                    self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
         def selectAll(self):
@@ -827,7 +827,7 @@ class BuildRecAdvWizard(QWizard):
                 tbox.setMinimumWidth(80)
                 tbox.setMaximumHeight(150)
                 tbox.setStyleSheet("border: none;")
-                tbox.setAlignment(Qt.AlignCenter)
+                tbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 tbox.textChanged.connect(self.updateClusterNames)
                 self.tboxes.append(tbox)
                 self.flowLayout.addWidget(self.tboxes[-1], r, c)
@@ -892,7 +892,7 @@ class BuildRecAdvWizard(QWizard):
             self.setSubTitle("These fields were completed using the training data. Adjust if required.\nWhen ready, "
                              "press \"Train\". The process may take a long time.")
             #self.setMinimumSize(350, 430)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
             self.adjustSize()
 
             self.method = method
@@ -999,13 +999,13 @@ class BuildRecAdvWizard(QWizard):
             len_min, len_max, f_low, f_high = pageSegs.getSummaries()
             self.maxlen.setText(str(round(np.max(len_max),2)))
 
-            self.fLow.setRange(0, fs/2)
+            self.fLow.setRange(0, fs//2)
             self.fLow.setValue(max(0, int(np.min(f_low))))
-            self.fHigh.setRange(0, fs/2)
+            self.fHigh.setRange(0, fs//2)
             if np.max(f_high) == 0:
                 # happens when no segments have y limits
-                f_high = fs/2
-            self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
+                f_high = fs//2
+            self.fHigh.setValue(min(fs//2,int(np.max(f_high))))
 
             # this is just the minimum call length:
             self.minlen.setText(str(round(np.min(len_min),2)))
@@ -1053,7 +1053,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(520, 440)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.segments = segments
@@ -1318,7 +1318,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Save recogniser')
             self.setSubTitle('If you are happy with the overall call detection summary, save the recogniser. \n You should now test it.')
             self.setMinimumSize(430, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.lblTrainDir = QLabel()
@@ -1336,9 +1336,9 @@ class BuildRecAdvWizard(QWizard):
 
             # filter dir listbox
             self.listFiles = QListWidget()
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFiles.setMinimumHeight(200)
-            filtdir = QDir(filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+            filtdir = QDir(filtdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file)
@@ -1355,7 +1355,7 @@ class BuildRecAdvWizard(QWizard):
                     elif input=="M.txt":
                         print("filter name \"M\" reserved for manual annotations")
                         return(QValidator.Intermediate, input, pos)
-                    elif self.listFiles.findItems(input, Qt.MatchExactly):
+                    elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
                     else:
@@ -1474,11 +1474,11 @@ class BuildRecAdvWizard(QWizard):
         super(BuildRecAdvWizard, self).__init__()
         self.setWindowTitle("Build Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+        self.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
 
         # add the Save & Test button
@@ -1631,7 +1631,7 @@ class TestRecWizard(QWizard):
             self.setSubTitle('Select the folder with testing data, then choose species')
 
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             # the combobox will default to this filter initially if provided
@@ -1647,7 +1647,7 @@ class TestRecWizard(QWizard):
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumHeight(275)
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             selectSpLabel = QLabel("Choose the recogniser that you want to test")
             self.species = QComboBox()  # fill during browse
@@ -1667,7 +1667,7 @@ class TestRecWizard(QWizard):
             layout.addWidget(space)
             layout.addWidget(selectSpLabel)
             layout.addWidget(self.species)
-            layout.setAlignment(Qt.AlignVCenter)
+            layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             self.setLayout(layout)
             self.setButtonText(QWizard.NextButton, 'Test >')
 
@@ -1689,7 +1689,7 @@ class TestRecWizard(QWizard):
             self.setTitle('Summary of testing results')
 
             self.setMinimumSize(300, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
             self.configdir = configdir
             self.filterdir = filterdir
@@ -1782,11 +1782,11 @@ class TestRecWizard(QWizard):
         super(TestRecWizard, self).__init__()
         self.setWindowTitle("Test Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
         self.setOptions(QWizard.NoBackButtonOnStartPage)
 
@@ -1873,11 +1873,11 @@ class BuildCNNWizard(QWizard):
         super(BuildCNNWizard, self).__init__()
         self.setWindowTitle("Train CNN")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
         self.setOptions(QWizard.NoBackButtonOnStartPage)
 
@@ -1918,7 +1918,7 @@ class BuildCNNWizard(QWizard):
             self.setSubTitle('Choose the recogniser that you want to extend with CNN, then select training data.')
 
             self.setMinimumSize(300, 600)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -1942,15 +1942,15 @@ class BuildCNNWizard(QWizard):
             self.listFilesTrain2 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain2.setMinimumWidth(350)
             self.listFilesTrain2.setMinimumHeight(275)
-            self.listFilesTrain2.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFilesTrain2.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFilesTrain1 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain1.setMinimumWidth(350)
             self.listFilesTrain1.setMinimumHeight(275)
-            self.listFilesTrain1.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFilesTrain1.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFilesTest = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTest.setMinimumWidth(150)
             self.listFilesTest.setMinimumHeight(275)
-            self.listFilesTest.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFilesTest.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
             self.speciesCombo = QComboBox()  # fill during browse
             self.speciesCombo.addItems(['Choose recogniser...'])
@@ -2034,7 +2034,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Confirm data input')
             self.setSubTitle('When ready, press \"Next\" to start preparing images and train the CNN.')
             self.setMinimumSize(350, 275)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2240,7 +2240,7 @@ class BuildCNNWizard(QWizard):
             self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN and training.\nThe process may take a long time.')
 
             self.setMinimumSize(350, 200)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             # self.cnntrain = cnntrain
@@ -2346,12 +2346,12 @@ class BuildCNNWizard(QWizard):
             self.cnntrain = self.wizard().confirminputPage.cnntrain
             self.cnntrain.windowWidth = 512
             self.cnntrain.windowInc = 256
-            self.f1.setRange(0, self.cnntrain.fs/2)
+            self.f1.setRange(0, self.cnntrain.fs//2)
             self.f1.setValue(0)
             self.f1text.setText('Lower frq. limit 0 Hz')
-            self.f2.setRange(0, self.cnntrain.fs/2)
-            self.f2.setValue(self.cnntrain.fs/2)
-            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+            self.f2.setRange(0, self.cnntrain.fs//2)
+            self.f2.setValue(self.cnntrain.fs//2)
+            self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
             self.f1.valueChanged.connect(self.f1Change)
             self.f2.valueChanged.connect(self.f2Change)
             self.cbfrange.setChecked(False)
@@ -2371,13 +2371,13 @@ class BuildCNNWizard(QWizard):
             # Ideally, the image length should be bigger than the max gap between syllables
             if np.max(self.cnntrain.maxgaps) * 2 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 2) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 2 * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 2 * 100))
             elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.maxgaps) * 1.5 * 100))
             elif np.max(self.cnntrain.mincallength) <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.mincallength)) + ' sec')
-                self.imgsec.setValue(np.max(self.cnntrain.mincallength) * 100)
+                self.imgsec.setValue(int(np.max(self.cnntrain.mincallength) * 100))
             self.cnntrain.imgWidth = self.imgsec.value() / 100
 
             self.setWindowInc()
@@ -2400,16 +2400,16 @@ class BuildCNNWizard(QWizard):
                 self.f1text.setEnabled(True)
                 self.f2.setEnabled(True)
                 self.f2text.setEnabled(True)
-                if self.f1.value() == 0 and self.f2.value() == self.cnntrain.fs/2:
+                if self.f1.value() == 0 and self.f2.value() == self.cnntrain.fs//2:
                     self.f1.setValue(self.cnntrain.f1)
                     self.f2.setValue(self.cnntrain.f2)
                     self.f1text.setText('Lower frq. limit ' + str(self.cnntrain.f1) + ' Hz')
                     self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.f2) + ' Hz')
             else:
                 self.f1.setValue(0)
-                self.f2.setValue(self.cnntrain.fs/2)
+                self.f2.setValue(self.cnntrain.fs//2)
                 self.f1text.setText('Lower frq. limit ' + str(0) + ' Hz')
-                self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs/2) + ' Hz')
+                self.f2text.setText('Upper frq. limit ' + str(self.cnntrain.fs//2) + ' Hz')
                 self.f1.setEnabled(False)
                 self.f1text.setEnabled(False)
                 self.f2.setEnabled(False)
@@ -2542,7 +2542,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(350, 200)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2642,7 +2642,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Training Summary')
             self.setSubTitle('If you are happy with the CNN performance, press \"Save the Recogniser.\"')
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2670,7 +2670,7 @@ class BuildCNNWizard(QWizard):
             for ct in range(len(self.cnntrain.calltypes)):
                 lblct = QLabel('Call type: ' + self.cnntrain.calltypes[ct])
                 lblct.setStyleSheet("QLabel { color : #808080; font-weight: bold; }")
-                self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignTop)
+                self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignmentFlag.AlignTop)
                 lblctsumy = QLabel('True Positive Rate: %.2f\nFalse Positive Rate: %.2f\nPrecision: %.2f\nAccuracy: %.2f'
                                    % (self.cnntrain.TPRs[ct][self.cnntrain.bestThrInd[ct]],
                                       self.cnntrain.FPRs[ct][self.cnntrain.bestThrInd[ct]],
@@ -2704,7 +2704,7 @@ class BuildCNNWizard(QWizard):
             self.setTitle('Save Recogniser')
             self.setSubTitle('If you are happy with the CNN performance, save the recogniser.')
             self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
             self.adjustSize()
 
             self.cnntrain = cnntrain
@@ -2713,9 +2713,9 @@ class BuildCNNWizard(QWizard):
 
             # filter dir listbox
             self.listFiles = QListWidget()
-            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+            self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
             self.listFiles.setMinimumHeight(200)
-            filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+            filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file)
@@ -2732,7 +2732,7 @@ class BuildCNNWizard(QWizard):
                     elif input=="M.txt":
                         print("filter name \"M\" reserved for manual annotations")
                         return(QValidator.Intermediate, input, pos)
-                    elif self.listFiles.findItems(input, Qt.MatchExactly):
+                    elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
                     else:
@@ -2928,7 +2928,7 @@ class FilterCustomiseROC(QDialog):
         self.setWindowTitle("Customise a recogniser (use existing ROC)")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.filtdir = filtdir
         self.saveoption = "New"
         self.ROCWF = False
@@ -2942,7 +2942,7 @@ class FilterCustomiseROC(QDialog):
         self.listFiles = QListWidget()
         self.listFiles.setFixedWidth(300)
         self.listFiles.setFixedHeight(450)
-        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.listFiles.itemSelectionChanged.connect(self.readFilter)
 
         self.readContents()
@@ -2960,7 +2960,7 @@ class FilterCustomiseROC(QDialog):
                 elif input=="M.txt":
                     print("filter name \"M\" reserved for manual annotations")
                     return(QValidator.Intermediate, input, pos)
-                elif self.listFiles.findItems(input, Qt.MatchExactly):
+                elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                     print("duplicated input", input)
                     return(QValidator.Intermediate, input, pos)
                 else:

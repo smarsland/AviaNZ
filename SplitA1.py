@@ -51,7 +51,7 @@ class SplitData(QMainWindow):
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
-        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec())
+        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec_())
         fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
@@ -69,7 +69,7 @@ class SplitData(QMainWindow):
         self.w_browse = QPushButton(" Browse Folder")
         self.w_browse.setToolTip("Warning: files inside subfolders will not be processed!")
         self.w_browse.setMinimumSize(190, 40)
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.clicked.connect(self.browse)
         self.w_browse.setSizePolicy(QSizePolicy(1,1))
@@ -86,7 +86,7 @@ class SplitData(QMainWindow):
         labelO = QLabel("Select folder for storing split output:")
         self.w_browseO = QPushButton(" Browse Folder")
         self.w_browseO.setMinimumSize(170, 40)
-        self.w_browseO.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
+        self.w_browseO.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_browseO.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browseO.clicked.connect(self.browseO)
         self.w_browseO.setSizePolicy(QSizePolicy(1,1))
@@ -240,7 +240,7 @@ class SplitData(QMainWindow):
             self.listOfDataFiles = []
             listOfDirs = []
         else:
-            listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot )
+            listOfDirs = QDir(self.dirName).entryList(['..'],filters=QDir.AllDirs | QDir.NoDotAndDotDot )
             self.listOfWavs = QDir(self.dirName).entryList(['*.wav'])
             self.listOfDataFiles = QDir(self.dirName).entryList(['*.wav.data'])
 
@@ -326,7 +326,7 @@ class SplitData(QMainWindow):
         dlg.setCancelButton(None)
         dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         dlg.setWindowTitle('AviaNZ')
-        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setWindowModality(Qt.WindowModal)
         dlg.setMinimumDuration(1)
         dlg.forceShow()
 
@@ -391,7 +391,7 @@ class SplitData(QMainWindow):
         QApplication.restoreOverrideCursor()
         if donefiles==totalfiles:
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", "Folder processed successfully!")
-            msg.exec()
+            msg.exec_()
 
 
     def splitData(self, infile, outdir, cutlen):

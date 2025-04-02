@@ -1,4 +1,4 @@
-# Self-standing executable for tall comparison mode
+# Self-standing executable for call comparison mode
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QDoubleSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox, QDialog, QToolButton, QCheckBox
 from PyQt5.QtCore import QDir, Qt, QSize
@@ -23,11 +23,11 @@ class CompareCalls(QMainWindow):
         print("Starting...")
         self.setWindowTitle("AviaNZ call comparator")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
-        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec_())
+        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec())
         fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
@@ -43,12 +43,12 @@ class CompareCalls(QMainWindow):
         self.dirName = ""
         label = QLabel("Select input folder containing files named in one of the following formats:")
         formatlabel = QLabel("recordername_YYMMDD_hhmmss.wav\n or \nrecordername_YYYYMMDD_hhmmss.wav")
-        formatlabel.setAlignment(Qt.AlignCenter)
+        formatlabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("QLabel {color: #303030}")
         formatlabel.setStyleSheet("QLabel {color: #303030}")
 
         self.w_browse = QPushButton(" Browse Folder")
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.setMinimumSize(170, 40)
         self.w_browse.setSizePolicy(QSizePolicy(1,1))
@@ -146,6 +146,8 @@ class CompareCalls(QMainWindow):
         comparisonGroup.setLayout(comparisonGrid)
         comparisonGroup.setStyleSheet("QGroupBox:title{color: #505050; font-weight: 50}")
 
+        #comparisonGrid.addWidget(QLabel("Compare recorders:"), 0, 0, 1, 2)
+        #comparisonGrid.addWidget(self.compareRecSelector, 0, 2, 1, 2)
         comparisonGrid.addWidget(QLabel("Compare recorders:"), 0, 0)
         comparisonGrid.addWidget(self.compareRecSelector, 0, 2)
         comparisonGrid.addWidget(QLabel("with shift:"), 0, 3)
@@ -176,7 +178,7 @@ class CompareCalls(QMainWindow):
         self.w_dir.setPlainText("")
         self.w_dir.setReadOnly(True)
         self.labelDatas.setText("")
-        pm = self.style().standardIcon(QStyle.SP_DialogCancelButton).pixmap(QSize(12,12))
+        pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton).pixmap(QSize(12,12))
         self.labelDatasIcon.setPixmap(pm)
         self.suggestAdjBtn.setEnabled(False)
         self.reviewAdjBtn.setEnabled(False)
@@ -207,7 +209,7 @@ class CompareCalls(QMainWindow):
         else:
             self.labelDatas.setText("Read %d data files from %d recorders" % (len(self.annots), len(self.allrecs)))
             self.labelDatas.setStyleSheet("QLabel {color: #000000}")
-            pm = self.style().standardIcon(QStyle.SP_DialogApplyButton).pixmap(QSize(12,12))
+            pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton).pixmap(QSize(12,12))
             self.labelDatasIcon.setPixmap(pm)
             print("Read %d data files from %d recorders" % (len(self.annots), len(self.allrecs)))
 
@@ -304,7 +306,7 @@ class CompareCalls(QMainWindow):
         print("Detected recorders:", self.allrecs)
         return(0)
 
-    def updateShiftSpinbox(self, text):
+   def updateShiftSpinbox(self, text):
         """ Updates the shift selection spinbox, when the selected
             recorder pair or estimated shift change.
         """
@@ -347,7 +349,7 @@ class CompareCalls(QMainWindow):
 
         # Disable GUI in case of errors
         self.labelAdjust.setText("Clock adjustment not done")
-        pm = self.style().standardIcon(QStyle.SP_DialogCancelButton).pixmap(QSize(12,12))
+        pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton).pixmap(QSize(12,12))
         self.labelAdjustIcon.setPixmap(pm)
         self.reviewAdjBtn.setEnabled(False)
 
@@ -432,14 +434,14 @@ class CompareCalls(QMainWindow):
 
         print("Clock adjustment complete")
         self.labelAdjust.setText("Clock adjustment complete")
-        pm = self.style().standardIcon(QStyle.SP_DialogApplyButton).pixmap(QSize(12,12))
+        pm = self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton).pixmap(QSize(12,12))
         self.labelAdjustIcon.setPixmap(pm)
         self.reviewAdjBtn.setEnabled(True)
         self.refreshMainOut()
 
     def showAdjustmentsDialog(self):
         self.adjrevdialog = ReviewAdjustments(self.overlaps_forplot, self.hopSpin.value(), self)
-        self.adjrevdialog.exec_()
+        self.adjrevdialog.exec()
 
         self.cclist = self.connectedComponents()
 
@@ -457,12 +459,11 @@ class CompareCalls(QMainWindow):
 
         # find the currently suggested shift for rec2 w.r.t rec1
         # This is the estimated shift:
-        # i = self.allrecs.index(rec1)
-        # j = self.allrecs.index(rec2)
-        # rec2shift = self.pairwiseShifts[i, j]
+        #i = self.allrecs.index(rec1)
+        #j = self.allrecs.index(rec2)
+        #rec2shift = self.pairwiseShifts[i, j]
         # This is the manually adjusted shift:
         rec2shift = self.compareShiftSpinbox.value()
-
 
         # find the matching annotations from that pair of Segment Lists
         # ideally need the one with biggest overlap to the other
@@ -484,6 +485,8 @@ class CompareCalls(QMainWindow):
             for sl2 in annots2:
                 filelen2 = dt.timedelta(seconds=sl2.metadata["Duration"])
                 if sl2.datetime-filelen1 < sl.datetime < sl2.datetime + filelen2:
+                    #sl2match = sl2
+                    #break
                     print("--- potential data file overlap detected:", rec1, sl.datetime, rec2, sl2.datetime)
                     # Check more carefully if the overlap is not very small, and has segments:
                     overlSize = min(sl.datetime+filelen1, sl2.datetime+filelen2) - max(sl.datetime, sl2.datetime)
@@ -502,6 +505,10 @@ class CompareCalls(QMainWindow):
 
             # identify the matching segment from sl2
             for seg in sl:
+                ## find matching pair at segment level
+                #seg[0] = seg[0] + rec2shift
+                #seg[1] = seg[1] + rec2shift
+                #seg2 = self.findMatchIn(sl2match, seg)
                 # find matching pair at segment level,
                 # after adjusting for the proposed recorder shift
                 # and any recorder start timestamp difference:
@@ -512,10 +519,10 @@ class CompareCalls(QMainWindow):
                     seg.recname = rec1
                     seg2.recname = rec2
                     seg.wavname = sl.wavname
+                    #seg2.wavname = sl2.wavname
                     seg2.wavname = sl2match.wavname
                     print("Storing SEG1", seg)
                     slpaired1.append(seg)
-
                     # Use this if you want to show THE BEST MATCHING SEGMENT
                     # in the comparison dialog
                     # slpaired2.append(seg2)
@@ -539,9 +546,13 @@ class CompareCalls(QMainWindow):
 
         print("Reviewing calls...")
         self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, self)
-        self.comparedialog.exec_()
+        #self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, rec2shift, self)
+        self.comparedialog.exec()
         print("Call comparison complete")
 
+    #def findMatchIn(self, seglist, seg):
+        #""" Returns one segment from seglist that has the most overlap with seg. """
+        #overlaps = [min(seg[1], seg2[1]) - max(seg[0], seg2[0]) for seg2 in seglist]
     def findMatchIn(self, seglist, seg, tshift):
         """ Returns one segment from seglist that has the most overlap with seg.
             tshift will be added to the segment timestamp temporarily:
@@ -647,7 +658,7 @@ class ReviewAdjustments(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Clock Adjustments')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         self.parent = parent
 
@@ -669,8 +680,8 @@ class ReviewAdjustments(QDialog):
         self.rightBtn.setArrowType(Qt.RightArrow)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("View next pair")
-        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
-        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
 
         self.connectCheckbox = QCheckBox("Recorders are connected")
         self.connectCheckbox.setChecked(bool(self.parent.recConnections[0,1]==1))
@@ -766,13 +777,14 @@ class CompareCallsDialog(QDialog):
     # 1. list of SegmentLists for rec1
     # 2. list of SegmentLists for rec2
     # 3. best shift for rec2
+    #def __init__(self, annots1, annots2, rec2shift, parent=None):
     # Will show the segments in the lists in order.
     # Times in the segment lists must be as usual: relative to file start.
     def __init__(self, annots1, annots2, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Compare Call Pairs')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         self.parent = parent
         self.rec1 = annots1[0].recname
@@ -786,6 +798,7 @@ class CompareCallsDialog(QDialog):
         self.lut = colourMaps.getLookupTable("Grey")
         self.cmapInverted = False
 
+        #self.topLabel = QLabel("Comparing recorders %s (top, shifted by %.1f) and %s (bottom)" %(self.rec1, rec2shift, self.rec2))
         self.topLabel = QLabel("Comparing recorders %s (top) and %s (bottom)" %(self.rec1, self.rec2))
         self.labelPair = QLabel()
 
@@ -822,8 +835,8 @@ class CompareCallsDialog(QDialog):
         self.rightBtn.setArrowType(Qt.RightArrow)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("View next pair")
-        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
-        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.leftBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.MinimumExpanding)
 
         # accept / close
         closeBtn = QPushButton("Close")
@@ -874,6 +887,8 @@ class CompareCallsDialog(QDialog):
 
         wav1start = currseg1[0]
         wav2start = currseg2[0]
+        #wav1len = currseg1[1]
+        #wav2len = currseg2[1]
         wav1len = currseg1[1]-currseg1[0]
         wav2len = currseg2[1]-currseg2[0]
         # want to show equal duration for both spectrograms
@@ -891,9 +906,11 @@ class CompareCallsDialog(QDialog):
             print("Warning: adjusting shown period since requested segment %d-%d is not in file" %(wav2start, wav2start+wavlen))
 
         self.sp1 = SignalProc.SignalProc(256, 128)
-        self.sp1.readWav(wav1, off=wav1start, len=wavlen)
+        self.sp1.readWav(wav1, off=wav1start, duration=wavlen)
+        #self.sp1.readWav(wav1, off=wav1start, duration=wav1len)
         self.sp2 = SignalProc.SignalProc(256, 128)
-        self.sp2.readWav(wav2, off=wav2start, len=wavlen)
+        self.sp2.readWav(wav2, off=wav2start, duration=wavlen)
+        #self.sp2.readWav(wav2, off=wav2start, duration=wav2len)
         _ = self.sp1.spectrogram()
         _ = self.sp2.spectrogram()
         sg1 = self.sp1.normalisedSpec("Log")
@@ -925,6 +942,7 @@ class CompareCallsDialog(QDialog):
         self.sg_axis2.setLabel('kHz')
 
         # info fields
+        #self.labelPair.setText("Showing calls at %.1f-%.1f s (adjusted) and %.1f-%.1f s" % (currseg1[0], currseg1[1], currseg2[0], currseg2[1]))
         self.labelPair.setText("Showing calls at %.1f-%.1f s and %.1f-%.1f s" % (currseg1[0], currseg1[1], currseg2[0], currseg2[1]))
 
         # self.labelCurrPage.setText("Page %s of %s" %(self.currpage, len(self.shifts)))
@@ -961,6 +979,6 @@ print("Starting AviaNZ call comparator")
 app = QApplication(sys.argv)
 mainwindow = CompareCalls()
 mainwindow.show()
-app.exec_()
+app.exec()
 print("Processing complete, closing AviaNZ call comparator")
 QApplication.closeAllWindows()

@@ -20,8 +20,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from PyQt5 import QtGui
-from PyQt5.QtGui import QIcon, QPixmap, QColor, QScreen
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
+from PyQt5.QtGui import QIcon, QPixmap, QColor
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle
 from PyQt5.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import fnmatch, gc, sys, os, json, re
@@ -69,17 +69,17 @@ class AviaNZ_batchWindow(QMainWindow):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.createMenu()
         self.createFrame()
-        self.centre()
+        self.center()
 
     def createFrame(self):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(850, 720)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(900, 800))
-        self.d_files = Dock("File list", size=(300, 800))
+        self.d_detection = Dock("Automatic Detection",size=(550, 700))
+        self.d_files = Dock("File list", size=(300, 700))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
@@ -87,7 +87,7 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_browse = QPushButton("  Browse Folder")
         self.w_browse.setToolTip("Select a folder to process (may contain sub folders)")
         self.w_browse.setFixedSize(165, 50)
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; padding: 3px 3px 3px 3px}')
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
@@ -96,72 +96,27 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_dir.setToolTip("The folder being processed")
         self.w_dir.setStyleSheet("color : #808080;")
 
-        # SRM: TODO 
-        # There will be some effort needed to tidy up the sampling rate, etc.
-        # How to get the size of the filter list right?
-        # Make bats separate?
-        self.process = QButtonGroup()
-        self.process.setExclusive(True)
-        self.usefilters = QRadioButton("Specify filters")
-        self.process.addButton(self.usefilters)
-        self.usefilters.setChecked(True)
-        self.anysound = QRadioButton("Any sound")
-        self.process.addButton(self.anysound)
-        self.anysound.clicked.connect(self.useFilters)
-        self.usefilters.clicked.connect(self.useFilters)
-        self.hasFilters = False
-        self.hasFiles = False
+        w_speLabel1 = QLabel("Select one or more recognisers to use:")
+        self.w_spe1 = QComboBox()
+        self.speCombos = [self.w_spe1]
 
-        self.w_speLabel1 = QLabel("Select one or more recognisers to use:")
-        self.w_spe1 = QListWidget()
-        self.w_spe1.setMinimumSize(800,500)
-        self.w_spe1.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-
+        # populate this box (always show all filters here)
         spp = sorted(list(self.FilterDicts.keys()))
+        self.w_spe1.addItem("Any sound")
+        self.w_spe1.addItem("Any sound (Intermittent sampling)")
         self.w_spe1.addItems(spp)
-        self.w_spe1.itemClicked.connect(self.countFilters)
+        self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
+        self.addSp = QPushButton("Add another recogniser")
+        self.addSp.clicked.connect(self.addSpeciesBox)
 
-        self.subset = QCheckBox("Process all recordings") 
-        self.subset.clicked.connect(self.showTime)
-        self.subset.setChecked(True)
-        self.w_timeLabel = QLabel("Select start and end times for processing")
+        w_timeLabel = QLabel("Process a subset of recordings only e.g. dawn or dusk?\nSelect the time window, otherwise skip")
         self.w_timeStart = QTimeEdit()
         self.w_timeStart.setDisplayFormat('hh:mm:ss')
         self.w_timeEnd = QTimeEdit()
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
-        # Intermittent Sampling controls
-        self.intermittent = QCheckBox("Process all of each recording")
-        self.intermittent.setChecked(True)
-        self.intermittent.clicked.connect(self.showIntermittent)
-        self.intermittentLabel = QLabel("Specify the length and frequency of the sections to process")
-        self.protocolSize = QSpinBox()
-        self.protocolSize.setRange(1, 180)
-        self.protocolSize.setValue(self.config['protocolSize'])
-        self.protocolInterval = QSpinBox()
-        self.protocolInterval.setRange(5, 3600)
-        self.protocolInterval.setValue(self.config['protocolInterval'])
-
-        self.windfilter = QCheckBox("Perform wind filtering")
-        self.windfilter.setChecked(True)
-        self.windfilter2 = QCheckBox("Choose wind filter")
-        self.windfilter2.setChecked(False)
-        self.windfilter2.clicked.connect(self.showWind)
         self.w_wind = QComboBox()
-        self.w_wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"])
-        # TODO: make sure first is checked
-
-        # TODO: check all these!
-        self.mergesyllables = QCheckBox("Merge Syllables")
-        self.mergesyllables.setChecked(True)
-        self.mergesyllables2 = QCheckBox("Specify merge parameters")
-        self.mergesyllables2.setChecked(False)
-        self.mergesyllables2.clicked.connect(self.showPost)
-        self.maxgap = QDoubleSpinBox()
-        self.maxgap.setRange(0.05, 10.0)
-        self.maxgap.setSingleStep(0.5)
-        self.maxgap.setValue(1.0)
-        self.maxgaplbl = QLabel("Maximum gap between syllables (s)")
+        self.w_wind.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "No wind filter"])
 
         # Spinboxes in second scale
         self.minlen = QDoubleSpinBox()
@@ -170,13 +125,25 @@ class AviaNZ_batchWindow(QMainWindow):
         self.minlen.setValue(0.5)
         self.minlenlbl = QLabel("Minimum segment length (s)")
 
-        #self.mergesegments = QCheckBox("Split Segments")
-        #self.mergesegements.setChecked(True)
         self.maxlen = QDoubleSpinBox()
         self.maxlen.setRange(0.05, 120.0)
         self.maxlen.setSingleStep(2.0)
         self.maxlen.setValue(10.0)
         self.maxlenlbl = QLabel("Maximum segment length (s)")
+
+        self.maxgap = QDoubleSpinBox()
+        self.maxgap.setRange(0.05, 10.0)
+        self.maxgap.setSingleStep(0.5)
+        self.maxgap.setValue(1.0)
+        self.maxgaplbl = QLabel("Maximum gap between syllables (s)")
+
+        # Intermittent Sampling controls
+        self.protocolSize = QSpinBox()
+        self.protocolSize.setRange(1, 180)
+        self.protocolSize.setValue(self.config['protocolSize'])
+        self.protocolInterval = QSpinBox()
+        self.protocolInterval.setRange(5, 3600)
+        self.protocolInterval.setValue(self.config['protocolInterval'])
 
         self.w_processButton = SupportClasses_GUI.MainPushButton(" Process Folder")
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
@@ -185,65 +152,46 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_processButton.setEnabled(False)
         self.w_browse.clicked.connect(self.browse)
 
-        self.d_detection.addWidget(self.w_dir, row=0, col=0, colspan=3)
-        self.d_detection.addWidget(self.w_browse, row=0, col=3)
-        #self.d_detection.addWidget(w_speLabel1, row=1, col=0)
+        self.d_detection.addWidget(self.w_dir, row=0, col=0, colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=0, col=2)
+        self.d_detection.addWidget(w_speLabel1, row=1, col=0)
 
-        #self.warning = QLabel("Warning!\n\"Any sound\" mode will delete ALL the existing annotations\nin the selected folder")
-        #self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
+        self.warning = QLabel("Warning!\nThe chosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
+        self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
 
         # Filter selection group
         self.boxSp = QGroupBox("")
         self.formSp = QVBoxLayout()
-        self.buttonSp = QHBoxLayout()
-        self.buttonSp.addWidget(self.usefilters)
-        self.buttonSp.addWidget(self.anysound)
-        self.formSp.addLayout(self.buttonSp)
-        self.formSp.addWidget(self.w_speLabel1)
+        self.formSp.addWidget(w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
+        self.formSp.addWidget(self.addSp)
+        self.formSp.addWidget(self.warning)
         self.boxSp.setLayout(self.formSp)
-        self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=4)
+        self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=3)
 
         # Time Settings group
-        self.d_detection.addWidget(self.subset,row=2,col=0, colspan=4)
         self.boxTime = QGroupBox()
         formTime = QGridLayout()
-        formTime.addWidget(self.w_timeLabel, 0, 0, 1, 2)
+        formTime.addWidget(w_timeLabel, 0, 0, 1, 2)
         formTime.addWidget(QLabel("Start time (hh:mm:ss)"), 1, 0)
         formTime.addWidget(self.w_timeStart, 1, 1)
         formTime.addWidget(QLabel("End time (hh:mm:ss)"), 2, 0)
         formTime.addWidget(self.w_timeEnd, 2, 1)
         self.boxTime.setLayout(formTime)
-        self.d_detection.addWidget(self.boxTime, row=3, col=0, colspan=4)
-        self.boxTime.hide()
+        self.d_detection.addWidget(self.boxTime, row=2, col=0, colspan=3)
 
         # intermittent sampling group, layout
-        self.d_detection.addWidget(self.intermittent,row=4,col=0, colspan=4)
-        self.boxIntermittent = QGroupBox()
-        #self.boxIntermit = QGroupBox("Intermittent sampling")
+        self.boxIntermit = QGroupBox("Intermittent sampling")
         formIntermit = QFormLayout()
-        formIntermit.addRow("Length of window", self.protocolSize)
-        formIntermit.addRow("Frequency", self.protocolInterval)
-        self.boxIntermittent.setLayout(formIntermit)
-        self.d_detection.addWidget(self.boxIntermittent, row=5, col=0, colspan=4)
-        self.boxIntermittent.hide()
+        formIntermit.addRow("Protocol size", self.protocolSize)
+        formIntermit.addRow("Protocol interval", self.protocolInterval)
+        self.boxIntermit.setLayout(formIntermit)
+        self.d_detection.addWidget(self.boxIntermit, row=4, col=0, colspan=3)
 
         # Post Proc checkbox group
-        self.d_detection.addWidget(self.windfilter,row=6,col=0, colspan=2)
-        self.d_detection.addWidget(self.windfilter2,row=6,col=2, colspan=2)
-        self.boxWind = QGroupBox()
-        #self.boxPost = QGroupBox("Post processing")
-        formWind = QGridLayout()
-        formWind.addWidget(self.w_wind, 0, 1)
-        self.boxWind.setLayout(formWind)
-        self.d_detection.addWidget(self.boxWind, row=8, col=0, colspan=4)
-        self.boxWind.hide()
-
-        self.d_detection.addWidget(self.mergesyllables,row=9,col=0, colspan=2)
-        self.d_detection.addWidget(self.mergesyllables2,row=9,col=2, colspan=2)
-        self.boxPost = QGroupBox()
-        #self.boxPost = QGroupBox("Post processing")
+        self.boxPost = QGroupBox("Post processing")
         formPost = QGridLayout()
+        formPost.addWidget(self.w_wind, 0, 1)
         formPost.addWidget(self.maxgaplbl, 2, 0)
         formPost.addWidget(self.maxgap, 2, 1)
         formPost.addWidget(self.minlenlbl, 3, 0)
@@ -251,10 +199,9 @@ class AviaNZ_batchWindow(QMainWindow):
         formPost.addWidget(self.maxlenlbl, 4, 0)
         formPost.addWidget(self.maxlen, 4, 1)
         self.boxPost.setLayout(formPost)
-        self.d_detection.addWidget(self.boxPost, row=10, col=0, colspan=4)
-        self.boxPost.hide()
+        self.d_detection.addWidget(self.boxPost, row=5, col=0, colspan=3)
 
-        self.d_detection.addWidget(self.w_processButton, row=11, col=3)
+        self.d_detection.addWidget(self.w_processButton, row=6, col=2)
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
@@ -273,19 +220,13 @@ class AviaNZ_batchWindow(QMainWindow):
         self.d_detection.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
-        #self.fillSpeciesBoxes()  # update the boxes to match the initial position
+        self.fillSpeciesBoxes()  # update the boxes to match the initial position
         self.show()
 
     def createMenu(self):
         """ Create the basic menu.
         """
-        #helpMenu = self.menuBar().addMenu("&Help")
-        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
-        #aboutMenu = self.menuBar().addMenu("&About")
-        #aboutMenu.addAction("About","Ctrl+A", self.showAbout)
-        #quitMenu = self.menuBar().addMenu("&Quit")
-        #quitMenu.addAction("Restart program", self.restart)
-        #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
+
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
@@ -294,11 +235,10 @@ class AviaNZ_batchWindow(QMainWindow):
         quitMenu.addAction("Restart program", self.restart)
         quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
-
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
-        msg.exec()
+        msg.exec_()
         return
 
     def showHelp(self):
@@ -315,24 +255,15 @@ class AviaNZ_batchWindow(QMainWindow):
         # 2. Creates and starts the batch worker
         if not self.dirName:
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec()
+            msg.exec_()
             return(1)
 
-        # TODO: SRM: This needs tidying up to use everything from the GUI more clearly
-
         # retrieve selected filter(s)
-        #species = set()
-        #for box in self.speCombos:
-            #if box.currentText() != "":
-                #species.add(box.currentText())
-        #species = list(species)
-        if self.anysound.isChecked():
-            species = "Any sound"
-        else:
-            selected = self.w_spe1.selectedItems()
-            species = []
-            for s in selected:
-                species.append(s.text())
+        species = set()
+        for box in self.speCombos:
+            if box.currentText() != "":
+                species.add(box.currentText())
+        species = list(species)
         print("Recognisers:", species)
 
         # Parse wind box:
@@ -342,7 +273,8 @@ class AviaNZ_batchWindow(QMainWindow):
         wind = (self.w_wind.currentIndex()+1)%3
         print("Wind set to", wind)
 
-        # Update config file based on provided settings, for reading by the worker
+        # Update config file based on provided settings, for reading
+        # by the worker
         # (particularly to store protocol settings for Intermittent,
         # but could pass any other changes this way as well)
         self.config['protocolSize'] = self.protocolSize.value()
@@ -352,7 +284,6 @@ class AviaNZ_batchWindow(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
-        # TODO: enable post-processing things not to be used!
         self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recogniser=species, wind=wind, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
@@ -373,13 +304,13 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def check_msg(self,title,text):
         msg = SupportClasses_GUI.MessagePopup("t", title, text)
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        response = msg.exec()
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        response = msg.exec_()
 
-        if response == QMessageBox.StandardButton.Cancel:
+        if response == QMessageBox.Cancel:
             # a fall back basically
             self.msg_response = 2
-        elif response == QMessageBox.StandardButton.No:
+        elif response == QMessageBox.No:
             # catches Esc as well
             self.msg_response = 1
         else:
@@ -390,7 +321,7 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def bat_survey_form(self,operator,easting,northing,recorder):
         exportForm = Dialogs.ExportBats(os.path.join(self.dirName, "BatDB.csv"),operator,easting,northing,recorder)
-        response = exportForm.exec()
+        response = exportForm.exec_()
         if response==1:
             self.batFormResults = exportForm.getValues()
         else:
@@ -407,10 +338,10 @@ class AviaNZ_batchWindow(QMainWindow):
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
-        self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint ^ Qt.WindowType.WindowCloseButtonHint)
+        self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
         self.dlg.canceled.connect(self.stopping_fileproc)
         # should be the default, but to make sure:
-        self.dlg.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.dlg.setWindowModality(Qt.ApplicationModal)
         self.dlg.open()
         self.dlg.setValue(cnt)
         self.dlg.update()
@@ -426,7 +357,7 @@ class AviaNZ_batchWindow(QMainWindow):
             self.dlg.setValue(self.dlg.maximum())
         msg = SupportClasses_GUI.MessagePopup("w", "Analysis error!", e)
         msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
-        msg.exec()
+        msg.exec_()
         self.w_processButton.setEnabled(True)
 
     def completed_fileproc(self):
@@ -437,9 +368,9 @@ class AviaNZ_batchWindow(QMainWindow):
 
         text = "Finished processing.\nWould you like to return to the start screen?"
         msg = SupportClasses_GUI.MessagePopup("t", "Finished", text)
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        reply = msg.exec()
-        if reply==QMessageBox.StandardButton.Yes:
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        reply = msg.exec_()
+        if reply==QMessageBox.Yes:
             QApplication.exit(1)
         else:
             return(0)
@@ -478,14 +409,14 @@ class AviaNZ_batchWindow(QMainWindow):
         # TODO see if it repaints properly without this
         # QApplication.processEvents()
 
-    def centre(self):
+    def center(self):
         # geometry of the main window
         qr = self.frameGeometry()
-        # centre point of screen
-        cp = self.screen().availableGeometry().center()
-        # move rectangle's centre point to screen's centre point
+        # center point of screen
+        cp = QDesktopWidget().availableGeometry().center()
+        # move rectangle's center point to screen's center point
         qr.moveCenter(cp)
-        # top left of rectangle becomes top left of window centring it
+        # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft())
 
     def browse(self):
@@ -496,71 +427,13 @@ class AviaNZ_batchWindow(QMainWindow):
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
         # populate file list and update rest of interface:
-        if self.fillFileList()==0 and self.hasFilters:
+        if self.fillFileList()==0:
             self.statusBar().showMessage("Ready for processing")
             self.w_processButton.setEnabled(True)
-        elif self.hasFilters:
+        else:
             self.statusBar().showMessage("Select a directory to process")
             self.w_processButton.setEnabled(False)
-        else: 
-            self.statusBar().showMessage("Select filters to use")
-            self.w_processButton.setEnabled(False)
 
-    def useFilters(self):
-        """Enable or disable selection of filters"""
-        if self.usefilters.isChecked():
-            self.w_speLabel1.setStyleSheet("color: black")
-            self.w_spe1.setEnabled(True)
-            self.hasFilters = False
-        else:
-            self.w_speLabel1.setStyleSheet("color: gray")
-            for i in range(self.w_spe1.count()):
-                it = self.w_spe1.item(i)
-                it.setSelected(False)
-            self.w_spe1.setDisabled(True)
-            self.hasFilters = True
-
-    def countFilters(self):
-        if len(self.w_spe1.selectedItems()) > 0:
-            self.hasFilters = True
-        else:
-            self.hasFilters = False
-
-        if self.hasFiles and self.hasFilters:
-            self.statusBar().showMessage("Ready for processing")
-            self.w_processButton.setEnabled(True)
-        elif self.hasFilters:
-            self.statusBar().showMessage("Select a directory to process")
-            self.w_processButton.setEnabled(False)
-        else: 
-            self.statusBar().showMessage("Select filters to use")
-            self.w_processButton.setEnabled(False)
-
-    def showTime(self):
-        if self.subset.isChecked():
-            self.boxTime.hide()
-        else:
-            self.boxTime.show()
-
-    def showIntermittent(self):
-        if self.intermittent.isChecked():
-            self.boxIntermittent.hide()
-        else:
-            self.boxIntermittent.show()
-
-    def showWind(self):
-        if self.windfilter2.isChecked():
-            self.boxWind.show()
-        else:
-            self.boxWind.hide()
-
-    def showPost(self):
-        if self.mergesyllables2.isChecked():
-            self.boxPost.show()
-        else:
-            self.boxPost.hide()
-
-    # OLD
     def addSpeciesBox(self):
         """ Deals with adding and moving species comboboxes """
         # create a new combobox
@@ -589,7 +462,6 @@ class AviaNZ_batchWindow(QMainWindow):
         self.setMinimumHeight(610+30*len(self.speCombos))
         self.boxSp.updateGeometry()
 
-    # OLD
     def removeSpeciesBox(self):
         """ Deals with removing and moving species comboboxes """
         # identify the clicked button
@@ -611,90 +483,11 @@ class AviaNZ_batchWindow(QMainWindow):
         self.setMinimumHeight(610+30*len(self.speCombos))
         self.boxSp.updateGeometry()
 
-    # Old
-    def CheckSpeciesBoxes(self):
-        # Show/hide any other UI elements specific to bird filters or AnySound methods
-
-        # setItemHidden() #selectedItems()
-        selected = self.w_spe1.selectedItems()
-        selectedNames = []
-        for s in selected:
-            selectedNames.append(s.text())
-        #print(selectedNames)
-        #print("----")
-        #print(int(self.w_spe1.item[3].flags()))
-        # TODO: second guard
-        if "Any sound" in selectedNames or "Any sound (Intermittent sampling)" in selectedNames: #and self.w_spe1.item[3].flags():
-            for i in range(2,self.w_spe1.count()):
-                it = self.w_spe1.item(i)
-                # Stop them being selected
-                it.setSelected(False)
-                it.setFlags(it.flags() & ~Qt.ItemIsSelectable)
-            #currfilt = self.FilterDicts[currname]
-            #currmethod = currfilt.get("method", "wv")
-            # (can't use AllSp with any other filter)
-            # Don't add different methods, samplerates, or the same name again
-            # (providing that missing method equals "wv")
-            #for name, filt in self.FilterDicts.items():
-                #if filt["SampleRate"]==currfilt["SampleRate"] and name!=currname and filt.get("method", "wv")==currmethod:
-                    #spp.append(name)
-            self.minlen.hide()
-            self.minlenlbl.hide()
-            self.maxlen.hide()
-            self.maxlenlbl.hide()
-            self.maxgap.hide()
-            self.maxgaplbl.hide()
-            self.boxIntermit.hide()
-            self.boxPost.show()
-            #self.addSp.show()
-            #self.warning.hide()
-            #if currmethod=="chp":
-                #self.w_wind.show()
-            #else:
-                #self.w_wind.hide()
-        else:
-            for i in range(2,self.w_spe1.count()):
-                it = self.w_spe1.item(i)
-                it.setFlags(it.flags() | Qt.ItemIsSelectable)
-
-            if "Any sound" in selectedNames:
-                self.minlen.show()
-                self.minlenlbl.show()
-                self.maxlen.show()
-                self.maxlenlbl.show()
-                self.maxgap.show()
-                self.maxgaplbl.show()
-                self.boxIntermit.hide()
-                self.boxPost.show()
-                #self.addSp.hide()
-                #self.warning.show()
-                self.w_wind.hide()
-            elif "Any sound (Intermittent sampling)" in selectedNames:
-                self.boxPost.hide()
-                self.boxIntermit.show()
-                #self.addSp.hide()
-                #self.warning.show()
-            self.boxTime.show()
-
-            if "NZ Bats" in selectedNames or "NZ Bats_NP" in selectedNames:
-                #self.addSp.setEnabled(False)
-                #self.addSp.setToolTip("Bat recognisers cannot be combined with others")
-                self.w_wind.setCurrentIndex(0)
-                self.w_wind.setEnabled(False)
-                self.w_wind.setToolTip("Filter not applicable to bats")
-            else:
-                #self.addSp.setEnabled(True)
-                #self.addSp.setToolTip("")
-                self.w_wind.setEnabled(True)
-                self.w_wind.setToolTip("")
-
-    # Old
     def fillSpeciesBoxes(self):
         # select filters with Fs matching box 1 selection
         # and show/hide any other UI elements specific to bird filters or AnySound methods
         spp = []
-        #currname = self.w_spe1.currentText()
-        currname = "Any sound"
+        currname = self.w_spe1.currentText()
         if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
             currfilt = self.FilterDicts[currname]
             currmethod = currfilt.get("method", "wv")
@@ -712,8 +505,8 @@ class AviaNZ_batchWindow(QMainWindow):
             self.maxgaplbl.hide()
             self.boxIntermit.hide()
             self.boxPost.show()
-            #self.addSp.show()
-            #self.warning.hide()
+            self.addSp.show()
+            self.warning.hide()
             if currmethod=="chp":
                 self.w_wind.show()
             else:
@@ -727,37 +520,37 @@ class AviaNZ_batchWindow(QMainWindow):
             self.maxgaplbl.show()
             self.boxIntermit.hide()
             self.boxPost.show()
-            #self.addSp.hide()
-            #self.warning.show()
+            self.addSp.hide()
+            self.warning.show()
             self.w_wind.hide()
         elif currname == "Any sound (Intermittent sampling)":
             self.boxPost.hide()
             self.boxIntermit.show()
-            #self.addSp.hide()
-            #self.warning.show()
+            self.addSp.hide()
+            self.warning.show()
         self.boxTime.show()
 
         if currname == "NZ Bats" or currname == "NZ Bats_NP":
-            #self.addSp.setEnabled(False)
-            #self.addSp.setToolTip("Bat recognisers cannot be combined with others")
+            self.addSp.setEnabled(False)
+            self.addSp.setToolTip("Bat recognisers cannot be combined with others")
             self.w_wind.setCurrentIndex(0)
             self.w_wind.setEnabled(False)
             self.w_wind.setToolTip("Filter not applicable to bats")
         else:
-            #self.addSp.setEnabled(True)
-            #self.addSp.setToolTip("")
+            self.addSp.setEnabled(True)
+            self.addSp.setToolTip("")
             self.w_wind.setEnabled(True)
             self.w_wind.setToolTip("")
 
         # (skip first box which is fixed)
-        #for box in self.speCombos[1:]:
-            ## clear old items:
-            #for i in reversed(range(box.count())):
-                #box.removeItem(i)
-            #box.setCurrentIndex(-1)
-            #box.setCurrentText("")
+        for box in self.speCombos[1:]:
+            # clear old items:
+            for i in reversed(range(box.count())):
+                box.removeItem(i)
+            box.setCurrentIndex(-1)
+            box.setCurrentText("")
 
-            #box.addItems(sorted(spp))
+            box.addItems(sorted(spp))
 
     def fillFileList(self, fileName=None):
         """ Populates the list of files for the file listbox.
@@ -772,7 +565,6 @@ class AviaNZ_batchWindow(QMainWindow):
 
         # update the "Browse" field text
         self.w_dir.setPlainText(self.dirName)
-        self.hasFiles = True
         return(0)
 
     def listLoadFile(self,current):
@@ -798,10 +590,11 @@ class AviaNZ_batchWindow(QMainWindow):
             self.previousFile = None
             self.fillFileList(current)
             # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchFlag.MatchExactly)
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         return(0)
+
 
 class BatchProcessWorker(AviaNZ_batchProcess, QObject):
     # adds QObject functionality to standard batchProc,
@@ -867,7 +660,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.setWindowTitle('AviaNZ - Review Batch Results')
         self.createFrame()
         self.createMenu()
-        self.centre()
+        self.center()
 
     def createFrame(self):
         # Make the window and set its size
@@ -896,7 +689,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_browse.setToolTip("Select a folder to review (may contain sub folders)")
         self.w_browse.setFixedHeight(50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold}')
-        self.w_browse.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton))
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
@@ -992,8 +785,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox.valueChanged.connect(self.changedCert)
 
         # sliders to select min/max frequencies for ALL SPECIES only
-        self.fLow = QSlider(Qt.Orientation.Horizontal)
-        self.fLow.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.fLow = QSlider(Qt.Horizontal)
+        self.fLow.setTickPosition(QSlider.TicksBelow)
         self.fLow.setTickInterval(500)
         self.fLow.setRange(0, 5000)
         self.fLow.setSingleStep(100)
@@ -1001,8 +794,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fLowtext = QLabel('Show only freq. above (Hz)')
         self.fLowvalue = QLabel('0')
         self.fLow.valueChanged.connect(self.fLowChanged)
-        self.fHigh = QSlider(Qt.Orientation.Horizontal)
-        self.fHigh.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.fHigh = QSlider(Qt.Horizontal)
+        self.fHigh.setTickPosition(QSlider.TicksBelow)
         self.fHigh.setTickInterval(1000)
         self.fHigh.setRange(4000, 32000)
         self.fHigh.setSingleStep(250)
@@ -1216,14 +1009,6 @@ class AviaNZ_reviewAll(QMainWindow):
     def createMenu(self):
         """ Create the basic menu.
         """
-        #helpMenu = self.menuBar().addMenu("&Help")
-        #helpMenu.addAction("Help","Ctrl+H", self.showHelp)
-        #aboutMenu = self.menuBar().addMenu("&About")
-        #aboutMenu.addAction("About","Ctrl+A", self.showAbout)
-        #quitMenu = self.menuBar().addMenu("&Quit")
-        #quitMenu.addAction("Restart program", self.restart)
-        #quitMenu.addAction("Quit","Ctrl+Q", QApplication.quit)
-
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
@@ -1239,7 +1024,7 @@ class AviaNZ_reviewAll(QMainWindow):
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
-        msg.exec()
+        msg.exec_()
         return
 
     def showHelp(self):
@@ -1247,14 +1032,14 @@ class AviaNZ_reviewAll(QMainWindow):
         webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
-    def centre(self):
+    def center(self):
         # geometry of the main window
         qr = self.frameGeometry()
-        # centre point of screen
-        cp = self.screen().availableGeometry().center()
-        # move rectangle's centre point to screen's centre point
+        # center point of screen
+        cp = QDesktopWidget().availableGeometry().center()
+        # move rectangle's center point to screen's center point
         qr.moveCenter(cp)
-        # top left of rectangle becomes top left of window centring it
+        # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft())
 
     def browse(self):
@@ -1341,7 +1126,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.previousFile = None
             self.fillFileList(current)
             # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchFlag.MatchExactly)
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         return(0)
@@ -1354,7 +1139,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.species = self.w_spe1.currentText()
         if self.species == "All species":
             msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
-            msg.exec()
+            msg.exec_()
         else:
             self.review(False)
 
@@ -1363,12 +1148,12 @@ class AviaNZ_reviewAll(QMainWindow):
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Enter Reviewer", "Please enter reviewer name")
-            msg.exec()
+            msg.exec_()
             return
 
         if self.dirName == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec()
+            msg.exec_()
             return
 
         # Update config based on provided settings
@@ -1476,7 +1261,6 @@ class AviaNZ_reviewAll(QMainWindow):
             #todelete = self.segments.mergeSplitSeg()
             #for dl in todelete:
                 #del self.segments[dl]
-            # SRM: I think it's right anyway -- use should specify what they want it processing
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
@@ -1522,16 +1306,16 @@ class AviaNZ_reviewAll(QMainWindow):
         if filesuccess == 1:
             msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
-            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            reply = msg.exec()
-            if reply == QMessageBox.StandardButton.Yes:
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
-            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            reply = msg.exec()
-            if reply == QMessageBox.StandardButton.Yes:
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
                 QApplication.exit(1)
 
     def exportExcel(self):
@@ -1542,7 +1326,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.species = self.w_spe1.currentText()
         if self.dirName == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec()
+            msg.exec_()
             return
 
         with pg.BusyCursor():
@@ -1608,7 +1392,7 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
             msg = SupportClasses_GUI.MessagePopup("d", "Excel output produced", msgtext)
-        msg.exec()
+        msg.exec_()
 
     def review_single(self, filename, chunksize):
         """ Initializes single species dialog, based on self.species.
@@ -1634,7 +1418,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog2.move(self.dialogPos)
         self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
         self.humanClassifyDialog2.setModal(True)
-        success = self.humanClassifyDialog2.exec()
+        success = self.humanClassifyDialog2.exec_()
 
         # capture Esc press or other "dirty" exit:
         if success == 0:
@@ -1805,7 +1589,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
         self.humanClassifyDialog1.buttonPlus.clicked.connect(self.humanClassifyPlus)
-        success = self.humanClassifyDialog1.exec()     # 1 on clean exit
+        success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()
@@ -1831,7 +1615,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 dlg.setWindowIcon(QIcon('img/Avianz.ico'))
                 dlg.setWindowTitle('AviaNZ')
                 dlg.setFixedSize(350, 100)
-                dlg.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
+                dlg.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
                 dlg.update()
                 dlg.repaint()
                 dlg.show()
@@ -2098,12 +1882,14 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.stopPlayback()
 
         # Insert new segment
-        # Don't bother showing the new box to the user TODO: ??? Right choice???
+        # Don't bother changing the numbers for now, or show the new box to the user TODO: ??? Right choice???
         # TODO: Offset
         currSeg = self.segments[self.indices2show[self.box1id]]
         currSeg.confirmLabels()
+        #print("****: ",len(self.toadd))
+        # TODO: SRM: Alert box asking how many to add? (default = 1, but deal with 0!)
         getNumCopies = Dialogs.getNumberCopiesPlus()
-        response = getNumCopies.exec()
+        response = getNumCopies.exec_()
         numCopies = getNumCopies.getValues()
 
         for i in range(numCopies):
@@ -2215,7 +2001,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)
-        if ev == Qt.Key.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
+        if ev == Qt.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
             self.humanClassifyDialog1.done(0)
 
     def updateCallType(self, boxid, calltype):

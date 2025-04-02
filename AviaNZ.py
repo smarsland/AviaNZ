@@ -31,11 +31,15 @@ import sys
 
 # For testing
 # python AviaNZ.py -c -u -d "/home/marslast/Projects/AviaNZ/Sound Files/test1" -r "Kiwi (Tokoeka Rakiura)"
+
+# To generate images without GUI
+# python AviaNZ.py -c -s -f "folder"
+
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
 @click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheatsheet images')
 @click.option('-z', '--zooniverse', is_flag=True, help='Make the Zooniverse images and sounds')
-@click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory in CLI mode)')
+@click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory directory in CLI mode)')
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.option('-b', '--batchmode', is_flag=True, help='Batch processing')
 @click.option('-t', '--training', is_flag=True, help='Train a CNN recogniser')
@@ -77,6 +81,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     else:
         print("ERROR: what OS is this? %s" % platform.system())
         raise
+    print(configdir)
 
     # if config and bird files not found, copy from distributed backups.
     # so these files will always exist on load (although they could be corrupt)
@@ -169,9 +174,10 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 raise
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):
-                import AviaNZ
-                avianz = AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse,
-                                firstFile=infile, imageFile=imagefile, command=command)
+                from PyQt5.QtWidgets import QApplication
+                import AviaNZ_manual
+                app = QApplication(sys.argv)
+                avianz = AviaNZ_manual.AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input file (-f) is needed")
@@ -180,6 +186,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         task = None
         print("Starting AviaNZ in GUI mode")
         from PyQt5.QtWidgets import QApplication
+        from PyQt5 import QtCore
+        QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         app = QApplication(sys.argv)
         # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
         QApplication.setFont(QApplication.font("QMenu"))
@@ -191,7 +199,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 import Dialogs
                 first = Dialogs.StartScreen()
                 first.show()
-                app.exec_()
+                app.exec()
                 task = first.getValues()
 
             avianz = None
@@ -214,7 +222,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             else:
                 return
 
-            out = app.exec_()
+            out = app.exec()
             QApplication.closeAllWindows()
             QApplication.processEvents()
 

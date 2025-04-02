@@ -28,9 +28,9 @@ import shutil
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox # listing some explicitly to make syntax checks lighter
+from PyQt5.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir
 
 import pyqtgraph as pg
 
@@ -52,7 +52,7 @@ class StartScreen(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowIcon(QIcon('img/AviaNZ.ico'))
         self.setWindowTitle('AviaNZ - Choose Task')
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.FramelessWindowHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowCloseButtonHint)
         self.setAutoFillBackground(False)
         self.setMinimumSize(860, 350)
         self.setStyleSheet("QDialog {background-image: url(img/AviaNZ_SW_V2.jpg); background-repeat: no-repeat; background-color: #242021; background-position: top center;}")
@@ -71,7 +71,7 @@ class StartScreen(QDialog):
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
-        bclose = QtGui.QToolButton()
+        bclose = QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
         bclose.setIconSize(QSize(40, 40))
         bclose.setToolTip("Close")
@@ -79,7 +79,7 @@ class StartScreen(QDialog):
         bclose.clicked.connect(self.reject)
 
         hboxclose = QHBoxLayout()
-        hboxclose.addWidget(bclose, alignment=Qt.AlignRight)
+        hboxclose.addWidget(bclose, alignment=Qt.AlignmentFlag.AlignRight)
 
         hbox = QHBoxLayout()
         hbox.addStretch(5)
@@ -161,7 +161,7 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumWidth(300)
 
         self.windowType = QComboBox()
@@ -196,7 +196,7 @@ class Spectrogram(QDialog):
         self.low.setSingleStep(100)
         self.low.valueChanged.connect(self.lowChange)
         self.lowtext = QLabel()
-        self.lowtext.setAlignment(Qt.AlignRight)
+        self.lowtext.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.lowChange(minFreqShow)
 
         self.high = QSlider(Qt.Horizontal)
@@ -205,12 +205,12 @@ class Spectrogram(QDialog):
         self.high.setSingleStep(100)
         self.high.valueChanged.connect(self.highChange)
         self.hightext = QLabel(str(self.high.value()) + ' Hz')
-        self.hightext.setAlignment(Qt.AlignRight)
+        self.hightext.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.highChange(maxFreqShow)
 
         self.labelMinF = QLabel()
         self.labelMaxF = QLabel()
-        self.labelMaxF.setAlignment(Qt.AlignRight)
+        self.labelMaxF.setAlignment(Qt.AlignmentFlag.AlignRight)
 
         self.setValues(minFreq, maxFreq, minFreqShow, maxFreqShow)
         self.restore = QPushButton("Restore Defaults && Update")
@@ -322,7 +322,7 @@ class Excel2Annotation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Generate annotations from Excel')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumWidth(700)
 
         self.txtExcel = QLineEdit()
@@ -334,7 +334,7 @@ class Excel2Annotation(QDialog):
 
         lblHeader = QLabel('Choose Columns')
         lblHeader.setFixedWidth(220)
-        lblHeader.setAlignment(Qt.AlignCenter)
+        lblHeader.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.comboStart = QComboBox()
         self.comboEnd = QComboBox()
         self.comboLow = QComboBox()
@@ -353,7 +353,7 @@ class Excel2Annotation(QDialog):
         self.txtSpecies.setText('')
         lblSpecies = QLabel("Species Name")
         lblSpecies.setFixedWidth(220)
-        lblSpecies.setAlignment(Qt.AlignCenter)
+        lblSpecies.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
@@ -381,7 +381,7 @@ class Excel2Annotation(QDialog):
         tableWidget.setItem(3, 3, QTableWidgetItem("8000.30"))
         tableWidget.setMinimumWidth(700)
         tableWidget.setStyleSheet("QTableWidget { color : #808080; }")
-        tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tableWidget.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         Box = QVBoxLayout()
         Box.addWidget(QLabel('Sample Excel:'))
@@ -430,7 +430,7 @@ class Excel2Annotation(QDialog):
             return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text(), self.headers[self.comboStart.currentIndex()], self.headers[self.comboEnd.currentIndex()], self.headers[self.comboLow.currentIndex()], self.headers[self.comboHigh.currentIndex()]]
         else:
             msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
-            msg.exec_()
+            msg.exec()
             return []
 
     def browseExcel(self):
@@ -483,7 +483,7 @@ class Tag2Annotation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Generate annotations from XML (Freebird)')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumWidth(700)
 
         self.txtSession = QLineEdit()
@@ -493,12 +493,12 @@ class Tag2Annotation(QDialog):
         self.btnBrowseSession.setFixedWidth(220)
         self.btnBrowseSession.clicked.connect(self.browseSession)
 
-        self.txtDuration = QLineEdit()
-        self.txtDuration.setMinimumWidth(400)
-        self.txtDuration.setText('')
-        lblDuration = QLabel("Duration (sec) of a recording")
-        lblDuration.setFixedWidth(220)
-        lblDuration.setAlignment(Qt.AlignCenter)
+        #self.txtDuration = QLineEdit()
+        #self.txtDuration.setMinimumWidth(400)
+        #self.txtDuration.setText('')
+        #lblDuration = QLabel("Duration (sec) of a recording")
+        #lblDuration.setFixedWidth(220)
+        #lblDuration.setAlignment(Qt.AlignCenter)
 
         self.btnGenerateAnnot = SupportClasses_GUI.MainPushButton("Generate AviaNZ Annotation")
 
@@ -507,11 +507,11 @@ class Tag2Annotation(QDialog):
         Box1 = QHBoxLayout()
         Box1.addWidget(self.btnBrowseSession)
         Box1.addWidget(self.txtSession)
-        Box2 = QHBoxLayout()
-        Box2.addWidget(lblDuration)
-        Box2.addWidget(self.txtDuration)
+        #Box2 = QHBoxLayout()
+        #Box2.addWidget(lblDuration)
+        #Box2.addWidget(self.txtDuration)
         Box.addLayout(Box1)
-        Box.addLayout(Box2)
+        #Box.addLayout(Box2)
         Box.addWidget(QLabel())
         Box.addWidget(self.btnGenerateAnnot)
 
@@ -519,15 +519,21 @@ class Tag2Annotation(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        if self.txtDuration.text() and self.txtSession.text():
-            return [self.txtSession.text(), self.txtDuration.text()]
+        if self.txtSession.text(): # and self.txtDuration.text():
+            return self.txtSession.text()
+            #return [self.txtSession.text(), self.txtDuration.text()]
         else:
-            msg = SupportClasses_GUI.MessagePopup("w", "All fields are mandatory ", "All fields are mandatory.")
-            msg.exec_()
+            msg = SupportClasses_GUI.MessagePopup("w", "Folder ", "Need a folder of Freebird tags.")
+            msg.exec()
             return []
 
     def browseSession(self):
-        dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
+        #dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
+        d = QFileDialog(self)
+        d.setFilter(QDir.Filter.AllDirs | QDir.Filter.Hidden | QDir.Filter.NoDotAndDotDot)
+        d.setFileMode(QFileDialog.Directory)
+        if(d.exec()):
+            dirName = d.selectedFiles()[0]
         self.txtSession.setText(dirName)
 
 #======
@@ -537,7 +543,7 @@ class BackupAnnotation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Backup annotations')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumWidth(700)
 
         self.txtSrc = QLineEdit()
@@ -578,7 +584,7 @@ class BackupAnnotation(QDialog):
             return [self.txtSrc.text(), self.txtDst.text()]
         else:
             msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
-            msg.exec_()
+            msg.exec()
             return []
 
     def browseSrc(self):
@@ -595,7 +601,7 @@ class OperatorReviewer(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint))
         self.setMinimumWidth(320)
 
         self.operatorlabel = QLabel("Operator")
@@ -628,7 +634,7 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint))
         self.setMinimumWidth(320)
 
         HBox1 = QVBoxLayout()
@@ -643,18 +649,18 @@ class addNoiseData(QDialog):
         self.btnMed = QRadioButton('Medium')
         self.level.addButton(self.btnMed)
         if noiseLevel == 'Medium':
-            self.btnLow.setChecked(True)
+            self.btnMed.setChecked(True)
         HBox1.addWidget(self.btnMed)
         self.btnHigh = QRadioButton('High')
         self.level.addButton(self.btnHigh)
         if noiseLevel == 'High':
-            self.btnLow.setChecked(True)
+            self.btnHigh.setChecked(True)
         HBox1.addWidget(self.btnHigh)
         self.btnTerrible = QRadioButton('Terrible')
         self.level.addButton(self.btnTerrible)
         HBox1.addWidget(self.btnTerrible)
         if noiseLevel == 'Terrible':
-            self.btnLow.setChecked(True)
+            self.btnTerrible.setChecked(True)
 
         self.activate = QPushButton("Set")
         HBox1.addWidget(self.activate)
@@ -709,7 +715,7 @@ class addNoiseData(QDialog):
             self.btns[6].setChecked(True)
 
         Box = QHBoxLayout()
-        Box.setAlignment(Qt.AlignTop)
+        Box.setAlignment(Qt.AlignmentFlag.AlignTop)
         Box.addLayout(HBox1)
         Box.addLayout(HBox2)
 
@@ -734,7 +740,7 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
 
         # species / filter
         self.filterLabel = QLabel("Select recogniser to use")
@@ -797,7 +803,7 @@ class DiagnosticCNN(QDialog):
         self.setWindowTitle('CNN Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
 
         # species / filter
         self.filterLabel = QLabel("Select recogniser to use")
@@ -838,7 +844,7 @@ class Segmentation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
@@ -1033,19 +1039,19 @@ class Segmentation(QDialog):
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.5*1000)
-        self.minlen.setRange(0.1*1000, 10*1000)
-        self.minlen.setSingleStep(0.1*1000)
-        self.minlen.setValue(0.5*1000)
+        self.minlen.setTickInterval(500)
+        self.minlen.setRange(100, 10000)
+        self.minlen.setSingleStep(100)
+        self.minlen.setValue(500)
         self.minlen.valueChanged.connect(self.minLenChange)
         self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
 
         self.maxgap = QSlider(Qt.Horizontal)
         self.maxgap.setTickPosition(QSlider.TicksBelow)
-        self.maxgap.setTickInterval(0.25*1000)
-        self.maxgap.setRange(0.05*1000, 4*1000)
-        self.maxgap.setSingleStep(0.05*1000)
-        self.maxgap.setValue(1*1000)
+        self.maxgap.setTickInterval(250)
+        self.maxgap.setRange(50, 4000)
+        self.maxgap.setSingleStep(50)
+        self.maxgap.setValue(1000)
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
@@ -1201,7 +1207,7 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
 
         self.setMinimumWidth(300)
         self.setMinimumHeight(250)
@@ -1462,9 +1468,9 @@ class SearchableBirdWidget(QWidget):
         self.fulllist = QListWidget()
 
         if allow_multi:
-            self.fulllist.setSelectionMode(QAbstractItemView.MultiSelection)
+            self.fulllist.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         else:
-            self.fulllist.setSelectionMode(QAbstractItemView.SingleSelection)
+            self.fulllist.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 
         # layout
         self.headerBox = QHBoxLayout()
@@ -1484,11 +1490,11 @@ class SearchableBirdWidget(QWidget):
             self.addSpBtn.setEnabled(False)
             return
         self.addSpBtn.setEnabled(True)
-        hit = self.fulllist.findItems(text, Qt.MatchContains)
+        hit = self.fulllist.findItems(text, Qt.MatchFlag.MatchContains)
         if len(hit)>0:
-            self.fulllist.scrollToItem(hit[0], QAbstractItemView.PositionAtTop)
+            self.fulllist.scrollToItem(hit[0], QAbstractItemView.SelectionMode.PositionAtTop)
             # also check if the exact species is already present
-            exacthit = self.fulllist.findItems(text, Qt.MatchFixedString)
+            exacthit = self.fulllist.findItems(text, Qt.MatchFlag.MatchFixedString)
             if len(exacthit)==1:
                 self.addSpBtn.setEnabled(False)
 
@@ -1501,7 +1507,7 @@ class SearchableBirdWidget(QWidget):
     def selectBird(self, index):
         # Takes index (int) or label (str).
         if type(index) is str:
-            item = self.fulllist.findItems(index, Qt.MatchExactly)
+            item = self.fulllist.findItems(index, Qt.MatchFlag.MatchExactly)
             if len(item)!=1:
                 print("Warning: could not find bird", index)
                 return
@@ -1516,8 +1522,8 @@ class SearchableBirdWidget(QWidget):
         # Then calls the usual handler for listbox selections
         species = self.searchline.text()
         msg = SupportClasses_GUI.MessagePopup("t", "Adding new species", 'Species "%s" will be added to the full bird list. Are you sure?' % species)
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        if msg.exec_()==QMessageBox.Yes:
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if msg.exec()==QMessageBox.StandardButton.Yes:
             if species.lower()=="don't know" or species.lower()=="other":
                 print("ERROR: provided name %s is reserved, cannot create" % species)
                 return
@@ -1547,7 +1553,7 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
         self.setModal(True)
         self.frame = QWidget()
@@ -1618,29 +1624,37 @@ class HumanClassify1(QDialog):
         # The buttons to move through the overview
         self.numberDone = QLabel()
         self.numberLeft = QLabel()
-        self.numberDone.setAlignment(Qt.AlignCenter)
-        self.numberLeft.setAlignment(Qt.AlignCenter)
+        self.numberDone.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.numberLeft.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         iconSize = QSize(45, 45)
-        self.buttonPrev = QtGui.QToolButton()
+        self.buttonPrev = QToolButton()
         self.buttonPrev.setIcon(QtGui.QIcon('img/undo.png'))
         self.buttonPrev.setIconSize(iconSize)
         self.buttonPrev.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.buttonNext = QtGui.QToolButton()
+        self.buttonNext = QToolButton()
         self.buttonNext.setIcon(QtGui.QIcon('img/questionL.png'))
         self.buttonNext.setIconSize(iconSize)
         self.buttonNext.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.correct = QtGui.QToolButton()
+        self.correct = QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/check-mark2.png'))
         self.correct.setIconSize(iconSize)
         self.correct.setStyleSheet("padding: 5px 5px 5px 5px")
 
-        self.delete = QtGui.QToolButton()
+        self.delete = QToolButton()
         self.delete.setIcon(QtGui.QIcon('img/deleteL.png'))
         self.delete.setIconSize(iconSize)
         self.delete.setStyleSheet("padding: 5px 5px 5px 5px")
+
+        # TODO: Icon
+        self.buttonPlus = QToolButton()
+        self.buttonPlus.setIcon(QtGui.QIcon('img/add.png'))
+        self.buttonPlus.setIconSize(iconSize)
+        #self.buttonPlus.setIcon(QtGui.QIcon('img/iconplus.png'))
+        #self.buttonPlus.setText('+')
+        self.buttonPlus.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.birds3 = SearchableBirdWidget(self.multipleBirds)
         if self.longBirdList is not None and self.longBirdList != 'None':
@@ -1706,7 +1720,7 @@ class HumanClassify1(QDialog):
             self.ctbtns.append(btn)
 
         # button to switch to call type view
-        self.viewSpButton = QtGui.QToolButton()
+        self.viewSpButton = QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
         self.viewSpButton.setIconSize(QSize(42, 25))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
@@ -1768,14 +1782,15 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.buttonNext)
         hboxNextPrev.addWidget(self.delete)
+        hboxNextPrev.addWidget(self.buttonPlus)
         hboxNextPrev.addWidget(self.numberLeft)
 
-        self.playButton = QtGui.QToolButton()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton = QToolButton()
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
         self.playButton.clicked.connect(self.playSeg)
 
-        self.scroll = QtGui.QScrollArea()
+        self.scroll = QScrollArea()
         self.scroll.setWidget(self.wPlot)
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumHeight(270)
@@ -1787,8 +1802,8 @@ class HumanClassify1(QDialog):
         self.specControls.volChanged.connect(self.volSliderMoved)
 
         # zoom buttons
-        self.zoomInBtn = QtGui.QToolButton()
-        self.zoomOutBtn = QtGui.QToolButton()
+        self.zoomInBtn = QToolButton()
+        self.zoomOutBtn = QToolButton()
         self.zoomInBtn.setIcon(QtGui.QIcon('img/zoom-in.png'))
         self.zoomOutBtn.setIcon(QtGui.QIcon('img/search.png'))
         self.zoomInBtn.setIconSize(QSize(24, 24))
@@ -1832,13 +1847,13 @@ class HumanClassify1(QDialog):
         if self.media_obj2.isPlaying():
             self.stopPlayback()
         else:
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
             self.playButton.setIconSize(QSize(40, 40))
             self.media_obj2.loadArray(self.audiodata)
 
     def stopPlayback(self):
         self.media_obj2.pressedStop()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QSize(40, 40))
 
     def volSliderMoved(self, value):
@@ -1971,8 +1986,9 @@ class HumanClassify1(QDialog):
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
         # add time markers next to the lines
-        time1 = QTime(0,0,0).addSecs(time1).toString('hh:mm:ss')
-        time2 = QTime(0,0,0).addSecs(time2).toString('hh:mm:ss')
+        # SRM int
+        time1 = QTime(0,0,0).addSecs(int(time1)).toString('hh:mm:ss')
+        time2 = QTime(0,0,0).addSecs(int(time2)).toString('hh:mm:ss')
         self.segTimeText1.setText(time1)
         self.segTimeText2.setText(time2)
         self.segTimeText1.setPos(startV, SgSize)
@@ -2389,7 +2405,7 @@ class HumanClassify2(QDialog):
             self.setWindowTitle('Human review')
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
         # let the user quit without bothering rest of it
 
         self.sps = sps
@@ -2409,19 +2425,19 @@ class HumanClassify2(QDialog):
 
         # Volume, brightness and contrast sliders.
         # Need to pass true (config) values to set up correct initial positions
-        specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
-        specControls.colChanged.connect(self.setColourLevels)
-        specControls.volChanged.connect(self.volSliderMoved)
-        specControls.layout().addStretch(3) # add a big stretchable outer margin
+        self.specControls = SupportClasses_GUI.BrightContrVol(brightness, contrast, self.cmapInverted)
+        self.specControls.colChanged.connect(self.setColourLevels)
+        self.specControls.volChanged.connect(self.volSliderMoved)
+        self.specControls.layout().addStretch(3) # add a big stretchable outer margin
 
         # batmode customizations:
         self.guidefreq = guidefreq
         self.guidecol = guidecol
         if not haveaudio:
-            specControls.volSlider.setEnabled(False)
-            specControls.volIcon.setEnabled(False)
+            self.specControls.volSlider.setEnabled(False)
+            self.specControls.volIcon.setEnabled(False)
 
-        label1 = QLabel('Click on the images that are incorrectly labelled.')
+        label1 = QLabel('Click on the images that are incorrectly labelled or need some change.')
         label1.setFont(QtGui.QFont('SansSerif', 10))
         species = QLabel(label)
         species.setStyleSheet("padding: 2px 0px 5px 0px")
@@ -2433,7 +2449,7 @@ class HumanClassify2(QDialog):
         vboxTop = QVBoxLayout()
         vboxTop.addWidget(label1)
         vboxTop.addWidget(species)
-        vboxTop.addWidget(specControls)
+        vboxTop.addWidget(self.specControls)
 
         # Controls at the bottom
         # self.buttonPrev = QtGui.QToolButton()
@@ -2476,13 +2492,13 @@ class HumanClassify2(QDialog):
         # (fills self.buttons)
         # self.flowLayout = QGridLayout()
         self.flowLayout = pg.LayoutWidget()
-        self.flowLayout.layout.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        self.flowLayout.layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
 
         # these sizes ensure at least one image fits:
         self.specV = 0
         self.specH = 0
         self.createButtons()
-        specControls.emitAll()  # applies initial colour, volume levels
+        self.specControls.emitAll()  # applies initial colour, volume levels
 
         # sets a lot of self properties needed before showing anything
         self.butStart = 0
@@ -2498,7 +2514,7 @@ class HumanClassify2(QDialog):
         self.flowAxesT = pg.LayoutWidget()
         self.flowAxesT.setMinimumSize(self.specH+20, 40)
         self.flowAxesT.setSizePolicy(5, 0)
-        self.flowAxesT.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.flowAxesT.layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         gridFlowAndAxes = QGridLayout()
         gridFlowAndAxes.addWidget(self.flowAxes, 0, 0)
@@ -2789,7 +2805,7 @@ class FilterManager(QDialog):
         self.setWindowTitle("Manage recognisers")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.filtdir = filtdir
 
         # filter dir name
@@ -2802,7 +2818,7 @@ class FilterManager(QDialog):
         # filter dir contents
         self.listFiles = QListWidget()
         self.listFiles.setMinimumHeight(275)
-        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.listFiles.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 
         self.readContents()
 
@@ -2815,7 +2831,7 @@ class FilterManager(QDialog):
                     input = input+'.txt'
                 if input==".txt" or input=="":
                     return(QValidator.Intermediate, input, pos)
-                if self.listFiles.findItems(input, Qt.MatchExactly):
+                if self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
                     print("duplicated input", input)
                     return(QValidator.Intermediate, input, pos)
                 else:
@@ -2932,9 +2948,9 @@ class FilterManager(QDialog):
                 return
 
         msg = SupportClasses_GUI.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % sources[0])
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
-        reply = msg.exec_()
-        if reply != QMessageBox.Yes:
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        reply = msg.exec()
+        if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             print("removing", sources)
@@ -2998,10 +3014,10 @@ class FilterManager(QDialog):
                 if os.path.isfile(targets[i]):
                     print("Warning: target file %s exists" % targets[i])
                     msg = SupportClasses_GUI.MessagePopup("t", "Import error"," A file %s already exists. Overwrite or skip?" % targets[i])
-                    msg.setStandardButtons(QMessageBox.NoButton)
-                    msg.addButton("Overwrite", QMessageBox.YesRole)
-                    msg.addButton("Skip", QMessageBox.RejectRole)
-                    reply = msg.exec_()
+                    msg.setStandardButtons(QMessageBox.StandardButton.NoButton)
+                    msg.addButton("Overwrite", QMessageBox.ButtonRole.YesRole)
+                    msg.addButton("Skip", QMessageBox.ButtonRole.RejectRole)
+                    reply = msg.exec()
                 if reply==0:
                     # no problems, or chose to overwrite
                     print("Copying", sources[i], "->", targets[i])
@@ -3010,7 +3026,7 @@ class FilterManager(QDialog):
                     # cancelled the entire copy
                     return
             msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported","Import complete. Now you can use the recogniser %s" % os.path.basename(targets[0]))
-            msg.exec_()
+            msg.exec()
             self.readContents()
         except Exception as e:
             print("ERROR: failed to import")
@@ -3054,7 +3070,7 @@ class FilterManager(QDialog):
                         return
                     shutil.copy2(sources[i], targets[i])
                 msg = SupportClasses_GUI.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the recogniser file(s) in %s" % target)
-                msg.exec_()
+                msg.exec()
             except Exception as e:
                 print("ERROR: failed to export")
                 print(e)
@@ -3065,7 +3081,7 @@ class Cluster(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Clustered segments')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
 
         if len(segments) == 0:
             print("No segments provided")
@@ -3089,7 +3105,7 @@ class Cluster(QDialog):
         self.flowLayout = pg.LayoutWidget()
         self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
 
-        self.scrollArea = QtGui.QScrollArea(self)
+        self.scrollArea = QScrollArea(self)
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setWidget(self.flowLayout)
 
@@ -3105,6 +3121,7 @@ class Cluster(QDialog):
 
     def addButtons(self):
         """ Only makes the PicButtons and self.clusters dict
+        TODO: Get the parameters for the spectrogram from the config
         """
         self.clusters = []
         self.picbuttons = []
@@ -3140,7 +3157,7 @@ class Cluster(QDialog):
             tbox.setMinimumWidth(80)
             tbox.setMaximumHeight(150)
             tbox.setStyleSheet("border: none;")
-            tbox.setAlignment(Qt.AlignCenter)
+            tbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tboxes.append(tbox)
             self.flowLayout.addWidget(self.tboxes[-1], r, c)
             c += 1
@@ -3178,7 +3195,7 @@ class ExportBats(QDialog):
         QDialog.__init__(self)
         self.setWindowTitle('Export Results?')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
 
         l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved as '+filename+'.\nYou will need to email this file yourself.\nFields with a * are mandatory)\n')
 
@@ -3251,7 +3268,7 @@ class Shapes(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Shape analysis')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
         self.setMinimumWidth(300)
 
         # if len(segments) == 0:
@@ -3348,3 +3365,31 @@ class Shapes(QDialog):
             pars=[]
         print('pars', pars)
         return(method, pars)
+
+class getNumberCopiesPlus(QDialog):
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Multiple Calls')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowCloseButtonHint)
+        self.setMinimumWidth(300)
+
+        self.numCopies = QSpinBox()
+        self.numCopies.setRange(0,10)
+        self.numCopies.setSingleStep(1)
+        self.numCopies.setValue(1)
+
+        button = QPushButton("OK")
+        button.clicked.connect(self.accept)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(QLabel("How many calls in this segment?"))
+        vbox.addWidget(self.numCopies)
+        vbox.addWidget(button)
+
+        self.setLayout(vbox)
+
+    def getValues(self):
+        return self.numCopies.value()
+
+

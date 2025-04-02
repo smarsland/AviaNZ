@@ -1,6 +1,4 @@
 
-# coding=latin-1
-
 # SupportClasses_GUI.py
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
@@ -24,13 +22,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QApplication, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 
 import Segment
@@ -42,7 +40,6 @@ import math
 import numpy as np
 import os
 import io
-import SignalProc
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -60,10 +57,10 @@ class TimeAxisHour(pg.AxisItem):
         # Overwrite the axis tick code
         if self.showMS:
             self.setLabel('Time', units='hh:mm:ss.ms')
-            return [QTime(0,0,0).addMSecs(int(value+self.offset)*1000).toString('hh:mm:ss.z') for value in values]
+            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('hh:mm:ss.z') for value in values]
         else:
             self.setLabel('Time', units='hh:mm:ss')
-            return [QTime(0,0,0).addSecs(int(value+self.offset)).toString('hh:mm:ss') for value in values]
+            return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -90,18 +87,17 @@ class TimeAxisMin(pg.AxisItem):
         vs = [value + self.offset for value in values]
         if self.showMS:
             self.setLabel('Time', units='mm:ss.ms')
-            vstr1 = [QTime(0,0,0).addMSecs(int(value*1000)).toString('mm:ss.z') for value in vs]
+            vstr1 = [QTime(0,0,0).addMSecs(value*1000).toString('mm:ss.z') for value in vs]
             # check if we need to add hours:
             if vs[-1]>=3600:
                 self.setLabel('Time', units='h:mm:ss.ms')
                 for i in range(len(vs)):
                     if vs[i]>=3600:
-                        vstr1[i] = QTime(0,0,0).addMSecs(int(vs[i]*1000)).toString('h:mm:ss.z')
+                        vstr1[i] = QTime(0,0,0).addMSecs(vs[i]*1000).toString('h:mm:ss.z')
             return vstr1
         else:
             self.setLabel('Time', units='mm:ss')
-            # SRM: bug? (int)
-            vstr1 = [QTime(0,0,0).addSecs(int(value)).toString('mm:ss') for value in vs]
+            vstr1 = [QTime(0,0,0).addSecs(value).toString('mm:ss') for value in vs]
             # check if we need to add hours:
             if vs[-1]>=3600:
                 self.setLabel('Time', units='h:mm:ss')
@@ -146,15 +142,15 @@ class AxisWidget(QAbstractButton):
             fontOffset = 5 + 2.6*self.fontsize
             tickmark = QLine(bottomR, QPoint(bottomR.x()+6, bottomR.y()))
             painter.drawLine(tickmark)
-            painter.drawText(int(tickmark.x2()-fontOffset), int(tickmark.y2()+1), "%.1f" % currFrq)
+            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+1, "%.1f" % currFrq)
             for ticknum in range(3):
                 currFrq += (self.maxFreq - self.minFreq)/4
                 tickmark.translate(0, -event.rect().height()//4)
                 painter.drawLine(tickmark)
-                painter.drawText(int(tickmark.x2()-fontOffset), int(tickmark.y2()+self.fontsize//2), "%.1f" % currFrq)
+                painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize//2, "%.1f" % currFrq)
             tickmark.translate(0, -tickmark.y2())
             painter.drawLine(tickmark)
-            painter.drawText(int(tickmark.x2()-fontOffset), int(tickmark.y2()+self.fontsize+1), "%.1f" % self.maxFreq)
+            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize+1, "%.1f" % self.maxFreq)
 
             painter.save()
             painter.translate(self.fontsize//2, event.rect().height()//2)
@@ -205,18 +201,18 @@ class TimeAxisWidget(QAbstractButton):
 
             tickmark = QLine(bottomL.x(), top+6, bottomL.x(), top)
             painter.drawLine(tickmark)
-            painter.drawText(int(tickmark.x1()), int(tickmark.y1()+fontOffset), timeFormat % currTime)
+            painter.drawText(tickmark.x1(), tickmark.y1()+fontOffset, timeFormat % currTime)
             for ticknum in range(4):
                 currTime += self.maxTime/5
                 tickmark.translate(event.rect().width()//5,0)
                 painter.drawLine(tickmark)
-                painter.drawText(int(tickmark.x1()-fontOffset//4), int(tickmark.y1()+fontOffset), timeFormat % currTime)
+                painter.drawText(tickmark.x1()-fontOffset//4, tickmark.y1()+fontOffset, timeFormat % currTime)
             tickmark.translate(event.rect().width()//5-2,0)
             painter.drawLine(tickmark)
-            painter.drawText(int(tickmark.x2()-fontOffset*0.7), int(tickmark.y1()+fontOffset), timeFormat % self.maxTime)
+            painter.drawText(tickmark.x2()-fontOffset*0.7, tickmark.y1()+fontOffset, timeFormat % self.maxTime)
 
             painter.save()
-            painter.drawText(int((bottomR.x() - bottomL.x())//2), int(bottomL.y()), "s")
+            painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
             painter.restore()
 
     def sizeHint(self):
@@ -582,8 +578,8 @@ class DragViewBox(pg.ViewBox):
     # Effectively, if "dragging" is enabled, it captures press & release signals.
     # Otherwise it ignores the event, which then goes to the scene(),
     # which only captures click events.
-    sigMouseDragged = QtCore.pyqtSignal(object,object,object)
-    keyPressed = QtCore.pyqtSignal(int)
+    sigMouseDragged = QtCore.Signal(object,object,object)
+    keyPressed = QtCore.Signal(int)
 
     def __init__(self, parent, enableDrag, thisIsAmpl, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -638,7 +634,7 @@ class DragViewBox(pg.ViewBox):
 
 class ChildInfoViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to pass a message back from a child
-    sigChildMessage = QtCore.pyqtSignal(object)
+    sigChildMessage = QtCore.Signal(object)
 
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -647,10 +643,10 @@ class ChildInfoViewBox(pg.ViewBox):
         self.sigChildMessage.emit(x)
 
 
-class ClickableRectItem(QGraphicsRectItem):
+class ClickableRectItem(QtGui.QGraphicsRectItem):
     # QGraphicsItem doesn't include signals, hence this mess
     def __init__(self, *args, **kwds):
-        QGraphicsRectItem.__init__(self, *args, **kwds)
+        QtGui.QGraphicsRectItem.__init__(self, *args, **kwds)
 
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
@@ -675,8 +671,8 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
         # this should be doable by postEvent(QResizeEvent),
         # but somehow doesn't always work.
         self.alreadyResizing = False
-        self.setMinimumWidth(int(self.height()*self.plotAspect)-10)
-        self.setMaximumWidth(int(self.height()*self.plotAspect)+10)
+        self.setMinimumWidth(self.height()*self.plotAspect-10)
+        self.setMaximumWidth(self.height()*self.plotAspect+10)
         self.adjustSize()
 
     def resizeEvent(self, e):
@@ -690,8 +686,8 @@ class PartlyResizableGLW(pg.GraphicsLayoutWidget):
             self.alreadyResizing = True
             # Some buffer for flexibility, so that it could adjust itself
             # and avoid infinite loops
-            self.setMinimumWidth(int(e.size().height()*self.plotAspect)-10)
-            self.setMaximumWidth(int(e.size().height()*self.plotAspect)+10)
+            self.setMinimumWidth(e.size().height()*self.plotAspect-10)
+            self.setMaximumWidth(e.size().height()*self.plotAspect+10)
 
             pg.GraphicsLayoutWidget.resizeEvent(self, e)
 
@@ -700,15 +696,15 @@ class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
 
-    def __init__(self, format, loop=False):
+    def __init__(self, format):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
         self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
         self.tempin = QBuffer()
-        self.timeoffset = 0  # start t of the played audio, in ms, relative to page start
+        self.startpos = 0
+        self.timeoffset = 0
         self.keepSlider = False
-        self.loop = loop
         #self.format = format
         # set small buffer (10 ms) and use processed time
         self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
@@ -719,9 +715,6 @@ class ControllableAudio(QAudioOutput):
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
         if self.state() == QAudio.IdleState:
-            if self.loop:
-                self.restart()
-                return
             # give some time for GUI to catch up and stop
             sleepCycles = 0
             while(self.state() != QAudio.StoppedState and sleepCycles < 30):
@@ -734,41 +727,30 @@ class ControllableAudio(QAudioOutput):
                 self.notify.emit()
             self.pressedStop()
 
-    #def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
-        #if not resetPause and self.state() == QAudio.SuspendedState:
-            #print("Resuming at: %d" % self.pauseoffset)
-            #self.sttime = time.time() - self.pauseoffset/1000
-    def pressedPlay(self, start=0, stop=0, audiodata=None):
-        # If playback bar is not moved, this can use resume() to
-        # continue from the same spot.
-        # Otherwise assumes that the QAudioOutput was stopped/reset,
-        # the updated position passed as start, and will
-        # start anew from there.
-        if self.state() == QAudio.SuspendedState:
-            print("Resuming the segment %d-%d ms" % (start,stop))
+    def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
+        if not resetPause and self.state() == QAudio.SuspendedState:
+            print("Resuming at: %d" % self.pauseoffset)
+            self.sttime = time.time() - self.pauseoffset/1000
             self.resume()
         else:
-            if not self.keepSlider: #or resetPause:
+            if not self.keepSlider or resetPause:
                 self.pressedStop()
 
-            #print("Starting at: %d" % self.tempin.pos())
-            #sleep(0.2)
-            ## in case bar was moved under pause, we need this:
-            #pos = self.tempin.pos() # bytes
-            #pos = self.format().durationForBytes(pos) / 1000 # convert to ms
-            #pos = pos + start
-            #print("Pos: %d start: %d stop %d" %(pos, start, stop))
-            #self.filterSeg(pos, stop, audiodata)
-            sleep(0.1)
-            print("Playing segment: %d-%d ms" %(start, stop))
-            self.filterSeg(start, stop, audiodata)
+            print("Starting at: %d" % self.tempin.pos())
+            sleep(0.2)
+            # in case bar was moved under pause, we need this:
+            pos = self.tempin.pos() # bytes
+            pos = self.format().durationForBytes(pos) / 1000 # convert to ms
+            pos = pos + start
+            print("Pos: %d start: %d stop %d" %(pos, start, stop))
+            self.filterSeg(pos, stop, audiodata)
 
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
-        #pos = self.tempin.pos() # bytes
-        #pos = self.format().durationForBytes(pos) / 1000 # convert to ms
-        ## store offset, relative to the start of played segment
-        #self.pauseoffset = pos + self.timeoffset
+        pos = self.tempin.pos() # bytes
+        pos = self.format().durationForBytes(pos) / 1000 # convert to ms
+        # store offset, relative to the start of played segment
+        self.pauseoffset = pos + self.timeoffset
         self.suspend()
 
     def pressedStop(self):
@@ -779,29 +761,25 @@ class ControllableAudio(QAudioOutput):
             self.tempin.close()
 
     def filterBand(self, start, stop, low, high, audiodata, sp):
-        # Selects the data between start-stop ms, relative to file start,
-        # bandpasses it and plays it.
+        # takes start-end in ms, relative to file start
         self.timeoffset = max(0, start)
         start = max(0, start * self.format().sampleRate() // 1000)
         stop = min(stop * self.format().sampleRate() // 1000, len(audiodata))
         segment = audiodata[int(start):int(stop)]
         segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
+        # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
 
-    def filterSeg(self, start, stop, audiodata, speed = 1.0):
-        # Selects the data between start-stop ms, relative to file start
-        # and plays it.
+    def filterSeg(self, start, stop, audiodata):
+        # takes start-end in ms
         self.timeoffset = max(0, start)
         start = max(0, int(start * self.format().sampleRate() // 1000))
         stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
-        if speed != 1.0:
-           segment = SignalProc.wsola(segment,speed) 
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
-        # Plays the entire audiodata: puts it onto a buffer
-        # and then starts the QAudioOutput from that buffer
+        # loads an array from memory into an audio buffer
         if self.format().sampleSize() == 16:
             audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
         elif self.format().sampleSize() == 32:
@@ -838,20 +816,15 @@ class ControllableAudio(QAudioOutput):
 
         # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
-        #self.sttime = time.time() - self.timeoffset/1000
+        self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
-    def restart(self):
-        self.tempin.seek(0)
-        #self.sttime = time.time() - self.timeoffset/1000
-        self.start(self.tempin)
-
-    #def seekToMs(self, ms, start):
-        #print("Seeking to %d ms" % ms)
-        ## start is an offset for the current view start, as it is position 0 in extracted file
-        #self.reset()
-        #self.tempin.seek(self.format().bytesForDuration((ms-start)*1000))
-        #self.timeoffset = ms
+    def seekToMs(self, ms, start):
+        print("Seeking to %d ms" % ms)
+        # start is an offset for the current view start, as it is position 0 in extracted file
+        self.reset()
+        self.tempin.seek(self.format().bytesForDuration((ms-start)*1000))
+        self.timeoffset = ms
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
@@ -860,7 +833,7 @@ class ControllableAudio(QAudioOutput):
         self.setVolume(value)
 
 
-class FlowLayout(QLayout):
+class FlowLayout(QtGui.QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
     # nicely as possible
     # From https://gist.github.com/Cysu/7461066
@@ -935,12 +908,12 @@ class FlowLayout(QLayout):
             spaceX = self.spacing() + wid.style().layoutSpacing(
                 QtGui.QSizePolicy.PushButton,
                 QtGui.QSizePolicy.PushButton,
-                QtCore.Qt.Orientation.Horizontal)
+                QtCore.Qt.Horizontal)
 
             spaceY = self.spacing() + wid.style().layoutSpacing(
                 QtGui.QSizePolicy.PushButton,
                 QtGui.QSizePolicy.PushButton,
-                QtCore.Qt.Orientation.Vertical)
+                QtCore.Qt.Vertical)
 
             nextX = x + item.sizeHint().width() + spaceX
             if nextX - spaceX > rect.right() and lineHeight > 0:
@@ -973,19 +946,19 @@ class MessagePopup(QMessageBox):
 
         self.setText(text)
         self.setWindowTitle(title)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         if (type=="w"):
             self.setIconPixmap(QPixmap("img/Owl_warning.png"))
         elif (type=="d"):
-            self.setIcon(QMessageBox.Icon.Information)
+            self.setIcon(QMessageBox.Information)
             self.setIconPixmap(QPixmap("img/Owl_done.png"))
         elif (type=="t"):
-            self.setIcon(QMessageBox.Icon.Information)
+            self.setIcon(QMessageBox.Information)
             self.setIconPixmap(QPixmap("img/Owl_thinking.png"))
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v3.3-devel (May 2021)")
+            self.setText("The AviaNZ Program, v3.2-alpha (January 2021)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -993,12 +966,12 @@ class MessagePopup(QMessageBox):
         self.setWindowIcon(QIcon("img/Avianz.ico"))
 
         # by default, adding OK button. Can easily be overwritten after creating
-        self.setStandardButtons(QMessageBox.StandardButton.Ok)
+        self.setStandardButtons(QMessageBox.Ok)
 
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, guidecol=None, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -1008,15 +981,9 @@ class PicButton(QAbstractButton):
         self.cluster = cluster
         self.setMouseTracking(True)
 
-        self.playButton = QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.playButton = QtGui.QToolButton(self)
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.hide()
-
-        # SRM: Decided this isn't the right wat
-        #self.plusButton = QToolButton(self)
-        #self.plusButton.setText('+')
-        #self.plusButton.hide()
-        #self.plusButton.clicked.connect(self.plusSegment)
 
         # batmode frequency guides (in Y positions 0-1)
         self.guides = guides
@@ -1032,10 +999,8 @@ class PicButton(QAbstractButton):
             self.noaudio = True
 
         # setImage reads some properties from self, to allow easy update
-        # when color map changes. Initialize with full colour scale,
-        # then we expect to call setImage soon again to update.
-        self.lut = lut
-        self.setImage([np.min(self.spec), np.max(self.spec)])
+        # when color map changes
+        self.setImage(lut, colStart, colEnd, cmapInv)
 
         self.buttonClicked = False
         # if not self.cluster:
@@ -1047,18 +1012,15 @@ class PicButton(QAbstractButton):
         # playback things
         self.media_obj = ControllableAudio(format)
         self.media_obj.notify.connect(self.endListener)
-        self.media_obj.loop = loop
         self.audiodata = audiodata
         self.duration = duration * 1000  # in ms
 
-    def setImage(self, colRange):
+    def setImage(self, lut, colStart, colEnd, cmapInv):
         # takes in a piece of spectrogram and produces a pair of images
-        # colRange: list [colStart, colEnd]
-        # TODO Could be smoother to separate out setLevels
-        # from setImage here, so that colours could be adjusted without
-        # redrawing - like in other review dialogs. But this also helps
-        # to trigger repaint upon scrolling etc, esp on Macs.
-        im, alpha = fn.makeARGB(self.spec, lut=self.lut, levels=colRange)
+        if cmapInv:
+            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colEnd, colStart])
+        else:
+            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
         im1 = fn.makeQImage(im, alpha)
         if im1.size().width() == 0:
             print("ERROR: button not shown, likely bad spectrogram coordinates")
@@ -1106,7 +1068,7 @@ class PicButton(QAbstractButton):
             else:
                 if self.mark == "yellow":
                     painter.setOpacity(0.8)
-                elif self.mark == "red" or self.mark == "blue":
+                elif self.mark == "red":
                     painter.setOpacity(0.5)
             painter.drawImage(rect, self.im1)
             if not self.cluster:
@@ -1126,22 +1088,17 @@ class PicButton(QAbstractButton):
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "?")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "?")
             elif self.mark == "yellow" and self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220, 220, 0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "√")
-            elif self.mark == "blue":
-                painter.setOpacity(0.9)
-                painter.setPen(QPen(QColor(0,0,220)))
-                painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "+")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "√")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "X")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "X")
             else:
                 print("ERROR: unrecognised segment mark")
                 return
@@ -1151,7 +1108,7 @@ class PicButton(QAbstractButton):
         if self.noaudio:
             return
         if not self.media_obj.isPlaying():
-            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
@@ -1169,27 +1126,24 @@ class PicButton(QAbstractButton):
         drag = QDrag(self)
         drag.setMimeData(mimeData)
         drag.setPixmap(QPixmap("./img/Owl_thinking.png"))
-        dropAction = drag.exec(Qt.MoveAction)
+        dropAction = drag.exec_(Qt.MoveAction)
 
     def playImage(self):
         if self.media_obj.isPlaying():
             self.stopPlayback()
         else:
-            self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.media_obj.loadArray(self.audiodata)
 
     def endListener(self):
         timeel = self.media_obj.elapsedUSecs() // 1000
         if timeel > self.duration:
-            if self.media_obj.loop:
-                self.media_obj.restart()
-            else:
-                self.stopPlayback()
+            self.stopPlayback()
 
     def stopPlayback(self):
         self.media_obj.pressedStop()
         self.playButton.hide()
-        self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
     def sizeHint(self):
         return self.im1.size()
@@ -1211,18 +1165,16 @@ class PicButton(QAbstractButton):
             elif self.mark == "red":
                 self.mark = "yellow"
             elif self.mark == "yellow":
-                self.mark = "blue"
-            elif self.mark == "blue":
                 self.mark = "green"
         self.paintEvent(ev)
         #self.update()
         self.repaint()
-        QApplication.processEvents()
+        pg.QtGui.QApplication.processEvents()
 
 
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
-    buttonDragged = QtCore.pyqtSignal(int,object)
+    buttonDragged = QtCore.Signal(int,object)
 
     def __init__(self):
         super().__init__()
@@ -1278,7 +1230,7 @@ class LightedFileList(QListWidget):
 
         with pg.BusyCursor():
             # Read contents of current dir
-            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.Filter.AllDirs | QDir.Filter.NoDot | QDir.Filter.Files,sort=QDir.SortFlag.DirsFirst)
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.AllDirs | QDir.NoDot | QDir.Files,sort=QDir.DirsFirst)
             self.soundDir = soundDir
 
             for file in self.listOfFiles:
@@ -1373,7 +1325,7 @@ class LightedFileList(QListWidget):
         if fileName:
             # for matching dirs:
             # index = self.findItems(fileName+"\/",Qt.MatchExactly)
-            index = self.findItems(fileName,Qt.MatchFlag.MatchExactly)
+            index = self.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:
@@ -1386,7 +1338,7 @@ class LightedFileList(QListWidget):
         """
         # for matching dirs - not sure if needed:
         # index = self.findItems(fileName+"\/",Qt.MatchExactly)
-        index = self.findItems(fileName,Qt.MatchFlag.MatchExactly)
+        index = self.findItems(fileName,Qt.MatchExactly)
         if len(index)==0:
             return
 
@@ -1483,110 +1435,3 @@ class MainPushButton(QPushButton):
         #  MainPushButton:pressed { background-color: #cccccc }
         # But any such change overrides default drawing style entirely.
         self.setFixedHeight(45)
-
-class BrightContrVol(QWidget):
-    """ Widget containing brightness, contrast, volume control sliders
-        and icons. On bright./contr. change, emits a colChanged signal
-        with (brightness, contrast) values. On vol. change, emits a volChanged
-        signal with (volume) value.
-        All values are ints on 0-100 scale.
-    """
-    # Initialize with values to accurately set up slider positions
-    # horizontal: bool, True for e.g. review modes, False for manual
-    #  (adjusts layout accordingly)
-    colChanged = pyqtSignal(int, int)
-    volChanged = pyqtSignal(int)
-    def __init__(self, brightness, contrast, inverted, horizontal=True, parent=None, **kwargs):
-        super(BrightContrVol, self).__init__(parent, **kwargs)
-
-        # Sliders and signals
-        self.brightSlider = QSlider(Qt.Orientation.Horizontal)
-        self.brightSlider.setMinimum(0)
-        self.brightSlider.setMaximum(100)
-        if inverted:
-            self.brightSlider.setValue(brightness)
-        else:
-            self.brightSlider.setValue(100-brightness)
-        self.brightSlider.setTickInterval(1)
-        self.brightSlider.valueChanged.connect(self.emitCol)
-
-        self.contrSlider = QSlider(Qt.Orientation.Horizontal)
-        self.contrSlider.setMinimum(0)
-        self.contrSlider.setMaximum(100)
-        self.contrSlider.setValue(contrast)
-        self.contrSlider.setTickInterval(1)
-        self.contrSlider.valueChanged.connect(self.emitCol)
-
-        # Volume control
-        self.volSlider = QSlider(Qt.Orientation.Horizontal)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        self.volSlider.valueChanged.connect(self.volChanged.emit)
-
-        # static labels
-        labelBr = QLabel()
-        # TODO -- transformation mode was 1, not sure if this right option
-        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=Qt.TransformationMode.SmoothTransformation))
-
-        labelCo = QLabel()
-        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=Qt.TransformationMode.SmoothTransformation))
-
-        self.volIcon = QLabel()
-        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=Qt.TransformationMode.SmoothTransformation))
-        # Layout
-        if horizontal:
-            labelCo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            labelBr.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.volIcon.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-            box = QHBoxLayout()
-            box.addSpacing(5)  # outer margin
-            box.addWidget(self.volIcon)
-            box.addWidget(self.volSlider)
-            box.addSpacing(10)
-            box.addWidget(labelBr)
-            box.addWidget(self.brightSlider)
-            box.addSpacing(10)
-            box.addWidget(labelCo)
-            box.addWidget(self.contrSlider)
-            box.addStretch(3)
-
-            box.setStretch(2,4)
-            box.setStretch(5,5)  # color sliders should stretch more than vol
-            box.setStretch(8,5)
-        else:
-            box = QGridLayout()
-            box.addWidget(self.volIcon, 0, 0)
-            box.addWidget(self.volSlider, 0, 1)
-            box.setRowMinimumHeight(0, 30)
-
-            box.addWidget(labelBr, 1, 0)
-            box.addWidget(QLabel("Brightness"), 1, 1)
-            box.addWidget(self.brightSlider, 2, 0, 1, 2)
-
-            box.addWidget(labelCo, 3, 0)
-            box.addWidget(QLabel("Contrast"), 3, 1)
-            box.addWidget(self.contrSlider, 4, 0, 1, 2)
-
-            # Could also set icon scale to 16
-            labelCo.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
-            labelBr.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
-            self.volIcon.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-            box.setColumnStretch(1,3)
-            box.setHorizontalSpacing(20)
-            box.setContentsMargins(0, 5, 0, 10)
-
-        self.setLayout(box)
-
-    def emitCol(self):
-        """ Emit the colour signal (to be triggered by valueChanged or
-            programmatically, when a colour refresh is needed)
-        """
-        self.colChanged.emit(self.brightSlider.value(), self.contrSlider.value())
-
-    def emitAll(self):
-        """ Emit both colour and volume signals (useful for initialization)
-        """
-        self.emitCol()
-        self.volChanged.emit(self.volSlider.value())

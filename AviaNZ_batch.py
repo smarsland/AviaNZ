@@ -35,6 +35,13 @@ import time
 import math
 import copy
 
+# SRM: TODO:
+# Need to work through this and ensure:
+# 1. everything needed is passed from interface (or command line, or test)
+# 2. one bat method
+# 3. care taken for resampling for different filters
+# 4. intermittent sampling and time of files is correct
+# 5. simplify if possible
 
 class AviaNZ_batchProcess():
     # Main class for batch processing
@@ -73,6 +80,7 @@ class AviaNZ_batchProcess():
             print("ERROR: unrecognized mode ", mode)
             return
 
+        # TODO: get all the UI params here
         self.dirName = sdir
         self.wind = wind
 
@@ -88,6 +96,7 @@ class AviaNZ_batchProcess():
             self.detect()
         else:
             self.species = recogniser
+        print(self.species)
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -103,13 +112,15 @@ class AviaNZ_batchProcess():
             self.method = "Default"
             speciesStr = "Any sound"
             filters = None
+        # TODO: Not used?
         elif "Any sound (Intermittent sampling)" in self.species:
             self.method = "Intermittent sampling"
             speciesStr = "Intermittent sampling"
             filters = None
         else:
+            # TODO: One bat filter!
             if "NZ Bats" in self.species:
-                # Should bats only be possible alone?
+                # TODO: Should bats only be possible alone?
                 self.method = "Click"   # old bat method
                 #self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
             elif "NZ Bats_NP" in self.species:
@@ -117,6 +128,7 @@ class AviaNZ_batchProcess():
             else:
                 self.method = "Wavelets"
 
+            # TODO: NOT TRUE NOW!
             # double-check that all Fs are equal (should already be prevented by UI)
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
@@ -131,6 +143,7 @@ class AviaNZ_batchProcess():
             self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
+        # TODO: Will always need to do bats separately
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
@@ -139,6 +152,7 @@ class AviaNZ_batchProcess():
         total = len(allwavs)
 
         # Parse the user-set time window to process
+        # TODO: Check if they selected it
         if self.CLI or self.testmode:
             timeWindow_s = 0
             timeWindow_e = 0
@@ -148,6 +162,7 @@ class AviaNZ_batchProcess():
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
+        # TODO: This will change a bit
         self.filesDone = []
         if not self.testmode:
             if self.method != "Intermittent sampling":
@@ -273,13 +288,13 @@ class AviaNZ_batchProcess():
                         os.remove(filenamef)
 
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
+            # TODO: Move into a separate function
             if self.method == 'Click':
                 self.exportToBatSearch(self.dirName)
                 self.outputBatPasses(self.dirName)
             elif self.method == 'Bats':
                 self.exportToBatSearch(self.dirName,threshold1=100,threshold2=None)
                 self.outputBatPasses(self.dirName)
-                #self.exportToBatSearch_NP(self.dirName)
 
             if self.method=='Click' or self.method=='Bats':
                 if not self.CLI:
@@ -320,8 +335,7 @@ class AviaNZ_batchProcess():
                     self.ui.msgClosed.wait(self.mutex)
                     self.mutex.unlock()
 
-                    # now, the form was either rejected, setting results to None,
-                    # or accepted:
+                    # now, the form was either rejected, setting results to None, or accepted:
                     if self.ui.batFormResults is not None:
                         self.exportBatSurvey(self.dirName, self.ui.batFormResults)
                 else:
@@ -335,6 +349,7 @@ class AviaNZ_batchProcess():
 
     def mainloop(self,allwavs,total,speciesStr,filters,settings):
         # MAIN PROCESSING starts here
+        # TODO: This will need a bit of work to deal with different filters with non-matching sample rates
         processingTime = 0
         cleanexit = 0
         cnt = 0
@@ -372,7 +387,7 @@ class AviaNZ_batchProcess():
                     self.log.appendFile(filename)
                     continue
 
-            # test the selected time window if it is a doc recording
+            # test the selected time window if it is a DOC recording
             DOCRecording = re.search(r'(\d{6})_(\d{6})', os.path.basename(filename))
             if DOCRecording:
                 startTime = DOCRecording.group(2)
@@ -411,7 +426,7 @@ class AviaNZ_batchProcess():
             else:
                 # load audiodata/spectrogram and clean up old segments:
                 print("Loading file...")
-                # Impulse masking:   TODO masking is useful but could be improved
+                # Impulse masking:   TODO: masking is useful but could be improved
                 if speciesStr=="Any sound":
                     impMask = True  # Up to debate - could turn this off here
                 elif self.method=="Click" or self.method=="Bats":
@@ -469,7 +484,7 @@ class AviaNZ_batchProcess():
             # END of audio batch processing
 
     def addRegularSegments(self):
-        """ Perform the Hartley bodge: add 10s segments every minute. """
+        """ Perform the Hartley bodge: add fixed length segments at specified frequency. """
         # if wav.data exists get the duration
         (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
         self.segments.metadata = dict()
@@ -675,7 +690,7 @@ class AviaNZ_batchProcess():
                                 else:
                                     probs = 0
                                 if isinstance(probs, int):
-                                    # there is no at least one img generated from this segment, very unlikely to be a true seg.
+                                    # there is not at least one img generated from this segment, very unlikely to be a true seg.
                                     label = []
                                 else:
                                     ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
@@ -846,7 +861,11 @@ class AviaNZ_batchProcess():
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            hasmetadata = self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            if not hasmetadata:
+                    # TODO: Should save this...
+                    self.segments.metadata["Operator"] = "Auto"
+                    self.segments.metadata["Reviewer"] = ""
             # wipe same species:
             for sp in species:
                 # shorthand for double-checking that it's not "Any Sound" etc
@@ -1163,8 +1182,12 @@ class AviaNZ_batchProcess():
                         # DOC format
                         # night comes from the directory
                         night = root[-2:]+"/"+root[-4:-2]+"/"+root[-6:-4]
+                        print(night)
                         folder = root.split("/")[-2]
-                        detname = folder.split(" ")[-2]
+                        print(folder)
+                        # TODO -- Note sure what this is doing?!
+                        #detname = folder.split(" ")[-2]
+                        detname = ""
                         #print(detname,folder)
                         #print("night "+night)
                         #night = filename[6:8]+"/"+filename[4:6]+"/"+filename[2:4]
@@ -1184,10 +1207,109 @@ class AviaNZ_batchProcess():
             output = start
 
     def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
+        # Write out a BatData.xml that can be used for BatSearch import
+        # The format of Bat searches is <Survey> / <Site> / Bat / <Date> / files ----- the word Bat is fixed
+        # The BatData.xml goes in the Date folder
+        # TODO: No error checking!
+        # TODO: Check date
+        from lxml import etree 
+
+        # TODO: Get version label!
+        operator = "AviaNZ 3.0"
+        site = "Nowhere"
+
+        # BatSeach codes
+        namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
+        if not os.path.isdir(dirName):
+            print("Folder doesn't exist")
+            return 0
+        for root, dirs, files in os.walk(dirName, topdown=True):
+            #nfiles = len(files)
+            #if nfiles > 0:
+            if any(fnmatch.fnmatch(filename, '*.bmp') for filename in files):
+                # Set up the XML start
+                schema = etree.QName("http://www.w3.org/2001/XMLSchema-instance", "schema")
+                start = etree.Element("ArrayOfBatRecording", nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance", 'xsd':"http://www.w3.org/2001/XMLSchema"})
+
+                for filename in files:
+                #for count in range(nfiles):
+                    #filename = files[count]
+                    if filename.endswith('.data'):
+                        s1 = etree.SubElement(start,"BatRecording")
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, filename))
+                        if len(segments)>0:
+                            seg = segments[0]
+                            #print(seg)
+                            c = [lab["certainty"] for lab in seg[4]]
+                            s = [lab["species"] for lab in seg[4]]
+                            if len(c)>1:
+                                label = 'Both'
+                            else:
+                                if c[0]>=threshold1:
+                                    if s[0] == 'Long-tailed bat':
+                                        label = 'Long Tail'
+                                    elif s[0] == 'Short-tailed bat':
+                                        label = 'Short Tail'
+                                elif threshold2 is not None:
+                                    if c[0]>threshold2:
+                                        if s[0] == 'Long-tailed bat':
+                                            label = 'Possible LT'
+                                        elif s[0] == 'Short-tailed bat':
+                                            label = 'Possible ST'
+                                elif threshold2 is None:
+                                    if s[0] == 'Long-tailed bat':
+                                        label = 'Possible LT'
+                                    elif s[0] == 'Short-tailed bat':
+                                        label = 'Possible ST'
+                                else:
+                                    label = 'Non-bat'
+                        else:
+                            # TODO: which?
+                            label = 'Non-bat'
+                            #label = 'Unassigned'
+                        # This is the text for the file
+                        s2 = etree.SubElement(s1,"AssignedBatCategory")
+                        s3 = etree.SubElement(s1,"AssignedSite")
+                        s4 = etree.SubElement(s1,"AssignedUser")
+                        s5 = etree.SubElement(s1,"RecTime")
+                        s6 = etree.SubElement(s1,"RecordingFileName")
+                        s7 = etree.SubElement(s1,"RecordingFolderName")
+                        s8 = etree.SubElement(s1,"MeasureTimeFrom")
+
+                        s2.text = str(namedict[label])
+                        s3.text = site
+                        s4.text = operator
+                        # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
+                        if len(filename.split('_')[0]) == 6:
+                            # ddmmyy
+                            timedate = "20"+filename[4:6]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[7:9]+":"+filename[9:11]+":"+filename[11:13]
+                        elif len(filename.split('_')[0]) == 8:
+                            # yyyymmdd
+                            timedate = filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]
+                        else:
+                            print("Error: time unknown")
+                            timedate = ""
+                        s5.text = timedate
+
+                        s6.text = filename[:-5]
+                        s7.text = ".\\"+os.path.split(root)[-1]
+                        #s7.text = ".\\"+os.path.relpath(root, dirName)
+                        s8.text = str(0)
+
+                # Now write the file 
+                print("writing to", os.path.join(root, savefile))
+                with open(os.path.join(root, savefile), "wb") as f:
+                    f.write(etree.tostring(etree.ElementTree(start), pretty_print=True, xml_declaration=True, encoding='utf-8'))
+        return 1
+
+    def exportToBatSearch_2(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
         # Write out a file that can be used for BatSearch import
         # For now, looks like the xml file used there
         # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
-        # No error checking
+        # TODO: No error checking!
+        # TODO: Use xml properly
+        # TODO: Check date
         operator = "AviaNZ 3.0"
         site = "Nowhere"
         # BatSeach codes
@@ -1241,8 +1363,18 @@ class AviaNZ_batchProcess():
                         s2 = "<AssignedBatCategory>"+str(namedict[label])+"</AssignedBatCategory>\n"
                         s3 = "<AssignedSite>"+site+"</AssignedSite>\n"
                         s4 = "<AssignedUser>"+operator+"</AssignedUser>\n"
-                        # DOC format
-                        s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                        # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
+                        if len(filename.split('_')[0]) == 6:
+                            # ddmmyy
+                            s5 = "<RecTime>"+"20"+filename[4:6]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[7:9]+":"+filename[9:11]+":"+filename[11:13]+"</RecTime>\n"
+                        elif len(filename.split('_')[0]) == 8:
+                            # yyyymmdd
+                            s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                        else:
+                            print("Error: time unknown")
+                            s5 = "<RecTime>"+"</RecTime>\n"
+
+                        #s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
                         s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
                         s7 = "<RecordingFolderName>.\\"+os.path.relpath(root, dirName)+"</RecordingFolderName>\n"
                         s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
@@ -1260,7 +1392,7 @@ class AviaNZ_batchProcess():
     
         return 1
 
-    def exportToBatSearch_NP(self, dirName, savefile='BatData.xml'):
+    def exportToBatSearch_1(self, dirName, savefile='BatData.xml'):
         # Write out a file that can be used for BatSearch import
         # For now, looks like the xml file used there
         # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date

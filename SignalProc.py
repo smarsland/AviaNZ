@@ -68,12 +68,13 @@ class SignalProc:
         # only accepting wav files of this format
         if QtMM:
             self.audioFormat = QAudioFormat()
-            self.audioFormat.setCodec("audio/pcm")
-            self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+            # TODO!!
+            #self.audioFormat.setCodec("audio/pcm")
+            #self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
 
-    def readWav(self, file, len=None, off=0, silent=False):
+    def readWav(self, file, duration=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        wavobj = wavio.read(file, len, off)
+        wavobj = wavio.read(file, duration, off)
         self.data = wavobj.data
 
         # take only left channel
@@ -92,9 +93,11 @@ class SignalProc:
         self.sampleRate = wavobj.rate
 
         if QtMM:
+            # TODO!!!
             self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
             self.audioFormat.setSampleRate(self.sampleRate)
             # Only 8-bit WAVs are unsigned:
+            # TODO!!
             if wavobj.sampwidth==1:
                 self.audioFormat.setSampleType(QAudioFormat.UnSignedInt)
             else:
@@ -106,11 +109,13 @@ class SignalProc:
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
 
+        #print("a",self.sampleRate, self.fileLength, np.shape(self.data))
+
         if not silent:
             if QtMM:
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
-    def readBmp(self, file, len=None, off=0, silent=False, rotate=True, repeat=True):
+    def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
             For similarity with readWav, accepts len and off args, in seconds.
             rotate: if True, rotates to match setImage and other spectrograms (rows=time)
@@ -134,7 +139,7 @@ class SignalProc:
         # Check color format and convert to grayscale
         if not silent and (not img.allGray() or colc>256):
             print("Warning: image provided not in 8-bit grayscale, information will be lost")
-        img.convertTo(QImage.Format_Grayscale8)
+        img.convertTo(QImage.Format.Format_Grayscale8)
 
         # Convert to numpy
         # (remember that pyqtgraph images are column-major)
@@ -179,15 +184,15 @@ class SignalProc:
 
         # NOTE: conversions will use self.sampleRate and self.incr, so ensure those are already set!
         # trim to specified offset and length:
-        if off>0 or len is not None:
+        if off>0 or duration is not None:
             # Convert offset from seconds to pixels
             off = int(self.convertAmpltoSpec(off))
-            if len is None:
+            if duration is None:
                 img2 = img2[:, off:]
             else:
                 # Convert length from seconds to pixels:
-                len = int(self.convertAmpltoSpec(len))
-                img2 = img2[:, off:(off+len)]
+                duration = int(self.convertAmpltoSpec(duration))
+                img2 = img2[:, off:(off+duration)]
 
         if rotate:
             # rotate for display, b/c required spectrogram dimensions are:
@@ -199,7 +204,7 @@ class SignalProc:
 
         if QtMM:
             self.audioFormat.setChannelCount(0)
-            self.audioFormat.setSampleSize(0)
+            #self.audioFormat.setSampleSize(0)
             self.audioFormat.setSampleRate(self.sampleRate)
         #else:
             #self.audioFormat['channelCount'] = 0
@@ -217,13 +222,13 @@ class SignalProc:
 
     def resample(self, target):
         if len(self.data)==0:
-            print("Warning: no data set to resmample")
+            print("Warning: no data set to resample")
             return
         if target==self.sampleRate:
             print("No resampling needed")
             return
 
-        self.data = librosa.core.audio.resample(self.data, self.sampleRate, target)
+        self.data = librosa.resample(self.data, orig_sr=self.sampleRate, target_sr=target)
 
         self.sampleRate = target
         if QtMM:
@@ -320,7 +325,14 @@ class SignalProc:
 
     def convertToMel(self,filt='mel',nfilters=40,minfreq=0,maxfreq=None,normalise=True):
         filterbank = self.mel_filter(filt,nfilters,minfreq,maxfreq,normalise)
-        self.sg = np.dot(self.sg,filterbank)
+        # Single channel spectrograms will convert successfully. Exception is for Multi-tapered spectrograms.
+        try:
+            self.sg = np.dot(self.sg,filterbank)
+        except:
+            placeholder = np.zeros(shape=(np.shape(self.sg)[0],np.shape(filterbank)[1],np.shape(self.sg)[2]))
+            for i in range(np.shape(self.sg)[2]):
+                placeholder[:,:,i] = np.dot(self.sg[:,:,i],filterbank)
+            self.sg = placeholder
     # ====
 
     def setWidth(self,window_width,incr):
@@ -368,7 +380,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=40,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,stop=None):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -376,7 +388,12 @@ class SignalProc:
         This version is faster than the default versions in pylab and scipy.signal
         Assumes that the values are not normalised.
         """
-        if self.data is None or len(self.data)==0:
+        if start is None:
+            data = self.data
+        else:
+            # TODO: Error checking
+            data = self.data[start:stop]
+        if data is None or len(data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
 
@@ -390,10 +407,10 @@ class SignalProc:
             incr = self.incr
 
         # clean handling of very short segments:
-        if len(self.data) <= window_width:
-            window_width = len(self.data) - 1
+        if len(data) <= window_width:
+            window_width = len(data) - 1
 
-        self.sg = np.copy(self.data)
+        self.sg = np.copy(data)
         if self.sg.dtype != 'float':
             self.sg = self.sg.astype('float')
 
@@ -440,17 +457,21 @@ class SignalProc:
             self.sg -= self.sg.mean()
 
         starts = range(0, len(self.sg) - window_width, incr)
+        # This multi-tapered method does not sum all channels. Each taper equals one channel.
         if sgType=='Multi-tapered':
             if specExtra:
-                [tapers, eigen] = dpss(window_width, 2.5, 4)
+                [tapers, eigen] = dpss(window_width, 2.5, 3)
                 counter = 0
-                out = np.zeros((len(starts),window_width // 2))
+                out = np.zeros(shape=(len(starts),window_width // 2,3))
                 for start in starts:
                     Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
                     Sk = abs(Sk)**2
                     Sk = np.mean(Sk.T * weights, axis=1)
-                    out[counter:counter + 1,:] = Sk[window_width // 2:].T
-                    counter += 1
+                    for taper in range(3):
+                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][window_width // 2:].T
+                    counter += 1  
+                    # The next line is for summing them
+                    #out[counter:counter + 1,:] = Sk[window_width // 2:].T
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")
@@ -469,7 +490,7 @@ class SignalProc:
 
             # Messiness. Need to work out where to put each pixel
             # I wish I could think of a way that didn't need a histogram
-            times = np.tile(np.arange(0, (len(self.data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
+            times = np.tile(np.arange(0, (len(data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
             self.sg = np.absolute(self.sg[:, :window_width //2]) #+ 0.1
@@ -545,6 +566,7 @@ class SignalProc:
             sg, lam = boxcox(sg)
             return np.reshape(sg, size)
         elif tr=="Sigmoid":
+            # TODO!!!
             sig  = 1/(1+np.exp(1.2))
             return self.sg**sig
         elif tr=="PCEN":
@@ -845,12 +867,19 @@ class SignalProc:
             wave_est = np.real(fft.ifft(spectral_slice))[::-1]
             if calculate_offset and i > 0:
                 offset_size = size - incr
+                print("Offset: ",offset_size)
                 if offset_size <= 0:
-                    #print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
+                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
+                print(wave_start, est_start, offset_size, len(wave), len(wave_est), est_start+offset_size<len(wave_est))
                 offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
+                print("New offset: ",offset)
             else:
                 offset = 0
+            print(wave_end-wave_start, len(window), est_end-est_start,len(wave_est), len(wave),est_start, offset)
+            if est_end-offset >= size:
+                offset+=(est_end-offset-size)
+                wave_end-=(est_end-offset-size)
             wave[wave_start:wave_end] += window * wave_est[est_start - offset:est_end - offset]
             total_windowing_sum[wave_start:wave_end] += window**2 #Virginia: needed square
         wave = np.real(wave) / (total_windowing_sum + 1E-6)
@@ -967,20 +996,21 @@ class SignalProc:
     def drawSpectralDeriv(self):
         # helper function to parse output for plotting spectral derivs.
         sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
-        x, y = np.where(sd > 0)
-        #print(y)
+        if sd is not None:
+            x, y = np.where(sd > 0)
+            #print(y)
 
-        # remove points beyond frq range to show
-        y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
-        y1 = np.asarray(y1)
-        valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+            # remove points beyond frq range to show
+            y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+            y1 = np.asarray(y1)
+            valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+    
+            inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+            x = x[inds]
+            y = y[inds]
+            y = [i - valminfrq for i in y]
 
-        inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
-        x = x[inds]
-        y = y[inds]
-        y = [i - valminfrq for i in y]
-
-        return x, y
+            return x, y
 
     def drawFundFreq(self, seg):
         """ Produces marks of fundamental freq to be drawn on the spectrogram.
@@ -1473,4 +1503,104 @@ class SignalProc:
         # CNN frame size
         featuress = featuress[:i, :, :, :]
         return featuress
+
+def wsola(x, s, win_type='hann', win_size=1024, syn_hop_size=512, tolerance=512):
+    from scipy.interpolate import interp1d
+    """Modify length of the audio sequence using WSOLA algorithm.
+    This implementation is largely from pytsmod
+
+    Parameters
+    ----------
+
+    start, stop : the part of the sound to play
+
+    s : number > 0 [scalar] or numpy.ndarray [shape=(2, num_points)]
+        the time stretching factor. Either a constant value (alpha)
+        or an 2 x n array of anchor points which contains the sample points
+        of the input signal in the first row
+        and the sample points of the output signal in the second row.
+    win_type : str
+            type of the window function. hann and sin are available.
+    win_size : int > 0 [scalar]
+            size of the window function.
+    syn_hop_size : int > 0 [scalar]
+            hop size of the synthesis window.
+            Usually half of the window size.
+    tolerance : int >= 0 [scalar]
+                number of samples the window positions
+                in the input signal may be shifted
+                to avoid phase discontinuities when overlap-adding them
+                to form the output signal (given in samples).
+
+    Returns
+    -------
+    
+    y : numpy.ndarray [shape=(channel, num_samples) or (num_samples)]
+        the modified output audio sequence.
+    """
+
+    x = np.expand_dims(x, 0)
+    anc_points = np.array([[0, np.shape(x)[1] - 1], [0, np.ceil(s * np.shape(x)[1]) - 1]])
+    #anc_points = np.array([[0, np.shape(x)[1] - 1], [0, np.ceil(s * np.shape(x)[1]) - 1]])
+    n_chan = x.shape[0]
+    output_length = int(anc_points[-1, -1]) + 1
+
+    win = np.hanning(win_size)
+
+    sw_pos = np.arange(0, output_length + win_size // 2, syn_hop_size)
+    ana_interpolated = interp1d(anc_points[1, :], anc_points[0, :],
+                                fill_value='extrapolate')
+    aw_pos = np.round(ana_interpolated(sw_pos)).astype(int)
+    ana_hop = np.insert(aw_pos[1:] - aw_pos[0: -1], 0, 0)
+    
+    y = np.zeros((n_chan, output_length))
+
+    min_fac = np.min(syn_hop_size / ana_hop[1:])
+
+    # padding the input audio sequence.
+    left_pad = int(win_size // 2 + tolerance)
+    right_pad = int(np.ceil(1 / min_fac) * win_size + tolerance)
+    x_padded = np.pad(x, ((0, 0), (left_pad, right_pad)), 'constant')
+
+    aw_pos = aw_pos + tolerance
+
+    # Applying WSOLA to each channels
+    for c, x_chan in enumerate(x_padded):
+        y_chan = np.zeros(output_length + 2 * win_size)
+        ow = np.zeros(output_length + 2 * win_size)
+
+        delta = 0
+
+        for i in range(len(aw_pos) - 1):
+            x_adj = x_chan[aw_pos[i] + delta: aw_pos[i] + win_size + delta]
+            y_chan[sw_pos[i]: sw_pos[i] + win_size] += x_adj * win
+            ow[sw_pos[i]: sw_pos[i] + win_size] += win
+
+            nat_prog = x_chan[aw_pos[i] + delta + syn_hop_size:
+                              aw_pos[i] + delta + syn_hop_size + win_size]
+
+            next_aw_range = np.arange(aw_pos[i+1] - tolerance,
+                                      aw_pos[i+1] + win_size + tolerance)
+
+            x_next = x_chan[next_aw_range]
+
+            cross_corr = np.correlate(nat_prog, x_next)
+            max_index = np.argmax(cross_corr)
+
+            delta = tolerance - max_index
+
+        # Calculate last frame
+        x_adj = x_chan[aw_pos[-1] + delta: aw_pos[-1] + win_size + delta]
+        y_chan[sw_pos[-1]: sw_pos[-1] + win_size] += x_adj * win
+        ow[sw_pos[-1]: sw_pos[-1] + win_size] += + win
+
+        ow[ow < 1e-3] = 1
+
+        y_chan = y_chan / ow
+        y_chan = y_chan[win_size // 2:]
+        y_chan = y_chan[: output_length]
+
+        y[c, :] = np.int_(y_chan)
+
+    return y.squeeze()
 

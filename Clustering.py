@@ -63,6 +63,13 @@ class Clustering:
         self.targets = labels
         self.n_clusters = nclusters
 
+    def setnClusters(self,nc):
+        # Sets the number of clusters as 5 unless otherwise told
+        if nc > 0:
+            self.n_clusters = nc
+        else:
+            self.n_clusters = 5
+
     def custom_dist(self, x, y):
             d, _ = librosa.sequence.dtw(x, y, metric='euclidean')
             return d[d.shape[0] - 1][d.shape[1] - 1]
@@ -262,23 +269,25 @@ class Clustering:
 
         return som
 
-    # def cluster(self, dirname, fs, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
-    def cluster(self, dirname, fs, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False,
-                    alg='agglomerative'):
+    def cluster(self, dataset, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
         """
         Cluster segments during training to make sub-filters.
-        Given wav + annotation files,
-            1) identify syllables using median clipping/ FIR
-            2) make them to fixed-length by padding or clipping
-            3) use existing clustering algorithems
+
+        This is called by DialogsTraining, after getSyllables has run
+
+        Given wav + annotation files, plus set of syllables
+            1) make them fixed-length by padding or clipping
+            2) cluster with some clustering algorithm
+
+        :param dataset: syllables output by findSyllables
         :param dir: path to directory with wav & wav.data files
         :param fs: sample rate
-        :param species: string, optional. will train on segments containing this label
+        :param species: string, will train on segments containing this label
         :param feature: 'we' (wavelet energy), 'mfcc', or 'chroma'
         :param n_mels: number of mel coeff when feature='mfcc'
         :param minlen: min syllable length in secs
         :param denoise: True/False
-        :param alg: algorithm to use, default to agglomerative
+        :param alg: clustering algorithm to use, default to agglomerative
         :return: clustered segments - a list of lists [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
                  fs, nclasses, syllable duration (median)
         """
@@ -288,6 +297,7 @@ class Clustering:
         weInds = []
 
         # 1. Get the frequency band and sampling frequency from annotations
+        # TODO
         f1, f2 = self.getFrqRange(dirname, species, fs)
         print("Clustering using sampling rate", fs)
 
@@ -296,12 +306,15 @@ class Clustering:
             mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs / 2, htk=False)
             ind_flow = (np.abs(mels - f1)).argmin()
             ind_fhigh = (np.abs(mels - f2)).argmin()
-
         elif feature == 'we' and f1 != 0 and f2 != 0:
             weInds = self.nodesInRange(nlevels, f1, f2, fs)
+        else:
+            print("Unknown feature type")
+            return
 
         # 3. Clustering at syllable level, therefore find the syllables in each segment
-        dataset = self.findSyllables(dirname, species, minlen, fs, f1, f2, denoise)
+        # TODO: The input from DialogTraining is the syllables? Is this called from elsewhere?
+        # dataset = self.findSyllables(dirname, species, minlen, fs, f1, f2, denoise)
         # dataset format: [[file1, seg1, syl1], [file1, seg1, syl2], [file1, seg2, syl1],..]
 
         # Make syllables fixed-length (again to have same sized feature matrices) and generate features
@@ -309,8 +322,9 @@ class Clustering:
         for data in dataset:
             lengths.append(data[2][1] - data[2][0])
         duration = np.median(lengths)
-        print("- Setting duration to", duration)
-        # duration is going to be the fixed length of a syllable, if a syllable too long clip it
+        print("Setting duration to", duration)
+        # duration is going to be the fixed length of a syllable, if a syllable is too long clip it
+        # TODO: Could make >1 syllable instead...
         for record in dataset:
             if record[2][1] - record[2][0] > duration:
                 middle = (record[2][1] + record[2][0]) / 2
@@ -318,6 +332,7 @@ class Clustering:
                 record[2][1] = middle + duration / 2
 
         # 4. Read the syllables and generate features, also zero padding short syllables
+        # TODO: Here...
         features = []
         for record in dataset:
             audiodata = self.loadFile(filename=record[0], duration=record[2][1] - record[2][0], offset=record[2][0], fs=fs, denoise=denoise, f1=f1, f2=f2, silent=True)
@@ -358,11 +373,13 @@ class Clustering:
 
         # 5. Actual clustering
         # features = TSNE().fit_transform(features)
+        # TODO: If have some template examples, use them?
+        # There are three ways to do this: (i) cluster as is, then see if all of the named ones are in a class (and move the others), (ii) try from sklearn.semi_supervised import LabelSpreading or similar or (iii) use them as nearest neighbour templates
         self.features = features
 
         model = self.trainModel()
         predicted_labels = model.labels_
-        print(predicted_labels)
+        #print(predicted_labels)
         # clusters = len(set(model.labels_))
 
         # Attach the label to each syllable
@@ -414,6 +431,186 @@ class Clustering:
             # clustered_dataset format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
 
         return clustered_dataset, nclasses, duration
+
+    def getCalls(self,trainDir,species,fs):
+        # TODO: Check this!
+        """ Gets all labelled segments for the specified species. Those with a calltype annotation are given it, the others have a None label
+        Returns [parent_audio_file, [segment], class_label], dict of class labels and counts
+        """
+        self.sp = SignalProc.SignalProc(256,128)
+        calls = []
+        calltypes = {}
+        duration = []
+
+        listOfDataFiles = []
+        listOfWavFiles = []
+        for root, dirs, files in os.walk(trainDir):
+            for file in files:
+                if file[-5:].lower() == '.data':
+                    listOfDataFiles.append(os.path.join(root, file))
+                elif file[-4:].lower() == '.wav':
+                    listOfWavFiles.append(os.path.join(root, file))
+
+        for file in listOfDataFiles:
+            if file[:-5] in listOfWavFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(trainDir, file))
+                wavfile = os.path.join(trainDir, file[:-5])
+                SpSegs = segments.getSpecies(species)
+                #print(SpSegs)
+            
+                if len(SpSegs) > 0:
+                    # Load the file
+                    #self.sp.readWav(wavfile)
+                    #audiodata = sp.data.tolist()
+
+                    # For each segment
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        # See if it has a calltype label
+                        for label in seg[4]:
+                            if label["species"] == species:
+                                if "calltype" in label:
+                                    if label["calltype"] in calltypes:
+                                        calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
+                                    else:
+                                        calltypes.update({label["calltype"]:1})
+                                    ct = label["calltype"]
+                                else:
+                                    ct = None
+
+                            calls.append([wavfile, seg, ct])
+                
+                                # Find the syllables inside this segment
+                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
+                                # TODO: is median clipping still best option?
+                                # TODO: SRM: HERE
+                                #syls = self.findSyllablesSeg(wavfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
+                                # TODO: Something weird with self.clusters It's a dict except when it isn't...
+                                #CTsegments.append([wavfile, seg, syls, ct])
+                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(ct)]])
+                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                # TODO: What's the point of this duration?
+                                #duration.append(seg[1]-seg[0])
+        #print(calltypes)                     
+        return calls, calltypes #, np.median(duration)
+
+    def getSyllables(self,trainDir,species,fs):
+        # TODO: Check this!
+        """ Gets all syllables. Those with a calltype annotation are given it, the others have a None label
+        Returns [parent_audio_file, [segment], [syllables], class_label], dict of class labels and counts #, median duration
+        """
+        self.sp = SignalProc.SignalProc(256,128)
+        CTsegments = []
+        calltypes = {}
+        duration = []
+
+        listOfDataFiles = []
+        listOfWavFiles = []
+        for root, dirs, files in os.walk(trainDir):
+            for file in files:
+                if file[-5:].lower() == '.data':
+                    listOfDataFiles.append(os.path.join(root, file))
+                elif file[-4:].lower() == '.wav':
+                    listOfWavFiles.append(os.path.join(root, file))
+
+        for file in listOfDataFiles:
+            if file[:-5] in listOfWavFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(trainDir, file))
+                wavfile = os.path.join(trainDir, file[:-5])
+                SpSegs = segments.getSpecies(species)
+                #print(SpSegs)
+            
+                if len(SpSegs) > 0:
+                    # Load the file
+                    #self.sp.readWav(wavfile)
+                    #audiodata = sp.data.tolist()
+
+                    # For each segment
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        # See if it has a calltype label
+                        for label in seg[4]:
+                            if label["species"] == species:
+                                if "calltype" in label:
+                                    if label["calltype"] in calltypes:
+                                        calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
+                                    else:
+                                        calltypes.update({label["calltype"]:1})
+                                    ct = label["calltype"]
+                                else:
+                                    ct = None
+
+                            CTsegments.append([wavfile, seg, syls, ct])
+                
+                                # Find the syllables inside this segment
+                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
+                                # TODO: is median clipping still best option?
+                                # TODO: SRM: HERE
+                                #syls = self.findSyllablesSeg(wavfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
+                                # TODO: Something weird with self.clusters It's a dict except when it isn't...
+                                #CTsegments.append([wavfile, seg, syls, ct])
+                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(ct)]])
+                                ##CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                # TODO: What's the point of this duration?
+                                #duration.append(seg[1]-seg[0])
+        #print(calltypes)                     
+        return CTsegments, calltypes #, np.median(duration)
+
+    def getClustersGT_OLD(self):
+        """ Gets call type clusters from annotations
+         returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
+        """
+        ctTexts = []
+        CTsegments = []
+        duration = []
+        cl = Clustering.Clustering([], [], 5)
+
+        listOfDataFiles = []
+        listOfWavFiles = []
+        for root, dirs, files in os.walk(self.field("trainDir")):
+            for file in files:
+                if file[-5:].lower() == '.data':
+                    listOfDataFiles.append(os.path.join(root, file))
+                elif file[-4:].lower() == '.wav':
+                    listOfWavFiles.append(os.path.join(root, file))
+
+        # TODO Why are there 2 versions of these loops
+        for file in listOfDataFiles:
+            if file[:-5] in listOfWavFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(file)
+                SpSegs = segments.getSpecies(self.field("species"))
+                for segix in SpSegs:
+                    seg = segments[segix]
+                    for label in seg[4]:
+                        if label["species"] == self.field("species") and "calltype" in label:
+                            if label["calltype"] not in ctTexts:
+                                ctTexts.append(label["calltype"])
+        for i in range(len(ctTexts)):
+            self.clusters[i] = ctTexts[i]
+
+        for file in listOfDataFiles:
+            if file[:-5] in listOfWavFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                wavfile = os.path.join(self.field("trainDir"), file[:-5])
+                segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                SpSegs = segments.getSpecies(self.field("species"))
+                for segix in SpSegs:
+                    seg = segments[segix]
+                    for label in seg[4]:
+                        if label["species"] == self.field("species") and "calltype" in label:
+                            # Find the syllables inside this segment
+                            # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
+                            syls = self.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), denoise=False, minlen=0.2)
+                            CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                            duration.append(seg[1]-seg[0])
+        return CTsegments, len(self.clusters), np.median(duration)
 
     def nodesInRange(self, nlevels, f1, f2, fs):
         ''' Return the indices (nodes) to keep
@@ -546,20 +743,33 @@ class Clustering:
                         dataset.append([dirname, seg, syl])
         return dataset
 
-    def findSyllablesSeg(self, file, seg, fs, denoise, minlen):
+    def findSyllablesSeg(self, audiodata, seg, fs=None, denoise=False, minlen=10):
         """ Find syllables in the segment using median clipping - single segment
         :return: syllables list
         """
         # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
-        # audiodata = self.loadFile(filename=file, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
-        audiodata = self.loadFile(filename=file, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
+        # And should avoid opening file more than once
+        # And since have made spectrogram, pass it back
+        audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
         start = seg[0]
-        sp = SignalProc.SignalProc()
-        sp.data = audiodata
-        sp.sampleRate = fs
-        _ = sp.spectrogram()
+        #self.sp = SignalProc.SignalProc()
+        self.sp.data = audiodata
+        self.sp.sampleRate = fs
+        _ = self.sp.spectrogram()
+        #if isinstance(audiodata,str):
+            #audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
+            #start = seg[0]
+            #self.sp = SignalProc.SignalProc()
+            #self.sp.data = audiodata
+            #self.sp.sampleRate = fs
+            #_ = self.sp.spectrogram()
+        #else:
+            # File is already loaded, make the spectrogram of the call
+            # TODO: Check
+            #_ = self.sp.spectrogram(start=self.sp.convertAmpltoSpec(seg[0]),stop=self.sp.convertAmpltoSpec(seg[1]))
+            
         # Show only the segment frequencies to the median clipping and avoid overlapping noise - better than filtering when loading audiodata (it could make aliasing effect)
-        linear = np.linspace(0, fs / 2, int(sp.window_width/2))
+        linear = np.linspace(0, fs / 2, int(self.sp.window_width/2))
         # check segment type to determine if upper freq bound is OK
         if seg[3]==0:
             print("Warning: auto-detecting freq bound for full-height segments")
@@ -568,14 +778,15 @@ class Clustering:
             fhigh = seg[3]
         ind_flow = (np.abs(linear - seg[2])).argmin()
         ind_fhigh = (np.abs(linear - fhigh)).argmin()
-        sp.sg = sp.sg[:, ind_flow:ind_fhigh]
+        self.sp.sg = self.sp.sg[:, ind_flow:ind_fhigh]
 
-        segment = Segment.Segmenter(sp, fs)
+        segment = Segment.Segmenter(self.sp, fs)
 
         syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
         if len(syls) == 0:  # Sanity check
             # Try again with lower threshold
-            segment = Segment.Segmenter(sp, fs)
+            # TODO: Why reinitialise?
+            segment = Segment.Segmenter(self.sp, fs)
             syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
 
         # Merge overlapped segments
@@ -583,16 +794,19 @@ class Clustering:
         syls = segment.deleteShort(syls, minlen)
         syls = [[s[0] + start, s[1] + start] for s in syls]
 
-        # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it
+        # Sanity check, e.g. when user annotates syllables tightly, median clipping may not detect it
         if len(syls) == 0:
             syls = [[start, seg[1]]]
-        if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
+        if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  
             syls = [[start, seg[1]]]
 
-        return syls
+        # TODO: Check
+        #syls_sg = [self.sp.sg for s in syls]
+        return syls #, syls_sg
 
     def trainModel(self):
         """ Clustering model"""
+        # TODO: More parameters :(
         if self.alg == 'DBSCAN':
             print('\nDBSCAN--------------------------------------')
             model = self.DBscan(eps=0.3, min_samples=3)
@@ -679,7 +893,6 @@ class Clustering:
                     fc.append(chroma)
         return np.mean(fc, axis=0)
 
-
     def loadFile(self, filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0, silent=False):
         """
         Read audio file and preprocess as required.
@@ -687,11 +900,12 @@ class Clustering:
         if duration == 0:
             duration = None
 
-        sp = SignalProc.SignalProc(256, 128)
-        sp.readWav(filename, duration, offset, silent=silent)
-        sp.resample(fs)
-        sampleRate = sp.sampleRate
-        audiodata = sp.data
+        self.sp = SignalProc.SignalProc(256, 128)
+        print(filename,duration,offset)
+        self.sp.readWav(filename, duration, offset, silent=silent)
+        #self.sp.resample(fs)
+        sampleRate = self.sp.sampleRate
+        audiodata = self.sp.data
 
         # # pre-process
         if denoise:
@@ -700,7 +914,7 @@ class Clustering:
 
         if f1 != 0 and f2 != 0:
             # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
-            audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
+            audiodata = self.sp.bandpassFilter(audiodata, sampleRate, f1, f2)
 
         return audiodata
 

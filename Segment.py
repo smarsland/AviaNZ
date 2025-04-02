@@ -121,6 +121,13 @@ class Segment(list):
         self[4].append(label)
         self.keys.append((species, certainty))
 
+    def extendLabel(self, species, certainty, calltype):
+        """ Find a label and add the calltype information to it """
+        for lab in self[4]:
+            if lab["species"]==species and lab["certainty"]==certainty:
+                lab.update({"filter": "M", "calltype":calltype})
+        print(lab)
+
     ### --- couple functions to process all labels for a given species ---
 
     def wipeSpecies(self, species):
@@ -199,7 +206,7 @@ class Segment(list):
                     text += "\nWhich had keys" + str(self.keys)
                     import SupportClasses_GUI
                     msg = SupportClasses_GUI.MessagePopup("w", "ERROR - please report", text)
-                    msg.exec_()
+                    msg.exec()
                 # if that was the last label, flip to Don't Know
                 if len(self[4])==0:
                     self.addLabel("Don't Know", 0)
@@ -243,44 +250,72 @@ class SegmentList(list):
             print(e)
             return
 
+        hasmetadata = True
         # first segment stores metadata
         self.metadata = dict()
-        if isinstance(annots[0], list) and annots[0][0] == -1:
+        # -----
+        if isinstance(annots[0],list):
+            print(annots[0])
+        #if isinstance(annots[0], list) and annots[0][0] == -1:
+        if isinstance(annots[0], list):
             if not silent:
                 print("old format metadata detected")
-            self.metadata = {"Operator": annots[0][2], "Reviewer": annots[0][3]}
-            # when file is loaded, true duration can be passed. Otherwise,
-            # some old files have duration in samples, so need a rough check
-            if duration>0:
-                self.metadata["Duration"] = duration
-            elif isinstance(annots[0][1], (int, float)) and annots[0][1]>0 and annots[0][1]<100000:
-                self.metadata["Duration"] = annots[0][1]
+            if annots[0][0] == -1:
+                self.metadata = {"Operator": annots[0][2], "Reviewer": annots[0][3]}
+                # when file is loaded, true duration can be passed. Otherwise,
+                # some old files have duration in samples, so need a rough check
+                if duration>0:
+                    self.metadata["Duration"] = duration
+                elif isinstance(annots[0][1], (int, float)) and annots[0][1]>0 and annots[0][1]<100000:
+                    self.metadata["Duration"] = annots[0][1]
+                else:
+                    # fallback to reading the wav:
+                    try:
+                        self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                    except Exception as e:
+                        print("ERROR: duration not found in metadata, arguments, or read from wav")
+                        print(file)
+                        print(e)
+                        return
+                # noise metadata
+                if len(annots[0])<5 or not isinstance(annots[0][4], list):
+                    self.metadata["noiseLevel"] = None
+                    self.metadata["noiseTypes"] = []
+                else:
+                    self.metadata["noiseLevel"] = annots[0][4][0]
+                    self.metadata["noiseTypes"] = annots[0][4][1]
+                del annots[0]
             else:
-                # fallback to reading the wav:
+                # Very old version
                 try:
                     self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
                 except Exception as e:
-                    print("ERROR: duration not found in metadata, arguments, or read from wav")
+                    print("ERROR: can't read duration from wav")
                     print(file)
                     print(e)
-                return
-            # noise metadata
-            if len(annots[0])<5 or not isinstance(annots[0][4], list):
-                self.metadata["noiseLevel"] = None
-                self.metadata["noiseTypes"] = []
-            else:
-                self.metadata["noiseLevel"] = annots[0][4][0]
-                self.metadata["noiseTypes"] = annots[0][4][1]
-            del annots[0]
-
+                    return
+                self.metadata["Operator"] = ""
+                self.metadata["Reviewer"] = ""
+                hasmetadata = False
         elif isinstance(annots[0], dict):
             # New format has 3 required fields:
             self.metadata = annots[0]
             if duration>0:
                 self.metadata["Duration"] = duration
             if "Operator" not in self.metadata or "Reviewer" not in self.metadata or "Duration" not in self.metadata:
-                print("ERROR: required metadata fields not found")
-                return
+                if "Duration" not in self.metadata:
+                    try:
+                        self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
+                    except Exception as e:
+                        print("ERROR: can't read duration from wav")
+                        print(file)
+                        print(e)
+                    return
+                self.metadata["Operator"] = ""
+                self.metadata["Reviewer"] = ""
+                hasmetadata = False
+                #print("ERROR: required metadata fields not found")
+                #return
             del annots[0]
 
         # read the segments
@@ -302,9 +337,10 @@ class SegmentList(list):
             # Early version of AviaNZ stored freqs as values between 0 and 1.
             # The .1 is to take care of rounding errors
             if 0 < annot[2] < 1.1 and 0 < annot[3] < 1.1:
-                print("Warning: ignoring old-format frequency marks")
-                annot[2] = 0
-                annot[3] = 0
+                print("Warning: updating old-format frequency marks")
+                rate = wavio.readFmt(file[:-5])[0]//2
+                annot[2] *= rate
+                annot[3] *= rate
 
             # single string-type species labels
             if isinstance(annot[4], str):
@@ -330,6 +366,8 @@ class SegmentList(list):
             self.addSegment(annot)
         if not silent:
             print("%d segments read" % len(self))
+
+        return hasmetadata
 
     def addSegment(self, segment):
         """ Just a cleaner wrapper to allow adding segments quicker.
@@ -970,7 +1008,7 @@ class Segmenter:
         The multitaper spectrogram helps a lot
 
         """
-        tt = time.time()
+        #tt = time.time()
         sg = self.sg/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!
