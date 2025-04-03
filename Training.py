@@ -264,7 +264,7 @@ class NNtrain:
         ''' Generate training images  for each calltype and noise'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
-        _, self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
+        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
 
     def train(self):
         # Create temp dir to hold img data and model
@@ -714,7 +714,7 @@ class NNtest:
         if "NN" in self.currfilt:
             cl = SupportClasses.ConfigLoader()
             filterlist = cl.filters(self.filterdir, bats=False)
-            NNDicts = cl.NNmodels(filterlist, self.filterdir, [filtname])
+            NNDicts = cl.getNNmodels(filterlist, self.filterdir, [filtname])
             #if len(NNDicts.keys()) == 1:
             # SM: NN testing used wrong name
             #if filtname in NNDicts.keys():
