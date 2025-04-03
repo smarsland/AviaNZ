@@ -378,11 +378,11 @@ class NNtrain:
         self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
         # Load the model and prepare
         jsonfile = open(model, 'r')
-        loadedmodeljson = jsonfile.read()
+        loadedModelJson = jsonfile.read()
         jsonfile.close()
         with custom_object_scope(NNModels.customObjectScopes):
             try:
-                model = model_from_json(loadedmodeljson)
+                model = model_from_json(loadedModelJson)
             except:
                 print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
                 return False

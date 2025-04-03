@@ -3794,7 +3794,7 @@ class AviaNZ(QMainWindow):
             for f in speciesData['Filters']:
                 CTs.append(f['calltype'])
             CTs.append('Noise')
-            self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, [filtername])
+            self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, [filtername])
 
             segment = [[self.startRead, self.startRead + self.datalengthSec]]
             NNmodel = None
@@ -5077,7 +5077,7 @@ class AviaNZ(QMainWindow):
                 print(newSegments)
                 print('Post-processing...')
                 # load target NN model if exists
-                self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, [filtname])
+                self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, [filtname])
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):

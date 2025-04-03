@@ -160,7 +160,7 @@ class AviaNZ_batchProcess():
 
         # load target NN models (currently stored in the same dir as filters)
         # format: {filtername: [model, win, inputdim, output]}
-        self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, self.species)
+        self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
         """
         if "Any sound" in self.species:
@@ -172,7 +172,7 @@ class AviaNZ_batchProcess():
             if "NZ Bats" in self.species:
                 # TODO: Should bats only be possible alone?
                 self.method = "Click"   # old bat method
-                #self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, self.species)
+                #self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
             elif "NZ Bats_NP" in self.species:
                 self.method = "Bats"
             else:
@@ -191,7 +191,7 @@ class AviaNZ_batchProcess():
 
             # load target NN models (currently stored in the same dir as filters)
             # format: {filtername: [model, win, inputdim, output]}
-            self.NNDicts = self.ConfigLoader.NNmodels(self.FilterDicts, self.filtersDir, self.species)
+            self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
         """
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)

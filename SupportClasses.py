@@ -232,7 +232,7 @@ class ConfigLoader(object):
         print("Loaded filters:", list(goodfilters.keys()))
         return goodfilters
 
-    def NNmodels(self, filters, dirnn, targetspecies):
+    def getNNmodels(self, filters, dirnn, targetspecies):
         """ Returns a dict of target NN models
             Filters - dict of loaded filter files
             Targetspecies - list of species names to load
@@ -256,16 +256,14 @@ class ConfigLoader(object):
                     try:
                         print(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
                         json_file = open(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json', 'r')
-                        loaded_model_json = json_file.read()
-                        print(loaded_model_json)
+                        loadedModelJson = json_file.read()
                         json_file.close()
                         with custom_object_scope(NNModels.customObjectScopes):
                             try:
-                                model = model_from_json(loadedmodeljson)
+                                model = model_from_json(loadedModelJson)
                             except:
                                 print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
                                 return False
-                        print(model)
                         model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
                         print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
                         model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
