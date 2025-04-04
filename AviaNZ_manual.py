@@ -100,6 +100,7 @@ import time
 import openpyxl
 # TODO: Check this
 from lxml import etree as ET
+from PIL import Image
 
 pg.setConfigOption('useNumba', True)
 pg.setConfigOption('background','w')
@@ -5514,10 +5515,15 @@ class AviaNZ(QMainWindow):
             print(e)
 
     def saveImageRaw(self):
+        """ Saves the spectrogram image. We need to flip vertically as the coordinates are different.
+        """
         fileMinusExtension = self.filename.rsplit('.', 1)[0]
         imageFile = fileMinusExtension + '.png'
         print("Exporting raw spectrogram to file %s" % imageFile)
         self.specPlot.save(imageFile)
+        img = Image.open(imageFile)
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+        img.save(imageFile)
 
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
