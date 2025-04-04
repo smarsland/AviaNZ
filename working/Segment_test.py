@@ -18,7 +18,7 @@ def testMC():
     fs = wavobj.rate
     data = wavobj.data#[:20*fs]
 
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')  #/ 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
@@ -84,7 +84,7 @@ def showSegs():
     fs = wavobj.rate
     data = wavobj.data#[:20*fs]
 
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float') # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
@@ -238,7 +238,7 @@ def showSpecDerivs():
     fs = wavobj.rate
     data = wavobj.data[:20*fs]
 
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')     # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
@@ -337,7 +337,7 @@ def detectClicks():
     fs = wavobj.rate
     data = wavobj.data #[:20*fs]
 
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')     # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:

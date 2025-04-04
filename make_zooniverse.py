@@ -38,7 +38,7 @@ def loadFile(filename):
         #fileLength = wavobj.nframes
         fileLength = info.frames
 
-        if audiodata.dtype is not 'float':
+        if audiodata.dtype != 'float':
             audiodata = audiodata.astype('float')  # / 32768.0
 
         if np.shape(np.shape(audiodata))[0] > 1:

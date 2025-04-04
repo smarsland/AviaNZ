@@ -23,7 +23,7 @@ def showEnergies():
     wavobj = wavio.read(filename)
     sampleRate = wavobj.rate
     data = wavobj.data
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')  # / 32768.0
     if np.shape(np.shape(data))[0] > 1:
         data = np.squeeze(data[:, 0])
@@ -108,7 +108,7 @@ def showNoiseEnergies():
                 wavobj = wavio.read(filename)
                 sampleRate = wavobj.rate
                 data = wavobj.data
-                if data.dtype is not 'float':
+                if data.dtype != 'float':
                     data = data.astype('float')  # / 32768.0
                 if np.shape(np.shape(data))[0] > 1:
                     data = np.squeeze(data[:, 0])
@@ -141,7 +141,7 @@ def reconWPT():
     wavobj = wavio.read(filename)
     sampleRate = wavobj.rate
     data = wavobj.data
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')  # / 32768.0
     if np.shape(np.shape(data))[0] > 1:
         data = np.squeeze(data[:, 0])
@@ -185,7 +185,7 @@ def reconWPT():
 
     wavobj = wavio.read('Sound Files/tril1_d.wav')
     data = wavobj.data
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')  # / 32768.0
     if np.shape(np.shape(data))[0] > 1:
         data = np.squeeze(data[:, 0])

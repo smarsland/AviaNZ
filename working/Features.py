@@ -342,7 +342,7 @@ def loadFile(filename):
     audiodata = wavobj.data
 
     # None of the following should be necessary for librosa
-    if audiodata.dtype is not 'float':
+    if audiodata.dtype != 'float':
         audiodata = audiodata.astype('float')   #/ 32768.0
     if np.shape(np.shape(audiodata))[0]>1:
         audiodata = audiodata[:,0]
@@ -556,7 +556,7 @@ def testFeatures():
     fs = wavobj.rate
     data = wavobj.data
 
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')         # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
@@ -689,7 +689,7 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
 #         pass
 #     sampleRate = wavobj.rate
 #     data = wavobj.data
-#     if data.dtype is not 'float':
+#     if data.dtype != 'float':
 #         data = data.astype('float') #/ 32768.0
 #     if np.shape(np.shape(data))[0]>1:
 #         data = np.squeeze(data[:,0])

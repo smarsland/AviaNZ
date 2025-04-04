@@ -202,7 +202,7 @@ def cluster_ruru(sampRate):
 
         for i in inds:
             audiodata,fs = sf.read(fnames[i])
-            if audiodata.dtype is not 'float':
+            if audiodata.dtype != 'float':
                 audiodata = audiodata.astype('float')
             if np.shape(np.shape(audiodata))[0] > 1:
                 audiodata = audiodata[:, 0]
@@ -253,7 +253,7 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
         stop_frame = int((offset + duration) * sampleRate)
         audiodata, _ = sf.read(filename, start=start_frame, stop=stop_frame)
 
-    if audiodata.dtype is not 'float':
+    if audiodata.dtype != 'float':
         audiodata = audiodata.astype('float')   #/ 32768.0
     if np.shape(np.shape(audiodata))[0] > 1:
         audiodata = audiodata[:, 0]

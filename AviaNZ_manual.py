@@ -924,7 +924,6 @@ class AviaNZ(QMainWindow):
 
         # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.fillBirdList()
 
         # Hack to get the type of an ROI
         p_spec_r = SupportClasses_GUI.ShadedRectROI(0, 0)

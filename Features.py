@@ -341,7 +341,7 @@ def loadFile(filename):
     audiodata, sampleRate = sf.read(filename)
 
     # None of the following should be necessary for librosa
-    if audiodata.dtype is not 'float':
+    if audiodata.dtype != 'float':
         audiodata = audiodata.astype('float')   #/ 32768.0
     if np.shape(np.shape(audiodata))[0]>1:
         audiodata = audiodata[:,0]
@@ -553,7 +553,7 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
 def testFeatures():
     data, fs = sf.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
 
-    if data.dtype is not 'float':
+    if data.dtype != 'float':
         data = data.astype('float')         # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
