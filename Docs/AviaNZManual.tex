@@ -4,9 +4,9 @@
 \usepackage{url}
 \usepackage{color}
 
-\title{The AviaNZ Bioacoustic Analysis Software (v 3.0)}
+\title{The AviaNZ Bioacoustic Analysis Software (v 4.0)}
 \author{The AviaNZ Team \\(\url{stephen.marsland@vuw.ac.nz})}
-\date{September 2020}
+\date{April 2025}
 
 %\usepackage[usenames, dvipsnames]{color}
 
@@ -19,7 +19,7 @@
 \begin{document}
 \maketitle
 
-This is the user manual for version 3.0 of the AviaNZ program. There are several changes to this version of the program, of which the most obvious are (i) improved species filters, including the ability to train your own, and (ii) the ability to process bat recordings from DOC AR4 acoustic recorders. The purpose of this manual is to help you get started with using AviaNZ. There are also some videos and an FAQ available at \url{http://www.avianz.net}. We provide some introductory material about sounds and spectrograms on our web page if you want to know more about them. We also provide a `Cheat Sheet' of spectrograms for many examples of birdsong for NZ birds, partly based on those from NZ Birds Online \url{http://nzbirdsonline.org.nz}.
+This is the user manual for version 4.0 of the AviaNZ program. This version comes with a number of improvements to the interface and various bugfixes. The purpose of this manual is to help you get started with using AviaNZ. There are also some videos and an FAQ available at \url{http://www.avianz.net}. We provide some introductory material about sounds and spectrograms on our web page if you want to know more about them. A `Cheat Sheet' of spectrograms is also available for many NZ birdsongs, partly based on those from NZ Birds Online \url{http://nzbirdsonline.org.nz}.
  
 We really want feedback on AviaNZ, particularly what works and what doesn't, how you would like to see it improved, and what other functionality it needs. We are more than happy to talk about our plans. 
 
@@ -54,7 +54,7 @@ AviaNZ has three main modes of interaction, which are presented as options on th
 
 If you select `Manual Processing', you will see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. The program will then ask you to give names for the operator and reviewer. These are useful to keep track of who has looked at different files. Following that, you should see a screen like the one below. This is the main interface for manually labelling birdcalls, training recognisers, or testing things. It can also be used for reviewing the results of automatic processing; checking for misclassifications is usually easier in `Review Batch Results', but the manual processing mode also allows you to see if there are any calls that the recogniser missed and to correct the type of call and the time and frequency limits of the call.
 
-AviaNZ can load sound files in wav format, or bat files in bmp format. Other sound files should be converted to wav format. Note that mp3 files lose a lot of information and should be avoided for bioacoustics recordings if possible, although they are what websites such as \url{http:www.xeno-canto.org} use. AviaNZ assumes that sound files are recording in mono (single microphone) sound. If there are other channels, it only loads the first one.
+AviaNZ can load sound files in wav or flac format, and bat files in bmp format. Other sound files should be converted to one of these. Note that mp3 files lose a lot of information and should be avoided for bioacoustics recordings if possible, although they are what websites such as \url{http:www.xeno-canto.org} use. AviaNZ assumes that sound files are recording in mono (single microphone) sound. If there are other channels, it only loads the first one.
 
 Very long recordings can be used, but it is generally easier if they are split into shorter files. We provide a splitter in the Utilies (see Section~\ref{sec:utilities}) but there are plenty of other options on the internet if you prefer.
 
@@ -99,7 +99,7 @@ There are two other parts to the interface:
 
 \item The axes of the spectrogram are time on the horizontal axis and frequencies on the vertical axis. The times will be true times if this information is available (such as when using DOC recorders), or time from start of file otherwise. 
 
-\item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders in the Controls section (13). 
+\item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the sliders in the Controls section (13). 
 \item You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu.
 \end{itemize}
 
@@ -118,7 +118,7 @@ There are two other parts to the interface:
 \item The amount of the file that you can see (the visible width) can be changed by either: 
 	\begin{itemize}
 	\item dragging the ends of the blue highlight in (2).
-	\item changing the `Visible window width (seconds)' in the Controls dock (14) by clicking on the up and down arrows, or typing in a new number.
+	\item changing the `Visible window width (seconds)' in the Controls dock (13) by clicking on the up and down arrows, or typing in a new number.
 	\end{itemize}
 
 \item You can also view a restricted amount of the spectrogram by reducing the visible frequency band, see Section~\ref{sec:spectrogram2}. 
@@ -157,15 +157,17 @@ There are two other parts to the interface:
 \item When you create a new segment, a drop-down menu will appear asking you to choose a label for that segment. 
 
 \begin{itemize}
-\item To choose the type of bird, click on the name. 
-\item If the species isn't in the list, move to `Other'. 
-\item If it isn't in the second list, at the bottom of that list is a selectable box (it probably says `Albatross'). Clicking on it provides the complete list of birds. 
-\item If there is something missing from there, choose Other' from it, which is at the very end. It will ask you to enter a name, as Genus (Species); e.g., `Kiwi (Little Spotted)'. 
+\item Classification is done by species, but with the option to also choose a call type.
+\item To classify a segment go to the species name in the drop-down menu. This will then open a submenu for the call type. Select it by clicking the right label, or `Not Specified' if you don't know.
+\item Selected species and calls are marked with a tick at the start of the name.
+\item If your species isn't in the first list go to the bottom and navigate the `See all' submenu.
+\item If there is something missing, choose `Add', which is at the bottom of this submenu. It will ask you to enter a name, as Genus (Species); e.g., `Kiwi (Little Spotted)'. 
 \item If there is only a single example of the genus, you can miss out the species, e.g., `Kakapo'. 
 \item The new name you add will then appear in the list. 
-\item If you click anywhere on the screen except on a bird name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'. 
+\item If you click anywhere on the screen except on a call name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'. 
+\item To clear the labels for a segment you can also just click `Don't Know'.
 \item The bird list that we are using is based on the one that DOC use, and is meant to cover all the bird species that we know about in New Zealand. 
-\item You can add new species individually using `Other' in the menus.
+\item You can add new calltypes individually using `Add' in the menus.
 \item It is possible to use other bird lists using the `Interface settings'.  
 \end{itemize}
 
@@ -177,7 +179,6 @@ There are two other parts to the interface:
 
 \item You can choose whether or not to allow more than one species per segment. This can be useful for recordings of the dawn chorus and where you just want to label presence of a set of species. Use the `Default to multiple species' in the `Interface settings' to allow this. Then, when you choose a bird from the list it will be ticked, and the menu will not close automatically, allowing you to make multiple selections. To unselect something, click on it again. When you make a new segment, `Don't Know' is selected by default. Choosing any other option deselects `Don't Know'. You can reselect it if you do want that label as well. 
 
-\item {\em New to v3.0} AviaNZ now also allows you to specify the call type, which is something that is can be decided by the automatic analysis tools. This could be the difference between male and female vocalisations for e.g., kiwi, or different calls types such as `more-pork' or `cree' for ruru. The choice of which call types are available is made in the automatic filter, which is covered in Section~\ref{sec:trainfilter}. To swap between seeing the species and seeing the call use the SP/CT button (\includegraphics[scale=0.5]{Figures/SPCT}) on the right of area 12 of the Controls panel.
 \end{itemize}
 
 \subsubsection*{Updating Segments}
@@ -185,7 +186,7 @@ There are two other parts to the interface:
 \begin{itemize}
 \item If you select a segment that already exists by clicking on it then it will turn blue. Click on it again and the menu will reappear so that you can correct mistakes. This will be either the species label or the call type label depending on the SP/CT button.
 \item Segments have blue diamonds at the corners, so that you can resize them, or you can move the whole segment by dragging it (this works even when it isn't selected). 
-\item Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls or pressing the delete or backspace key on the keyboard. 
+\item Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls (14) or pressing the delete or backspace key on the keyboard. 
 \item To delete all of the segments from the current file, use the `Delete all segments' option in the Actions menu. 
 \item You can disable the making and updating of segments (to avoid making segments by mistake) by selecting `Make read only' from the `Appearance' menu.
 \end{itemize}
@@ -720,17 +721,17 @@ A wavelet recogniser will usually find most of your bird calls (it has good reca
 \item Select `Train an automated recogniser' $\rightarrow$ `Extend a wavelet recogniser with NN' from the Recognisers menu. 
 \item Follow the instructions to select the folder/s with training data. Use the appropriate `Browse' buttons to load your manually annotated recordings and the Batch Processed and Reviewed recordings. Select the the name of the wavelet recogniser that you will be extending from the list. 
 
-\begin{center}
-    \includegraphics[width=.7\textwidth]{Figures/NNpage1}
-\end{center}
+%\begin{center}
+ %   \includegraphics[width=.7\textwidth]{Figures/NNpage1}
+%\end{center}
 
 \item AviaNZ will confirm these choices before starting the training process. It will also warn you if it cannot find enough data. 
 \item AviaNZ will then suggest an appropriate length of call/segment to feed into the NN. If the number looks wrong for your species, you can correct it. Ideally this length should be a bit longer than both a syllable of the call, and the gap between syllables. 
 \item At the end of the training, AviaNZ will show you ROC curves for each call type and ask you to select a point that represents your compromise between True Positive Rate and False Positive Rate. If you select the relevant option then AviaNZ can do this automatically instead.
 
-\begin{center}
-    \includegraphics[width=.7\textwidth]{Figures/NNpage2}
-\end{center}
+%\begin{center}
+%    \includegraphics[width=.7\textwidth]{Figures/NNpage2}
+%\end{center}
 
 \item It normally takes a long time to train the neural network. 
 \item Following training, AviaNZ will show you a summary of the NN recogniser, and you can choose to save it either as a new recogniser, or updating an old one. This means that you can train multiple recognisers for a species to see which works best. 
