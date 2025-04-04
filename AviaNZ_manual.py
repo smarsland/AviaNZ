@@ -886,9 +886,9 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.stopButton,row=1,col=0)
         self.w_controls.addWidget(self.quickDenoiseButton,row=1,col=2)
 
-        self.w_controls.addWidget(QLabel('Noise floor'),row=2,col=0)
-        self.w_controls.addWidget(self.floorSlider,row=2,col=1,colspan=3)
-        self.w_controls.addWidget(self.specControls, row=3, col=0, rowspan=2, colspan=4)
+        self.w_controls.addWidget(self.specControls, row=2, col=0, rowspan=1, colspan=4)
+        self.w_controls.addWidget(QLabel('Noise floor'),row=3,col=0)
+        self.w_controls.addWidget(self.floorSlider,row=3,col=1,colspan=3)
 
         self.w_controls.addWidget(QLabel('Visible window'),row=8,col=0,colspan=4)
         self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=2)
