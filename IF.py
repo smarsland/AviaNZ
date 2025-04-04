@@ -656,10 +656,10 @@ class IF:
             #change mv shape?
             ss1=np.sort(dpf)
             CL=len(ss1)
-            mv[1]=ss1[np.int(self.Round(0.75*CL))-1]-ss1[np.int(self.Round(0.25*CL))-1]
+            mv[1]=ss1[int(self.Round(0.75*CL))-1]-ss1[int(self.Round(0.25*CL))-1]
             ss2=np.sort(pf)
             CL=len(ss2)
-            mv[3]=ss2[np.int(self.Round(0.75*CL))-1]-ss2[np.int(self.Round(0.25*CL))-1]
+            mv[3]=ss2[int(self.Round(0.75*CL))-1]-ss2[int(self.Round(0.25*CL))-1]
 
             #Display, if needed
             if self.DispMode.lower()!='off' and self.DispMode!='notify':
