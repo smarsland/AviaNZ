@@ -405,7 +405,15 @@ class AviaNZ_batchProcess():
                 continue
 
             # ALL SYSTEMS GO: process this file
+            print("Loading file...")
             self.segments = Segment.SegmentList()
+            self.loadFile(filename,"NZ Bats" in self.species)
+            if self.overwrite:
+                print("Clearing old segments")
+                self.segments = Segment.SegmentList()
+            print('Segments in this file: ', self.segments)
+            startCount = len(self.segments)
+
             if self.testmode:
                 self.segments_nonn = Segment.SegmentList()
             if self.options[5] == "Intermittent: ":
@@ -417,32 +425,6 @@ class AviaNZ_batchProcess():
                     self.log.file.close()
                     raise
             else:
-                # load audiodata/spectrogram and clean up old segments:
-                print("Loading file...")
-                # Impulse masking:   TODO: masking is useful but could be improved
-                #if speciesStr=="Any sound":
-                    #impMask = True  # Up to debate - could turn this off here
-                #elif self.method=="Click" or self.method=="Bats":
-                    #impMask = False  # definitely off for bats
-                #else:
-                    # MUST BE off for changepoints (it introduces discontinuities, which
-                    # create large WCs and highly distort means/variances)
-                    #impMask = "chp" not in [sf.get("method") for sf in filters]
-                self.loadFile(filename,"NZ Bats" in self.species)
-                
-                if self.overwrite:
-                    print("Clearing old segments")
-                    self.segments = Segment.SegmentList()
-                #self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"), impMask=impMask)
-
-                # initialize empty segmenter
-                #if self.method=="Wavelets":
-                    # TODO: Why were the next lines there? 
-                    # TODO: IMPORTANT!!
-                    #del self.sp
-                    #gc.collect()
-
-                # Main work is done here:
                 try:
                     print("Segmenting...")
                     self.detectFile(speciesStr, filters)
@@ -455,10 +437,8 @@ class AviaNZ_batchProcess():
                         self.log.file.close()
                     raise
 
-                print('Segments in this file: ', self.segments)
-
             # export segments
-            print("%d new segments marked" % len(self.segments))
+            print("%d new segments marked" % (len(self.segments)-startCount))
             if self.testmode:
                 # save separately With and without NN
                 cleanexit = self.saveAnnotation(filename,self.segments, suffix=".tmpdata")
@@ -553,6 +533,7 @@ class AviaNZ_batchProcess():
                 # Create spectrogram for median clipping etc
                 if not hasattr(self, 'sp'):
                     print(self.config['window_width'], self.config['incr'])
+                    print("LOADING SP 1")
                     self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
                 _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'],start=start,stop=end)
                 self.seg = Segment.Segmenter(self.sp, self.sp.audioFormat.sampleRate())
@@ -850,6 +831,7 @@ class AviaNZ_batchProcess():
             Species names will be wiped based on these. """
         # Create an instance of the Spectrogram class
         if not hasattr(self, 'sp'):
+            print("LOADING SP 2")
             self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
 
         # Read audiodata or spectrogram
@@ -1150,6 +1132,7 @@ class AviaNZ_batchProcess():
     def outputBatPasses(self,dirName,savefile='BatPasses.csv'):
         # A bit ad hoc for now. Assumes that the directory structure ends with 'Bat detname date/date/'
         if not hasattr(self, 'sp'):
+            print("LOADING SP 3")
             self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
         start = "Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n"
         output = start

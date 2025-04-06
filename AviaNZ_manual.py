@@ -443,10 +443,6 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Analyse shapes", self.showShapesDialog)
             actionMenu.addAction("Cluster segments", self.classifySegments)
 
-        #actionMenu.addSeparator()
-        # TODO: Bug
-        #self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
-
         actionMenu.addSeparator()
 
         if not self.DOC:
