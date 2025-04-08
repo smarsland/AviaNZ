@@ -201,7 +201,8 @@ def useNet(netName,dirName,imgWidth,imgHeight,incr,nClasses,thr1,thr2,channels=3
                 with custom_object_scope(NNModels.customObjectScopes):
                     try:
                         model = model_from_json(loadedModelJson)
-                    except:
+                    except Exception as e:
+                        print(e)
                         print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
                         return False
                 head_model.load_weights(os.path.join('/home/marslast/.avianz/Filters/',netName))
