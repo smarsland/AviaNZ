@@ -146,4 +146,9 @@ def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
     model.load_weights("pre-trained_ViT_weights.h5", by_name=True)
     return model
 
-customObjectScopes = {'PatchLayer': PatchLayer, 'PositionalEmbedding': PositionalEmbedding, 'TransformerBlock': TransformerBlock}
+customObjectScopes = {
+    'PatchLayer': PatchLayer, 
+    'PositionalEmbedding': PositionalEmbedding, 
+    'TransformerBlock': TransformerBlock, 
+    'ClsTokenLayer': ClsTokenLayer
+}
