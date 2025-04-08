@@ -452,19 +452,19 @@ Batch processing is for use when you have large numbers of recordings that need 
 \item Navigate to a folder containing recordings to process. 
 \item If this folder contains subfolders, the program will work through all of the folders inside the original one. 
 \item You can choose one or more species/call specific recognisers from the drop-down list to apply to the sound files in order to automatically label them. 
-\item Alternatively, you can select `Any sounds'; in this case AviaNZ will detect any sounds in the files, and label them as `Don't Know'. 
+\item Alternatively, you can select `Any sound'; in this case AviaNZ will detect any sounds in the files, and label them as `Don't Know'. 
 \item If you want to process a DOC recording for a particular period untick the `Process all recordings' box and put in the time range. The program will only process filenames which match.
-\item If you just want to create a set of segments of a fixed interval you should untick the `Process all of each recording' box and enter a frequence and window size. This will not run any model - it's just to be used if you want to create segments of a particular size (in bulk).
+\item If you just want to create a set of segments of a fixed interval you should untick the `Process all of each recording' box and enter a frequency and window size. This will not run any models - it's just to be used if you want to create segments of a particular size (in bulk).
 \item You can choose whether or not to try and filter out the sound of wind. This is useful if your data was collected in a windy place, but may miss some calls otherwise and is only available for changepoint recognisers.
 \item Finally you can tick whether or not to overwrite existing annotations.
 \item Press the `Process Folder' button to start the program. This is a very computationally intensive process, and will take a long time (hours) if there are lots of files to process. If you have a lot of files do this kind of processing overnight as it will make your computer hard to use for anything else.
-\item If you stop the processing partway through, AviaNZ will try and restart from the place it got up to last time (if you restart the batch process).
+\item If you stop the processing partway through, AviaNZ will try and restart from the place it got up to last time.
 \item Once it has finished, the window will give you the option to see the AviaNZ start screen again so that you can review the outputs. You can either do this in the `Manual Processing' interface, or use the `Review Batch Results' option, which is described next. 
 \end{itemize}
 
 \section{Review Batch Results}\label{sec:review}
 
-After batch processing it is important to verify the results, since AviaNZ will have created false positives (labelled calls are being your species when they are not). We try not to have too many false negatives (missed calls) because they are harder to find later. However, this does mean that there are more false positives instead. We provide two interfaces for checking and correcting the results. 
+After batch processing it is important to verify the results, since AviaNZ will have created false positives (labelled a segment as a species when it was not). We try not to have too many false negatives (missed calls) because they are harder to find later. However, this does mean that there are more false positives instead. We provide two interfaces for checking and correcting the results. 
 
 If you select `Review Batch Results' on the start screen then the following window will appear.
 
@@ -473,10 +473,10 @@ If you select `Review Batch Results' on the start screen then the following wind
 \end{center}
 
 \begin{itemize}
-\item Give a reviewer as in the Manual interface, then browse to a folder of previously processed files that you wish to review.
+\item Give a reviewer, as in the Manual interface, then browse to a folder of previously processed files that you wish to review.
 \item `Quick review' is designed to let you process lots of files quickly to remove false positives. It shows only the spectrograms related to the species selected in the drop-down box, see Section~\ref{sec:batchQuick}.
 \item `Review all' is designed to let you see more detail about each segment, including potentially the call type as well as species. See Section~\ref{sec:batchAll}.
-\item The option marked `Skip if certainty above' is important. AviaNZ assigns a confidence score to its classification of a bird call. User annotations, and automated annotions that the user has confirmed, are scored 100. Classifications by just a wavelet-based recogniser are scored 50, as are annotations with a ? on by the user. Neural-network based automated annotations have confidence assigned by the neural network. If you want to see all annotations you should set this parameter to 100 (the maximum value). If you wish to only see those that the system is not certain of, the default of 90 is suitable. As you set the value lower, more and more of the detections will be suppressed. Below 50 there will not be any segments to review.
+\item The dropdown marked `Minimum certainty to show' is important. AviaNZ assigns a confidence score to its classification of a bird call. User annotations, and automated annotions that the user has confirmed, are scored 100. Classifications by just a wavelet-based recogniser are scored 50, as are annotations with a ? on by the user. Neural-network based automated annotations have confidence assigned by the neural network. With this dropdown you can decide if you want to see all annotations, just the uncertain ones (not 100), or a custom range. If you do this and wish to only see those that the system is not certain of, the default of 90 is suitable. As you set the value lower, more and more of the detections will be suppressed. Below 50 there will not be any segments to review.
 \item At the bottom of the window is the option to generate an Excel file of outputs; see Section~\ref{sec:outputs}.
 \item There are also a variety of options to change the appearance of the spectrogram in the Advanced Settings. These act in the same way as was described in the Manual interface section.
 \end{itemize}
