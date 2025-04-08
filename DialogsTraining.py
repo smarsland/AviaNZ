@@ -544,7 +544,7 @@ class BuildRecAdvWizard(QWizard):
             for ix in range(len(self.picbuttons)):
                 if self.picbuttons[ix].mark == 'yellow':
                     self.segments[ix][-1] = movetoID
-                    self.picbuttons[ix].mark = 'green'
+                    self.picbuttons[ix].mark = 'unknown'
 
             # update self.clusters, delete clusters with no members
             todelete = []
@@ -636,7 +636,7 @@ class BuildRecAdvWizard(QWizard):
                 for ix in range(len(self.picbuttons)):
                     if self.picbuttons[ix].mark == 'yellow':
                         self.segments[ix][-1] = newID
-                        self.picbuttons[ix].mark = 'green'
+                        self.picbuttons[ix].mark = 'unknown'
 
                 # Delete clusters with no members left and update self.clusters before adding the new cluster
                 todelete = []
@@ -892,7 +892,7 @@ class BuildRecAdvWizard(QWizard):
                 else:
                     for ix in range(len(self.segments)):
                         if self.segments[ix][-1] == ID:
-                            self.picbuttons[ix].mark = 'green'
+                            self.picbuttons[ix].mark = 'unknown'
                             self.picbuttons[ix].buttonClicked = False
                             self.picbuttons[ix].setChecked(False)
                             self.picbuttons[ix].repaint()

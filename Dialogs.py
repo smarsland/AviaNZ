@@ -2217,45 +2217,25 @@ class HumanClassify2(QDialog):
         self.vboxBot.addWidget(self.none)
         self.vboxBot.addWidget(self.next)
 
-        # Set up the middle section of images
-        self.numPicsV = 0
-        self.numPicsH = 0
         # Create the button objects, and we'll show them as needed
         # (fills self.buttons)
-        # self.flowLayout = QGridLayout()
-        self.flowLayout = pg.LayoutWidget()
-        self.flowLayout.layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+        self.flowContainer = QWidget()
+        self.flowLayout = QGridLayout()
+        self.flowLayout.setSpacing(10)
+        self.flowContainer.setLayout(self.flowLayout)
+        self.flowContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.flowLayout.setRowStretch(0, 100)
+        self.flowLayout.setColumnStretch(0, 100)
 
-        # These sizes ensure at least one image fits:
-        self.specV = 0
-        self.specH = 0
+        # this is the starting index of the first button, which we change when we flip pages
+        self.butStart = 0
+        self.maxCols = 10
+        self.maxRows = 10
+
         self.createButtons()
         self.specControls.emitAll()  # applies initial colour, volume levels
 
-        # Sets a lot of self properties needed before showing anything
-        self.butStart = 0
         self.countPages()
-
-        self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
-
-        # Freq axes
-        self.flowAxes = pg.LayoutWidget()
-        self.flowAxes.setMinimumSize(70, self.specV+20)
-        #self.flowAxes.setSizePolicy(0, 5)
-        self.flowAxes.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.MinimumExpanding)
-        # Time axes
-        self.flowAxesT = pg.LayoutWidget()
-        self.flowAxesT.setMinimumSize(self.specH+20, 40)
-        #self.flowAxesT.setSizePolicy(5, 0)
-        self.flowAxesT.setSizePolicy(QSizePolicy.Policy.MinimumExpanding,QSizePolicy.Policy.Fixed)
-        self.flowAxesT.layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-
-        gridFlowAndAxes = QGridLayout()
-        gridFlowAndAxes.addWidget(self.flowAxes, 0, 0)
-        gridFlowAndAxes.addWidget(self.flowLayout, 0, 1)
-        gridFlowAndAxes.addWidget(self.flowAxesT, 1, 1)
-        gridFlowAndAxes.setRowStretch(0, 10)
-        gridFlowAndAxes.setRowStretch(1, 0)
 
         # Set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
@@ -2263,7 +2243,7 @@ class HumanClassify2(QDialog):
         self.vboxFull.addLayout(vboxTop)
         self.vboxSpacer = QSpacerItem(1,1, QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
         self.vboxFull.addItem(self.vboxSpacer)
-        self.vboxFull.addLayout(gridFlowAndAxes)
+        self.vboxFull.addWidget(self.flowContainer)
         self.vboxFull.addLayout(self.vboxBot)
         # Must be fixed size!
         vboxTop.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
@@ -2274,7 +2254,6 @@ class HumanClassify2(QDialog):
         # The idea is that spacer absorbs all height changes
         #self.setSizePolicy(1,1)
         self.setSizePolicy(QSizePolicy.Policy.Minimum,QSizePolicy.Policy.Minimum)
-        self.setMinimumSize(self.specH+100, self.specV+100)
         self.setLayout(self.vboxFull)
         self.vboxFull.setStretch(1, 100)
         # Plan B could be to measure the sizes of the top/bottom boxes and subtract them
@@ -2314,41 +2293,13 @@ class HumanClassify2(QDialog):
             # Create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
 
-            newButton = SupportClasses_GUI.PicButton(i, sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop)
-            if newButton.im1.size().width() > self.specH:
-                self.specH = newButton.im1.size().width()
-            if newButton.im1.size().height() > self.specV:
-                self.specV = newButton.im1.size().height()
-
+            newButton = SupportClasses_GUI.PicButton(i, sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
+            newButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
+            newButton.setMinimumSize(10, 10)
             self.buttons.append(newButton)
             self.buttons[-1].buttonClicked=False
             self.marked.append(False)
-
-    def resizeEvent(self, ev):
-        """ On this event, choose which (and how many) buttons to display
-            from self.buttons. It is also called on initialization.
-        """
-        QDialog.resizeEvent(self, ev)
-
-        # space for remaining widgets:
-        # width is just dialog width with small buffer for now
-        spaceV = self.flowLayout.size().height() + self.vboxSpacer.geometry().height()
-        spaceH = self.flowLayout.size().width()
-
-        # this is the grid that fits in dialog, and self.* is the current grid
-        # Let's say we leave 10px for spacing
-        numPicsV = spaceV // (self.specV+10)
-        numPicsH = spaceH // (self.specH+10)
-        # only need to redraw pics if the grid has changed
-        if numPicsV!=self.numPicsV or numPicsH!=self.numPicsH:
-            # clear
-            self.clearButtons()
-            # draw new
-            self.numPicsV = numPicsV
-            self.numPicsH = numPicsH
-            self.redrawButtons()
-            self.countPages()
-        return
+        self.redrawButtons()
 
     def redrawButtons(self):
         # create one frequency axis
@@ -2358,40 +2309,32 @@ class HumanClassify2(QDialog):
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
             maxFreq = exampleSP.audioFormat.sampleRate() // 2
-        #SgSize = np.shape(exampleSP.sg)[1]  # in spec units
-        SgSize = self.specV
         if len(exampleSP.data)>0:
             duration = len(exampleSP.data)/exampleSP.audioFormat.sampleRate()
         else:
             duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
-        print("Found duration", duration, "px", self.specH)
 
         butNum = 0
-        for row in range(self.numPicsV):
-            # add a frequency axis
-            # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
-            # print(self.numPicsV)
-            sg_axis = SupportClasses_GUI.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
-            self.flowAxes.addWidget(sg_axis, row, 0)
-            self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
 
-            # draw a row of buttons
-            for col in range(1, self.numPicsH+1):
-                if row==0:
-                    time_axis = SupportClasses_GUI.TimeAxisWidget(self.specH, duration)
-                    self.flowAxesT.addWidget(time_axis, 0, col)
-                    self.flowAxesT.layout.setColumnMinimumWidth(col, self.specH+10)
-                    time_axis.show()
+        numRows = min(self.maxCols,int(np.ceil(np.sqrt(len(self.buttons)))))
+        numCols = min(self.maxRows,int(np.ceil(len(self.buttons)/numRows)))
 
-                # resizing shouldn't change which segments are displayed,
-                # so we use a fixed start point for counting shown buttons.
+        for row in range(self.maxRows):
+            if row<numRows:
+                self.flowLayout.setRowStretch(row, 1)
+            else:
+                self.flowLayout.setRowStretch(row, 0)
+        for col in range(numCols):
+            if col<numCols:
+                self.flowLayout.setColumnStretch(col, 1)
+            else:
+                self.flowLayout.setColumnStretch(col, 0)
+
+        for row in range(numRows):
+            for col in range(numCols):
                 self.flowLayout.addWidget(self.buttons[self.butStart+butNum], row, col)
-                # just in case, update the bounds of grid on every redraw
-                self.flowLayout.layout.setColumnMinimumWidth(col, self.specH+10)
-                self.flowLayout.layout.setRowMinimumHeight(row, self.specV+10)
                 self.buttons[self.butStart+butNum].show()
                 butNum += 1
-
                 if self.butStart+butNum==len(self.buttons):
                     # stop if we are out of segments
                     break
@@ -2416,7 +2359,7 @@ class HumanClassify2(QDialog):
             Called on resize, so does not update current button position.
             Updates next/prev arrow states.
         """
-        buttonsPerPage = self.numPicsV * self.numPicsH
+        buttonsPerPage = self.maxRows * self.maxCols
         if buttonsPerPage == 0:
             # dialog still initializing or too small to show segments
             #self.buttonPrev.setEnabled(False)
@@ -2457,7 +2400,7 @@ class HumanClassify2(QDialog):
             Updates current segment position, and calls other functions
             to deal with actual page recount/redraw.
         """
-        buttonsPerPage = self.numPicsV * self.numPicsH
+        buttonsPerPage = self.maxRows * self.maxCols
         # clear buttons while self.butStart is still old:
         self.clearButtons()
         self.butStart = min(len(self.buttons), self.butStart+buttonsPerPage)
@@ -2470,7 +2413,7 @@ class HumanClassify2(QDialog):
             Updates current segment position, and calls other functions
             to deal with actual page recount/redraw.
         """
-        buttonsPerPage = self.numPicsV * self.numPicsH
+        buttonsPerPage = self.maxRows * self.maxCols
         # clear buttons while self.butStart is still old:
         self.clearButtons()
         self.butStart = max(0, self.butStart-buttonsPerPage)
@@ -2482,41 +2425,16 @@ class HumanClassify2(QDialog):
         for btn in self.buttons:
             btn.stopPlayback()
         # clear pic buttons
-        for btnum in reversed(range(self.flowLayout.layout.count())):
-            item = self.flowLayout.layout.itemAt(btnum)
-            if item is not None:
-                self.flowLayout.layout.removeItem(item)
-                r,c = self.flowLayout.items[item.widget()]
-                self.flowLayout.layout.setColumnMinimumWidth(c, 1)
-                self.flowLayout.layout.setRowMinimumHeight(r, 1)
-                del self.flowLayout.rows[r][c]
-                item.widget().hide()
-        self.flowLayout.update()
-
-        # clear freq axes
-        for axnum in reversed(range(self.flowAxes.layout.count())):
-            item = self.flowAxes.layout.itemAt(axnum)
-            if item is not None:
-                self.flowAxes.layout.removeItem(item)
-                r,c = self.flowAxes.items[item.widget()]
-                self.flowAxes.layout.setRowMinimumHeight(r, 1)
-                del self.flowAxes.rows[r][c]
-                item.widget().hide()
-        self.flowAxes.update()
-
-        # clear time axes
-        for axnum in reversed(range(self.flowAxesT.layout.count())):
-            item = self.flowAxesT.layout.itemAt(axnum)
-            if item is not None:
-                self.flowAxesT.layout.removeItem(item)
-                r,c = self.flowAxesT.items[item.widget()]
-                self.flowAxesT.layout.setColumnMinimumWidth(r, 1)
-                del self.flowAxesT.rows[r][c]
-                item.widget().hide()
-        self.flowAxesT.update()
+        for i in reversed(range(self.flowLayout.count())):
+            item = self.flowLayout.itemAt(i)
+            widget = item.widget()
+            if widget:
+                self.flowLayout.removeWidget(widget)
+                widget.hide()
+                widget.setParent(None)
 
     def toggleAll(self):
-        buttonsPerPage = self.numPicsV * self.numPicsH
+        buttonsPerPage = self.maxRows * self.maxCols
         for butNum in range(self.butStart,min(self.butStart+buttonsPerPage,len(self.buttons))):
             self.buttons[butNum].changePic(False)
         #self.update()

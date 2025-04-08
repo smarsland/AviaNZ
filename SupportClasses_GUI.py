@@ -1125,14 +1125,15 @@ class MessagePopup(QMessageBox):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False, scaleToButton=False):
         super(PicButton, self).__init__(parent)
         self.index = index
-        self.mark = "green"
+        self.mark = "unknown"
         self.spec = spec
         self.unbufStart = unbufStart
         self.unbufStop = unbufStop
         self.cluster = cluster
+        self.scaleToButton = scaleToButton
         self.setMouseTracking(True)
 
         self.playButton = QToolButton(self)
@@ -1140,6 +1141,9 @@ class PicButton(QAbstractButton):
         self.playButton.hide()
 
         self.mouseIn = False
+
+        # what to set the range to if a resize happens. This is overwritten in setImage
+        self.colRangForResize = [np.min(self.spec), np.max(self.spec)]
 
         # SRM: Decided this isn't the right idea
         #self.plusButton = QToolButton(self)
@@ -1192,27 +1196,34 @@ class PicButton(QAbstractButton):
         # from setImage here, so that colours could be adjusted without
         # redrawing - like in other review dialogs. But this also helps
         # to trigger repaint upon scrolling etc, esp on Macs.
+        self.colRangeForResize = colRange
+
         im, alpha = fn.makeARGB(self.spec, lut=self.lut, levels=colRange)
         im1 = fn.makeQImage(im, alpha)
         if im1.size().width() == 0:
             print("ERROR: button not shown, likely bad spectrogram coordinates")
             return
 
-        # Output image width - larger for batmode:
-        if self.noaudio:
-            targwidth = 750
-        else:
-            targwidth = 500
-
         # hardcode all image sizes
         if self.cluster:
             self.im1 = im1.scaled(200, 150)
-        else:
-            self.specReductionFact = im1.size().width()/targwidth
-            # use original height if it is not extreme
-            prefheight = max(192, min(im1.size().height(), 512))
-            self.im1 = im1.scaled(targwidth, prefheight)
+        else: # just scaling the x axis basically
+            if self.scaleToButton:
+                targwidth = self.size().width()
+            else:
+                if self.noaudio:
+                    targwidth = 750
+                else:
+                    targwidth = 500
 
+            self.specReductionFact = im1.size().width()/targwidth
+            if self.scaleToButton:
+                prefheight = self.size().height()
+            else:
+                # use original height if it is not extreme
+                prefheight = max(192, min(im1.size().height(), 512))
+
+            self.im1 = im1.scaled(targwidth, prefheight)
             heightRedFact = im1.size().height()/prefheight
 
             # draw lines marking true segment position
@@ -1225,6 +1236,12 @@ class PicButton(QAbstractButton):
             if self.guides is not None:
                 for i in range(len(self.guides)):
                     self.guidelines[i] = QLineF(0, self.im1.height() - self.guides[i]/heightRedFact, targwidth, self.im1.height() - self.guides[i]/heightRedFact)
+        
+    def resizeEvent(self, event):
+        if self.scaleToButton:
+            self.setImage(self.colRangeForResize)
+        else:
+            super(PicButton, self).resizeEvent(event)
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -1254,8 +1271,13 @@ class PicButton(QAbstractButton):
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
-            if self.mark == "green":
+            if self.mark == "unknown":
                 pass
+            elif self.mark == "green":
+                painter.setOpacity(0.9)
+                painter.setPen(QPen(QColor(0,220,0)))
+                painter.setFont(QFont("Helvetica", fontsize))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "\u2713")
             elif self.mark == "yellow" and not self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
@@ -1344,19 +1366,21 @@ class PicButton(QAbstractButton):
         # cycle through CONFIRM / DELETE / RECHECK marks
 
         if self.cluster:
-            if self.mark == "green":
+            if self.mark == "unknown":
                 self.mark = "yellow"
             elif self.mark == "yellow":
-                self.mark = "green"
+                self.mark = "unknown"
         else:
-            if self.mark == "green":
+            if self.mark == "unknown":
+                self.mark = "green"
+            elif self.mark == "green":
                 self.mark = "red"
             elif self.mark == "red":
                 self.mark = "yellow"
             elif self.mark == "yellow":
                 self.mark = "blue"
             elif self.mark == "blue":
-                self.mark = "green"
+                self.mark = "unknown"
         self.paintEvent(ev)
         #self.update()
         self.repaint()
