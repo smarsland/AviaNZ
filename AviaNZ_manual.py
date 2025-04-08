@@ -1182,7 +1182,11 @@ class AviaNZ(QMainWindow):
         # save long bird list
         self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
-        labels = copy.deepcopy(self.segments[self.box1id][4])
+        if not self.multipleBirds:
+            labels = []
+        else:
+            labels = copy.deepcopy(self.segments[self.box1id][4])
+        
         labels.append({"species": species, "certainty": certainty})
         if "Don't Know" in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!="Don't Know"]
@@ -1222,7 +1226,11 @@ class AviaNZ(QMainWindow):
 
         self.knownCalls[species].append(callname)
 
-        labels = copy.deepcopy(self.segments[self.box1id][4])
+        if not self.multipleBirds:
+            labels = []
+        else:
+            labels = copy.deepcopy(self.segments[self.box1id][4])
+            
         if species in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!=species]
         labels.append({"species": species, "certainty": certainty, "calltype": callname})
