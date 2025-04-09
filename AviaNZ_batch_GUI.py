@@ -1505,6 +1505,7 @@ class AviaNZ_reviewAll(QMainWindow):
         return 1
 
     def humanClassifyClose2(self):
+        print("RUNNING humanClassifyClose2")
         todelete = []
         self.toadd = []
         # initialize correction file. All "downgraded" segments will be stored

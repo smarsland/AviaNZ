@@ -1128,7 +1128,7 @@ class PicButton(QAbstractButton):
     def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False, scaleToButton=False):
         super(PicButton, self).__init__(parent)
         self.index = index
-        self.mark = "unknown"
+        self.mark = "green"
         self.spec = spec
         self.unbufStart = unbufStart
         self.unbufStop = unbufStop
@@ -1271,13 +1271,8 @@ class PicButton(QAbstractButton):
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
-            if self.mark == "unknown":
+            if self.mark == "green":
                 pass
-            elif self.mark == "green":
-                painter.setOpacity(0.9)
-                painter.setPen(QPen(QColor(0,220,0)))
-                painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, "\u2713")
             elif self.mark == "yellow" and not self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
@@ -1366,21 +1361,19 @@ class PicButton(QAbstractButton):
         # cycle through CONFIRM / DELETE / RECHECK marks
 
         if self.cluster:
-            if self.mark == "unknown":
+            if self.mark == "green":
                 self.mark = "yellow"
             elif self.mark == "yellow":
-                self.mark = "unknown"
-        else:
-            if self.mark == "unknown":
                 self.mark = "green"
-            elif self.mark == "green":
+        else:
+            if self.mark == "green":
                 self.mark = "red"
             elif self.mark == "red":
                 self.mark = "yellow"
             elif self.mark == "yellow":
                 self.mark = "blue"
             elif self.mark == "blue":
-                self.mark = "unknown"
+                self.mark = "green"
         self.paintEvent(ev)
         #self.update()
         self.repaint()

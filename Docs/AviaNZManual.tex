@@ -477,8 +477,8 @@ If you select `Review Batch Results' on the start screen then the following wind
 \item `Quick review' is designed to let you process lots of files quickly to remove false positives. It shows only the spectrograms related to the species selected in the drop-down box, see Section~\ref{sec:batchQuick}.
 \item `Review all' is designed to let you see more detail about each segment, including potentially the call type as well as species. See Section~\ref{sec:batchAll}.
 \item The dropdown marked `Minimum certainty to show' is important. AviaNZ assigns a confidence score to its classification of a bird call. User annotations, and automated annotions that the user has confirmed, are scored 100. Classifications by just a wavelet-based recogniser are scored 50, as are annotations with a ? on by the user. Neural-network based automated annotations have confidence assigned by the neural network. With this dropdown you can decide if you want to see all annotations, just the uncertain ones (not 100), or a custom range. If you do this and wish to only see those that the system is not certain of, the default of 90 is suitable. As you set the value lower, more and more of the detections will be suppressed. Below 50 there will not be any segments to review.
-\item At the bottom of the window is the option to generate an Excel file of outputs; see Section~\ref{sec:outputs}.
-\item There are also a variety of options to change the appearance of the spectrogram in the Advanced Settings. These act in the same way as was described in the Manual interface section.
+\item In the middle of the window is the option to generate an Excel file of outputs; see Section~\ref{sec:outputs}.
+\item There are also a variety of options to change the appearance of the spectrogram in the Advanced Settings.
 \end{itemize}
 
 \subsection{Quick Review\label{sec:batchQuick}}
@@ -490,9 +490,7 @@ If you select `Review Batch Results' on the start screen then the following wind
 \begin{itemize}
 \item The quick review mode is intended to let you delete false positives quickly. 
 \item A set of spectrograms that have been labelled as your chosen species are shown. You can specify the size of these in the Batch Review interface above (by selecting `View segments in chunks of (s)') or let AviaNZ choose it (`Auto-pick view size').
-\item Make the window larger to see more of them, any that do not fit will be shown on another page. 
-\item For each segment that is wrongly labelled, click on its picture (it will be marked with a cross). 
-\item If you click on it again, the cross will become a question mark to show that you are unsure, and if you click again, it will return to having no mark. 
+\item Clicking on segments will mark them as false positive (red cross).  If you click on it again, the cross will become a question mark to show that you are unsure, If you click again it will be a blue plus, (which means confirm the labels and split the segment), and finally clicking again return it to having no mark. No mark means it is fine and the uncertainty will be set to 100 when you click next.  
 \item Segments marked with a cross will be deleted, those with a question mark will be identified as unsure by having a question mark added to those label (confidence 50), while those left plain will be confirmed as correct. Using the question mark option is useful to then review them further in either the All Species review (Section~\ref{sec:batchAll}) or the Manual interface.
 \item You can change the brightness and contrast at the top of the screen.
 \item You can also play the sounds by hovering on the image, and then clicking on the play button at the top-left of the image when it appears. 
