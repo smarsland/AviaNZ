@@ -2964,13 +2964,6 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                elif modifiers == Qt.KeyboardModifier.MetaModifier:
-                    # TODO: SRM: Check
-                    # TODO: Check fillBirdList and toggleViewSp and whether they compete
-                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                    # Calltype context menu
-                    self.fillBirdList()
-                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -3049,13 +3042,6 @@ class AviaNZ(QMainWindow):
                             modifiers = QApplication.keyboardModifiers()
                             if modifiers == Qt.KeyboardModifier.ControlModifier:
                                 self.fillBirdList(unsure=True)
-                            elif modifiers == Qt.KeyboardModifier.MetaModifier:
-                                # TODO: SRM: Check
-                                # TODO: Check fillBirdList and toggleViewSp and whether they compete
-                                self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                                # Calltype context menu
-                                self.fillBirdList()
-                                self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
                             self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
@@ -3150,13 +3136,6 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
-                elif modifiers == Qt.KeyboardModifier.MetaModifier:
-                    # TODO: SRM: Check
-                    # TODO: Check fillBirdList and toggleViewSp and whether they compete
-                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                    # Calltype context menu
-                    self.fillBirdList()
-                    self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
@@ -3245,11 +3224,6 @@ class AviaNZ(QMainWindow):
                             modifiers = QApplication.keyboardModifiers()
                             if modifiers == Qt.KeyboardModifier.ControlModifier:
                                 self.fillBirdList(unsure=True)
-                            elif modifiers == Qt.KeyboardModifier.MetaModifier:
-                                # TODO: Check fillBirdList and toggleViewSp and whether they compete
-                                self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                                self.fillBirdList()
-                                self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
                             else:
                                 self.fillBirdList()
                                 self.menuSpeciesSelection.popup(QPoint(int(evt.screenPos().x()), int(evt.screenPos().y())))
