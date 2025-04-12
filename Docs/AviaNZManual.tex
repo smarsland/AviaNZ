@@ -490,7 +490,7 @@ If you select `Review Batch Results' on the start screen then the following wind
 \begin{itemize}
 \item The quick review mode is intended to let you delete false positives quickly. 
 \item A set of spectrograms that have been labelled as your chosen species are shown. You can specify the size of these in the Batch Review interface above (by selecting `View segments in chunks of (s)') or let AviaNZ choose it (`Auto-pick view size').
-\item Clicking on segments will mark them as false positive (red cross).  If you click on it again, the cross will become a question mark to show that you are unsure, If you click again it will be a blue plus, (which means confirm the labels and split the segment), and finally clicking again return it to having no mark. No mark means it is fine and the uncertainty will be set to 100 when you click next.  
+\item Clicking on segments will mark them as false positive (red cross).  If you click on it again, the cross will become a question mark to show that you are unsure, If you click again it will be a blue plus, (which means confirm the labels and split the segment), and finally clicking again return it to having no mark.
 \item Segments marked with a cross will be deleted, those with a question mark will be identified as unsure by having a question mark added to those label (confidence 50), while those left plain will be confirmed as correct. Using the question mark option is useful to then review them further in either the All Species review (Section~\ref{sec:batchAll}) or the Manual interface.
 \item You can change the brightness and contrast at the top of the screen.
 \item You can also play the sounds by hovering on the image, and then clicking on the play button at the top-left of the image when it appears. 
@@ -510,7 +510,7 @@ If you select `Review Batch Results' on the start screen then the following wind
 \item You can play the sound with the play button. 
 \item You can also change the spectrogram brightness and contrast to make it easier to review. 
 \item If the label is correct, click on the green tick, which will make the next image load. 
-\item If the label is wrong, select the correct label before clicking the tick button. 
+\item If the label is wrong, select `Change species / calltype' and choose the correct label before clicking the tick button.
 \item If you are unsure, or want to mark the segment for further attention (for example, because it includes other sounds and you want to resize it) then press the question mark button (\includegraphics[scale=0.03]{Figures/questionL}). It is then easy to find in the Manual interface later.
 \item If you have allowed multiple species selection (in the `Interface setting' in the Manual Interface) you can pick several options. 
 \item To delete a segment, click on the red dustbin button. 
@@ -519,7 +519,7 @@ If you select `Review Batch Results' on the start screen then the following wind
 
 %\item You can also see these two types of review from the `Manual Processing' interface by selecting `Human review' and then either `All segments' or `Choose species'. 
 
-\subsection{Outputs}
+\subsection{Excel Outputs}
 \label{sec:outputs}
 
 The AviaNZ program aims to provide detailed and easy-to-review outputs. An Excel file (with the name `DetectionSummary' followed by the species selected) will be generated with three sheets of outputs in the same directory as the files. If this file already exists, the new results will be appended to the end of each sheet. 
@@ -531,18 +531,16 @@ The three sheets of the Excel workbook are:
 \item  presence/absence of the target species (or set of species) in each time interval that the user specifies (by default 60 seconds)
 \end{enumerate}
 
-In addition to the Excel file, for each sound file AviaNZ generates an annotation file of the automated detections that  the user can open and review in either the main interface or using the `Review Batch Results' option. 
-
 \newpage
 \section{Training a species recogniser}\label{sec:trainfilter}
 
 \subsection{Overview}
 
-One of the main features of AviaNZ is that you can train your own species recognisers for use in batch processing. You can also swap them between people.% At the moment these recognisers are fairly simple; they are intended to include {\em any} sound that might be a call from the species of interest. However, over time we will be working to improve them so that they are more accurate, while still being easy to train. 
+One of the main features of AviaNZ is that you can train your own species recognisers for use in batch processing. Those recognisers can then also be shared with others. 
 
 The process of training filters is fairly complex, and can be computationally expensive. The quality of the final filter depends on the training data used, the quality of the labelling that was performed, how noisy the files are, and how many other birds there are present.
 
-AviaNZ has two levels of filters. The first is the wavelet filter. This does not need too much data to train, but will usually produce a lot of false positives. You can stop at this stage, but it you want to get higher accuracy, then you can train a second level filter, which refines the first by using a neural network. This requires a lot of data and training time. In both cases there are three parts to training a filter:
+AviaNZ has two levels of filters. The first is the changepoint  filter. This does not need too much data to train, but will usually produce a lot of false positives. You can stop at this stage, but it you want to get higher accuracy, then you can train a second level filter, which refines the first by using a neural network. This requires a lot of data and training time. In both cases there are three parts to training a filter:
 
 \begin{enumerate}
 \item Creating training labels
@@ -619,12 +617,12 @@ In order to start the training process, you need to start by performing some man
 \end{itemize}
 \end{description}
 
-\subsection{Training a wavelet recogniser}
-Wavelet recogniser is the initial form of a recogniser in AviaNZ. All automated recognisers should start with training a wavelet recogniser and then later on it can be extended with a neural network filter.
+\subsection{Training a changepoint recogniser}
+The changepoint recogniser is the default model we use. All automated recognisers should start with training a changepoint recogniser and later it can be extended with a neural network filter.
 
 Follow the steps below to train a wavelet recogniser:
 \begin{itemize}
-\item To begin training a recogniser, select `Train an automated recogniser' $\rightarrow$ `Train a wavelet recogniser' from the Recognisers menu in the Manual interface. 
+\item To begin training a recogniser, select `Train an automated recogniser' $\rightarrow$ `Train a changepoint recogniser' from the Recognisers menu in the Manual interface. 
 \item Then follow the instructions to select the folder, and the name of the species:
 \begin{center}
     \includegraphics[width=.8\textwidth]{Figures/BuildRecogniser1}
@@ -668,15 +666,15 @@ Follow the steps below to train a wavelet recogniser:
 \item The program will then search for good ways to represent those calls, which can take a while, and then show a plot of error rates for different parameter settings. 
 \item This is known as an ROC curve, and it is a plot of the recall (True Positive Rate) against the False Positive Rate for different parameter settings:
 \begin{center}
-    \includegraphics[width=.7\textwidth]{Figures/BuildRecogniser4a}
+    \includegraphics[width=.7\textwidth]{Figures/BuildRecogniser4}
 \end{center}
 
 \begin{itemize}
 \item The perfect recogniser would be in the top-left corner of the graph. 
 \item Points lower down miss examples of the bird calling, while calls further to the right provide more false detections, i.e., think the bird is calling when it is not. 
-\item You need to choose the compromise between these two that you are prepared to accept: more work in reviewing to get rid of false positives, or accepting that the software has not detected every call. If you are planning to train a neural network filter as well, choose to accept more false detections.
+\item You'll notice that it won't necessarily be a smooth increasing curve, as you would find with a standard ROC graph, as for each threshold we do a search for the best parameters at that threshold as well.
+\item You need to choose the compromise between these two that you are prepared to accept: more work in reviewing to get rid of false positives, or accepting that the software has not detected every call. If you are planning to train a neural network filter as well, choose to accept more false detections. The neural network will try to improve the false positive rate, but can't do anything about the true positive rate. 
 \item To make the choice, click near the point that you think is the best compromise on the curve, which AviaNZ will show as a black dot (you can see it in the picture above). 
-\item You don't have to click on it exactly, AviaNZ will show you which point is closest to where you clicked. 
 \item You need to do this for each call type. 
 \end{itemize}
 
@@ -698,7 +696,7 @@ Follow the steps below to train a wavelet recogniser:
 
 \subsection{Extending a recogniser with NN}\label{sec:nnfilter}
 
-A wavelet recogniser will usually find most of your bird calls (it has good recall), but the price you pay for this is that it finds a lot of false positives (poor specificity). This leads to a lot of wrong segments that have to be reviewed. You can extend the filter in AviaNZ using a neural network known as a NN (convolutional neural network). These are often used for image recognition. Training a neural network requires a lot of training data and computational power. The way that you perform the training is as follows:
+A changepoint recogniser will usually find most of your bird calls (it has good recall), but the price you pay for this is that it finds a lot of false positives (poor specificity). This leads to a lot of wrong segments that have to be reviewed. You can extend the filter in AviaNZ using a neural network known as a NN (convolutional neural network). These are often used for image recognition. Training a neural network requires a lot of training data and computational power. The way that you perform the training is as follows:
 
 \begin{description}
 \item[Preparation] You will need to compile a good collection of the calls of your species. 
