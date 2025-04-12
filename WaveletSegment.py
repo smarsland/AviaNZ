@@ -427,6 +427,11 @@ class WaveletSegment:
                 # extract node from file num, and average over windows of set size
                 # (wpantialias=True specifies the non-downsampled WP)
                 nodeE = allEs[indexF][node-1,:]
+
+                if (nodeE==0).any():
+                    print("Node", node, "has no energy in parts, skipping")
+                    continue
+
                 noderealwindow = allwindows[node-1, indexF]
                 nodesigma2 = np.percentile(nodeE, 10)
                 # NOTE: we're providing points on the original scale (non-squared) for the C part
@@ -808,12 +813,11 @@ class WaveletSegment:
         r = np.zeros(np.shape(waveletCoefs)[0])
         for node in range(len(r)):
             # for safety e.g. when an array was filled with a const and SD=0
-            if np.all(waveletCoefs[node,:]==waveletCoefs[node,0]):
+            if np.all(waveletCoefs[node,:]==waveletCoefs[node,0]) or np.std(waveletCoefs[node,:])==0 or (waveletCoefs[(node, w1)]==0).all() or (waveletCoefs[(node, w0)]==0).all():
                 r[node] = 0
                 continue
 
             r[node] = (np.mean(waveletCoefs[(node, w1)]) - np.mean(waveletCoefs[(node, w0)])) / np.std(waveletCoefs[node, :]) * np.sqrt(len(w0) * len(w1)) / len(annotation)
-
         return r
 
     def sortListByChild(self, order):
