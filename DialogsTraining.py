@@ -2568,18 +2568,6 @@ class BuildNNWizard(QWizard):
                 self.f2.setEnabled(False)
                 self.f2text.setEnabled(False)
 
-        def loadFile(self, filename, duration=0, offset=0, fs=0):
-            """
-            Read audio file.
-            """
-            if duration == 0:
-                duration = None
-
-            self.nntrain.sp.readSoundFile(filename, duration, offset)
-            self.nntrain.sp.resample(fs)
-
-            return self.nntrain.sp.data
-
         def showimg(self, indices=[]):
             ''' Show example spectrogram (random ct segments from train dataset)
             '''
@@ -2594,11 +2582,17 @@ class BuildNNWizard(QWizard):
             else:
                 self.indx = indices
             for ind in self.indx:
-                audiodata = self.loadFile(filename=self.nntrain.traindata[ind][0], duration=self.imgsec.value()/100, offset=self.nntrain.traindata[ind][1][0], fs=self.nntrain.fs)
-                self.nntrain.sp.data = audiodata
-                self.nntrain.sp.audioFormat.setSampleRate(self.nntrain.fs)
-                # TODO: Params?!
-                sgRaw = self.nntrain.sp.spectrogram(window_width=self.nntrain.windowWidth, incr=self.nntrain.windowInc)
+                filename=self.nntrain.traindata[ind][0]
+                duration = self.imgsec.value()/100
+                if duration == 0:
+                    duration = None
+                offset = self.nntrain.traindata[ind][1][0]
+                sp = Spectrogram.Spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
+                sp.readSoundFile(filename, duration, offset)
+                sp.resample(self.nntrain.fs)
+                sp.audioFormat.setSampleRate(self.nntrain.fs)
+                sgRaw = sp.spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
+                sgRaw = sgRaw[:self.nntrain.imgsize[0]]
                 # Frequency masking
                 f1 = self.f1.value()
                 f2 = self.f2.value()
@@ -2614,7 +2608,7 @@ class BuildNNWizard(QWizard):
                 # determine colour map
                 self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
-                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(sg), self.nntrain.sp.data, self.nntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
+                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
                 if i == 0:
                     pic = QPixmap.fromImage(picbtn.im1)
                     self.img1.setPixmap(pic.scaledToHeight(175))
@@ -2639,8 +2633,15 @@ class BuildNNWizard(QWizard):
                 self.flowLayout.update()
 
         def setWindowInc(self):
+            """
+                What is the increment such that we get the correct image width?
+            """
             self.nntrain.windowWidth = self.nntrain.imgsize[0] * 2
-            self.nntrain.windowInc = int(np.ceil(self.imgsec.value() * self.nntrain.fs / (self.nntrain.imgsize[1] - 1)) / 100)
+            duration = self.imgsec.value()/100
+            totalLength = duration * self.nntrain.fs
+            lengthIgnoringLast = totalLength - self.nntrain.windowWidth
+            gapRequiredToFitOthers = lengthIgnoringLast / (self.nntrain.imgsize[1] - 1) # minus 1 as we ignore the last one
+            self.nntrain.windowInc = int(np.floor(gapRequiredToFitOthers))
             print('window and increment set: ', self.nntrain.windowWidth, self.nntrain.windowInc)
 
         def imglenChange(self):

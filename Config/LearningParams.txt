@@ -1,9 +1,7 @@
 {
 "minPerClass": 5,
-"sgramWindowWidth": 256,
-"sgramHop": 128,
-"imgX": 256,
-"imgY": 256,
+"imgHeight": 256,
+"imgWidth": 256,
 "windowScaling": 2,
 "batchsize": 32,
 "batchsize_ROC":8,

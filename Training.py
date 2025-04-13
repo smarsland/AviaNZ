@@ -52,16 +52,16 @@ class NNtrain:
         # Two important things: 
         # 1. LearningParams.txt, which a dictionary of parameters *** including spectrogram parameters
         # 2. CLI: whether it runs off the command line, which makes picking the ROC curve parameters hard
-        # Qn: what is imgWidth? Why not a learning param? Ans: it is a slider in the UI and sets the input data shape
+        # Qn: what is imgWidth? Why not a learning param? Ans: it is a slider for duration in the UI. 
+        #     Slider can give different durations, we then find the increments to use for each duration to get the same image width
 
         self.filterdir = filterdir
         self.configdir =configdir
         cl = SupportClasses.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
-        self.sp = Spectrogram.Spectrogram(self.LearningDict['sgramWindowWidth'], self.LearningDict['sgramHop'])
-
-        self.imgsize = [self.LearningDict['imgX'], self.LearningDict['imgY']]
+        
+        self.imgsize = [self.LearningDict['imgHeight'], self.LearningDict['imgWidth']]
         self.tmpdir1 = False
         self.tmpdir2 = False
         self.ROCdata = {}
@@ -264,7 +264,7 @@ class NNtrain:
         ''' Generate training images  for each calltype and noise'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
-        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
+        self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop, specFrameSize=self.imgsize[1])
 
     def train(self):
         # Create temp dir to hold img data and model

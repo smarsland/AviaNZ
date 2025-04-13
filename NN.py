@@ -588,21 +588,20 @@ class GenerateData:
 
         return N
 
-    def generateFeatures(self, dirName, dataset, hop, verbose=False):
+    def generateFeatures(self, dirName, dataset, hop, specFrameSize, verbose=False):
         '''
         Read the segment library and generate features, training.
         Similar to SignalProc.generateFeaturesNN, except this one saves images
             to disk instead of returning them.
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop:
+        :param specFrameSize: size of the spectrogram frame. We can't just use the window width, because that has been rounded to an integer,
+            and we want the final image to be a set width. 
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
         '''
         count = 0
         dhop = hop
         eps = 0.0005
-        print("self.length",self.length, "self.fs", self.fs, "self.windowwidth", self.windowwidth, "self.inc", self.inc)
-        specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
-        print("specFrameSize", specFrameSize)
         N = [0 for i in range(len(self.calltypes) + 1)]
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
         sp.audioFormat.setSampleRate(self.fs)
@@ -679,7 +678,7 @@ class GenerateData:
                 count += 1
 
         print('\n\nCompleted feature extraction')
-        return specFrameSize, N
+        return N
 
 
 class CustomGenerator(tf.keras.utils.Sequence):

@@ -1318,13 +1318,6 @@ class PostProcess:
 
         batchsize = 5   # TODO: read from learning parameters file
 
-        # spectrograms of pre-cut segs are tiny bit shorter than expected
-        # based on the segment length, because spectrogram does not use
-        # the last bin: it uses len(data)-window bins
-        # so when extracting pieces of a premade spec, we adjust to this
-        # length for comparability:
-        specFrameWidth = len(range(0, int(self.NNwindow * self.tgtsampleRate - self.NNwindowInc[0]), self.NNwindowInc[1]))
-
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
             print('\n--- Segment', seg)
@@ -1354,7 +1347,7 @@ class PostProcess:
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
-            featuress = sp.generateFeaturesNN(seglen=duration, real_spec_width=specFrameWidth, frame_size=self.NNwindow, frame_hop=self.NNhop, NNfRange=self.NNfRange)
+            featuress = sp.generateFeaturesNN(seglen=duration, real_spec_width=self.NNinputdim[1], frame_size=self.NNwindow, frame_hop=self.NNhop, NNfRange=self.NNfRange)
             featuress = featuress.astype('float32')
 
             # assert shape
@@ -1435,12 +1428,10 @@ class PostProcess:
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
-            specFrameWidth = len(range(0, int(self.NNwindow * sp.audioFormat.sampleRate() - sp.window_width), sp.incr))
-
             # frame_hop can be set to self.NNhop for overlap
-            featuress = sp.generateFeaturesNN(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.NNwindow, frame_hop=None, NNfRange=self.NNfRange)
+            featuress = sp.generateFeaturesNN(seglen=seg[0][1]-seg[0][0], real_spec_width=self.NNinputdim[1], frame_size=self.NNwindow, frame_hop=None, NNfRange=self.NNfRange)
             # or multichannel:
-            # featuress = sp.generateFeaturesNN2(seglen=seg[0][1]-seg[0][0], real_spec_width=specFrameWidth, frame_size=self.NNwindow, frame_hop=None)
+            # featuress = sp.generateFeaturesNN2(seglen=seg[0][1]-seg[0][0], real_spec_width=self.NNinputdim[1], frame_size=self.NNwindow, frame_hop=None)
             featuress = featuress.astype('float32')
             # predict with NN
             if np.shape(featuress)[0] > 0:

@@ -7,10 +7,8 @@
     "minPerClass": {"type": "integer", "minimum": 0},
     "patience": {"type": "number"},
     "hopScaling": {"type": "number"},
-    "sgramWindowWidth": {"type": "integer", "minimum": 0},
-    "sgramHop": {"type": "integer", "minimum": 0},
-    "imgX": {"type": "integer", "minimum": 0},
-    "imgY": {"type": "integer", "minimum": 0},
+    "imgHeight": {"type": "integer", "minimum": 0},
+    "imgWidth": {"type": "integer", "minimum": 0},
     "windowScaling": {"type": "number"},
     "t": {"type": "number"},
     "batchsize": {"type": "integer", "minimum": 0},
@@ -20,7 +18,7 @@
     "tWidthShift": {"type": "number"}
   },
   "required": [
-    "optimizer", "loss", "epochs", "monitor", "minPerClass", "patience", "hopScaling", "sgramWindowWidth", "sgramHop", "imgX", "imgY", "windowScaling", "t", "batchsize", "test_size", "metrics", "batchsize_ROC", "tWidthShift"
+    "optimizer", "loss", "epochs", "monitor", "minPerClass", "patience", "hopScaling", "imgHeight", "imgWidth", "windowScaling", "t", "batchsize", "test_size", "metrics", "batchsize_ROC", "tWidthShift"
   ]
 }
 
