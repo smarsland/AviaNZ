@@ -407,25 +407,17 @@ class GenerateData:
     .correction has segments for the noise class
     3. when extracted pieces of sounds (of call types and noise) are presented TODO
     """
-    def __init__(self, filter, length, windowwidth, inc, imageheight, imagewidth, f1, f2):
+    def __init__(self, filter, windowwidth, inc, f1, f2):
         self.filter = filter
         self.species = filter["species"]
-        # not sure if this is needed?
-        ind = self.species.find('>')
-        if ind != -1:
-            self.species = self.species.replace('>', '(')
-            self.species = self.species + ')'
         self.calltypes = []
         for fi in filter['Filters']:
             self.calltypes.append(fi['calltype'])
         self.fs = filter["SampleRate"]
         self.f1 = f1
         self.f2 = f2
-        self.length = length
         self.windowwidth = windowwidth
         self.inc = inc
-        self.imageheight = imageheight
-        self.imagewidth = imagewidth
 
     def findCTsegments(self, dirName, calltypei):
         ''' dirName got reviewed.data or manual.data
@@ -439,7 +431,7 @@ class GenerateData:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                     segments = Segment.SegmentList()
-                    segments.parseJSON(soundFile + '.data')
+                    segments.parseJSON(soundFile + '.data', silent=True)
                     if len(self.calltypes) == 1:
                         ctSegments = segments.getSpecies(self.species)
                     else:
@@ -470,7 +462,7 @@ class GenerateData:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     segments = Segment.SegmentList()
-                    segments.parseJSON(soundFile + '.data')
+                    segments.parseJSON(soundFile + '.data', silent=True)
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
 
@@ -493,7 +485,7 @@ class GenerateData:
                 sppSegments = []
                 if os.path.isfile(soundFile + '.data'):
                     segments = Segment.SegmentList()
-                    segments.parseJSON(soundFile + '.data')
+                    segments.parseJSON(soundFile + '.data', silent=True)
                     sppSegments = [segments[i] for i in segments.getSpecies(self.species)]
                 for segAuto in item[1]:
                     overlappedwithGT = False
@@ -521,7 +513,7 @@ class GenerateData:
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     # Generate GT files from annotations in dir1
                     segments = Segment.SegmentList()
-                    segments.parseJSON(soundFile + '.data')
+                    segments.parseJSON(soundFile + '.data', silent=True)
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
 
@@ -550,145 +542,82 @@ class GenerateData:
         # return True if the two segments, segGT and seg overlap
         return seg[0]<=segGT[1] and seg[1]>=segGT[0]
 
-    def getImgCount(self, dirName, dataset, hop):
-        '''
-        Read the segment library and estimate the number of NN images per class
-        :param dataset: segments in the form of [[file, [segment], label], ..]
-        :param hop: list of hops for different classes
-        :return: a list
-        '''
-        dhop = hop
-        eps = 0.0005
-        N = [0 for i in range(len(self.calltypes) + 1)]
-
-        for record in dataset:
-            # Compute number of images, also consider tiny segments because this would be the case for song birds.
-            duration = record[1][1] - record[1][0]
-            hop = dhop[record[-1]]
-            if duration < self.length:
-                info = sf.info(record[0])
-                sample_rate = info.samplerate
-                fileduration = info.frames / sample_rate
-                
-                record[1][0] = record[1][0] - (self.length - duration)/2 - eps
-                record[1][1] = record[1][1] + (self.length - duration)/2 + eps
-                if record[1][0] < 0:
-                    record[1][0] = 0
-                    record[1][1] = self.length + eps
-                elif record[1][1] > fileduration:
-                    record[1][1] = fileduration
-                    record[1][0] = fileduration - duration - eps
-                if 0 <= record[1][0] and record[1][1] <= fileduration:
-                    n = 1
-                else:
-                    n = 0
-            else:
-                n = math.ceil((record[1][1] - record[1][0] - self.length) / hop + 1)
-            N[record[-1]] += n
-
-        return N
-
-    def generateFeatures(self, dirName, dataset, hop, specFrameSize, verbose=False):
+    def generateFeatures(self, dirName, dataset, offsetIncrement=50, verbose=False):
         '''
         Read the segment library and generate features, training.
         Similar to SignalProc.generateFeaturesNN, except this one saves images
             to disk instead of returning them.
         :param dataset: segments in the form of [[file, [segment], label], ..]
-        :param hop:
-        :param specFrameSize: size of the spectrogram frame. We can't just use the window width, because that has been rounded to an integer,
-            and we want the final image to be a set width. 
+        :param offsetIncrement: To create the spectrogram we take a slice every self.inc and get the frequencies. But of course, this depends on where you start.
+            For every offsetIncrement up to self.inc we will make the spectrogram. They will all be slightly different. 
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
         '''
-        count = 0
-        dhop = hop
+        segmentCount = 0
         eps = 0.0005
-        N = [0 for i in range(len(self.calltypes) + 1)]
+        Nsegments = [0 for i in range(len(self.calltypes) + 1)]
+        Ntotal = [0 for i in range(len(self.calltypes) + 1)]
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
         sp.audioFormat.setSampleRate(self.fs)
 
         for record in dataset:
             # Compute features, also consider tiny segments because this would be the case for song birds.
             duration = record[1][1] - record[1][0]
-            hop = dhop[record[-1]]
-            if duration < self.length:
-                info = sf.info(record[0])
-                sample_rate = info.samplerate
-                fileduration = info.frames / sample_rate
+            offsetCount = 0
+            for offsetInc in np.arange(0, self.inc, offsetIncrement):
+                try:
+                    # load file
+                    sp.readSoundFile(record[0], duration=duration, off=record[1][0]+offsetInc/self.fs)
+                    sp.resample(self.fs)
+                    sgRaw = sp.spectrogram()
 
-                record[1][0] = record[1][0] - (self.length - duration) / 2 - eps
-                record[1][1] = record[1][1] + (self.length - duration) / 2 + eps
-                if record[1][0] < 0:
-                    record[1][0] = 0
-                    record[1][1] = self.length + eps
-                elif record[1][1] > fileduration:
-                    record[1][1] = fileduration
-                    record[1][0] = fileduration - self.length - eps
-                if record[1][0] <= 0 and record[1][1] <= fileduration:
-                    n = 1
-                    hop = self.length
-                    duration = self.length + eps
-                else:
+                    # Could bandpass here if relevant:
+                    # if f1 != 0 and f2 != 0:
+                    #     audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
+                except Exception as e:
+                    print("Warning: failed to load audio because:", e)
                     continue
-            else:
-                n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
-            print('* hop:', hop, 'n:', n, 'label:', record[-1])
 
-            try:
-                # load file
-                sp.readSoundFile(record[0], duration=duration, off=record[1][0])
-                sp.resample(self.fs)
-                sgRaw = sp.spectrogram()
+                # Frequency masking
+                bin_width = self.fs / 2 / np.shape(sgRaw)[1]
+                lb = int(np.ceil(self.f1 / bin_width))
+                ub = int(np.floor(self.f2 / bin_width))
+                sgRaw[:, 0:lb] = 0.0
+                sgRaw[:, ub:] = 0.0
 
-                # Could bandpass here if relevant:
-                # if f1 != 0 and f2 != 0:
-                #     audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
-            except Exception as e:
-                print("Warning: failed to load audio because:", e)
-                continue
+                # normalise and rotate
+                sgRaw = sgRaw / np.max(sgRaw)
+                sgRaw = np.rot90(sgRaw)
 
-            N[record[-1]] += n
-
-            # Frequency masking
-            bin_width = self.fs / 2 / np.shape(sgRaw)[1]
-            lb = int(np.ceil(self.f1 / bin_width))
-            ub = int(np.floor(self.f2 / bin_width))
-            sgRaw[:, 0:lb] = 0.0
-            sgRaw[:, ub:] = 0.0
-
-            for i in range(int(n)):
-                if verbose:
-                    print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '**')
-                # Sgram images
-                sgstart = int(hop * i * self.fs / sp.incr)
-                sgend = sgstart + specFrameSize
-                if sgend > np.shape(sgRaw)[0]:
-                    # Adjusting the final frame to be full width
-                    sgend = np.shape(sgRaw)[0]
-                    sgstart = np.shape(sgRaw)[0] - specFrameSize
-                sgRaw_i = sgRaw[sgstart:sgend, :]
-
-                # Normalize and rotate
-                maxg = np.max(sgRaw_i)
-                sgRaw_i = np.rot90(sgRaw_i / maxg)
-
-                # Save train data: individual images as npy
-                np.save(os.path.join(dirName, str(record[-1]),
-                        str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split(os.sep)[-1].rsplit('.', 1)[0] + '.npy'),
-                        sgRaw_i)
-                count += 1
+                # check if any NAN!
+                if not np.isnan(sgRaw).any():
+                    segmentDirname = os.path.join(dirName,str(record[-1]),"segment_"+str(segmentCount))
+                    os.makedirs(segmentDirname,exist_ok=True)
+                    np.save(os.path.join(segmentDirname,
+                            str(record[-1]) + '_segment-' + "%06d" % segmentCount + '_version-' + "%06d" % offsetCount + '_' + record[0].split(os.sep)[-1].rsplit('.', 1)[0] + '.npy'),
+                            sgRaw)
+                    offsetCount += 1
+                    Ntotal[record[-1]] += 1
+                else:
+                    print("NAN detected, skipping")
+            
+            Nsegments[record[-1]] += 1
+            segmentCount+=1
 
         print('\n\nCompleted feature extraction')
-        return N
+        print("Number of segments of each class extracted:",Nsegments)
+        print("Number of spectrograms of each class extracted:",Ntotal)
+
+        return Nsegments
 
 
 class CustomGenerator(tf.keras.utils.Sequence):
 
-    def __init__(self, image_filenames, labels, batch_size, traindir, imghight, imgwidth, channels):
+    def __init__(self, image_filenames, labels, batch_size, traindir, imgheight, imgwidth, channels):
         self.image_filenames = image_filenames
         self.labels = labels
         self.batch_size = batch_size
         self.train_dir = traindir
-        self.imgheight = imghight
+        self.imgheight = imgheight
         self.imgwidth = imgwidth
         self.channels = channels
 

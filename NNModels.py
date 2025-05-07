@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 def CNNModel(imageHeight,imageWidth,outputDim):
     apply_same_padding =  imageHeight < 120 or imageWidth < 120
@@ -25,14 +26,15 @@ def CNNModel(imageHeight,imageWidth,outputDim):
     # Final categorization from 0-ct+1 with softmax
     model.add(tf.keras.layers.Dense(outputDim, activation='softmax'))
     model.summary()
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 class PatchLayer(tf.keras.layers.Layer):
-    def __init__(self, patchSize, patchOverlap):
-        super(PatchLayer, self).__init__()
+    def __init__(self, patchSize, patchOverlap, channels, name=None):
+        super(PatchLayer, self).__init__(name=name)
         self.patchSize = patchSize
         self.patchOverlap = patchOverlap
+        self.channels = channels
 
     def call(self, inputs):
         patches = tf.image.extract_patches(
@@ -42,27 +44,28 @@ class PatchLayer(tf.keras.layers.Layer):
             rates=[1, 1, 1, 1],
             padding='VALID'
         )
-        patches = tf.reshape(patches, [tf.shape(patches)[0], -1, self.patchSize, self.patchSize, 3])
+        patches = tf.reshape(patches, [tf.shape(patches)[0], -1, self.patchSize*self.patchSize*self.channels])
         return patches
 
 class PositionalEmbedding(tf.keras.layers.Layer):
-    def __init__(self, numPatches, embeddingDim):
-        super().__init__()
+    def __init__(self, numPatches, embeddingDim, name=None):
+        super().__init__(name=name)
         self.pos_emb = self.add_weight("pos_emb", shape=[1, numPatches, embeddingDim], initializer="random_normal")
 
     def call(self, x):
         return x + self.pos_emb
 
 class TransformerBlock(tf.keras.layers.Layer):
-    def __init__(self, numHeads, inputDim, ffDim, dropoutRate=0.1):
-        super(TransformerBlock, self).__init__()
-        self.layerNormBefore = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.attn = tf.keras.layers.MultiHeadAttention(num_heads=numHeads, key_dim=inputDim//numHeads, dropout=dropoutRate)
-        self.layerNormAfter = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+    def __init__(self, numHeads, inputDim, ffDim, dropoutRate=0.1,name=None):
+        super(TransformerBlock, self).__init__(name=name)
+        self.layerNormBefore = tf.keras.layers.LayerNormalization(epsilon=1e-12,name="pre-norm")
+        self.attn = tf.keras.layers.MultiHeadAttention(num_heads=numHeads, key_dim=inputDim//numHeads, dropout=dropoutRate, name="attn")
+        self.layerNormAfter = tf.keras.layers.LayerNormalization(epsilon=1e-12,name="post-norm")
         self.ff = tf.keras.Sequential([
-            tf.keras.layers.Dense(ffDim, activation=tf.nn.gelu),
-            tf.keras.layers.Dense(inputDim)
+            tf.keras.layers.Dense(ffDim, activation=tf.nn.gelu,name="ff-intermediate"),
+            tf.keras.layers.Dense(inputDim,name="ff-output")
         ])
+        self.finalDropout = tf.keras.layers.Dropout(dropoutRate)
 
     def call(self, inputs, training=False):
         inputsNorm = self.layerNormBefore(inputs)
@@ -71,11 +74,12 @@ class TransformerBlock(tf.keras.layers.Layer):
         attnOutputWithResidualNorm = self.layerNormAfter(attnOutputWithResidual)
         ffOutput = self.ff(attnOutputWithResidualNorm)
         ffOutputWithResidual = attnOutputWithResidual + ffOutput
-        return ffOutputWithResidual
+        finalOut = self.finalDropout(ffOutputWithResidual, training=training)
+        return finalOut
 
 class ClsTokenLayer(tf.keras.layers.Layer):
-    def __init__(self, embedding_dim):
-        super(ClsTokenLayer, self).__init__()
+    def __init__(self, embedding_dim, name=None):
+        super(ClsTokenLayer, self).__init__(name=name)
         self.embedding_dim = embedding_dim
 
     def build(self, input_shape):
@@ -94,56 +98,44 @@ class ClsTokenLayer(tf.keras.layers.Layer):
         clsTokenRepeated = tf.repeat(self.clsToken, repeats=tf.shape(inputs)[0], axis=0) 
         return tf.concat([clsTokenRepeated, inputs], axis=1)
 
-def AudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
-    patchSize = 16
-    patchOverlap = 0
-    transformerHeads = 12
-    embeddingDim = 768
-    transformerLayers = 12
-    transformerNNDim = 3072
-    dropoutRate = 0.1
+def AudioSpectogramTransformer(imageHeight, imageWidth, outputDim, patchSize, patchOverlap, transformerHeads, embeddingDim, transformerLayers, transformerNNDim, dropoutRate=0.1, silent=False):
+    if not embeddingDim % transformerHeads == 0:
+        print("Warning: your embedding is not a multiple of the number of heads. Model may fail to load...")
 
     numPatches = ((imageHeight - patchSize) // (patchSize - patchOverlap) + 1) * ((imageWidth - patchSize) // (patchSize - patchOverlap) + 1)
 
-    inputs = tf.keras.layers.Input(shape=(imageHeight, imageWidth, 1))
+    inputs = tf.keras.layers.Input(shape=(imageHeight, imageWidth, 1),name="inputs")
     # repeat to get 3 dimensions
-    x = tf.keras.layers.Concatenate()([inputs, inputs, inputs])
+    x = tf.keras.layers.Concatenate(name="concatenate")([inputs, inputs, inputs])
     
     # Extract patches
-    x = PatchLayer(patchSize, patchOverlap)(x)
+    x = PatchLayer(patchSize, patchOverlap, 3, name="patch_layer")(x)
 
     # embedding network
-    x = tf.keras.layers.Reshape((-1, patchSize * patchSize * 3))(x)
-    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embeddingDim, activation='linear'))(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embeddingDim, activation='linear',name="embedding_weights"), name="linear_embedding_layer")(x)
     
     # Add the ClsTokenLayer after patch extraction
-    x = ClsTokenLayer(embeddingDim)(x)
+    x = ClsTokenLayer(embeddingDim, name="cls_token_layer")(x)
 
     # Add positional embedding
-    positionalEmbedding = PositionalEmbedding(numPatches=numPatches+1, embeddingDim=embeddingDim)
-    x = positionalEmbedding(x)
+    x = PositionalEmbedding(numPatches=numPatches+1, embeddingDim=embeddingDim, name="positional_embedding")(x)
     
-    for _ in range(transformerLayers):
-        x = TransformerBlock(transformerHeads, embeddingDim, transformerNNDim, dropoutRate)(x)
+    for l in range(transformerLayers):
+        x = TransformerBlock(transformerHeads, embeddingDim, transformerNNDim, dropoutRate, name="transformer_block_"+str(l+1))(x)
     
-    if outputDim==0: # no head
-        outputs = x
+    x = tf.keras.layers.LayerNormalization(epsilon=1e-12,name="final_normalization")(x)
+    
+    x = x[:, 0, :] # we only use the output at the CLS token normally.
+
+    if outputDim>=0:
+        outputs = tf.keras.layers.Dense(outputDim, activation='softmax', name="output_layer")(x)
     else:
-        x = tf.keras.layers.Flatten()(x)
-        outputs = tf.keras.layers.Dense(outputDim, activation='sigmoid')(x)
+        outputs = x
 
     model = tf.keras.models.Model(inputs, outputs)
-    model.summary()
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    return model
-
-def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
-    if not imageHeight==224 or not imageWidth==224:
-        print("Error: pretrained model requires imageHeight and imageWidth are set to 224. Change this in the learning parameters file.")
-        return
-    model = AudioSpectogramTransformer(224,224,outputDim)
-    print("Loading weights...")
-    model.load_weights("pre-trained_ViT_weights.h5", by_name=True)
+    if not silent:
+        model.summary()
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 customObjectScopes = {
