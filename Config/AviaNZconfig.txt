@@ -5,6 +5,7 @@
 "drawingRightBtn": false, "specMouseAction": 3,
 "StartMaximized": true,
 "MultipleSpecies": true,
+"IncludeCalltype": true,
 "RequireNoiseData": false,
 "DOC": true,
 "ReorderList": true,

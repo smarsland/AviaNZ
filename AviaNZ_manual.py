@@ -192,6 +192,8 @@ class AviaNZ(QMainWindow):
         # Whether or not the context menu allows multiple birds.
         self.multipleBirds = self.config['MultipleSpecies']
 
+        self.includeCalltype = self.config['IncludeCalltype']
+
         if len(self.config['RecentFiles']) > 0:
             self.SoundFileDir = os.path.dirname(self.config['RecentFiles'][-1])
             if not os.path.isdir(self.SoundFileDir):
@@ -1260,7 +1262,8 @@ class AviaNZ(QMainWindow):
                     currentLabels=currentLabels, 
                     parent=self, 
                     unsure=unsure,
-                    multipleBirds=self.multipleBirds
+                    multipleBirds=self.multipleBirds,
+                    includeCalltype=self.includeCalltype
                 )
                 self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
                 self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
@@ -1322,6 +1325,8 @@ class AviaNZ(QMainWindow):
         self.bar.setValue(0)
 
         self.multipleBirds = self.config['MultipleSpecies']
+
+        self.includeCalltype = self.config['IncludeCalltype']
 
         # reset buttons which require segment selection
         self.refreshSegmentControls()
@@ -5615,6 +5620,7 @@ class AviaNZ(QMainWindow):
                 {'name': 'Dynamically reorder bird list', 'type': 'bool', 'value': self.config['ReorderList']},
                 {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies'],
                  'readonly': hasMultipleSegments},
+                {'name': 'Include calltype', 'type': 'bool', 'value': self.config['IncludeCalltype']},
             ]},
             {'name': 'User', 'type': 'group', 'children': [
                 {'name': 'Operator', 'type': 'str', 'value': self.config['operator'],
@@ -5692,6 +5698,8 @@ class AviaNZ(QMainWindow):
                 self.config['ReorderList'] = data
             elif childName == 'Bird List.Default to multiple species':
                 self.config['MultipleSpecies'] = data
+            elif childName == 'Bird List.Include calltype':
+                self.config['IncludeCalltype'] = data
             elif childName == 'Require noise data':
                 self.config['RequireNoiseData'] = data
             elif childName=='Bird List.Common Bird List.Filename':
