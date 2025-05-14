@@ -207,9 +207,9 @@ class Spectrogram:
                     return
     
     def readSoundFile(self, file, duration=None, off=0, silent=False):
-        if file.endswith(".wav"):
+        if file.lower().endswith(".wav"):
             return self.readWav(file, duration, off, silent)
-        elif file.endswith(".flac"):
+        elif file.lower().endswith(".flac"):
             return self.readFlac(file, duration, off, silent)
         else:
             raise ValueError("Unsupported file format")
