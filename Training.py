@@ -383,18 +383,15 @@ class NNtrain:
         model = os.path.join(self.tmpdir2.name, 'model.json')
         self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
         # Load the model and prepare
-        jsonfile = open(model, 'r')
-        loadedModelJson = jsonfile.read()
-        jsonfile.close()
         with custom_object_scope(NNModels.customObjectScopes):
             try:
-                model = model_from_json(loadedModelJson)
+                model = NNModels.loadModelFromJson(model)
             except Exception as e:
+                print("Error loading model from "+json_file+":")
                 print(e)
-                print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
                 return False
         # Load weights into new model
-        model.load_weights(self.bestweight)
+        NNModels.loadWeights(model, self.bestweight)
         # Compile the model
         model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'],
                       metrics=self.LearningDict['metrics'])

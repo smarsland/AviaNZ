@@ -245,43 +245,29 @@ class ConfigLoader(object):
                 continue
             elif filt["NN"]:
                 if species == "NZ Bats":
-                    try:
-                        model = load_model(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
-                        targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"],
-                                                 filt["NN"]["windowInc"], filt["NN"]["thr"]]
-                        print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
-                    except Exception as e:
-                        print("Could not load NN model from file:", os.path.join(dirnn, filt["NN"]["NN_name"]), e)
+                    model = load_model(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
+                    targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
                 else:
-                    try:
-                        json_file = open(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json', 'r')
-                        loadedModelJson = json_file.read()
-                        json_file.close()
-                        with custom_object_scope(NNModels.customObjectScopes):
-                            try:
-                                model = model_from_json(loadedModelJson)
-                            except Exception as e:
-                                print(e)
-                                print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
-                                return 
-                        if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5'):
-                            NNModels.loadWeightsCompat(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
-                        if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
-                            NNModels.loadWeightsCompat(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
-                        print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
-                        model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
-                        if 'fRange' in filt["NN"]:
-                            targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
-                                                     filt["NN"]["output"],
-                                                     filt["NN"]["windowInc"], filt["NN"]["thr"], True,
-                                                     filt["NN"]["fRange"]]
-                        else:
-                            targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
-                                                     filt["NN"]["output"], filt["NN"]["windowInc"],
-                                                     filt["NN"]["thr"], False]
-                    except Exception as e:
-                        print("Could not load NN model from file:", os.path.join(dirnn, filt["NN"]["NN_name"]))
-                        print(e)
+                    with custom_object_scope(NNModels.customObjectScopes):
+                        print('Loading model from json:', os.path.join(dirnn, filt["NN"]["NN_name"]))
+                        model = NNModels.loadModelFromJson(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json')
+                        print("Model was loaded")
+                    print("Loading model weights")
+                    if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5'):
+                        NNModels.loadWeights(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
+                    if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
+                        NNModels.loadWeights(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
+                    print("Model weights were loaded")
+                    model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
+                    if 'fRange' in filt["NN"]:
+                        targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                    filt["NN"]["output"],
+                                                    filt["NN"]["windowInc"], filt["NN"]["thr"], True,
+                                                    filt["NN"]["fRange"]]
+                    else:
+                        targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                    filt["NN"]["output"], filt["NN"]["windowInc"],
+                                                    filt["NN"]["thr"], False]
         print("Loaded NN models:", list(targetmodels.keys()))
         return targetmodels
 

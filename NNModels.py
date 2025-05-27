@@ -1,23 +1,103 @@
 import tensorflow as tf
 import os
 import shutil
-from keras.saving import register_keras_serializable
+from packaging import version
+import h5py
+import json
+from tensorflow.keras.models import model_from_json
+
+def loadModelFromJson(jsonPath):
+    with open(jsonPath, 'r') as f:
+        modelJson = json.load(f)
+
+    config = modelJson['config']['layers']
+    hasInputLayer = any(layer['class_name'] == 'InputLayer' for layer in config)
+
+    if not hasInputLayer and 'batch_input_shape' in config[0]['config']:
+        print("Likely missing InputLayer; older Keras may fail to load this.")
+        inputShape = config[0]['config']['batch_input_shape']
+        inputLayer = {
+            "class_name": "InputLayer",
+            "config": {
+                "batch_input_shape": inputShape,
+                "dtype": "float32",
+                "sparse": False,
+                "ragged": False,
+                "name": "input_1"
+            }
+        }
+        modelJson['config']['layers'].insert(0, inputLayer)
+        del modelJson['config']['layers'][1]['config']['batch_input_shape']
+
+    return model_from_json(json.dumps(modelJson))
 
 def loadWeightsCompat(model, path):
-    # Check if old-style .h5 file exists
-    if path.endswith(".h5") and not path.endswith(".weights.h5"):
-        if os.path.exists(path):
-            # Create a temporary renamed copy
-            temp_path = path.replace(".h5", ".weights.h5")
-            shutil.copy(path, temp_path)
-            model.load_weights(temp_path, by_name=True, )
-            os.remove(temp_path)  # Clean up
-            return
-    # For standard new-style use
-    if os.path.exists(path):
+    try:
+        print("Attemping to load NN model weights")
         model.load_weights(path)
-        return
-    raise FileNotFoundError(f"Cannot find compatible weight file for '{path}'")
+    except:
+        print("Warning: Model weights could not be loaded. This is likely because you are using an old model which was built in a previous version of tensorflow. Trying to load layer by layer...")
+
+        name_map = {
+            'conv2d': 'conv2d',
+            'conv2d_2': 'conv2d_1',
+            'conv2d_4': 'conv2d_2',
+            'conv2d_6': 'conv2d_3',
+            'conv2d_8': 'conv2d_4',
+            'dense': 'dense',
+            'dense_2': 'dense_1',
+        }
+
+        print("\n--- Model layers ---")
+        for l in model.layers:
+            print(l.name, [w.shape.as_list() for w in l.weights])
+        print("\n--- Checkpoint layers ---")
+        with h5py.File(path, 'r') as f:
+            for layer_name in f.keys():
+                print(f"Layer group: {layer_name}")
+                for key in f[layer_name].keys():
+                    print(f"  Key: {key}, type: {type(f[layer_name][key])}")
+                    if isinstance(f[layer_name][key], h5py.Group):
+                        for subkey in f[layer_name][key].keys():
+                            print(f"    Subkey: {subkey}, type: {type(f[layer_name][key][subkey])}")
+            
+        with h5py.File(path, 'r') as f:
+            layer_group = f['_layer_checkpoint_dependencies']
+            for layer_name in layer_group.keys():
+                vars_group = layer_group[layer_name]['vars']
+                
+                # Find the corresponding model layer by name (you must have layer names)
+                model_layer_name = name_map.get(layer_name)
+                if model_layer_name is None:
+                    print(f"Skipping {layer_name}")
+                    continue
+                model_layer = next((l for l in model.layers if l.name == model_layer_name), None)
+
+                if model_layer is None:
+                    print(f"Layer {layer_name} not found in model.")
+                    continue
+
+                model_vars = model_layer.weights
+                if len(model_vars) != len(vars_group):
+                    print(f"Warning: Variable count mismatch for layer {layer_name}: model {len(model_vars)} vs checkpoint {len(vars_group)}")
+
+                for var, (var_name, dataset) in zip(model_vars, vars_group.items()):
+                    print(f"Assigning {var.name} {var.shape} <- {var_name} {dataset.shape}")
+                    if var.shape == dataset.shape:
+                        var.assign(dataset[()])
+                    else:
+                        print(f"Shape mismatch for {var.name}: model {var.shape}, checkpoint {dataset.shape}")
+
+def loadWeights(model, path):
+    print("Loading model weights from path,",path)
+    if path.endswith(".h5") and not path.endswith(".weights.h5"):
+        temp_path = path.replace(".h5", ".weights.h5")
+        shutil.copy(path, temp_path)
+        loadWeightsCompat(model, temp_path)
+        os.remove(temp_path)
+    else:
+        loadWeightsCompat(model, path)
+
 
 def CNNModel(imageHeight,imageWidth,outputDim):
     apply_same_padding =  imageHeight < 120 or imageWidth < 120
@@ -162,17 +242,22 @@ def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
         return
     model = AudioSpectogramTransformer(224,224,outputDim)
     print("Loading weights...")
-    load_weights_compat(model, "pre-trained_ViT_weights.h5")
+    loadWeights(model, "pre-trained_ViT.weights.h5")
     return model
 
-@register_keras_serializable()
-class SequentialWrapper(tf.keras.models.Sequential):
-    pass
 
 customObjectScopes = {
     'PatchLayer': PatchLayer, 
     'PositionalEmbedding': PositionalEmbedding, 
     'TransformerBlock': TransformerBlock, 
     'ClsTokenLayer': ClsTokenLayer,
-    'Sequential': SequentialWrapper
 }
+
+if version.parse(tf.__version__) >= version.parse("2.13.0"):
+    from keras.saving import register_keras_serializable
+
+    @register_keras_serializable()
+    class SequentialWrapper(tf.keras.models.Sequential):
+        pass
+
+    customObjectScopes['Sequential'] = SequentialWrapper
