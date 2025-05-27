@@ -1,6 +1,7 @@
 import tensorflow as tf
 import os
 import shutil
+from keras.saving import register_keras_serializable
 
 def loadWeightsCompat(model, path):
     # Check if old-style .h5 file exists
@@ -21,17 +22,17 @@ def loadWeightsCompat(model, path):
 def CNNModel(imageHeight,imageWidth,outputDim):
     apply_same_padding =  imageHeight < 120 or imageWidth < 120
     model = tf.keras.models.Sequential()
-    model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[imageHeight, imageWidth, 1], padding='Same'))
-    model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu', padding="Same" if apply_same_padding else "Valid"))
+    model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[imageHeight, imageWidth, 1], padding='same'))
+    model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu', padding="same" if apply_same_padding else "Valid"))
     model.add(tf.keras.layers.MaxPooling2D(pool_size=(3, 3)))
     model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding="Same" if apply_same_padding else "Valid"))
+    model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding="same" if apply_same_padding else "Valid"))
     model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
     model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding="Same" if apply_same_padding else "Valid"))
+    model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu', padding="same" if apply_same_padding else "Valid"))
     model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
     model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding="Same" if apply_same_padding else "Valid"))
+    model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding="same" if apply_same_padding else "Valid"))
     model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
     model.add(tf.keras.layers.Dropout(0.2))
     # Flatten the results to one dimension for passing into our final layer
@@ -164,9 +165,14 @@ def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
     load_weights_compat(model, "pre-trained_ViT_weights.h5")
     return model
 
+@register_keras_serializable()
+class SequentialWrapper(tf.keras.models.Sequential):
+    pass
+
 customObjectScopes = {
     'PatchLayer': PatchLayer, 
     'PositionalEmbedding': PositionalEmbedding, 
     'TransformerBlock': TransformerBlock, 
-    'ClsTokenLayer': ClsTokenLayer
+    'ClsTokenLayer': ClsTokenLayer,
+    'Sequential': SequentialWrapper
 }
