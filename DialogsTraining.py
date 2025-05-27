@@ -1082,9 +1082,9 @@ class BuildRecAdvWizard(QWizard):
             len_min, len_max, f_low, f_high = pageSegs.getSummaries()
             self.maxlen.setText(str(round(np.max(len_max),2)))
 
-            self.fLow.setRange(0, fs/2)
+            self.fLow.setRange(0, int(fs/2))
             self.fLow.setValue(max(0, int(np.min(f_low))))
-            self.fHigh.setRange(0, fs/2)
+            self.fHigh.setRange(0, int(fs/2))
             if np.max(f_high) == 0:
                 # happens when no segments have y limits
                 f_high = fs/2
@@ -3209,7 +3209,7 @@ class FilterCustomiseROC(QDialog):
         self.ROCWF = False
         self.RONN = False
         self.btnSave.setEnabled(False)
-
+        
         # Store the widget pointers here
         self.WThrSliders = []
         self.NNThr1Sliders = []
@@ -3266,12 +3266,17 @@ class FilterCustomiseROC(QDialog):
             self.WThrSliders.append(newWThr)
 
             if 'NN' in self.filter:
-                newNNThr1 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][i][0], 0.1, 10.0, slider=not ROCyes)
+                if self.filter['Filters'][i]['calltype']=='Bat':
+                    newNNThr1 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][0], 0.1, 100.0, slider=not ROCyes)
+                    newNNThr2 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][1], 0.1, 100.0, slider=not ROCyes)
+                else:
+                    newNNThr1 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][i][0], 0.1, 10.0, slider=not ROCyes)
+                    newNNThr2 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][i][1], 0.1, 10.0, slider=not ROCyes)
+                
                 newNNThr1.valueChanged.connect(self.refreshSaveButton)
                 self.form.addWidget(newNNThr1, i + 1, 2)
                 self.NNThr1Sliders.append(newNNThr1)
 
-                newNNThr2 = FilterCustomiseROC.LabelSlider(self.filter['NN']['thr'][i][1], 0.1, 10.0, slider=not ROCyes)
                 newNNThr2.valueChanged.connect(self.refreshSaveButton)
                 self.form.addWidget(newNNThr2, i + 1, 3)
                 self.NNThr2Sliders.append(newNNThr2)
@@ -3399,8 +3404,12 @@ class FilterCustomiseROC(QDialog):
                         if sliderCL.value() > sliderCU.value():
                             sliderCU.setValue(1.0)
 
-                    self.newfilter['NN']['thr'][idx][0] = sliderCL.value()
-                    self.newfilter['NN']['thr'][idx][1] = sliderCU.value()
+                    if self.calltypes[idx]=='Bat':
+                        self.newfilter['NN']['thr'][0] = sliderCL.value()
+                        self.newfilter['NN']['thr'][1] = sliderCU.value()
+                    else:
+                        self.newfilter['NN']['thr'][idx][0] = sliderCL.value()
+                        self.newfilter['NN']['thr'][idx][1] = sliderCU.value()
                     if sliderCL.hasChanged() or sliderCU.hasChanged():
                         anyChanged = True
 
@@ -3425,8 +3434,12 @@ class FilterCustomiseROC(QDialog):
             if 'NN' in self.filter:
                 sliderCL = self.NNThr1Sliders[idx]
                 sliderCU = self.NNThr2Sliders[idx]
-                self.newfilter['NN']['thr'][idx][0] = sliderCL.value()
-                self.newfilter['NN']['thr'][idx][1] = sliderCU.value()
+                if self.calltypes[idx]=='Bat':
+                    self.newfilter['NN']['thr'][0] = sliderCL.value()
+                    self.newfilter['NN']['thr'][1] = sliderCU.value()
+                else:
+                    self.newfilter['NN']['thr'][idx][0] = sliderCL.value()
+                    self.newfilter['NN']['thr'][idx][1] = sliderCU.value()
                 if sliderCL.hasChanged() or sliderCU.hasChanged():
                     anyChanged = True
             sliderW = self.WThrSliders[idx]

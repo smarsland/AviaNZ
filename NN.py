@@ -354,7 +354,7 @@ class NN:
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
         checkpoint = tf.keras.callbacks.ModelCheckpoint(
-            modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
+            modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5",
             monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
             save_freq='epoch')
         early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
@@ -370,8 +370,6 @@ class NN:
         model_json = self.model.to_json()
         with open(modelsavepath + "/model.json", "w") as json_file:
             json_file.write(model_json)
-        # # just serialize final weights to H5, not necessary
-        # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
 
     def train(self, modelsavepath, training_batch_generator, validation_batch_generator):
@@ -379,9 +377,7 @@ class NN:
 
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
-        # checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
-        # early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor=self.LearningDict['monitor'], verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5", monitor=self.LearningDict['monitor'], verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
         early = tf.keras.callbacks.EarlyStopping(monitor=self.LearningDict['monitor'], min_delta=0, patience=self.LearningDict['patience'], verbose=1, mode='auto')
 
         epochs = self.LearningDict['epochs']

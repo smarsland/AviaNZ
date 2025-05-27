@@ -4421,7 +4421,7 @@ class AviaNZ(QMainWindow):
         self.buildNNWizard.nntrain.currfilt["NN"]["NN_name"] = NN_name
         modelfile = os.path.join(self.filtersDir, NN_name + '.json')
         weightsrc = self.buildNNWizard.nntrain.bestweight
-        weightfile = os.path.join(self.filtersDir, NN_name + '.h5')
+        weightfile = os.path.join(self.filtersDir, NN_name + '.weights.h5')
         # Also write ROC in to a file
         rocfilename = self.buildNNWizard.nntrain.currfilt["species"] + "_RONN" + time.strftime("_%H-%M-%S", time.gmtime())
         self.buildNNWizard.nntrain.currfilt["RONN"] = rocfilename

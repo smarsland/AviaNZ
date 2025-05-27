@@ -254,7 +254,6 @@ class ConfigLoader(object):
                         print("Could not load NN model from file:", os.path.join(dirnn, filt["NN"]["NN_name"]), e)
                 else:
                     try:
-                        print(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
                         json_file = open(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json', 'r')
                         loadedModelJson = json_file.read()
                         json_file.close()
@@ -264,8 +263,11 @@ class ConfigLoader(object):
                             except Exception as e:
                                 print(e)
                                 print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
-                                return False
-                        model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
+                                return 
+                        if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5'):
+                            NNModels.loadWeightsCompat(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
+                        if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
+                            NNModels.loadWeightsCompat(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
                         print('Loaded model:', os.path.join(dirnn, filt["NN"]["NN_name"]))
                         model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
                         if 'fRange' in filt["NN"]:

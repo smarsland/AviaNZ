@@ -318,9 +318,15 @@ class NNtrain:
                 # prepare iterator
                 it = datagen.flow(samples, batch_size=self.LearningDict['batchsize'])
                 # generate samples
-                batch = it.next()
+                try:
+                    batch = next(it)
+                except TypeError:
+                    batch = it.next()
                 for j in range(int((self.LearningDict['t'] - ns[ct]) / self.LearningDict['batchsize'])):
-                    newbatch = it.next()
+                    try:
+                        newbatch = next(it)
+                    except TypeError:
+                        newbatch = it.next()
                     batch = np.vstack((batch, newbatch))
                 # Save augmented data
                 k = 0
@@ -369,8 +375,8 @@ class NNtrain:
         epoch = []
         for r, d, files in os.walk(self.tmpdir2.name):
             for f in files:
-                if f.endswith('.h5') and 'weights' in f:
-                    epoch.append(int(f.split('weights.')[-1][:2]))
+                if f.endswith('.weights.h5'):
+                    epoch.append(int(f.split('.weights.h5')[0][:2]))
                     weights.append(f)
             j = np.argmax(epoch)
             weightfile = weights[j]

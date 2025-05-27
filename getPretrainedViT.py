@@ -54,4 +54,4 @@ for l in range(1):
     model2.get_layer(name).set_weights(transformerWeights)
 
 # save model 2
-model2.save_weights("pre-trained_ViT_weights.h5")
+model2.save_weights("pre-trained_ViT.weights.h5")

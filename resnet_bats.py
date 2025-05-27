@@ -85,7 +85,7 @@ def trainNet(dirName,netName,imgWidth=128,imgHeight=64,incr=32,nLearnLayer=500,n
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
         checkpoint = tf.keras.callbacks.ModelCheckpoint(
-            modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
+            modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5",
             monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
             save_freq='epoch')
 
@@ -205,8 +205,7 @@ def useNet(netName,dirName,imgWidth,imgHeight,incr,nClasses,thr1,thr2,channels=3
                         print(e)
                         print('Error in loading model from json. Are you linking all custom layers in NNModels.customObjectScopes?')
                         return False
-                head_model.load_weights(os.path.join('/home/marslast/.avianz/Filters/',netName))
-                #head_model = models.load_model(os.path.join('/home/marslast/.avianz/Filters/',netName))
+                head_model = models.load_model(os.path.join('/home/marslast/.avianz/Filters/',netName))
                 imgHeight=64
                 imgWidth=343
         else:
@@ -351,7 +350,7 @@ def trainNet_VGG(dirName,netName,imgWidth=224,imgHeight=64,incr=32,nLearnLayer=5
     if not os.path.exists(modelsavepath):
         os.makedirs(modelsavepath)
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
+        modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5",
         monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
         save_freq='epoch')
     early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
@@ -434,7 +433,7 @@ def trainNet_NP(dirName,netName,imgWidth=343,imgHeight=64,incr=32,nLearnLayer=50
     if not os.path.exists(modelsavepath):
         os.makedirs(modelsavepath)
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
+        modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5",
         monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
         save_freq='epoch')
     early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')

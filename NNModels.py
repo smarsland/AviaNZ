@@ -1,4 +1,22 @@
 import tensorflow as tf
+import os
+import shutil
+
+def loadWeightsCompat(model, path):
+    # Check if old-style .h5 file exists
+    if path.endswith(".h5") and not path.endswith(".weights.h5"):
+        if os.path.exists(path):
+            # Create a temporary renamed copy
+            temp_path = path.replace(".h5", ".weights.h5")
+            shutil.copy(path, temp_path)
+            model.load_weights(temp_path, by_name=True, )
+            os.remove(temp_path)  # Clean up
+            return
+    # For standard new-style use
+    if os.path.exists(path):
+        model.load_weights(path)
+        return
+    raise FileNotFoundError(f"Cannot find compatible weight file for '{path}'")
 
 def CNNModel(imageHeight,imageWidth,outputDim):
     apply_same_padding =  imageHeight < 120 or imageWidth < 120
@@ -143,7 +161,7 @@ def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
         return
     model = AudioSpectogramTransformer(224,224,outputDim)
     print("Loading weights...")
-    model.load_weights("pre-trained_ViT_weights.h5", by_name=True)
+    load_weights_compat(model, "pre-trained_ViT_weights.h5")
     return model
 
 customObjectScopes = {
