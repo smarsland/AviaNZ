@@ -93,7 +93,7 @@ Any extra subfilter parameters may follow, such as `"F0"`.
     "NN": {"NN_name": "Kiwi (Nth Is Brown)", "loss": "binary_crossentropy", "optimizer": "adam", "win": 0.25, "inputdim": [128, 30], "output": {"0": "Male", "1": "Female", "2": "Noise"}}
 
 If present, all the following are required:  
-* `NN_name` - File name of the model, e.g. `Kiwi (Nth Is Brown).json` and `Kiwi (Nth Is Brown).h5`.   
+* `NN_name` - File name of the model, e.g. `Kiwi (Nth Is Brown).json` and `Kiwi (Nth Is Brown).h5` or `Kiwi (Nth Is Brown).weights.h5`.   
 * `loss` - loss function.   
 * `optimizer` - optimisation algorithm.   
 * `win` - input image width in seconds.   

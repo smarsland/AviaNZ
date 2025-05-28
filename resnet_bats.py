@@ -195,13 +195,7 @@ def useNet(netName,dirName,imgWidth,imgHeight,incr,nClasses,thr1,thr2,channels=3
         if netName[-5:]=='NP.h5':
                 print("Loading original filter")
                 print(os.path.join('/home/marslast/.avianz/Filters/',netName))
-                with custom_object_scope(NNModels.customObjectScopes):
-                    try:
-                        model = NNModels.loadModelFromJson(os.path.join('/home/marslast/.avianz/Filters/',netName[:-3]) + '.json')
-                    except Exception as e:
-                        print("Error loading model from "+json_file+":")
-                        print(e)
-                        return False
+                model = NNModels.loadModelFromJson(os.path.join('/home/marslast/.avianz/Filters/',netName[:-3]) + '.json')
                 head_model = models.load_model(os.path.join('/home/marslast/.avianz/Filters/',netName))
                 imgHeight=64
                 imgWidth=343

@@ -248,16 +248,11 @@ class ConfigLoader(object):
                     model = load_model(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
                     targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
                 else:
-                    with custom_object_scope(NNModels.customObjectScopes):
-                        print('Loading model from json:', os.path.join(dirnn, filt["NN"]["NN_name"]))
-                        model = NNModels.loadModelFromJson(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json')
-                        print("Model was loaded")
-                    print("Loading model weights")
+                    model = NNModels.loadModelFromJson(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json')
                     if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5'):
                         NNModels.loadWeights(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
-                    if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
+                    elif os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
                         NNModels.loadWeights(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
-                    print("Model weights were loaded")
                     model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
                     if 'fRange' in filt["NN"]:
                         targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],

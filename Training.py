@@ -383,13 +383,7 @@ class NNtrain:
         model = os.path.join(self.tmpdir2.name, 'model.json')
         self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
         # Load the model and prepare
-        with custom_object_scope(NNModels.customObjectScopes):
-            try:
-                model = NNModels.loadModelFromJson(model)
-            except Exception as e:
-                print("Error loading model from "+json_file+":")
-                print(e)
-                return False
+        model = NNModels.loadModelFromJson(model)
         # Load weights into new model
         NNModels.loadWeights(model, self.bestweight)
         # Compile the model
