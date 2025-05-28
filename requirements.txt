@@ -6,37 +6,25 @@
 # pip install -r requirements.txt --user
 # cd ext; python3 setup.py build_ext -i
 
-click==8.1.3
-Cython==0.29.32
-h5py==3.2.1
-jsonschema==4.17.3
-librosa==0.10.0
-lxml
-#numpy==1.23.5  # scikit-image overwrites this w/ a newer version
-openpyxl==3.0.10
-pyFFTW==0.13.1
-#PyQt5==5.15.7
-pyqtgraph==0.13.2
-resampy
-scikit-image==0.19.3
-six==1.16.0
-scipy==1.9.3
-setuptools==56.1.0
-spectrum==0.8.1
-tensorflow==2.12.1
-
-## These dependencies are important, but should be installed by the main packages:
-# joblib==0.13.2
-# llvmlite==0.29.0
-# matplotlib==3.1.0
-# PyWavelets==1.0.3
-# scikit-learn==0.21.2
-
-## MANUAL:
-## NECESSARY to install pytgraph development, 0.11.0.dev0+g9aaae8 or another version
-## Hence git is required.
-## For compiling binaries:
-# PyInstaller==4.0
+click==8.2.1
+Cython==3.1.1
+h5py==3.13.0
+jsonschema==4.24.0
+librosa==0.11.0
+lxml==5.4.0
+openpyxl==3.1.5
+matplotlib==3.10.3
+numba==0.61.2
+numpy==2.1.3
+pyFFTW==0.15.0
+pyFLAC==3.0.0
+pyqtgraph==0.13.7
+resampy==0.4.3
+scipy==1.15.3
+scikit-image==0.25.2
+soundfile==0.13.1
+tensorflow==2.19.0
+PyQt6==6.9.0
 
 # For those without AVX2 support:
 # pip install --upgrade https://github.com/fo40225/tensorflow-windows-wheel/blob/master/2.0.0/py37/CPU/sse2/tensorflow-2.0.0-cp37-cp37m-win_amd64.whl
