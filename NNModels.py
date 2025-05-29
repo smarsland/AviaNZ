@@ -178,74 +178,15 @@ def loadModelFromJson(jsonPath):
     if not hasInputLayer and 'batch_input_shape' in config['config']['layers'][0]['config']:
         print("Likely missing InputLayer; older Keras may fail to load this.")
         # Manually remove 'batch_input_shape' and insert InputLayer
-        if config["config"]["layers"][0]["class_name"] == "Conv2D":
-            input_shape = config["config"]["layers"][0]["config"].pop("batch_input_shape", None)
-            if input_shape:
-                config["config"]["layers"].insert(0, {
-                    "class_name": "InputLayer",
-                    "config": {
-                        "batch_input_shape": input_shape,
-                        "dtype": "float32",
-                        "name": "input"
-                    }
-                })
+        input_shape = config["config"]["layers"][0]["config"].pop("batch_input_shape", None)
+        if input_shape:
+            config["config"]["layers"].insert(0, {
+                "class_name": "InputLayer",
+                "config": {
+                    "batch_input_shape": input_shape,
+                    "dtype": "float32",
+                    "name": "input"
+                }
+            })
     model_json = json.dumps(config)
     return model_from_json(model_json, custom_objects=customObjectScopes)
-
-def loadWeights(model, path):
-    try:
-        print("Attemping to load NN model weights from", path)
-        model.load_weights(path)
-    except Exception as e:
-        print(e)
-        print("Warning: Model weights could not be loaded. This is likely because you are using an old model which was built in a previous version of tensorflow. Trying to load layer by layer...")
-
-        name_map = {
-            'conv2d': 'conv2d',
-            'conv2d_2': 'conv2d_1',
-            'conv2d_4': 'conv2d_2',
-            'conv2d_6': 'conv2d_3',
-            'conv2d_8': 'conv2d_4',
-            'dense': 'dense',
-            'dense_2': 'dense_1',
-        }
-
-        # print("\n--- Model layers ---")
-        # for l in model.layers:
-        #     print(l.name, [w.shape.as_list() for w in l.weights])
-        # print("\n--- Checkpoint layers ---")
-        # with h5py.File(path, 'r') as f:
-        #     for layer_name in f.keys():
-        #         print(f"Layer group: {layer_name}")
-        #         for key in f[layer_name].keys():
-        #             print(f"  Key: {key}, type: {type(f[layer_name][key])}")
-        #             if isinstance(f[layer_name][key], h5py.Group):
-        #                 for subkey in f[layer_name][key].keys():
-        #                     print(f"    Subkey: {subkey}, type: {type(f[layer_name][key][subkey])}")
-            
-        with h5py.File(path, 'r') as f:
-            layer_group = f['_layer_checkpoint_dependencies']
-            for layer_name in layer_group.keys():
-                vars_group = layer_group[layer_name]['vars']
-                
-                # Find the corresponding model layer by name (you must have layer names)
-                model_layer_name = name_map.get(layer_name)
-                if model_layer_name is None:
-                    print(f"Skipping {layer_name}")
-                    continue
-                model_layer = next((l for l in model.layers if l.name == model_layer_name), None)
-
-                if model_layer is None:
-                    print(f"Layer {layer_name} not found in model.")
-                    continue
-
-                model_vars = model_layer.weights
-                if len(model_vars) != len(vars_group):
-                    print(f"Warning: Variable count mismatch for layer {layer_name}: model {len(model_vars)} vs checkpoint {len(vars_group)}")
-
-                for var, (var_name, dataset) in zip(model_vars, vars_group.items()):
-                    print(f"Assigning {var.name} {var.shape} <- {var_name} {dataset.shape}")
-                    if var.shape == dataset.shape:
-                        var.assign(dataset[()])
-                    else:
-                        print(f"Shape mismatch for {var.name}: model {var.shape}, checkpoint {dataset.shape}")

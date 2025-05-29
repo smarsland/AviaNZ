@@ -250,9 +250,9 @@ class ConfigLoader(object):
                 else:
                     model = NNModels.loadModelFromJson(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json')
                     if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5'):
-                        NNModels.loadWeights(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
+                        model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
                     elif os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
-                        NNModels.loadWeights(model, os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
+                        model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
                     model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
                     if 'fRange' in filt["NN"]:
                         targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],

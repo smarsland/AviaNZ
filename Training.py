@@ -385,7 +385,7 @@ class NNtrain:
         # Load the model and prepare
         model = NNModels.loadModelFromJson(model)
         # Load weights into new model
-        NNModels.loadWeights(model, self.bestweight)
+        model.load_weights(self.bestweight)
         # Compile the model
         model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'],
                       metrics=self.LearningDict['metrics'])
