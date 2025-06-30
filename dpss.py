@@ -347,7 +347,7 @@ def _fftconvolve(in1, in2, mode="full", axis=None):
     """
     #Locally import stuff only required for this:
     from scipy.fftpack import fftn, fft, ifftn, ifft
-    from numpy import array, product
+    from numpy import array, prod
     try:
         from scipy.signal._signaltools import _centered
     except ModuleNotFoundError:
@@ -390,7 +390,7 @@ def _fftconvolve(in1, in2, mode="full", axis=None):
     if mode == "full":
         return ret
     elif mode == "same":
-        if product(s1,axis=0) > product(s2,axis=0):
+        if prod(s1,axis=0) > prod(s2,axis=0):
             osize = s1
         else:
             osize = s2
