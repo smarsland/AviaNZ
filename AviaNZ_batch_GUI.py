@@ -1158,7 +1158,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def reviewClickedAll(self):
         self.species = self.w_spe1.currentText()
-        self.review(True)
+        self.review(quick=False)
 
     def reviewClickedSingle(self):
         self.species = self.w_spe1.currentText()
@@ -1166,185 +1166,221 @@ class AviaNZ_reviewAll(QMainWindow):
             msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
             msg.exec()
         else:
-            # Use batched review for quick review
-            self.review_batched()
+            self.review(quick=True)
 
-    def review(self,reviewAll):
+    def setupReview(self):
+        """ Common setup for both review types """
         self.reviewer = self.w_reviewer.text()
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Enter Reviewer", "Please enter reviewer name")
             msg.exec()
-            return
+            return False
 
         if self.dirName == '':
             msg = SupportClasses_GUI.MessagePopup("w", "Select Folder", "Please select a folder to process!")
             msg.exec()
-            return
+            return False
 
         # Update config based on provided settings
         self.config['window_width'] = self.winwidthBox.value()
         self.config['incr'] = self.incrBox.value()
         self.ConfigLoader.configwrite(self.config, self.configfile)
+        return True
 
-        # LIST ALL WAV + DATA pairs that can be processed
+    def getSoundFiles(self):
+        """ Get list of all processable sound files """
         allsoundfiles = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 filenamef = os.path.join(root, filename)
                 if (filename.lower().endswith('.wav') or filename.lower().endswith('.flac') or filename.lower().endswith('.bmp')) and os.path.isfile(filenamef + '.data'):
                     allsoundfiles.append(filenamef)
-        total = len(allsoundfiles)
-        #print(total, "files found")
+        return allsoundfiles
 
-        # main file review loop
+    def review(self, quick=False):
+        """ 
+        Unified review method that handles both one-by-one and quick review modes.
+        
+        Args:
+            quick (bool): If False, reviews file-by-file (one-by-one mode).
+                         If True, collects all segments first, then reviews in quick mode.
+        """
+        if not self.setupReview():
+            return
+
+        allsoundfiles = self.getSoundFiles()
+        total = len(allsoundfiles)
+
+        # Initialize variables
         cnt = 0
         filesuccess = 1
-        self.sps = []
-        msgtext = ""
         self.update()
         self.repaint()
 
-        for filename in allsoundfiles:
-            self.filename = filename
+        if quick:
+            # Collect all segments first, then process together
+            self.quickSegments = []
+            self.quickFiles = []
+            self.quickFileSegments = {}
+            
+            # Collect segments from all files
+            for filename in allsoundfiles:
+                self.filename = filename
+                cnt += 1
+                print("*** Collecting from file %d / %d : %s ***" % (cnt, total, filename))
+                self.statusBar().showMessage("Collecting from file " + str(cnt) + "/" + str(total) + "...")
+                self.update()
+                self.repaint()
 
-            cnt=cnt+1
-            print("*** Reviewing file %d / %d : %s ***" % (cnt, total, filename))
-            self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
-            self.update()
-            self.repaint()
-
-            if os.stat(filename).st_size < 1000:
-                print("Warning: file %s empty, skipping" % filename)
-                continue
-
-            # check if file is formatted correctly
-            if filename.lower().endswith('.wav'):
-                with open(filename, 'br') as f:
-                    if f.read(4) != b'RIFF':
-                        print("Warning: WAV file %s not formatted correctly, skipping" % filename)
-                        continue
-                self.batmode = False
-            elif filename.lower().endswith('.flac'):
-                with open(filename, 'br') as f:
-                    if f.read(4) != b'fLaC':
-                        print("Warning: FLAC file %s not formatted correctly, skipping" % filename)
-                        continue
-                self.batmode = False
-            elif filename.lower().endswith('.bmp'):
-                with open(filename, 'br') as f:
-                    if f.read(2) != b'BM':
-                        print("Warning: BMP file %s not formatted correctly" % filename)
-                        continue
-                self.batmode = True
-            else:
-                print("Warning: file %s format not recognised " % filename)
-                continue
-
-            # Load segments
-            with pg.BusyCursor():
-                self.allsegments = Segment.SegmentList()
-                self.allsegments.parseJSON(filename+'.data')
-
-                self.segments = Segment.SegmentList()
-                self.segments.parseJSON(filename+'.data')
-
-                # Separate out segments which do not need review
-                self.goodsegments = []
-                for seg in reversed(self.segments):
-                    goodenough = True
-                    for lab in seg[4]:
-                        if lab["certainty"] <= self.certBox.value():
-                            goodenough = False
-                    if goodenough:
-                        self.goodsegments.append(seg)
-                        self.segments.remove(seg)
-
-            # Skip review dialog if there's no segments passing relevant criteria
-            # (self.segments will have all species even if only one is being reviewed)
-            if len(self.segments)==0 or self.species!='All species' and len(self.segments.getSpecies(self.species))==0:
-                print("No segments found in file %s" % filename)
-                filesuccess = 1
-                continue
-
-            # Split segments into chunks if requested
-            if self.chunksizeManual.isChecked():
-                chunksize = self.chunksizeBox.value()
-                self.segments.splitLongSeg(species=self.species, maxlen=chunksize)
-            else:
-                # Leave all (chunksize = max segment length)
-                chunksize = 0
-                thisspsegs = self.segments.getSpecies(self.species)
-                for si in thisspsegs:
-                    seg = self.segments[si]
-                    chunksize = max(chunksize, seg[1]-seg[0])
-                print("Auto-setting view size to:", chunksize)
-
-            _ = self.segments.orderTime()
-
-            # file has >=1 segments to review,
-            # so call the right dialog:
-            # (they will update self.segments and store corrections)
-            if reviewAll:
-                filesuccess = self.review_all(filename)
-            else:
-                # For quick review (single species), check if we should batch across files
-                if hasattr(self, '_use_batched_review') and self._use_batched_review:
-                    # Add segments to batch collection and continue
-                    if not hasattr(self, '_batch_segments'):
-                        self._batch_segments = []
-                        self._batch_files = []
-                        self._batch_file_segments = {}
-                    
-                    # Store segments with their source file
-                    relevant_indices = self.segments.getSpecies(self.species) if self.species != 'All species' else range(len(self.segments))
-                    for idx in relevant_indices:
-                        seg = self.segments[idx]
-                        self._batch_segments.append((seg, filename, idx))
-                    
-                    self._batch_files.append(filename)
-                    self._batch_file_segments[filename] = {
-                        'segments': self.segments,
-                        'goodsegments': self.goodsegments,
-                        'chunksize': chunksize
-                    }
-                    
-                    # Continue to next file
-                    filesuccess = 1
+                segments_data = self.processFileForReview(filename)
+                if segments_data is None:
                     continue
+                
+                chunksize = segments_data['chunksize']
+
+                # Collect segments for quick processing
+                relevantIndices = self.segments.getSpecies(self.species) if self.species != 'All species' else range(len(self.segments))
+                for idx in relevantIndices:
+                    seg = self.segments[idx]
+                    self.quickSegments.append((seg, filename, idx))
+                
+                self.quickFiles.append(filename)
+                self.quickFileSegments[filename] = {
+                    'segments': self.segments,
+                    'goodsegments': self.goodsegments,
+                    'chunksize': chunksize
+                }
+
+            # Process all collected segments in quick mode
+            if len(self.quickSegments) > 0:
+                totalSegments = len(self.quickSegments)
+                print(f"Processing {totalSegments} segments across multiple files with pagination")
+                
+                success = self.reviewAllSegmentsQuick(self.quickSegments)
+                if success == 0:
+                    print("Review stopped")
+                    filesuccess = 0
                 else:
-                    filesuccess = self.review_single(filename, chunksize)
+                    self.saveQuickResults()
+            else:
+                # No segments found for review
+                msg = SupportClasses_GUI.MessagePopup("w", "No Segments", "No segments found to review!")
+                msg.exec()
+                return
+        else:
+            # ONE-BY-ONE MODE: Process each file individually
+            for filename in allsoundfiles:
+                self.filename = filename
+                cnt += 1
+                print("*** Reviewing file %d / %d : %s ***" % (cnt, total, filename))
+                self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
+                self.update()
+                self.repaint()
 
-            # TODO sort out how to do this if we want to fix the split in a filter
-            # merge back any split segments, plus ANY overlaps within calltypes
-            # (NOTE: applied to either review type to get identical results)
-            # SRM: Have removed this for now, since it gets in the way of Harry's desire for a way to have multiple segments
-            #todelete = self.segments.mergeSplitSeg()
-            #for dl in todelete:
-                #del self.segments[dl]
-            # SRM: I think it's right anyway -- use should specify what they want it processing
+                # Process this file (load segments, validate, etc.)
+                segments_data = self.processFileForReview(filename)
+                if segments_data is None:
+                    continue  # Skip this file
+                
+                chunksize = segments_data['chunksize']
 
-            # break out of review loop if Esc detected
-            # (return value will be 1 for correct close, 0 for Esc)
-            if filesuccess == 0:
-                print("Review stopped")
-                break
+                # Review all species in this file
+                filesuccess = self.reviewAllSegmentsOneByOne(filename)
 
-            if reviewAll:
+                # break out of review loop if Esc detected
+                if filesuccess == 0:
+                    print("Review stopped")
+                    break
+
                 # save changes and corrections (on nice exit only):
                 if self.config['saveCorrections']:
                     self.saveCorrections()
                 self.finishDeleting()
 
-            # otherwise re-add the segments that were good enough to skip review,
-            # and save the corrected segment JSON
-            self.segments.extend(self.goodsegments)
-            self.segments.extend(self.toadd)
-            cleanexit = self.segments.saveJSON(filename+'.data', self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save segments!")
-        # END of main review loop
+                # otherwise re-add the segments that were good enough to skip review,
+                # and save the corrected segment JSON
+                self.segments.extend(self.goodsegments)
+                self.segments.extend(self.toadd)
+                cleanexit = self.segments.saveJSON(filename+'.data', self.reviewer)
+                if cleanexit != 1:
+                    print("Warning: could not save segments!")
 
+        # Common cleanup for both modes
+        self.finishReview(cnt, total, filesuccess)
+
+    def processFileForReview(self, filename):
+        """Process a single file for review. Returns segments data or None if file should be skipped."""
+        if os.stat(filename).st_size < 1000:
+            print("Warning: file %s empty, skipping" % filename)
+            return None
+
+        # check if file is formatted correctly
+        if filename.lower().endswith('.wav'):
+            with open(filename, 'br') as f:
+                if f.read(4) != b'RIFF':
+                    print("Warning: WAV file %s not formatted correctly, skipping" % filename)
+                    return None
+            self.batmode = False
+        elif filename.lower().endswith('.flac'):
+            with open(filename, 'br') as f:
+                if f.read(4) != b'fLaC':
+                    print("Warning: FLAC file %s not formatted correctly, skipping" % filename)
+                    return None
+            self.batmode = False
+        elif filename.lower().endswith('.bmp'):
+            with open(filename, 'br') as f:
+                if f.read(2) != b'BM':
+                    print("Warning: BMP file %s not formatted correctly" % filename)
+                    return None
+            self.batmode = True
+        else:
+            print("Warning: file %s format not recognised " % filename)
+            return None
+
+        # Load segments
+        with pg.BusyCursor():
+            self.allsegments = Segment.SegmentList()
+            self.allsegments.parseJSON(filename+'.data')
+
+            self.segments = Segment.SegmentList()
+            self.segments.parseJSON(filename+'.data')
+
+            # Separate out segments which do not need review
+            self.goodsegments = []
+            for seg in reversed(self.segments):
+                goodenough = True
+                for lab in seg[4]:
+                    if lab["certainty"] <= self.certBox.value():
+                        goodenough = False
+                if goodenough:
+                    self.goodsegments.append(seg)
+                    self.segments.remove(seg)
+
+        # Skip review dialog if there's no segments passing relevant criteria
+        if len(self.segments)==0 or self.species!='All species' and len(self.segments.getSpecies(self.species))==0:
+            print("No segments found in file %s" % filename)
+            return None
+
+        # Split segments into chunks if requested
+        if self.chunksizeManual.isChecked():
+            chunksize = self.chunksizeBox.value()
+            self.segments.splitLongSeg(species=self.species, maxlen=chunksize)
+        else:
+            # Leave all (chunksize = max segment length)
+            chunksize = 0
+            thisspsegs = self.segments.getSpecies(self.species)
+            for si in thisspsegs:
+                seg = self.segments[si]
+                chunksize = max(chunksize, seg[1]-seg[0])
+            print("Auto-setting view size to:", chunksize)
+
+        _ = self.segments.orderTime()
+
+        return {'chunksize': chunksize}
+
+    def finishReview(self, cnt, total, filesuccess):
+        """Common cleanup and messaging for both review types"""
         with pg.BusyCursor():
             # delete old results (xlsx)
             # ! WARNING: any Detection...xlsx files will be DELETED,
@@ -1380,45 +1416,8 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.StandardButton.Yes:
                 QApplication.exit(1)
 
-    def review_batched(self):
-        """ Handles batched review across multiple files for Quick Review.
-            Collects segments from multiple files and processes them all in one dialog
-            with the HumanClassify2 pagination system handling the batching.
-        """
-        # Enable batched mode
-        self._use_batched_review = True
-        self._batch_segments = []
-        self._batch_files = []
-        self._batch_file_segments = {}
-        
-        # First, collect all segments across files by calling regular review
-        self.review(False)
-        
-        # Now process the collected segments in one dialog with pagination
-        if not hasattr(self, '_batch_segments') or len(self._batch_segments) == 0:
-            msg = SupportClasses_GUI.MessagePopup("w", "No Segments", "No segments found to review!")
-            msg.exec()
-            return
-            
-        total_segments = len(self._batch_segments)
-        print(f"Processing {total_segments} segments across multiple files with pagination")
-        
-        # Process all segments in one dialog
-        success = self.review_all_segments_batched(self._batch_segments)
-        if success == 0:
-            print("Review stopped")
-        
-        # Save all modified segments back to their files
-        self.save_batched_results()
-        
-        # Clean up
-        delattr(self, '_use_batched_review')
-        delattr(self, '_batch_segments')
-        delattr(self, '_batch_files')
-        delattr(self, '_batch_file_segments')
-
-    def review_all_segments_batched(self, batch_segments):
-        """ Reviews all batched segments in a single dialog with pagination.
+    def reviewAllSegmentsQuick(self, quick_segments):
+        """ Reviews all segments in quick mode using a single dialog with pagination.
             Returns 1 for clean completion, 0 for Esc press.
         """
         from collections import defaultdict
@@ -1426,7 +1425,7 @@ class AviaNZ_reviewAll(QMainWindow):
         
         # Group segments by file for efficient loading
         segments_by_file = defaultdict(list)
-        for seg, filename, orig_idx in batch_segments:
+        for seg, filename, orig_idx in quick_segments:
             segments_by_file[filename].append((seg, orig_idx))
         
         # Create segment list and spectrogram list for all segments
@@ -1436,7 +1435,7 @@ class AviaNZ_reviewAll(QMainWindow):
         
         idx_counter = 0
         for filename, file_segments in segments_by_file.items():
-            file_data = self._batch_file_segments[filename]
+            file_data = self.quickFileSegments[filename]
             chunksize = file_data['chunksize']
             
             # Determine file format
@@ -1512,9 +1511,9 @@ class AviaNZ_reviewAll(QMainWindow):
                     all_indices.append(idx_counter)
                     
                     # Store mapping back to original file/index
-                    if not hasattr(self, '_batch_mapping'):
-                        self._batch_mapping = {}
-                    self._batch_mapping[idx_counter] = (filename, orig_idx)
+                    if not hasattr(self, '_quick_mapping'):
+                        self._quick_mapping = {}
+                    self._quick_mapping[idx_counter] = (filename, orig_idx)
                     
                     idx_counter += 1
                     
@@ -1524,7 +1523,7 @@ class AviaNZ_reviewAll(QMainWindow):
                     all_segment_list.addSegment(seg)
                     all_sps.append(None)
                     all_indices.append(idx_counter)
-                    self._batch_mapping[idx_counter] = (filename, orig_idx)
+                    self._quick_mapping[idx_counter] = (filename, orig_idx)
                     idx_counter += 1
         
         if len(all_segment_list) == 0:
@@ -1554,7 +1553,7 @@ class AviaNZ_reviewAll(QMainWindow):
             guides = None
         
         # Create and show dialog with ALL segments - let HumanClassify2 handle pagination
-        dialog_title = f"Batch Review - {self.species} ({len(all_segment_list)} segments)"
+        dialog_title = f"Quick Review - {self.species} ({len(all_segment_list)} segments)"
         dialog = Dialogs.HumanClassify2(all_sps, sgs, all_segment_list, all_indices,
                                        self.species, lut, self.config['invertColourMap'],
                                        self.config['brightness'], self.config['contrast'],
@@ -1565,14 +1564,14 @@ class AviaNZ_reviewAll(QMainWindow):
             dialog.resize(self.dialogSize)
             dialog.move(self.dialogPos)
         
-        dialog.finish.clicked.connect(lambda: self.humanClassifyClose2_batch(dialog))
+        dialog.finish.clicked.connect(lambda: self.humanClassifyClose2_quick(dialog))
         dialog.setModal(True)
         success = dialog.exec()
         
         return success
 
-    def humanClassifyClose2_batch(self, dialog):
-        """ Handles the close event for batched review dialog """
+    def humanClassifyClose2_quick(self, dialog):
+        """ Handles the close event for quick review dialog """
         # Store dialog properties
         self.dialogSize = dialog.size()
         self.dialogPos = dialog.pos()
@@ -1582,34 +1581,34 @@ class AviaNZ_reviewAll(QMainWindow):
             self.config['brightness'] = 100-self.config['brightness']
         
         # Process button states and update segments
-        if not hasattr(self, '_batch_changes'):
-            self._batch_changes = {}
+        if not hasattr(self, '_quick_changes'):
+            self._quick_changes = {}
             
         for btn in dialog.buttons:
             btn.stopPlayback()
-            batch_idx = btn.index
+            quick_idx = btn.index
             
-            if batch_idx in self._batch_mapping:
-                filename, orig_idx = self._batch_mapping[batch_idx]
+            if quick_idx in self._quick_mapping:
+                filename, orig_idx = self._quick_mapping[quick_idx]
                 
-                if filename not in self._batch_changes:
-                    self._batch_changes[filename] = {}
+                if filename not in self._quick_changes:
+                    self._quick_changes[filename] = {}
                 
                 # Store the button state for later processing
-                self._batch_changes[filename][orig_idx] = btn.mark
+                self._quick_changes[filename][orig_idx] = btn.mark
         
         dialog.done(1)
 
-    def save_batched_results(self):
-        """ Saves all changes from batched review back to the original files """
-        if not hasattr(self, '_batch_changes'):
+    def saveQuickResults(self):
+        """ Saves all changes from quick review back to the original files """
+        if not hasattr(self, '_quick_changes'):
             return
             
-        for filename, changes in self._batch_changes.items():
-            if filename not in self._batch_file_segments:
+        for filename, changes in self._quick_changes.items():
+            if filename not in self.quickFileSegments:
                 continue
                 
-            file_data = self._batch_file_segments[filename]
+            file_data = self.quickFileSegments[filename]
             segments = file_data['segments']
             goodsegments = file_data['goodsegments']
             
@@ -1660,9 +1659,9 @@ class AviaNZ_reviewAll(QMainWindow):
                 print(f"Warning: could not save segments for {filename}!")
         
         # Clean up
-        delattr(self, '_batch_changes')
-        if hasattr(self, '_batch_mapping'):
-            delattr(self, '_batch_mapping')
+        delattr(self, '_quick_changes')
+        if hasattr(self, '_quick_mapping'):
+            delattr(self, '_quick_mapping')
 
     def exportExcel(self):
         """ Launched manually by pressing the button.
@@ -1815,10 +1814,9 @@ class AviaNZ_reviewAll(QMainWindow):
         return 1
 
     def humanClassifyClose2(self):
-        print("RUNNING humanClassifyClose2")
         todelete = []
         self.toadd = []
-        # initialize correction file. All "downgraded" segments will be stored
+        # initialize correction file. All changed segments will be stored
         outputErrors = []
 
         for btn in self.humanClassifyDialog2.buttons:
@@ -1885,7 +1883,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # done - the segments will be saved by the main loop
         return
 
-    def review_all(self, filename):
+    def reviewAllSegmentsOneByOne(self, filename):
         """ Initializes all species dialog.
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
@@ -1903,15 +1901,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
-        if self.config['BirdListLong'] is None:
-            # If don't have a long birdreview_all list,
-            # check the length of the short bird list is OK, and otherwise split it
-            # 40 is a bit random, but 20 in a list is long enough!
-            if len(self.shortBirdList) > 40:
-                self.longBirdList = self.shortBirdList.copy()
-                self.shortBirdList = self.shortBirdList[:40]
-            else:
-                self.longBirdList = None
         
         self.knownCalls = self.ConfigLoader.knownCalls(self.config['KnownCallsList'], self.configdir)
 
@@ -1966,9 +1955,14 @@ class AviaNZ_reviewAll(QMainWindow):
             The Spectrogram containing these are loaded into self.sps.
         """
         with pg.BusyCursor():
-            # delete old instances to force release memory
-            for sp in reversed(range(len(self.sps))):
-                del self.sps[sp]
+            # Initialize or clean up spectrograms list
+            if hasattr(self, 'sps') and self.sps:
+                # delete old instances to force release memory
+                for sp in reversed(range(len(self.sps))):
+                    del self.sps[sp]
+            else:
+                self.sps = []
+            
             minsg = 1
             maxsg = 1
             gc.collect()
