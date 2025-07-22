@@ -1176,7 +1176,12 @@ class WaveletSegment:
             bgpow = np.zeros(len(nodelist))
             for node_ix in range(len(nodelist)):
                 E, _ = wf.extractE(nodelist[node_ix], window, wpantialias=True)
-                bgpow[node_ix] = np.mean(np.log(E[quietframes]))
+                quietframes = np.where(E < np.quantile(E, 0.1))[0]
+                if len(quietframes) > 0:
+                    E_safe = np.maximum(E, 1e-10)
+                    bgpow[node_ix] = np.mean(np.log(E_safe[quietframes]))
+                else:
+                    bgpow[node_ix] = np.log(np.maximum(np.mean(E), 1e-10))
 
             # for each window, interpolate wind (log) energy in each target node:
             pred = np.zeros((datalen, len(nodelist)))
@@ -1194,6 +1199,7 @@ class WaveletSegment:
                     qrbiasadjust = 0.4
 
             tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
+            windE = np.maximum(windE, 1e-10)
             windE = np.log(windE)
             for w in range(datalen):
                 regy = windE[w, :]
@@ -1274,6 +1280,8 @@ class WaveletSegment:
             if alg==1:
                 segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
             else:
+                epsilon = 1e-10
+                E = np.maximum(E, epsilon)
                 segm1 = ce_detect.launchDetector2(E, 1, realmaxlen, alpha=alpha, printing=printing).astype('float')
 
             # here's how you would extract segment means:
@@ -1288,6 +1296,8 @@ class WaveletSegment:
         # keep only S and their positions:
         if np.shape(detected)[0]>0:
             detected = detected[np.logical_or(detected[:,2]==ord('s'), detected[:,2]==ord('o')), 0:2]
+        else:
+            detected = np.empty((0,2))
 
         # now, need to go over the segments and find any overlapping ones (i.e. combine across nodes).
         # NOTE: will sort them
