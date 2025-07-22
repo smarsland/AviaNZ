@@ -1166,7 +1166,8 @@ class AviaNZ_reviewAll(QMainWindow):
             msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
             msg.exec()
         else:
-            self.review(False)
+            # Use batched review for quick review
+            self.review_batched()
 
     def review(self,reviewAll):
         self.reviewer = self.w_reviewer.text()
@@ -1287,7 +1288,32 @@ class AviaNZ_reviewAll(QMainWindow):
             if reviewAll:
                 filesuccess = self.review_all(filename)
             else:
-                filesuccess = self.review_single(filename, chunksize)
+                # For quick review (single species), check if we should batch across files
+                if hasattr(self, '_use_batched_review') and self._use_batched_review:
+                    # Add segments to batch collection and continue
+                    if not hasattr(self, '_batch_segments'):
+                        self._batch_segments = []
+                        self._batch_files = []
+                        self._batch_file_segments = {}
+                    
+                    # Store segments with their source file
+                    relevant_indices = self.segments.getSpecies(self.species) if self.species != 'All species' else range(len(self.segments))
+                    for idx in relevant_indices:
+                        seg = self.segments[idx]
+                        self._batch_segments.append((seg, filename, idx))
+                    
+                    self._batch_files.append(filename)
+                    self._batch_file_segments[filename] = {
+                        'segments': self.segments,
+                        'goodsegments': self.goodsegments,
+                        'chunksize': chunksize
+                    }
+                    
+                    # Continue to next file
+                    filesuccess = 1
+                    continue
+                else:
+                    filesuccess = self.review_single(filename, chunksize)
 
             # TODO sort out how to do this if we want to fix the split in a filter
             # merge back any split segments, plus ANY overlaps within calltypes
@@ -1353,6 +1379,290 @@ class AviaNZ_reviewAll(QMainWindow):
             reply = msg.exec()
             if reply == QMessageBox.StandardButton.Yes:
                 QApplication.exit(1)
+
+    def review_batched(self):
+        """ Handles batched review across multiple files for Quick Review.
+            Collects segments from multiple files and processes them all in one dialog
+            with the HumanClassify2 pagination system handling the batching.
+        """
+        # Enable batched mode
+        self._use_batched_review = True
+        self._batch_segments = []
+        self._batch_files = []
+        self._batch_file_segments = {}
+        
+        # First, collect all segments across files by calling regular review
+        self.review(False)
+        
+        # Now process the collected segments in one dialog with pagination
+        if not hasattr(self, '_batch_segments') or len(self._batch_segments) == 0:
+            msg = SupportClasses_GUI.MessagePopup("w", "No Segments", "No segments found to review!")
+            msg.exec()
+            return
+            
+        total_segments = len(self._batch_segments)
+        print(f"Processing {total_segments} segments across multiple files with pagination")
+        
+        # Process all segments in one dialog
+        success = self.review_all_segments_batched(self._batch_segments)
+        if success == 0:
+            print("Review stopped")
+        
+        # Save all modified segments back to their files
+        self.save_batched_results()
+        
+        # Clean up
+        delattr(self, '_use_batched_review')
+        delattr(self, '_batch_segments')
+        delattr(self, '_batch_files')
+        delattr(self, '_batch_file_segments')
+
+    def review_all_segments_batched(self, batch_segments):
+        """ Reviews all batched segments in a single dialog with pagination.
+            Returns 1 for clean completion, 0 for Esc press.
+        """
+        from collections import defaultdict
+        import Spectrogram
+        
+        # Group segments by file for efficient loading
+        segments_by_file = defaultdict(list)
+        for seg, filename, orig_idx in batch_segments:
+            segments_by_file[filename].append((seg, orig_idx))
+        
+        # Create segment list and spectrogram list for all segments
+        all_segment_list = Segment.SegmentList()
+        all_sps = []
+        all_indices = []
+        
+        idx_counter = 0
+        for filename, file_segments in segments_by_file.items():
+            file_data = self._batch_file_segments[filename]
+            chunksize = file_data['chunksize']
+            
+            # Determine file format
+            if filename.lower().endswith('.bmp'):
+                batmode = True
+            else:
+                batmode = False
+            
+            # Load file metadata
+            if batmode:
+                # For bat files, get duration from existing segments
+                duration = max(seg[1] for seg, _ in file_segments) + 1.0
+                samplerate = 1  # Placeholder for bmp files
+            else:
+                import soundfile as sf
+                info = sf.info(filename)
+                samplerate = info.samplerate
+                duration = info.frames / samplerate
+            
+            # Get frequency range
+            minFreq = max(self.fLow.value(), 0)
+            maxFreq = min(self.fHigh.value(), samplerate//2) if not batmode else 200000
+            
+            # Process each segment from this file
+            for seg, orig_idx in file_segments:
+                # Create spectrogram for this segment
+                sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
+                
+                if chunksize > 0:
+                    halfChunk = 1.1/2 * chunksize
+                    mid = (seg[0]+seg[1])/2
+                    x1 = max(0, mid-halfChunk)
+                    x2 = min(duration, mid+halfChunk)
+                    x1nob = max(seg[0], x1)
+                    x2nob = min(seg[1], x2)
+                else:
+                    x1nob = seg[0]
+                    x2nob = seg[1]
+                    x1 = max(x1nob - self.config['reviewSpecBuffer'], 0)
+                    x2 = min(x2nob + self.config['reviewSpecBuffer'], duration)
+                
+                # Load spectrogram data
+                try:
+                    if batmode:
+                        sp.readBmp(filename, off=x1, duration=x2-x1, silent=True)
+                        sp.sg = sp.normalisedSpec("Batmode")
+                    else:
+                        sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=True)
+                        sp.data = SignalProc.bandpassFilter(sp.data, sp.audioFormat.sampleRate(), minFreq, maxFreq)
+                        sp.sg = sp.spectrogram(window_width=self.config['window_width'], 
+                                             incr=self.config['incr'],
+                                             window=self.config['windowType'],
+                                             sgType=self.config['sgType'],
+                                             sgScale=self.config['sgScale'],
+                                             nfilters=self.config['nfilters'],
+                                             mean_normalise=self.config['sgMeanNormalise'],
+                                             equal_loudness=self.config['sgEqualLoudness'],
+                                             onesided=self.config['sgOneSided'])
+                        
+                        # Trim spectrogram to frequency range
+                        height = sp.audioFormat.sampleRate()//2 / np.shape(sp.sg)[1]
+                        pixelstart = int(minFreq/height)
+                        pixelend = int(maxFreq/height)
+                        sp.sg = sp.sg[:,pixelstart:pixelend]
+                    
+                    # Store unbuffered limits
+                    sp.x1nobspec = sp.convertAmpltoSpec(x1nob-x1)
+                    sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
+                    
+                    # Add to collections
+                    all_segment_list.addSegment(seg)
+                    all_sps.append(sp)
+                    all_indices.append(idx_counter)
+                    
+                    # Store mapping back to original file/index
+                    if not hasattr(self, '_batch_mapping'):
+                        self._batch_mapping = {}
+                    self._batch_mapping[idx_counter] = (filename, orig_idx)
+                    
+                    idx_counter += 1
+                    
+                except Exception as e:
+                    print(f"Error loading segment from {filename}: {e}")
+                    # Add placeholder
+                    all_segment_list.addSegment(seg)
+                    all_sps.append(None)
+                    all_indices.append(idx_counter)
+                    self._batch_mapping[idx_counter] = (filename, orig_idx)
+                    idx_counter += 1
+        
+        if len(all_segment_list) == 0:
+            return 1
+        
+        # Set up color map
+        cmap = self.config['cmap']
+        pos, colour, mode = colourMaps.colourMaps(cmap)
+        cmap = pg.ColorMap(pos, colour)
+        lut = cmap.getLookupTable(0.0, 1.0, 256)
+        
+        # Create normalized spectrograms
+        sgs = []
+        for sp in all_sps:
+            if sp is not None:
+                if batmode:
+                    sgs.append(sp.sg)
+                else:
+                    sgs.append(sp.normalisedSpec(self.config['sgNormMode']))
+            else:
+                sgs.append(None)
+        
+        # Set up frequency guides
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and batmode):
+            guides = self.config['guidepos']
+        else:
+            guides = None
+        
+        # Create and show dialog with ALL segments - let HumanClassify2 handle pagination
+        dialog_title = f"Batch Review - {self.species} ({len(all_segment_list)} segments)"
+        dialog = Dialogs.HumanClassify2(all_sps, sgs, all_segment_list, all_indices,
+                                       self.species, lut, self.config['invertColourMap'],
+                                       self.config['brightness'], self.config['contrast'],
+                                       guidefreq=guides, guidecol=self.config['guidecol'],
+                                       loop=self.loopBox.isChecked(), filename=dialog_title)
+        
+        if hasattr(self, 'dialogPos'):
+            dialog.resize(self.dialogSize)
+            dialog.move(self.dialogPos)
+        
+        dialog.finish.clicked.connect(lambda: self.humanClassifyClose2_batch(dialog))
+        dialog.setModal(True)
+        success = dialog.exec()
+        
+        return success
+
+    def humanClassifyClose2_batch(self, dialog):
+        """ Handles the close event for batched review dialog """
+        # Store dialog properties
+        self.dialogSize = dialog.size()
+        self.dialogPos = dialog.pos()
+        self.config['brightness'] = dialog.specControls.brightSlider.value()
+        self.config['contrast'] = dialog.specControls.contrSlider.value()
+        if not self.config['invertColourMap']:
+            self.config['brightness'] = 100-self.config['brightness']
+        
+        # Process button states and update segments
+        if not hasattr(self, '_batch_changes'):
+            self._batch_changes = {}
+            
+        for btn in dialog.buttons:
+            btn.stopPlayback()
+            batch_idx = btn.index
+            
+            if batch_idx in self._batch_mapping:
+                filename, orig_idx = self._batch_mapping[batch_idx]
+                
+                if filename not in self._batch_changes:
+                    self._batch_changes[filename] = {}
+                
+                # Store the button state for later processing
+                self._batch_changes[filename][orig_idx] = btn.mark
+        
+        dialog.done(1)
+
+    def save_batched_results(self):
+        """ Saves all changes from batched review back to the original files """
+        if not hasattr(self, '_batch_changes'):
+            return
+            
+        for filename, changes in self._batch_changes.items():
+            if filename not in self._batch_file_segments:
+                continue
+                
+            file_data = self._batch_file_segments[filename]
+            segments = file_data['segments']
+            goodsegments = file_data['goodsegments']
+            
+            todelete = []
+            toadd = []
+            
+            # Process changes for this file
+            for orig_idx, mark in changes.items():
+                if orig_idx >= len(segments):
+                    continue
+                    
+                seg = segments[orig_idx]
+                
+                if mark == "red":
+                    # Remove all labels for the current species
+                    wipedAll = seg.wipeSpecies(self.species)
+                    if wipedAll:
+                        todelete.append(orig_idx)
+                elif mark == "yellow":
+                    # Set uncertainty
+                    seg.questionLabels(self.species)
+                elif mark == "green":
+                    # Confirm labels
+                    seg.confirmLabels(self.species)
+                elif mark == "blue":
+                    # Duplicate segment
+                    seg.confirmLabels(self.species)
+                    new_seg = copy.deepcopy(seg)
+                    new_seg[0] += 0.1
+                    new_seg[1] += 0.1
+                    new_seg[2] += 50
+                    new_seg[3] += 50
+                    toadd.append(new_seg)
+            
+            # Apply deletions (reverse order to preserve indices)
+            for idx in reversed(sorted(todelete)):
+                del segments[idx]
+            
+            # Add new segments
+            segments.extend(toadd)
+            
+            # Re-add good segments
+            segments.extend(goodsegments)
+            
+            # Save the file
+            cleanexit = segments.saveJSON(filename + '.data', self.reviewer)
+            if cleanexit != 1:
+                print(f"Warning: could not save segments for {filename}!")
+        
+        # Clean up
+        delattr(self, '_batch_changes')
+        if hasattr(self, '_batch_mapping'):
+            delattr(self, '_batch_mapping')
 
     def exportExcel(self):
         """ Launched manually by pressing the button.

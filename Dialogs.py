@@ -2229,8 +2229,8 @@ class HumanClassify2(QDialog):
 
         # this is the starting index of the first button, which we change when we flip pages
         self.butStart = 0
-        self.maxCols = 10
-        self.maxRows = 10
+        self.maxCols = 5
+        self.maxRows = 5
 
         self.createButtons()
         self.specControls.emitAll()  # applies initial colour, volume levels
