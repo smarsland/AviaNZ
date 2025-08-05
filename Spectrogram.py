@@ -23,7 +23,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import scipy.signal as signal
-import scipy.fftpack as fft
+#import scipy.fftpack as fft
+import pyfftw as fft
 from scipy.stats import boxcox
 import pyflac
 import resampy
@@ -266,7 +267,7 @@ class Spectrogram:
             img2 = np.rot90(img2, 1, (1,0))
             w, h = h, w
         else:
-            print("ERROR: image does not appear to be in DoC format!")
+            print("ERROR: image does not appear to be in DOC format!")
             print("Format details:")
             print(img2)
             print(h, w)
@@ -490,7 +491,7 @@ class Spectrogram:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=128,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,stop=None,singleIm=True):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=128,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,complex_values=False,stop=None,singleIm=True):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -507,10 +508,6 @@ class Spectrogram:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
 
-        #S = librosa.feature.melspectrogram(self.data, sr=self.sampleRate, power=1)
-        #log_S = librosa.amplitude_to_db(S, ref=np.max)
-        #self.sg = librosa.pcen(S * (2**31))
-        #return self.sg.T
         if window_width is None:
             window_width = self.window_width
         if incr is None:
@@ -520,9 +517,13 @@ class Spectrogram:
         if len(data) <= window_width:
             window_width = len(data) - 1
 
-        self.sg = np.copy(data)
-        if self.sg.dtype != 'float':
-            self.sg = self.sg.astype('float')
+        self.sg = np.zeros((((len(data)-window_width)//incr)+1,2*window_width))
+        if complex_values:
+            self.sg = self.sg.astype(complex)
+
+        #self.sg = np.copy(data)
+        #if self.sg.dtype != 'float':
+            #self.sg = self.sg.astype('float')
 
         # Set of window options
         if window=='Hann':
@@ -561,12 +562,13 @@ class Spectrogram:
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
 
         if equal_loudness:
-            self.sg = self.equalLoudness(self.sg)
+            data = self.equalLoudness(data)
 
         if mean_normalise:
-            self.sg -= self.sg.mean()
+            data -= data.mean()
 
-        starts = range(0, len(self.sg) - window_width, incr)
+        starts = range(0, len(data) - window_width + 1, incr)
+        #starts = range(0, len(self.sg) - window_width, incr)
         # Returns either multiple channels or sums them and returns one
         if sgType=='Multi-tapered':
             # TODO: hard param -- 3 tapers
@@ -574,28 +576,33 @@ class Spectrogram:
                 import dpss
                 [tapers, eigen] = dpss.dpss(window_width, 2.5, 3)
                 counter = 0
-                out = np.zeros(shape=(len(starts),window_width // 2,3))
+                out = np.zeros(shape=(len(starts),window_width,3))
                 for start in starts:
-                    Sk, weights, eigen = dpss.pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=window_width)
+                    Sk, weights, eigen = dpss.pmtm(data[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=window_width)
                     Sk = abs(Sk)**2
                     #Sk = np.mean(Sk.T * weights, axis=1)
                     for taper in range(3):
-                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][:window_width // 2].T
+                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][:window_width].T
                     counter += 1  
                 if singleIm:
                     out = np.squeeze(np.sum(out,axis=2))
                 self.sg = out
+                #print("MT: ",np.shape(out))
             else:
                 print("Option not available")
         elif sgType=='Reassigned':
             ft = np.zeros((len(starts), window_width),dtype='complex')
             ft2 = np.zeros((len(starts), window_width),dtype='complex')
             for i in starts:
-                winddata = window * self.sg[i:i + window_width]
-                ft[i // incr, :] = fft.fft(winddata)[:window_width]
-                winddata = window * np.roll(self.sg[i:i + window_width],1)
-                ft2[i // incr, :] = fft.fft(winddata)[:window_width]
+                winddata = window * data[i:i + window_width]
+                #ft[i // incr, :] = fft.fft(winddata)[:window_width]
+                ft[i // incr, :] = fft.interfaces.scipy_fft.fft(winddata)[:window_width]
 
+                winddata = window * np.roll(data[i:i + window_width],1)
+                #ft2[i // incr, :] = fft.fft(winddata)[:window_width]
+                ft2[i // incr, :] = fft.interfaces.scipy_fft.fft(winddata)[:window_width]
+
+            #print("RS: ",np.shape(ft))
             # Approximate the derivative by finite differences and get the angle of the complex number
             CIF = np.mod(np.angle(ft*np.conj(ft2))/(2*np.pi),1.0)
             delay = (0.5 - np.mod(np.angle(ft*np.conj(np.roll(ft,1,axis=1)))/(2*np.pi),1.0))
@@ -605,44 +612,45 @@ class Spectrogram:
             times = np.tile(np.arange(0, (len(data) - window_width)/self.audioFormat.sampleRate(), incr/self.audioFormat.sampleRate()) + window_width/self.audioFormat.sampleRate()/2,(np.shape(delay)[1],1)).T + delay*window_width/self.audioFormat.sampleRate()
             #times = np.tile(np.arange(0, (len(data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
+            #print("RS: ",np.shape(self.sg))
 
-            self.sg = np.absolute(self.sg[:, :window_width //2]) #+ 0.1
+            self.sg = np.absolute(self.sg[:, :window_width]) #+ 0.1
 
-            print("SG range:", np.min(self.sg),np.max(self.sg))
-        else:
+            #print("SG range:", np.min(self.sg),np.max(self.sg))
+        else: # Normal spectrogram
             if need_even:
-                starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
+                starts = np.hstack((starts, np.zeros((window_width - len(data) % window_width),dtype=int)))
 
             # this mode is optimized for speed, but reportedly sometimes
             # results in crashes when lots of large files are batch processed.
             # The FFTs here could be causing this, but I'm not sure.
-            # hi_mem = False should switch FFTs to go over smaller vectors
-            # and possibly use less caching, at the cost of 1.5x longer CPU time.
-            hi_mem = True
-            if hi_mem:
-                ft = np.zeros((len(starts), window_width))
-                for i in starts:
-                    ft[i // incr, :] = self.sg[i:i + window_width]
-                ft = np.multiply(window, ft)
+            fftBuffer = np.zeros(2*window_width)
+            #fftBuffer = np.zeros((len(starts), 2*window_width))
+            for i in starts:
+                #fftBuffer[i // incr, window_width//2:3*window_width//2] = np.multiply(window,data[i:i + window_width])
+                #print(np.shape(window),np.shape(data))
+                fftBuffer[window_width//2:3*window_width//2] = np.multiply(window,data[i:i + window_width])
+                fftBuffer = fft.interfaces.scipy_fft.fftshift(fftBuffer)
 
-                if onesided:
-                    self.sg = np.absolute(fft.fft(ft)[:, :window_width //2])
-                else:
-                    self.sg = np.absolute(fft.fft(ft))
-            else:
-                if onesided:
-                    ft = np.zeros((len(starts), window_width//2))
-                    for i in starts:
-                        winddata = window * self.sg[i:i + window_width]
-                        ft[i // incr, :] = fft.fft(winddata)[:window_width//2]
-                else:
-                    ft = np.zeros((len(starts), window_width))
-                    for i in starts:
-                        winddata = window * self.sg[i:i + window_width]
-                        ft[i // incr, :] = fft.fft(winddata)
-                self.sg = np.absolute(ft)
-            
-            del ft
+                #fftBuffer = fft.fftshift(fftBuffer,axes=1)
+                # For exact match with matlab
+                fftBuffer = np.roll(fftBuffer,-1)
+                #fftBuffer = np.roll(fftBuffer,-1,axis=1)
+                self.sg[i//incr,:] = fft.interfaces.scipy_fft.fft(fftBuffer)
+
+            #fftBuffer = np.multiply(window, fftBuffer)
+
+            if onesided:
+                self.sg = self.sg[:,:window_width]
+                #self.sg = fft.fft(fft.fftshift(fftBuffer))[:, :window_width]
+            #else:
+                #fftBuffer = fft.fftshift(fftBuffer,axes=1)
+                #fftBuffer = np.roll(fftBuffer,-1)
+                #self.sg = fft.fft(fftBuffer)
+
+            if not complex_values:
+                self.sg = np.absolute(self.sg)
+            del fftBuffer
             gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
 
@@ -708,11 +716,13 @@ class Spectrogram:
         p = 2 * np.pi * np.outer(f, 1 / f_half[1:])
         window = np.exp(-p ** 2 / 2).T
 
-        f_tran = fft.fft(self.audiodata, 2*width, overwrite_x=True)
+        f_tran = fft.interfaces.scipy_fft.fft(self.audiodata, 2*width, overwrite_x=True)
+        #f_tran = fft.fft(self.audiodata, 2*width, overwrite_x=True)
         diag_con = np.linalg.toeplitz(np.conj(f_tran[:width + 1]), f_tran)
         # Remove zero freq line
         diag_con = diag_con[1:width + 1, :]  
-        return np.flipud(fft.ifft(diag_con * window, axis=1))
+        return np.flipud(fft.interfaces.scipy_fft.ifft(diag_con * window, axis=1))
+        #return np.flipud(fft.ifft(diag_con * window, axis=1))
 
     def wiener_entropy(self,sg):
         return np.sum(np.log(sg),1)/np.shape(sg)[1] - np.log(np.sum(sg,1)/np.shape(sg)[1])
@@ -726,7 +736,8 @@ class Spectrogram:
         return freqs,mf
 
     def goodness_of_pitch(self,spectral_deriv,sg):
-        return np.max(np.abs(fft.fft(spectral_deriv/sg, axis=0)),axis=0)
+        return np.max(np.abs(fft.interfaces.scipy_fft.fft(spectral_deriv/sg, axis=0)),axis=0)
+        #return np.max(np.abs(fft.fft(spectral_deriv/sg, axis=0)),axis=0)
 
     def spectral_derivative(self, window_width, incr, K=2, threshold=0.5, returnAll=False):
         """ Compute the spectral derivative """
@@ -745,7 +756,8 @@ class Spectrogram:
         for k in range(K):
             for i in starts:
                 sg[i // incr, :, k] = tapers[:, k] * self.data[i:i + window_width]
-            sg[:, :, k] = fft.fft(sg[:, :, k])
+            sg[:, :, k] = fft.interfaces.scipy_fft.fft(sg[:, :, k])
+            #sg[:, :, k] = fft.fft(sg[:, :, k])
         sg = sg[:, window_width//2:, :]
 
         # Spectral derivative is the real part of exp(i \phi) \sum_ k s_k conj(s_{k+1}) where s_k is the k-th tapered spectrogram

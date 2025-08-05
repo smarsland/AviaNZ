@@ -5,7 +5,8 @@
 # SignalProc.py
 # This file holds signal processing functions that don't use the full spectrogram or audio data
 import scipy.signal as signal
-import scipy.fftpack as fft
+import pyfftw as fft
+#import scipy.fftpack as fft
 import numpy as np
 import copy
 import Spectrogram
@@ -194,22 +195,29 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
 
 # TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
-def invertSpectrogram(sg,window_width=256,incr=64,nits=10, window='Hann'):
+def invertSpectrogram(sg,window_width=256,incr=64,nits=10, window='Hamming'):
     # Assumes that this is the plain (not power) spectrogram
-    # Make the spectrogram two-sided and make the values small
-    sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
+    sp = Spectrogram.Spectrogram()
+    # Assume the spectrogram is a bmp, so it is real (no phase) and one-sided, make it two-sided
+    #sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
+    print(np.shape(sg))
 
-    sg_best = copy.deepcopy(sg)
+    current_sg = copy.deepcopy(sg)
     for i in range(nits):
-        invertedSgram = inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0), window=window)
-        self.setData(invertedSgram)
-        est = self.spectrogram(window_width, incr, onesided=False,need_even=True, window=window)
-        phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
-        sg_best = sg * phase[:len(sg)]
-    invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False, window=window)
-    return np.real(invertedSgram)
+        new_wave = inversion_iteration(current_sg, incr, calculate_offset=True, iteration=i, window=window)
+        sp.setData(new_wave)
+        new_sg = sp.spectrogram(window_width, incr, onesided=False,need_even=False, complex_values=True, window=window)
+        if new_sg.shape[1] != sg.shape[1]:
+            new_sg = new_sg[:,sg.shape[1]]
+        new_phase = new_sg / np.maximum(np.max(sg)/1E8, np.abs(new_sg))
+        print(np.shape(new_phase),np.shape(new_sg),np.shape(sg))
+        current_sg = sg * new_phase
+        #print(np.max(current_sg))
 
-def inversion_iteration(sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
+    #new_wave = inversion_iteration(current_sg, incr, calculate_offset=True, iteration=nits, window=window)
+    return new_wave
+
+def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='Hamming'):
     """
     Under MSR-LA License
     Based on MATLAB implementation from Spectrogram Inversion Toolbox
@@ -226,80 +234,80 @@ def inversion_iteration(sg, incr, calculate_offset=True, set_zero_phase=True, wi
     Magnitude Spectra. IEEE Transactions on Audio Speech and
     Language Processing, 08/2007.
     """
-    size = int(np.shape(sg)[1] // 2)
-    wave = np.zeros((np.shape(sg)[0] * incr + size),dtype='float64')
+    windowSize = int(np.shape(sg)[1] // 2)
+    wave = np.zeros(((np.shape(sg)[0]) * incr + windowSize - 1),dtype='float64')
     # Getting overflow warnings with 32 bit...
     #wave = wave.astype('float64')
-    total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
+    total_windowing_sum = np.zeros(((np.shape(sg)[0]) * incr + windowSize - 1))
     #Virginia: adding different windows
 
     
    # Set of window options
     if window=='Hann':
         # This is the Hann window
-        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
+        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)))
     elif window=='Parzen':
         # Parzen (window_width even)
-        n = np.arange(size) - 0.5*size
-        window = np.where(np.abs(n)<0.25*size,1 - 6*(n/(0.5*size))**2*(1-np.abs(n)/(0.5*size)), 2*(1-np.abs(n)/(0.5*size))**3)
+        n = np.arange(windowSize) - 0.5*windowSize
+        window = np.where(np.abs(n)<0.25*windowSize,1 - 6*(n/(0.5*windowSize))**2*(1-np.abs(n)/(0.5*windowSize)), 2*(1-np.abs(n)/(0.5*windowSize))**3)
     elif window=='Welch':
         # Welch
-        window = 1.0 - ((np.arange(size) - 0.5*(size-1))/(0.5*(size-1)))**2
+        window = 1.0 - ((np.arange(windowSize) - 0.5*(windowSize-1))/(0.5*(windowSize-1)))**2
     elif window=='Hamming':
         # Hamming
         alpha = 0.54
         beta = 1.-alpha
-        window = alpha - beta*np.cos(2 * np.pi * np.arange(size) / (size - 1))
+        window = alpha - beta*np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1))
     elif window=='Blackman':
         # Blackman
         alpha = 0.16
         a0 = 0.5*(1-alpha)
         a1 = 0.5
         a2 = 0.5*alpha
-        window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1))
+        window = a0 - a1*np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)) + a2*np.cos(4 * np.pi * np.arange(windowSize) / (windowSize - 1))
     elif window=='BlackmanHarris':
         # Blackman-Harris
         a0 = 0.358375
         a1 = 0.48829
         a2 = 0.14128
         a3 = 0.01168
-        window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1)) - a3*np.cos(6 * np.pi * np.arange(size) / (size - 1))
+        window = a0 - a1*np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)) + a2*np.cos(4 * np.pi * np.arange(windowSize) / (windowSize - 1)) - a3*np.cos(6 * np.pi * np.arange(windowSize) / (windowSize - 1))
     elif window=='Ones':
-        window = np.ones(size)
+        window = np.ones(windowSize)
     else:
         print("Unknown window, using Hann")
-        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
+        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)))
 
-    est_start = int(size // 2) - 1
-    est_end = est_start + size
+    fft_start = int(windowSize // 2) -1
+    fft_end = fft_start + windowSize 
     for i in range(sg.shape[0]):
-        wave_start = int(incr * i)
-        wave_end = wave_start + size
-        if set_zero_phase:
-            spectral_slice = sg[i].real + 0j
+        wave_start = incr * i
+        wave_end = wave_start + windowSize 
+        if np.iscomplex(sg).any():
+            sg_col = sg[i,:]
         else:
-            # already complex
-            spectral_slice = sg[i]
+            print("Treating as complex")
+            sg_col = sg[i,:].real + 0j
+        wave_est = np.real(fft.interfaces.scipy_fft.fftshift(fft.interfaces.scipy_fft.ifft(sg_col)))
 
-        wave_est = np.real(fft.ifft(spectral_slice))[::-1]
-        if calculate_offset and i > 0:
-            offset_size = size - incr
-            print("Offset: ",offset_size)
-            if offset_size <= 0:
-                print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
-                offset_size = incr
-            print(wave_start, est_start, offset_size, len(wave), len(wave_est), est_start+offset_size<len(wave_est))
-            offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
-            print("New offset: ",offset)
+        if calculate_offset and i > 0 and iteration==0:
+            offset_size = windowSize - incr 
+            cor = fast_xcorr(wave[wave_start:wave_start+offset_size],wave_est[fft_start:fft_start+offset_size])
+            ind = np.argmax(cor[offset_size//2:-offset_size//2])+offset_size//2
+            bestOffset = ind-offset_size
+            print("Offset: ",bestOffset)
+            #print(wave_start, wave_end, len(wave), est_start, offset_size, bestOffset)
+            #offset = xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
+            #print("New offset: ",offset)
         else:
-            offset = 0
-        print(wave_end-wave_start, len(window), est_end-est_start,len(wave_est), len(wave),est_start, offset)
-        if est_end-offset >= size:
-            offset+=(est_end-offset-size)
-            wave_end-=(est_end-offset-size)
-        wave[wave_start:wave_end] += window * wave_est[est_start - offset:est_end - offset]
-        total_windowing_sum[wave_start:wave_end] += window**2 #Virginia: needed square
-    wave = np.real(wave) / (total_windowing_sum + 1E-6)
+            bestOffset = 0
+        #if est_end-offset >= windowSize:
+            #offset+=(est_end-offset-windowSize)
+            #wave_end-=(est_end-offset-windowSize)
+        wave[wave_start:wave_end] += wave_est[fft_start - bestOffset:fft_end - bestOffset]
+        total_windowing_sum[wave_start:wave_end] += window #**2 #Virginia: needed square
+    inds = np.where(total_windowing_sum!=0)
+    wave = np.real(wave[inds]) / total_windowing_sum[inds]
     return wave
 
 def xcorr_offset(x1, x2):
@@ -311,6 +319,12 @@ def xcorr_offset(x1, x2):
     corrs[:half] = -1E30
     corrs[-half:] = -1E30
     return corrs.argmax() - len(x1)
+
+def fast_xcorr(x1,x2):
+    X1 = fft.interfaces.scipy_fft.fft(np.hstack((x1, 0*x1)))
+    X2 = fft.interfaces.scipy_fft.fft(np.hstack((x2, 0*x2)))
+    y = fft.interfaces.scipy_fft.fftshift(fft.interfaces.scipy_fft.ifft(X1*np.conj(X2)))
+    return y[1:]
 
 def medianFilter(data,width=11):
     # Median Filtering
