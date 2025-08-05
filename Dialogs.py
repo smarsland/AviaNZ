@@ -1811,14 +1811,14 @@ class HumanClassify1(QDialog):
     def zoomOut(self):
         self.wPlot.zoomOut()
 
-    def setSegNumbers(self, accepted, deleted, total):
-        #print(accepted,deleted,total)
-        text1 = "calls accepted: " + str(accepted) + ", deleted: " + str(deleted)
-        text2 = str(total - accepted - deleted) + " to go"
+    def setSegNumbers(self, accepted, deleted, questioned, total):
+        #print(accepted,deleted,questioned,total)
+        text1 = "calls accepted: " + str(accepted) + ", deleted: " + str(deleted) + ", questioned: " + str(questioned)
+        text2 = str(total - accepted - deleted - questioned) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
         # based on these, update "previous" arrow status
-        self.buttonPrev.setEnabled((accepted+deleted)>0)
+        self.buttonPrev.setEnabled((accepted+deleted+questioned)>0)
         self.update()
         QApplication.processEvents()
     

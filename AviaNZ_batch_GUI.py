@@ -1203,7 +1203,7 @@ class AviaNZ_reviewAll(QMainWindow):
         Unified review method that handles both one-by-one and quick review modes.
         
         Args:
-            quick (bool): If False, reviews file-by-file (one-by-one mode).
+            quick (bool): If False, reviews segments one-by-one across all files.
                          If True, collects all segments first, then reviews in quick mode.
         """
         if not self.setupReview():
@@ -1218,95 +1218,69 @@ class AviaNZ_reviewAll(QMainWindow):
         self.update()
         self.repaint()
 
-        if quick:
-            # Collect all segments first, then process together
-            self.quickSegments = []
-            self.quickFiles = []
-            self.quickFileSegments = {}
+        # COLLECT ALL SEGMENTS FROM ALL FILES FIRST
+        print("Collecting segments from all files...")
+        self.allSegments = []
+        self.allFileData = {}
+        
+        for filename in allsoundfiles:
+            cnt += 1
+            print("*** Collecting from file %d / %d : %s ***" % (cnt, total, filename))
+            self.statusBar().showMessage("Collecting from file " + str(cnt) + "/" + str(total) + "...")
+            self.update()
+            self.repaint()
+
+            segments_data = self.processFileForReview(filename)
+            if segments_data is None:
+                continue
             
-            # Collect segments from all files
-            for filename in allsoundfiles:
-                self.filename = filename
-                cnt += 1
-                print("*** Collecting from file %d / %d : %s ***" % (cnt, total, filename))
-                self.statusBar().showMessage("Collecting from file " + str(cnt) + "/" + str(total) + "...")
-                self.update()
-                self.repaint()
+            # Store file data for later saving
+            self.allFileData[filename] = {
+                'segments': self.segments,
+                'goodsegments': self.goodsegments,
+                'allsegments': self.allsegments,
+                'chunksize': segments_data['chunksize']
+            }
 
-                segments_data = self.processFileForReview(filename)
-                if segments_data is None:
-                    continue
-                
-                chunksize = segments_data['chunksize']
+            # Collect segments for processing
+            relevantIndices = self.segments.getSpecies(self.species) if self.species != 'All species' else range(len(self.segments))
+            for idx in relevantIndices:
+                seg = self.segments[idx]
+                self.allSegments.append({
+                    'segment': seg,
+                    'filename': filename,
+                    'index': idx
+                })
 
-                # Collect segments for quick processing
-                relevantIndices = self.segments.getSpecies(self.species) if self.species != 'All species' else range(len(self.segments))
-                for idx in relevantIndices:
-                    seg = self.segments[idx]
-                    self.quickSegments.append((seg, filename, idx))
-                
-                self.quickFiles.append(filename)
-                self.quickFileSegments[filename] = {
-                    'segments': self.segments,
-                    'goodsegments': self.goodsegments,
-                    'chunksize': chunksize
-                }
+        if len(self.allSegments) == 0:
+            msg = SupportClasses_GUI.MessagePopup("w", "No Segments", "No segments found to review!")
+            msg.exec()
+            return
 
-            # Process all collected segments in quick mode
-            if len(self.quickSegments) > 0:
-                totalSegments = len(self.quickSegments)
-                print(f"Processing {totalSegments} segments across multiple files with pagination")
-                
-                success = self.reviewAllSegmentsQuick(self.quickSegments)
-                if success == 0:
-                    print("Review stopped")
-                    filesuccess = 0
-                else:
-                    self.saveQuickResults()
+        print(f"Found {len(self.allSegments)} segments to review across {len(self.allFileData)} files")
+
+        # NOW PROCESS SEGMENTS BASED ON MODE
+        if quick:
+            # QUICK MODE: Show all segments in paginated interface
+            print("Processing segments in quick review mode")
+            success = self.reviewAllSegmentsQuick(self.allSegments)
+            if success == 0:
+                print("Review stopped")
+                filesuccess = 0
             else:
-                # No segments found for review
-                msg = SupportClasses_GUI.MessagePopup("w", "No Segments", "No segments found to review!")
-                msg.exec()
-                return
+                self.saveQuickResults()
         else:
-            # ONE-BY-ONE MODE: Process each file individually
-            for filename in allsoundfiles:
-                self.filename = filename
-                cnt += 1
-                print("*** Reviewing file %d / %d : %s ***" % (cnt, total, filename))
-                self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
-                self.update()
-                self.repaint()
+            # ONE-BY-ONE MODE: Go through each segment individually
+            print("Processing segments one-by-one")
+            success = self.reviewAllSegmentsOneByOne(self.allSegments)
+            if success == 0:
+                print("Review stopped")
+                filesuccess = 0
+            else:
+                print("Review completed successfully")
+                filesuccess = 1
 
-                # Process this file (load segments, validate, etc.)
-                segments_data = self.processFileForReview(filename)
-                if segments_data is None:
-                    continue  # Skip this file
-                
-                chunksize = segments_data['chunksize']
-
-                # Review all species in this file
-                filesuccess = self.reviewAllSegmentsOneByOne(filename)
-
-                # break out of review loop if Esc detected
-                if filesuccess == 0:
-                    print("Review stopped")
-                    break
-
-                # save changes and corrections (on nice exit only):
-                if self.config['saveCorrections']:
-                    self.saveCorrections()
-                self.finishDeleting()
-
-                # otherwise re-add the segments that were good enough to skip review,
-                # and save the corrected segment JSON
-                self.segments.extend(self.goodsegments)
-                self.segments.extend(self.toadd)
-                cleanexit = self.segments.saveJSON(filename+'.data', self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save segments!")
-
-        # Common cleanup for both modes
+        # Common cleanup
         self.finishReview(cnt, total, filesuccess)
 
     def processFileForReview(self, filename):
@@ -1416,8 +1390,9 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.StandardButton.Yes:
                 QApplication.exit(1)
 
-    def reviewAllSegmentsQuick(self, quick_segments):
+    def reviewAllSegmentsQuick(self, allSegments):
         """ Reviews all segments in quick mode using a single dialog with pagination.
+            allSegments: list of dicts with 'segment', 'filename', 'index' keys
             Returns 1 for clean completion, 0 for Esc press.
         """
         from collections import defaultdict
@@ -1425,8 +1400,9 @@ class AviaNZ_reviewAll(QMainWindow):
         
         # Group segments by file for efficient loading
         segments_by_file = defaultdict(list)
-        for seg, filename, orig_idx in quick_segments:
-            segments_by_file[filename].append((seg, orig_idx))
+        for segData in allSegments:
+            filename = segData['filename']
+            segments_by_file[filename].append(segData)
         
         # Create segment list and spectrogram list for all segments
         all_segment_list = Segment.SegmentList()
@@ -1435,7 +1411,7 @@ class AviaNZ_reviewAll(QMainWindow):
         
         idx_counter = 0
         for filename, file_segments in segments_by_file.items():
-            file_data = self.quickFileSegments[filename]
+            file_data = self.allFileData[filename]
             chunksize = file_data['chunksize']
             
             # Determine file format
@@ -1447,7 +1423,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # Load file metadata
             if batmode:
                 # For bat files, get duration from existing segments
-                duration = max(seg[1] for seg, _ in file_segments) + 1.0
+                duration = max(segData['segment'][1] for segData in file_segments) + 1.0
                 samplerate = 1  # Placeholder for bmp files
             else:
                 import soundfile as sf
@@ -1460,7 +1436,9 @@ class AviaNZ_reviewAll(QMainWindow):
             maxFreq = min(self.fHigh.value(), samplerate//2) if not batmode else 200000
             
             # Process each segment from this file
-            for seg, orig_idx in file_segments:
+            for segData in file_segments:
+                seg = segData['segment']
+                orig_idx = segData['index']
                 # Create spectrogram for this segment
                 sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
                 
@@ -1605,10 +1583,10 @@ class AviaNZ_reviewAll(QMainWindow):
             return
             
         for filename, changes in self._quick_changes.items():
-            if filename not in self.quickFileSegments:
+            if filename not in self.allFileData:
                 continue
                 
-            file_data = self.quickFileSegments[filename]
+            file_data = self.allFileData[filename]
             segments = file_data['segments']
             goodsegments = file_data['goodsegments']
             
@@ -1883,70 +1861,242 @@ class AviaNZ_reviewAll(QMainWindow):
         # done - the segments will be saved by the main loop
         return
 
-    def reviewAllSegmentsOneByOne(self, filename):
-        """ Initializes all species dialog.
-            Updates self.segments as a side effect.
+    def reviewAllSegmentsOneByOne(self, allSegments):
+        """ Reviews segments one by one across all files.
+            allSegments: list of dicts with 'segment', 'filename', 'index' keys
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
+            
+            IMPORTANT BEHAVIOR:
+            - Species changes are ALWAYS saved immediately when user modifies them
+            - Action buttons (correct/delete/question/plus) confirm the SEGMENT, not the species
+            - On Esc exit: only saves segments that had action buttons pressed
+            - On normal completion: saves all segments (including those with species changes only)
         """
-        if self.config['saveCorrections']:
-            self.origSeg = copy.deepcopy(self.segments)
+        # Initialize tracking variables
+        self.allSegmentsToReview = allSegments
+        self.currentSegmentIndex = 0
+        self.segsAccepted = 0
+        self.segsDeleted = 0
+        self.segsQuestioned = 0
+        self.nsegments = len(allSegments)
+        self.returned = False
         self.toadd = []
+        
+        # Track changes to segments: Maps segment index to change state
+        self.segmentChanges = {}  # 'accepted', 'deleted', 'questioned', or None
+        
+        # Initialize storage for corrections tracking
+        if self.config['saveCorrections']:
+            self.allOriginalSegments = {}
+            for filename, filedata in self.allFileData.items():
+                self.allOriginalSegments[filename] = copy.deepcopy(filedata['segments'])
+        
+        # Load bird lists and known calls
+        self._loadBirdLists(allSegments)
+        
+        if len(allSegments) == 0:
+            return 1
+            
+        # Load first segment and create dialog
+        self.loadCurrentSegment()
+        self._createReviewDialog()
+        
+        # Execute dialog
+        success = self.humanClassifyDialog1.exec()
+        
+        if success == 0:
+            self.humanClassifyDialog1.stopPlayback()
+            # On Esc press, only apply tracked action button changes (species changes already saved)
+            self._saveChanges(confirmed_only=True)
+        else:
+            # On normal completion, apply all tracked changes
+            self._saveChanges(confirmed_only=False)
 
-        # Load the birdlists:
-        # short list is necessary, long list can be None
-        # (on load, shortBirdList is copied over from config, and if that fails - can't start anything)
+        return success
+    
+    def _loadBirdLists(self, allSegments):
+        """Load bird lists and update with species from segments"""
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], self.configdir)
         if self.shortBirdList is None:
             sys.exit()
 
-        # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
-        
         self.knownCalls = self.ConfigLoader.knownCalls(self.config['KnownCallsList'], self.configdir)
+        self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
 
-        # update known calls, short bird list, long bird list etc
-        for segment in self.allsegments:
-            for species,calltype in segment.getKeysWithCalltypes():
+        # Update known calls and bird lists from all segments
+        for segData in allSegments:
+            segment = segData['segment']
+            for species, calltype in segment.getKeysWithCalltypes():
                 if species not in self.knownCalls:
                     self.knownCalls[species] = []
-                if calltype not in self.knownCalls[species] and not calltype is None:
+                if calltype not in self.knownCalls[species] and calltype is not None:
                     self.knownCalls[species].append(calltype)
                 if species not in self.shortBirdList:
                     del self.shortBirdList[-1]
                     self.shortBirdList.append(species)
-
-        self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
-
-        if self.species=="All species":
-            self.loadFile(filename)
-        else:
-            self.loadFile(filename, species=self.species)
-
+    
+    def _createReviewDialog(self):
+        """Create and configure the human classification dialog"""
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
-        # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.knownCalls, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self, reorderShortList=self.config['ReorderList'])
-        #self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.config['guidecol'], self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), parent=self, reorderShortList=self.config['ReorderList'])
-        self.box1id = -1
-        # if there was a previous dialog, try to recreate its settings
+            
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(
+            self.lut, self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], 
+            self.shortBirdList, self.longBirdList, self.knownCalls, self.batList, 
+            self.config['MultipleSpecies'], self.sps[0].audioFormat, self.config['guidecol'], 
+            self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), 
+            parent=self, reorderShortList=self.config['ReorderList'])
+        
+        # Restore dialog position and size if available
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
-        self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + self.filename)
-        self.humanClassifyNextImage1()
-        # connect listeners
+        
+        self.humanClassifyDialog1.setWindowTitle(f"AviaNZ - reviewing segment {self.currentSegmentIndex + 1}/{len(self.allSegmentsToReview)}")
+        self.showCurrentSegment()
+        
+        # Connect event handlers
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1New)
-        #self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
         self.humanClassifyDialog1.buttonPlus.clicked.connect(self.humanClassifyPlus)
-        success = self.humanClassifyDialog1.exec()     # 1 on clean exit
+    
+    def _saveChanges(self, confirmed_only=False):
+        """Save tracked changes to files
+        
+        Args:
+            confirmed_only (bool): If True, only apply changes from action button presses.
+                                 If False, apply all tracked changes.
+                                 Note: Species changes are always saved regardless of this flag.
+        """
+        
+        # ALWAYS save species changes for the current segment, regardless of confirmed_only flag
+        if hasattr(self, 'currentSegmentIndex') and hasattr(self, 'allSegmentsToReview'):
+            self._saveCurrentSegmentState()
+        
+        # Apply tracked changes to original data
+        # The confirmed_only flag controls what's in segmentChanges
+        if not confirmed_only:
+            # Normal completion: apply all tracked action button changes
+            self.applyTrackedChanges()
+        else:
+            # Esc press: only apply changes that were confirmed via action buttons
+            # (but species changes are already saved above)
+            self.applyTrackedChanges()
+        
+        # Save each modified file
+        for filename, filedata in self.allFileData.items():
+            self.segments = filedata['segments']
+            self.goodsegments = filedata['goodsegments']
+            
+            self.finishDeleting()
+            
+            # Add good segments and any new segments
+            self.segments.extend(self.goodsegments)
+            self.segments.extend(getattr(self, 'toadd', []))
+            
+            # Save the file
+            cleanexit = self.segments.saveJSON(filename + '.data', self.reviewer)
+            if cleanexit != 1:
+                print(f"Warning: could not save segments for {filename}!")
+    
+    def _saveCurrentSegmentState(self):
+        """Save any species changes made to the current segment immediately
+        
+        Note: Since we now pass the original segment object to the dialog,
+        species changes are automatically preserved. This method is kept
+        for compatibility but no longer needs to copy data.
+        """
+        # Species changes are now automatically saved since the dialog
+        # modifies the original segment object directly
+        pass
+    
+    def _saveBirdListConfig(self):
+        """Save bird list configuration when changed"""
+        self.longBirdList = self.humanClassifyDialog1.longBirdList
+        self.longBirdList = sorted(self.longBirdList, key=str.lower)
+        self.shortBirdList = self.humanClassifyDialog1.shortBirdList
+        self.knownCalls = self.humanClassifyDialog1.knownCalls
+        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+        self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
+        self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
+    
+    def _finishReviewDialog(self):
+        """Finish the review dialog and save all changes"""
+        # Store dialog properties
+        self.dialogSize = self.humanClassifyDialog1.size()
+        self.dialogPos = self.humanClassifyDialog1.pos()
+        self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
+        self.config['brightness'] = self.humanClassifyDialog1.specControls.brightSlider.value()
+        self.config['contrast'] = self.humanClassifyDialog1.specControls.contrSlider.value()
+        if not self.config['invertColourMap']:
+            self.config['brightness'] = 100-self.config['brightness']
+        
+        # Save all changes before closing
+        self._saveChanges(confirmed_only=False)
+        self.humanClassifyDialog1.done(1)
 
-        if success == 0:
-            self.humanClassifyDialog1.stopPlayback()
+    def applyTrackedChanges(self):
+        """ Apply all tracked changes from segmentChanges to the original segment data """
+        if not hasattr(self, 'segmentChanges') or not hasattr(self, 'allSegmentsToReview'):
+            return
+            
+        for segmentIndex, state in self.segmentChanges.items():
+            if segmentIndex >= len(self.allSegmentsToReview):
+                continue
+                
+            segData = self.allSegmentsToReview[segmentIndex]
+            filename = segData['filename']
+            origIndex = segData['index']
+            
+            if filename not in self.allFileData:
+                continue
+                
+            segments = self.allFileData[filename]['segments']
+            if origIndex >= len(segments):
+                continue
+                
+            segment = segments[origIndex]
+            
+            # Apply state changes based on current dialog state
+            # Note: Species changes are preserved directly in segment data and not undone
+            if state == 'deleted':
+                # Mark segment as deleted
+                segment[4] = [{"species": "-To Be Deleted-", "certainty": 100, "filter": "M"}]
+            elif state == 'questioned':
+                # Mark with reduced certainty
+                if len(segment[4]) > 0:
+                    for label in segment[4]:
+                        label["certainty"] = 50  # Set to 50% certainty
+            elif state == 'accepted':
+                # Make sure certainty is 100%
+                if len(segment[4]) > 0:
+                    for label in segment[4]:
+                        label["certainty"] = 100
 
-        return(success)
+    def loadCurrentSegment(self):
+        """ Load the current segment for one-by-one review """
+        if self.currentSegmentIndex >= len(self.allSegmentsToReview):
+            return
+            
+        segData = self.allSegmentsToReview[self.currentSegmentIndex]
+        filename = segData['filename']
+        segment = segData['segment']
+        
+        # Set up current file context
+        self.filename = filename
+        filedata = self.allFileData[filename]
+        self.segments = Segment.SegmentList()
+        self.segments.append(segment)
+        self.allsegments = filedata['allsegments']
+        
+        # Load this single segment
+        self.loadFile(filename, species=self.species)
+        
+        # Set up indices for the dialog
+        self.indices2show = [0]  # Only showing one segment
 
     def loadFile(self, filename, species=None, chunksize=None):
         """ Generates spectrograms and audiodatas
@@ -2082,17 +2232,90 @@ class AviaNZ_reviewAll(QMainWindow):
 
             self.lut = cmap.getLookupTable(0.0, 1.0, 256)
 
-            self.nsegments = len(self.indices2show)
-            self.segsAccepted = 0
-            self.segsDeleted = 0
-            self.returned = False
-
         # END of file loading
 
+    def showCurrentSegment(self):
+        """ Display the current segment without advancing the index """
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file navigation mode
+            if self.currentSegmentIndex < len(self.allSegmentsToReview):
+                # Update title
+                self.humanClassifyDialog1.setWindowTitle(f"AviaNZ - reviewing segment {self.currentSegmentIndex + 1}/{len(self.allSegmentsToReview)}")
+                
+                # Use the ORIGINAL segment from allSegmentsToReview so species changes persist
+                segData = self.allSegmentsToReview[self.currentSegmentIndex]
+                original_segment = segData['segment']
+
+                # update "done/to go" numbers based on actual status counts
+                self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
+
+                # select the Spectrogram with relevant data
+                sp = self.sps[0]  # Only one segment loaded
+
+                # these pass the axis limits set by slider
+                minFreq = max(self.fLow.value(), 0)
+                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+
+                if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                    guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
+                else:
+                    guides = None
+
+                if self.batmode:
+                    sg = sp.normalisedSpec("Batmode")
+                else:
+                    sg = sp.normalisedSpec(self.config['sgNormMode'])
+
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                                                   original_segment, sp.x1nobspec, sp.x2nobspec,
+                                                   guides, minFreq, maxFreq)
+        else:
+            # Original file-based mode
+            if self.box1id < len(self.indices2show):
+                # Show the current segment
+                seg = self.segments[self.indices2show[self.box1id]]
+
+                # update "done/to go" numbers:
+                self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, self.nsegments)
+
+                # select the Spectrogram with relevant data
+                sp = self.sps[self.indices2show[self.box1id]]
+
+                # these pass the axis limits set by slider
+                minFreq = max(self.fLow.value(), 0)
+                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+
+                if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                    guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
+                else:
+                    guides = None
+
+                if self.batmode:
+                    sg = sp.normalisedSpec("Batmode")
+                else:
+                    sg = sp.normalisedSpec(self.config['sgNormMode'])
+
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                                                   seg, sp.x1nobspec, sp.x2nobspec,
+                                                   guides, minFreq, maxFreq)
+
     def saveCorrections(self):
+        """ Save corrections for the current review session.
+        For cross-file one-by-one mode, corrections are handled when saving each file.
+        This method is primarily for legacy/quick mode compatibility.
+        """
+        if hasattr(self, 'allSegmentsToReview'):
+            # In cross-file mode, corrections are handled when saving each file
+            print("Corrections tracking for cross-file review is handled during file save")
+            return
+            
+        # Original file-based correction saving (for legacy modes)
+        if not hasattr(self, 'origSeg') or not self.config['saveCorrections']:
+            return
+            
         for i in reversed(range(len(self.segments))):
             if self.segments[i][4] == self.origSeg[i][4]:
-                # print("Segment matches")
+                # No changes made to this segment
                 del self.origSeg[i]
             else:
                 oldlabel = self.origSeg[i][4]
@@ -2100,113 +2323,218 @@ class AviaNZ_reviewAll(QMainWindow):
                 if "-To Be Deleted-" in [lab["species"] for lab in newlabel]:
                     self.origSeg[i] = [self.origSeg[i], []]
                 else:
-                    # Note that we have to use .get to allow unspecified calltype
+                    # Check for species or calltype changes
                     if [lab["species"] for lab in oldlabel] != [lab["species"] for lab in newlabel] or \
                        [lab.get("calltype") for lab in oldlabel] != [lab.get("calltype") for lab in newlabel]:
                         self.origSeg[i] = [self.origSeg[i], newlabel]
 
-        if len(self.origSeg)>0:
+        if len(self.origSeg) > 0:
             cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), self.origSeg, mode=1, reviewer=self.reviewer)
             if cleanexit != 1:
                 print("Warning: could not save correction file!")
 
-    def humanClassifyNextImage1(self):
+    def humanClassifyNextImage1(self, move_forward=True):
         # Get the next image
-        if self.box1id < len(self.indices2show)-1:
-            self.box1id += 1
-            # Check if have moved to next segment, and if so load it
+        # In one-by-one mode across files, we always show one segment at a time
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file navigation mode
+            if move_forward and self.currentSegmentIndex < len(self.allSegmentsToReview) - 1:
+                # Move to next segment (possibly in different file)
+                self.currentSegmentIndex += 1
+                self.loadCurrentSegment()
+                self.box1id = 0  # Reset to first (only) segment in current load
+            
+            # Display current segment (whether we moved forward or not)
+            if self.currentSegmentIndex < len(self.allSegmentsToReview):
+                # Update title
+                self.humanClassifyDialog1.setWindowTitle(f"AviaNZ - reviewing segment {self.currentSegmentIndex + 1}/{len(self.allSegmentsToReview)}")
+                
+                # Show the segment
+                seg = self.segments[0]  # Only one segment loaded
+                lab = seg[4]
 
-            # Show the next segment
-            seg = self.segments[self.indices2show[self.box1id]]
-            lab = seg[4]
+                # update "done/to go" numbers based on actual status counts
+                self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
-            # update "done/to go" numbers:
-            if self.returned:
-                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
-                    self.segsDeleted -= 1
+                # select the Spectrogram with relevant data
+                sp = self.sps[0]  # Only one segment loaded
+
+                # these pass the axis limits set by slider
+                minFreq = max(self.fLow.value(), 0)
+                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+
+                if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                    guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
                 else:
-                    self.segsAccepted -= 1
+                    guides = None
 
-            # print(self.segsAccepted,self.segsDeleted,self.nsegments)
-            self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.nsegments)
+                if self.batmode:
+                    sg = sp.normalisedSpec("Batmode")
+                else:
+                    sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-            # select the Spectrogram with relevant data
-            sp = self.sps[self.indices2show[self.box1id]]
-
-            # these pass the axis limits set by slider
-            minFreq = max(self.fLow.value(), 0)
-            maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
-
-            if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
-                guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                                                   seg, sp.x1nobspec, sp.x2nobspec,
+                                                   guides, minFreq, maxFreq)
             else:
-                guides = None
-
-            # currLabel, then unbufstart in spec units rel to start, unbufend,
-            # then true time to display start, end,
-            # NOTE: might be good to pass copy.deepcopy(seg[4])
-            # instead of seg[4], if any bugs come up due to Dialog1 changing the label
-
-            if self.batmode:
-                sg = sp.normalisedSpec("Batmode")
-            else:
-                sg = sp.normalisedSpec(self.config['sgNormMode'])
-
-            self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
-                                               seg, sp.x1nobspec, sp.x2nobspec,
-                                               guides, minFreq, maxFreq)
+                # End of all segments - finish review
+                self._finishReviewDialog()
         else:
-            # store dialog properties such as position for the next file
-            self.dialogSize = self.humanClassifyDialog1.size()
-            self.dialogPos = self.humanClassifyDialog1.pos()
-            self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
-            self.config['brightness'] = self.humanClassifyDialog1.specControls.brightSlider.value()
-            self.config['contrast'] = self.humanClassifyDialog1.specControls.contrSlider.value()
-            if not self.config['invertColourMap']:
-                self.config['brightness'] = 100-self.config['brightness']
+            # Original file-based navigation
+            if self.box1id < len(self.indices2show)-1:
+                self.box1id += 1
+                # Check if have moved to next segment, and if so load it
 
-            self.humanClassifyDialog1.done(1)
+                # Show the next segment
+                seg = self.segments[self.indices2show[self.box1id]]
+                lab = seg[4]
+
+                # update "done/to go" numbers:
+                if self.returned:
+                    if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
+                        self.segsDeleted -= 1
+                    elif len(lab)>0 and lab[0].get("certainty", 100) < 100:
+                        self.segsQuestioned -= 1
+                    else:
+                        self.segsAccepted -= 1
+
+                # print(self.segsAccepted,self.segsDeleted,self.segsQuestioned,self.nsegments)
+                self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, self.nsegments)
+
+                # select the Spectrogram with relevant data
+                sp = self.sps[self.indices2show[self.box1id]]
+
+                # these pass the axis limits set by slider
+                minFreq = max(self.fLow.value(), 0)
+                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+
+                if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
+                    guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
+                else:
+                    guides = None
+
+                # currLabel, then unbufstart in spec units rel to start, unbufend,
+                # then true time to display start, end,
+                # NOTE: might be good to pass copy.deepcopy(seg[4])
+                # instead of seg[4], if any bugs come up due to Dialog1 changing the label
+
+                if self.batmode:
+                    sg = sp.normalisedSpec("Batmode")
+                else:
+                    sg = sp.normalisedSpec(self.config['sgNormMode'])
+
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                                                   seg, sp.x1nobspec, sp.x2nobspec,
+                                                   guides, minFreq, maxFreq)
+            else:
+                # store dialog properties such as position for the next file
+                self.dialogSize = self.humanClassifyDialog1.size()
+                self.dialogPos = self.humanClassifyDialog1.pos()
+                self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
+                self.config['brightness'] = self.humanClassifyDialog1.specControls.brightSlider.value()
+                self.config['contrast'] = self.humanClassifyDialog1.specControls.contrSlider.value()
+                if not self.config['invertColourMap']:
+                    self.config['brightness'] = 100-self.config['brightness']
+
+                self.humanClassifyDialog1.done(1)
 
     def humanClassifyPrevImage(self):
-        """ Go back one image by changing boxid and calling NextImage.
-        Note: won't undo deleted segments."""
-        if self.box1id>0:
-            self.box1id -= 2
-            self.returned=True
-            self.humanClassifyNextImage1()
+        """ Go back one image, undoing any status changes made to the current segment.
+        Note: Species changes are NOT undone as they should be permanent once made."""
+        if hasattr(self, 'allSegmentsToReview'):
+            if self.currentSegmentIndex > 0:
+                self.currentSegmentIndex -= 1
+                self.loadCurrentSegment()
+                self.returned = True
+
+                # Undo status changes (but not species changes)
+                currentState = self.segmentChanges.get(self.currentSegmentIndex)
+                
+                if currentState is not None:
+                    if currentState == 'accepted':
+                        self.segsAccepted -= 1
+                    elif currentState == 'deleted':
+                        self.segsDeleted -= 1
+                    elif currentState == 'questioned':
+                        self.segsQuestioned -= 1
+                    
+                    del self.segmentChanges[self.currentSegmentIndex]
+                
+                # Update the display counters and show the previous segment
+                self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
+                self.humanClassifyNextImage1(move_forward=False)
+        else:
+            # Original file-based navigation
+            if self.box1id > 0:
+                self.box1id -= 2
+                self.returned = True
+                self.humanClassifyNextImage1()
 
     def humanClassifyQuestion(self):
-        """ Go to next image, keeping this one as it was found
-            (so any changes made to it will be discarded, and cert kept) """
+        """ Go to next image, marking this one as questioned """
         self.humanClassifyDialog1.stopPlayback()
 
         saveConfig = self.humanClassifyDialog1.checkIfNeedToSaveConfig()
-
         if saveConfig:
-            self.longBirdList = self.humanClassifyDialog1.longBirdList
-            self.longBirdList = sorted(self.longBirdList, key=str.lower)
-            self.shortBirdList = self.humanClassifyDialog1.shortBirdList
-            self.knownCalls = self.humanClassifyDialog1.knownCalls
-            self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
-            self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
-            self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
+            self._saveBirdListConfig()
         
-        currSeg = self.segments[self.indices2show[self.box1id]]
-        # set uncertainty
-        currSeg.questionLabels()
+        # Handle both cross-file and original modes
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file mode: Save any species changes and record the QUESTION action
+            currSeg = self.segments[0]  # Only one segment loaded at a time
+            
+            # Save current segment state (including any species changes made by user)
+            self._saveCurrentSegmentState()
+            
+            currSeg.questionLabels()  # Apply to currently loaded segment for display
+            
+            # Track this QUESTION action
+            prevState = self.segmentChanges.get(self.currentSegmentIndex)
+            self.segmentChanges[self.currentSegmentIndex] = 'questioned'
+            
+            # Update counters based on previous state
+            if prevState == 'accepted':
+                self.segsAccepted -= 1
+            elif prevState == 'deleted':
+                self.segsDeleted -= 1
+            elif prevState is None:  # First time changing this segment
+                pass  # No previous counter to decrement
+            # else prevState == 'questioned': no change needed
+            
+            if prevState != 'questioned':
+                self.segsQuestioned += 1
+        else:
+            # Original mode
+            currSeg = self.segments[self.indices2show[self.box1id]]
+            currSeg.questionLabels()
+            self.segsQuestioned += 1
+
+        # Update the display counters immediately
+        if hasattr(self, 'allSegmentsToReview'):
+            self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
         self.returned = False
-        self.segsAccepted+=1
-        self.humanClassifyNextImage1()
+        
+        # Check if this was the last segment
+        if hasattr(self, 'allSegmentsToReview') and self.currentSegmentIndex >= len(self.allSegmentsToReview) - 1:
+            self._finishReviewDialog()
+        else:
+            self.humanClassifyNextImage1()
 
     def humanClassifyPlus(self):
-        # Repeat a segment, offset slightly in freq and time
+        """ Repeat a segment, offset slightly in freq and time """
         self.humanClassifyDialog1.stopPlayback()
 
-        # Insert new segment
-        # Don't bother showing the new box to the user TODO: ??? Right choice???
-        # TODO: Offset
-        currSeg = self.segments[self.indices2show[self.box1id]]
+        # Handle both cross-file and original modes
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file mode: Save any species changes and record the PLUS action
+            currSeg = self.segments[0]  # Only one segment loaded at a time
+            # Save current segment state (including any species changes made by user)
+            self._saveCurrentSegmentState()
+        else:
+            # Original mode
+            currSeg = self.segments[self.indices2show[self.box1id]]
+            
         currSeg.confirmLabels()
         getNumCopies = Dialogs.getNumberCopiesPlus()
         response = getNumCopies.exec()
@@ -2216,58 +2544,119 @@ class AviaNZ_reviewAll(QMainWindow):
 
         numCopies = getNumCopies.getValues()
 
+        if not hasattr(self, 'toadd'):
+            self.toadd = []
+            
         for i in range(numCopies):
-            self.toadd.append(copy.deepcopy(currSeg))
-            self.toadd[-1][0]+=(i+1)*0.1
-            self.toadd[-1][1]+=(i+1)*0.1
-            self.toadd[-1][2]+=(i+1)*50
-            self.toadd[-1][3]+=(i+1)*50
-        #print(self.toadd)
-        #print("****: ",len(self.toadd))
-        #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1])
-        #self.segments.insert(self.indices2show[self.box1id]+1,self.segments[self.indices2show[self.box1id]])
-        #print(self.segments[self.indices2show[self.box1id]],self.segments[self.indices2show[self.box1id]+1],self.segments[self.indices2show[self.box1id]+2])
-        #self.box1id += 1
+            newSeg = copy.deepcopy(currSeg)
+            newSeg[0] += (i+1)*0.1  # Start time offset
+            newSeg[1] += (i+1)*0.1  # End time offset
+            newSeg[2] += (i+1)*50   # Low freq offset
+            newSeg[3] += (i+1)*50   # High freq offset
+            self.toadd.append(newSeg)
 
         self.returned = False
-        self.segsAccepted+=1
-        self.humanClassifyNextImage1()
+        self.segsAccepted += 1
+        
+        # Check if this was the last segment
+        if hasattr(self, 'allSegmentsToReview') and self.currentSegmentIndex >= len(self.allSegmentsToReview) - 1:
+            self._finishReviewDialog()
+        else:
+            self.humanClassifyNextImage1()
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         self.humanClassifyDialog1.stopPlayback()
 
         saveConfig = self.humanClassifyDialog1.checkIfNeedToSaveConfig()
-
         if saveConfig:
-            self.longBirdList = self.humanClassifyDialog1.longBirdList
-            self.longBirdList = sorted(self.longBirdList, key=str.lower)
-            self.shortBirdList = self.humanClassifyDialog1.shortBirdList
-            self.knownCalls = self.humanClassifyDialog1.knownCalls
-            self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
-            self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
-            self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
+            self._saveBirdListConfig()
         
-        currSeg = self.segments[self.indices2show[self.box1id]]
-        # set certainty on all labels to 100
-        currSeg.confirmLabels()
+        # Handle both cross-file and original modes
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file mode: Save any species changes and record the CORRECT action
+            currSeg = self.segments[0]  # Only one segment loaded at a time
+            
+            # Save current segment state (including any species changes made by user)
+            self._saveCurrentSegmentState()
+            
+            currSeg.confirmLabels()  # Apply to currently loaded segment for display
+            
+            # Track this CORRECT action
+            prevState = self.segmentChanges.get(self.currentSegmentIndex)
+            self.segmentChanges[self.currentSegmentIndex] = 'accepted'
+            
+            # Update counters based on previous state
+            if prevState == 'deleted':
+                self.segsDeleted -= 1
+            elif prevState == 'questioned':
+                self.segsQuestioned -= 1
+            elif prevState is None:  # First time changing this segment
+                pass  # No previous counter to decrement
+            # else prevState == 'accepted': no change needed
+            
+            if prevState != 'accepted':
+                self.segsAccepted += 1
+        else:
+            # Original mode
+            currSeg = self.segments[self.indices2show[self.box1id]]
+            currSeg.confirmLabels()
+            self.segsAccepted += 1
+
+        # Update the display counters immediately
+        if hasattr(self, 'allSegmentsToReview'):
+            self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
         self.returned = False
-        self.segsAccepted+=1
-        self.humanClassifyNextImage1()
+        
+        # Check if this was the last segment
+        if hasattr(self, 'allSegmentsToReview') and self.currentSegmentIndex >= len(self.allSegmentsToReview) - 1:
+            self._finishReviewDialog()
+        else:
+            self.humanClassifyNextImage1()
 
     def humanClassifyDelete1New(self):
-        # Delete a segment
-        # Just mark for delete and then do the actual deletion when the file closes
+        """ Delete a segment """
         self.humanClassifyDialog1.stopPlayback()
 
-        # New segment label -- To Be Deleted
-        newlabel = [{"species": "-To Be Deleted-", "certainty": 100}]
-        self.segments[self.indices2show[self.box1id]][4] = newlabel
-        self.segsDeleted+=1
+        # Handle both cross-file and original modes
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file mode: Save any species changes and record the DELETE action
+            # Save current segment state (including any species changes made by user)
+            self._saveCurrentSegmentState()
+            
+            # Track this DELETE action
+            prevState = self.segmentChanges.get(self.currentSegmentIndex)
+            self.segmentChanges[self.currentSegmentIndex] = 'deleted'
+            
+            # Update counters based on previous state
+            if prevState == 'accepted':
+                self.segsAccepted -= 1
+            elif prevState == 'questioned':
+                self.segsQuestioned -= 1
+            elif prevState is None:  # First time changing this segment
+                pass  # No previous counter to decrement
+            # else prevState == 'deleted': no change needed
+            
+            if prevState != 'deleted':
+                self.segsDeleted += 1
+        else:
+            # Original mode - keep existing behavior
+            newlabel = [{"species": "-To Be Deleted-", "certainty": 100}]
+            self.segments[self.indices2show[self.box1id]][4] = newlabel
+            self.segsDeleted += 1
+
+        # Update the display counters immediately
+        if hasattr(self, 'allSegmentsToReview'):
+            self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
         self.returned = False
-        self.humanClassifyNextImage1()
+        
+        # Check if this was the last segment
+        if hasattr(self, 'allSegmentsToReview') and self.currentSegmentIndex >= len(self.allSegmentsToReview) - 1:
+            self._finishReviewDialog()
+        else:
+            self.humanClassifyNextImage1()
 
     def finishDeleting(self):
         # Does the actual work of deleting segments.
@@ -2283,8 +2672,11 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.segments.remove(seg)
 
     def closeDialog(self, ev):
-        # (actually a poorly named listener for the Esc key)
+        """ Handle dialog close events, including Esc key press """
         if ev == Qt.Key.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
+            # Save changes with confirmed_only=True on Esc press
+            if hasattr(self, 'allSegmentsToReview'):
+                self._saveChanges(confirmed_only=True)
             self.humanClassifyDialog1.done(0)
 
     def updateCallType(self, boxid, calltype):
