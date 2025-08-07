@@ -5512,27 +5512,24 @@ class AviaNZ(QMainWindow):
     def invertSpectrogram(self):
         """ Call the spectrogram inversion """
         print("Inverting spectrogram")
-        new_wave = SignalProc.invertSpectrogram(self.sg)
-        filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
-        if not filename:
-            filename = 'temp.wav'
-        else:
-            # filedialog doesn't attach extension
-            filename = str(filename)
-            if not filename.endswith('.wav'):
-                filename = filename + '.wav'
+        if self.batmode:
+            self.sp.readBmp(self.filename,repeat=False)
+
+        with pg.BusyCursor():
+            new_wave = SignalProc.invertSpectrogram(self.sp.sg)
+            #filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
+            fileMinusExtension = self.filename.rsplit('.', 1)[0]
+            filename = fileMinusExtension+'_recon.wav'
 
         if self.sp.audioFormat.sampleRate() > 48000:
-            # Ad hoc
+            # Ad hoc, but works OK
             sampleRate = 16000
         else:
             sampleRate = self.sp.audioFormat.sampleRate()
-        print(filename, sampleRate)
         sf.write(filename, new_wave, sampleRate)
-        self.toggleBatMode()
+        self.batmode=False
         # update the file list box
         self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
-        print("Loading file ",filename)
         self.loadFile(filename)
         
     def changeSettings(self):

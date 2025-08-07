@@ -195,26 +195,26 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
 
 # TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
-def invertSpectrogram(sg,window_width=256,incr=64,nits=10, window='Hamming'):
+def invertSpectrogram(sg,incr=32,nits=10,window='Hamming',bmp=True):
     # Assumes that this is the plain (not power) spectrogram
     sp = Spectrogram.Spectrogram()
-    # Assume the spectrogram is a bmp, so it is real (no phase) and one-sided, make it two-sided
-    #sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
-    print(np.shape(sg))
+    window_width = int(np.shape(sg)[1])
+    # If the spectrogram is a bmp, it is one-sided, make it two-sided
+    if bmp:
+        #sg = sg[:,::8]
+        sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
 
     current_sg = copy.deepcopy(sg)
     for i in range(nits):
         new_wave = inversion_iteration(current_sg, incr, calculate_offset=True, iteration=i, window=window)
         sp.setData(new_wave)
         new_sg = sp.spectrogram(window_width, incr, onesided=False,need_even=False, complex_values=True, window=window)
-        if new_sg.shape[1] != sg.shape[1]:
-            new_sg = new_sg[:,sg.shape[1]]
+        if new_sg.shape[0] != sg.shape[0]:
+            new_sg = new_sg[:sg.shape[0],:]
         new_phase = new_sg / np.maximum(np.max(sg)/1E8, np.abs(new_sg))
-        print(np.shape(new_phase),np.shape(new_sg),np.shape(sg))
         current_sg = sg * new_phase
-        #print(np.max(current_sg))
 
-    #new_wave = inversion_iteration(current_sg, incr, calculate_offset=True, iteration=nits, window=window)
+    new_wave = inversion_iteration(current_sg, incr, calculate_offset=False, iteration=nits, window=window)
     return new_wave
 
 def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='Hamming'):
@@ -286,7 +286,6 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
         if np.iscomplex(sg).any():
             sg_col = sg[i,:]
         else:
-            print("Treating as complex")
             sg_col = sg[i,:].real + 0j
         wave_est = np.real(fft.interfaces.scipy_fft.fftshift(fft.interfaces.scipy_fft.ifft(sg_col)))
 
@@ -295,17 +294,10 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
             cor = fast_xcorr(wave[wave_start:wave_start+offset_size],wave_est[fft_start:fft_start+offset_size])
             ind = np.argmax(cor[offset_size//2:-offset_size//2])+offset_size//2
             bestOffset = ind-offset_size
-            print("Offset: ",bestOffset)
-            #print(wave_start, wave_end, len(wave), est_start, offset_size, bestOffset)
-            #offset = xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
-            #print("New offset: ",offset)
         else:
             bestOffset = 0
-        #if est_end-offset >= windowSize:
-            #offset+=(est_end-offset-windowSize)
-            #wave_end-=(est_end-offset-windowSize)
         wave[wave_start:wave_end] += wave_est[fft_start - bestOffset:fft_end - bestOffset]
-        total_windowing_sum[wave_start:wave_end] += window #**2 #Virginia: needed square
+        total_windowing_sum[wave_start:wave_end] += window 
     inds = np.where(total_windowing_sum!=0)
     wave = np.real(wave[inds]) / total_windowing_sum[inds]
     return wave

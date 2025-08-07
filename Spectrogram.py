@@ -255,6 +255,7 @@ class Spectrogram:
         ptr = img.constBits()
         ptr.setsize(h*w*1)
         img2 = np.array(ptr).reshape(h, w)
+        print(np.shape(img2))
 
         # Determine if original image was rotated, based on expected num of freq bins and freq 0 being empty
         # We also used to check if np.median(img2[-1,:])==0,
@@ -281,10 +282,10 @@ class Spectrogram:
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
-        img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
+        #img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
         if repeat:
             img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
-        #print(np.shape(img2))
+        print(np.shape(img2))
 
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples
@@ -329,6 +330,7 @@ class Spectrogram:
 
         if not silent:
             print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
+        print(np.shape(self.sg))
         return(0)
 
     def resample(self, target):
