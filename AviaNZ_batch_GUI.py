@@ -1089,6 +1089,33 @@ class AviaNZ_reviewAll(QMainWindow):
             # this will check if other settings are OK as well
             self.validateInputs()
 
+    def refreshSpeciesList(self):
+        """Refresh the species dropdown list without affecting other settings"""
+        # Store current selection
+        currentSpecies = self.w_spe1.currentText()
+        
+        # Re-scan files to update species list
+        if hasattr(self, 'listFiles') and hasattr(self, 'dirName'):
+            self.listFiles.fill(self.dirName, None, recursive=True, readFmt=True)
+            
+            # Update species list
+            self.spList = list(self.listFiles.spList)
+            # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
+            try:
+                self.spList.remove("Don't Know")
+            except Exception:
+                pass
+                
+            # Update dropdown
+            self.w_spe1.clear()
+            self.w_spe1.addItem('All species')
+            self.w_spe1.addItems(self.spList)
+            
+            # Restore selection if it still exists
+            index = self.w_spe1.findText(currentSpecies)
+            if index >= 0:
+                self.w_spe1.setCurrentIndex(index)
+
     def fillFileList(self,fileName=None):
         """ Generates the list of files for the file listbox.
             Updates species lists and other properties of the current dir.
@@ -1324,9 +1351,21 @@ class AviaNZ_reviewAll(QMainWindow):
             self.goodsegments = []
             for seg in reversed(self.segments):
                 goodenough = True
-                for lab in seg[4]:
-                    if lab["certainty"] <= self.certBox.value():
+                if self.species == 'All species':
+                    # For "All species" mode, check all labels
+                    for lab in seg[4]:
+                        if lab["certainty"] <= self.certBox.value():
+                            goodenough = False
+                else:
+                    # For specific species mode, only check labels for that species
+                    species_labels = [lab for lab in seg[4] if lab["species"] == self.species]
+                    for lab in species_labels:
+                        if lab["certainty"] <= self.certBox.value():
+                            goodenough = False
+                    # If no labels for this species exist, keep the segment for review
+                    if not species_labels:
                         goodenough = False
+                        
                 if goodenough:
                     self.goodsegments.append(seg)
                     self.segments.remove(seg)
@@ -1375,6 +1414,10 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
+        
+        # Refresh the species list to include any new species added during review
+        self.refreshSpeciesList()
+        
         if filesuccess == 1:
             msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
@@ -2036,6 +2079,10 @@ class AviaNZ_reviewAll(QMainWindow):
         
         # Save all changes before closing
         self._saveChanges(confirmed_only=False)
+        
+        # Refresh the species list to include any new species added during review
+        self.refreshSpeciesList()
+        
         self.humanClassifyDialog1.done(1)
 
     def applyTrackedChanges(self):
@@ -2486,7 +2533,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # Save current segment state (including any species changes made by user)
             self._saveCurrentSegmentState()
             
-            currSeg.questionLabels()  # Apply to currently loaded segment for display
+            currSeg.questionLabels(None if self.species == 'All species' else self.species)  # Apply to currently loaded segment for display
             
             # Track this QUESTION action
             prevState = self.segmentChanges.get(self.currentSegmentIndex)
@@ -2506,7 +2553,7 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             # Original mode
             currSeg = self.segments[self.indices2show[self.box1id]]
-            currSeg.questionLabels()
+            currSeg.questionLabels(None if self.species == 'All species' else self.species)
             self.segsQuestioned += 1
 
         # Update the display counters immediately
@@ -2535,7 +2582,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # Original mode
             currSeg = self.segments[self.indices2show[self.box1id]]
             
-        currSeg.confirmLabels()
+        currSeg.confirmLabels(None if self.species == 'All species' else self.species)
         getNumCopies = Dialogs.getNumberCopiesPlus()
         response = getNumCopies.exec()
         
@@ -2580,7 +2627,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # Save current segment state (including any species changes made by user)
             self._saveCurrentSegmentState()
             
-            currSeg.confirmLabels()  # Apply to currently loaded segment for display
+            currSeg.confirmLabels(None if self.species == 'All species' else self.species)  # Apply to currently loaded segment for display
             
             # Track this CORRECT action
             prevState = self.segmentChanges.get(self.currentSegmentIndex)
@@ -2600,7 +2647,7 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             # Original mode
             currSeg = self.segments[self.indices2show[self.box1id]]
-            currSeg.confirmLabels()
+            currSeg.confirmLabels(None if self.species == 'All species' else self.species)
             self.segsAccepted += 1
 
         # Update the display counters immediately
