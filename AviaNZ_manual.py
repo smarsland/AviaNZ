@@ -433,7 +433,8 @@ class AviaNZ(QMainWindow):
         self.denoiseAction = actionMenu.addAction("Denoise",self.showDenoiseDialog)
         actionMenu.addAction("Add metadata about noise","Ctrl+N",self.addNoiseData)
 
-        #if not self.DOC:
+        if not self.DOC:
+            actionMenu.addAction("Invert spectrogram",self.invertSpectrogram)
             #actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             #actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
@@ -5508,6 +5509,29 @@ class AviaNZ(QMainWindow):
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
         img.save(imageFile)
 
+    def invertSpectrogram(self):
+        """ Call the spectrogram inversion """
+        print("Inverting spectrogram")
+        if self.batmode:
+            self.sp.readBmp(self.filename,repeat=False)
+
+        with pg.BusyCursor():
+            new_wave = SignalProc.invertSpectrogram(self.sp.sg)
+            #filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
+            fileMinusExtension = self.filename.rsplit('.', 1)[0]
+            filename = fileMinusExtension+'_recon.wav'
+
+        if self.sp.audioFormat.sampleRate() > 48000:
+            # Ad hoc, but works OK
+            sampleRate = 16000
+        else:
+            sampleRate = self.sp.audioFormat.sampleRate()
+        sf.write(filename, new_wave, sampleRate)
+        self.batmode=False
+        # update the file list box
+        self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
+        self.loadFile(filename)
+        
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
         """
