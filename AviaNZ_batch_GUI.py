@@ -1837,8 +1837,14 @@ class AviaNZ_reviewAll(QMainWindow):
     def humanClassifyClose2(self):
         todelete = []
         self.toadd = []
-        # initialize correction file. All changed segments will be stored
         outputErrors = []
+
+        # Apply tracked deletions from action buttons first
+        if hasattr(self, 'segmentChanges'):
+            for segmentIndex, state in self.segmentChanges.items():
+                if segmentIndex < len(self.segments):
+                    if state == 'deleted':
+                        todelete.append(segmentIndex)
 
         for btn in self.humanClassifyDialog2.buttons:
             btn.stopPlayback()
@@ -1909,11 +1915,15 @@ class AviaNZ_reviewAll(QMainWindow):
             allSegments: list of dicts with 'segment', 'filename', 'index' keys
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
             
-            IMPORTANT BEHAVIOR:
-            - Species changes are ALWAYS saved immediately when user modifies them
-            - Action buttons (correct/delete/question/plus) confirm the SEGMENT, not the species
-            - On Esc exit: only saves segments that had action buttons pressed
-            - On normal completion: saves all segments (including those with species changes only)
+            BEHAVIOR:
+            - Species changes: IMMEDIATE and IRREVERSIBLE (applied directly to segment objects)
+            - Action button changes (certainty/deletion): TRACKED and REVERSIBLE
+              * Question: sets certainty to 50%
+              * Accept: sets certainty to 100%  
+              * Delete: removes segment completely
+            
+            On Esc exit: only confirmed action button changes are saved
+            On normal completion: all changes (species + action buttons) are saved
         """
         # Initialize tracking variables
         self.allSegmentsToReview = allSegments
@@ -1923,10 +1933,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segsQuestioned = 0
         self.nsegments = len(allSegments)
         self.returned = False
-        self.toadd = []
+        self.toadd = {}  # filename -> list of new segments to add
         
-        # Track changes to segments: Maps segment index to change state
-        self.segmentChanges = {}  # 'accepted', 'deleted', 'questioned', or None
+        # Track state changes for action buttons (certainty changes and deletion)
+        self.segmentChanges = {}  # segment index -> 'accepted', 'deleted', 'questioned'
         
         # Initialize storage for corrections tracking
         if self.config['saveCorrections']:
@@ -2031,14 +2041,43 @@ class AviaNZ_reviewAll(QMainWindow):
         
         # Save each modified file
         for filename, filedata in self.allFileData.items():
-            self.segments = filedata['segments']
-            self.goodsegments = filedata['goodsegments']
+            # Start with all original segments for this file
+            all_segments = filedata['segments'] + filedata['goodsegments']
             
-            self.finishDeleting()
+            # Remove duplicates by converting to set of segment IDs and back
+            seen_segments = set()
+            unique_segments = []
+            for seg in all_segments:
+                seg_id = id(seg)
+                if seg_id not in seen_segments:
+                    seen_segments.add(seg_id)
+                    unique_segments.append(seg)
             
-            # Add good segments and any new segments
-            self.segments.extend(self.goodsegments)
-            self.segments.extend(getattr(self, 'toadd', []))
+            # Handle deletions using segmentChanges
+            if hasattr(self, 'segmentChanges') and hasattr(self, 'allSegmentsToReview'):
+                # Find which segments to delete from this file
+                segments_to_remove = []
+                for segIndex, state in self.segmentChanges.items():
+                    if state == 'deleted' and segIndex < len(self.allSegmentsToReview):
+                        segData = self.allSegmentsToReview[segIndex]
+                        if segData['filename'] == filename:
+                            segments_to_remove.append(segData['segment'])
+                
+                # Remove deleted segments
+                for seg_to_remove in segments_to_remove:
+                    if seg_to_remove in unique_segments:
+                        unique_segments.remove(seg_to_remove)
+                        
+                print(f"Deleted {len(segments_to_remove)} segments from {filename}")
+            
+            # Add any new segments
+            if hasattr(self, 'toadd') and filename in self.toadd:
+                unique_segments.extend(self.toadd[filename])
+            
+            # Use the original segments list (preserves metadata) and replace its contents
+            self.segments = filedata['segments']  # Use original to preserve metadata
+            self.segments.clear()  # Clear existing segments
+            self.segments.extend(unique_segments)  # Add all final segments
             
             # Save the file
             cleanexit = self.segments.saveJSON(filename + '.data', self.reviewer)
@@ -2048,12 +2087,15 @@ class AviaNZ_reviewAll(QMainWindow):
     def _saveCurrentSegmentState(self):
         """Save any species changes made to the current segment immediately
         
-        Note: Since we now pass the original segment object to the dialog,
-        species changes are automatically preserved. This method is kept
-        for compatibility but no longer needs to copy data.
+        IMPORTANT: Species changes are IMMEDIATE and IRREVERSIBLE.
+        When the user modifies species in the dialog, those changes are applied
+        directly to the segment object and cannot be undone.
+        
+        Only certainty changes (from action buttons) are tracked and reversible.
         """
-        # Species changes are now automatically saved since the dialog
-        # modifies the original segment object directly
+        # Species changes are automatically saved since the dialog
+        # modifies the original segment object directly.
+        # This is intentional - species changes are immediate and permanent.
         pass
     
     def _saveBirdListConfig(self):
@@ -2086,42 +2128,63 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.done(1)
 
     def applyTrackedChanges(self):
-        """ Apply all tracked changes from segmentChanges to the original segment data """
-        if not hasattr(self, 'segmentChanges') or not hasattr(self, 'allSegmentsToReview'):
+        """ Apply all tracked changes from segmentChanges to segment data 
+        
+        Note: This only handles certainty changes and deletion tracking.
+        Species changes are applied immediately and are irreversible.
+        """
+        if not hasattr(self, 'segmentChanges'):
             return
             
-        for segmentIndex, state in self.segmentChanges.items():
-            if segmentIndex >= len(self.allSegmentsToReview):
-                continue
+        if hasattr(self, 'allSegmentsToReview'):
+            # Cross-file mode: apply changes to segments in allSegmentsToReview
+            for segmentIndex, state in self.segmentChanges.items():
+                if segmentIndex >= len(self.allSegmentsToReview):
+                    continue
+                    
+                segData = self.allSegmentsToReview[segmentIndex]
+                segment = segData['segment']
                 
-            segData = self.allSegmentsToReview[segmentIndex]
-            filename = segData['filename']
-            origIndex = segData['index']
-            
-            if filename not in self.allFileData:
-                continue
+                # Apply certainty changes (deletion is handled separately in _saveChanges)
+                if state == 'questioned':
+                    if len(segment[4]) > 0:
+                        for label in segment[4]:
+                            label["certainty"] = 50
+                elif state == 'accepted':
+                    if len(segment[4]) > 0:
+                        for label in segment[4]:
+                            label["certainty"] = 100
+                # Note: 'deleted' state is handled in _saveChanges by removing segments
+        else:
+            # Single-file mode: apply changes to segments in self.segments
+            for segmentIndex, state in self.segmentChanges.items():
+                if segmentIndex >= len(self.segments):
+                    continue
+                    
+                segment = self.segments[segmentIndex]
                 
-            segments = self.allFileData[filename]['segments']
-            if origIndex >= len(segments):
-                continue
+                # Apply certainty changes (deletion is handled separately in humanClassifyClose2)
+                if state == 'questioned':
+                    if len(segment[4]) > 0:
+                        for label in segment[4]:
+                            label["certainty"] = 50
+                elif state == 'accepted':
+                    if len(segment[4]) > 0:
+                        for label in segment[4]:
+                            label["certainty"] = 100
+                # Note: 'deleted' state is handled in humanClassifyClose2 by removing segments
+                    
+                segment = self.segments[segmentIndex]
                 
-            segment = segments[origIndex]
-            
-            # Apply state changes based on current dialog state
-            # Note: Species changes are preserved directly in segment data and not undone
-            if state == 'deleted':
-                # Mark segment as deleted
-                segment[4] = [{"species": "-To Be Deleted-", "certainty": 100, "filter": "M"}]
-            elif state == 'questioned':
-                # Mark with reduced certainty
-                if len(segment[4]) > 0:
-                    for label in segment[4]:
-                        label["certainty"] = 50  # Set to 50% certainty
-            elif state == 'accepted':
-                # Make sure certainty is 100%
-                if len(segment[4]) > 0:
-                    for label in segment[4]:
-                        label["certainty"] = 100
+                if state == 'questioned':
+                    if len(segment[4]) > 0:
+                        for label in segment[4]:
+                            label["certainty"] = 50
+                elif state == 'accepted':
+                    if len(segment[4]) > 0:
+                        for label in segment[4]:
+                            label["certainty"] = 100
+                # Note: deletion handled separately
 
     def loadCurrentSegment(self):
         """ Load the current segment for one-by-one review """
@@ -2525,38 +2588,35 @@ class AviaNZ_reviewAll(QMainWindow):
         if saveConfig:
             self._saveBirdListConfig()
         
-        # Handle both cross-file and original modes
+        # Save any species changes first (these are immediate and irreversible)
+        self._saveCurrentSegmentState()
+        
+        # Track this QUESTION action for certainty changes (reversible)
+        if not hasattr(self, 'segmentChanges'):
+            self.segmentChanges = {}
+        
         if hasattr(self, 'allSegmentsToReview'):
-            # Cross-file mode: Save any species changes and record the QUESTION action
-            currSeg = self.segments[0]  # Only one segment loaded at a time
-            
-            # Save current segment state (including any species changes made by user)
-            self._saveCurrentSegmentState()
-            
-            currSeg.questionLabels(None if self.species == 'All species' else self.species)  # Apply to currently loaded segment for display
-            
-            # Track this QUESTION action
-            prevState = self.segmentChanges.get(self.currentSegmentIndex)
-            self.segmentChanges[self.currentSegmentIndex] = 'questioned'
-            
-            # Update counters based on previous state
-            if prevState == 'accepted':
-                self.segsAccepted -= 1
-            elif prevState == 'deleted':
-                self.segsDeleted -= 1
-            elif prevState is None:  # First time changing this segment
-                pass  # No previous counter to decrement
-            # else prevState == 'questioned': no change needed
-            
-            if prevState != 'questioned':
-                self.segsQuestioned += 1
+            # Cross-file mode
+            segmentIndex = self.currentSegmentIndex
         else:
-            # Original mode
-            currSeg = self.segments[self.indices2show[self.box1id]]
-            currSeg.questionLabels(None if self.species == 'All species' else self.species)
+            # Single-file mode  
+            segmentIndex = self.indices2show[self.box1id]
+        
+        prevState = self.segmentChanges.get(segmentIndex)
+        self.segmentChanges[segmentIndex] = 'questioned'
+        
+        # Update counters based on previous state
+        if prevState == 'accepted':
+            self.segsAccepted -= 1
+        elif prevState == 'deleted':
+            self.segsDeleted -= 1
+        elif prevState is None:  # First time changing this segment
+            pass  # No previous counter to decrement
+        
+        if prevState != 'questioned':
             self.segsQuestioned += 1
 
-        # Update the display counters immediately
+        # Update the display counters
         if hasattr(self, 'allSegmentsToReview'):
             self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
@@ -2582,6 +2642,8 @@ class AviaNZ_reviewAll(QMainWindow):
             # Original mode
             currSeg = self.segments[self.indices2show[self.box1id]]
             
+        # For Plus functionality, we still need to confirm the labels immediately
+        # since we're creating copies based on the current segment state
         currSeg.confirmLabels(None if self.species == 'All species' else self.species)
         getNumCopies = Dialogs.getNumberCopiesPlus()
         response = getNumCopies.exec()
@@ -2592,7 +2654,16 @@ class AviaNZ_reviewAll(QMainWindow):
         numCopies = getNumCopies.getValues()
 
         if not hasattr(self, 'toadd'):
-            self.toadd = []
+            self.toadd = {}
+            
+        # Get current filename to track where these segments belong
+        if hasattr(self, 'allSegmentsToReview'):
+            current_filename = self.allSegmentsToReview[self.currentSegmentIndex]['filename']
+        else:
+            current_filename = self.filename
+            
+        if current_filename not in self.toadd:
+            self.toadd[current_filename] = []
             
         for i in range(numCopies):
             newSeg = copy.deepcopy(currSeg)
@@ -2600,7 +2671,7 @@ class AviaNZ_reviewAll(QMainWindow):
             newSeg[1] += (i+1)*0.1  # End time offset
             newSeg[2] += (i+1)*50   # Low freq offset
             newSeg[3] += (i+1)*50   # High freq offset
-            self.toadd.append(newSeg)
+            self.toadd[current_filename].append(newSeg)
 
         self.returned = False
         self.segsAccepted += 1
@@ -2619,38 +2690,35 @@ class AviaNZ_reviewAll(QMainWindow):
         if saveConfig:
             self._saveBirdListConfig()
         
-        # Handle both cross-file and original modes
+        # Save any species changes first (these are immediate and irreversible)
+        self._saveCurrentSegmentState()
+        
+        # Track this CORRECT action for certainty changes (reversible)
+        if not hasattr(self, 'segmentChanges'):
+            self.segmentChanges = {}
+        
         if hasattr(self, 'allSegmentsToReview'):
-            # Cross-file mode: Save any species changes and record the CORRECT action
-            currSeg = self.segments[0]  # Only one segment loaded at a time
-            
-            # Save current segment state (including any species changes made by user)
-            self._saveCurrentSegmentState()
-            
-            currSeg.confirmLabels(None if self.species == 'All species' else self.species)  # Apply to currently loaded segment for display
-            
-            # Track this CORRECT action
-            prevState = self.segmentChanges.get(self.currentSegmentIndex)
-            self.segmentChanges[self.currentSegmentIndex] = 'accepted'
-            
-            # Update counters based on previous state
-            if prevState == 'deleted':
-                self.segsDeleted -= 1
-            elif prevState == 'questioned':
-                self.segsQuestioned -= 1
-            elif prevState is None:  # First time changing this segment
-                pass  # No previous counter to decrement
-            # else prevState == 'accepted': no change needed
-            
-            if prevState != 'accepted':
-                self.segsAccepted += 1
+            # Cross-file mode
+            segmentIndex = self.currentSegmentIndex
         else:
-            # Original mode
-            currSeg = self.segments[self.indices2show[self.box1id]]
-            currSeg.confirmLabels(None if self.species == 'All species' else self.species)
+            # Single-file mode  
+            segmentIndex = self.indices2show[self.box1id]
+        
+        prevState = self.segmentChanges.get(segmentIndex)
+        self.segmentChanges[segmentIndex] = 'accepted'
+        
+        # Update counters based on previous state
+        if prevState == 'deleted':
+            self.segsDeleted -= 1
+        elif prevState == 'questioned':
+            self.segsQuestioned -= 1
+        elif prevState is None:  # First time changing this segment
+            pass  # No previous counter to decrement
+        
+        if prevState != 'accepted':
             self.segsAccepted += 1
 
-        # Update the display counters immediately
+        # Update the display counters
         if hasattr(self, 'allSegmentsToReview'):
             self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
@@ -2666,34 +2734,32 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Delete a segment """
         self.humanClassifyDialog1.stopPlayback()
 
-        # Handle both cross-file and original modes
+        # Track this DELETE action (same pattern as other actions)
+        if not hasattr(self, 'segmentChanges'):
+            self.segmentChanges = {}
+        
         if hasattr(self, 'allSegmentsToReview'):
-            # Cross-file mode: Save any species changes and record the DELETE action
-            # Save current segment state (including any species changes made by user)
-            self._saveCurrentSegmentState()
-            
-            # Track this DELETE action
-            prevState = self.segmentChanges.get(self.currentSegmentIndex)
-            self.segmentChanges[self.currentSegmentIndex] = 'deleted'
-            
-            # Update counters based on previous state
-            if prevState == 'accepted':
-                self.segsAccepted -= 1
-            elif prevState == 'questioned':
-                self.segsQuestioned -= 1
-            elif prevState is None:  # First time changing this segment
-                pass  # No previous counter to decrement
-            # else prevState == 'deleted': no change needed
-            
-            if prevState != 'deleted':
-                self.segsDeleted += 1
+            # Cross-file mode
+            segmentIndex = self.currentSegmentIndex
         else:
-            # Original mode - keep existing behavior
-            newlabel = [{"species": "-To Be Deleted-", "certainty": 100}]
-            self.segments[self.indices2show[self.box1id]][4] = newlabel
+            # Single-file mode  
+            segmentIndex = self.indices2show[self.box1id]
+        
+        prevState = self.segmentChanges.get(segmentIndex)
+        self.segmentChanges[segmentIndex] = 'deleted'
+        
+        # Update counters based on previous state
+        if prevState == 'accepted':
+            self.segsAccepted -= 1
+        elif prevState == 'questioned':
+            self.segsQuestioned -= 1
+        elif prevState is None:  # First time changing this segment
+            pass  # No previous counter to decrement
+        
+        if prevState != 'deleted':
             self.segsDeleted += 1
 
-        # Update the display counters immediately
+        # Update the display counters
         if hasattr(self, 'allSegmentsToReview'):
             self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
 
@@ -2706,16 +2772,14 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyNextImage1()
 
     def finishDeleting(self):
-        # Does the actual work of deleting segments.
-        # Loop over segments, delete any that are marked for this
+        """
+        Remove any segments that still have "-To Be Deleted-" markers.
+        This is a cleanup method for backwards compatibility.
+        """
+        # Clean up any old-style deletion markers
         for seg in reversed(self.segments):
-            todel = False
-            for lab in seg[4]:
-                if lab["species"] == "-To Be Deleted-":
-                    todel = True
-                    break
-            if todel:
-                print("Removing",seg)
+            if len(seg[4]) > 0 and seg[4][0].get("species") == "-To Be Deleted-":
+                print("Removing legacy marked segment:", seg)
                 self.segments.remove(seg)
 
     def closeDialog(self, ev):
