@@ -28,7 +28,7 @@ from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox, QAbstractButton, QListWidget, QListWidgetItem, QPushButton, QSlider, QLabel, QHBoxLayout, QGridLayout, QWidget, QGraphicsRectItem, QLayout, QToolButton, QStyle, QSizePolicy, QMenu
 from PyQt6.QtCore import Qt, QTime, QTimer, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir, pyqtSignal, pyqtSlot, QThread, QEvent
 from PyQt6.QtMultimedia import QAudio, QAudioOutput, QAudioSink, QAudioFormat, QMediaDevices
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag, QAction
 
 import pyqtgraph as pg
 import pyqtgraph.functions as fn
@@ -1797,432 +1797,433 @@ class CustomSlider(QSlider):
             self.setValue(int(new_value))
         super().mousePressEvent(event)
 
-class CheckboxMenuStayOpen(QMenu):
-    def mouseReleaseEvent(self, event):
-        action = self.actionAt(event.pos())
-        if action:
-            if action.isCheckable():
-                action.setChecked(not action.isChecked())
-            action.trigger()
-        else:
-            super().mouseReleaseEvent(event)  # Let Qt handle the rest
 
-class BirdSelectionMenu(QMenu):
-    """ Custom menu which has the list of birds"""
-    # signal
-    addSpecies = pyqtSignal(int)
-    addCallname = pyqtSignal(str,int)
-    labelsUpdated = pyqtSignal(object,str,str,int)
-
-    def __init__(self, shortBirdList, longBirdList, knownCalls, currentLabels, parent=None, unsure=False, multipleBirds=False, includeCalltype=True):
-        super(BirdSelectionMenu, self).__init__(parent)
-        self.currentLabels = copy.deepcopy(currentLabels)
+class BaseSpeciesMenu(QMenu):
+    """Base class for species selection menus with common functionality."""
+    
+    # Common signals
+    labels_updated = pyqtSignal(object, str, object, int)  # labels, species, call_type, certainty
+    add_species_requested = pyqtSignal(int)  # certainty
+    add_call_type_requested = pyqtSignal(str, int)  # species, certainty
+    
+    def __init__(self, current_labels, parent=None, unsure=False, multiple_birds=False):
+        super().__init__(parent)
+        self.current_labels = copy.deepcopy(current_labels) if current_labels else []
+        self.unsure = unsure
+        self.multiple_birds = multiple_birds
         self.parent = parent
-        self.unsure = unsure
-        self.multipleBirds = multipleBirds
-        self.includeCalltype = includeCalltype
-        self.position = None
-        self.unsure = unsure
-        self.installEventFilter(self)
-        self.createShortMenu(shortBirdList,knownCalls)
-        self.createLongMenu(longBirdList,knownCalls)
-    
-    def formatLabel(self,label):
-        return label if not self.unsure else label+'?'
-
-    def createShortMenu(self,shortBirdList,knownCalls):
-        currentSpecies = [label['species'] for label in self.currentLabels]
-        for item in shortBirdList:
-            if not item=="":
-                if item=="Don't Know":
-                    action = self.addAction("Don't Know")
-                    action.triggered.connect(partial(self.birdAndCallSelected, "Don't Know", "Not Specified"))
-                    if "Don't Know" in currentSpecies:
-                        action.setText("\u2714 Don't Know")
-                    self.addAction(action)
-                else:
-                    species, cert = self.parse_short_list_item(item)
-                    if not self.includeCalltype:
-                        label = self.formatLabel(species)
-                        label = "\u2714 "+label if species in currentSpecies else label
-                        action = self.addAction(label)
-                        action.triggered.connect(partial(self.birdAndCallSelected, species, "Not Specified"))
-                    else:
-                        calltypes = knownCalls[species] if species in knownCalls else []
-                        calltypes = ["Not Specified"] + calltypes + ["Add"]
-                        birdMenu = CheckboxMenuStayOpen(species,self) if self.multipleBirds else QMenu(species,self)
-                        self.addMenu(birdMenu)
-                        anyChecked = False
-                        for calltype in calltypes:
-                            action = birdMenu.addAction(self.formatLabel(calltype))
-                            action.setCheckable(True)
-                            action.triggered.connect(partial(self.birdAndCallSelected, species, calltype))
-                            if not len(self.currentLabels)==0:
-                                if calltype == "Not Specified" or calltype is None:
-                                    if species in currentSpecies and not 'calltype' in self.currentLabels[currentSpecies.index(species)]: # current call is empty
-                                        action.setChecked(True)
-                                        anyChecked = True
-                                else:
-                                    if not calltype=="Add":
-                                        if species in currentSpecies:
-                                            if 'calltype' in self.currentLabels[currentSpecies.index(species)]:
-                                                if calltype == self.currentLabels[currentSpecies.index(species)]['calltype']:
-                                                    action.setChecked(True)
-                                                    anyChecked = True
-                        if anyChecked:
-                            birdMenu.setTitle("\u2714 "+species)
         
-    def createLongMenu(self,longBirdList,knownCalls):
-        menuBirdAll = QMenu("See all",self)
-        allBirdTree = {}
-        if longBirdList is not None:
-            for longBirdEntry in longBirdList:
-                # Add ? marks if Ctrl menu is called
-                if '>' in longBirdEntry:
-                    speciesLevel1,speciesLevel2 = longBirdEntry.split('>')
-                else:
-                    speciesLevel1,speciesLevel2 = longBirdEntry, ""
-                
-                species = speciesLevel1 if speciesLevel2=="" else speciesLevel1 + " ("+speciesLevel2+")"
-                calls = ["Not Specified"]
-                if species in knownCalls:
-                    calls+=knownCalls[species].copy()
-                calls.append("Add")
-
-                firstLetter = speciesLevel1[0].upper()
-
-                if not firstLetter in allBirdTree:
-                    allBirdTree[firstLetter] = {}
-                
-                if not speciesLevel1 in allBirdTree[firstLetter]:
-                    allBirdTree[firstLetter][speciesLevel1] = {}
-                
-                if speciesLevel2 == "":
-                    allBirdTree[firstLetter][speciesLevel1] = {None: calls}
-                else:
-                    if not speciesLevel2 in allBirdTree[firstLetter][speciesLevel1]:
-                        allBirdTree[firstLetter][speciesLevel1][speciesLevel2] = calls
-
-        for letter in allBirdTree:
-            letterMenu = QMenu(letter,menuBirdAll)
-            if not self.includeCalltype:
-                for speciesLevel1 in allBirdTree[letter]:
-                    if None in allBirdTree[letter][speciesLevel1]:
-                        action = letterMenu.addAction(self.formatLabel(speciesLevel1))
-                        action.triggered.connect(partial(self.birdAndCallSelected, speciesLevel1, "Not Specified"))
-                    else:
-                        speciesLevel1Menu = QMenu(speciesLevel1,letterMenu)
-                        letterMenu.addMenu(speciesLevel1Menu)
-                        for speciesLevel2 in allBirdTree[letter][speciesLevel1]:
-                            species = speciesLevel1 + " (" + speciesLevel2 + ")"
-                            action = speciesLevel1Menu.addAction(self.formatLabel(species))
-                            action.triggered.connect(partial(self.birdAndCallSelected, species, "Not Specified"))
-            else:
-                for speciesLevel1 in allBirdTree[letter]:
-                    speciesLevel1Menu = QMenu(speciesLevel1,letterMenu)
-                    letterMenu.addMenu(speciesLevel1Menu)
-                    if None in allBirdTree[letter][speciesLevel1]: # no species, go straight to call
-                        for call in allBirdTree[letter][speciesLevel1][None]:
-                            action = speciesLevel1Menu.addAction(self.formatLabel(call))
-                            action.triggered.connect(partial(self.birdAndCallSelected, speciesLevel1, call))
-                    else:
-                        for speciesLevel2 in allBirdTree[letter][speciesLevel1]:
-                            species = speciesLevel1 + " (" + speciesLevel2 + ")"
-                            speciesLevel2Menu = QMenu(speciesLevel2,speciesLevel1Menu)
-                            for call in allBirdTree[letter][speciesLevel1][speciesLevel2]:
-                                action = speciesLevel2Menu.addAction(self.formatLabel(call))
-                                action.triggered.connect(partial(self.birdAndCallSelected, species, call))
-                            speciesLevel1Menu.addMenu(speciesLevel2Menu)
-            menuBirdAll.addMenu(letterMenu)
-        new_species_action = menuBirdAll.addAction("Add")
-        new_species_action.triggered.connect(partial(self.birdAndCallSelected, "Add", "Not Specified"))
-        
-        self.addMenu(menuBirdAll)
-
-    def popup(self, pos):
-        if self.position is None:
-            self.position = pos
-        super().popup(pos)
+    def _format_label(self, label):
+        """Add uncertainty marker if needed."""
+        return f"{label}?" if self.unsure and label != "Don't Know" else label
     
-    def parse_short_list_item(self,item):
-        # Determine certainty
-        # Add ? marks if Ctrl menu is called
-        searchForSpecies = re.search(r' \((.*?)\)$',item)
-        if searchForSpecies is not None:
-            species = searchForSpecies.group(1)
-            genus = item.split(" ("+species+")")[0]
-        else:
-            # try > format
-            itemSplit = item.split('>')
-            if len(itemSplit)==1:
-                species = None
-                genus = item
-            else:
-                species = itemSplit[1]
-                genus = itemSplit[0]
-        if species is None:
-            mergedSpeciesName = genus
-        else:
-            mergedSpeciesName = genus + " (" + species + ")"
-        if self.unsure and item != "Don't Know":
-            cert = 50
-            mergedSpeciesName = mergedSpeciesName+'?'
-        elif item == "Don't Know":
-            cert = 0
-        else:
-            cert = 100
-        return mergedSpeciesName, cert
+    def _parse_species_name(self, species_text):
+        """Parse species name from various formats."""
+        if '>' in species_text:
+            genus, species = species_text.split('>', 1)
+            return f"{genus} ({species})"
+        return species_text
     
-    def birdAndCallSelected(self,species, callname):
-        """ Collects the label for a bird from the context menu and processes it.
-        Has to update the overview segments in case their colour should change.
-        Copes with two level names (with a > in).
-        Also handles getting the name through a message box if necessary.
-        """
-        if type(species) is not str:
-            species = species.text()
-        if species is None or species=='':
-            return
-        
-        if species=="Don't Know":
-            certainty = 0
+    def _get_certainty(self, species):
+        """Get certainty level based on species and unsure state."""
+        if species == "Don't Know":
+            return 0
         elif self.unsure:
-            species = species[:-1]
-            certainty = 50
+            return 50
         else:
-            certainty = 100
-
-        if species == 'Add':
-            self.addSpecies.emit(certainty)
-            return
-
-        if callname == 'Add':
-            self.addCallname.emit(species,certainty)
-            return
-        
-        self.updateLabels(species,callname,certainty)
-        self.updateMenu(species)
+            return 100
     
-    def updateLabels(self,species,callname,certainty):
-        currentSpecies = [label['species'] for label in self.currentLabels]
-        if callname=="Not Specified": callname=None
-        if species=="Don't Know":
-            self.currentLabels = [{'species':"Don't Know",'certainty':certainty}]
-            currentSpecies = ["Don't Know"]
-        else:
-            if species in currentSpecies: # remove if already in
-                fullLabel = self.currentLabels[currentSpecies.index(species)]
-                oldCallname = fullLabel['calltype'] if 'calltype' in fullLabel else None
-                self.currentLabels.pop(currentSpecies.index(species))
-                currentSpecies.pop(currentSpecies.index(species))
-                if not callname==oldCallname:
-                    if self.includeCalltype:
-                        if callname is None:
-                            self.currentLabels.append({'species':species,'certainty':certainty})
-                            currentSpecies.append(species)
-                        else:
-                            self.currentLabels.append({'species':species,'calltype':callname,'certainty':certainty})
-                            currentSpecies.append(species)
-                    else:
-                        pass # if we aren't using the calltype we just remove it
-                if len(self.currentLabels)==0:
-                    self.currentLabels.append({'species':"Don't Know",'certainty':0})
-                    currentSpecies.append("Don't Know")
-            else: # add
-                if not self.multipleBirds: # clear if new species and not multiple birds
-                    self.currentLabels = []
-                    currentSpecies = []
-
-                if callname is None:
-                    self.currentLabels.append({'species':species,'certainty':certainty})
-                    currentSpecies.append(species)
-                else:
-                    self.currentLabels.append({'species':species,'calltype':callname,'certainty':certainty})
-                    currentSpecies.append(species)
-
-                if "Don't Know" in currentSpecies:
-                    self.currentLabels.pop(currentSpecies.index("Don't Know"))
-                    currentSpecies.pop(currentSpecies.index("Don't Know"))                
-        
-        self.labelsUpdated.emit(copy.deepcopy(self.currentLabels),species,callname,certainty)
-
-    def updateMenu(self,species):
-        if not self.includeCalltype:
-            for action in self.actions():
-                currentText = action.text()
-                if "\u2714 " in currentText:
-                    if not currentText[2:] in [label['species'] for label in self.currentLabels]:
-                        action.setText(currentText[2:])
-                else:
-                    if currentText in [label['species'] for label in self.currentLabels]:
-                        action.setText("\u2714 "+currentText)
-        else:
-            for birdMenu in self.findChildren(QMenu):
-                # remove current checks
-                if "\u2714 " == birdMenu.title()[:2]:
-                    birdMenu.setTitle(birdMenu.title()[2:])
-                # clear actions if we have Don't Know
-                if species=="Don't Know":
-                    for action in birdMenu.actions():
-                        action.setChecked(False)
-                else:
-                    # go through each bird in the segment and check the right calltype, then set the title
-                    for label in self.currentLabels:
-                        species_X = label['species']
-                        calltype_X = label['calltype'] if 'calltype' in label else None
-                        if birdMenu.title() == species_X or birdMenu.title() == "\u2714 "+species_X:
-                            for action in birdMenu.actions():
-                                calltype_X = "Not Specified" if calltype_X is None else calltype_X
-                                if action.text() == calltype_X:
-                                    action.setChecked(True)
-                                else:
-                                    action.setChecked(False)
-                            birdMenu.setTitle("\u2714 " + birdMenu.title())
-
-            # update the Don't Know action
-            for action in self.actions():
-                if action.text() == "Don't Know" and "Don't Know" in [label['species'] for label in self.currentLabels]:
-                    action.setText("\u2714 " + action.text())
-                if action.text() == "\u2714 Don't Know" and not "Don't Know" in [label['species'] for label in self.currentLabels]:
-                    action.setText(action.text()[2:])
+    def _get_current_species_list(self):
+        """Get list of currently selected species names."""
+        return [label.get('species', '') for label in self.current_labels]
     
-    def mouseReleaseEvent(self, event):
-        action = self.actionAt(event.pos())
-        if action and self.multipleBirds: # trigger the action without closing the menu
-            action.trigger()
-        else:
-            super().mouseReleaseEvent(event)
-
-class BatSelectionMenu(QMenu):
-    """ Custom menu which has the list of birds"""
-    # signal
-    labelsUpdated = pyqtSignal(object,str,int)
-
-    def __init__(self, batList, currentLabels, parent=None, unsure=False, multipleBirds=False):
-        super(BatSelectionMenu, self).__init__(parent)
-        self.currentLabels = copy.deepcopy(currentLabels)
-        self.parent = parent
-        self.unsure = unsure
-        self.multipleBirds = multipleBirds
-        self.position = None
-        self.unsure = unsure
-        self.installEventFilter(self)
-        self.createBatMenu(batList)
-
-    def createBatMenu(self,batList):
-        currentSpecies = [label['species'] for label in self.currentLabels]        
-        for item in batList:
-            species, cert = self.parse_short_list_item(item)
-            bat = self.addAction(species)
-            bat.setCheckable(True)
-            if species in currentSpecies:
-                bat.setChecked(True)
-            bat.triggered.connect(partial(self.batSelected, species))
-            self.addAction(bat)
-
-    def popup(self, pos):
-        if self.position is None:
-            self.position = pos
-        super().popup(pos)
+    def _emit_labels_updated(self, species, call_type, certainty):
+        """Emit the labels updated signal."""
+        self.labels_updated.emit(
+            copy.deepcopy(self.current_labels), 
+            species, 
+            call_type, 
+            certainty
+        )
     
-    def parse_short_list_item(self,item):
-        # Determine certainty
-        # Add ? marks if Ctrl menu is called
-        searchForSpecies = re.search(r' \((.*?)\)$',item)
-        if searchForSpecies is not None:
-            species = searchForSpecies.group(1)
-            genus = item.split(" ("+species+")")[0]
-        else:
-            # try > format
-            itemSplit = item.split('>')
-            if len(itemSplit)==1:
-                species = None
-                genus = item
-            else:
-                species = itemSplit[1]
-                genus = itemSplit[0]
-        if species is None:
-            mergedSpeciesName = genus
-        else:
-            mergedSpeciesName = genus + " (" + species + ")"
-        if self.unsure and item != "Don't Know":
-            cert = 50
-            mergedSpeciesName = mergedSpeciesName+'?'
-        elif item == "Don't Know":
-            cert = 0
-        else:
-            cert = 100
-        return mergedSpeciesName, cert
-    
-    def batSelected(self,species):
-        """ Collects the label for a bird from the context menu and processes it.
-        Has to update the overview segments in case their colour should change.
-        Copes with two level names (with a > in).
-        Also handles getting the name through a message box if necessary.
-        """
-        if type(species) is not str:
-            species = species.text()
-        if species is None or species=='':
-            return
-        
-        if species=="Don't Know":
-            certainty = 0
-        elif self.unsure:
-            species = species[:-1]
-            certainty = 50
-        else:
-            certainty = 100
-        
-        self.updateLabels(species,certainty)
-        self.updateMenu(species)
-    
-    def updateLabels(self,species,certainty):
-        currentSpecies = [label['species'] for label in self.currentLabels]
-        if species=="Don't Know":
-            self.currentLabels = [{'species':"Don't Know",'certainty':certainty}]
-            currentSpecies = ["Don't Know"]
-        else:
-            if species in currentSpecies: # remove if already in
-                self.currentLabels.pop(currentSpecies.index(species))
-                currentSpecies.pop(currentSpecies.index(species))
-                if len(self.currentLabels)==0:
-                    self.currentLabels.append({'species':"Don't Know",'certainty':certainty})
-                    currentSpecies.append("Don't Know")
-            else: # add
-                if not self.multipleBirds: # clear if new species and not multiple birds
-                    self.currentLabels = []
-                    currentSpecies = []
-
-                self.currentLabels.append({'species':species,'certainty':certainty})
-                currentSpecies.append(species)
-                
-                if "Don't Know" in currentSpecies:
-                    self.currentLabels.pop(currentSpecies.index("Don't Know"))
-                    currentSpecies.pop(currentSpecies.index("Don't Know"))                
-        
-        self.labelsUpdated.emit(copy.deepcopy(self.currentLabels),species,certainty)
-
-    def updateMenu(self,species):
+    def refresh_species_menu(self, species_name):
+        """Refresh a specific species menu to show updated call types."""
+        # Find the species menu by title and rebuild it
         for action in self.actions():
-            action.setChecked(False)
-        
-        if species=="Don't Know":
-            for action in self.actions():
-                if action.text() == species:
-                    action.setChecked(True)
-        else:
-            currentSpecies = [label['species'] for label in self.currentLabels]
-            for action in self.actions():
-                for species_X in currentSpecies:
-                    if action.text() == species_X:
-                        action.setChecked(True)
+            if hasattr(action, 'menu') and action.menu():
+                menu_title = action.menu().title()
+                # Remove checkmark prefix if present
+                clean_title = menu_title.replace('\u2714 ', '') if menu_title.startswith('\u2714 ') else menu_title
+                if clean_title == species_name:
+                    # Clear and rebuild this species submenu
+                    species_menu = action.menu()
+                    species_menu.clear()
+                    self._rebuild_species_submenu(species_menu, species_name)
+                    break
+    
+    def _rebuild_species_submenu(self, species_menu, species_name):
+        """Rebuild a species submenu with updated call types - to be implemented by subclasses."""
+        pass
 
-    def eventFilter(self, obj, event):
-        # don't hide if an action is clicked
-        if self.multipleBirds:
-            if event.type() == QEvent.Type.MouseButtonPress:
-                action = self.activeAction()
-                if action is not None:
-                    action.trigger()
-                    return True
-        return False
+
+class BirdSelectionMenu(BaseSpeciesMenu):
+    """Enhanced bird species selection menu with hierarchical organization."""
+    
+    def __init__(self, short_bird_list, long_bird_list, known_calls, current_labels, 
+                 parent=None, unsure=False, multiple_birds=False, include_call_type=True):
+        super().__init__(current_labels, parent, unsure, multiple_birds)
+        self.include_call_type = include_call_type
+        self.known_calls = known_calls or {}
+        
+        self._create_short_menu(short_bird_list)
+        self._create_long_menu(long_bird_list)
+    
+    def _create_short_menu(self, short_bird_list):
+        """Create the main menu from short bird list."""
+        if not short_bird_list:
+            return
+            
+        current_species = self._get_current_species_list()
+        
+        for item in short_bird_list:
+            if not item:
+                continue
+                
+            if item == "Don't Know":
+                self._add_dont_know_action(current_species)
+            else:
+                species = self._parse_species_name(item)
+                if self.include_call_type:
+                    self._add_species_with_calls(species, current_species)
+                else:
+                    self._add_species_simple(species, current_species)
+    
+    def _add_dont_know_action(self, current_species):
+        """Add Don't Know action."""
+        label = "\u2714 Don't Know" if "Don't Know" in current_species else "Don't Know"
+        action = self.addAction(label)
+        action.triggered.connect(partial(self._species_selected, "Don't Know", None))
+    
+    def _add_species_simple(self, species, current_species):
+        """Add species without call type submenu."""
+        label = self._format_label(species)
+        if species in current_species:
+            label = f"\u2714 {label}"
+        action = self.addAction(label)
+        action.triggered.connect(partial(self._species_selected, species, None))
+    
+    def _add_species_with_calls(self, species, current_species):
+        """Add species with call type submenu."""
+        call_types = self.known_calls.get(species, [])
+        call_types = ["Not Specified"] + call_types + ["Add"]
+        
+        # Create submenu for this species
+        species_menu = QMenu(species, self)
+        self.addMenu(species_menu)
+        
+        # Check if any calls for this species are currently selected
+        any_checked = False
+        current_call_type = None
+        
+        if species in current_species:
+            species_index = current_species.index(species)
+            current_call_type = self.current_labels[species_index].get('calltype')
+            any_checked = True
+        
+        # Add call type actions
+        for call_type in call_types:
+            if call_type == "Add":
+                action = species_menu.addAction("Add new call type...")
+                action.triggered.connect(partial(self._add_call_type_requested, species))
+            else:
+                label = self._format_label(call_type)
+                action = species_menu.addAction(label)
+                action.setCheckable(True)
+                
+                # Check if this specific call type is selected
+                if any_checked and call_type == (current_call_type or "Not Specified"):
+                    action.setChecked(True)
+                
+                call_to_emit = None if call_type == "Not Specified" else call_type
+                action.triggered.connect(partial(self._species_selected, species, call_to_emit))
+        
+        # Update species menu title if any calls are selected
+        if any_checked:
+            species_menu.setTitle(f"\u2714 {species}")
+    
+    def _rebuild_species_submenu(self, species_menu, species_name):
+        """Rebuild a species submenu with updated call types."""
+        # Get current species selections
+        current_species = [label['species'] for label in self.current_labels]
+        
+        # Rebuild the menu using the same logic as _add_species_with_calls
+        call_types = self.known_calls.get(species_name, [])
+        call_types = ["Not Specified"] + call_types + ["Add"]
+        
+        # Check if any calls for this species are currently selected
+        any_checked = False
+        current_call_type = None
+        
+        if species_name in current_species:
+            species_index = current_species.index(species_name)
+            current_call_type = self.current_labels[species_index].get('calltype')
+            any_checked = True
+        
+        # Add call type actions
+        for call_type in call_types:
+            if call_type == "Add":
+                action = species_menu.addAction("Add new call type...")
+                action.triggered.connect(partial(self._add_call_type_requested, species_name))
+            else:
+                label = self._format_label(call_type)
+                action = species_menu.addAction(label)
+                action.setCheckable(True)
+                
+                # Check if this specific call type is selected
+                if any_checked and call_type == (current_call_type or "Not Specified"):
+                    action.setChecked(True)
+                
+                call_to_emit = None if call_type == "Not Specified" else call_type
+                action.triggered.connect(partial(self._species_selected, species_name, call_to_emit))
+        
+        # Update species menu title if any calls are selected
+        if any_checked:
+            species_menu.setTitle(f"\u2714 {species_name}")
+        else:
+            species_menu.setTitle(species_name)
+    
+    def _create_long_menu(self, long_bird_list):
+        """Create 'See all' hierarchical menu."""
+        if not long_bird_list:
+            return
+            
+        see_all_menu = QMenu("See all", self)
+        self.addMenu(see_all_menu)
+        
+        # Build hierarchical tree: Letter -> Genus -> Species -> Calls
+        bird_tree = self._build_bird_tree(long_bird_list)
+        
+        # Create menu structure
+        for letter in sorted(bird_tree.keys()):
+            letter_menu = QMenu(letter, see_all_menu)
+            see_all_menu.addMenu(letter_menu)
+            
+            for genus in sorted(bird_tree[letter].keys()):
+                self._add_genus_to_menu(letter_menu, genus, bird_tree[letter][genus])
+        
+        # Add "Add new species" option
+        add_action = see_all_menu.addAction("Add new species...")
+        add_action.triggered.connect(partial(self._add_species_requested))
+    
+    def _build_bird_tree(self, long_bird_list):
+        """Build hierarchical tree structure from bird list."""
+        tree = {}
+        
+        for entry in long_bird_list:
+            if '>' in entry:
+                genus, species = entry.split('>', 1)
+                full_species_name = f"{genus} ({species})"
+            else:
+                genus = entry
+                species = None
+                full_species_name = genus
+            
+            letter = genus[0].upper()
+            
+            if letter not in tree:
+                tree[letter] = {}
+            if genus not in tree[letter]:
+                tree[letter][genus] = {}
+            
+            calls = ["Not Specified"]
+            if full_species_name in self.known_calls:
+                calls.extend(self.known_calls[full_species_name])
+            calls.append("Add")
+            
+            if species is None:
+                tree[letter][genus][None] = calls
+            else:
+                tree[letter][genus][species] = calls
+                
+        return tree
+    
+    def _add_genus_to_menu(self, parent_menu, genus, species_dict):
+        """Add genus and its species to menu."""
+        if None in species_dict:
+            # Genus without species - add directly with calls
+            if self.include_call_type:
+                genus_menu = QMenu(genus, parent_menu)
+                parent_menu.addMenu(genus_menu)
+                for call in species_dict[None]:
+                    if call == "Add":
+                        action = genus_menu.addAction("Add new call type...")
+                        action.triggered.connect(partial(self._add_call_type_requested, genus))
+                    else:
+                        label = self._format_label(call)
+                        call_to_emit = None if call == "Not Specified" else call
+                        action = genus_menu.addAction(label)
+                        action.triggered.connect(partial(self._species_selected, genus, call_to_emit))
+            else:
+                action = parent_menu.addAction(self._format_label(genus))
+                action.triggered.connect(partial(self._species_selected, genus, None))
+        else:
+            # Genus with species - create submenu
+            genus_menu = QMenu(genus, parent_menu)
+            parent_menu.addMenu(genus_menu)
+            
+            for species_name, calls in species_dict.items():
+                full_name = f"{genus} ({species_name})"
+                
+                if self.include_call_type:
+                    species_menu = QMenu(species_name, genus_menu)
+                    genus_menu.addMenu(species_menu)
+                    
+                    for call in calls:
+                        if call == "Add":
+                            action = species_menu.addAction("Add new call type...")
+                            action.triggered.connect(partial(self._add_call_type_requested, full_name))
+                        else:
+                            label = self._format_label(call)
+                            call_to_emit = None if call == "Not Specified" else call
+                            action = species_menu.addAction(label)
+                            action.triggered.connect(partial(self._species_selected, full_name, call_to_emit))
+                else:
+                    action = genus_menu.addAction(self._format_label(full_name))
+                    action.triggered.connect(partial(self._species_selected, full_name, None))
+    
+    def _species_selected(self, species, call_type):
+        """Handle species selection."""
+        if species == "Add":
+            self._add_species_requested()
+            return
+        
+        certainty = self._get_certainty(species)
+        
+        # Handle special unsure case
+        if self.unsure and species.endswith('?'):
+            species = species[:-1]
+        
+        self._update_labels(species, call_type, certainty)
+        self._emit_labels_updated(species, call_type, certainty)
+    
+    def _add_species_requested(self):
+        """Handle add new species request."""
+        certainty = self._get_certainty("")
+        self.add_species_requested.emit(certainty)
+    
+    def _add_call_type_requested(self, species):
+        """Handle add new call type request."""
+        certainty = self._get_certainty(species)
+        self.add_call_type_requested.emit(species, certainty)
+    
+    def _update_labels(self, species, call_type, certainty):
+        """Update the current labels list."""
+        current_species = self._get_current_species_list()
+        
+        if species == "Don't Know":
+            self.current_labels = [{'species': "Don't Know", 'certainty': certainty}]
+            return
+        
+        # Remove existing entry for this species if present
+        if species in current_species:
+            species_index = current_species.index(species)
+            old_call_type = self.current_labels[species_index].get('calltype')
+            self.current_labels.pop(species_index)
+            
+            # If same call type, just remove (toggle off)
+            if call_type == old_call_type:
+                if not self.current_labels:
+                    self.current_labels = [{'species': "Don't Know", 'certainty': 0}]
+                return
+        
+        # Clear existing labels if not multiple birds mode
+        if not self.multiple_birds:
+            self.current_labels = []
+        
+        # Add new label
+        new_label = {'species': species, 'certainty': certainty}
+        if call_type is not None:
+            new_label['calltype'] = call_type
+        
+        self.current_labels.append(new_label)
+        
+        # Remove "Don't Know" if we have actual species
+        self.current_labels = [
+            label for label in self.current_labels 
+            if label.get('species') != "Don't Know"
+        ]
+        
+        # Ensure we have at least one label
+        if not self.current_labels:
+            self.current_labels = [{'species': "Don't Know", 'certainty': 0}]
+
+
+class BatSelectionMenu(BaseSpeciesMenu):
+    """Simplified bat species selection menu."""
+    
+    def __init__(self, bat_list, current_labels, parent=None, unsure=False, multiple_birds=False):
+        super().__init__(current_labels, parent, unsure, multiple_birds)
+        self._create_bat_menu(bat_list)
+    
+    def _create_bat_menu(self, bat_list):
+        """Create bat selection menu."""
+        if not bat_list:
+            return
+            
+        current_species = self._get_current_species_list()
+        
+        for item in bat_list:
+            if not item:
+                continue
+                
+            species = self._parse_species_name(item)
+            label = self._format_label(species)
+            
+            if species in current_species:
+                label = f"\u2714 {label}"
+            
+            action = self.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(species in current_species)
+            action.triggered.connect(partial(self._bat_selected, species))
+    
+    def _bat_selected(self, species):
+        """Handle bat selection."""
+        certainty = self._get_certainty(species)
+        
+        # Handle special unsure case
+        if self.unsure and species.endswith('?'):
+            species = species[:-1]
+        
+        self._update_labels(species, certainty)
+        self._emit_labels_updated(species, None, certainty)
+    
+    def _update_labels(self, species, certainty):
+        """Update the current labels list for bats."""
+        current_species = self._get_current_species_list()
+        
+        if species == "Don't Know":
+            self.current_labels = [{'species': "Don't Know", 'certainty': certainty}]
+            return
+        
+        # Toggle species selection
+        if species in current_species:
+            # Remove species
+            species_index = current_species.index(species)
+            self.current_labels.pop(species_index)
+            
+            if not self.current_labels:
+                self.current_labels = [{'species': "Don't Know", 'certainty': 0}]
+        else:
+            # Add species
+            if not self.multiple_birds:
+                self.current_labels = []
+            
+            self.current_labels.append({'species': species, 'certainty': certainty})
+            
+            # Remove "Don't Know" if we have actual species
+            self.current_labels = [
+                label for label in self.current_labels 
+                if label.get('species') != "Don't Know"
+            ]
+

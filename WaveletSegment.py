@@ -1666,7 +1666,7 @@ class WaveletSegment:
 
         fileAnnotations = []
         # Get the segmentation from the txt file
-        with open(filenameAnnotation) as f:
+        with open(filenameAnnotation, encoding='utf-8') as f:
             reader = csv.reader(f, delimiter="\t")
             d = list(reader)
         if d[-1] == []:
@@ -1708,7 +1708,7 @@ class WaveletSegment:
         self.sp.readSoundFile(filename)
 
         # Get the segmentation from the txt file
-        with open(filenameAnnotation) as f:
+        with open(filenameAnnotation, encoding='utf-8') as f:
             reader = csv.reader(f, delimiter="\t")
             d = list(reader)
         if d[-1] == []:

@@ -279,13 +279,19 @@ class SegmentList(list):
                     self.metadata["Duration"] = annots[0][1]
                 else:
                     # fallback to reading the wav:
+                    audio_file = file[:-5]  # Remove .data extension
                     try:
-                        info = sf.info(file[:-5])
-                        sample_rate = info.samplerate
-                        fileduration = info.frames / sample_rate
-                        self.metadata["Duration"] = fileduration
+                        # Skip duration reading for bitmap files
+                        if audio_file.lower().endswith('.bmp'):
+                            # For bitmap files, we can't get duration from audio, use a default
+                            self.metadata["Duration"] = 0
+                        else:
+                            info = sf.info(audio_file)
+                            sample_rate = info.samplerate
+                            fileduration = info.frames / sample_rate
+                            self.metadata["Duration"] = fileduration
                     except Exception as e:
-                        print("ERROR: duration not found in metadata, arguments, or read from wav")
+                        print("ERROR: duration not found in metadata, arguments, or read from audio file")
                         print(file)
                         print(e)
                         return
@@ -299,13 +305,19 @@ class SegmentList(list):
                 del annots[0]
             else:
                 # Very old version
+                audio_file = file[:-5]  # Remove .data extension
                 try:
-                    info = sf.info(file[:-5])
-                    sample_rate = info.samplerate
-                    fileduration = info.frames / sample_rate
-                    self.metadata["Duration"] = fileduration
+                    # Skip duration reading for bitmap files
+                    if audio_file.lower().endswith('.bmp'):
+                        # For bitmap files, we can't get duration from audio, use a default
+                        self.metadata["Duration"] = 0
+                    else:
+                        info = sf.info(audio_file)
+                        sample_rate = info.samplerate
+                        fileduration = info.frames / sample_rate
+                        self.metadata["Duration"] = fileduration
                 except Exception as e:
-                    print("ERROR: can't read duration from wav")
+                    print("ERROR: can't read duration from audio file")
                     print(file)
                     print(e)
                     return
@@ -317,20 +329,28 @@ class SegmentList(list):
             self.metadata = annots[0]
             if duration>0:
                 self.metadata["Duration"] = duration
-            if "Operator" not in self.metadata or "Reviewer" not in self.metadata or "Duration" not in self.metadata:
-                if "Duration" not in self.metadata:
+            if "Operator" not in self.metadata or "Reviewer" not in self.metadata or ("Duration" not in self.metadata and duration <= 0):
+                if "Duration" not in self.metadata and duration <= 0:
+                    audio_file = file[:-5]  # Remove .data extension
                     try:
-                        info = sf.info(file[:-5])
-                        sample_rate = info.samplerate
-                        fileduration = info.frames / sample_rate
-                        self.metadata["Duration"] = fileduration
+                        # Skip duration reading for bitmap files
+                        if audio_file.lower().endswith('.bmp'):
+                            # For bitmap files, we can't get duration from audio, use a default
+                            self.metadata["Duration"] = 0
+                        else:
+                            info = sf.info(audio_file)
+                            sample_rate = info.samplerate
+                            fileduration = info.frames / sample_rate
+                            self.metadata["Duration"] = fileduration
                     except Exception as e:
-                        print("ERROR: can't read duration from wav")
+                        print("ERROR: can't read duration from audio file")
                         print(file)
                         print(e)
                     return
-                self.metadata["Operator"] = ""
-                self.metadata["Reviewer"] = ""
+                if "Operator" not in self.metadata:
+                    self.metadata["Operator"] = ""
+                if "Reviewer" not in self.metadata:
+                    self.metadata["Reviewer"] = ""
                 hasmetadata = False
                 #print("ERROR: required metadata fields not found")
                 #return

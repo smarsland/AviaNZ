@@ -175,7 +175,7 @@ class ConfigLoader(object):
         # It will always be in user configdir, otherwise it would be impossible to find.
         print("Loading software settings from file %s" % file)
         try:
-            f = open(file)
+            f = open(file, encoding='utf-8')
             config = json.load(f)
             f.close()
             return config
@@ -283,7 +283,7 @@ class ConfigLoader(object):
                 shortblfile = os.path.join(configdir, "ListCommonBirds.txt")
 
             try:
-                json_file = open(shortblfile)
+                json_file = open(shortblfile, encoding='utf-8')
                 readlist = json.load(json_file)
                 json_file.close()
                 if len(readlist)>29:
@@ -319,7 +319,7 @@ class ConfigLoader(object):
                 longblfile = os.path.join(configdir, "ListDOCBirds.txt")
 
             try:
-                json_file = open(longblfile)
+                json_file = open(longblfile, encoding='utf-8')
                 readlist = json.load(json_file)
                 json_file.close()
                 return readlist
@@ -385,7 +385,7 @@ class ConfigLoader(object):
                 blfile = os.path.join(configdir, "ListBats.txt")
 
             try:
-                json_file = open(blfile)
+                json_file = open(blfile, encoding='utf-8')
                 readlist = json.load(json_file)
                 json_file.close()
                 return readlist
@@ -404,7 +404,7 @@ class ConfigLoader(object):
     def learningParams(self, file):
         print("Loading software settings from file %s" % file)
         try:
-            configfile = open(file)
+            configfile = open(file, encoding='utf-8')
             config = json.load(configfile)
             configfile.close()
             return config
@@ -427,8 +427,8 @@ class ConfigLoader(object):
                 file = os.path.join(configdir, file)
 
             # no fallback in case file not found - don't want to write to random places.
-            with open(file, 'w') as f:
-                json.dump(content, f, indent=1)
+            with open(file, 'w', encoding='utf-8') as f:
+                json.dump(content, f, indent=1, ensure_ascii=False)
 
         except Exception as e:
             print(e)
@@ -448,7 +448,7 @@ class ConfigLoader(object):
                 file = os.path.join(configdir, file)
 
             # no fallback in case file not found - don't want to write to random places.
-            with open(file, 'w') as f:
+            with open(file, 'w', encoding='utf-8') as f:
                 for key, values in sorted(content.items()):  # Sort keys
                     for value in sorted(values):  # Sort values
                         f.write(f"{key} > {value}\n")
@@ -463,8 +463,8 @@ class ConfigLoader(object):
         print("Saving config to file %s" % file)
         try:
             # will always be an absolute path to the user configdir.
-            with open(file, 'w') as f:
-                json.dump(content, f, indent=1)
+            with open(file, 'w', encoding='utf-8') as f:
+                json.dump(content, f, indent=1, ensure_ascii=False)
         except Exception as e:
             print("Warning: could not save config file:")
             print(e)

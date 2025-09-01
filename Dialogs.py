@@ -2062,26 +2062,26 @@ class HumanClassify1(QDialog):
         currentLabels = self.segment[4]
         if self.batmode:
             self.menuSpeciesSelection = SupportClasses_GUI.BatSelectionMenu(
-                batList=self.batList, 
-                currentLabels=currentLabels, 
+                bat_list=self.batList, 
+                current_labels=currentLabels, 
                 parent=self, 
                 unsure=False,
-                multipleBirds=self.multipleBirds
+                multiple_birds=self.multipleBirds
             )
-            self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
+            self.menuSpeciesSelection.labels_updated.connect(self.batLabelsUpdated)
         else:
             self.menuSpeciesSelection = SupportClasses_GUI.BirdSelectionMenu(
-                shortBirdList=self.shortBirdList, 
-                longBirdList=self.longBirdList,
-                knownCalls=self.knownCalls, 
-                currentLabels=currentLabels, 
+                short_bird_list=self.shortBirdList, 
+                long_bird_list=self.longBirdList,
+                known_calls=self.knownCalls, 
+                current_labels=currentLabels, 
                 parent=self, 
                 unsure=False,
-                multipleBirds=self.multipleBirds
+                multiple_birds=self.multipleBirds
             )
-            self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
-            self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
-            self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
+            self.menuSpeciesSelection.add_species_requested.connect(self.addBirdSpecies)
+            self.menuSpeciesSelection.add_call_type_requested.connect(self.addBirdCallname)
+            self.menuSpeciesSelection.labels_updated.connect(self.birdLabelsUpdated)
 
     def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
