@@ -23,12 +23,12 @@ class SegmentManager(QObject):
     """
     
     # Signals for communicating with main window
-    segment_added = pyqtSignal(object)  # Emitted when a segment is created
+    segment_added = pyqtSignal(object, int)  # Emitted when a segment is created (segment, index)
     segment_deleted = pyqtSignal(int)  # Emitted with segment index when deleted
     segment_updated = pyqtSignal(int)  # Emitted when segment bounds/labels change
     segment_selection_changed = pyqtSignal(int)  # Emitted with new selection (-1 for none)
-    segment_labels_updated = pyqtSignal(int)  # Emitted when segment labels change
-    overview_refresh_needed = pyqtSignal()  # Emitted when overview needs refresh
+    segment_labels_updated = pyqtSignal(int, list)  # Emitted when segment labels change (id, labels)
+    overview_update_requested = pyqtSignal(object, bool)  # Emitted when overview needs update (segment, delete)
     segments_to_save_changed = pyqtSignal(bool)  # Emitted when save state changes
     
     def __init__(self, config_manager, audio_file_manager, display_manager):
@@ -164,10 +164,10 @@ class SegmentManager(QObject):
 
         # Update overview if this segment affects the display
         if saveSeg or (startpoint >= 0 and endpoint <= self.datalengthSec):
-            self.refreshOverviewWith(newSegment)
+            self.overview_update_requested.emit(newSegment, False)
 
         # Emit signal for UI to create graphics
-        self.segment_added.emit(newSegment)
+        self.segment_added.emit(newSegment, len(self.segments) - 1 if saveSeg else -1)
         
         return newSegment
 
@@ -193,7 +193,7 @@ class SegmentManager(QObject):
             return False
             
         # Update overview with old position
-        self.refreshOverviewWith(self.segments[segment_index], delete=True)
+        self.overview_update_requested.emit(self.segments[segment_index], True)
         
         # Update segment data
         self.segments[segment_index][0] = new_start_spec + self.startRead
@@ -205,7 +205,7 @@ class SegmentManager(QObject):
         self.segments_to_save_changed.emit(True)
         
         # Update overview with new position
-        self.refreshOverviewWith(self.segments[segment_index])
+        self.overview_update_requested.emit(self.segments[segment_index], False)
         
         # Notify UI of the update
         self.segment_updated.emit(segment_index)
@@ -222,7 +222,7 @@ class SegmentManager(QObject):
             return False
             
         # Update overview with old position
-        self.refreshOverviewWith(self.segments[segment_index], delete=True)
+        self.overview_update_requested.emit(self.segments[segment_index], True)
         
         # Update segment data
         self.segments[segment_index][0] = new_start_ampl + self.startRead
@@ -232,7 +232,7 @@ class SegmentManager(QObject):
         self.segments_to_save_changed.emit(True)
         
         # Update overview with new position
-        self.refreshOverviewWith(self.segments[segment_index])
+        self.overview_update_requested.emit(self.segments[segment_index], False)
         
         # Notify UI of the update
         self.segment_updated.emit(segment_index)
@@ -263,8 +263,16 @@ class SegmentManager(QObject):
                 
             i += protocolInterval
 
-    def refreshOverviewWith(self, segment, delete=False):
-        """Update overview segment colors based on segment labels."""
+    def update_overview_counters(self, segment, delete=False):
+        """Update overview segment counters for data tracking.
+        
+        This method only updates the data counters - UI updates are handled
+        by the main window/display manager in response to signals.
+        
+        Args:
+            segment: The segment to update counters for
+            delete: True if removing the segment, False if adding
+        """
         if self.overviewSegments is None or self.widthOverviewSegment == 0:
             return
             
@@ -274,11 +282,12 @@ class SegmentManager(QObject):
             inde = min(int(self.audio_processor.convertAmpltoSpec(segment[1] - self.startRead) / self.widthOverviewSegment), 
                       len(self.overviewSegments) - 1)
         else:
-            # Fallback calculation
+            # Fallback calculation if audio_processor not available
             inds = max(0, int((segment[0] - self.startRead) * 100 / self.widthOverviewSegment))
             inde = min(int((segment[1] - self.startRead) * 100 / self.widthOverviewSegment), 
                       len(self.overviewSegments) - 1)
 
+        # Update counters based on label certainties
         for label in segment[4]:
             if label["certainty"] == 0:
                 # "red" label counter
@@ -299,32 +308,33 @@ class SegmentManager(QObject):
                 else:
                     self.overviewSegments[inds:inde + 1, 2] += 1
 
+        # Prevent negative counters
         if np.any(self.overviewSegments < 0):
             print("Warning: something went wrong with overview colors!")
-            print(self.overviewSegments)
-
-        # Emit signal for UI to update overview colors
-        self.overview_refresh_needed.emit()
+            self.overviewSegments[self.overviewSegments < 0] = 0
 
     def confirmSegment(self):
         """Confirm labels on the selected segment (set certainty to 100)."""
         segment_id = self.box1id
         
         if segment_id > -1:
-            # Update overview with old labels
-            self.refreshOverviewWith(self.segments[segment_id], delete=True)
+            # Update overview counters with old labels
+            self.update_overview_counters(self.segments[segment_id], delete=True)
             
             # Confirm all labels
             self.segments[segment_id].confirmLabels()
             
-            # Update overview with new labels
-            self.refreshOverviewWith(self.segments[segment_id])
+            # Update overview counters with new labels
+            self.update_overview_counters(self.segments[segment_id])
+            
+            # Send signal for UI to update overview display
+            self.overview_update_requested.emit(self.segments[segment_id], False)
             
             self.segments_to_save = True
             self.segments_to_save_changed.emit(True)
             
             # Notify UI of label changes
-            self.segment_labels_updated.emit(segment_id)
+            self.segment_labels_updated.emit(segment_id, self.segments[segment_id][4])
             
             return True
         return False
@@ -335,8 +345,11 @@ class SegmentManager(QObject):
             segment_id = self.box1id
 
         if segment_id > -1 and segment_id < len(self.segments):
-            # Update overview
-            self.refreshOverviewWith(self.segments[segment_id], delete=True)
+            # Update overview counters
+            self.update_overview_counters(self.segments[segment_id], delete=True)
+            
+            # Send signal for UI to update overview display  
+            self.overview_update_requested.emit(self.segments[segment_id], True)
             
             # Remove from data
             del self.segments[segment_id]
@@ -498,8 +511,8 @@ class SegmentManager(QObject):
                 self.segments.append(newSegment)
                 index = len(self.segments) - 1
 
-        # Update overview
-        self.update_overview_display(newSegment)
+        # Update overview data
+        self.update_overview_counters(newSegment)
         
         # Emit signal for UI to create graphics
         self.segment_added.emit(newSegment, index)
@@ -518,7 +531,7 @@ class SegmentManager(QObject):
             return False
             
         # Update overview before deletion
-        self.update_overview_display(self.segments[id], delete=True)
+        self.update_overview_counters(self.segments[id], delete=True)
         
         # Remove from segments list
         del self.segments[id]
@@ -562,13 +575,13 @@ class SegmentManager(QObject):
             return False
             
         # Update overview with old segment first
-        self.update_overview_display(self.segments[self.box1id], delete=True)
+        self.update_overview_counters(self.segments[self.box1id], delete=True)
         
         # Confirm the labels
         self.segments[self.box1id].confirmLabels()
         
         # Update overview with new segment
-        self.update_overview_display(self.segments[self.box1id])
+        self.update_overview_counters(self.segments[self.box1id])
         
         self.segments_to_save = True
         self.segments_to_save_changed.emit(True)
@@ -587,7 +600,7 @@ class SegmentManager(QObject):
             return False
             
         # Update overview with old segment first
-        self.update_overview_display(self.segments[segment_id], delete=True)
+        self.update_overview_counters(self.segments[segment_id], delete=True)
         
         # Update segment bounds
         self.segments[segment_id][0] = start_sec + self.startRead  # absolute start time
@@ -599,7 +612,10 @@ class SegmentManager(QObject):
             self.segments[segment_id][3] = y2
             
         # Update overview with new segment
-        self.update_overview_display(self.segments[segment_id])
+        self.update_overview_counters(self.segments[segment_id])
+        
+        # Send signal for UI overview update
+        self.overview_update_requested.emit(self.segments[segment_id], False)
         
         self.segments_to_save = True
         self.segments_to_save_changed.emit(True)
@@ -633,74 +649,6 @@ class SegmentManager(QObject):
                 self.create_segment(i, i + protocol_size, coordsAbsolute=True)
             i += protocol_interval
             
-    def update_overview_display(self, segment, delete=False):
-        """
-        Update the overview display counters for a segment.
-        This handles the data side - UI updates are handled by signals.
-        """
-        if self.overviewSegments is None or not self.audio_processor:
-            return
-            
-        # Work out which overview segment this segment is in (could be more than one)
-        # max/min deal with segments continuing past the edge of current page
-        inds = max(0, int(self.audio_processor.convertAmpltoSpec(segment[0]-self.startRead) / self.widthOverviewSegment))
-        inde = min(int(self.audio_processor.convertAmpltoSpec(segment[1]-self.startRead) / self.widthOverviewSegment), len(self.overviewSegments)-1)
-
-        for label in segment[4]:
-            if label["certainty"] == 0:
-                # "red" label counter
-                if delete:
-                    self.overviewSegments[inds:inde+1,0] -= 1
-                else:
-                    self.overviewSegments[inds:inde+1,0] += 1
-            elif label["certainty"] == 100:
-                # "green" label counter
-                if delete:
-                    self.overviewSegments[inds:inde + 1, 1] -= 1
-                else:
-                    self.overviewSegments[inds:inde + 1, 1] += 1
-            else:
-                # "yellow" label counter
-                if delete:
-                    self.overviewSegments[inds:inde + 1, 2] -= 1
-                else:
-                    self.overviewSegments[inds:inde + 1, 2] += 1
-
-        if np.any(self.overviewSegments < 0):
-            print("Warning: negative overview segment counts detected")
-            self.overviewSegments[self.overviewSegments < 0] = 0
-            
-        # Emit signal for overview UI update
-        self.overview_update_requested.emit(segment, delete)
-        
-    def get_segment_info_string(self, segment_id):
-        """Get info string for a segment"""
-        if segment_id < 0 or segment_id >= len(self.segments):
-            return ""
-        return self.segments[segment_id].infoString()
-        
-    def update_segment_labels(self, segment_id, new_labels):
-        """Update labels for a segment"""
-        if segment_id < 0 or segment_id >= len(self.segments):
-            return False
-            
-        # Update overview with old segment first
-        self.update_overview_display(self.segments[segment_id], delete=True)
-        
-        # Update labels
-        self.segments[segment_id][4] = copy.deepcopy(new_labels)
-        
-        # Update overview with new segment
-        self.update_overview_display(self.segments[segment_id])
-        
-        self.segments_to_save = True
-        self.segments_to_save_changed.emit(True)
-        
-        # Emit signal for UI updates
-        self.segment_labels_updated.emit(segment_id, new_labels)
-        
-        return True
-        
     def clear_all_segments(self):
         """Clear all segments"""
         import Segment

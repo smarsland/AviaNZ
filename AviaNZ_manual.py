@@ -66,9 +66,8 @@ from shutil import copyfile
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
 from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard, QGraphicsBlurEffect, QCheckBox
-# The two below will move from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
-from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF #, QThread
+from PyQt6.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt6.QtMultimedia import QAudio, QAudioFormat
 
 import numpy as np
@@ -133,10 +132,6 @@ class AviaNZ(QMainWindow):
     """
 
     def __init__(self,root=None,configdir=None,CLI=False,cheatsheet=False,zooniverse=False,firstFile='', imageFile='', command=''):
-        """Initialisation of the class. Load main config and bird lists from configdir.
-        Also initialises the data stuctures and loads an initial file (specified explicitly)
-        and sets up the window.
-        One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         print("Starting AviaNZ...")
 
         super(AviaNZ, self).__init__()
@@ -146,7 +141,6 @@ class AviaNZ(QMainWindow):
         self.zooniverse = zooniverse
 
         # configdir passes the standard user app dir based on OS.
-        # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
         
         # Initialize ConfigManager
@@ -231,7 +225,7 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = False
         self.batmode = False
 
-        self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
+        self.lastSpecies = {"species": "Don't Know", "certainty": 0, "filter": "M"}
         self.DOC = self.config['DOC']
         self.extra = "none"
         self.playSpeed = 1.0
@@ -1116,19 +1110,8 @@ class AviaNZ(QMainWindow):
             # Special case for Confirm button because it requires yellow segment
             self.confirmButton.setEnabled(control_state['has_unconfirmed'])
     
-    def reorderShortBirdList(self, segment):
-        """Reorder short bird list based on current segment labels."""
-        if segment is None:
-            return
-            
-        segment_labels = segment[4] if len(segment) > 4 else []
-        self.shortBirdList = self.species_manager.reorder_short_list(
-            self.shortBirdList, 
-            segment_labels
-        )
-    
-    def _handle_species_selection(self, species_name, call_type, certainty):
-        """Unified handler for all species selections."""
+    def handle_species_selection(self, species_name, call_type, certainty):
+        """Handle species selection and update UI accordingly."""
         currentSegment = self.segment_manager.get_segment(self.box1id)
         if currentSegment is None:
             return
@@ -1140,18 +1123,18 @@ class AviaNZ(QMainWindow):
             call_type=call_type,
             certainty=certainty,
             multiple_birds=self.multipleBirds,
-            species_lists={'short_list': self.shortBirdList}
+            species_lists={'short_list': self.shortBirdList, 'bat_list': self.batList}
         )
         
         # Apply results to UI
-        self._apply_species_selection_results(currentSegment, result)
+        self.apply_species_selection_to_ui(currentSegment, result)
         
         # Store species for next segment (birds only)
         if result['last_species_info'] and not self.batmode:
-            self.lastSpecies = [result['last_species_info']]
+            self.lastSpecies = result['last_species_info']
     
-    def _apply_species_selection_results(self, segment, result):
-        """Apply the results from species manager to the UI."""
+    def apply_species_selection_to_ui(self, segment, result):
+        """Apply species selection results to the user interface."""
         # Remove old segment from overview
         self.refreshOverviewWith(segment, delete=True)
         
@@ -1182,29 +1165,36 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
         QApplication.processEvents()
 
-    def addBirdSpecies(self, certainty):
+    def add_bird_species_and_apply(self, certainty):
         """Add a new bird species and apply to current segment."""
         success, species_name = self.species_manager.add_new_species(self, certainty)
         if success and self.box1id > -1:
             # Apply the new species to current segment
-            self._handle_species_selection(species_name, None, certainty)
+            self.handle_species_selection(species_name, None, certainty)
     
-    def addBirdCallname(self, species, certainty):
+    def add_call_type_and_apply(self, species, certainty):
         """Add a new call type for a species and apply to current segment."""
         success, call_type = self.species_manager.add_new_call_type(self, species, certainty)
         if success and self.box1id > -1:
             # Apply the new call type to current segment  
-            self._handle_species_selection(species, call_type, certainty)
+            self.handle_species_selection(species, call_type, certainty)
 
     def fillBirdList(self, unsure=False):
-        """Create and show species selection menu using new architecture."""
+        """Create and show species selection menu using SpeciesManager architecture."""
         currentSegment = self.segment_manager.get_segment(self.box1id) if self.box1id > -1 else None
         if currentSegment is None:
             print("Error: no segments detected")
             return
             
-        self.reorderShortBirdList(currentSegment)
-        currentLabels = currentSegment[4]
+        # Reorder species list based on current segment
+        if currentSegment and len(currentSegment) > 4:
+            segment_labels = currentSegment[4]
+            self.shortBirdList = self.species_manager.reorder_short_list(
+                self.shortBirdList, 
+                segment_labels
+            )
+        
+        currentLabels = currentSegment[4] if currentSegment else []
         
         if self.batmode:
             # Create bat selection menu
@@ -1218,7 +1208,7 @@ class AviaNZ(QMainWindow):
             # Connect bat-specific signals
             self.menuSpeciesSelection.labels_updated.connect(
                 lambda labels, species, call_type, certainty: 
-                self._handle_species_selection(species, None, certainty)
+                self.handle_species_selection(species, None, certainty)
             )
         else:
             # Create bird selection menu
@@ -1232,17 +1222,27 @@ class AviaNZ(QMainWindow):
                 multiple_birds=self.multipleBirds,
                 include_call_type=self.includeCalltype
             )
-            # Connect bird-specific signals
-            self.menuSpeciesSelection.add_species_requested.connect(self.addBirdSpecies)
-            self.menuSpeciesSelection.add_call_type_requested.connect(self.addBirdCallname)
+            # Connect bird-specific signals - use the renamed methods
+            self.menuSpeciesSelection.add_species_requested.connect(self.add_bird_species_and_apply)
+            self.menuSpeciesSelection.add_call_type_requested.connect(self.add_call_type_and_apply)
             self.menuSpeciesSelection.labels_updated.connect(
                 lambda labels, species, call_type, certainty:
-                self._handle_species_selection(species, call_type, certainty)
+                self.handle_species_selection(species, call_type, certainty)
             )
     
     def on_species_added(self, species_name, call_types):
         """Handle species added signal from species manager."""
         print(f"New species added: {species_name}")
+        
+        # Save the updated configuration using the config manager
+        self.config_manager.save_config_to_file()
+        
+        # Update the long bird list reference
+        self.longBirdList = self.config_manager.longBirdList
+        
+        # Refresh any open species menu to show the new species
+        if hasattr(self, 'menuSpeciesSelection') and self.menuSpeciesSelection:
+            self.menuSpeciesSelection.refresh_species_lists()
         
     def on_call_type_added(self, species_name, call_type, updated_calls):
         """Handle call type added signal from species manager."""
@@ -2754,7 +2754,7 @@ class AviaNZ(QMainWindow):
                 # Possibly, if they pressed the Windows key, use call type menu
                 modifiers = QApplication.keyboardModifiers()
                 if modifiers == Qt.KeyboardModifier.ShiftModifier:
-                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=[self.lastSpecies])
                 elif modifiers == Qt.KeyboardModifier.ControlModifier:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -2926,7 +2926,7 @@ class AviaNZ(QMainWindow):
                 # TODO: Could make all these options
                 modifiers = QApplication.keyboardModifiers()
                 if modifiers == Qt.KeyboardModifier.ShiftModifier:
-                    self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
+                    self.addSegment(x1, x2, y1, y2, species=[self.lastSpecies])
                 elif modifiers == Qt.KeyboardModifier.ControlModifier:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
