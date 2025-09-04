@@ -196,7 +196,7 @@ class AviaNZ(QMainWindow):
         # Connect to segment manager signals
         self.segment_manager.segment_selection_changed.connect(self.on_segment_selection_changed)
         self.segment_manager.segment_labels_updated.connect(self.on_segment_labels_updated)
-        self.segment_manager.overview_refresh_needed.connect(self.refresh_overview_display)
+        self.segment_manager.overview_update_requested.connect(self.refresh_overview_display)
         self.segment_manager.segments_to_save_changed.connect(self.on_segments_to_save_changed)
 
         # Initialize SpeciesManager
@@ -2464,7 +2464,7 @@ class AviaNZ(QMainWindow):
         Takes Segments as an input and either removes or adds to the box counters."""
         
         # Delegate to segment manager for data operations
-        self.segment_manager.refreshOverviewWith(segment, delete)
+        self.segment_manager.update_overview_counters(segment, delete)
         
         # Handle UI color updates here
         # Work out which overview segment this segment is in (could be more than one)
@@ -5343,7 +5343,7 @@ class AviaNZ(QMainWindow):
             self.updateText(segment_id)
             self.updateColour(segment_id)
             
-    def refresh_overview_display(self):
+    def refresh_overview_display(self, segment=None, delete=False):
         """Handle when overview display needs refreshing."""
         self.refreshFileColor()
         
