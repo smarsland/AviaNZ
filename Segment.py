@@ -1422,7 +1422,8 @@ class PostProcess:
                 # data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
                 data = self.audioData
             # generate features for NN
-            sp = Spectrogram.Spectrogram(window_width=self.NNwindowInc[0],
+            nn_window_width = self.NNinputdim[0]
+            sp = Spectrogram.Spectrogram(window_width=nn_window_width,
                                         incr=self.NNwindowInc[1])
             sp.data = data
             sp.audioFormat.setSampleRate(self.sampleRate)
