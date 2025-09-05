@@ -59,6 +59,7 @@ class TimeAxisHour(pg.AxisItem):
         self.offset = 0
         self.setLabel('Time', units='hh:mm:ss')
         self.showMS = False
+        self.range = [0, 1]  # default range
 
     def setShowMS(self,value):
         self.showMS = value
@@ -75,6 +76,25 @@ class TimeAxisHour(pg.AxisItem):
     def setOffset(self,offset):
         self.offset = offset
         #self.update()
+    
+    def setRange(self, minimum, maximum):
+        """Set the range for the time axis"""
+        # Store the range for use in tick calculations
+        self.range = [minimum, maximum]
+        # Call the parent's setRange method to properly set the axis range
+        super().setRange(minimum, maximum)
+        # Force an update to redraw the axis
+        self.update()
+    
+    def clear(self):
+        """Clear the axis and reset its state"""
+        self.offset = 0
+        self.showMS = False
+        self.range = [0, 1]  # default range
+        # Clear any cached data
+        if hasattr(self, '_tickStrings'):
+            self._tickStrings = []
+        self.update()
 
 
 class TimeAxisMin(pg.AxisItem):
@@ -85,6 +105,7 @@ class TimeAxisMin(pg.AxisItem):
         self.offset = 0
         self.setLabel('Time', units='mm:ss.z')
         self.showMS = False
+        self.range = [0, 1]  # default range
 
     def setShowMS(self,value):
         self.showMS = value
@@ -119,6 +140,25 @@ class TimeAxisMin(pg.AxisItem):
 
     def setOffset(self,offset):
         self.offset = offset
+        self.update()
+    
+    def setRange(self, minimum, maximum):
+        """Set the range for the time axis"""
+        # Store the range for use in tick calculations
+        self.range = [minimum, maximum]
+        # Call the parent's setRange method to properly set the axis range
+        super().setRange(minimum, maximum)
+        # Force an update to redraw the axis
+        self.update()
+    
+    def clear(self):
+        """Clear the axis and reset its state"""
+        self.offset = 0
+        self.showMS = False
+        self.range = [0, 1]  # default range
+        # Clear any cached data
+        if hasattr(self, '_tickStrings'):
+            self._tickStrings = []
         self.update()
 
 

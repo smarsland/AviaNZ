@@ -245,6 +245,7 @@ class AviaNZ(QMainWindow):
         else:
             self.SoundFileDir = self.config['SoundFileDir']
         self.filename = None
+        self.timeaxis = None  # Initialize timeaxis to None
         self.focusRegion = None
         self.operator = self.config['operator']
         self.reviewer = self.config['reviewer']
@@ -1550,19 +1551,46 @@ class AviaNZ(QMainWindow):
                     self.zooniverse, self.config, self.batmode
                 )
                 # Get display components
-                self.timeaxis = self.display_manager.timeaxis
+                new_timeaxis = self.display_manager.timeaxis
                 self.nFileSections = self.display_manager.nFileSections
                 self.startTime = self.display_manager.start_time
                 
                 # Add timeaxis to UI
                 if not self.zooniverse:
-                    # Remove old timeaxis if it exists
-                    if hasattr(self, 'w_spec') and hasattr(self, 'timeaxis'):
+                    # Remove old timeaxis if it exists and clear the layout position
+                    if hasattr(self, 'w_spec') and hasattr(self, 'timeaxis') and self.timeaxis is not None:
                         try:
                             self.w_spec.removeItem(self.timeaxis)
+                            # Clear the timeaxis to prevent overlay issues
+                            if hasattr(self.timeaxis, 'clear'):
+                                self.timeaxis.clear()
                         except:
                             pass  # timeaxis might not be added yet
+                    
+                    # Set the new timeaxis
+                    self.timeaxis = new_timeaxis
+                    
+                    # Ensure the layout position is clear before adding
+                    try:
+                        # Try to get any existing item at this position and remove it
+                        existing_item = self.w_spec.getItem(1, 1)
+                        if existing_item is not None:
+                            self.w_spec.removeItem(existing_item)
+                    except:
+                        # If getItem doesn't exist, try alternative approach
+                        try:
+                            # Clear the grid position by setting it to None
+                            if hasattr(self.w_spec, 'grid') and hasattr(self.w_spec.grid, 'setItemAt'):
+                                self.w_spec.grid.setItemAt(1, 1, None)
+                        except:
+                            pass
+                    
+                    # Add the new timeaxis
                     self.w_spec.addItem(self.timeaxis, row=1, col=1)
+                    
+                    # Set the initial timeaxis range to match the window size
+                    if hasattr(self, 'windowSize'):
+                        self.timeaxis.setRange(0, self.windowSize)
                 
                 # Update UI controls
                 self._update_file_info_display()
@@ -2023,7 +2051,15 @@ class AviaNZ(QMainWindow):
             self.p_plot.setXRange(self.audio_processor.convertSpectoAmpl(minX)*4, self.audio_processor.convertSpectoAmpl(maxX)*4)
         self.scrollSlider.setValue(int(minX))
         self.config['windowWidth'] = self.audio_processor.convertSpectoAmpl(maxX-minX)
-        self.timeaxis.update()
+        
+        # Update the window size and timeaxis range
+        if hasattr(self, 'timeaxis') and self.timeaxis is not None:
+            # Update the current window size
+            self.windowSize = self.audio_processor.convertSpectoAmpl(maxX-minX)
+            # Update the timeaxis to show the new window duration
+            self.timeaxis.setRange(0, self.windowSize)
+            self.timeaxis.update()
+        
         QApplication.processEvents()
         self.updateRequestedByOverview = False
 

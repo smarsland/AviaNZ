@@ -661,6 +661,8 @@ class Spectrogram:
         elif sgScale == 'Bark Frequency':
             self.convertToMel(filt='bark',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
 
+        print("SPECTROGRAM OUTPUT SHAPE:",self.sg.shape)
+
         return self.sg
 
     def normalisedSpec(self, tr="Log"):

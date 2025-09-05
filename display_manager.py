@@ -364,10 +364,10 @@ class DisplayManager(QObject):
         self.start_read = start_read
         
         # Create time axis based on file type
-        if hasattr(self, 'timeaxis') and not zooniverse:
-            # Remove existing timeaxis from main window's w_spec
-            # Note: This removal needs to be handled by the main window
-            pass
+        # Clear any existing timeaxis first
+        if hasattr(self, 'timeaxis') and self.timeaxis is not None:
+            self.timeaxis.clear()
+            self.timeaxis = None
             
         # Check if filename is in DOC format for time axis type
         DOCRecording = re.search(r'(\d{6})_(\d{6})', filename[-17:-4])
@@ -381,11 +381,11 @@ class DisplayManager(QObject):
                 print("Day time DOC recording")
                 
             self.start_time = int(self.start_time[:2]) * 3600 + int(self.start_time[2:4]) * 60 + int(self.start_time[4:6])
-            # Note: p_ampl reference needs to be passed from main window
-            self.timeaxis = SupportClasses_GUI.TimeAxisHour(orientation='bottom', linkView=None)
+            # Create timeaxis - will be linked to ViewBox in main window
+            self.timeaxis = SupportClasses_GUI.TimeAxisHour(orientation='bottom')
         else:
             self.start_time = 0
-            self.timeaxis = SupportClasses_GUI.TimeAxisMin(orientation='bottom', linkView=None)
+            self.timeaxis = SupportClasses_GUI.TimeAxisMin(orientation='bottom')
         
         # Calculate file sections
         if datalength_sec != sp.fileLength and not batmode:
