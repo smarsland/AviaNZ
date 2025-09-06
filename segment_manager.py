@@ -50,10 +50,9 @@ class SegmentManager(QObject):
         self.datalengthSec = 0
         self.batmode = False
         
-        # Overview display context
-        self.overviewSegments = None
-        self.widthOverviewSegment = 0
-        self.SegmentRects = []
+        # Overview display context (now accessed via display_manager)
+        # self.overviewSegments, self.widthOverviewSegment, self.SegmentRects 
+        # are no longer stored here to avoid stale references
         
     def set_audio_context(self, startRead, datalengthSec, batmode):
         """Set current audio and display context for segment operations."""
@@ -62,10 +61,10 @@ class SegmentManager(QObject):
         self.batmode = batmode
         
     def set_overview_context(self, overviewSegments, widthOverviewSegment, SegmentRects):
-        """Set overview tracking variables."""
-        self.overviewSegments = overviewSegments
-        self.widthOverviewSegment = widthOverviewSegment
-        self.SegmentRects = SegmentRects
+        """Set overview tracking variables (deprecated - now uses display_manager directly)."""
+        # This method is kept for compatibility but the values are no longer used
+        # The update_overview_counters method now accesses display_manager arrays directly
+        pass
         
     def refreshSegmentControls(self):
         """Toggles all the segment controls on/off when a segment
@@ -273,45 +272,52 @@ class SegmentManager(QObject):
             segment: The segment to update counters for
             delete: True if removing the segment, False if adding
         """
-        if self.overviewSegments is None or self.widthOverviewSegment == 0:
+        # Always use display manager's arrays directly to avoid stale references
+        if not hasattr(self.display_manager, 'overviewSegments') or self.display_manager.overviewSegments is None:
+            return
+            
+        overviewSegments = self.display_manager.overviewSegments
+        widthOverviewSegment = getattr(self.display_manager, 'widthOverviewSegment', 0)
+        
+        if widthOverviewSegment == 0:
             return
             
         # Calculate which overview segments this segment spans
-        if hasattr(self, 'audio_processor') and self.audio_processor:
-            inds = max(0, int(self.audio_processor.convertAmpltoSpec(segment[0] - self.startRead) / self.widthOverviewSegment))
-            inde = min(int(self.audio_processor.convertAmpltoSpec(segment[1] - self.startRead) / self.widthOverviewSegment), 
-                      len(self.overviewSegments) - 1)
+        # Use audio processor from display manager to get proper conversion
+        audio_processor = self.display_manager.audio_processor
+        if audio_processor:
+            inds = max(0, int(audio_processor.convertAmpltoSpec(segment[0] - self.startRead) / widthOverviewSegment))
+            inde = min(int(audio_processor.convertAmpltoSpec(segment[1] - self.startRead) / widthOverviewSegment), 
+                      len(overviewSegments) - 1)
         else:
-            # Fallback calculation if audio_processor not available
-            inds = max(0, int((segment[0] - self.startRead) * 100 / self.widthOverviewSegment))
-            inde = min(int((segment[1] - self.startRead) * 100 / self.widthOverviewSegment), 
-                      len(self.overviewSegments) - 1)
+            print("Warning: No audio processor available for overview calculation")
+            return
 
         # Update counters based on label certainties
         for label in segment[4]:
             if label["certainty"] == 0:
                 # "red" label counter
                 if delete:
-                    self.overviewSegments[inds:inde + 1, 0] -= 1
+                    overviewSegments[inds:inde + 1, 0] -= 1
                 else:
-                    self.overviewSegments[inds:inde + 1, 0] += 1
+                    overviewSegments[inds:inde + 1, 0] += 1
             elif label["certainty"] == 100:
                 # "green" label counter
                 if delete:
-                    self.overviewSegments[inds:inde + 1, 1] -= 1
+                    overviewSegments[inds:inde + 1, 1] -= 1
                 else:
-                    self.overviewSegments[inds:inde + 1, 1] += 1
+                    overviewSegments[inds:inde + 1, 1] += 1
             else:
                 # "yellow" label counter
                 if delete:
-                    self.overviewSegments[inds:inde + 1, 2] -= 1
+                    overviewSegments[inds:inde + 1, 2] -= 1
                 else:
-                    self.overviewSegments[inds:inde + 1, 2] += 1
+                    overviewSegments[inds:inde + 1, 2] += 1
 
         # Prevent negative counters
-        if np.any(self.overviewSegments < 0):
+        if np.any(overviewSegments < 0):
             print("Warning: something went wrong with overview colors!")
-            self.overviewSegments[self.overviewSegments < 0] = 0
+            overviewSegments[overviewSegments < 0] = 0
 
     def confirmSegment(self):
         """Confirm labels on the selected segment (set certainty to 100)."""
@@ -388,13 +394,16 @@ class SegmentManager(QObject):
         
     def set_segments_data(self, segments):
         """Set the segments data (for loading from file)."""
-        self.segments = segments if segments else []
+        if segments:
+            self.segments = segments
+        else:
+            self.segments = Segment.SegmentList()
         self.segments_to_save = False
         self.segments_to_save_changed.emit(False)
         
     def clear_segments(self):
         """Clear all segments."""
-        self.segments = []
+        self.segments = Segment.SegmentList()
         self.segments_to_save = False
         self.segments_to_save_changed.emit(False)
         self.box1id = -1
@@ -439,7 +448,13 @@ class SegmentManager(QObject):
     
     def set_segments(self, segments):
         """Set the segments list (when loading a file)"""
-        self.segments = segments
+        if segments and hasattr(segments, 'metadata'):
+            self.segments = segments
+        else:
+            # Create new SegmentList and copy data if needed
+            self.segments = Segment.SegmentList()
+            if segments:
+                self.segments.extend(segments)
         self.segments_to_save = False
         self.box1id = -1
         

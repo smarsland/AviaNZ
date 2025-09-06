@@ -75,7 +75,7 @@ class TimeAxisHour(pg.AxisItem):
 
     def setOffset(self,offset):
         self.offset = offset
-        #self.update()
+        self.update()
     
     def setRange(self, minimum, maximum):
         """Set the range for the time axis"""

@@ -206,13 +206,22 @@ class AudioFileManager(QObject):
         if segments is None:
             return False
             
+        # Ensure we have a proper SegmentList with metadata
         if not hasattr(segments, 'metadata'):
-            # Add metadata if it doesn't exist
-            try:
-                segments.metadata = {}
-            except Exception as e:
-                print(f"Error adding metadata: {e}")
+            # Convert plain list to SegmentList if needed
+            if isinstance(segments, list):
+                import Segment
+                new_segments = Segment.SegmentList()
+                new_segments.extend(segments)
+                segments = new_segments
+            else:
+                # Still can't add metadata - this shouldn't happen
+                print("Error: segments object doesn't support metadata")
                 return False
+            
+        # Ensure metadata is a dictionary
+        if not hasattr(segments, 'metadata') or segments.metadata is None:
+            segments.metadata = {}
             
         # Update metadata (even for empty segments list)
         if operator:

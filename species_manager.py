@@ -26,33 +26,6 @@ class SpeciesManager(QObject):
         super().__init__()
         self.config_manager = config_manager
         self.config = config_manager.config
-        
-    def clean_text_encoding(self, text):
-        """Clean up text encoding issues, particularly with apostrophes."""
-        if not text:
-            return text
-            
-        # Fix common encoding issues with apostrophes
-        text = text.replace('â', "'")  # Fix corrupted apostrophe
-        text = text.replace(''', "'")  # Fix smart quote to regular apostrophe
-        text = text.replace(''', "'")  # Fix another smart quote variant
-        
-        return text
-    
-    def clean_species_list(self, species_list):
-        """Clean a species list to fix encoding issues."""
-        if not species_list:
-            return species_list
-            
-        cleaned_list = []
-        for species in species_list:
-            if isinstance(species, str):
-                cleaned_species = self.clean_text_encoding(species)
-                cleaned_list.append(cleaned_species)
-            else:
-                cleaned_list.append(species)
-                
-        return cleaned_list
     
     def parse_species_name(self, name_string):
         """Parse species name from various formats.
@@ -163,7 +136,7 @@ class SpeciesManager(QObject):
         Returns: Reordered list with recent species at top
         """
         if not self.config.get('ReorderList', True) or not segment_labels:
-            return self._normalize_short_list(short_list)
+            return self.normalize_short_list(short_list)
             
         updated_list = short_list.copy()
         
@@ -178,13 +151,9 @@ class SpeciesManager(QObject):
                 updated_list.pop()
                 updated_list.insert(0, species)
                 
-        return self._normalize_short_list(updated_list[:30])  # Limit to 30 items
+        return self.normalize_short_list(updated_list[:30])  # Limit to 30 items
     
-    def _normalize_short_list(self, bird_list):
-        """Normalize short bird list - move blanks to end, Don't Know to start, and clean encoding."""
-        # Clean encoding issues first
-        bird_list = self.clean_species_list(bird_list)
-        
+    def normalize_short_list(self, bird_list):
         # Remove empty strings and put them at the end
         non_empty = [x for x in bird_list if x.strip() != ""]
         empty = [x for x in bird_list if x.strip() == ""]
@@ -301,12 +270,8 @@ class SpeciesManager(QObject):
         if display_name not in known_calls:
             known_calls[display_name] = []
             
-        # Save to config
-        self.config_manager.ConfigLoader.blwrite(
-            long_list, 
-            self.config['BirdListLong'], 
-            self.config_manager.configdir
-        )
+        # Save bird lists via ConfigManager
+        self.config_manager.save_bird_lists()
         
         # Emit signal
         self.species_added.emit(display_name, known_calls.get(display_name, []))
@@ -346,6 +311,9 @@ class SpeciesManager(QObject):
             
         # Add to calls list
         known_calls[species_name].append(call_type)
+        
+        # Save bird lists via ConfigManager  
+        self.config_manager.save_bird_lists()
         
         # Emit signal  
         self.call_type_added.emit(species_name, call_type, known_calls[species_name])

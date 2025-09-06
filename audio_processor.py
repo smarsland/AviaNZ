@@ -23,7 +23,6 @@ class AudioProcessor(QObject):
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config_manager = config_manager
-        self.config = config_manager.config
         
         # These will be set by the main window when needed
         self.sp = None  # Spectrogram processor instance
@@ -31,13 +30,12 @@ class AudioProcessor(QObject):
         self.batmode = False
         self.datalength = 0
         
-    def process_audio_file(self, filename, start_read, config, batmode, cheatsheet, existing_sp=None):
+    def process_audio_file(self, filename, start_read, batmode, cheatsheet, existing_sp=None):
         """Process audio file and create spectrogram.
         
         Args:
             filename: Path to audio file
             start_read: Starting position in seconds
-            config: Configuration dictionary
             batmode: Whether in bat mode
             cheatsheet: Whether in cheatsheet mode
             existing_sp: Existing spectrogram processor to reuse (optional)
@@ -55,28 +53,28 @@ class AudioProcessor(QObject):
                 if cheatsheet:
                     self.sp = Spectrogram.Spectrogram(512, 256, 0, 0)
                 else:
-                    minFreqShow = config['minFreq']
-                    maxFreqShow = config['maxFreq']
+                    minFreqShow = self.config_manager.config['minFreq']
+                    maxFreqShow = self.config_manager.config['maxFreq']
                     # Note: spectrogramDialog access would need to be passed from main window
-                    self.sp = Spectrogram.Spectrogram(config['window_width'], config['incr'], minFreqShow, maxFreqShow)
+                    self.sp = Spectrogram.Spectrogram(self.config_manager.config['window_width'], self.config_manager.config['incr'], minFreqShow, maxFreqShow)
             
             # Read audio file
             if batmode:
-                self.sp.minFreqShow = config['minFreqBats']
-                self.sp.maxFreqShow = config['maxFreqBats']
+                self.sp.minFreqShow = self.config_manager.config['minFreqBats']
+                self.sp.maxFreqShow = self.config_manager.config['maxFreqBats']
                 successread = self.sp.readBmp(filename)
                 if successread > 0:
                     print("ERROR: file not loaded")
                     return False
                 self.datalength = self.sp.fileLength
             else:
-                self.sp.minFreqShow = config['minFreq']
-                self.sp.maxFreqShow = config['maxFreq']
+                self.sp.minFreqShow = self.config_manager.config['minFreq']
+                self.sp.maxFreqShow = self.config_manager.config['maxFreq']
                 
                 if start_read == 0:
-                    lenRead = config['maxFileShow'] + config['fileOverlap']
+                    lenRead = self.config_manager.config['maxFileShow'] + self.config_manager.config['fileOverlap']
                 else:
-                    lenRead = config['maxFileShow'] + 2 * config['fileOverlap']
+                    lenRead = self.config_manager.config['maxFileShow'] + 2 * self.config_manager.config['fileOverlap']
                 
                 self.sp.readSoundFile(filename, lenRead, start_read)
                 
@@ -90,15 +88,15 @@ class AudioProcessor(QObject):
             # Create spectrogram if not in bat mode
             if not batmode:
                 _ = self.sp.spectrogram(
-                    window_width=config['window_width'], 
-                    incr=config['incr'],
-                    window=config['windowType'],
-                    sgType=config['sgType'],
-                    sgScale=config['sgScale'],
-                    nfilters=config['nfilters'],
-                    mean_normalise=config['sgMeanNormalise'],
-                    equal_loudness=config['sgEqualLoudness'],
-                    onesided=config['sgOneSided']
+                    window_width=self.config_manager.config['window_width'], 
+                    incr=self.config_manager.config['incr'],
+                    window=self.config_manager.config['windowType'],
+                    sgType=self.config_manager.config['sgType'],
+                    sgScale=self.config_manager.config['sgScale'],
+                    nfilters=self.config_manager.config['nfilters'],
+                    mean_normalise=self.config_manager.config['sgMeanNormalise'],
+                    equal_loudness=self.config_manager.config['sgEqualLoudness'],
+                    onesided=self.config_manager.config['sgOneSided']
                 )
             
             self.batmode = batmode
@@ -127,7 +125,7 @@ class AudioProcessor(QObject):
         if self.batmode:
             incr = 512
         else:
-            incr = self.config['incr']
+            incr = self.config_manager.config['incr']
         
         if self.sp is None:
             return x  # Return unchanged if no audio context
@@ -139,7 +137,7 @@ class AudioProcessor(QObject):
         if self.batmode:
             incr = 512
         else:
-            incr = self.config['incr']
+            incr = self.config_manager.config['incr']
             
         if self.sp is None:
             return x  # Return unchanged if no audio context
@@ -190,7 +188,7 @@ class AudioProcessor(QObject):
         WFinst = WaveletFunctions.WaveletFunctions(
             data=data, 
             wavelet="dmey2", 
-            maxLevel=self.config['maxSearchDepth'], 
+            maxLevel=self.config_manager.config['maxSearchDepth'], 
             samplerate=self.sp.audioFormat.sampleRate()
         )
         
@@ -239,7 +237,7 @@ class AudioProcessor(QObject):
         WF = WaveletFunctions.WaveletFunctions(
             data=segment_data, 
             wavelet=wavelet, 
-            maxLevel=self.config['maxSearchDepth'], 
+            maxLevel=self.config_manager.config['maxSearchDepth'], 
             samplerate=self.sp.audioFormat.sampleRate()
         )
         
@@ -294,7 +292,7 @@ class AudioProcessor(QObject):
             waveletDenoiser = WaveletFunctions.WaveletFunctions(
                 data=self.sp.data, 
                 wavelet=wavelet, 
-                maxLevel=self.config['maxSearchDepth'], 
+                maxLevel=self.config_manager.config['maxSearchDepth'], 
                 samplerate=self.sp.audioFormat.sampleRate()
             )
             

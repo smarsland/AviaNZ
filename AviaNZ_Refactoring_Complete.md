@@ -1,11 +1,22 @@
 # AviaNZ Refactoring Complete - Architecture Documentation
 
-**Date**: September 1, 2025  
-**Scope**: Complete refactoring of AviaNZ_manual.py from monolithic 6,124-line file to modular architecture
+**Date**: September 5, 2025  
+**Scope**: Complete refactoring of AviaNZ_manual.py from monolithic 6,124-line file to modular architecture + session state pattern implementation
 
 ## Overview
 
-This document describes the complete refactoring of the AviaNZ bioacoustic analysis application, transforming it from a single massive file into a clean, modular architecture following Qt6 patterns and modern software design principles.
+This document describes the complete refactoring of the A### Phase 9: Session State Pattern Implementation ✅ 
+- **Problem**: Redundant config assignments creating dual access patterns + unclear file/directory state management + UI state cleanup
+- **Eliminated**: `self.config = self.config_manager.config` (200+ references)
+- **Eliminated**: `self.DOC = self.config_manager.config['DOC']` redundant assignment
+- **Eliminated**: Redundant variables moved to managers: `self.playSpeed`, `self.segmentsToSave`, `self.noisefloor`
+- **Dead Code Cleanup**: Removed unused `self.focusRegion` and `self.filters` variables
+- **Pattern**: Implemented `session_` prefix for file-specific state variables
+- **Variables**: `self.operator` → `self.session_operator`, `self.reviewer` → `self.session_reviewer`, `self.multipleBirds` → `self.session_multipleBirds`
+- **File Context**: `self.SoundFileDir` → `self.session_sound_file_dir`, `self.filename` → `self.session_filename`
+- **Species State**: `self.lastSpecies` → `self.session_last_species`
+- **Bug Fix**: Overview segments now properly update when segments are deleted
+- **Achievement**: Crystal-clear distinction between global config, file session state, manager responsibilities, and UI stateacoustic analysis application, transforming it from a single massive file into a clean, modular architecture following Qt6 patterns and modern software design principles. **Updated** to include session state pattern implementation for cleaner configuration management.
 
 ## Original Problem
 
@@ -42,6 +53,12 @@ AviaNZ_manual.py (3,200 lines)     ← UI creation, events, signal coordination,
 ├── segment_manager.py (712 lines) ← Segment data operations, overview management
 ├── species_manager.py (380 lines) ← Species business logic, validation, list management
 └── SupportClasses_GUI.py           ← Enhanced species menu classes integrated here
+
+**Session State Pattern:**
+- File session variables use `session_` prefix (session_operator, session_reviewer, session_multipleBirds, session_sound_file_dir, session_filename, session_last_species)
+- Global config accessed via `self.config_manager.config['key']` only
+- Manager responsibilities clearly defined (playSpeed → playback_manager, segmentsToSave → segment_manager, noisefloor → display_manager)
+- Clear distinction: global settings vs. per-file session state vs. runtime file context vs. manager state
 ```
 
 ## Detailed Module Responsibilities
@@ -170,6 +187,70 @@ self.audio_file_manager.file_loaded.connect(self.on_file_loaded)
 self.playback_manager.playback_started.connect(self.on_playback_started)
 ```
 
+## Session State Pattern - Architecture Detail
+
+### Problem Statement
+The original code had redundant configuration assignments that created confusion and maintenance issues:
+```python
+# Problematic dual access patterns
+self.config = self.config_manager.config  # 200+ references throughout codebase
+self.DOC = self.config_manager.config['DOC']  # Redundant assignment
+self.operator = self.config_manager.config['operator']  # File-specific state mixed with global config
+```
+
+### Solution: Session State Pattern
+Implemented clear distinction between global configuration and file session state:
+
+#### Global Configuration Access:
+```python
+# Single source of truth - always use config_manager
+value = self.config_manager.config['setting_name']
+```
+
+#### File Session State Variables:
+```python
+# Session state (initialized from config but can be overridden per file)
+self.session_operator = self.config_manager.config['operator']      # Can be overridden by file metadata
+self.session_reviewer = self.config_manager.config['reviewer']      # Can be overridden by file metadata  
+self.session_multipleBirds = self.config_manager.config['MultipleSpecies']  # Can be auto-enabled when multiple species detected
+
+# File/directory context (changes during runtime)
+self.session_sound_file_dir = ...   # Current working directory 
+self.session_filename = None        # Currently loaded file path
+```
+
+#### Per-File Override Logic:
+```python
+def load_file_metadata(self, filename):
+    """Load file and override session state with file-specific metadata"""
+    metadata = self.load_annotation_metadata(filename)
+    
+    # Override session state without affecting global config
+    self.session_operator = metadata.get("Operator", self.session_operator)
+    self.session_reviewer = metadata.get("Reviewer", self.session_reviewer)
+    
+    # Auto-enable multipleBirds if multiple species detected in file
+    if multiple_species_detected and not self.session_multipleBirds:
+        self.session_multipleBirds = True
+```
+
+### Benefits Achieved:
+1. **Code Clarity**: `session_` prefix immediately identifies file-specific state
+2. **No Dual Access**: Eliminated confusion between `self.config['key']` vs `self.config_manager.config['key']` 
+3. **Clear Intent**: Session variables explicitly show they can be overridden per file
+4. **Maintainability**: Future developers understand the distinction immediately
+5. **Architecture**: Clean separation between global settings and file session state
+
+### Pattern Rules:
+- **Global Config**: Always access via `self.config_manager.config['key']`
+- **Session State**: Use `session_` prefix for any variable that:
+  - Is initialized from global config
+  - Can be overridden on a per-file basis  
+  - Should not persist back to global config
+- **File Context**: Use `session_` prefix for runtime file/directory state that changes during application use
+- **Dead Code**: Remove unused variables like `self.focusRegion`, `self.filters` that serve no purpose
+- **Documentation**: Comment session variables to explain override behavior
+
 ## Communication Architecture
 
 ### Signal-Based Loose Coupling
@@ -237,6 +318,16 @@ Main Window
 - **Result**: Clean UI controller with signal coordination only
 - **Final size**: 3,200 lines (48% reduction from original)
 
+### Phase 9: Session State Pattern Implementation ✅ 
+- **Problem**: Redundant config assignments creating dual access patterns + unclear file/directory state management
+- **Eliminated**: `self.config = self.config_manager.config` (200+ references)
+- **Eliminated**: `self.DOC = self.config_manager.config['DOC']` redundant assignment
+- **Pattern**: Implemented `session_` prefix for file-specific state variables
+- **Variables**: `self.operator` → `self.session_operator`, `self.reviewer` → `self.session_reviewer`, `self.multipleBirds` → `self.session_multipleBirds`
+- **File Context**: `self.SoundFileDir` → `self.session_sound_file_dir`, `self.filename` → `self.session_filename`
+- **Dead Code Cleanup**: Removed unused `self.focusRegion` and `self.filters` variables
+- **Achievement**: Crystal-clear distinction between global config, file session state, and runtime file context
+
 ## Species Menu System - Special Focus
 
 The species menu system was particularly convoluted and required complete redesign:
@@ -268,6 +359,7 @@ The species menu system was particularly convoluted and required complete redesi
 - **Final Main Window**: 3,200 lines (48% reduction)
 - **Total Modular Code**: 3,599 lines across 8 modules
 - **Net Code Reduction**: ~2,525 lines through elimination of duplication
+- **Session State Cleanup**: Eliminated 200+ redundant config references
 - **Maintainability**: Dramatically improved through separation of concerns
 
 ### Architecture Benefits:
@@ -277,6 +369,8 @@ The species menu system was particularly convoluted and required complete redesi
 4. **Extensibility**: New features can be added without modifying existing modules
 5. **Debugging**: Issues can be isolated to specific modules
 6. **Code Reuse**: Common functionality properly abstracted
+7. **Session State Clarity**: Clear distinction between global config and file session state
+8. **No Dual Access Patterns**: Single source of truth for all configuration
 
 ### Qt6 Modernization:
 - Signal-based architecture throughout
@@ -325,12 +419,19 @@ The modular structure enables future plugin development where new modules can be
 
 This refactoring transforms AviaNZ from a maintenance nightmare into a modern, modular application following software engineering best practices. The architecture is now:
 
-- **Maintainable**: Clear separation of concerns
+- **Maintainable**: Clear separation of concerns + session state pattern
 - **Testable**: Business logic independent of UI
 - **Extensible**: Easy to add new features
 - **Debuggable**: Issues can be isolated
 - **Modern**: Follows Qt6 and Python best practices
+- **Clear**: Session state pattern eliminates configuration confusion
 
-The 48% reduction in main window size, elimination of code duplication, and clear architectural boundaries represent a fundamental improvement in code quality while preserving all existing functionality.
+The 48% reduction in main window size, elimination of code duplication, clear architectural boundaries, and implementation of the session state pattern represent a fundamental improvement in code quality while preserving all existing functionality.
 
-This refactoring serves as a model for modernizing large legacy Qt applications while maintaining backward compatibility and user experience.
+**Key Architectural Patterns Established:**
+1. **Manager-Based Architecture**: Business logic separated into focused managers
+2. **Signal-Based Communication**: Loose coupling between components  
+3. **Session State Pattern**: Clear distinction between global config and file session state
+4. **Single Source of Truth**: All configuration accessed via ConfigManager
+
+This refactoring serves as a model for modernizing large legacy Qt applications while maintaining backward compatibility and user experience. The session state pattern in particular provides a template for handling per-file overrides without corrupting global configuration.

@@ -28,7 +28,6 @@ class ConfigManager(QObject):
         # Initialize config loader
         self.ConfigLoader = SupportClasses.ConfigLoader()
         self.config = None
-        self.saveConfigFlag = True
         
         # Parameter tree for settings dialog
         self.parameter_tree = None
@@ -36,6 +35,7 @@ class ConfigManager(QObject):
         
         # Load configuration
         self.load_config()
+        print("Config loaded")
         
     def load_config(self):
         """Load configuration from file."""
@@ -386,8 +386,6 @@ class ConfigManager(QObject):
             elif childName == 'Bird List.Freebird List.Choose File':
                 self._choose_freebird_list_file()
 
-        self.saveConfigFlag = True
-        
         # Reload the file to apply settings
         if self.parent_window and hasattr(self.parent_window, 'resetStorageArrays'):
             self.parent_window.resetStorageArrays()
@@ -465,6 +463,14 @@ class ConfigManager(QObject):
         
     def save_config_to_file(self):
         """Save configuration to file."""
-        if self.saveConfigFlag:
-            self.ConfigLoader.configwrite(self.config, self.configfile)
-            self.config_saved.emit()
+        self.ConfigLoader.configwrite(self.config, self.configfile)
+        self.config_saved.emit()
+    
+    def save_bird_lists(self):
+        """Save all bird lists to their respective files."""
+        # Save each list to its configured file
+        self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+        self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir) 
+        self.ConfigLoader.blwrite(self.batList, self.config['BatList'], self.configdir)
+        if self.knownCalls:
+            self.ConfigLoader.knownCallsWrite(self.knownCalls, self.config['KnownCallsList'], self.configdir)
