@@ -5123,7 +5123,21 @@ class AviaNZ(QMainWindow):
             sampleRate = 16000
         else:
             sampleRate = self.sp.audioFormat.sampleRate()
-        sf.write(filename, new_wave, sampleRate)
+        
+        # Normalize the reconstructed audio like other save functions do
+        if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+            normalised_data = (new_wave - 128) / 128
+        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+            normalised_data = new_wave / 32768
+        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int8:
+            normalised_data = new_wave / 128
+        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+            normalised_data = new_wave / 2147483648
+        else:
+            print("ERROR: sampleSize %d not supported" % self.sp.audioFormat.sampleSize())
+            normalised_data = new_wave / 32768  # Default to 16-bit normalization
+            
+        sf.write(filename, normalised_data, sampleRate)
         self.session_batmode = False
         # update the file list box
         self.audio_file_manager.populate_file_list(self.session_sound_file_dir, os.path.basename(self.session_filename), self.listFiles)
