@@ -389,8 +389,8 @@ class ConfigManager(QObject):
         # Reload the file to apply settings
         if self.parent_window and hasattr(self.parent_window, 'resetStorageArrays'):
             self.parent_window.resetStorageArrays()
-            if hasattr(self.parent_window, 'loadFile') and hasattr(self.parent_window, 'filename'):
-                self.parent_window.loadFile(self.parent_window.filename)
+            if hasattr(self.parent_window, 'loadFile') and hasattr(self.parent_window, 'session_filename'):
+                self.parent_window.loadFile(self.parent_window.session_filename)
 
     def _choose_bird_list_file(self, list_name, config_key, loader_method):
         """Handle bird list file selection."""

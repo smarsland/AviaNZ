@@ -195,22 +195,27 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
 
 # TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
-def invertSpectrogram(sg,incr=32,nits=10,window='Hamming',bmp=True):
-    # Assumes that this is the plain (not power) spectrogram
+def invertSpectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True):
     sp = Spectrogram.Spectrogram()
-    window_width = int(np.shape(sg)[1])
-    # If the spectrogram is a bmp, it is one-sided, make it two-sided
+    
     if bmp:
-        #sg = sg[:,::8]
-        sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
-
+        window_width = sg.shape[1]
+        # Add the missing Nyquist bin by duplicating the last bin
+        sg_with_nyquist = np.concatenate([sg, sg[:, -1:]], axis=1)
+        # Now mirror: original + reversed (excluding DC and Nyquist)
+        sg = np.concatenate([sg_with_nyquist, sg_with_nyquist[:, -2:0:-1]], axis=1)
+    else:
+        window_width = sg.shape[1] // 2
+    
     current_sg = copy.deepcopy(sg)
     for i in range(nits):
         new_wave = inversion_iteration(current_sg, incr, calculate_offset=True, iteration=i, window=window)
         sp.setData(new_wave)
-        new_sg = sp.spectrogram(window_width, incr, onesided=False,need_even=False, complex_values=True, window=window)
+        new_sg = sp.spectrogram(window_width=window_width, incr=incr, onesided=False, 
+                               need_even=False, complex_values=True, window=window)
         if new_sg.shape[0] != sg.shape[0]:
             new_sg = new_sg[:sg.shape[0],:]
+            
         new_phase = new_sg / np.maximum(np.max(sg)/1E8, np.abs(new_sg))
         current_sg = sg * new_phase
 
@@ -234,7 +239,8 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
     Magnitude Spectra. IEEE Transactions on Audio Speech and
     Language Processing, 08/2007.
     """
-    windowSize = int(np.shape(sg)[1] // 2)
+    # For a two-sided FFT, windowSize equals the number of frequency bins
+    windowSize = int(np.shape(sg)[1])
     wave = np.zeros(((np.shape(sg)[0]) * incr + windowSize - 1),dtype='float64')
     # Getting overflow warnings with 32 bit...
     #wave = wave.astype('float64')
@@ -278,8 +284,6 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
         print("Unknown window, using Hann")
         window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)))
 
-    fft_start = int(windowSize // 2) -1
-    fft_end = fft_start + windowSize 
     for i in range(sg.shape[0]):
         wave_start = incr * i
         wave_end = wave_start + windowSize 
@@ -291,13 +295,25 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
 
         if calculate_offset and i > 0 and iteration==0:
             offset_size = windowSize - incr 
-            cor = fast_xcorr(wave[wave_start:wave_start+offset_size],wave_est[fft_start:fft_start+offset_size])
-            ind = np.argmax(cor[offset_size//2:-offset_size//2])+offset_size//2
-            bestOffset = ind-offset_size
+            # For offset calculation, we need to extract the right part of wave_est
+            if len(wave_est) >= offset_size:
+                cor = fast_xcorr(wave[wave_start:wave_start+offset_size], wave_est[:offset_size])
+                ind = np.argmax(cor[offset_size//2:-offset_size//2])+offset_size//2
+                bestOffset = ind-offset_size
+            else:
+                bestOffset = 0
         else:
             bestOffset = 0
-        wave[wave_start:wave_end] += wave_est[fft_start - bestOffset:fft_end - bestOffset]
-        total_windowing_sum[wave_start:wave_end] += window 
+        
+        # Ensure we don't go out of bounds when applying offset
+        src_start = max(0, -bestOffset)
+        src_end = min(windowSize, windowSize - bestOffset)
+        dst_start = wave_start + src_start
+        dst_end = wave_start + src_end
+        
+        if dst_end <= len(wave) and src_end <= len(wave_est):
+            wave[dst_start:dst_end] += wave_est[src_start:src_end]
+            total_windowing_sum[dst_start:dst_end] += window[src_start:src_end] 
     inds = np.where(total_windowing_sum!=0)
     wave = np.real(wave[inds]) / total_windowing_sum[inds]
     return wave

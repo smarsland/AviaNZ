@@ -5,18 +5,41 @@
 
 ## Overview
 
-This document describes the complete refactoring of the A### Phase 9: Session State Pattern Implementation ✅ 
-- **Problem**: Redundant config assignments creating dual access patterns + unclear file/directory state management + UI state cleanup
+This document describes the complete refactoring of the A### Phase 8: Main Window Cleanup ✅
+- **Result**: Clean UI controller with signal coordination only
+- **Final size**: 3,200 lines (48% reduction from original)
+
+### Phase 9: Session State Pattern Implementation ✅ 
+- **Problem**: Redundant config assignments creating dual access patterns + unclear file/directory state management
 - **Eliminated**: `self.config = self.config_manager.config` (200+ references)
 - **Eliminated**: `self.DOC = self.config_manager.config['DOC']` redundant assignment
-- **Eliminated**: Redundant variables moved to managers: `self.playSpeed`, `self.segmentsToSave`, `self.noisefloor`
-- **Dead Code Cleanup**: Removed unused `self.focusRegion` and `self.filters` variables
 - **Pattern**: Implemented `session_` prefix for file-specific state variables
 - **Variables**: `self.operator` → `self.session_operator`, `self.reviewer` → `self.session_reviewer`, `self.multipleBirds` → `self.session_multipleBirds`
 - **File Context**: `self.SoundFileDir` → `self.session_sound_file_dir`, `self.filename` → `self.session_filename`
-- **Species State**: `self.lastSpecies` → `self.session_last_species`
-- **Bug Fix**: Overview segments now properly update when segments are deleted
-- **Achievement**: Crystal-clear distinction between global config, file session state, manager responsibilities, and UI stateacoustic analysis application, transforming it from a single massive file into a clean, modular architecture following Qt6 patterns and modern software design principles. **Updated** to include session state pattern implementation for cleaner configuration management.
+- **Dead Code Cleanup**: Removed unused `self.focusRegion` and `self.filters` variables
+- **Achievement**: Crystal-clear distinction between global config, file session state, and runtime file context
+
+### Phase 10: DisplayManager Architecture Cleanup ✅
+- **Problem**: DisplayManager had mixed responsibilities - creating some graphics objects while only referencing others
+- **Improved**: Clear ownership boundaries - DisplayManager only manages references, doesn't create graphics objects
+- **Removed**: Direct QApplication access from DisplayManager for better decoupling
+- **Pattern**: DisplayManager methods now accept parameters instead of hunting for values
+- **API**: `render_overview(sg, initial_width)` instead of `render_overview(sg)` + internal main window access
+- **API**: `setup_file_display()` returns information dict instead of creating timeaxis internally
+- **Responsibility**: Main window creates timeaxis based on DisplayManager's returned `timeaxis_type`
+- **Signals**: Kept simple 3-signal approach (spectrogram_ready, overview_updated, graphics_refreshed)
+- **Achievement**: Cleaner separation between display logic and UI object creation/ownership
+
+### Phase 10: DisplayManager Architecture Cleanup ✅
+- **Problem**: DisplayManager had mixed responsibilities - creating some graphics objects while only referencing others
+- **Improved**: Clear ownership boundaries - DisplayManager only manages references, doesn't create graphics objects
+- **Removed**: Direct QApplication access from DisplayManager for better decoupling
+- **Pattern**: DisplayManager methods now accept parameters instead of hunting for values
+- **API**: `render_overview(sg, initial_width)` instead of `render_overview(sg)` + internal main window access
+- **API**: `setup_file_display()` returns information dict instead of creating timeaxis internally
+- **Responsibility**: Main window creates timeaxis based on DisplayManager's returned `timeaxis_type`
+- **Signals**: Kept simple 3-signal approach (spectrogram_ready, overview_updated, graphics_refreshed)
+- **Achievement**: Cleaner separation between display logic and UI object creation/ownershipacoustic analysis application, transforming it from a single massive file into a clean, modular architecture following Qt6 patterns and modern software design principles. **Updated** to include session state pattern implementation for cleaner configuration management.
 
 ## Original Problem
 

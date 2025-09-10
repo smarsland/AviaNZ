@@ -35,7 +35,7 @@ class DisplayManager(QObject):
         self.overviewImage = None
         self.overviewImageRegion = None
         self.amplPlot = None
-        self.timeaxis = None
+        self.timeaxis = None  # Set by main window, not created here
         self.specaxis = None
         self.guidelines = []
         
@@ -180,26 +180,26 @@ class DisplayManager(QObject):
         ticks = [[(tick[0], "%.1f" % tick[1]) for tick in ticks]]
         self.specaxis.setTicks(ticks)
         
-    def render_overview(self, sg):
-        """Renders the overview display with the complete spectrogram"""
+    def render_overview(self, sg, initial_width=None):
+        """Renders the overview display with the complete spectrogram
+        
+        Args:
+            sg: Spectrogram data
+            initial_width: Initial width for the overview region (optional)
+        """
         if not self.overviewImage or not self.overviewImageRegion:
             return
             
         self.overviewImage.setImage(sg)
         self.overviewImageRegion.setBounds([0, len(sg)])
         
-        if self.audio_processor:
-            # Set initial region based on current window width
-            from PyQt6.QtWidgets import QApplication
-            # Get current window width from main window if available
-            try:
-                main_window = QApplication.instance().activeWindow()
-                if hasattr(main_window, 'widthWindow'):
-                    width_spec = self.audio_processor.convertAmpltoSpec(main_window.widthWindow.value())
-                    self.overviewImageRegion.setRegion([0, width_spec])
-            except:
-                # Fallback to default region
-                self.overviewImageRegion.setRegion([0, min(1000, len(sg))])
+        # Set initial region width if provided
+        if initial_width is not None and self.audio_processor:
+            width_spec = self.audio_processor.convertAmpltoSpec(initial_width)
+            self.overviewImageRegion.setRegion([0, width_spec])
+        else:
+            # Fallback to default region
+            self.overviewImageRegion.setRegion([0, min(1000, len(sg))])
         
         self.overview_updated.emit()
         
@@ -355,7 +355,7 @@ class DisplayManager(QObject):
             batmode: Whether in bat mode
             
         Returns:
-            None: Sets up timeaxis and nFileSections attributes
+            dict: Contains timeaxis type and nFileSections for main window to use
         """
         import re
         
@@ -363,13 +363,7 @@ class DisplayManager(QObject):
         self.start_time = start_time
         self.start_read = start_read
         
-        # Create time axis based on file type
-        # Clear any existing timeaxis first
-        if hasattr(self, 'timeaxis') and self.timeaxis is not None:
-            self.timeaxis.clear()
-            self.timeaxis = None
-            
-        # Check if filename is in DOC format for time axis type
+        # Determine time axis type based on file format
         DOCRecording = re.search(r'(\d{6})_(\d{6})', filename[-17:-4])
         
         if DOCRecording:
@@ -381,14 +375,19 @@ class DisplayManager(QObject):
                 print("Day time DOC recording")
                 
             self.start_time = int(self.start_time[:2]) * 3600 + int(self.start_time[2:4]) * 60 + int(self.start_time[4:6])
-            # Create timeaxis - will be linked to ViewBox in main window
-            self.timeaxis = SupportClasses_GUI.TimeAxisHour(orientation='bottom')
+            timeaxis_type = 'hour'
         else:
             self.start_time = 0
-            self.timeaxis = SupportClasses_GUI.TimeAxisMin(orientation='bottom')
+            timeaxis_type = 'minute'
         
         # Calculate file sections
         if datalength_sec != sp.fileLength and not batmode:
-            self.nFileSections = int(np.ceil(sp.fileLength / datalength_sec))
+            nFileSections = int(np.ceil(sp.fileLength / datalength_sec))
         else:
-            self.nFileSections = 1
+            nFileSections = 1
+            
+        return {
+            'timeaxis_type': timeaxis_type,
+            'nFileSections': nFileSections,
+            'start_time': self.start_time
+        }

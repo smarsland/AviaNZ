@@ -159,22 +159,16 @@ class AviaNZ(QMainWindow):
         self.playback_manager.playback_stopped.connect(self.on_playback_stopped)
         self.playback_manager.playback_paused.connect(self.on_playback_paused)
         self.playback_manager.playback_position_changed.connect(self.on_playback_position_changed)
-        self.playback_manager.volume_changed.connect(self.on_volume_changed)
-        self.playback_manager.playback_finished.connect(self.on_playback_finished)
         self.playback_manager.button_state_changed.connect(self.on_playback_button_state_changed)
 
         # Initialize DisplayManager
         self.display_manager = DisplayManager(self.config_manager, self.audio_processor)
-        self.display_manager.spectrogram_ready.connect(self.on_spectrogram_ready)
-        self.display_manager.overview_updated.connect(self.on_overview_updated)
-        self.display_manager.graphics_refreshed.connect(self.on_graphics_refreshed)
+        self.display_manager.graphics_refreshed.connect(self.updateOverview)
 
         # Initialize AudioFileManager
         self.audio_file_manager = AudioFileManager(self.config_manager, self.audio_processor)
         self.audio_file_manager.file_loaded.connect(self.on_file_loaded)
         self.audio_file_manager.file_saved.connect(self.on_file_saved)
-        self.audio_file_manager.file_list_updated.connect(self.refresh_file_list_display)
-        self.audio_file_manager.file_navigation_changed.connect(self.update_navigation_state)
 
         # Initialize SegmentManager
         self.segment_manager = SegmentManager(self.config_manager, self.audio_file_manager, self.display_manager)
@@ -220,6 +214,7 @@ class AviaNZ(QMainWindow):
         else:
             self.session_sound_file_dir = self.config_manager.config['SoundFileDir']
         self.session_filename = None        # Currently loaded file path
+        self.currentFileSection = 0        # Which section of the file is currently shown
         
         # === UI STATE ===
         self.timeaxis = None  # PyQtGraph time axis widget
@@ -1437,7 +1432,7 @@ class AviaNZ(QMainWindow):
                 self.currentFileSection = 0
             else:
                 # Loading next section - ensure we have a filename
-                if not hasattr(self, 'filename') or not self.session_filename:
+                if not hasattr(self, 'session_filename') or not self.session_filename:
                     print("ERROR: No filename available for loading next section")
                     return
             
@@ -1487,14 +1482,21 @@ class AviaNZ(QMainWindow):
                 if not hasattr(self, 'startTime'):
                     self.startTime = 0
                     
-                self.display_manager.setup_file_display(
+                display_info = self.display_manager.setup_file_display(
                     self.session_filename, self.datalengthSec, self.sp, self.startTime, self.startRead, 
                     self.zooniverse, self.config_manager.config, self.session_batmode
                 )
-                # Get display components
-                new_timeaxis = self.display_manager.timeaxis
-                self.nFileSections = self.display_manager.nFileSections
-                self.startTime = self.display_manager.start_time
+                
+                # Extract display information
+                timeaxis_type = display_info['timeaxis_type']
+                self.nFileSections = display_info['nFileSections']
+                self.startTime = display_info['start_time']
+                
+                # Create timeaxis based on type
+                if timeaxis_type == 'hour':
+                    new_timeaxis = SupportClasses_GUI.TimeAxisHour(orientation='bottom')
+                else:
+                    new_timeaxis = SupportClasses_GUI.TimeAxisMin(orientation='bottom')
                 
                 # Add timeaxis to UI
                 if not self.zooniverse:
@@ -1510,6 +1512,21 @@ class AviaNZ(QMainWindow):
                     
                     # Set the new timeaxis
                     self.timeaxis = new_timeaxis
+                    
+                    # Update DisplayManager with new timeaxis reference
+                    graphics_refs = {
+                        'p_spec': self.p_spec,
+                        'p_overview': self.p_overview,
+                        'p_overview2': self.p_overview2,
+                        'specPlot': self.specPlot,
+                        'overviewImage': self.overviewImage,
+                        'overviewImageRegion': self.overviewImageRegion,
+                        'amplPlot': self.amplPlot,
+                        'timeaxis': self.timeaxis,
+                        'specaxis': self.specaxis,
+                        'guidelines': self.guidelines
+                    }
+                    self.display_manager.set_graphics_references(graphics_refs)
                     
                     # Ensure the layout position is clear before adding
                     try:
@@ -1929,7 +1946,8 @@ class AviaNZ(QMainWindow):
         Delegates main rendering to DisplayManager, handles UI connections in main window. """
         
         # Delegate main overview rendering to DisplayManager
-        self.display_manager.render_overview(self.sg)
+        initial_width = self.widthWindow.value() if hasattr(self, 'widthWindow') else None
+        self.display_manager.render_overview(self.sg, initial_width)
         
         # Set up UI connections (remains in main window)
         self.overviewImageRegion.setRegion([0, self.audio_processor.convertAmpltoSpec(self.widthWindow.value())])
@@ -5086,13 +5104,19 @@ class AviaNZ(QMainWindow):
         """ Call the spectrogram inversion """
         print("Inverting spectrogram")
         if self.session_batmode:
-            self.sp.readBmp(self.session_filename,repeat=False)
+            self.sp.readBmp(self.session_filename, repeat=False)
 
         with pg.BusyCursor():
-            new_wave = SignalProc.invertSpectrogram(self.sp.sg)
-            #filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
+            # Use proper parameters for inversion based on current config
+            new_wave = SignalProc.invertSpectrogram(
+                self.sp.sg, 
+                incr=self.config_manager.config['incr'], 
+                nits=10, 
+                window=self.config_manager.config['windowType'], 
+                bmp=self.config_manager.config['sgOneSided']
+            )
             fileMinusExtension = self.session_filename.rsplit('.', 1)[0]
-            filename = fileMinusExtension+'_recon.wav'
+            filename = fileMinusExtension + '_recon.wav'
 
         if self.sp.audioFormat.sampleRate() > 48000:
             # Ad hoc, but works OK
@@ -5100,7 +5124,7 @@ class AviaNZ(QMainWindow):
         else:
             sampleRate = self.sp.audioFormat.sampleRate()
         sf.write(filename, new_wave, sampleRate)
-        self.session_batmode=False
+        self.session_batmode = False
         # update the file list box
         self.audio_file_manager.populate_file_list(self.session_sound_file_dir, os.path.basename(self.session_filename), self.listFiles)
         self.loadFile(filename)
@@ -5140,16 +5164,6 @@ class AviaNZ(QMainWindow):
         if hasattr(self, 'bar'):
             self.bar.setValue(position)
 
-    def on_volume_changed(self, volume):
-        """Handle volume changes."""
-        # Volume changes are already handled by the slider
-        pass
-
-    def on_playback_finished(self):
-        """Handle when playback reaches the end."""
-        # This will trigger on_playback_stopped via the manager
-        pass
-
     def on_playback_button_state_changed(self, is_pause_state):
         """Handle playback button state changes."""
         if hasattr(self, 'playButton'):
@@ -5179,19 +5193,6 @@ class AviaNZ(QMainWindow):
             self.playBandLimitedSegButton.repaint()
         QApplication.processEvents()
 
-    def on_spectrogram_ready(self):
-        """Handle when spectrogram data is ready."""
-        pass
-
-    def on_overview_updated(self):
-        """Handle when overview display is updated."""
-        pass
-
-    def on_graphics_refreshed(self):
-        """Handle when graphics are refreshed."""
-        # Update overview after main display rendering
-        self.updateOverview()
-
     def on_file_loaded(self, filename):
         """Handle when file is loaded by AudioFileManager."""
         # Update UI state for new file
@@ -5207,16 +5208,6 @@ class AviaNZ(QMainWindow):
         self.refreshFileColor()
         self.segment_manager.segments_to_save = False
         self.statusLeft.setText("Segments saved at " + time.strftime("%X", time.localtime()))
-
-    def refresh_file_list_display(self):
-        """Handle when file list is updated."""
-        # File list widget handles its own updates
-        pass
-
-    def update_navigation_state(self, file_index):
-        """Handle when file navigation changes."""
-        # Update any navigation-related UI state
-        pass
 
     def apply_setting_change(self, setting_name, new_value):
         """Handle setting changes from ConfigManager."""
@@ -5492,7 +5483,7 @@ class AviaNZ(QMainWindow):
             segments = self.segment_manager.get_segments()
             if segments is not None:
                 # Ensure AudioFileManager has the current filename
-                if hasattr(self, 'filename') and self.session_filename:
+                if hasattr(self, 'session_filename') and self.session_filename:
                     self.audio_file_manager.current_filename = self.session_filename
                 
                 # Save segments via AudioFileManager (even if empty - this clears the file)
