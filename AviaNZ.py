@@ -67,7 +67,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     try:
         import platform, json, shutil
         from jsonschema import validate
-        import SupportClasses
+        from src.core import SupportClasses
     except Exception as e:
         print("ERROR: could not import packages")
         raise
@@ -149,7 +149,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     if cli:
         print("Starting AviaNZ in CLI mode")
         if batchmode:
-            import AviaNZ_batch
+            from src.core import AviaNZ_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
                 avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recognisers=recogniser, wind=wind)
                 print("Analysis complete, closing AviaNZ")
@@ -157,7 +157,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
                 raise
         elif training:
-            import Training
+            from src.core import Training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
                 training = Training.NNtrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
                 training.cliTrain()
@@ -166,7 +166,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("ERROR: valid input dirs (-d and -e) and recogniser name (-r) are essential for training")
                 raise
         elif testing:
-            import Training
+            from src.core import Training
             filts = confloader.filters(filterdir)
             if os.path.isdir(sdir1) and recogniser in filts:
                 testing = Training.NNtest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
@@ -177,9 +177,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):
                 from PyQt6.QtWidgets import QApplication
-                import AviaNZ_manual
+                from src.ui import AviaNZ_manual_GUI
                 app = QApplication(sys.argv)
-                avianz = AviaNZ_manual.AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
+                avianz = AviaNZ_manual_GUI.AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input file (-f) is needed")
@@ -198,7 +198,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             # splash screen?
             if task is None:
                 # This screen asks what you want to do, then processes the response
-                import Dialogs
+                from src.ui import Dialogs
                 first = Dialogs.StartScreen()
                 first.show()
                 app.exec()
@@ -206,16 +206,16 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
 
             avianz = None
             if task == 1:
-                import AviaNZ_manual
-                avianz = AviaNZ_manual.AviaNZ(configdir=configdir)
+                from src.ui import AviaNZ_manual_GUI
+                avianz = AviaNZ_manual_GUI.AviaNZ(configdir=configdir)
             elif task==2:
-                import AviaNZ_batch_GUI
+                from src.ui import AviaNZ_batch_GUI
                 avianz = AviaNZ_batch_GUI.AviaNZ_batchWindow(configdir=configdir)
             elif task==3:
-                import AviaNZ_batch_GUI
+                from src.ui import AviaNZ_batch_GUI
                 avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
             elif task==4:
-                import SplitAnnotations
+                from src.tools import SplitAnnotations
                 avianz = SplitAnnotations.SplitData()
 
             # catch bad initialiation
