@@ -35,15 +35,15 @@ import matplotlib.pyplot as plt
 from time import strftime, gmtime
 import math
 
-from . import SupportClasses
-from . import Spectrogram
-from ..models import NN
-from . import Segment, WaveletSegment
-from . import AviaNZ_batch
+from src.core import SupportClasses
+from src.core import Spectrogram
+from src.models import NN
+from src.core import Segment, WaveletSegment
+from src.core import AviaNZ_batch
 
 import soundfile as sf
 
-from ..models import NNModels
+from src.models import NNModels
 from tensorflow.keras.utils import custom_object_scope
 
 class NNtrain:

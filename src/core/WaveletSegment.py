@@ -19,14 +19,14 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from . import WaveletFunctions
+from src.core import WaveletFunctions
 import resampy
 import copy
 import numpy as np
 import time, os, math, csv, gc
-from . import Spectrogram
-from . import Segment
-from . import SignalProc
+from src.core import Spectrogram
+from src.core import Segment
+from src.core import SignalProc
 from ext import ce_denoise as ce
 from ext import ce_detect
 from itertools import combinations
@@ -207,7 +207,7 @@ class WaveletSegment:
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, learnMode='recaa', window=1,
                              inc=None):
-        """ Entry point to use during training, called from DialogsTraining.py.
+        """ Entry point to use during training, called from training dialog files.
             Switches between various training methods, orders data loading etc.,
             then just passes the arguments to the right training method and returns the results.
 
@@ -300,7 +300,7 @@ class WaveletSegment:
         return res
 
     def waveletSegment_trainChp(self, dirName, thrList, window, maxlen):
-        """ Entry point to use during training, called from DialogsTraining.py.
+        """ Entry point to use during training, called from training dialog files.
             Switches between various training methods, orders data loading etc.,
             then just passes the arguments to the right training method and returns the results.
 

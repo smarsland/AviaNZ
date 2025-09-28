@@ -30,15 +30,15 @@ import json, os
 import numpy as np
 import math
 
-from ..core import Spectrogram
-from ..core import WaveletSegment
-from ..core import Segment
-from ..core import SupportClasses
+from src.core import Spectrogram
+from src.core import WaveletSegment
+from src.core import Segment
+from src.core import SupportClasses
 import librosa
 
 import soundfile as sf
 
-from . import NNModels
+from src.models import NNModels
 
 # from sklearn.metrics import confusion_matrix
 # from numpy import expand_dims

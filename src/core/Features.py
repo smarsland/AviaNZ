@@ -23,9 +23,9 @@
 
 import numpy as np
 import librosa, resampy
-from . import Spectrogram
-from . import SupportClasses
-from . import WaveletSegment
+from src.core import Spectrogram
+from src.core import SupportClasses
+from src.core import WaveletSegment
 from scipy import signal
 import math
 import os

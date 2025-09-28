@@ -26,24 +26,14 @@ import scipy.signal as signal
 #import scipy.fftpack as fft
 import pyfftw as fft
 from scipy.stats import boxcox
-import pyflac
 import resampy
 import copy
 import gc
-from . import SignalProc
+from src.core import SignalProc
+from src.core import AudioData
 
 from PyQt6.QtGui import QImage
 from PyQt6.QtMultimedia import QAudioFormat
-
-import pyflac
-import tempfile
-
-import os
-import shutil
-
-import soundfile as sf
-
-from ..utils import wavio
 
 #QtMM = True
 #try:
@@ -75,11 +65,38 @@ class Spectrogram:
         self.incr=incr
         self.minFreqShow = minFreqShow
         self.maxFreqShow = maxFreqShow
-        self.data = []
+        # Store reference to AudioData instead of duplicating data
+        self.audio_data = None
 
         # only accepting wav files of this format
         #if QtMM:
         self.audioFormat = QAudioFormat()
+        
+        # Audio loader for file I/O
+        self.audio_loader = AudioData.AudioLoader()
+
+    @property
+    def data(self):
+        """Access audio data through AudioData reference"""
+        if self.audio_data is None:
+            return None
+        return self.audio_data.data
+    
+    @data.setter 
+    def data(self, value):
+        """Set audio data - creates new AudioData if needed"""
+        if self.audio_data is None:
+            from src.core.AudioData import AudioData
+            if not self.audioFormat:
+                raise ValueError("audioFormat must be set before assigning data")
+            self.audio_data = AudioData(
+                data=value,
+                sample_rate=self.audioFormat.sampleRate(),
+                file_length=len(value) if value is not None else 0,
+                audio_format=self.audioFormat
+            )
+        else:
+            self.audio_data.data = value
 
     # # TODO: read less of the file
     # def readFlac(self, file,silent=False):
@@ -126,228 +143,141 @@ class Spectrogram:
     #         print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf.split('.')[-1]))
     #         #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
-    def readWav(self, file, duration=None, off=0, silent=False):
-        """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        sampleRate = sf.info(file).samplerate
-        self.fileLength = sf.info(file).frames/sampleRate
-
-        # start_frame = int(off * sampleRate)
-        # if duration is None:
-        #     stop_frame = None
-        # else:
-        #     stop_frame = int((off + duration) * sampleRate)
-        #self.data, _ = sf.read(file, start=start_frame, stop=stop_frame)
-
-        wavobj = wavio.read(file, duration, off)
-        self.data = wavobj.data
-
-        # take only left channel
-        if np.shape(np.shape(self.data))[0] > 1:
-            self.data = self.data[:, 0]
-        #if QtMM:
-        self.audioFormat.setChannelCount(1)
-
-        # force float type
-        if self.data.dtype != 'float':
-            self.data = self.data.astype('float')
-
-        #self.sampleRate = wavobj.rate
-
-        self.audioFormat.setSampleRate(sampleRate)
-        #self.audioFormat.setSampleRate(self.sampleRate)
-        #self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
-        # Only 8-bit WAVs are unsigned:
-        # TODO!! Int16/Int32
-
-        sampwidth = sf.info(file).subtype
-
-        if sampwidth=="PCM_U8":
-            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
-        elif sampwidth=="PCM_16":
-            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-        elif sampwidth=="PCM_S8":
-            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int8)
-        elif sampwidth=="PCM_32":
-            self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
-        else:
-            print("ERROR: Unsupported sample format")
-            return
-
-        # *Freq sets hard bounds, *Show can limit the spec display
-        self.minFreq = 0
-        self.maxFreq = self.audioFormat.sampleRate() // 2
-        #self.maxFreq = self.sampleRate // 2
+    def readSoundFile(self, filepath, duration=None, offset=0, silent=False, **kwargs):
+        """Load audio file using AudioLoader or BMP file directly.
+        
+        Args:
+            filepath: Path to audio or BMP file
+            duration: Duration to read in seconds (None for all)
+            offset: Offset to start reading in seconds  
+            silent: Suppress output messages
+            **kwargs: Format-specific arguments (rotate, repeat for BMP)
+        """
+        # Check if it's a BMP file - handle directly since it's spectrogram data
+        if filepath.lower().endswith('.bmp'):
+            return self._load_bmp(filepath, duration, offset, silent, **kwargs)
+        
+        # For audio files, use AudioLoader
+        loaded_data = self.audio_loader.load_audio(filepath, duration, offset, silent)
+        
+        # Store reference to AudioData
+        self.audio_data = loaded_data
+        self.audioFormat = loaded_data.audio_format
+        self.fileLength = loaded_data.file_length
+        self.minFreq = loaded_data.min_freq
+        self.maxFreq = loaded_data.max_freq
+        
+        # Update frequency bounds for display
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
-
-        #print("a",self.sampleRate, self.fileLength, np.shape(self.data))
-
-        if not silent:
-            #if QtMM:
-            #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate()))
-            sf_name = str(self.audioFormat.sampleFormat())
-            print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), sf_name.split('.')[-1]))
-            #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-
-    def readFlac(self, file, duration=None, off=0, silent=False):
-        with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
-            temp_wav_path = temp_wav.name
-            temp_dir = os.path.dirname(temp_wav.name)
-            estimated_wav_size = os.path.getsize(file) * 10
-            total, used, free = shutil.disk_usage(temp_dir)
-            if free < estimated_wav_size:
-                print("Error: Insufficient disk space for the WAV file")
-                return
-            else:
-                try:
-                    pyf = pyflac.FileDecoder(file, temp_wav_path)
-                    pyf.process()
-                    return self.readWav(temp_wav_path,duration,off,silent)
-                except Exception as e:
-                    print("Error: %s" % e)
-                    return
-    
-    def readSoundFile(self, file, duration=None, off=0, silent=False):
-        if file.lower().endswith(".wav"):
-            return self.readWav(file, duration, off, silent)
-        elif file.lower().endswith(".flac"):
-            return self.readFlac(file, duration, off, silent)
-        else:
-            raise ValueError("Unsupported file format")
-
-    def readBmp(self, file, duration=None, off=0, silent=False, rotate=True, repeat=True):
-        """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
-            For similarity with readWav, accepts len and off args, in seconds.
-            rotate: if True, rotates to match setImage and other spectrograms (rows=time)
-                otherwise preserves normal orientation (cols=time)
-        """
-        # !! Important to set these, as they are used in other functions
-        self.audioFormat.setSampleRate(176000)
-        #self.sampleRate = 176000
-        # TODO: why was this here?
-        #if not repeat:
-            #self.incr = 512
-        self.incr = 512
-
-        if not os.path.exists(file):
-            print("ERROR: file not found")
-            return(1)
         
-        if not file.endswith(".bmp"):
-            print("ERROR: file is not a BMP")
-            return(1)
-
-        img = QImage(file, "BMP")
+    def _load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
+        """Load BMP file (DOC bat recording format) directly as spectrogram data."""
+        rotate = kwargs.get('rotate', True)
+        repeat = kwargs.get('repeat', True)
+        
+        from PyQt6.QtGui import QImage
+        from PyQt6.QtMultimedia import QAudioFormat
+        import numpy as np
+        
+        img = QImage(filepath, "BMP")
         h = img.height()
         w = img.width()
         colc = img.colorCount()
-        if h==0 or w==0:
-            print("ERROR: image was not loaded")
-            return(1)
-
+        
+        if h == 0 or w == 0:
+            raise ValueError("Image was not loaded")
+        
         # Check color format and convert to grayscale
-        if not silent and (not img.allGray() or colc>256):
+        if not silent and (not img.allGray() or colc > 256):
             print("Warning: image provided not in 8-bit grayscale, information will be lost")
         img.convertTo(QImage.Format.Format_Grayscale8)
-
+        
         # Convert to numpy
-        # (remember that pyqtgraph images are column-major)
         ptr = img.constBits()
-        ptr.setsize(h*w*1)
+        ptr.setsize(h * w * 1)
         img2 = np.array(ptr).reshape(h, w)
-        print(np.shape(img2))
-
-        # Determine if original image was rotated, based on expected num of freq bins and freq 0 being empty
-        # We also used to check if np.median(img2[-1,:])==0,
-        # but some files happen to have the bottom freq bin around 90, so we cannot rely on that.
-        if h==64:
+        
+        # Determine if original image was rotated
+        if h == 64:
             # standard DoC format
             pass
-        elif w==64:
-            # seems like DoC format, rotated at -90*
-            img2 = np.rot90(img2, 1, (1,0))
+        elif w == 64:
+            # DoC format, rotated at -90*
+            img2 = np.rot90(img2, 1, (1, 0))
             w, h = h, w
         else:
-            print("ERROR: image does not appear to be in DOC format!")
-            print("Format details:")
-            print(img2)
-            print(h, w)
-            print(min(img2[-1,:]), max(img2[-1,:]))
-            print(np.sum(img2[-1,:]>0))
-            print(np.median(img2[-1,:]))
-            return(1)
-
-        #print(np.shape(img2))
-        # Could skip that for visual mode - maybe useful for establishing contrast?
+            raise ValueError("Image does not appear to be in DOC format!")
+        
+        # Process image
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
-        img2 = img2/np.max(img2)  # normalization
-        #img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
+        img2 = img2 / np.max(img2)  # normalization
+        
         if repeat:
-            img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
-        print(np.shape(img2))
-
-        self.data = []
-        self.fileLength = (w-2)*self.incr + self.window_width  # in samples
-        # Alternatively:
-        # self.fileLength = self.convertSpectoAmpl(h-1)*self.sampleRate
-
-        # NOTE: conversions will use self.sampleRate and self.incr, so ensure those are already set!
-        # trim to specified offset and length:
-        if off>0 or duration is not None:
-            # Convert offset from seconds to pixels
-            off = int(self.convertAmpltoSpec(off))
-            if duration is None:
-                img2 = img2[:, off:]
-            else:
-                # Convert length from seconds to pixels:
-                duration = int(self.convertAmpltoSpec(duration))
-                img2 = img2[:, off:(off+duration)]
-
-        if rotate:
-            # rotate for display, b/c required spectrogram dimensions are:
-            #  t increasing over rows, f increasing over cols
-            # This will be enough if the original image was spectrogram-shape.
-            img2 = np.rot90(img2, 1, (1,0))
-
-        self.sg = img2
-
-        #if QtMM:
-        self.audioFormat.setChannelCount(0)
+            img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 8 times
+        
+        # Create QAudioFormat for BMP
+        self.audioFormat = QAudioFormat()
+        self.audioFormat.setSampleRate(176000)
+        self.audioFormat.setChannelCount(0)  # No audio channels for BMP
         self.audioFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-            #self.audioFormat.setSampleSize(0)
-            #self.audioFormat.setSampleRate(self.sampleRate)
-        #else:
-            #self.audioFormat['channelCount'] = 0
-            #self.audioFormat['sampleFormat'] = 0
-            #self.audioFormat['sampleRate'] = self.sampleRate
-
+        
+        # Calculate file length
+        file_length = (w - 2) * 512 + 256  # incr=512, window_width=256 for BMP
+        
+        # Trim to specified offset and duration
+        if offset > 0 or duration is not None:
+            # Convert offset from seconds to pixels
+            offset_px = int(offset * 176000 / 512)
+            if duration is None:
+                img2 = img2[:, offset_px:]
+            else:
+                # Convert length from seconds to pixels
+                duration_px = int(duration * 176000 / 512)
+                img2 = img2[:, offset_px:(offset_px + duration_px)]
+        
+        if rotate:
+            # Rotate for display (t increasing over rows, f increasing over cols)
+            img2 = np.rot90(img2, 1, (1, 0))
+        
+        if not silent:
+            print(f"Detected BMP format: {w} x {h} px, {colc} colours")
+        
+        # Store spectrogram data directly
+        self.sg = img2
+        self.fileLength = file_length
         self.minFreq = 0
-        #self.maxFreq = self.sampleRate //2
-        self.maxFreq = self.audioFormat.sampleRate() // 2
+        self.maxFreq = 88000  # 176000 / 2
+        
+        # Update frequency bounds for display
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
-
-        if not silent:
-            print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
-        print(np.shape(self.sg))
-        return(0)
+        
+        return 0  # BMP success indicator
+        
+    def readBmp(self, filepath, duration=None, offset=0, silent=False, rotate=True, repeat=True):
+        """Load BMP file - delegates to readSoundFile."""
+        return self.readSoundFile(filepath, duration, offset, silent, rotate=rotate, repeat=repeat)
 
     def resample(self, target):
-        if len(self.data)==0:
+        if self.data is None or len(self.data)==0:
             print("Warning: data is empty")
             return
         if target==self.audioFormat.sampleRate():
             print("No resampling needed")
             return
 
-        self.data = resampy.resample(self.data, sr_orig=self.audioFormat.sampleRate(), sr_new=target)
+        resampled_data = resampy.resample(self.data, sr_orig=self.audioFormat.sampleRate(), sr_new=target)
+        self.audio_data.data = resampled_data
         self.audioFormat.setSampleRate(target)
+        self.audio_data.sample_rate = target
 
         self.minFreq = 0
         self.maxFreq = self.audioFormat.sampleRate() // 2
 
-        self.fileLength = len(self.data)
+        self.fileLength = len(resampled_data)
+        self.audio_data.file_length = self.fileLength
 
     def convertAmpltoSpec(self, x):
         """ Unit conversion, for easier use wherever spectrograms are needed """
@@ -453,10 +383,21 @@ class Spectrogram:
         self.incr = incr
 
     def setData(self,audiodata,sampleRate=None):
-        self.data = audiodata
+        if self.audio_data is None:
+            from src.core.AudioData import AudioData
+            if sampleRate is None:
+                raise ValueError("sampleRate must be provided when creating new AudioData")
+            self.audio_data = AudioData(
+                data=audiodata,
+                sample_rate=sampleRate,
+                file_length=len(audiodata) if audiodata is not None else 0,
+                audio_format=self.audioFormat
+            )
+        else:
+            self.audio_data.data = audiodata
         if sampleRate is not None:
             self.audioFormat.setSampleRate(sampleRate)
-            #self.sampleRate = sampleRate
+            self.audio_data.sample_rate = sampleRate
 
     def SnNR(self,startSignal,startNoise):
         # Compute the estimated signal-to-noise ratio
@@ -711,7 +652,7 @@ class Spectrogram:
         # Stockwell transform (Brown et al. version)
         # Need to get the starts etc. sorted
 
-        width = len(self.audiodata) // 2
+        width = len(self.data) // 2
 
         # Gaussian window for frequencies
         f_half = np.arange(0, width + 1) / (2 * width)
@@ -719,8 +660,8 @@ class Spectrogram:
         p = 2 * np.pi * np.outer(f, 1 / f_half[1:])
         window = np.exp(-p ** 2 / 2).T
 
-        f_tran = fft.interfaces.scipy_fft.fft(self.audiodata, 2*width, overwrite_x=True)
-        #f_tran = fft.fft(self.audiodata, 2*width, overwrite_x=True)
+        f_tran = fft.interfaces.scipy_fft.fft(self.data, 2*width, overwrite_x=True)
+        #f_tran = fft.fft(self.data, 2*width, overwrite_x=True)
         diag_con = np.linalg.toeplitz(np.conj(f_tran[:width + 1]), f_tran)
         # Remove zero freq line
         diag_con = diag_con[1:width + 1, :]  
@@ -842,7 +783,7 @@ class Spectrogram:
         """ Produces marks of fundamental freq to be drawn on the spectrogram.
             Return is a list of (x, y) segments w/ x,y - lists in spec coords
         """
-        import Shapes
+        from src.utils import Shapes
         # Estimate fund freq, using windows of 2 spec FFT lengths (4 columns)
         # to make life easier:
         Wsamples = 4*self.incr
@@ -1144,14 +1085,14 @@ class Spectrogram:
             print("Don't use this interface for wavelets")
             return
         elif str(alg) == "Bandpass":
-            self.data = SignalProc.bandpassFilter(self.data,self.audioFormat.sampleRate(), start=start, end=end)
+            self.audio_data.data = SignalProc.bandpassFilter(self.data,self.audioFormat.sampleRate(), start=start, end=end)
             #self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
         elif str(alg) == "Butterworth Bandpass":
-            self.data = SignalProc.ButterworthBandpass(self.data, self.audioFormat.sampleRate(), low=start, high=end)
+            self.audio_data.data = SignalProc.ButterworthBandpass(self.data, self.audioFormat.sampleRate(), low=start, high=end)
             #self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
         else:
             # Median Filter
-            self.data = SignalProc.medianFilter(self.data,int(str(width)))
+            self.audio_data.data = SignalProc.medianFilter(self.data,int(str(width)))
 
     def generateFeaturesNN(self, seglen, real_spec_width, frame_size, frame_hop=None, NNfRange=None):
         '''

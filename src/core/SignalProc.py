@@ -196,7 +196,7 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
 # TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
 def invertSpectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True):
-    from . import Spectrogram
+    from src.core import Spectrogram
     sp = Spectrogram.Spectrogram()
     
     if bmp:
@@ -485,7 +485,7 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
     pos = np.abs(arr - w1).argmin()
     window = arr[pos]
 
-    from . import Spectrogram
+    from src.core import Spectrogram
     sp = Spectrogram.Spectrogram(window, window)     # No overlap
     sp.data = data
     sp.audioFormat.setSampleRate(sampleRate)

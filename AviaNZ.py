@@ -198,22 +198,22 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             # splash screen?
             if task is None:
                 # This screen asks what you want to do, then processes the response
-                from src.ui import Dialogs
-                first = Dialogs.StartScreen()
+                from src.ui.dialogs.start_screen import StartScreen
+                first = StartScreen()
                 first.show()
                 app.exec()
                 task = first.getValues()
 
             avianz = None
             if task == 1:
-                from src.ui import AviaNZ_manual_GUI
-                avianz = AviaNZ_manual_GUI.AviaNZ(configdir=configdir)
+                from src.ui import manual_interface
+                avianz = manual_interface.ManualInterface(configdir=configdir)
             elif task==2:
-                from src.ui import AviaNZ_batch_GUI
-                avianz = AviaNZ_batch_GUI.AviaNZ_batchWindow(configdir=configdir)
+                from src.ui import batch_interface
+                avianz = batch_interface.BatchInterface(configdir=configdir)
             elif task==3:
-                from src.ui import AviaNZ_batch_GUI
-                avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
+                from src.ui import review_interface
+                avianz = review_interface.ReviewInterface(configdir=configdir)
             elif task==4:
                 from src.tools import SplitAnnotations
                 avianz = SplitAnnotations.SplitData()

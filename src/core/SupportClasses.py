@@ -26,7 +26,7 @@ from openpyxl.styles import Font
 
 QtMM = True
 try:
-    from ..ui import SupportClasses_GUI
+    from src.ui.components.dialogs_and_popups import MessagePopup
 except ImportError:
     print("No GUI")
     QtMM = False
@@ -39,7 +39,7 @@ import re
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
 
-from ..models import NNModels
+from src.models import NNModels
 from tensorflow.keras.utils import custom_object_scope
 
 class Log(object):
@@ -181,7 +181,7 @@ class ConfigLoader(object):
             return config
         except ValueError:
             # if JSON looks corrupt, quit:
-            #msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            #msg = MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             #msg.exec()
             print("ERROR: file " + file + " corrupt, delete it to restore default")
             raise
@@ -293,14 +293,14 @@ class ConfigLoader(object):
             except ValueError as e:
                 # if JSON looks corrupt, quit and suggest deleting:
                 print(e)
-                msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             # if file is not found at all, quit, user must recreate the file or change path
             print(e)
-            msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
+            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
 
@@ -325,13 +325,13 @@ class ConfigLoader(object):
                 return readlist
             except ValueError as e:
                 print(e)
-                msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             print(e)
-            msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
     
@@ -360,13 +360,13 @@ class ConfigLoader(object):
                 return knownCalls
             except ValueError as e:
                 print(e)
-                msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + knowncallsfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + knowncallsfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             print(e)
-            msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
 
@@ -391,13 +391,13 @@ class ConfigLoader(object):
                 return readlist
             except ValueError as e:
                 print(e)
-                msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             print(e)
-            msg = SupportClasses_GUI.MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
             msg.exec()
             return None
 
@@ -410,7 +410,7 @@ class ConfigLoader(object):
             return config
         except ValueError:
             # if JSON looks corrupt, quit:
-            msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            msg = MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec()
             raise
 
@@ -432,7 +432,7 @@ class ConfigLoader(object):
 
         except Exception as e:
             print(e)
-            msg = SupportClasses_GUI.MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
+            msg = MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
             msg.exec()
     
     # Dumps the provided dictionary into the corresponding known calls file
@@ -455,7 +455,7 @@ class ConfigLoader(object):
 
         except Exception as e:
             print(e)
-            msg = SupportClasses_GUI.MessagePopup("w", "Unwriteable known calls list", "Warning: Failed to write known calls list to " + file)
+            msg = MessagePopup("w", "Unwriteable known calls list", "Warning: Failed to write known calls list to " + file)
             msg.exec()
 
     # Dumps the provided JSON array to the corresponding config file.
@@ -515,7 +515,7 @@ class ExcelIO():
 
             if startTime is None:
                 # if no startTime was provided, try to figure it out based on the filename
-                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(segsl.filename)[:-8])
+                DOCRecording = re.search(r'(\d{6})_(\d{6})', os.path.basename(segsl.filename)[:-8])
 
                 if DOCRecording:
                     print("time stamp found", DOCRecording)

@@ -11,7 +11,8 @@ import numpy as np
 
 import pyqtgraph as pg
 
-import SupportClasses_GUI
+from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.buttons_and_controls import BrightContrVol
 import Segment
 import Spectrogram
 import colourMaps
@@ -27,7 +28,7 @@ class CompareCalls(QMainWindow):
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
-        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec())
+        fileMenu.addAction("About", lambda: MessagePopup("a", "About", ".").exec())
         fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
@@ -820,7 +821,7 @@ class CompareCallsDialog(QDialog):
         self.labelPair = QLabel()
 
         # Volume, brightness and contrast sliders. (NOTE hardcoded init)
-        self.specControls = SupportClasses_GUI.BrightContrVol(80, 20, False)
+        self.specControls = BrightContrVol(80, 20, False)
         self.specControls.colChanged.connect(self.setColourLevels)
         # self.specControls.volChanged.connect(self.volSliderMoved)
         # TODO add volume and playback at some point

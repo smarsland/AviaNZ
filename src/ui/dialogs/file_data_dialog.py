@@ -1,0 +1,82 @@
+
+# This is part of the AviaNZ interface
+# Holds most of the code for the various dialog boxes
+
+# Version 3.4 18/12/24
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
+
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2024
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Dialogs used by the AviaNZ program
+# Since most of them just get user selections, they are mostly just a mess of UI things
+import os
+import shutil
+
+from PyQt6 import QtCore, QtGui
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import QPoint, QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
+
+import pyqtgraph as pg
+
+import numpy as np
+from src.ui.colourMaps import colourMaps
+from src.ui.components.audio_player import ControllableAudio
+from src.ui.components.buttons_and_controls import BrightContrVol, MainPushButton, PicButton
+from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.layout_widgets import PartlyResizableGLW
+from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
+from src.core import Spectrogram
+from src.core import SupportClasses
+import openpyxl
+import json
+from scipy.stats import boxcox
+
+import copy
+
+import re
+
+pg.setConfigOption('background','w')
+pg.setConfigOption('foreground','k')
+pg.setConfigOption('antialias',True)
+
+class FileDataDialog(QDialog):
+    def __init__(self, name, date, time, parent=None):
+        super(FileDataDialog, self).__init__(parent)
+
+        layout = QVBoxLayout(self)
+
+        l1 = QLabel("Annotator")
+        self.name = QLineEdit(self)
+        self.name.setText(name)
+
+        l2 = QLabel("Data recorded: " + date)
+        l3 = QLabel("Time recorded: " + time)
+
+        layout.addWidget(l1)
+        layout.addWidget(self.name)
+        layout.addWidget(l2)
+        layout.addWidget(l3)
+
+        button = QPushButton("OK")
+        button.clicked.connect(self.accept)
+
+        layout.addWidget(button)
+
+    def getData(self):
+        return

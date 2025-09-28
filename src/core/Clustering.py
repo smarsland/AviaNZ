@@ -26,11 +26,11 @@ import random
 import os
 import librosa
 
-from . import WaveletSegment
-from . import WaveletFunctions
-from . import Spectrogram
-from . import Segment
-from . import SignalProc
+from src.core import WaveletSegment
+from src.core import WaveletFunctions
+from src.core import Spectrogram
+from src.core import Segment
+from src.core import SignalProc
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import scale

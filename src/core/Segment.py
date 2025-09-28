@@ -20,9 +20,9 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from . import Spectrogram
-from . import SupportClasses
-from ..ui import Shapes
+from src.core import Spectrogram
+from src.core import SupportClasses
+from src.utils import Shapes
 
 import numpy as np
 import scipy.ndimage as spi
@@ -209,8 +209,8 @@ class Segment(list):
                     text += str(e)
                     text += "\nWhile trying to remove key "+str(species)+" from "+ str(self[4])
                     text += "\nWhich had keys" + str(self.keys)
-                    from ..ui import SupportClasses_GUI
-                    msg = SupportClasses_GUI.MessagePopup("w", "ERROR - please report", text)
+                    from src.ui.components.dialogs_and_popups import MessagePopup
+                    msg = MessagePopup("w", "ERROR - please report", text)
                     msg.exec()
                 # if that was the last label, flip to Don't Know
                 if len(self[4])==0:

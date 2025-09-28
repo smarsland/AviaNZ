@@ -34,7 +34,7 @@ import datetime as dt
 # sys.path.append('..')
 from ext import SplitLauncher
 import Segment
-import SupportClasses_GUI
+from src.ui.components.dialogs_and_popups import MessagePopup
 
 
 class SplitData(QMainWindow):
@@ -51,7 +51,7 @@ class SplitData(QMainWindow):
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
-        fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec())
+        fileMenu.addAction("About", lambda: MessagePopup("a", "About", ".").exec())
         fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
@@ -402,7 +402,7 @@ class SplitData(QMainWindow):
         print("processed %d files" % donefiles)
         QApplication.restoreOverrideCursor()
         if donefiles==totalfiles:
-            msg = SupportClasses_GUI.MessagePopup("d", "Finished", "Folder processed successfully!")
+            msg = MessagePopup("d", "Finished", "Folder processed successfully!")
             msg.exec()
 
 

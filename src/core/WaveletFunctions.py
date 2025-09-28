@@ -27,9 +27,9 @@ from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
-from ..utils import Wavelet
-from . import Spectrogram
-from . import SignalProc
+from src.core import Wavelet
+from src.core import Spectrogram
+from src.core import SignalProc
 
 # A pair of helper functions that are often useful:
 def graycode(n):

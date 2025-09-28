@@ -23,11 +23,11 @@ import gc, os, re, fnmatch
 
 import numpy as np
 
-from . import Spectrogram
-from . import SignalProc
-from . import Segment
-from . import WaveletSegment
-from . import SupportClasses
+from src.core import Spectrogram
+from src.core import SignalProc
+from src.core import Segment
+from src.core import WaveletSegment
+from src.core import SupportClasses
 
 import traceback
 import time
