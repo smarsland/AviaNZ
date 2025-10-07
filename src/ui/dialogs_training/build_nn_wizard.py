@@ -670,7 +670,7 @@ class BuildNNWizard(QWizard):
                 sp = Spectrogram.Spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
                 sp.readSoundFile(filename, duration, offset)
                 sp.resample(self.nntrain.fs)
-                sp.audioFormat.setSampleRate(self.nntrain.fs)
+                sp.audioFormat.sample_rate = self.nntrain.fs
                 sgRaw = sp.spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
                 sgRaw = sgRaw[:self.nntrain.imgsize[0]]
                 # Frequency masking

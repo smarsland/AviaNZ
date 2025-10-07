@@ -23,24 +23,51 @@
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font
+import json
 
-QtMM = True
-try:
-    from src.ui.components.dialogs_and_popups import MessagePopup
-except ImportError:
-    print("No GUI")
-    QtMM = False
+# By default, core uses a simple console MessagePopup. The UI layer can
+# register its own GUI-backed MessagePopup implementation at application
+# startup by calling set_message_popup_class(MyGuiMessagePopup).
+QtMM = False
 
 import time
 import math
 import numpy as np
 import os, json
-import re
-from tensorflow.keras.models import model_from_json
-from tensorflow.keras.models import load_model
 
+class MessagePopup:
+    """Default console-based MessagePopup used when no GUI is registered.
+
+    Existing core code expects to be able to call MessagePopup(level, title, text)
+    and optionally call exec() on the result. To avoid importing UI modules
+    at core import time, this default implementation simply prints to stdout.
+    """
+    def __init__(self, level, title, text):
+        self.level = level
+        self.title = title
+        self.text = text
+
+    def exec(self):
+        print(f"{self.level}:{self.title}:{self.text}")
+
+
+def set_message_popup_class(cls):
+    """Register a MessagePopup implementation provided by the UI layer.
+
+    This rebinds the global name MessagePopup to the provided class so existing
+    code that calls MessagePopup(...) continues to work. The UI layer should
+    call this during application startup after importing GUI modules.
+    """
+    global MessagePopup, QtMM
+    MessagePopup = cls
+    QtMM = True
+
+
+def get_message_popup(*args, **kwargs):
+    """Factory helper to instantiate the currently-registered MessagePopup."""
+    return MessagePopup(*args, **kwargs)
+import re
 from src.models import NNModels
-from tensorflow.keras.utils import custom_object_scope
 
 class Log(object):
     """ Used for logging info during batch processing.
@@ -245,7 +272,7 @@ class ConfigLoader(object):
                 continue
             elif filt["NN"]:
                 if species == "NZ Bats":
-                    model = load_model(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
+                    model = NNModels.loadModelFromH5(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
                     targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
                 else:
                     model = NNModels.loadModelFromJson(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json')
@@ -498,7 +525,8 @@ class ExcelIO():
             timeStrFormat = "hh:mm:ss.zzz"
         else:
             timeStrFormat = "hh:mm:ss"
-        from PyQt6.QtCore import QTime
+        # Avoid importing PyQt6 in core; use stdlib datetime for formatting
+        from datetime import datetime, timedelta
         ws = wb['Time Stamps']
         r = ws.max_row + 1
 
@@ -519,12 +547,13 @@ class ExcelIO():
 
                 if DOCRecording:
                     print("time stamp found", DOCRecording)
-                    startTimeFile = DOCRecording.group(2)
-                    startTimeFile = QTime(int(startTimeFile[:2]), int(startTimeFile[2:4]), int(startTimeFile[4:6]))
+                    ts = DOCRecording.group(2)  # HHMMSS
+                    startTimeFile = datetime.strptime(ts, "%H%M%S")
                 else:
-                    startTimeFile = QTime(0,0,0)
+                    startTimeFile = datetime.strptime("000000", "%H%M%S")
             else:
-                startTimeFile = QTime(0,0,0).addSecs(startTime)
+                # startTime is in seconds offset
+                startTimeFile = datetime.strptime("000000", "%H%M%S") + timedelta(seconds=startTime)
 
             # Loop over the segments
             #for seg in speciesSegs:
@@ -533,9 +562,16 @@ class ExcelIO():
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
-                # Time limits
-                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(int(seg[0]*1000)).toString(timeStrFormat)))
-                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(int(seg[1]*1000)).toString(timeStrFormat)))
+                # Time limits - use datetime formatting
+                tstart = startTimeFile + timedelta(milliseconds=int(seg[0]*1000))
+                tend = startTimeFile + timedelta(milliseconds=int(seg[1]*1000))
+                if precisionMS:
+                    # Format with milliseconds
+                    ws.cell(row=r, column=2, value=tstart.strftime("%H:%M:%S.%f")[:-3])
+                    ws.cell(row=r, column=3, value=tend.strftime("%H:%M:%S.%f")[:-3])
+                else:
+                    ws.cell(row=r, column=2, value=tstart.strftime("%H:%M:%S"))
+                    ws.cell(row=r, column=3, value=tend.strftime("%H:%M:%S"))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))

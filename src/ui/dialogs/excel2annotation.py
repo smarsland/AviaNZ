@@ -1799,26 +1799,26 @@ class HumanClassify1(QDialog):
         currentLabels = self.segment[4]
         if self.batmode:
             self.menuSpeciesSelection = BatSelectionMenu(
-                bat_list=self.batList, 
-                current_labels=currentLabels, 
+                batList=self.batList, 
+                currentLabels=currentLabels, 
                 parent=self, 
                 unsure=False,
-                multiple_birds=self.multipleBirds
+                multipleBirds=self.multipleBirds
             )
-            self.menuSpeciesSelection.labels_updated.connect(self.batLabelsUpdated)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
         else:
             self.menuSpeciesSelection = BirdSelectionMenu(
-                short_bird_list=self.shortBirdList, 
-                long_bird_list=self.longBirdList,
-                known_calls=self.knownCalls, 
-                current_labels=currentLabels, 
+                shortBirdList=self.shortBirdList, 
+                longBirdList=self.longBirdList,
+                knownCalls=self.knownCalls, 
+                currentLabels=currentLabels, 
                 parent=self, 
                 unsure=False,
-                multiple_birds=self.multipleBirds
+                multipleBirds=self.multipleBirds
             )
-            self.menuSpeciesSelection.add_species_requested.connect(self.addBirdSpecies)
-            self.menuSpeciesSelection.add_call_type_requested.connect(self.addBirdCallname)
-            self.menuSpeciesSelection.labels_updated.connect(self.birdLabelsUpdated)
+            self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
+            self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
 
     def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
@@ -2009,7 +2009,7 @@ class HumanClassify2(QDialog):
         for i in self.indices2show:
             # This will contain pre-made slices of spec and audio
             sp = self.sps[i]
-            duration = len(sp.data)/sp.audioFormat.sampleRate()
+            duration = len(sp.data)/sp.audio_data.sample_rate
 
             sg = self.sgs[i]
             
@@ -2030,7 +2030,7 @@ class HumanClassify2(QDialog):
             # Create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
 
-            newButton = PicButton(i, sg, sp, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
+            newButton = PicButton(i, sg, sp, sp.audio_data, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
             newButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             newButton.setMinimumSize(10, 10)
             self.buttons.append(newButton)
@@ -2045,9 +2045,9 @@ class HumanClassify2(QDialog):
         minFreq = exampleSP.minFreqShow
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
-            maxFreq = exampleSP.audioFormat.sampleRate() // 2
+            maxFreq = exampleSP.audio_data.sample_rate // 2
         if len(exampleSP.data)>0:
-            duration = len(exampleSP.data)/exampleSP.audioFormat.sampleRate()
+            duration = len(exampleSP.data)/exampleSP.audio_data.sample_rate
         else:
             duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
 
@@ -2548,7 +2548,7 @@ class Cluster(QDialog):
             self.minsg = min(self.minsg, np.min(self.sg))
             self.maxsg = max(self.maxsg, np.max(self.sg))
 
-            newButton = PicButton(1, np.fliplr(sg), sp, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+            newButton = PicButton(1, np.fliplr(self.sg), sp, sp.audio_data, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)
 

@@ -84,7 +84,7 @@ class ReviewInterface(QMainWindow):
         self.area = DockArea()
         self.setCentralWidget(self.area)
         self.setMinimumSize(1000, 750)
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
 
         # Make the docks
         self.d_detection = Dock("Review",size=(600, 250), autoOrientation=False)
@@ -113,11 +113,11 @@ class ReviewInterface(QMainWindow):
         self.w_dir.setToolTip("The folder being processed")
 
         self.w_processButton = MainPushButton(" Review One-By-One")
-        self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
+        self.w_processButton.setIcon(QIcon(QPixmap('src/resources/images/review.png')))
         self.w_processButton.clicked.connect(self.reviewClickedAll)
         self.w_processButton.setEnabled(False)
         self.w_processButton1 = MainPushButton(" Review Quick")
-        self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
+        self.w_processButton1.setIcon(QIcon(QPixmap('src/resources/images/tile1.png')))
         self.w_processButton1.clicked.connect(self.reviewClickedSingle)
         self.w_processButton1.setEnabled(False)
         self.w_processButton.setMinimumWidth(200)
@@ -174,7 +174,7 @@ class ReviewInterface(QMainWindow):
         self.w_excelButton = QPushButton(" Generate Excel ")
         self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_excelButton.setFixedHeight(45)
-        self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
+        self.w_excelButton.setIcon(QIcon(QPixmap('src/resources/images/excel.png')))
         self.w_excelButton.clicked.connect(self.exportExcel)
         self.w_excelButton.setEnabled(False)
         self.d_excel.addWidget(self.w_excelButton, row=8, col=2)
@@ -182,7 +182,7 @@ class ReviewInterface(QMainWindow):
         self.toggleSettingsBtn = QPushButton(" Advanced settings ")
         self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; padding: 2px 2px 2px 4px}')
         self.toggleSettingsBtn.setFixedHeight(32)
-        self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+        self.toggleSettingsBtn.setIcon(QIcon(QPixmap('src/resources/images/settingsmore.png')))
         self.toggleSettingsBtn.setIconSize(QSize(25, 17))
         self.toggleSettingsBtn.clicked.connect(self.toggleSettings)
 
@@ -339,7 +339,7 @@ class ReviewInterface(QMainWindow):
             # self.d_settings.setVisible(True)
             self.d_excel.hide()
             self.toggleSettingsBtn.setText(" Hide settings ")
-            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsless.png')))
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('src/resources/images/settingsless.png')))
         else:
             # self.d_settings.setVisible(False)
             for item in self.d_settings.widgets:
@@ -347,7 +347,7 @@ class ReviewInterface(QMainWindow):
                     item.hide()
             self.d_excel.show()
             self.toggleSettingsBtn.setText(" Advanced settings ")
-            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('src/resources/images/settingsmore.png')))
         self.repaint()
         QApplication.processEvents()
 
@@ -530,16 +530,19 @@ class ReviewInterface(QMainWindow):
         self.w_spe1.addItems(self.spList)
 
         # Also detect samplerates on dir change
-        minfs = min(self.listFiles.fsList)
-        self.fHigh.setRange(minfs//32, minfs//2)
-        self.fLow.setRange(0, minfs//2)
-        # If the user hasn't selected custom bandpass, reset it to min-max:
-        # (if the user did select one or more of them, setRange will auto-trim
-        # it to the allowed range, but not change it otherwise)
-        if not self.fHighcheck.isChecked():
-            self.fHigh.setValue(self.fHigh.maximum())
-        if not self.fLowcheck.isChecked():
-            self.fLow.setValue(self.fLow.minimum())
+        if len(self.listFiles.fsList) > 0:
+            minfs = min(self.listFiles.fsList)
+            self.fHigh.setRange(minfs//32, minfs//2)
+            self.fLow.setRange(0, minfs//2)
+            # If the user hasn't selected custom bandpass, reset it to min-max:
+            # (if the user did select one or more of them, setRange will auto-trim
+            # it to the allowed range, but not change it otherwise)
+            if not self.fHighcheck.isChecked():
+                self.fHigh.setValue(self.fHigh.maximum())
+            if not self.fLowcheck.isChecked():
+                self.fLow.setValue(self.fLow.minimum())
+        else:
+            print("Warning: No valid audio files found in directory, using default frequency range")
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist """
@@ -804,6 +807,9 @@ class ReviewInterface(QMainWindow):
         # Refresh the species list to include any new species added during review
         self.refreshSpeciesList()
         
+        # Refresh the file list to update the UI (squares/buttons)
+        self.fillFileList()
+        
         if filesuccess == 1:
             msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = MessagePopup("d", "Finished", msgtext)
@@ -891,7 +897,7 @@ class ReviewInterface(QMainWindow):
                         sp.sg = sp.normalisedSpec("Batmode")
                     else:
                         sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=True)
-                        sp.data = SignalProc.bandpassFilter(sp.data, sp.audioFormat.sampleRate(), minFreq, maxFreq)
+                        sp.data = SignalProc.bandpassFilter(sp.data, sp.audio_data.sample_rate, minFreq, maxFreq)
                         sp.sg = sp.spectrogram(window_width=self.config['window_width'], 
                                              incr=self.config['incr'],
                                              window=self.config['windowType'],
@@ -903,7 +909,7 @@ class ReviewInterface(QMainWindow):
                                              onesided=self.config['sgOneSided'])
                         
                         # Trim spectrogram to frequency range
-                        height = sp.audioFormat.sampleRate()//2 / np.shape(sp.sg)[1]
+                        height = sp.audio_data.sample_rate//2 / np.shape(sp.sg)[1]
                         pixelstart = int(minFreq/height)
                         pixelend = int(maxFreq/height)
                         sp.sg = sp.sg[:,pixelstart:pixelend]
@@ -1383,7 +1389,7 @@ class ReviewInterface(QMainWindow):
         self.humanClassifyDialog1 = HumanClassify1(
             self.lut, self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], 
             self.shortBirdList, self.longBirdList, self.knownCalls, self.batList, 
-            self.config['MultipleSpecies'], self.sps[0].audioFormat, self.config['guidecol'], 
+            self.config['MultipleSpecies'], self.sps[0].audio_data, self.config['guidecol'], 
             self.dialogPlotAspect, loop=self.loopBox.isChecked(), autoplay=self.autoplayBox.isChecked(), 
             parent=self, reorderShortList=self.config['ReorderList'])
         
@@ -1615,7 +1621,7 @@ class ReviewInterface(QMainWindow):
 
             with pg.ProgressDialog("Loading file...", 0, len(self.segments)) as dlg:
                 dlg.setCancelButton(None)
-                dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+                dlg.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
                 dlg.setWindowTitle('AviaNZ')
                 dlg.setFixedSize(350, 100)
                 dlg.setWindowFlags(self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint)
@@ -1689,7 +1695,7 @@ class ReviewInterface(QMainWindow):
                             sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = SignalProc.bandpassFilter(sp.data, sp.audioFormat.sampleRate(), minFreq, maxFreq)
+                            sp.data = SignalProc.bandpassFilter(sp.data, sp.audio_data.sample_rate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             # TODO: Insist on log scale?
@@ -1706,7 +1712,7 @@ class ReviewInterface(QMainWindow):
                         sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
 
                         # trim the spectrogram
-                        height = sp.audioFormat.sampleRate()//2 / np.shape(sp.sg)[1]
+                        height = sp.audio_data.sample_rate//2 / np.shape(sp.sg)[1]
                         pixelstart = int(minFreq/height)
                         pixelend = int(maxFreq/height)
                         sp.sg = sp.sg[:,pixelstart:pixelend]
@@ -1750,7 +1756,7 @@ class ReviewInterface(QMainWindow):
 
                 # these pass the axis limits set by slider
                 minFreq = max(self.fLow.value(), 0)
-                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+                maxFreq = min(self.fHigh.value(), sp.audio_data.sample_rate//2)
 
                 if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
                     guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
@@ -1762,7 +1768,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
                                                    original_segment, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
         else:
@@ -1779,7 +1785,7 @@ class ReviewInterface(QMainWindow):
 
                 # these pass the axis limits set by slider
                 minFreq = max(self.fLow.value(), 0)
-                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+                maxFreq = min(self.fHigh.value(), sp.audio_data.sample_rate//2)
 
                 if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
                     guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
@@ -1791,7 +1797,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
 
@@ -1857,7 +1863,7 @@ class ReviewInterface(QMainWindow):
 
                 # these pass the axis limits set by slider
                 minFreq = max(self.fLow.value(), 0)
-                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+                maxFreq = min(self.fHigh.value(), sp.audio_data.sample_rate//2)
 
                 if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
                     guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
@@ -1869,7 +1875,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
             else:
@@ -1902,7 +1908,7 @@ class ReviewInterface(QMainWindow):
 
                 # these pass the axis limits set by slider
                 minFreq = max(self.fLow.value(), 0)
-                maxFreq = min(self.fHigh.value(), sp.audioFormat.sampleRate()//2)
+                maxFreq = min(self.fHigh.value(), sp.audio_data.sample_rate//2)
 
                 if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
                     guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
@@ -1919,7 +1925,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audioFormat.sampleRate(), sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
             else:

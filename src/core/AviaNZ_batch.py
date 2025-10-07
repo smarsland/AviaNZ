@@ -19,6 +19,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import gc, os, re, fnmatch
 
 import numpy as np
@@ -37,16 +38,11 @@ import copy
 
 import soundfile as sf
 
-# SRM: TODO:
-
-# Bats need sorting
 
 # Need to work through this and ensure:
-# 1. everything needed is passed from interface (or command line, or test)
-# 2. one bat method
-# 3. care taken for resampling for different filters
-# 4. intermittent sampling and time of files is correct
-# 5. simplify if possible
+# 1. care taken for resampling for different filters
+# 2. intermittent sampling and time of files is correct
+# 3. simplify if possible
 
 class AviaNZ_batchProcess():
     # Main class for batch processing
@@ -56,9 +52,15 @@ class AviaNZ_batchProcess():
         # Recogniser - filter file name without ".txt" 
         # TODO: allow CLI to have multiple recognisers and other options
 
-    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind="None", mergeSyllables=False, overwrite=True):
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recognisers=None, subset=False, intermittent=False, wind="None", mergeSyllables=False, overwrite=True, timeWindow_s=0, timeWindow_e=0, protocolSize=15, protocolInterval=300, maxgap=1, minlen=0.2, maxlen=10):
         # Read config and filters from user location
         # recognisers - list of filter file names without ".txt"
+        # timeWindow_s, timeWindow_e - time window in seconds from midnight (0 to 86400)
+        # protocolSize - length of segments for intermittent sampling in seconds
+        # protocolInterval - interval between segments for intermittent sampling in seconds
+        # maxgap - max gap to join syllables in seconds
+        # minlen - minimum syllable length in seconds
+        # maxlen - maximum syllable length in seconds
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
@@ -91,32 +93,18 @@ class AviaNZ_batchProcess():
 
         self.dirName = sdir
         
-        # Parse the user-set time window and other options from the GUI
-        # A bit cumbersome, but combines passing them through with writing them to the log file
-        # TODO: Work out how to get these for CLI
-        self.options = ["Wind: ", wind] # options[0,1]
+        # Build options list for logging
+        self.options = ["Wind: ", wind]
         if subset:
-            if self.CLI or self.testmode:
-                timeWindow_s = 0
-                timeWindow_e = 0
-            else:
-                timeWindow_s = self.ui.w_timeStart.time().hour() * 3600 + self.ui.w_timeStart.time().minute() * 60 + self.ui.w_timeStart.time().second()
-                timeWindow_e = self.ui.w_timeEnd.time().hour() * 3600 + self.ui.w_timeEnd.time().minute() * 60 + self.ui.w_timeEnd.time().second()
-                self.options += ["Subset: ",timeWindow_s, timeWindow_e] # options[2,3,4]
+            self.options += ["Subset: ", timeWindow_s, timeWindow_e]
         else:
-                self.options += ["","",""]
+            self.options += ["","",""]
         if intermittent:
-            if self.CLI or self.testmode:
-                pass
-            else:
-                self.options += ["Intermittent: ", self.ui.protocolSize.value(), self.ui.protocolInterval.value()] # options[5,6,7]
+            self.options += ["Intermittent: ", protocolSize, protocolInterval]
         else:
             self.options += ["","",""]
         if mergeSyllables:
-            if self.CLI or self.testmode:
-                pass
-            else:
-                self.options += ["Merge syllables: ", self.ui.maxgap.value(), self.ui.minlen.value(), self.ui.maxlen.value()] # options[8,9,10,11]
+            self.options += ["Merge syllables: ", maxgap, minlen, maxlen]
         else:
             self.options += ["","","",""]
 
@@ -149,11 +137,12 @@ class AviaNZ_batchProcess():
         # REQUIRES: [species], dirName, and processing options (wind, intermittent sampling, time-limited) must be set on self
 
         filters = [self.FilterDicts[name] for name in self.species]
+        
+        # Get all unique sample rates required by the filters
         samplerate = set([filt["SampleRate"] for filt in filters])
-
-        if len(samplerate)>1:
-            # TODO: Make this more efficient
-            print("Multiple sample rates: ",samplerate)
+        if len(samplerate) > 1:
+            print("Multiple sample rates required: ", samplerate)
+            print("Audio will be resampled as needed for each filter group")
 
         # convert list to string
         speciesStr = " & ".join(self.species)
@@ -161,38 +150,6 @@ class AviaNZ_batchProcess():
         # load target NN models (currently stored in the same dir as filters)
         # format: {filtername: [model, win, inputdim, output]}
         self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
-
-        """
-        if "Any sound" in self.species:
-            self.method = "Default"
-            speciesStr = "Any sound"
-            filters = None
-        else:
-            # TODO: One bat filter!
-            if "NZ Bats" in self.species:
-                # TODO: Should bats only be possible alone?
-                self.method = "Click"   # old bat method
-                #self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
-            elif "NZ Bats_NP" in self.species:
-                self.method = "Bats"
-            else:
-                self.method = "Wavelets"
-
-            # TODO: NOT TRUE NOW! SRM SRM
-            # double-check that all Fs are equal (should already be prevented by UI)
-            filters = [self.FilterDicts[name] for name in self.species]
-            samplerate = set([filt["SampleRate"] for filt in filters])
-            if len(samplerate)>1:
-                # TODO: Make this more efficient
-                print("Multiple sample rates: ",samplerate)
-
-            # convert list to string
-            speciesStr = " & ".join(self.species)
-
-            # load target NN models (currently stored in the same dir as filters)
-            # format: {filtername: [model, win, inputdim, output]}
-            self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
-        """
 
         # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
         allsoundfiles = []
@@ -321,8 +278,8 @@ class AviaNZ_batchProcess():
             # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
             if "NZ Bats" in self.species:
                 # TODO: Check if detected any
-                self.exportToBatSearch(self.dirName,threshold1=100,threshold2=None)
-                self.outputBatPasses(self.dirName)
+                self.exportBatResults(self.dirName, format='xml', threshold1=100, threshold2=None)
+                self.exportBatResults(self.dirName, format='passes')
                 self.exportToDOCDB()
             # END of processing and exporting. Final cleanup
             self.log.file.close()
@@ -406,6 +363,7 @@ class AviaNZ_batchProcess():
 
             # ALL SYSTEMS GO: process this file
             print("Loading file...")
+            self.currentFilename = filename  # Track current file for bat processing
             self.segments = Segment.SegmentList()
             self.loadFile(filename,"NZ Bats" in self.species)
             if self.overwrite:
@@ -483,34 +441,43 @@ class AviaNZ_batchProcess():
 
     def detectFile(self, speciesStr, filters):
         """ Actual worker for a file in the detection loop.
-            Does not return anything - for use with external try/catch
+        Args:
+            speciesStr: String representation of species being detected
+            filters: List of filter dictionaries, each with "SampleRate" key
+            
+        Does not return anything - results stored in self.segments
+        Use with external try/catch for error handling
         """
         # Segment over pages separately, to allow dealing with large files smoothly:
-        # (page size is shorter for low freq things, i.e. bittern,
-        # since those freqs are very noisy and variable)
-        # TODO: Lots -- Spectrogram
+        # Page size depends on the original audio sample rate (not filter target rates)
+        # - Low sample rates (<=4000 Hz, e.g., bittern): smaller pages as low freqs are noisier
+        # - Standard rates: ~15 min pages (900s * 16000 Hz standard reference)
         if hasattr(self, 'sp'):
-            if self.sp.audioFormat.sampleRate()<=4000:
-                # Basically bittern
-                samplesInPage = 300*self.sp.audioFormat.sampleRate()
+            if self.sp.audio_data.sample_rate <= 4000:
+                # Low frequency recordings (e.g., bittern at 4000 Hz)
+                samplesInPage = 300 * self.sp.audio_data.sample_rate  # ~5 min pages
             else:
-                samplesInPage = 900*16000
+                # Standard recordings: use 15 min pages normalized to 16 kHz
+                samplesInPage = 900 * 16000
         
         elif not("NZ Bats" in self.species):
-            # If using changepoints and v short windows,
-            # aim to have roughly 5000 windows:
-            # (4500 = 4 windows in 15 min DoC standard files)
+            # For bird detection without pre-loaded spectrogram
+            # If using changepoint detection with very short windows,
+            # we want enough windows for reliable statistics (~5000 windows)
+            # Current implementation: use standard 15 min pages for all cases
             winsize = [subf["WaveletParams"].get("win", 1) for f in filters for subf in f["Filters"]]
             winsize = min(winsize)
-            if winsize<0.05:
-                # TODO: Needs work
-                samplesInPage = 900*16000
-                #samplesInPage = int(4500 * 0.05 * self.sp.sampleRate)
+            if winsize < 0.05:
+                # Short window changepoint detection
+                # Could use: int(4500 * 0.05 * sample_rate) for proportional sizing
+                # But currently using standard page size for consistency
+                samplesInPage = 900 * 16000
             else:
-                samplesInPage = 900*16000
+                # Standard window sizes
+                samplesInPage = 900 * 16000
         else:
-            # A sensible default
-            samplesInPage = 900*16000
+            # Bat processing: use standard 15 min pages
+            samplesInPage = 900 * 16000
 
         # (ceil division for large integers)
         numPages = (len(self.sp.data) - 1) // samplesInPage + 1
@@ -521,7 +488,7 @@ class AviaNZ_batchProcess():
             start = page*samplesInPage
             end = min(start+samplesInPage, len(self.sp.data))
             # TODO: Still self.sp problems!
-            thisPageLen = (end-start) / self.sp.audioFormat.sampleRate()
+            thisPageLen = (end-start) / self.sp.audio_data.sample_rate
             #thisPageLen = (end-start) /16000 # self.sp.sampleRate
 
             if thisPageLen < 2 and not("NZ Bats" in self.species):
@@ -536,13 +503,13 @@ class AviaNZ_batchProcess():
                     print("LOADING SP 1")
                     self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
                 _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'],start=start,stop=end)
-                self.seg = Segment.Segmenter(self.sp, self.sp.audioFormat.sampleRate())
+                self.seg = Segment.Segmenter(self.sp, self.sp.audio_data.sample_rate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
                 # Post-process
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end], sampleRate=self.sp.audioFormat.sampleRate(), segments=thisPageSegs, subfilter={}, cert=0)
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end], sampleRate=self.sp.audio_data.sample_rate, segments=thisPageSegs, subfilter={}, cert=0)
                 #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 if self.options[8] != "":
                     post.joinGaps(self.options[9])
@@ -553,8 +520,8 @@ class AviaNZ_batchProcess():
                 # adjust segment starts for 15min "pages"
                 if start != 0:
                     for seg in post.segments:
-                        seg[0][0] += start/self.sp.audioFormat.sampleRate()
-                        seg[0][1] += start/self.sp.audioFormat.sampleRate()
+                        seg[0][0] += start/self.sp.audio_data.sample_rate
+                        seg[0][1] += start/self.sp.audio_data.sample_rate
                 # attach mandatory "Don't Know"s etc and put on self.segments
                 self.makeSegments(self.segments, post.segments)
                 del self.seg
@@ -566,158 +533,78 @@ class AviaNZ_batchProcess():
                         self.log.file.close()
                         raise GentleExitException
 
-            data_test = []
-            click_label = 'None'
+            # Group filters by required sample rate to minimize resampling operations
+            uniqueSampleRates = set([filt["SampleRate"] for filt in filters])
             
-            fsOut = set([filt["SampleRate"] for filt in filters])
-            for filterSampleRate in fsOut:
-                filtersAtSampleRate = [filters[i] for i in range(len(filters)) if filters[i]["SampleRate"]==filterSampleRate]
-                speciesAtSampleRate = [self.species[i] for i in range(len(filters)) if filters[i]["SampleRate"]==filterSampleRate]
-                if not("NZ Bats" in speciesAtSampleRate) and len(speciesAtSampleRate)>0:
-                    # read in the page and resample as needed
-                    # TODO: correct samplerate? And data
-                    # TODO: make efficient for resampling
-                    # TODO: need to init class somewhere
+            for targetSampleRate in uniqueSampleRates:
+                # Get all filters that need this sample rate
+                filtersAtSampleRate = [filters[i] for i in range(len(filters)) 
+                                      if filters[i]["SampleRate"] == targetSampleRate]
+                speciesAtSampleRate = [self.species[i] for i in range(len(filters)) 
+                                      if filters[i]["SampleRate"] == targetSampleRate]
+                
+                print(f"Processing sample rate {targetSampleRate} Hz for species: {speciesAtSampleRate}")
+                
+                # Initialize wavelet segmentation for bird processing only
+                # (WaveletSegment.readBatch handles its own resampling efficiently)
+                if not("NZ Bats" in speciesAtSampleRate) and len(speciesAtSampleRate) > 0:
                     self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
                     useWind = self.options[1] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
-                    self.ws.readBatch(self.sp.data[start:end], self.sp.audioFormat.sampleRate(), d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=useWind)
+                    # Note: readBatch will intelligently handle resampling from self.sp.audio_data.sample_rate
+                    # to targetSampleRate, including node adjustment optimizations for 2x/4x ratios
+                    self.ws.readBatch(self.sp.data[start:end], self.sp.audio_data.sample_rate, 
+                                     d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=useWind)
+                
                 for speciesix in range(len(filtersAtSampleRate)):
                     print("Working with recogniser:", filtersAtSampleRate[speciesix])
+                    spInfo = filtersAtSampleRate[speciesix]
+                    
+                    # Check if this is bat processing
                     if "NZ Bats" in speciesAtSampleRate:
-                        # TODO: Necessary? Probably not
-                        #click_label, data_test, gen_spec = self.ClickSearch(self.sp.sg, filename)
-                        #print('number of detected clicks = ', gen_spec)
-                        thisPageSegs = []
+                        # === BAT PROCESSING PATH ===
+                        # Get NN model for bats
+                        NNmodel = None
+                        if 'NN' in spInfo and spInfo['NN']['NN_name'] in self.NNDicts.keys():
+                            NNmodel = self.NNDicts[spInfo['NN']['NN_name']]
+                        
+                        if NNmodel is None:
+                            print("Warning: No NN model found for bat detection")
+                            continue
+                        
+                        if not self.testmode:
+                            # Process bat file with unified method
+                            batSegments = self.processBatFile(self.currentFilename, start, end, thisPageLen, NNmodel)
+                            if len(batSegments) > 0:
+                                self.makeSegments(self.segments, batSegments[0])
+                        else:
+                            print("Warning: Bat detection not fully supported in test mode")
+                            # Could add test mode support here if needed
                     else:
+                        # === BIRD PROCESSING PATH ===
                         # Bird detection by wavelets. Choose the right wavelet method:
-                        if "method" not in filtersAtSampleRate[speciesix] or filtersAtSampleRate[speciesix]["method"]=="wv":
+                        if "method" not in spInfo or spInfo["method"]=="wv":
                             # note: using 'recaa' mode = partial antialias
                             thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
-                        elif filtersAtSampleRate[speciesix]["method"]=="chp":
+                        elif spInfo["method"]=="chp":
                             # note that only allowing alg2 = nuisance-robust chp detection
                             thisPageSegs = self.ws.waveletSegmentChp(speciesix, alg=2, wind=self.options[1])
                         else:
-                            print("ERROR: unrecognised method", filtersAtSampleRate[speciesix]["method"])
+                            print("ERROR: unrecognised method", spInfo["method"])
                             raise Exception
 
-                    print("Segments detected (all subfilters): ", thisPageSegs)
-                    if not self.testmode and not("NZ Bats" in speciesAtSampleRate):
-                        print("Post-processing...")
-                    # NN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
-                    spInfo = filtersAtSampleRate[speciesix]
-                    for filtix in range(len(spInfo['Filters'])):
-                        NNmodel = None
-                        if 'NN' in spInfo:
-                            if spInfo['NN']['NN_name'] in self.NNDicts.keys():
-                                # This list contains the model itself, plus parameters for running it
-                                NNmodel = self.NNDicts[spInfo['NN']['NN_name']]
-
+                        print("Segments detected (all subfilters): ", thisPageSegs)
                         if not self.testmode:
-                            # TODO THIS IS FULL POST-PROC PIPELINE FOR BIRDS AND BATS
-                            # -- Need to check how this should interact with the testmode
+                            print("Post-processing...")
+                        
+                        # Process each subfilter
+                        for filtix in range(len(spInfo['Filters'])):
+                            NNmodel = None
+                            if 'NN' in spInfo:
+                                if spInfo['NN']['NN_name'] in self.NNDicts.keys():
+                                    NNmodel = self.NNDicts[spInfo['NN']['NN_name']]
 
-                            if "NZ Bats" in speciesAtSampleRate:
-                                # bat-style NN:
-                                model = NNmodel[0]
-                                thr1 = NNmodel[5][0]
-                                thr2 = NNmodel[5][1]
-                                if click_label=='Click':
-                                    # we enter in the nn only if we got a click
-                                    sg_test = np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
-                                    spec_id=[]
-                                    print('Number of file spectrograms = ', np.shape(data_test)[0])
-                                    for j in range(np.shape(data_test)[0]):
-                                        maxg = np.max(data_test[j][0][:])
-                                        sg_test[j][:] = data_test[j][0][:]/maxg
-                                        spec_id.append(data_test[j][1:3])
-
-                                    # NN classification of clicks
-                                    x_test = sg_test
-                                    test_images = x_test.reshape(x_test.shape[0],6, 512, 1)
-                                    test_images = test_images.astype('float32')
-
-                                    # recovering labels
-                                    predictions = model.predict(test_images)
-                                    # predictions is an array #imagesX #of classes which entries are the probabilities for each class
-
-                                    # Create a label (list of dicts with species, certs) for the single segment
-                                    print('Assessing file label...')
-                                    label = self.labelBatFile(predictions, thr1=thr1, thr2=thr2)
-                                    print('NN detected: ', label)
-                                    if len(label)>0:
-                                        # Convert the annotation into a full segment in self.segments
-                                        thisPageStart = start / self.sp.audioFormat.sampleRate()
-                                        self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
-                                else:
-                                    # do not create any segments
-                                    print("Nothing detected")
-                                """
-                                # TODO: decide what want from these two
-                                elif self.method == "Bats":     # Let's do it here - PostProc class is not supporting bats
-                                    # TODO review this a bit - my code checker shows errors
-                                    model = NNmodel[0]
-                                    if thisPageLen < NNmodel[1][0]:
-                                        continue
-                                    elif thisPageLen >= NNmodel[1][0]:
-                                        # print('duration:', thisPageLen)
-                                        n = math.ceil((thisPageLen - 0 - NNmodel[1][0]) / NNmodel[1][1] + 1)
-                                    # print('* hop:', NNmodel[1][1], 'n:', n)
-
-                                    featuress = []
-                                    specFrameSize = len(range(0, int(NNmodel[1][0] * self.sp.sampleRate - self.sp.window_width), self.sp.incr))
-                                    for i in range(int(n)):
-                                        # print('**', self.filename, NNmodel[1][0], 0 + NNmodel[1][1] * i, self.sp.sampleRate,
-                                        #       '************************************')
-                                        # Sgram images
-                                        sgRaw = self.sp.sg
-                                        sgstart = int(NNmodel[1][1] * i * self.sp.sampleRate / self.sp.incr)
-                                        sgend = sgstart + specFrameSize
-                                        if sgend > np.shape(sgRaw)[0]:
-                                            sgend = np.shape(sgRaw)[0]
-                                            sgstart = np.shape(sgRaw)[0] - specFrameSize
-                                        if sgstart < 0:
-                                            continue
-                                        sgRaw_i = sgRaw[sgstart:sgend, :]
-                                        maxg = np.max(sgRaw_i)
-                                        # Normalize and rotate
-                                        featuress.append([np.rot90(sgRaw_i / maxg).tolist()])
-                                    featuress = np.array(featuress)
-                                    featuress = featuress.reshape(featuress.shape[0], NNmodel[2][0], NNmodel[2][1], 1)
-                                    featuress = featuress.astype('float32')
-                                    if np.shape(featuress)[0] > 0:
-                                        probs = model.predict(featuress)
-                                    else:
-                                        probs = 0
-                                    if isinstance(probs, int):
-                                        # there is not at least one img generated from this segment, very unlikely to be a true seg.
-                                        label = []
-                                    else:
-                                        ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
-
-                                        if n > 4:
-                                            n = 4
-                                        prob = [np.mean(probs[ind[0][-n // 2:], 0]),
-                                                np.mean(probs[ind[1][-n // 2:], 1]),
-                                                (np.sum(probs[ind[0][-n // 2:], 2]) + np.sum(probs[ind[1][-n // 2:], 2])) / (n // 2 * 2)]
-                                        print(self.filename, prob)
-                                        if prob[0] >= NNmodel[5][0][-1]:
-                                            label = [{"species": "Long-tailed bat", "certainty": 100}]
-                                        elif prob[1] >= NNmodel[5][1][-1]:
-                                            label = [{"species": "Short-tailed bat", "certainty": 100}]
-                                        elif prob[0] >= NNmodel[5][0][0]:
-                                            label = [{"species": "Long-tailed bat", "certainty": 50}]
-                                        elif prob[1] >= NNmodel[5][1][0]:
-                                            label = [{"species": "Short-tailed bat", "certainty": 50}]
-                                        else:
-                                            label = []
-                                    print('NN detected: ', label)
-                                    if len(label) > 0:
-                                        # Convert the annotation into a full segment in self.segments
-                                        thisPageStart = start / self.sp.sampleRate
-                                        self.makeSegments(self.segments, [thisPageStart, thisPageLen, label])
-                                """
-                            else:
-                                # bird-style NN and other processing:
+                            if not self.testmode:
+                                # Bird-style NN and other processing:
                                 postsegs = self.postProcFull(thisPageSegs, spInfo, filtix, start, end, NNmodel)
                                 # attach filter info and put on self.segments:
                                 self.makeSegments(self.segments, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
@@ -728,32 +615,40 @@ class AviaNZ_batchProcess():
                                         print("Analysis cancelled")
                                         self.log.file.close()
                                         raise GentleExitException
+                            else:
+                                # THIS IS testmode for birds
+                                # test without nn:
+                                postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, NNmodel=None)
+                                # stash these segments before any NN/postproc:
+                                self.makeSegments(self.segments_nonn, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
-                        else:
-                            # THIS IS testmode. NOT ADAPTED TO BATS: assumes bird-style postproc
-                            # TODO adapt to bats?
-
-                            # test without nn:
-                            postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, NNmodel=None)
-                            # stash these segments before any NN/postproc:
-                            self.makeSegments(self.segments_nonn, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
-
-                            # test with nn:
-                            postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, NNmodel)
-                            # attach filter info and put on self.segments:
-                            self.makeSegments(self.segments, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+                                # test with nn:
+                                postsegs = self.postProcFull(copy.deepcopy(thisPageSegs), spInfo, filtix, start, end, NNmodel)
+                                # attach filter info and put on self.segments:
+                                self.makeSegments(self.segments, postsegs, speciesAtSampleRate[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
     def postProcFull(self, segments, spInfo, filtix, start, end, NNmodel):
-        """ Full bird-style postprocessing (NN, joinGaps...)
+        """ Full bird-style postprocessing (NN, joinGaps, fundamental frequency, etc.)
+        
+        Args:
             segments: list of segments over calltypes
-            start, end: start and end of this page, in samples
-            NNmodel: None or a NN
+            spInfo: species info dict containing filter config including target SampleRate
+            filtix: index of current subfilter
+            start, end: start and end of this page, in samples (at original sample rate)
+            NNmodel: None or a neural network model for species classification
+            
+        Returns:
+            list of processed segments
+            
+        Note: PostProcess will handle resampling if needed (sampleRate != tgtsampleRate).
+        This is typically only required for NN classification or fundamental frequency detection.
         """
         subfilter = spInfo["Filters"][filtix]
-        # TODO: data?
-        #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end],
+        
+        # PostProcess handles any needed resampling from current rate to target rate
         post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end],
-                            sampleRate=self.sp.audioFormat.sampleRate(), tgtsampleRate=spInfo["SampleRate"],
+                            sampleRate=self.sp.audio_data.sample_rate, 
+                            tgtsampleRate=spInfo["SampleRate"],
                             segments=segments[filtix], subfilter=subfilter,
                             NNmodel=NNmodel, cert=50)
         print("Segments detected after WF: ", len(segments[filtix]))
@@ -778,8 +673,8 @@ class AviaNZ_batchProcess():
         # adjust segment starts for 15min "pages"
         if start != 0:
             for seg in post.segments:
-                seg[0][0] += start/self.sp.audioFormat.sampleRate()
-                seg[0][1] += start/self.sp.audioFormat.sampleRate()
+                seg[0][0] += start/self.sp.audio_data.sample_rate
+                seg[0][1] += start/self.sp.audio_data.sample_rate
         print("After post-processing: ", post.segments)
         return(post.segments)
 
@@ -796,7 +691,7 @@ class AviaNZ_batchProcess():
         elif subfilter is not None:
             # for wavelet segments: (same as self.species!="Any sound")
             y1 = subfilter["FreqRange"][0]
-            y2 = min(subfilter["FreqRange"][1], self.sp.audioFormat.sampleRate()//2)
+            y2 = min(subfilter["FreqRange"][1], self.sp.audio_data.sample_rate//2)
             for s in segmentsNew:
                 segment = Segment.Segment([s[0][0], s[0][1], y1, y2, [{"species": species, "certainty": s[1], "filter": filtName, "calltype": subfilter["calltype"]}]])
                 segmentsList.addSegment(segment)
@@ -817,18 +712,48 @@ class AviaNZ_batchProcess():
             segmentList.metadata = dict()
         segmentList.metadata["Operator"] = "Auto"
         segmentList.metadata["Reviewer"] = ""
-        segmentList.metadata["Duration"] = float(len(self.sp.data))/self.sp.audioFormat.sampleRate()
-        #if self.method != "Intermittent sampling":
-            #segmentList.metadata["Duration"] = float(self.datalength)/self.sp.sampleRate
+        segmentList.metadata["Duration"] = float(len(self.sp.data))/self.sp.audio_data.sample_rate
         segmentList.metadata["noiseLevel"] = None
         segmentList.metadata["noiseTypes"] = []
 
         segmentList.saveJSON(str(filename) + suffix)
         return 1
 
+    def _needsResampling(self, originalRate, targetRate):
+        """
+        Helper method to determine if resampling is actually needed.
+        Returns True if resampling required, False if rates match or node adjustment can be used.
+        
+        Args:
+            originalRate: Original audio sample rate
+            targetRate: Target sample rate required by filter
+            
+        Returns:
+            bool: True if full resampling needed, False otherwise
+        """
+        if originalRate == targetRate:
+            return False
+        
+        # WaveletSegment can handle 2x and 4x upsampling via node adjustment (more efficient)
+        # This is already implemented in WaveletSegment.readBatch
+        ratio = targetRate / originalRate
+        if ratio in [2.0, 4.0]:
+            print(f"Will use node adjustment instead of resampling ({originalRate} Hz -> {targetRate} Hz)")
+            return False
+        
+        return True
+
     def loadFile(self, filename, bats=False, anysound=False, impMask=False):
-        """ species: list of recogniser names, or ["Any sound"].
-            Species names will be wiped based on these. """
+        """ Load audio file and prepare for processing.
+        
+        Args:
+            filename: Path to audio file
+            bats: True if processing bat spectrograms (BMP files)
+            anysound: True if using "Any sound" generic detection
+            impMask: True to apply impulse masking (experimental)
+            
+        Note: Resampling is handled per-filter-group in detectFile() for efficiency.
+        """
         # Create an instance of the Spectrogram class
         if not hasattr(self, 'sp'):
             print("LOADING SP 2")
@@ -841,7 +766,7 @@ class AviaNZ_batchProcess():
         else:
             self.sp.readSoundFile(filename)
 
-        print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(len(self.sp.data))/self.sp.audioFormat.sampleRate(), self.sp.audioFormat.sampleRate()))
+        print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(len(self.sp.data))/self.sp.audio_data.sample_rate, self.sp.audio_data.sample_rate))
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
@@ -850,12 +775,12 @@ class AviaNZ_batchProcess():
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
             self.segments.metadata["Reviewer"] = ""
-            self.segments.metadata["Duration"] = float(len(self.sp.data))/self.sp.audioFormat.sampleRate()
+            self.segments.metadata["Duration"] = float(len(self.sp.data))/self.sp.audio_data.sample_rate
             # wipe all segments:
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            hasmetadata = self.segments.parseJSON(filename+'.data', float(len(self.sp.data))/self.sp.audioFormat.sampleRate())
+            hasmetadata = self.segments.parseJSON(filename+'.data', float(len(self.sp.data))/self.sp.audio_data.sample_rate)
             if not hasmetadata:
                     # TODO: Should save this...
                     self.segments.metadata["Operator"] = "Auto"
@@ -882,7 +807,69 @@ class AviaNZ_batchProcess():
                 #self.sp.data = SignalProc.impMask(self.sp.data, self.sp.sampleRate) 
             #self.audiodata = self.sp.data
 
-    # Next few functions are probably unnecessary
+    # ========== BAT PROCESSING METHODS ==========
+    # All bat-specific detection, classification, and processing methods are grouped here
+    
+    def processBatFile(self, filename, start, end, thisPageLen, NNmodel):
+        """
+        Unified bat processing method that handles click detection, NN classification, and labeling.
+        
+        Args:
+            filename: path to the audio file
+            start: start sample of the current page
+            end: end sample of the current page  
+            thisPageLen: length of the page in seconds
+            NNmodel: list containing [model, win, inputdim, output, ..., [thr1, thr2]]
+            
+        Returns:
+            List of segments in format [start_time, end_time, labels] or empty list if no bats detected
+        """
+        print("Processing bat file...")
+        
+        # Step 1: Detect clicks in spectrogram
+        click_label, data_test, count = self.ClickSearch(self.sp.sg, filename, virginia=True)
+        print(f"Click detection: {click_label}, {count} clicks found")
+        
+        if click_label != 'Click' or count == 0:
+            print("No clicks detected")
+            return []
+        
+        # Step 2: Prepare data for NN classification
+        model = NNmodel[0]
+        thr1 = NNmodel[5][0]
+        thr2 = NNmodel[5][1]
+        
+        sg_test = np.ndarray(shape=(np.shape(data_test)[0], np.shape(data_test[0][0])[0], 
+                                    np.shape(data_test[0][0])[1]), dtype=float)
+        spec_id = []
+        print(f'Number of file spectrograms: {np.shape(data_test)[0]}')
+        
+        for j in range(np.shape(data_test)[0]):
+            maxg = np.max(data_test[j][0][:])
+            sg_test[j][:] = data_test[j][0][:] / maxg
+            spec_id.append(data_test[j][1:3])
+        
+        # Step 3: Run NN classification
+        x_test = sg_test
+        print(f"Shape before reshape: {x_test.shape}")
+        test_images = x_test.reshape(x_test.shape[0], 6, 512, 1)
+        print(f"Shape after reshape: {test_images.shape}")
+        test_images = test_images.astype('float32')
+        
+        predictions = model.predict(test_images)
+        
+        # Step 4: Generate labels from predictions
+        print('Assessing file label...')
+        labels = self.labelBatFile(predictions, thr1=thr1, thr2=thr2)
+        print('NN detected:', labels)
+        
+        if len(labels) == 0:
+            return []
+        
+        # Step 5: Create segment with labels
+        thisPageStart = start / self.sp.audio_data.sample_rate
+        return [[thisPageStart, thisPageLen, labels]]
+    
     def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, dt=None):
         """
         Update Dataset with current segment
@@ -913,7 +900,6 @@ class AviaNZ_batchProcess():
 
         return featuress, count
 
-    # TODO: One version of this only!
     def ClickSearch(self, imspec, file,virginia=True):
         """
         searches for clicks in the provided imspec, saves dataset
@@ -937,8 +923,8 @@ class AviaNZ_batchProcess():
         featuress = []
         count = 0
 
-        df=self.sp.audioFormat.sampleRate()//2 /(np.shape(imspec)[0]+1)  # frequency increment
-        dt=self.sp.incr/self.sp.audioFormat.sampleRate()  # self.sp.incr is set to 512 for bats
+        df=self.sp.audio_data.sample_rate//2 /(np.shape(imspec)[0]+1)  # frequency increment
+        dt=self.sp.incr/self.sp.audio_data.sample_rate  # self.sp.incr is set to 512 for bats
         # dt=0.002909090909090909
         # up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
         up_len=17
@@ -1128,347 +1114,219 @@ class AviaNZ_batchProcess():
                 label.append({"species": "Short-tailed bat", "certainty": 50})
 
         return label
-
-    def outputBatPasses(self,dirName,savefile='BatPasses.csv'):
-        # A bit ad hoc for now. Assumes that the directory structure ends with 'Bat detname date/date/'
-        if not hasattr(self, 'sp'):
-            print("LOADING SP 3")
-            self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
-        start = "Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n"
-        output = start
-        dt=0.002909090909090909
-        if not os.path.isdir(dirName):
-           print("Folder doesn't exist")
-           return 0
-        tally = 0
-        for root, dirs, files in os.walk(dirName, topdown=True):
-            nfiles = len(files)
-            if nfiles > 0:
-                for count in range(nfiles):
-                    filename = files[count]
-                    if filename.endswith('.data'):
-                        segments = Segment.SegmentList()
-                        segments.parseJSON(os.path.join(root, filename))
-                        # TODO:Should be able to remove this...
-                        label = 'Non-bat'
-                        if len(segments)>0:
-                            # Get the length of the clicks from the spectrogram
-                            fn = filename[:-5]
-                            #print(fn,os.path.join(root, fn))
-                            self.sp.readBmp(os.path.join(root, fn), rotate=False,silent=True)
-                            #self.sampleRate = self.sp.sampleRate
-                            res = self.ClickSearch(self.sp.sg,None,virginia=False)
-                            if res is not None:
-                                length = "{:.2f}".format((res[1]-res[0])*dt)
-                            else:
-                                length = str(0)
-                            #print("Length "+length)
-                            seg = segments[0]
-                            #print(seg)
-                            c = [lab["certainty"] for lab in seg[4]]
-                            s = [lab["species"] for lab in seg[4]]
-                            if len(c)>1:
-                                label = 'L,S'
-                            else:
-                                if s[0] == 'Long-tailed bat':
-                                    label = 'L'
-                                elif s[0] == 'Short-tailed bat':
-                                    label = 'S'
-                        else:
-                            length = "0"
-                            label = ''
-                        #print("label "+label)
-
-                        # DOC format
-                        # night comes from the directory
-                        night = root[-2:]+"/"+root[-4:-2]+"/"+root[-6:-4]
-                        print(night)
-                        folder = root.split("/")[-2]
-                        print(folder)
-                        # TODO -- Note sure what this is doing?!
-                        #detname = folder.split(" ")[-2]
-                        detname = ""
-                        #print(detname,folder)
-                        #print("night "+night)
-                        #night = filename[6:8]+"/"+filename[4:6]+"/"+filename[2:4]
-                        # time comes from file
-                        time = filename[9:11]+":"+filename[11:13]+":"+filename[13:15]
-                        #print("time "+time)
-                        
-                        output+= str(tally)+","+night+",,,"+detname+","+label+","+time+","+length+",\n"
-                        tally += 1
-        # Now write the file if necessary
-        if output != start:
-            file = open(os.path.join(dirName, savefile), 'w')
-            print("writing to", os.path.join(dirName, savefile))
-            file.write(output)
-            file.write("\n")
-            file.close()
-            output = start
-
-    # The next functions sort out the outputs for bat processing. TODO: move to their own file
-    def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
-        # Write out a BatData.xml that can be used for BatSearch import
-        # The format of Bat searches is <Survey> / <Site> / Bat / <Date> / files ----- the word Bat is fixed
-        # The BatData.xml goes in the Date folder
-        # TODO: No error checking!
-        # TODO: Check date
-        from lxml import etree 
-
-        # TODO: Get version label!
-        operator = "AviaNZ 3.0"
-        site = "Nowhere"
-
-        # BatSeach codes
-        namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
+    
+    def exportBatResults(self, dirName, format='xml', savefile=None, threshold1=0.85, threshold2=0.7):
+        """
+        Unified bat export method supporting multiple output formats.
+        
+        Args:
+            dirName: Directory containing bat detection results
+            format: Output format - 'xml' (BatSearch), 'csv' (BatSearch CSV), or 'passes' (bat passes)
+            savefile: Output filename (defaults based on format if None)
+            threshold1: Primary certainty threshold
+            threshold2: Secondary certainty threshold (can be None)
+            
+        Returns:
+            1 on success, 0 on failure
+        """
         if not os.path.isdir(dirName):
             print("Folder doesn't exist")
             return 0
+        
+        # Set default savefile based on format
+        if savefile is None:
+            if format == 'xml':
+                savefile = 'BatData.xml'
+            elif format == 'csv':
+                savefile = 'BatResults.csv'
+            elif format == 'passes':
+                savefile = 'BatPasses.csv'
+            else:
+                print(f"Unknown format: {format}")
+                return 0
+        
+        # Metadata
+        operator = "AviaNZ 3.4"
+        site = "Nowhere"
+        namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, 
+                    "Possible LT":5, "Possible ST":6, "Both":7}
+        
+        if format == 'xml':
+            return self._exportBatXML(dirName, savefile, threshold1, threshold2, operator, site, namedict)
+        elif format == 'csv':
+            return self._exportBatCSV(dirName, savefile, threshold1, threshold2, operator)
+        elif format == 'passes':
+            return self._exportBatPasses(dirName, savefile)
+        else:
+            print(f"Unknown format: {format}")
+            return 0
+    
+    def _exportBatXML(self, dirName, savefile, threshold1, threshold2, operator, site, namedict):
+        """Export bat results to BatSearch XML format."""
+        from lxml import etree
+        
         for root, dirs, files in os.walk(dirName, topdown=True):
-            #nfiles = len(files)
-            #if nfiles > 0:
             if any(fnmatch.fnmatch(filename, '*.bmp') for filename in files):
-                # Set up the XML start
-                schema = etree.QName("http://www.w3.org/2001/XMLSchema-instance", "schema")
-                start = etree.Element("ArrayOfBatRecording", nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance", 'xsd':"http://www.w3.org/2001/XMLSchema"})
-
+                # Set up the XML structure
+                start = etree.Element("ArrayOfBatRecording", 
+                                     nsmap={'xsi': "http://www.w3.org/2001/XMLSchema-instance", 
+                                           'xsd': "http://www.w3.org/2001/XMLSchema"})
+                
                 for filename in files:
-                #for count in range(nfiles):
-                    #filename = files[count]
                     if filename.endswith('.data'):
-                        s1 = etree.SubElement(start,"BatRecording")
+                        s1 = etree.SubElement(start, "BatRecording")
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
-                        # TODO:Should be able to remove this...
-                        label = 'Non-bat'
-                        if len(segments)>0:
-                            seg = segments[0]
-                            #print(seg)
-                            c = [lab["certainty"] for lab in seg[4]]
-                            s = [lab["species"] for lab in seg[4]]
-                            if len(c)>1:
-                                label = 'Both'
-                            else:
-                                if c[0]>=threshold1:
-                                    if s[0] == 'Long-tailed bat':
-                                        label = 'Long Tail'
-                                    elif s[0] == 'Short-tailed bat':
-                                        label = 'Short Tail'
-                                elif threshold2 is not None:
-                                    if c[0]>threshold2:
-                                        if s[0] == 'Long-tailed bat':
-                                            label = 'Possible LT'
-                                        elif s[0] == 'Short-tailed bat':
-                                            label = 'Possible ST'
-                                elif threshold2 is None:
-                                    if s[0] == 'Long-tailed bat':
-                                        label = 'Possible LT'
-                                    elif s[0] == 'Short-tailed bat':
-                                        label = 'Possible ST'
-                                else:
-                                    label = 'Non-bat'
-                        else:
-                            # TODO: which?
-                            label = 'Non-bat'
-                            #label = 'Unassigned'
-                        # This is the text for the file
-                        s2 = etree.SubElement(s1,"AssignedBatCategory")
-                        s3 = etree.SubElement(s1,"AssignedSite")
-                        s4 = etree.SubElement(s1,"AssignedUser")
-                        s5 = etree.SubElement(s1,"RecTime")
-                        s6 = etree.SubElement(s1,"RecordingFileName")
-                        s7 = etree.SubElement(s1,"RecordingFolderName")
-                        s8 = etree.SubElement(s1,"MeasureTimeFrom")
-
-                        # TODO: which?
-                        #s2.text = str(label)
-                        s2.text = str(namedict[label])
-                        s3.text = site
-                        s4.text = operator
-                        # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
-                        if len(filename.split('_')[0]) == 6:
-                            # ddmmyy
-                            timedate = "20"+filename[4:6]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[7:9]+":"+filename[9:11]+":"+filename[11:13]
-                        elif len(filename.split('_')[0]) == 8:
-                            # yyyymmdd
-                            timedate = filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]
-                        else:
-                            print("Error: time unknown")
-                            timedate = ""
-                        s5.text = timedate
-
-                        s6.text = filename[:-5]
-                        s7.text = ".\\"+os.path.split(root)[-1]
-                        #s7.text = ".\\"+os.path.relpath(root, dirName)
-                        s8.text = str(0)
-
-                # Now write the file 
+                        
+                        # Determine label from segments
+                        label = self._getBatLabel(segments, threshold1, threshold2)
+                        
+                        # Create XML elements
+                        etree.SubElement(s1, "AssignedBatCategory").text = str(namedict[label])
+                        etree.SubElement(s1, "AssignedSite").text = site
+                        etree.SubElement(s1, "AssignedUser").text = operator
+                        etree.SubElement(s1, "RecTime").text = self._parseTimeDate(filename)
+                        etree.SubElement(s1, "RecordingFileName").text = filename[:-5]
+                        etree.SubElement(s1, "RecordingFolderName").text = ".\\" + os.path.split(root)[-1]
+                        etree.SubElement(s1, "MeasureTimeFrom").text = str(0)
+                
+                # Write XML file
                 print("writing to", os.path.join(root, savefile))
                 with open(os.path.join(root, savefile), "wb") as f:
-                    f.write(etree.tostring(etree.ElementTree(start), pretty_print=True, xml_declaration=True, encoding='utf-8'))
+                    f.write(etree.tostring(etree.ElementTree(start), pretty_print=True, 
+                                         xml_declaration=True, encoding='utf-8'))
         return 1
-
-    def exportToBatSearch_2(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
-        # Write out a file that can be used for BatSearch import
-        # For now, looks like the xml file used there
-        # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
-        # TODO: No error checking!
-        # TODO: Use xml properly
-        # TODO: Check date
-        operator = "AviaNZ 3.0"
-        site = "Nowhere"
-        # BatSeach codes
-        namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, "Possible LT":5, "Possible ST":6, "Both":7}
-        # File header
-        start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
-        output = start
-        if not os.path.isdir(dirName):
-            print("Folder doesn't exist")
-            return 0
-        for root, dirs, files in os.walk(dirName, topdown=True):
-            nfiles = len(files)
-            if nfiles > 0:
-                for count in range(nfiles):
-                    filename = files[count]
-                    if filename.endswith('.data'):
-                        segments = Segment.SegmentList()
-                        segments.parseJSON(os.path.join(root, filename))
-                        # TODO:Should be able to remove this...
-                        label = 'Non-bat'
-                        if len(segments)>0:
-                            seg = segments[0]
-                            print(seg)
-                            c = [lab["certainty"] for lab in seg[4]]
-                            s = [lab["species"] for lab in seg[4]]
-                            if len(c)>1:
-                                label = 'Both'
-                            else:
-                                if c[0]>=threshold1:
-                                    if s[0] == 'Long-tailed bat':
-                                        label = 'Long Tail'
-                                    elif s[0] == 'Short-tailed bat':
-                                        label = 'Short Tail'
-                                elif threshold2 is not None:
-                                    if c[0]>threshold2:
-                                        if s[0] == 'Long-tailed bat':
-                                            label = 'Possible LT'
-                                        elif s[0] == 'Short-tailed bat':
-                                            label = 'Possible ST'
-                                elif threshold2 is None:
-                                    if s[0] == 'Long-tailed bat':
-                                        label = 'Possible LT'
-                                    elif s[0] == 'Short-tailed bat':
-                                        label = 'Possible ST'
-                                else:
-                                    label = 'Non-bat'
-                        else:
-                            # TODO: which?
-                            label = 'Non-bat'
-                            #label = 'Unassigned'
-                        # This is the text for the file
-                        s1 = "<BatRecording>\n"
-                        s2 = "<AssignedBatCategory>"+str(namedict[label])+"</AssignedBatCategory>\n"
-                        s3 = "<AssignedSite>"+site+"</AssignedSite>\n"
-                        s4 = "<AssignedUser>"+operator+"</AssignedUser>\n"
-                        # DOC format -- BatSearch wants yyyy-mm-ddThh:mm:ss
-                        if len(filename.split('_')[0]) == 6:
-                            # ddmmyy
-                            s5 = "<RecTime>"+"20"+filename[4:6]+"-"+filename[2:4]+"-"+filename[0:2]+"T"+filename[7:9]+":"+filename[9:11]+":"+filename[11:13]+"</RecTime>\n"
-                        elif len(filename.split('_')[0]) == 8:
-                            # yyyymmdd
-                            s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
-                        else:
-                            print("Error: time unknown")
-                            s5 = "<RecTime>"+"</RecTime>\n"
-
-                        #s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
-                        s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
-                        s7 = "<RecordingFolderName>.\\"+os.path.relpath(root, dirName)+"</RecordingFolderName>\n"
-                        s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
-                        s9 = "</BatRecording>\n"
-                        output+= s1+s2+s3+s4+s5+s6+s7+s8+s9
-                # Now write the file if necessary
-                if output != start:
-                    output += "</ArrayOfBatRecording>\n"
-                    file = open(os.path.join(root, savefile), 'w')
-                    print("writing to", os.path.join(root, savefile))
-                    file.write(output)
-                    file.write("\n")
-                    file.close()
-                    output = start
     
-        return 1
-
-    def exportToBatSearch_1(self, dirName, savefile='BatData.xml'):
-        # Write out a file that can be used for BatSearch import
-        # For now, looks like the xml file used there
-        # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
-        # No error checking
-        operator = "AviaNZ 3.1"
-        site = "Nowhere"
-        # BatSeach codes
-        namedict = {"Unassigned": 0, "Non-bat": 1, "Unknown": 2, "Long Tail": 3, "Short Tail": 4, "Possible LT": 5,
-                    "Possible ST": 6, "Both": 7}
-        # File header
-        start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
-        output = start
-        if not os.path.isdir(dirName):
-            print("Folder doesn't exist")
-            return 0
-        for root, dirs, files in os.walk(dirName, topdown=True):
-            nfiles = len(files)
-            if nfiles > 0:
-                for count in range(nfiles):
-                    filename = files[count]
-                    if filename.endswith('.data'):
-                        segments = Segment.SegmentList()
-                        segments.parseJSON(os.path.join(root, filename))
-                        # TODO:Should be able to remove this...
-                        label = 'Non-bat'
-                        if len(segments) > 0:
-                            seg = segments[0]
-                            print(seg)
-                            c = [lab["certainty"] for lab in seg[4]]
-                            s = [lab["species"] for lab in seg[4]]
-                            if c[0] == 100:
-                                if s[0] == 'Long-tailed bat':
-                                    label = 'Long Tail'
-                                elif s[0] == 'Short-tailed bat':
-                                    label = 'Short Tail'
-                            else:
-                                if s[0] == 'Long-tailed bat':
-                                    label = 'Possible LT'
-                                elif s[0] == 'Short-tailed bat':
-                                    label = 'Possible ST'
+    def _exportBatCSV(self, dirName, savefile, threshold1, threshold2, operator):
+        """Export bat results to BatSearch CSV format."""
+        f = open(os.path.join(dirName, savefile), 'w')
+        f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
+        
+        for root, dirs, files in os.walk(dirName):
+            dirs.sort()
+            files.sort()
+            for filename in files:
+                if filename.endswith('.data'):
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(root, filename))
+                    
+                    label = self._getBatLabel(segments, threshold1, threshold2)
+                    if label == 'Non-bat':
+                        label = ''
+                    
+                    # Parse date and time (assumes DOC format)
+                    d = filename[6:8] + '/' + filename[4:6] + '/' + filename[:4] + ','
+                    if d[0] == '0':
+                        d = d[1:]
+                    
+                    if int(filename[9:11]) < 13:
+                        if filename[9:11] == '00':
+                            t = str(int(filename[9:11]) + 12) + ':' + filename[11:13] + ':' + filename[13:15] + ' a.m.,'
                         else:
-                            label = 'Non-bat'
-                            # label = 'Unassigned'
-                        # This is the text for the file
-                        s1 = "<BatRecording>\n"
-                        s2 = "<AssignedBatCategory>" + str(namedict[label]) + "</AssignedBatCategory>\n"
-                        s3 = "<AssignedSite>" + site + "</AssignedSite>\n"
-                        s4 = "<AssignedUser>" + operator + "</AssignedUser>\n"
-                        # DOC format
-                        s5 = "<RecTime>" + filename[:4] + "-" + filename[4:6] + "-" + filename[6:8] + "T" + filename[
-                                                                                                            9:11] + ":" + filename[
-                                                                                                                          11:13] + ":" + filename[
-                                                                                                                                         13:15] + "</RecTime>\n"
-                        s6 = "<RecordingFileName>" + filename[:-5] + "</RecordingFileName>\n"
-                        s7 = "<RecordingFolderName>.\\" + os.path.basename(root) + "</RecordingFolderName>\n"
-                        s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
-                        s9 = "</BatRecording>\n"
-                        output += s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9
-                # Now write the file if necessary
-                if output != start:
-                    output += "</ArrayOfBatRecording>\n"
-                    file = open(os.path.join(root, savefile), 'w')
-                    print("writing to", os.path.join(root, savefile))
-                    file.write(output)
-                    file.write("\n")
-                    file.close()
-                    output = start
-
+                            t = filename[9:11] + ':' + filename[11:13] + ':' + filename[13:15] + ' a.m.,'
+                    else:
+                        t = str(int(filename[9:11]) - 12) + ':' + filename[11:13] + ':' + filename[13:15] + ' p.m.,'
+                    if t[0] == '0':
+                        t = t[1:]
+                    
+                    rec = root.split('/')[-3] if label != '' else ''
+                    date = '.\\' + root.split('/')[-1]
+                    op = operator if label != '' else ''
+                    
+                    f.write(d + t + ',' + label + ',' + date + ',' + filename[:-5] + ',' + op + '\n')
+        
+        f.close()
         return 1
+    
+    def _exportBatPasses(self, dirName, savefile):
+        """Export bat passes summary."""
+        if not hasattr(self, 'sp'):
+            self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
+        
+        f = open(os.path.join(dirName, savefile), 'w')
+        f.write("Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n")
+        
+        dt = 0.002909090909090909
+        tally = 0
+        
+        for root, dirs, files in os.walk(dirName, topdown=True):
+            for filename in files:
+                if filename.endswith('.data'):
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(root, filename))
+                    
+                    label = 'Non-bat'
+                    length = "0"
+                    
+                    if len(segments) > 0:
+                        fn = filename[:-5]
+                        self.sp.readBmp(os.path.join(root, fn), rotate=False, silent=True)
+                        res = self.ClickSearch(self.sp.sg, None, virginia=False)
+                        if res is not None:
+                            length = "{:.2f}".format((res[1] - res[0]) * dt)
+                        
+                        seg = segments[0]
+                        c = [lab["certainty"] for lab in seg[4]]
+                        s = [lab["species"] for lab in seg[4]]
+                        
+                        if len(c) > 1:
+                            label = 'Both'
+                        elif c[0] > 50:
+                            if s[0] == 'Long-tailed bat':
+                                label = 'L'
+                            elif s[0] == 'Short-tailed bat':
+                                label = 'S'
+                    
+                    # Parse date/time from directory and filename
+                    night = root[-2:] + "/" + root[-4:-2] + "/" + root[-6:-4]
+                    folder = root.split("/")[-2]
+                    detname = ""
+                    time = filename[9:11] + ":" + filename[11:13] + ":" + filename[13:15]
+                    
+                    f.write(f"{tally},{night},,,{detname},{label},{time},{length},\n")
+                    tally += 1
+        
+        f.close()
+        return 1
+    
+    def _getBatLabel(self, segments, threshold1, threshold2):
+        """Helper method to determine bat label from segments."""
+        if len(segments) == 0:
+            return 'Non-bat'
+        
+        seg = segments[0]
+        c = [lab["certainty"] for lab in seg[4]]
+        s = [lab["species"] for lab in seg[4]]
+        
+        if len(c) > 1:
+            return 'Both'
+        
+        if c[0] >= threshold1:
+            if s[0] == 'Long-tailed bat':
+                return 'Long Tail'
+            elif s[0] == 'Short-tailed bat':
+                return 'Short Tail'
+        elif threshold2 is not None and c[0] > threshold2:
+            if s[0] == 'Long-tailed bat':
+                return 'Possible LT'
+            elif s[0] == 'Short-tailed bat':
+                return 'Possible ST'
+        
+        return 'Non-bat'
+    
+    def _parseTimeDate(self, filename):
+        """Helper method to parse time/date from filename for BatSearch format."""
+        if len(filename.split('_')[0]) == 6:
+            # ddmmyy format
+            return "20" + filename[4:6] + "-" + filename[2:4] + "-" + filename[0:2] + "T" + \
+                   filename[7:9] + ":" + filename[9:11] + ":" + filename[11:13]
+        elif len(filename.split('_')[0]) == 8:
+            # yyyymmdd format
+            return filename[:4] + "-" + filename[4:6] + "-" + filename[6:8] + "T" + \
+                   filename[9:11] + ":" + filename[11:13] + ":" + filename[13:15]
+        else:
+            print("Error: time unknown")
+            return ""
 
     def exportBatSurvey(self,dirName,responses,threshold1=0.85):
         import datetime as dt
@@ -1552,61 +1410,6 @@ class AviaNZ_batchProcess():
         line = line + str(start)+','+responses[3]+','+str(start)+','+str(end)+','+str(totalnights)+','+str(totalnights)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n'
         f.write(line)
         f.close()
-
-    def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):
-        # This produces a csv file that looks like the one from Bat Search. 
-
-        f = open(os.path.join(dirName,writefile),'w')
-        f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
-        for root, dirs, files in os.walk(dirName):
-            dirs.sort()
-            files.sort()
-            for filename in files:
-                if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(os.path.join(root, filename))
-                    if len(segments)>0:
-                        seg = segments[0]
-                        c = [lab["certainty"] for lab in seg[4]]
-                        s = [lab["species"] for lab in seg[4]]
-                        if len(c)>1:
-                            label = 'Both'
-                        else:
-                            if c[0]>threshold1:
-                                if s[0] == 'Long-tailed bat':
-                                    label = 'Long Tail'
-                                elif s[0] == 'Short-tailed bat':
-                                    label = 'Short Tail'
-                            elif c[0]>threshold2:
-                                if s[0] == 'Long-tailed bat':
-                                    label = 'Possible LT'
-                                elif s[0] == 'Short-tailed bat':
-                                    label = 'Possible ST'
-                            else:
-                                label = '' #Non-bat'
-                    else:
-                        label = '' #'Non-bat'
-                    # Assumes DOC format
-                    d = filename[6:8]+'/'+filename[4:6]+'/'+filename[:4]+','
-                    if d[0] == '0':
-                        d = d[1:]
-                    if int(filename[9:11]) < 13:
-                        if filename[9:11] == '00':
-                            t = str(int(filename[9:11])+12)+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
-                        else:
-                            t = filename[9:11]+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
-                    else:
-                        t = str(int(filename[9:11])-12)+':'+filename[11:13]+':'+filename[13:15]+' p.m.,'
-                    if t[0] == '0':
-                        t = t[1:]
-                    # Assume that directory structure is recorder - date
-                    if label == '':
-                        rec = ',Unassigned'
-                        op = ''
-                    else:
-                        rec = root.split('/')[-3]
-                        op = 'Moira Pryde'
-                    date = '.\\'+root.split('/')[-1]
 
     def exportToDOCDB(self):
         if not self.CLI:

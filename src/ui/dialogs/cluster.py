@@ -121,7 +121,7 @@ class Cluster(QDialog):
             self.minsg = min(self.minsg, np.min(self.sg))
             self.maxsg = max(self.maxsg, np.max(self.sg))
 
-            newButton = PicButton(1, np.fliplr(sg), sp, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+            newButton = PicButton(1, np.fliplr(self.sg), sp, sp.audio_data, seg[1][1] - seg[1][0], 0, seg[1][1], self.lut, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)
 

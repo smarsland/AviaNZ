@@ -945,7 +945,7 @@ class CompareCallsDialog(QDialog):
 
         # axes
         minFreq = 0
-        maxFreq = min(self.sp1.audioFormat.sampleRate(), self.sp2.audioFormat.sampleRate())
+        maxFreq = min(self.sp1.audioFormat.sample_rate, self.sp2.audioFormat.sample_rate)
         FreqRange = (maxFreq-minFreq)/1000.
 
         SgSize1 = np.shape(self.sp1.sg)[1]

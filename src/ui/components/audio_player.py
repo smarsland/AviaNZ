@@ -30,6 +30,8 @@ from time import sleep
 from PyQt6.QtCore import QTimer, QIODevice, QBuffer, QByteArray, pyqtSlot
 from PyQt6.QtMultimedia import QAudio, QAudioSink, QAudioFormat, QMediaDevices
 
+from src.core import SignalProc
+
 try:
     import librosa
 except ImportError:
@@ -43,7 +45,7 @@ class ControllableAudio(QAudioSink):
 
     def __init__(self, sp=None, loop=False, audioFormat=None,useBar=False):
         # Note the order here is audioFormat passed, otherwise sp.audioFormat
-        #print(self.audioFormat.sampleFormat(), self.audioFormat.sampleRate(), self.audioFormat.bytesPerSample(), self.audioFormat.channelCount())
+        #print(self.audioFormat.sample_format, self.audioFormat.sample_rate, self.audioFormat.bytesPerSample(), self.audioFormat.channels)
 
         if audioFormat is not None:
             self.audioFormat = audioFormat
@@ -51,19 +53,27 @@ class ControllableAudio(QAudioSink):
             if sp is None:
                 print("ERROR: need either audioFormat or SignalProc")
                 return None
-            self.audioFormat = sp.audioFormat
-
-        if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+            # sp is a Spectrogram, extract the AudioData from it
+            # sp.audio_data points to the AudioData object
+            self.audioFormat = sp.audio_data
+        
+        # Convert AudioData format to QAudioFormat for PyQt6
+        qtAudioFormat = self._convertToQtFormat(self.audioFormat)
+        
+        # Determine sample width from format
+        sfmt = self.audioFormat.sample_format
+        if 'Int16' in sfmt:
             self.sampwidth = 2
-        elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+        elif 'Int32' in sfmt:
             self.sampwidth = 4
-        elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+        elif 'UInt8' in sfmt or 'UInt8' == sfmt:
             self.sampwidth = 1
         else:
-            print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
-        super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=self.audioFormat)
-        #self.setBufferSize(int(sampwidth*8 * self.audioFormat.sampleRate()/100 * self.audioFormat.channelCount()))
-        self.bytesPerSecond = int(self.sampwidth * self.audioFormat.sampleRate() * self.audioFormat.channelCount())
+            print(f"ERROR: sample format {sfmt} not supported (size {self.audioFormat.sample_size})")
+            self.sampwidth = 2  # default
+        
+        super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=qtAudioFormat)
+        self.bytesPerSecond = int(self.sampwidth * self.audioFormat.sample_rate * self.audioFormat.channels)
         # TODO: or the size of the data if < 4 secs
         self.setBufferSize(int(self.bytesPerSecond/0.25)) # 4 s buffer
 
@@ -80,6 +90,28 @@ class ControllableAudio(QAudioSink):
         self.audioThreadPaused = False
         self.playbackSpeed = 1.0
         self.bytesWritten = 0
+    
+    def _convertToQtFormat(self, audio_data):
+        """Convert AudioData format to PyQt6 QAudioFormat."""
+        qtFormat = QAudioFormat()
+        qtFormat.setSampleRate(audio_data.sample_rate)
+        qtFormat.setChannelCount(audio_data.channels)
+        
+        # Map string format to QAudioFormat.SampleFormat enum
+        fmt_str = audio_data.sample_format
+        if 'Int16' in fmt_str:
+            qtFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+        elif 'Int32' in fmt_str:
+            qtFormat.setSampleFormat(QAudioFormat.SampleFormat.Int32)
+        elif 'UInt8' in fmt_str:
+            qtFormat.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
+        elif 'Int8' in fmt_str:
+            qtFormat.setSampleFormat(QAudioFormat.SampleFormat.Int8)
+        else:
+            # Default to Int16 if unknown
+            qtFormat.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+        
+        return qtFormat
     
     def setSpeed(self, speed):
         self.playbackSpeed = speed
@@ -148,15 +180,15 @@ class ControllableAudio(QAudioSink):
         # and plays it, optionally at a different speed and after bandpassing
 
         self.timeoffset = max(0, start)
-        start = max(0, int(start * self.audioFormat.sampleRate() // 1000))
+        start = max(0, int(start * self.audioFormat.sample_rate // 1000))
 
         if audiodata is None:
-            segment = self.sp.data[start:int(stop * self.audioFormat.sampleRate() // 1000)]
+            segment = self.sp.data[start:int(stop * self.audioFormat.sample_rate // 1000)]
         else:
             segment = audiodata
 
         if low is not None:
-            segment = self.sp.bandpassFilter(segment,low,high)
+            segment = SignalProc.bandpassFilter(segment, self.audioFormat.sample_rate, start=low, end=high)
 
         if self.playbackSpeed != 1.0 and librosa is not None:
             segment = librosa.effects.time_stretch(segment.astype('float'), rate=self.playbackSpeed)
@@ -168,17 +200,20 @@ class ControllableAudio(QAudioSink):
         # Plays the entire audiodata 
         # Gets the format, then puts the data in a buffer
         # and then starts the QAudioOutput from that buffer
-        if self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+        fmt_str = self.audioFormat.sample_format
+        if 'Int16' in fmt_str:
             audiodata = audiodata.astype('int16')  
-        elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+        elif 'Int32' in fmt_str:
             audiodata = audiodata.astype('int32')  
-        elif self.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+        elif 'UInt8' in fmt_str or 'UInt8' == fmt_str:
             audiodata = audiodata.astype('uint8')  
         else:
-            print("ERROR: sampleFormat %s not supported" % self.audioFormat.sampleFormat())
+            print("ERROR: sampleFormat %s not supported" % fmt_str)
 
         # double mono sound to get two channels -- simplifies reading
-        if self.audioFormat.channelCount()==2:
+        chcount = self.audioFormat.channels
+
+        if chcount == 2:
             audiodata = np.column_stack((audiodata, audiodata))
 
         self.audioByteArray = QByteArray(audiodata.tobytes())

@@ -22,6 +22,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from src.core import Spectrogram
 from src.core import SupportClasses
+from src.core.AudioData import AudioData
 from src.utils import Shapes
 
 import numpy as np
@@ -209,9 +210,12 @@ class Segment(list):
                     text += str(e)
                     text += "\nWhile trying to remove key "+str(species)+" from "+ str(self[4])
                     text += "\nWhich had keys" + str(self.keys)
-                    from src.ui.components.dialogs_and_popups import MessagePopup
-                    msg = MessagePopup("w", "ERROR - please report", text)
-                    msg.exec()
+                    try:
+                        msg = SupportClasses.MessagePopup("w", "ERROR - please report", text)
+                        if hasattr(msg, 'exec'):
+                            msg.exec()
+                    except Exception:
+                        print('ERROR - please report:', text)
                 # if that was the last label, flip to Don't Know
                 if len(self[4])==0:
                     self.addLabel("Don't Know", 0)
@@ -681,19 +685,28 @@ class Segmenter:
             self.sg = None
         # These are the spectrogram params. Needed to compute times.
         if sp:
-            self.data = sp.data
-            self.fs = sp.audioFormat.sampleRate()
+            # FIXED: Don't copy data, just reference via property
+            # Old: self.data = sp.data  <- This copied 4+ MB unnecessarily!
+            self.fs = sp.audio_data.sample_rate
             #self.fs = sp.sampleRate
             self.window_width = sp.window_width
             self.incr = sp.incr
         self.mingap = mingap
         self.minlength = minlength
 
+    @property
+    def data(self):
+        """Access audio data through Spectrogram reference (no copy)."""
+        if self.sp is not None:
+            return self.sp.data
+        return None
+
     def setNewData(self, sp):
         # To be called when a new sound file is loaded
         self.sp = sp
-        self.data = sp.data
-        self.fs = sp.audioFormat.sampleRate()
+        # FIXED: Don't copy data
+        # Old: self.data = sp.data  <- Unnecessary copy!
+        self.fs = sp.audio_data.sample_rate
         #self.fs = sp.sampleRate
         self.sg = sp.sg
         self.window_width = sp.window_width
@@ -1264,7 +1277,7 @@ class PostProcess:
 
     def __init__(self, configdir, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, NNmodel=None, cert=0):
         self.configdir = configdir
-        self.audioData = audioData
+        self.audioData = audioData  # numpy array of audio samples (not AudioData object)
         self.sampleRate = sampleRate
         self.subfilter = subfilter
 
@@ -1368,8 +1381,8 @@ class PostProcess:
             nn_window_width = self.NNinputdim[0]
             sp = Spectrogram.Spectrogram(window_width=nn_window_width,
                                         incr=self.NNwindowInc[1])
-            sp.data = data
-            sp.audioFormat.setSampleRate(self.sampleRate)
+            sp.audio_data = AudioData(data=data, sample_rate=self.sampleRate, file_length=len(data), 
+                                      sample_format='float32', sample_size=32, channels=1)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
@@ -1450,8 +1463,8 @@ class PostProcess:
             nn_window_width = self.NNinputdim[0]
             sp = Spectrogram.Spectrogram(window_width=nn_window_width,
                                         incr=self.NNwindowInc[1])
-            sp.data = data
-            sp.audioFormat.setSampleRate(self.sampleRate)
+            sp.audio_data = AudioData(data=data, sample_rate=self.sampleRate, file_length=len(data), 
+                                      sample_format='float32', sample_size=32, channels=1)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
 
@@ -1548,8 +1561,8 @@ class PostProcess:
         if newSegments.__len__() > 1:
             # Get avg energy
             sp = Spectrogram.Spectrogram()
-            sp.data = self.audioData
-            sp.audioFormat.setSampleRate(self.sampleRate)
+            sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, file_length=len(self.audioData), 
+                                      sample_format='float32', sample_size=32, channels=1)
             rawsg = sp.spectrogram()
             # Normalise
             rawsg -= np.mean(rawsg, axis=0)
@@ -1589,23 +1602,23 @@ class PostProcess:
             sp = Spectrogram.Spectrogram(256, 128)
             if fileName:
                 sp.readSoundFile(fileName, secs, seg[0])
-                self.sampleRate = sp.audioFormat.sampleRate()
+                self.sampleRate = sp.audio_data.sample_rate
                 self.audioData = sp.data
             else:
-                sp.data = self.audioData
-                sp.audioFormat.setSampleRate(self.sampleRate)
+                sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, file_length=len(self.audioData), 
+                                          sample_format='float32', sample_size=32, channels=1)
 
             # TODO: could denoise before fundamental frq. extraction
 
             # Ensure window width W is at least 3*period:
             # (generally fine for 100 Hz minfreq = 0.3 s minwin)
-            minwin = 3 * sp.audioFormat.sampleRate() / minfreq
+            minwin = 3 * sp.audio_data.sample_rate / minfreq
             if Wsamples < minwin:
                 print("Extending window width to ", minwin)
                 Wsamples = int(minwin)
 
             # returns pitch in Hz for each window of Wsamples/2.
-            pitch = Shapes.fundFreqShaper(sp.data, Wsamples, thr, sp.audioFormat.sampleRate())
+            pitch = Shapes.fundFreqShaper(sp.data, Wsamples, thr, sp.audio_data.sample_rate)
             pitch = pitch.y
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]

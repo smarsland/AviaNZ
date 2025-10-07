@@ -24,7 +24,7 @@ from PyQt6.QtGui import QIcon, QPixmap, QColor, QScreen
 from PyQt6.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
 from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
-import os, platform, sys, webbrowser, re
+import os, platform, sys, webbrowser, re, traceback
 import pyqtgraph as pg
 from pyqtgraph.dockarea import Dock, DockArea
 
@@ -64,7 +64,7 @@ class BatchInterface(QMainWindow):
         self.statusBar().showMessage("Select a directory to process")
 
         self.setWindowTitle('AviaNZ - Batch Processing')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
         self.createMenu()
         self.createFrame()
         self.centre()
@@ -186,7 +186,7 @@ class BatchInterface(QMainWindow):
         self.maxlenlbl = QLabel("Maximum segment length (s)")
 
         self.w_processButton = MainPushButton(" Process Folder")
-        self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
+        self.w_processButton.setIcon(QIcon(QPixmap('src/resources/images/process.png')))
         self.w_processButton.clicked.connect(self.detect)
         self.w_processButton.setFixedWidth(165)
         self.w_processButton.setEnabled(False)
@@ -353,7 +353,9 @@ class BatchInterface(QMainWindow):
         # Create the worker and move it to its thread
         # NOTE: any communication w/ batchProc from this thread
         # must be via signals, if at all necessary
-        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentText(), mergeSyllables=self.mergesyllables.isChecked(), overwrite=self.overwrite.isChecked()) #, maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
+        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
+        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentText(), mergeSyllables=self.mergesyllables.isChecked(), overwrite=self.overwrite.isChecked(), timeWindow_s=timeWindow_s, timeWindow_e=timeWindow_e, protocolSize=self.protocolSize.value(), protocolInterval=self.protocolInterval.value(), maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
 
         # NOTE: must be on self. to maintain the reference
         self.batchThread = QThread()
@@ -404,7 +406,7 @@ class BatchInterface(QMainWindow):
 
         self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", 0, total+1, self)
         self.dlg.setFixedSize(350, 100)
-        self.dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.dlg.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
         self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint ^ Qt.WindowType.WindowCloseButtonHint)
         self.dlg.canceled.connect(self.stopping_fileproc)

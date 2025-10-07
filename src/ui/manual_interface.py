@@ -327,7 +327,7 @@ class ManualInterface(QMainWindow):
         else:
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
-            self.setWindowIcon(QIcon('img/AviaNZ.ico'))
+            self.setWindowIcon(QIcon('src/resources/images/AviaNZ.ico'))
             # Show the window
             if self.config['StartMaximized']:
                 self.showMaximized()
@@ -361,7 +361,7 @@ class ManualInterface(QMainWindow):
             fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
         fileMenu.addSeparator()
         fileMenu.addAction("Restart Program","Ctrl+R",self.restart)
-        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "&Quit","Ctrl+Q",QApplication.quit)
+        fileMenu.addAction(QIcon(QPixmap('src/resources/images/exit.png')), "&Quit","Ctrl+Q",QApplication.quit)
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
@@ -644,13 +644,13 @@ class ManualInterface(QMainWindow):
         # "Find next annotation" buttons
         self.annotJumpLabel = QLabel("Jump to next mark:")
         self.annotJumpG = QToolButton()
-        self.annotJumpG.setIcon(QIcon('img/findnext-g.png'))
+        self.annotJumpG.setIcon(QIcon('src/resources/images/findnext-g.png'))
         self.annotJumpG.setToolTip("Any label")
         self.annotJumpG.setMinimumSize(35,30)
         self.annotJumpG.setIconSize(QtCore.QSize(20, 17))
         self.annotJumpG.clicked.connect(lambda: self.annotJumper(100))
         self.annotJumpY = QToolButton()
-        self.annotJumpY.setIcon(QIcon('img/findnext-y.png'))
+        self.annotJumpY.setIcon(QIcon('src/resources/images/findnext-y.png'))
         self.annotJumpY.setToolTip("Uncertain label")
         self.annotJumpY.setMinimumSize(35,30)
         self.annotJumpY.setIconSize(QtCore.QSize(20, 17))
@@ -773,8 +773,8 @@ class ManualInterface(QMainWindow):
             self.specPlot.unsetCursor()
             self.bar.setCursor(Qt.CursorShape.OpenHandCursor)
         else:
-            self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
-            self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+            self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
+            self.specPlot.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
             self.bar.unsetCursor()
 
         # Connect up the listeners
@@ -815,14 +815,14 @@ class ManualInterface(QMainWindow):
         self.stopButton.clicked.connect(self.stopPlayback)
 
         self.playSegButton = QToolButton()
-        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+        self.playSegButton.setIcon(QIcon('src/resources/images/playsegment.png'))
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playSegButton.setToolTip("Play selected")
         self.playSegButton.clicked.connect(self.playSelectedSegment)
 
         self.speedButton = QToolButton()
         self.speedButton.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.speedButton.setIcon(QIcon('img/playSlow-w.png'))
+        self.speedButton.setIcon(QIcon('src/resources/images/playSlow-w.png'))
         self.speedButton.setIconSize(QtCore.QSize(20, 20))
         self.speedButton.setToolTip("Playback speed")
 
@@ -840,12 +840,12 @@ class ManualInterface(QMainWindow):
         self.speedButton.setMenu(speedMenu)
 
         self.quickDenoiseButton = QToolButton()
-        self.quickDenoiseButton.setIcon(QIcon('img/denoisesegment.png'))
+        self.quickDenoiseButton.setIcon(QIcon('src/resources/images/denoisesegment.png'))
         self.quickDenoiseButton.setIconSize(QtCore.QSize(20, 20))
         self.quickDenoiseButton.setToolTip("Denoise segment")
         self.quickDenoiseButton.clicked.connect(self.denoiseSeg)
         self.playBandLimitedSegButton = QToolButton()
-        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('src/resources/images/playBandLimited.png'))
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
@@ -865,27 +865,27 @@ class ManualInterface(QMainWindow):
         # Confirm button - auto ups the certainty to 100
         self.confirmButton = QPushButton("   Confirm labels")
         self.confirmButton.clicked.connect(self.confirmSegment)
-        self.confirmButton.setIcon(QIcon(QPixmap('img/check-mark2.png')))
+        self.confirmButton.setIcon(QIcon(QPixmap('src/resources/images/check-mark2.png')))
         self.confirmButton.setStyleSheet("QPushButton {padding: 3px 3px 3px 3px}")
         self.confirmButton.setToolTip("Set all labels in this segment as certain")
 
         # Delete segment button. We have to get rid of the extra event args
         self.deleteButton = QPushButton("  Delete segment")
         self.deleteButton.clicked.connect(lambda _ : self.deleteSegment())
-        self.deleteButton.setIcon(QIcon(QPixmap('img/deleteL.png')))
+        self.deleteButton.setIcon(QIcon(QPixmap('src/resources/images/deleteL.png')))
         self.deleteButton.setStyleSheet("QPushButton {padding: 3px 3px 3px 3px}")
 
         # export selected sound
         self.exportSoundBtn = QPushButton("  Save sound clip")
         self.exportSoundBtn.clicked.connect(lambda _ : self.saveSelectedSound(False))
-        self.exportSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
+        self.exportSoundBtn.setIcon(QIcon(QPixmap('src/resources/images/storage2.png')))
         self.exportSoundBtn.setToolTip("Export the selected segment to a file")
 
         # export selected sound
         if not self.DOC:
             self.exportSlowSoundBtn = QPushButton("  Save slow sound clip")
             self.exportSlowSoundBtn.clicked.connect(lambda _ : self.saveSelectedSound(True))
-            self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
+            self.exportSlowSoundBtn.setIcon(QIcon(QPixmap('src/resources/images/storage2.png')))
             self.exportSlowSoundBtn.setToolTip("Export the selected sound to a file at different speed")
 
         # flips buttons to Disabled state
@@ -1432,7 +1432,7 @@ class ManualInterface(QMainWindow):
         # Need name of file
         if type(current) is QListWidgetItem:
             current = current.text()
-            current = re.sub('\/.*', '', current)
+            current = re.sub(r'/.*', '', current)
 
         fullcurrent = os.path.join(self.SoundFileDir, current)
         if not os.path.isdir(fullcurrent):
@@ -1520,7 +1520,7 @@ class ManualInterface(QMainWindow):
 
         with pg.ProgressDialog("Loading..", 0, 6) as dlg:
             dlg.setCancelButton(None)
-            dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+            dlg.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             dlg.show()
             dlg.update()
@@ -1550,7 +1550,7 @@ class ManualInterface(QMainWindow):
                 # Check if the filename is in standard DOC format
                 # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c=char, x=0-9), could have _ afterward
                 # So this checks for the 6 ints _ 6 ints part anywhere in string
-                DOCRecording = re.search('(\d{6})_(\d{6})',name[-17:-4])
+                DOCRecording = re.search(r'(\d{6})_(\d{6})',name[-17:-4])
 
                 if DOCRecording:
                     self.startTime = DOCRecording.group(2)
@@ -1612,7 +1612,7 @@ class ManualInterface(QMainWindow):
                 # Parse wav format details based on file header:
                 self.datalength = np.shape(self.sp.data)[0]
 
-                # self.sp.audioFormat will be set
+                # self.sp.audio_data will be set
                 # self.sp.fileLength will be determined from wav header
                 # self.sp.minFreq and maxFreq will be set based on sample rate
                 # self.sp.*Show will be set based on Spectrogram settings
@@ -1621,7 +1621,7 @@ class ManualInterface(QMainWindow):
             dlg.update()
 
             
-            self.datalengthSec = self.datalength / self.sp.audioFormat.sampleRate()
+            self.datalengthSec = self.datalength / self.sp.audio_data.sample_rate
             
             if name is not None:  # i.e. starting a new file, not next section
                 if self.datalengthSec != self.sp.fileLength and not self.batmode:
@@ -1648,9 +1648,9 @@ class ManualInterface(QMainWindow):
                 self.placeInFileSelector.setValue(self.currentFileSection+1)
                 self.placeInFileSelector.setMaximum(self.nFileSections)
                 self.placeInFileLabel.setText("of %d (%d s in page)" % (self.nFileSections, self.datalengthSec))
-            self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.audioFormat.sampleRate())
-            self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
-            self.fileInfoSS.setText("<b>Sample format:</b> %s" % str(self.sp.audioFormat.sampleFormat()).split('.')[-1])
+            self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sp.audio_data.sample_rate)
+            self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audio_data.channels)
+            self.fileInfoSS.setText("<b>Sample format:</b> %s" % str(self.sp.audio_data.sample_format).split('.')[-1])
             self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.datalengthSec, 60))
 
             QApplication.processEvents() # adding this now to at least show the window as creating the spectrogram might take a long time. 
@@ -1703,10 +1703,10 @@ class ManualInterface(QMainWindow):
                         end = self.convertSpectoAmpl(result[1])
                     else:
                         start = 0
-                        end = self.datalength / self.sp.audioFormat.sampleRate()
+                        end = self.datalength / self.sp.audio_data.sample_rate
                 else:
                     start = 0
-                    end = self.datalength / self.sp.audioFormat.sampleRate()
+                    end = self.datalength / self.sp.audio_data.sample_rate
                 newSegment = Segment.Segment([start, end, 0, 0, species])
                 self.segments.append(newSegment)
                 self.segmentsToSave = True
@@ -1719,7 +1719,7 @@ class ManualInterface(QMainWindow):
             if hasattr(self,'seg'):
                 self.seg.setNewData(self.sp)
             else:
-                self.seg = Segment.Segmenter(self.sp, self.sp.audioFormat.sampleRate())
+                self.seg = Segment.Segmenter(self.sp, self.sp.audio_data.sample_rate)
 
             # Update the Dialogs
             # Also close any ones that could get buggy when moving between bird-bat modes
@@ -2001,7 +2001,7 @@ class ManualInterface(QMainWindow):
             incr = 512
         else:
             incr = self.config['incr']
-        return x*self.sp.audioFormat.sampleRate()/incr
+        return x*self.sp.audio_data.sample_rate/incr
 
     def convertSpectoAmpl(self,x):
         """ Unit conversion """
@@ -2009,7 +2009,7 @@ class ManualInterface(QMainWindow):
             incr = 512
         else:
             incr = self.config['incr']
-        return x*incr/self.sp.audioFormat.sampleRate()
+        return x*incr/self.sp.audio_data.sample_rate
 
     def convertMillisecs(self,millisecs):
         """ Unit conversion """
@@ -2021,13 +2021,13 @@ class ManualInterface(QMainWindow):
         """ Unit conversion """
         if sgy is None:
             sgy = np.shape(self.sg)[1]
-        return y * self.sp.audioFormat.sampleRate()//2 / sgy + self.sp.minFreqShow
+        return y * self.sp.audio_data.sample_rate//2 / sgy + self.sp.minFreqShow
         #return y * self.sp.sampleRate//2 / sgy + self.sp.minFreqShow
 
     def convertFreqtoY(self,f):
         """ Unit conversion """
         sgy = np.shape(self.sg)[1]
-        return (f-self.sp.minFreqShow) * sgy / (self.sp.audioFormat.sampleRate()//2)
+        return (f-self.sp.minFreqShow) * sgy / (self.sp.audio_data.sample_rate//2)
 
     def drawOverview(self):
         """ On loading a new file, update the overview figure to show where you are up to in the file.
@@ -2112,7 +2112,7 @@ class ManualInterface(QMainWindow):
         self.updateRequestedByOverview = False
 
     def setfigs(self):
-        height = self.sp.audioFormat.sampleRate() // 2 / np.shape(self.sg)[1]
+        height = self.sp.audio_data.sample_rate // 2 / np.shape(self.sg)[1]
         pixelstart = int(self.sp.minFreqShow/height)
         pixelend = int(self.sp.maxFreqShow/height)
 
@@ -2143,7 +2143,7 @@ class ManualInterface(QMainWindow):
         # I'm doing the first for now, although it isn't as good.
 
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
-        height = self.sp.audioFormat.sampleRate() // 2 / np.shape(self.sg)[1]
+        height = self.sp.audio_data.sample_rate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
         self.drawGuidelines()
 
@@ -2247,7 +2247,7 @@ class ManualInterface(QMainWindow):
 
             # Passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.sp.data, self.sp.audioFormat.sampleRate(), window=0.25, inc=0.25)
+            e = ws.computeWaveletEnergy(self.sp.data, self.sp.audio_data.sample_rate, window=0.25, inc=0.25)
             # e is 2^nlevels x nseconds
 
             # show only leaf nodes:
@@ -2270,12 +2270,12 @@ class ManualInterface(QMainWindow):
 
             # Preprocess
             # TODO: Other samplerates?
-            data = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
-            data = SignalProc.bandpassFilter(data, self.sp.audioFormat.sampleRate(), 100, 16000)
+            data = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
+            data = SignalProc.bandpassFilter(data, self.sp.audio_data.sample_rate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.sp.data, self.sp.audioFormat.sampleRate())
+            e = ws.computeWaveletEnergy(self.sp.data, self.sp.audio_data.sample_rate)
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
                 annotation[math.floor(s[0]):math.ceil(s[1])] = 1
@@ -2308,7 +2308,7 @@ class ManualInterface(QMainWindow):
             chpwin = round(0.25/minchpwin)*minchpwin
             print("Will use window of", chpwin, "s")
             # Resample and generate WP w/ all nodes for the current page
-            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=TGTSAMPLERATE)
+            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=TGTSAMPLERATE)
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
@@ -2413,9 +2413,9 @@ class ManualInterface(QMainWindow):
             we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
-                data = self.sp.data[int(w*self.sp.audioFormat.sampleRate()):int((w+1)*self.sp.audioFormat.sampleRate())]
-                post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audioFormat.sampleRate(), segments=[], subfilter={})
-                m, std, _ = post.wind_cal(data, self.sp.audioFormat.sampleRate())
+                data = self.sp.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
+                post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audio_data.sample_rate, segments=[], subfilter={})
+                m, std, _ = post.wind_cal(data, self.sp.audio_data.sample_rate)
                 we_mean[w] = m
                 we_std[w] = std
 
@@ -2438,8 +2438,8 @@ class ManualInterface(QMainWindow):
         if self.extra == "Rain":
             we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
-            for w in range(int(self.datalength/self.sp.audioFormat.sampleRate())):
-                data = self.sp.data[int(w*self.sp.audioFormat.sampleRate()):int((w+1)*self.sp.audioFormat.sampleRate())]
+            for w in range(int(self.datalength/self.sp.audio_data.sample_rate)):
+                data = self.sp.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
                 tempsp = Spectrogram.Spectrogram()
                 tempsp.data = data
                 sgRaw = tempsp.spectrogram()
@@ -2470,7 +2470,7 @@ class ManualInterface(QMainWindow):
                 plotNodes = [48, 49, 52]
 
             # resample
-            audiodata = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
+            audiodata = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             
             WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
 
@@ -2494,12 +2494,12 @@ class ManualInterface(QMainWindow):
             # Reconstructed signal was @ 16 kHz,
             # so we upsample to get equal sized spectrograms
             # TODO: Check this one
-            if self.sp.audioFormat.sampleRate() != 16000:
-                C = resampy.resample(C, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=16000)
+            if self.sp.audio_data.sample_rate != 16000:
+                C = resampy.resample(C, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             tempsp = Spectrogram.Spectrogram()
             tempsp.data = C
             sgRaw = tempsp.spectrogram()
-            sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.audioFormat.sampleRate()
+            sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.audio_data.sample_rate
             sgRaw = sgRaw[:, :sgHeightReduction]
             maxsg = max(np.min(sgRaw), 1e-9)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
@@ -2634,8 +2634,8 @@ class ManualInterface(QMainWindow):
             # Pages >1 start with an overlap zone, so need to offset marks:
             if self.currentFileSection > 0:
                 linestart += self.config['fileOverlap']
-            while linestart < self.datalength/self.sp.audioFormat.sampleRate():
-                lineend = min(self.datalength/self.sp.audioFormat.sampleRate(), linestart + self.config['protocolSize'])
+            while linestart < self.datalength/self.sp.audio_data.sample_rate:
+                lineend = min(self.datalength/self.sp.audio_data.sample_rate, linestart + self.config['protocolSize'])
                 line = pg.ROI(pos=(self.convertAmpltoSpec(linestart),0), size=(self.convertAmpltoSpec(lineend-linestart),0), movable=False, pen=linePen)
                 lline = pg.InfiniteLine(pos=self.convertAmpltoSpec(linestart), angle=90, movable=False, pen=linePen)
                 rline = pg.InfiniteLine(pos=self.convertAmpltoSpec(lineend), angle=90, movable=False, pen=linePen)
@@ -2804,7 +2804,7 @@ class ManualInterface(QMainWindow):
         # rectangle boxes:
         else:
             if y1==0 and y2==0:
-                y2 = self.sp.audioFormat.sampleRate()//2
+                y2 = self.sp.audio_data.sample_rate//2
             specy1 = self.convertFreqtoY(max(y1, self.sp.minFreqShow))
             specy2 = self.convertFreqtoY(min(y2, self.sp.maxFreqShow))
             startpointS = QPointF(self.convertAmpltoSpec(startpoint), specy1)
@@ -2934,10 +2934,10 @@ class ManualInterface(QMainWindow):
                 minutes = (time//60) % 60
                 hours = (time//3600) % 24
                 if hours>0:
-                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sp.audioFormat.sampleRate()//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sp.audio_data.sample_rate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
                     #self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sp.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
                 else:
-                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sp.audioFormat.sampleRate()//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sp.audio_data.sample_rate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
                     #self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sp.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
@@ -3047,8 +3047,8 @@ class ManualInterface(QMainWindow):
                     self.startedInAmpl = True
 
                     # Force cursor to drawing
-                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
-                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
+                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
                 # if this is left click (selection mode):
                 else:
                     # Check if the user has clicked in a box
@@ -3222,8 +3222,8 @@ class ManualInterface(QMainWindow):
                     self.startedInAmpl = False
 
                     # Force cursor to drawing
-                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
-                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
+                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
                 # if this is left click (selection mode):
                 else:
                     # Check if the user has clicked in a box
@@ -3663,7 +3663,7 @@ class ManualInterface(QMainWindow):
 
             # plot things
             # 1. decompose
-            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=spInfo['SampleRate'])
+            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=spInfo['SampleRate'])
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
@@ -3809,7 +3809,7 @@ class ManualInterface(QMainWindow):
             if NNname in self.NNDicts.keys():
                 NNmodel = self.NNDicts[NNname]
             post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data,
-                                       sampleRate=self.sp.audioFormat.sampleRate(),
+                                       sampleRate=self.sp.audio_data.sample_rate,
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
                                        subfilter=speciesData['Filters'][0], NNmodel=NNmodel, cert=50)
             if NNmodel:
@@ -3910,7 +3910,7 @@ class ManualInterface(QMainWindow):
 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
-            data = self.sp.data[int(starttime*self.sp.audioFormat.sampleRate()):int(endtime*self.sp.audioFormat.sampleRate())]
+            data = self.sp.data[int(starttime*self.sp.audio_data.sample_rate):int(endtime*self.sp.audio_data.sample_rate)]
             #data = self.sp.data[int(starttime*self.sp.sampleRate):int(endtime*self.sp.sampleRate)]
 
             # piece of spectrogram corresponding to this segment
@@ -3925,7 +3925,7 @@ class ManualInterface(QMainWindow):
             print("Calculating statistics on this segment...")
 
             # TODO: Workout the units
-            f = Features.Features(data=data, sampleRate=self.sp.audioFormat.sampleRate(), window_width=self.config['window_width'], incr=self.config['incr'])
+            f = Features.Features(data=data, sampleRate=self.sp.audio_data.sample_rate, window_width=self.config['window_width'], incr=self.config['incr'])
             avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
             cs.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
@@ -3936,7 +3936,7 @@ class ManualInterface(QMainWindow):
         method, IFsettings = self.shapesDialog.getValues()
         allshapes = []
         specxunit = self.convertSpectoAmpl(1)
-        specyunit = self.sp.audioFormat.sampleRate()//2 / np.shape(self.sg)[1]
+        specyunit = self.sp.audio_data.sample_rate//2 / np.shape(self.sg)[1]
         #specyunit = self.sp.sampleRate//2 / np.shape(self.sg)[1]
         if self.batmode:
             incr = 512
@@ -3966,10 +3966,10 @@ class ManualInterface(QMainWindow):
                     segshape = Shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
-                    data = self.sp.data[int(segRelativeStart*self.sp.audioFormat.sampleRate()):int(segRelativeEnd*self.sp.audioFormat.sampleRate())]
+                    data = self.sp.data[int(segRelativeStart*self.sp.audio_data.sample_rate):int(segRelativeEnd*self.sp.audio_data.sample_rate)]
                     #data = self.sp.data[int(segRelativeStart*self.sp.sampleRate):int(segRelativeEnd*self.sp.sampleRate)]
                     W = 4*incr
-                    segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.audioFormat.sampleRate())
+                    segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.audio_data.sample_rate)
                     #segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.sampleRate)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
@@ -3986,7 +3986,7 @@ class ManualInterface(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sp.audioFormat.sampleRate(), incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
+                    segshape = Shapes.instantShaper(sg, self.sp.audio_data.sample_rate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
                     #segshape = Shapes.instantShaper(sg, self.sp.sampleRate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
@@ -4067,7 +4067,7 @@ class ManualInterface(QMainWindow):
         """
         print("Decomposing to WP...")
         ot = time.time()
-        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audioFormat.sampleRate())
+        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
         maxLevel = 5
         allnodes = range(2 ** (maxLevel + 1) - 1)
         self.WFinst.WaveletPacket(allnodes, mode='symmetric', antialias=False)
@@ -4082,8 +4082,8 @@ class ManualInterface(QMainWindow):
         """
         if self.box1id > -1:
             start, stop = self.listRectanglesa1[self.box1id].getRegion()
-            start = int(start*self.sp.audioFormat.sampleRate())
-            stop = int(stop*self.sp.audioFormat.sampleRate())
+            start = int(start*self.sp.audio_data.sample_rate)
+            stop = int(stop*self.sp.audio_data.sample_rate)
         else:
             print("Can't play, no segment selected")
             return
@@ -4109,7 +4109,7 @@ class ManualInterface(QMainWindow):
             # extract the piece of audiodata under current segment
             denoised = self.sp.data[start : stop]
 
-            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audioFormat.sampleRate())
+            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
             denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
 
             # bandpass to selected zones, if it's a box
@@ -4119,7 +4119,7 @@ class ManualInterface(QMainWindow):
                 bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
                 top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
                 print("Extracting samples between %d-%d Hz" % (bottom, top))
-                denoised = SignalProc.bandpassFilter(denoised, sampleRate=self.sp.audioFormat.sampleRate(), start=bottom, end=top)
+                denoised = SignalProc.bandpassFilter(denoised, sampleRate=self.sp.audio_data.sample_rate, start=bottom, end=top)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -4131,7 +4131,7 @@ class ManualInterface(QMainWindow):
             self.setSpectrogram()
 
             # Update the ampl image
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audioFormat.sampleRate(),num=self.datalength,endpoint=True),self.sp.data)
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audio_data.sample_rate,num=self.datalength,endpoint=True),self.sp.data)
 
             # Update the spec & overview images.
             # Does not reset to start if the freqs aren't changed
@@ -4172,7 +4172,7 @@ class ManualInterface(QMainWindow):
                 # here we override default 0-Fs/2 returns
                 start = self.sp.minFreqShow
                 end = self.sp.maxFreqShow
-                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audioFormat.sampleRate())
+                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
                 #self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
@@ -4192,7 +4192,7 @@ class ManualInterface(QMainWindow):
             _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             self.setSpectrogram()
 
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audioFormat.sampleRate(),num=self.datalength,endpoint=True),self.sp.data)
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audio_data.sample_rate,num=self.datalength,endpoint=True),self.sp.data)
 
             # Update the frequency axis
             self.redoFreqAxis(start, end, store=False)
@@ -4237,18 +4237,31 @@ class ManualInterface(QMainWindow):
         before_extension = self.filename.rsplit('.', 1)[0]
         extension = self.filename[len(before_extension):]
         filename = before_extension + '_d' + extension
-        if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+        def _sample_format_str(fmt_obj):
+            # Accept QAudioFormat or AudioData or raw string
+            try:
+                # QAudioFormat: fmt_obj.sample_format may be an enum
+                sf = fmt_obj.sample_format
+                return str(sf).split('.')[-1]
+            except Exception:
+                try:
+                    return str(fmt_obj.sample_format)
+                except Exception:
+                    return str(fmt_obj)
+
+        sfmt = _sample_format_str(self.sp.audio_data)
+        if sfmt == 'UInt8' or sfmt.endswith('UInt8'):
             normalised_data = (self.sp.data - 128) / 128
-        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+        elif sfmt == 'Int16' or sfmt.endswith('Int16'):
             normalised_data = self.sp.data / 32768
-        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int8:
+        elif sfmt == 'Int8' or sfmt.endswith('Int8'):
             normalised_data = self.sp.data / 128
-        elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+        elif sfmt == 'Int32' or sfmt.endswith('Int32'):
             normalised_data = self.sp.data / 2147483648
         else:
-            print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
+            print("ERROR: sampleSize not supported for format", sfmt)
             return
-        sf.write(filename, normalised_data, self.sp.audioFormat.sampleRate())
+        sf.write(filename, normalised_data, self.sp.audio_data.sample_rate)
         # update the file list box
         self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
         self.statusLeft.setText("Saved")
@@ -4286,21 +4299,22 @@ class ManualInterface(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
-                tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.audioFormat.sampleRate(),start=y1, end=y2)
+                tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.playSpeed) 
-                if self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.UInt8:
+                sfmt = _sample_format_str(self.sp.audio_data)
+                if sfmt == 'UInt8' or sfmt.endswith('UInt8'):
                     normalised_data = (tosave - 128) / 128
-                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int16:
+                elif sfmt == 'Int16' or sfmt.endswith('Int16'):
                     normalised_data = tosave / 32768
-                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int8:
+                elif sfmt == 'Int8' or sfmt.endswith('Int8'):
                     normalised_data = tosave / 128
-                elif self.sp.audioFormat.sampleFormat() == QAudioFormat.SampleFormat.Int32:
+                elif sfmt == 'Int32' or sfmt.endswith('Int32'):
                     normalised_data = tosave / 2147483648
                 else:
-                    print("ERROR: sampleSize %d not supported" % self.audioFormat.sampleSize())
+                    print("ERROR: sampleSize not supported for format", sfmt)
                     return
-                sf.write(filename, normalised_data, self.sp.audioFormat.sampleRate())
+                sf.write(filename, normalised_data, self.sp.audio_data.sample_rate)
             # update the file list box
             self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
@@ -4688,7 +4702,7 @@ class ManualInterface(QMainWindow):
                         import Spectrogram 
                         sp = Spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
-                        duration = sp.fileLength / sp.audioFormat.sampleRate()
+                        duration = sp.fileLength / sp.audioFormat.sample_rate
            
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                                 
@@ -5048,7 +5062,7 @@ class ManualInterface(QMainWindow):
                 # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.sp.data, self.sp.audioFormat.sampleRate(), d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                ws.readBatch(self.sp.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 newSegments = ws.waveletSegment(0, wpmode="new")
                 # this will produce a list of lists (over subfilters)
             elif alg == 'WV Changepoint':
@@ -5057,7 +5071,7 @@ class ManualInterface(QMainWindow):
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 useWind = settings["wind"] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
-                ws.readBatch(self.sp.data, self.sp.audioFormat.sampleRate(), d=False, spInfo=[speciesData], wpmode="new", wind=useWind)
+                ws.readBatch(self.sp.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=useWind)
                 # nuisance-signal changepoint detector (alg 2)
                 # with all params passed:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])
@@ -5093,7 +5107,7 @@ class ManualInterface(QMainWindow):
                     if 'NN' in speciesData:
                         NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
-                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audioFormat.sampleRate(),
+                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audio_data.sample_rate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, NNmodel=NNmodel, cert=50)
                     if NNmodel:
@@ -5117,7 +5131,7 @@ class ManualInterface(QMainWindow):
             else:
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audioFormat.sampleRate(), segments=newSegments, subfilter={})
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
                 if settings["rain"]:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
@@ -5131,7 +5145,7 @@ class ManualInterface(QMainWindow):
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
-                    y2 = min(self.sp.audioFormat.sampleRate()//2, speciesSubf['FreqRange'][1])
+                    y2 = min(self.sp.audio_data.sample_rate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
@@ -5142,7 +5156,7 @@ class ManualInterface(QMainWindow):
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
-                    y2 = min(self.sp.audioFormat.sampleRate()//2, speciesSubf['FreqRange'][1])
+                    y2 = min(self.sp.audio_data.sample_rate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1]}], index=-1)
@@ -5246,7 +5260,7 @@ class ManualInterface(QMainWindow):
             sp_temp.readSoundFile('Sound Files/'+species+'/train1_1.wav')
 
             # Parse wav format details based on file header:
-            sampleRate = sp_temp.audioFormat.sampleRate()
+            sampleRate = sp_temp.audioFormat.sample_rate
             #sampleRate = sp_temp.sampleRate
             audiodata = sp_temp.data
 
@@ -5261,24 +5275,24 @@ class ManualInterface(QMainWindow):
                                         equal_loudness=self.sgEqualLoudness, onesided=self.config['sgOneSided'])
 
             # Get the data for the spectrogram
-            data1 = resampy.resample(self.sp.data, sr_orig=self.sp.audioFormat.sampleRate(), sr_new=self.sppInfo[str(species)][4])
+            data1 = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=self.sppInfo[str(species)][4])
             sampleRate1 = self.sppInfo[str(species)][4]
             
             # TODO utilize self.sp / Spectrogram more here
             sp_temp.data = data1
-            sp_temp.audioFormat.setSampleRate(sampleRate1)
+            sp_temp.audioFormat.sample_rate = sampleRate1
             sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             indices = self.seg.findCCMatches(sgRaw_temp,sgRaw,thr)
             # scale indices to match with self.samplerate
-            indices = [i*self.sp.audioFormat.sampleRate()/sampleRate1 for i in indices]
+            indices = [i*self.sp.audio_data.sample_rate/sampleRate1 for i in indices]
             y1 = self.convertFreqtoY(self.sppInfo[str(species)][2]/2)
-            if self.sppInfo[str(species)][4]/2 > self.sp.audioFormat.sampleRate():
-                y2 = self.convertFreqtoY(self.sp.audioFormat.sampleRate() / 2 - self.sp.audioFormat.sampleRate() * 0.01)
+            if self.sppInfo[str(species)][4]/2 > self.sp.audio_data.sample_rate:
+                y2 = self.convertFreqtoY(self.sp.audio_data.sample_rate / 2 - self.sp.audio_data.sample_rate * 0.01)
             else:
                 y2 = self.convertFreqtoY(self.sppInfo[str(species)][4] / 2)
             for i in indices:
                 if np.abs(i) > self.config['overlap_allowed']:
-                    time = i*self.config['incr'] / self.sp.audioFormat.sampleRate()
+                    time = i*self.config['incr'] / self.sp.audio_data.sample_rate
                     segments.append([time, time+len_seg])
         elif self.box1id is None or self.box1id<0:
             print("No box selected")
@@ -5300,13 +5314,13 @@ class ManualInterface(QMainWindow):
             #sgRaw = self.sp.spectrogram(window=str(self.windowType),sgType=str(self.sgType),sgScale=str(self.sgScale),nfilters=int(str(self.nfilters)),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.config['sgOneSided'])
             sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             segment = sgRaw[int(x1):int(x2),:]
-            len_seg = (x2-x1) * self.config['incr'] / self.sp.audioFormat.sampleRate()
+            len_seg = (x2-x1) * self.config['incr'] / self.sp.audio_data.sample_rate
             indices = self.seg.findCCMatches(segment,sgRaw,thr)
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter
                 if np.abs(i-x1) > self.config['overlap_allowed']:
-                    time = i*self.config['incr'] / self.sp.audioFormat.sampleRate()
+                    time = i*self.config['incr'] / self.sp.audio_data.sample_rate
                     segments.append([time, time+len_seg])
             self.statusLeft.setText("Ready")
         return segments
@@ -5319,8 +5333,8 @@ class ManualInterface(QMainWindow):
         if len(self.segments) > 1:
             cl = Clustering.Clustering([], [], 5)
             # TODO: This is the signature
-            segments, nclasses, duration = cl.cluster(dataset,self.sp.audioFormat.sampleRate(), None, feature='we')
-            self.clusterD = Cluster(segments, self.sp.audioFormat.sampleRate(), nclasses, self.config)
+            segments, nclasses, duration = cl.cluster(dataset,self.sp.audio_data.sample_rate, None, feature='we')
+            self.clusterD = Cluster(segments, self.sp.audio_data.sample_rate, nclasses, self.config)
             self.clusterD.show()
         else:
             print('need segments to cluster!')
@@ -5441,8 +5455,8 @@ class ManualInterface(QMainWindow):
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
-            self.playSegButton.setIcon(QIcon('img/playsegment.png'))
-            self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
+            self.playSegButton.setIcon(QIcon('src/resources/images/playsegment.png'))
+            self.playBandLimitedSegButton.setIcon(QIcon('src/resources/images/playBandLimited.png'))
 
         # OS X doesn't repaint them by default smh
         self.playButton.repaint()
@@ -5544,11 +5558,11 @@ class ManualInterface(QMainWindow):
             fileMinusExtension = self.filename.rsplit('.', 1)[0]
             filename = fileMinusExtension+'_recon.wav'
 
-        if self.sp.audioFormat.sampleRate() > 48000:
+        if self.sp.audio_data.sample_rate > 48000:
             # Ad hoc, but works OK
             sampleRate = 16000
         else:
-            sampleRate = self.sp.audioFormat.sampleRate()
+            sampleRate = self.sp.audio_data.sample_rate
         sf.write(filename, new_wave, sampleRate)
         self.batmode=False
         # update the file list box
@@ -5688,7 +5702,7 @@ class ManualInterface(QMainWindow):
         self.t.setParameters(self.p, showTop=False)
         self.t.show()
         self.t.setWindowTitle('AviaNZ - Interface Settings')
-        self.t.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.t.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
         self.t.setFixedHeight(900)
         self.t.setMinimumWidth(520)
 
@@ -5727,8 +5741,8 @@ class ManualInterface(QMainWindow):
                 else:
                     self.MouseDrawingButton = Qt.MouseButton.LeftButton
                     self.bar.unsetCursor()
-                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
-                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                    self.specPlot.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
+                    self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
                 self.bar.btn = self.MouseDrawingButton
             elif childName == 'Mouse settings.Spectrogram mouse action':
                 self.config['specMouseAction'] = data
@@ -6124,8 +6138,8 @@ class ManualInterface(QMainWindow):
                 elif key == Qt.Key.Key_Meta and platform.system() == 'Darwin':
                     # flip to rightMB cursors
                     if self.MouseDrawingButton==Qt.MouseButton.RightButton:
-                        self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
-                        self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                        self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
+                        self.specPlot.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
                         self.bar.unsetCursor()
                     else:
                         self.p_ampl.unsetCursor()
@@ -6140,8 +6154,8 @@ class ManualInterface(QMainWindow):
                         self.specPlot.unsetCursor()
                         self.bar.setCursor(Qt.CursorShape.OpenHandCursor)
                     else:
-                        self.p_ampl.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
-                        self.specPlot.setCursor(QtGui.QCursor(QPixmap('img/cursor.bmp'), 0, 0))
+                        self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
+                        self.specPlot.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
                         self.bar.unsetCursor()
                     return True
         return False

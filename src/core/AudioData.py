@@ -1,5 +1,25 @@
-# AudioLoader.py
-# Centralized audio file loading for AviaNZ
+# AudioData.py
+#
+# Holds array and formats
+
+# Version 3.4 18/12/24
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
+
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2024
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
 import tempfile
@@ -7,24 +27,70 @@ import shutil
 import numpy as np
 import soundfile as sf
 import pyflac
-from PyQt6.QtGui import QImage
-from PyQt6.QtMultimedia import QAudioFormat
 from src.utils import wavio
 
 
 class AudioData:
-    """Container for loaded audio data with metadata."""
+    """Container for loaded audio data with metadata.
     
-    def __init__(self, data, sample_rate, file_length, audio_format, 
-                 min_freq=0, max_freq=None, channels=1, sample_width=16):
+    Pure audio data - no PyQt6 dependencies.
+    Access properties directly: .sample_rate, .sample_format, .sample_size, .channels
+    """    
+    def __init__(self, data, sample_rate, file_length, sample_format, sample_size,
+                 min_freq=0, max_freq=None, channels=1):
         self.data = data  # numpy array of audio samples
         self.sample_rate = sample_rate
         self.file_length = file_length  # in samples
-        self.audio_format = audio_format  # QAudioFormat object
+        self.sample_format = sample_format  # e.g. 'Int16', 'Int32', 'UInt8'
+        self.sample_size = sample_size  # in bits: 8, 16, 32
+        self.channels = channels
         self.min_freq = min_freq
         self.max_freq = max_freq if max_freq is not None else sample_rate // 2
-        self.channels = channels
-        self.sample_width = sample_width
+
+    def replace_data(self, new_data, sample_rate=None, min_freq=None, max_freq=None):
+        """Replace the audio buffer and update related metadata in one place.
+
+        Args:
+            new_data: numpy array with the new samples
+            sample_rate: optional new sample rate (int)
+            min_freq, max_freq: optional frequency bounds
+        """
+        self.data = new_data
+        self.file_length = len(new_data) if new_data is not None else 0
+        if sample_rate is not None:
+            self.sample_rate = sample_rate
+        if min_freq is not None:
+            self.min_freq = min_freq
+        if max_freq is not None:
+            self.max_freq = max_freq
+        # Ensure max_freq has a sensible default
+        if self.max_freq is None and hasattr(self, 'sample_rate'):
+            self.max_freq = self.sample_rate // 2
+
+    def extract_time_slice(self, start_sec, end_sec):
+        """Extract a time slice of the audio data.
+        
+        Args:
+            start_sec: Start time in seconds
+            end_sec: End time in seconds
+            
+        Returns:
+            AudioData: New AudioData object with the extracted slice
+        """
+        start_sample = int(start_sec * self.sample_rate)
+        end_sample = int(end_sec * self.sample_rate)
+        sliced_data = self.data[start_sample:end_sample]
+        
+        return AudioData(
+            data=sliced_data,
+            sample_rate=self.sample_rate,
+            file_length=len(sliced_data),
+            sample_format=self.sample_format,
+            sample_size=self.sample_size,
+            channels=self.channels,
+            min_freq=self.min_freq,
+            max_freq=self.max_freq
+        )
 
 
 class AudioLoader:
@@ -53,9 +119,9 @@ class AudioLoader:
         file_format = self.detect_format(filepath)
         
         if file_format == '.wav':
-            return self._load_wav(filepath, duration, offset, silent)
+            return self.load_wav(filepath, duration, offset, silent)
         elif file_format == '.flac':
-            return self._load_flac(filepath, duration, offset, silent)
+            return self.load_flac(filepath, duration, offset, silent)
         else:
             raise ValueError(f"Unsupported file format: {file_format}")
     
@@ -91,7 +157,7 @@ class AudioLoader:
             info = sf.info(filepath)
             return (info.samplerate, info.frames/info.samplerate, info.channels, 16)
         
-    def _load_wav(self, filepath, duration, offset, silent):
+    def load_wav(self, filepath, duration, offset, silent):
         """Load WAV file using wavio."""
         wavobj = wavio.read(filepath, duration, offset)
         data = wavobj.data
@@ -109,38 +175,31 @@ class AudioLoader:
         sample_rate = info.samplerate
         file_length = len(data)
         
-        # Create QAudioFormat
-        audio_format = QAudioFormat()
-        audio_format.setChannelCount(1)
-        audio_format.setSampleRate(sample_rate)
+        # Map soundfile subtype to (format_name, bit_size)
+        FORMAT_MAP = {
+            "PCM_U8": ("UInt8", 8),
+            "PCM_S8": ("Int8", 8),
+            "PCM_16": ("Int16", 16),
+            "PCM_32": ("Int32", 32),
+        }
         
-        # Set sample format based on file
-        sampwidth = info.subtype
-        if sampwidth == "PCM_U8":
-            audio_format.setSampleFormat(QAudioFormat.SampleFormat.UInt8)
-        elif sampwidth == "PCM_16":
-            audio_format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-        elif sampwidth == "PCM_S8":
-            audio_format.setSampleFormat(QAudioFormat.SampleFormat.Int8)
-        elif sampwidth == "PCM_32":
-            audio_format.setSampleFormat(QAudioFormat.SampleFormat.Int32)
-        else:
-            print(f"Warning: Unsupported sample format {sampwidth}, using Int16")
-            audio_format.setSampleFormat(QAudioFormat.SampleFormat.Int16)
-        
+        samp_fmt, samp_size = FORMAT_MAP.get(info.subtype, ("Int16", 16))
+        if info.subtype not in FORMAT_MAP and not silent:
+            print(f"Warning: Unsupported sample format {info.subtype}, using Int16")
+
         if not silent:
-            sf_name = str(audio_format.sampleFormat())
-            print(f"Detected format: {audio_format.channelCount()} channels, {audio_format.sampleRate()} Hz, {sf_name.split('.')[-1]} format")
-        
+            print(f"Detected format: 1 channel, {sample_rate} Hz, {samp_fmt} format")
+
         return AudioData(
             data=data,
             sample_rate=sample_rate,
             file_length=file_length,
-            audio_format=audio_format,
+            sample_format=samp_fmt,
+            sample_size=samp_size,
             channels=1
         )
     
-    def _load_flac(self, filepath, duration, offset, silent):
+    def load_flac(self, filepath, duration, offset, silent):
         """Load FLAC file by converting to temporary WAV."""
         with tempfile.NamedTemporaryFile(suffix=".wav") as temp_wav:
             temp_wav_path = temp_wav.name
@@ -153,4 +212,4 @@ class AudioLoader:
             
             pyf = pyflac.FileDecoder(filepath, temp_wav_path)
             pyf.process()
-            return self._load_wav(temp_wav_path, duration, offset, silent)
+            return self.load_wav(temp_wav_path, duration, offset, silent)

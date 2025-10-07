@@ -224,7 +224,7 @@ class HumanClassify2(QDialog):
         for i in self.indices2show:
             # This will contain pre-made slices of spec and audio
             sp = self.sps[i]
-            duration = len(sp.data)/sp.audioFormat.sampleRate()
+            duration = len(sp.data)/sp.audio_data.sample_rate
 
             sg = self.sgs[i]
             
@@ -245,7 +245,7 @@ class HumanClassify2(QDialog):
             # Create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
 
-            newButton = PicButton(i, sg, sp, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
+            newButton = PicButton(i, sg, sp, sp.audio_data, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
             newButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             newButton.setMinimumSize(10, 10)
             self.buttons.append(newButton)
@@ -260,9 +260,9 @@ class HumanClassify2(QDialog):
         minFreq = exampleSP.minFreqShow
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
-            maxFreq = exampleSP.audioFormat.sampleRate() // 2
+            maxFreq = exampleSP.audio_data.sample_rate // 2
         if len(exampleSP.data)>0:
-            duration = len(exampleSP.data)/exampleSP.audioFormat.sampleRate()
+            duration = len(exampleSP.data)/exampleSP.audio_data.sample_rate
         else:
             duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
 

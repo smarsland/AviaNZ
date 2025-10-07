@@ -27,7 +27,7 @@ from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
-from src.core import Wavelet
+from src.utils import Wavelet
 from src.core import Spectrogram
 from src.core import SignalProc
 

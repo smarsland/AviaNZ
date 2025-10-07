@@ -647,14 +647,14 @@ class WaveletSegment:
                 print("Processing page %d / %d" % (page+1, numPages))
                 start = page*samplesInPage
                 end = min(start+samplesInPage, len(self.sp.data))
-                filelen = math.ceil((end-start)/self.sp.audioFormat.sampleRate())
+                filelen = math.ceil((end-start)/self.sp.audioFormat.sample_rate)
                 if filelen < 2:
                     print("Warning: can't process short file ends (%.2f s)" % filelen)
                     continue
 
                 # read in page and resample as needed
                 # will also set self.spInfo with ADJUSTED nodes if resampling!
-                self.readBatch(self.sp.data[start:end], self.sp.audioFormat.sampleRate(), d=False, spInfo=[filt], wpmode="new", wind=False)
+                self.readBatch(self.sp.data[start:end], self.sp.audioFormat.sample_rate, d=False, spInfo=[filt], wpmode="new", wind=False)
                 # TODO not sure if wind removal should be done here.
                 # Maybe not, to generate more noise examples?
 
@@ -1579,7 +1579,7 @@ class WaveletSegment:
                     # resample, denoise and store the resulting audio data:
                     # note: preprocessing is a side effect on data
                     # (preprocess only reads target nodes from spInfo)
-                    denoisedData = self.preprocess(self.sp.data, self.sp.audioFormat.sampleRate(), self.spInfo['SampleRate'], d=denoise)
+                    denoisedData = self.preprocess(self.sp.data, self.sp.audioFormat.sample_rate, self.spInfo['SampleRate'], d=denoise)
                     self.audioList.append(denoisedData)
 
                     print("file loaded in", time.time() - opstartingtime)
@@ -1626,7 +1626,7 @@ class WaveletSegment:
                     # resample, denoise and store the resulting audio data:
                     # note: preprocessing is a side effect on data
                     # (preprocess only reads target nodes from spInfo)
-                    denoisedData = self.preprocess(self.sp.data, self.sp.audioFormat.sampleRate(), self.spInfo['SampleRate'], d=False)
+                    denoisedData = self.preprocess(self.sp.data, self.sp.audioFormat.sample_rate, self.spInfo['SampleRate'], d=False)
                     self.audioList.append(denoisedData)
 
                     print("file loaded in %.3f s" % (time.time() - opstartingtime))
@@ -1662,7 +1662,7 @@ class WaveletSegment:
 
         # Do impulse masking by default
         if impMask:
-            self.sp.data = SignalProc.impMask(self.sp.data,self.sp.audioFormat.sampleRate())
+            self.sp.data = SignalProc.impMask(self.sp.data,self.sp.audioFormat.sample_rate)
 
         fileAnnotations = []
         # Get the segmentation from the txt file
@@ -1675,7 +1675,7 @@ class WaveletSegment:
         # Hardcoded resolution of the GT file:
         # (only used for a sanity check now)
         resol = 1.0
-        n = math.ceil((len(self.sp.data) / self.sp.audioFormat.sampleRate())/resol)
+        n = math.ceil((len(self.sp.data) / self.sp.audioFormat.sample_rate)/resol)
         if len(d) != n:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
             self.annotation = []
@@ -1715,7 +1715,7 @@ class WaveletSegment:
             d = d[:-1]
 
         # A sanity check as the durations will be used in F1 score
-        nwins = math.ceil(len(self.sp.data) / self.sp.audioFormat.sampleRate() / window)
+        nwins = math.ceil(len(self.sp.data) / self.sp.audioFormat.sample_rate / window)
         if len(d) != nwins:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), nwins))
             self.annotation = []

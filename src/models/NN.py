@@ -124,7 +124,7 @@ class NN:
         ''' Generate spectrogram image'''
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
         sp.data = audiodata
-        sp.audioFormat.setSampleRate(self.fs)
+        sp.audioFormat.sample_rate = self.fs
         sgRaw = sp.spectrogram(self.windowwidth, self.inc)
         maxg = np.max(sgRaw)
         return np.rot90(sgRaw / maxg).tolist()
@@ -600,7 +600,7 @@ class GenerateData:
         eps = 0.0005
         N = [0 for i in range(len(self.calltypes) + 1)]
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
-        sp.audioFormat.setSampleRate(self.fs)
+        sp.audioFormat.sample_rate = self.fs
 
         for record in dataset:
             # Compute features, also consider tiny segments because this would be the case for song birds.

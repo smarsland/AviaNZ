@@ -49,9 +49,19 @@ import sys
 @click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
 @click.option('-x', '--width', type=float, help='Width of windows for NN')
+@click.option('--time-start', type=int, default=0, help='Start time for subset (seconds from midnight, 0-86400)')
+@click.option('--time-end', type=int, default=0, help='End time for subset (seconds from midnight, 0-86400)')
+@click.option('--protocol-size', type=int, default=15, help='Length of segments for intermittent sampling (seconds)')
+@click.option('--protocol-interval', type=int, default=300, help='Interval between segments for intermittent sampling (seconds)')
+@click.option('--maxgap', type=float, default=1.0, help='Maximum gap between syllables to merge (seconds)')
+@click.option('--minlen', type=float, default=0.2, help='Minimum syllable length (seconds)')
+@click.option('--maxlen', type=float, default=10.0, help='Maximum syllable length (seconds)')
+@click.option('--subset/--no-subset', default=False, help='Enable time-limited subset processing')
+@click.option('--intermittent/--no-intermittent', default=False, help='Enable intermittent sampling')
+@click.option('--merge-syllables/--no-merge-syllables', default=False, help='Enable syllable merging')
 @click.argument('command', nargs=-1)
 
-def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
+def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, time_start, time_end, protocol_size, protocol_interval, maxgap, minlen, maxlen, subset, intermittent, merge_syllables, command):
     # adapt path to allow this to be launched from wherever
     import sys, os
     if getattr(sys, 'frozen', False):
@@ -151,7 +161,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         if batchmode:
             from src.core import AviaNZ_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recognisers=recogniser, wind=wind)
+                wind_str = "OLS wind filter (recommended)" if wind else "None"
+                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recognisers=recogniser, subset=subset, intermittent=intermittent, wind=wind_str, mergeSyllables=merge_syllables, overwrite=True, timeWindow_s=time_start, timeWindow_e=time_end, protocolSize=protocol_size, protocolInterval=protocol_interval, maxgap=maxgap, minlen=minlen, maxlen=maxlen)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")

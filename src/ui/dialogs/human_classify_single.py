@@ -561,26 +561,26 @@ class HumanClassify1(QDialog):
         currentLabels = self.segment[4]
         if self.batmode:
             self.menuSpeciesSelection = BatSelectionMenu(
-                bat_list=self.batList, 
-                current_labels=currentLabels, 
+                batList=self.batList, 
+                currentLabels=currentLabels, 
                 parent=self, 
                 unsure=False,
-                multiple_birds=self.multipleBirds
+                multipleBirds=self.multipleBirds
             )
-            self.menuSpeciesSelection.labels_updated.connect(self.batLabelsUpdated)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.batLabelsUpdated)
         else:
             self.menuSpeciesSelection = BirdSelectionMenu(
-                short_bird_list=self.shortBirdList, 
-                long_bird_list=self.longBirdList,
-                known_calls=self.knownCalls, 
-                current_labels=currentLabels, 
+                shortBirdList=self.shortBirdList, 
+                longBirdList=self.longBirdList,
+                knownCalls=self.knownCalls, 
+                currentLabels=currentLabels, 
                 parent=self, 
                 unsure=False,
-                multiple_birds=self.multipleBirds
+                multipleBirds=self.multipleBirds
             )
-            self.menuSpeciesSelection.add_species_requested.connect(self.addBirdSpecies)
-            self.menuSpeciesSelection.add_call_type_requested.connect(self.addBirdCallname)
-            self.menuSpeciesSelection.labels_updated.connect(self.birdLabelsUpdated)
+            self.menuSpeciesSelection.addSpecies.connect(self.addBirdSpecies)
+            self.menuSpeciesSelection.addCallname.connect(self.addBirdCallname)
+            self.menuSpeciesSelection.labelsUpdated.connect(self.birdLabelsUpdated)
 
     def setColourLevels(self, brightness, contrast):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.

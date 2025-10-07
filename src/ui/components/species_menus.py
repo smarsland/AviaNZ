@@ -32,10 +32,10 @@ from PyQt6.QtCore import pyqtSignal
 class BaseSpeciesMenu(QMenu):
     """Base class for species selection menus with common functionality."""
     
-    # Common signals
-    labels_updated = pyqtSignal(object, str, object, int)  # labels, species, call_type, certainty
-    add_species_requested = pyqtSignal(int)  # certainty
-    add_call_type_requested = pyqtSignal(str, int)  # species, certainty
+    # Common signals - using camelCase to match existing code conventions
+    labelsUpdated = pyqtSignal(object, str, object, int)  # labels, species, call_type, certainty
+    addSpecies = pyqtSignal(int)  # certainty
+    addCallname = pyqtSignal(str, int)  # species, certainty
     
     def __init__(self, current_labels, parent=None, unsure=False, multiple_birds=False):
         super().__init__(parent)
@@ -70,7 +70,7 @@ class BaseSpeciesMenu(QMenu):
     
     def _emit_labels_updated(self, species, call_type, certainty):
         """Emit the labels updated signal."""
-        self.labels_updated.emit(
+        self.labelsUpdated.emit(
             copy.deepcopy(self.current_labels), 
             species, 
             call_type, 
@@ -93,14 +93,14 @@ class BaseSpeciesMenu(QMenu):
 class BirdSelectionMenu(BaseSpeciesMenu):
     """Enhanced bird species selection menu with hierarchical organization."""
     
-    def __init__(self, short_bird_list, long_bird_list, known_calls, current_labels, 
-                 parent=None, unsure=False, multiple_birds=False, include_call_type=True):
-        super().__init__(current_labels, parent, unsure, multiple_birds)
-        self.include_call_type = include_call_type
-        self.known_calls = known_calls or {}
+    def __init__(self, shortBirdList, longBirdList, knownCalls, currentLabels, 
+                 parent=None, unsure=False, multipleBirds=False, includeCalltype=True):
+        super().__init__(currentLabels, parent, unsure, multipleBirds)
+        self.include_call_type = includeCalltype
+        self.known_calls = knownCalls or {}
         
-        self._create_short_menu(short_bird_list)
-        self._create_long_menu(long_bird_list)
+        self._create_short_menu(shortBirdList)
+        self._create_long_menu(longBirdList)
     
     def _create_short_menu(self, short_bird_list):
         """Create the main menu from short bird list."""
@@ -353,12 +353,12 @@ class BirdSelectionMenu(BaseSpeciesMenu):
     def _add_species_requested(self):
         """Handle add new species request."""
         certainty = self._get_certainty("")
-        self.add_species_requested.emit(certainty)
+        self.addSpecies.emit(certainty)
     
     def _add_call_type_requested(self, species):
         """Handle add new call type request."""
         certainty = self._get_certainty(species)
-        self.add_call_type_requested.emit(species, certainty)
+        self.addCallname.emit(species, certainty)
     
     def _update_labels(self, species, call_type, certainty):
         """Update the current labels list."""
@@ -400,9 +400,9 @@ class BirdSelectionMenu(BaseSpeciesMenu):
 class BatSelectionMenu(BaseSpeciesMenu):
     """Simplified bat species selection menu."""
     
-    def __init__(self, bat_list, current_labels, parent=None, unsure=False, multiple_birds=False):
-        super().__init__(current_labels, parent, unsure, multiple_birds)
-        self._create_bat_menu(bat_list)
+    def __init__(self, batList, currentLabels, parent=None, unsure=False, multipleBirds=False):
+        super().__init__(currentLabels, parent, unsure, multipleBirds)
+        self._create_bat_menu(batList)
     
     def _create_bat_menu(self, bat_list):
         """Create bat selection menu."""
