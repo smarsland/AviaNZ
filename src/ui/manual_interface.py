@@ -2129,7 +2129,7 @@ class ManualInterface(QMainWindow):
         Has to do some work to get the axis labels correct.
         """
 
-        if len(self.sp.audio_data.data)>0 and not self.batmode:
+        if self.sp.audio_data.data is not None and len(self.sp.audio_data.data)>0 and not self.batmode:
             self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.sp.audio_data.data)
 
         self.timeaxis.setLabel('')
@@ -5553,17 +5553,25 @@ class ManualInterface(QMainWindow):
             self.sp.readBmp(self.filename,repeat=False)
 
         with pg.BusyCursor():
-            new_wave = SignalProc.invertSpectrogram(self.sp.sg)
+            # Determine appropriate sample rate for reconstruction
+            if hasattr(self.sp, 'audio_data') and self.sp.audio_data is not None:
+                sampleRate = self.sp.audio_data.sample_rate
+            else:
+                sampleRate = 16000  # Default for BMP files
+                
+            # Use the original spectrogram parameters to maintain correct timing
+            # Most spectrograms are one-sided magnitude spectrograms, so use bmp=True logic
+            new_wave = SignalProc.invertSpectrogram(self.sp.sg, incr=self.sp.incr, sampleRate=sampleRate, bmp=True)
             #filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
             fileMinusExtension = self.filename.rsplit('.', 1)[0]
             filename = fileMinusExtension+'_recon.wav'
 
-        if self.sp.audio_data.sample_rate > 48000:
+        if sampleRate > 48000:
             # Ad hoc, but works OK
-            sampleRate = 16000
+            output_sampleRate = 16000
         else:
-            sampleRate = self.sp.audio_data.sample_rate
-        sf.write(filename, new_wave, sampleRate)
+            output_sampleRate = sampleRate
+        sf.write(filename, new_wave, output_sampleRate)
         self.batmode=False
         # update the file list box
         self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))

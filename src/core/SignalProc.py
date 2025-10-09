@@ -195,32 +195,54 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
 
 # TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
-def invertSpectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True):
+def invertSpectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True, sampleRate=16000):
     from src.core import Spectrogram
     sp = Spectrogram.Spectrogram()
     
-    if bmp:
+    # Determine if this is a one-sided or two-sided spectrogram
+    # One-sided: magnitude-only spectrograms from BMP files or regular display
+    # Two-sided: complex spectrograms from internal processing
+    
+    # Heuristic: if sg is real-valued OR if it's from BMP, treat as one-sided
+    is_onesided = not np.iscomplexobj(sg) or bmp
+    
+    if is_onesided:
+        # Input is one-sided magnitude spectrogram (BMP file or regular display spectrogram)
         window_width = sg.shape[1]
+        
         # Add the missing Nyquist bin by duplicating the last bin
         sg_with_nyquist = np.concatenate([sg, sg[:, -1:]], axis=1)
         # Now mirror: original + reversed (excluding DC and Nyquist)
         sg = np.concatenate([sg_with_nyquist, sg_with_nyquist[:, -2:0:-1]], axis=1)
     else:
+        # Input is already two-sided complex spectrogram
         window_width = sg.shape[1] // 2
     
     current_sg = copy.deepcopy(sg)
     for i in range(nits):
         new_wave = inversion_iteration(current_sg, incr, calculate_offset=True, iteration=i, window=window)
-        sp.setData(new_wave)
+        sp.setData(new_wave, sampleRate=sampleRate)
         new_sg = sp.spectrogram(window_width=window_width, incr=incr, onesided=False, 
                                need_even=False, complex_values=True, window=window)
         if new_sg.shape[0] != sg.shape[0]:
             new_sg = new_sg[:sg.shape[0],:]
             
-        new_phase = new_sg / np.maximum(np.max(sg)/1E8, np.abs(new_sg))
+        # More robust phase calculation to avoid division by zero
+        magnitude_threshold = np.maximum(np.max(sg)/1E8, 1E-10)
+        denominator = np.maximum(magnitude_threshold, np.abs(new_sg))
+        new_phase = new_sg / denominator
         current_sg = sg * new_phase
 
     new_wave = inversion_iteration(current_sg, incr, calculate_offset=False, iteration=nits, window=window)
+    
+    # Normalize output to prevent clipping while handling edge cases
+    max_val = np.max(np.abs(new_wave))
+    if np.isnan(max_val) or np.isinf(max_val):
+        # Handle pathological cases (all zeros, etc.)
+        new_wave = np.zeros_like(new_wave)
+    elif max_val > 0.95:  # If close to clipping
+        new_wave = new_wave * (0.8 / max_val)  # Scale to 80% of max to leave headroom
+    
     return new_wave
 
 def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='Hamming'):
@@ -297,10 +319,19 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
         if calculate_offset and i > 0 and iteration==0:
             offset_size = windowSize - incr 
             # For offset calculation, we need to extract the right part of wave_est
-            if len(wave_est) >= offset_size:
-                cor = fast_xcorr(wave[wave_start:wave_start+offset_size], wave_est[:offset_size])
-                ind = np.argmax(cor[offset_size//2:-offset_size//2])+offset_size//2
-                bestOffset = ind-offset_size
+            # Skip offset calculation if offset_size is non-positive (incr >= windowSize)
+            if offset_size > 0 and len(wave_est) >= offset_size:
+                wave_slice = wave[wave_start:wave_start+offset_size]
+                wave_est_slice = wave_est[:offset_size]
+                if len(wave_slice) > 0 and len(wave_est_slice) > 0:
+                    cor = fast_xcorr(wave_slice, wave_est_slice)
+                    if len(cor) > offset_size:
+                        ind = np.argmax(cor[offset_size//2:-offset_size//2])+offset_size//2
+                        bestOffset = ind-offset_size
+                    else:
+                        bestOffset = 0
+                else:
+                    bestOffset = 0
             else:
                 bestOffset = 0
         else:
@@ -330,6 +361,8 @@ def xcorr_offset(x1, x2):
     return corrs.argmax() - len(x1)
 
 def fast_xcorr(x1,x2):
+    if len(x1) == 0 or len(x2) == 0:
+        return np.array([0])
     X1 = fft.interfaces.scipy_fft.fft(np.hstack((x1, 0*x1)))
     X2 = fft.interfaces.scipy_fft.fft(np.hstack((x2, 0*x2)))
     y = fft.interfaces.scipy_fft.fftshift(fft.interfaces.scipy_fft.ifft(X1*np.conj(X2)))
