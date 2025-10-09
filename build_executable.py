@@ -17,14 +17,13 @@ includefiles_list.append(spectrum_path)
 includefiles_list.append(resampy_path)
 includefiles_list.append(numba_path)
 includefiles_list.append(llvmlite_path)
-includefiles_list.append('dmey.txt')
-includefiles_list.append('AviaNZconfig.txt')
-includefiles_list.append('sppInfo.txt')
+includefiles_list.append('src/data/wavelets/dmey2.txt')
+includefiles_list.append('Config/AviaNZconfig.txt')
 #includefiles_list.append('AviaNZconfig_user.txt')
 # Dependencies are automatically detected, but it might need
 # fine tuning.
 buildOptions = dict(
-    packages = ['numpy.core._methods','numpy.linalg._umath_linalg','numpy.lib.format','AviaNZ_batch','colourMaps','Dialogs','Segment','SignalProc','SupportClasses','WaveletSegment'	,'WaveletFunctions','wavio'],
+    packages = ['numpy.core._methods','numpy.linalg._umath_linalg','numpy.lib.format','src.core.AviaNZ_batch','src.ui.colourMaps.colourMaps','src.ui.dialogs.segmentation','src.core.Segment','src.core.SignalProc','src.core.SupportClasses','src.core.WaveletSegment','src.core.WaveletFunctions','src.utils.wavio'],
     excludes = ['tkinter'],
     includes = [] ,
     include_files = includefiles_list

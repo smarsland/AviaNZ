@@ -11,7 +11,7 @@ import numpy as np
 
 import pyqtgraph as pg
 
-from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.popups import MessagePopup
 from src.ui.components.buttons_and_controls import BrightContrVol
 import Segment
 import Spectrogram

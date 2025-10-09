@@ -51,7 +51,7 @@
 # 14. Is librosa used? - not really
 #           There are two places where it might get used. 
 #           It is used in Clustering.getClusterCenter, not if the parameter feature is 'we', which it always be following the call from
-#           DialogsTraining.WPageCluster.
+#           BuildRecAdvWizard.WPageCluster.
 #           It is also used in the function cluster, which is called by classifySegments, but only if the feature is not 'we' or the algorithm is DBSCAN,
 #           which will never be the case (as the feature is always 'we' given the DOC setting is true it will not be called with anything else), and
 #           the algorithm is never changed.
@@ -85,7 +85,7 @@ from src.core import Segment, Spectrogram
 from src.ui.components.audio_player import ControllableAudio
 from src.ui.components.axis_widgets import TimeAxisHour, TimeAxisMin
 from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider
-from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.graphics_items import ClickableRectItem
 from src.ui.components.roi_components import LinearRegionItem2, LinearRegionItemO, ShadedRectROI
@@ -3627,7 +3627,7 @@ class ManualInterface(QMainWindow):
             # This can be very slow with many items.
             # Uncomment and use the option below, if e.g. you are doing intense testing.
             # if len(self.diagnosticCalls)>0:
-            #     p_spec_new = SupportClasses_GUI.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['specMouseAction']==3, thisIsAmpl=False)
+            #     p_spec_new = DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['specMouseAction']==3, thisIsAmpl=False)
             #     p_spec_new.addItem(self.specPlot)
             #     self.w_spec.removeItem(self.p_spec)
             #     del self.p_spec
@@ -4386,7 +4386,7 @@ class ManualInterface(QMainWindow):
             and only trains alpha, length etc.
         """
         self.saveSegments()
-        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
+        self.buildRecAdvWizard = BuildRecAdvWizard(self.filtersDir, self.config, method="chp")
         self.buildRecAdvWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniser(test=False))
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
@@ -4399,7 +4399,7 @@ class ManualInterface(QMainWindow):
            All training and file I/O are done in Dialogs.py currently.
         """
         self.saveSegments()
-        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
+        self.buildRecAdvWizard = BuildRecAdvWizard(self.filtersDir, self.config, method="wv")
         self.buildRecAdvWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniser(test=False))
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniser(test=True))
         self.buildRecAdvWizard.activateWindow()
@@ -4411,7 +4411,7 @@ class ManualInterface(QMainWindow):
         """Listener for 'Build a NN'
         """
         self.saveSegments()
-        self.buildNNWizard = DialogsTraining.BuildNNWizard(self.filtersDir, self.config, self.configdir)
+        self.buildNNWizard = BuildNNWizard(self.filtersDir, self.config, self.configdir)
         #self.buildNNWizard.button(3).clicked.connect(lambda: self.RecogniserNN(test=False))
         self.buildNNWizard.saveTestBtn.clicked.connect(lambda: self.saveRecogniserNN(test=True))
         self.buildNNWizard.button(QWizard.WizardButton.FinishButton).clicked.connect(lambda: self.saveRecogniserNN(test=False))
@@ -4422,7 +4422,7 @@ class ManualInterface(QMainWindow):
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
-        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.configdir, filter)
+        self.testRecWizard = TestRecWizard(self.filtersDir, self.configdir, filter)
         self.testRecWizard.exec()
 
     def saveRecogniser(self, test=False):
@@ -4441,9 +4441,9 @@ class ManualInterface(QMainWindow):
 
             # prompt the user
             if test:
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+                msg = MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
             else:
-                msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+                msg = MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
             msg.exec()
             self.buildRecAdvWizard.done(1)
             if test:
@@ -4491,9 +4491,9 @@ class ManualInterface(QMainWindow):
         self.buildNNWizard.nntrain.tmpdir2.cleanup()
         # prompt the user
         if test:
-            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+            msg = MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
         else:
-            msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+            msg = MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
         msg.exec()
         self.buildNNWizard.done(1)
         if test:
@@ -4515,7 +4515,7 @@ class ManualInterface(QMainWindow):
             with open(filename, 'w') as f:
                 f.write(json.dumps(self.filterManager.newfilter, indent=4))
             # prompt the user
-            msg = SupportClasses_GUI.MessagePopup("d", "Saved!", msgtext)
+            msg = MessagePopup("d", "Saved!", msgtext)
             msg.exec()
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
@@ -4595,7 +4595,7 @@ class ManualInterface(QMainWindow):
             self.excel2AnnotationDialog.txtSpecies.setText('')
             self.excel2AnnotationDialog.txtAudio.setText('')
             self.excel2AnnotationDialog.txtExcel.setText('')
-            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",
+            msg = MessagePopup("d", "Generated annotation",
                                               "Successfully saved the annotation file: " + '\n' + audiofile + '.data')
             msg.exec()
             if audiofile==self.filename:
@@ -4731,7 +4731,7 @@ class ManualInterface(QMainWindow):
                     tagSegments.saveJSON(os.path.join(di,tagFileMinusExtension + '.wav.data'))
          
         self.tag2AnnotationDialog.txtSession.setText('')
-        msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
+        msg = MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
         msg.exec()
         
     def genTag2Annot_xlsx_TBD(self):
@@ -4845,7 +4845,7 @@ class ManualInterface(QMainWindow):
         
             #self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
-            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
+            msg = MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
             msg.exec()
         
 
@@ -4938,7 +4938,7 @@ class ManualInterface(QMainWindow):
             # What is this?
             self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
-            msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
+            msg = MessagePopup("d", "Generated annotation", "Successfully saved the annotations in: " + '\n' + sessiondir)
             msg.exec()
 
     def backupAnnotation(self):
@@ -4997,7 +4997,7 @@ class ManualInterface(QMainWindow):
             # only this species, if using species-specific methods:
             if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 if filtname == 'Choose species...':
-                    msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
+                    msg = MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec()
                     return
 
@@ -5198,7 +5198,7 @@ class ManualInterface(QMainWindow):
 
         if len(foundxls)>0:
             # check with user
-            msg = SupportClasses_GUI.MessagePopup("w", "Excel file exists", "Detection summaries already present in " + self.SoundFileDir + ". Overwrite them, append to them, or cancel the operation?")
+            msg = MessagePopup("w", "Excel file exists", "Detection summaries already present in " + self.SoundFileDir + ". Overwrite them, append to them, or cancel the operation?")
             msg.setStandardButtons(QMessageBox.StandardButton.Cancel)
             msg.addButton("Overwrite", QMessageBox.ButtonRole.YesRole)
             msg.addButton("Append", QMessageBox.ButtonRole.YesRole)
@@ -5241,7 +5241,7 @@ class ManualInterface(QMainWindow):
             print("Warning: Excel output was not saved")
             return
         else:
-            msg = SupportClasses_GUI.MessagePopup("d", "Segments Exported", "Check this directory for the Excel output: " + '\n' + self.SoundFileDir)
+            msg = MessagePopup("d", "Segments Exported", "Check this directory for the Excel output: " + '\n' + self.SoundFileDir)
             msg.exec()
             return
 
@@ -5296,7 +5296,7 @@ class ManualInterface(QMainWindow):
                     segments.append([time, time+len_seg])
         elif self.box1id is None or self.box1id<0:
             print("No box selected")
-            msg = SupportClasses_GUI.MessagePopup("w", "No segment", "No segment selected to match")
+            msg = MessagePopup("w", "No segment", "No segment selected to match")
             msg.exec()
             return []
         else:
@@ -5495,7 +5495,7 @@ class ManualInterface(QMainWindow):
         filterManagerSimple.exec()
 
     def customiseFiltersROC(self):
-        self.filterManager = DialogsTraining.FilterCustomiseROC(self.filtersDir)
+        self.filterManager = FilterCustomiseROC(self.filtersDir)
         self.filterManager.btnSave.clicked.connect(self.saveRecogniserROC)
         self.filterManager.exec()
 
@@ -5994,11 +5994,11 @@ class ManualInterface(QMainWindow):
         Checks if the user meant to do it, then calls removeSegments()
         """
         if len(self.segments) == 0:
-            msg = SupportClasses_GUI.MessagePopup("w", "No segments", "No segments to delete")
+            msg = MessagePopup("w", "No segments", "No segments to delete")
             msg.exec()
             return
         else:
-            msg = SupportClasses_GUI.MessagePopup("t", "Delete All Segments?", "Are you sure you want to delete all segments?")
+            msg = MessagePopup("t", "Delete All Segments?", "Are you sure you want to delete all segments?")
             msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             reply = msg.exec()
             if reply == QMessageBox.StandardButton.Yes:

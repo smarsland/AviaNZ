@@ -38,7 +38,7 @@ import numpy as np
 from src.ui.colourMaps import colourMaps
 from src.ui.components.audio_player import ControllableAudio
 from src.ui.components.buttons_and_controls import BrightContrVol, MainPushButton, PicButton
-from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.popups import MessagePopup
 from src.ui.components.layout_widgets import PartlyResizableGLW
 from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
 from src.core import Spectrogram

@@ -34,7 +34,7 @@ import datetime as dt
 # sys.path.append('..')
 from ext import SplitLauncher
 import Segment
-from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.popups import MessagePopup
 
 
 class SplitData(QMainWindow):

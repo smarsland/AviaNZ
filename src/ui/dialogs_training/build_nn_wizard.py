@@ -45,7 +45,7 @@ import pyqtgraph as pg
 import numpy as np
 from src.ui.colourMaps import colourMaps
 from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider, PicButton
-from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.layout_widgets import Layout
 from src.core import SupportClasses

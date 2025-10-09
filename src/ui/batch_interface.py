@@ -30,7 +30,7 @@ from pyqtgraph.dockarea import Dock, DockArea
 
 from src.core import SupportClasses
 from src.core.AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
-from src.ui.components.dialogs_and_popups import MessagePopup
+from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.buttons_and_controls import MainPushButton
 from src.ui.dialogs.export_bats import ExportBats

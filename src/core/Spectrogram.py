@@ -11,7 +11,7 @@ import resampy
 import copy
 import gc
 from src.core import SignalProc
-from src.core import AudioData
+from src.core import AudioLoader
 from PIL import Image
 from scipy.signal import medfilt
 
@@ -30,7 +30,7 @@ class Spectrogram:
         self.minFreqShow = minFreqShow
         self.maxFreqShow = maxFreqShow
         self.audio_data = None
-        self.audio_loader = AudioData.AudioLoader()
+        self.audio_loader = AudioLoader.AudioLoader()
 
     def readSoundFile(self, filepath, duration=None, offset=0, silent=False, **kwargs):
         """Load audio file using AudioLoader or BMP file directly.
@@ -51,9 +51,9 @@ class Spectrogram:
         
         # Store reference to AudioData - it has all the format info built in
         self.audio_data = loaded_data
-        self.fileLength = loaded_data.file_length
-        self.minFreq = loaded_data.min_freq
-        self.maxFreq = loaded_data.max_freq
+        self.fileLength = len(loaded_data.data) if loaded_data.data is not None else 0
+        self.minFreq = 0
+        self.maxFreq = loaded_data.sample_rate // 2
         
         # Update frequency bounds for display
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
@@ -99,7 +99,7 @@ class Spectrogram:
         # Create AudioData for BMP (core use only)
         # BMP files don't have actual audio, so create dummy AudioData with no data array
         from src.core.AudioData import AudioData
-        self.audio_data = AudioData(data=None, sample_rate=176000, file_length=file_length,
+        self.audio_data = AudioData(data=None, sample_rate=176000,
                                      sample_format='Int16', sample_size=16, channels=0)
         
         # Trim to specified offset and duration
@@ -145,8 +145,8 @@ class Spectrogram:
             return
 
         resampled_data = resampy.resample(self.audio_data.data, sr_orig=self.audio_data.sample_rate, sr_new=target)
-        # Use AudioData.replace_data to centralize metadata updates
-        self.audio_data.replace_data(resampled_data, sample_rate=target)
+        self.audio_data.data = resampled_data
+        self.audio_data.sample_rate = target
 
         self.minFreq = 0
         self.maxFreq = self.audio_data.sample_rate // 2
@@ -263,18 +263,16 @@ class Spectrogram:
             self.audio_data = AudioData(
                 data=audiodata,
                 sample_rate=sampleRate,
-                file_length=len(audiodata) if audiodata is not None else 0,
                 sample_format='float32',
                 sample_size=32,
                 channels=1
             )
         else:
             try:
-                self.audio_data.replace_data(audiodata, sample_rate=sampleRate)
+                self.audio_data.data = audiodata
             except Exception:
                 self.audio_data.data = audiodata
         if sampleRate is not None:
-            self.audio_data.sample_rate = sampleRate
             self.audio_data.sample_rate = sampleRate
 
     def SnNR(self,startSignal,startNoise):
@@ -959,23 +957,14 @@ class Spectrogram:
             print("Don't use this interface for wavelets")
             return
         elif str(alg) == "Bandpass":
-            try:
-                self.audio_data.replace_data(SignalProc.bandpassFilter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end))
-            except Exception:
-                self.audio_data.data = SignalProc.bandpassFilter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end)
+            self.audio_data.data = SignalProc.bandpassFilter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end)
             #self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
         elif str(alg) == "Butterworth Bandpass":
-            try:
-                self.audio_data.replace_data(SignalProc.ButterworthBandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end))
-            except Exception:
-                self.audio_data.data = SignalProc.ButterworthBandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end)
+            self.audio_data.data = SignalProc.ButterworthBandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end)
             #self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
         else:
             # Median Filter
-            try:
-                self.audio_data.replace_data(SignalProc.medianFilter(self.audio_data.data,int(str(width))))
-            except Exception:
-                self.audio_data.data = SignalProc.medianFilter(self.audio_data.data,int(str(width)))
+            self.audio_data.data = SignalProc.medianFilter(self.audio_data.data,int(str(width)))
 
     def generateFeaturesNN(self, seglen, real_spec_width, frame_size, frame_hop=None, NNfRange=None):
         '''

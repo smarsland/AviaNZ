@@ -1,5 +1,8 @@
+# AviaNZ_batch.py
+#
+# Runs filters over lots of data
 
-# Version 3.4 18/12/24
+# Version 4.0 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 # This is the processing class for the batch AviaNZ interface
@@ -21,7 +24,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import gc, os, re, fnmatch
-
+import time
+import datetime as dt
 import numpy as np
 
 from src.core import Spectrogram
@@ -31,22 +35,13 @@ from src.core import WaveletSegment
 from src.core import SupportClasses
 
 import traceback
-import time
-
 import math
 import copy
 
 import soundfile as sf
 
-
-# Need to work through this and ensure:
-# 1. care taken for resampling for different filters
-# 2. intermittent sampling and time of files is correct
-# 3. simplify if possible
-
 class AviaNZ_batchProcess():
     # Main class for batch processing
-    # Contains the algorithms, not the GUI, so that it can be run from the commandline or the GUI
     # Parent: AviaNZ_batchWindow
     # mode: "GUI/CLI/test". If GUI, must provide the parent
         # Recogniser - filter file name without ".txt" 
@@ -288,8 +283,6 @@ class AviaNZ_batchProcess():
         return(0)
 
     def mainloop(self,allsoundfiles,total,speciesStr,filters):
-        # MAIN PROCESSING starts here
-        # TODO: This will need a bit of work to deal with different filters with non-matching sample rates
         processingTime = 0
         cleanexit = 0
         cnt = 0
@@ -308,7 +301,6 @@ class AviaNZ_batchProcess():
 
             # if it was processed previously (stored in log)
             if filename in self.filesDone:
-                # skip the processing:
                 print("File %s processed previously, skipping" % filename)
                 if not self.testmode:
                     self.log.appendFile(filename)
@@ -434,7 +426,8 @@ class AviaNZ_batchProcess():
         segments = []
         print("Adding segments (%d s every %d s) to %s" %(length,interval, str(filename)))
         while i < nseconds:
-            segments.append([i, i + length])
+            end_time = min(i + length, nseconds)
+            segments.append([i, end_time])
             i += interval
         post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
         self.makeSegments(self.segments, post.segments)
@@ -1152,16 +1145,16 @@ class AviaNZ_batchProcess():
                     "Possible LT":5, "Possible ST":6, "Both":7}
         
         if format == 'xml':
-            return self._exportBatXML(dirName, savefile, threshold1, threshold2, operator, site, namedict)
+            return self.exportBatXML(dirName, savefile, threshold1, threshold2, operator, site, namedict)
         elif format == 'csv':
-            return self._exportBatCSV(dirName, savefile, threshold1, threshold2, operator)
+            return self.exportBatCSV(dirName, savefile, threshold1, threshold2, operator)
         elif format == 'passes':
-            return self._exportBatPasses(dirName, savefile)
+            return self.exportBatPasses(dirName, savefile)
         else:
             print(f"Unknown format: {format}")
             return 0
     
-    def _exportBatXML(self, dirName, savefile, threshold1, threshold2, operator, site, namedict):
+    def exportBatXML(self, dirName, savefile, threshold1, threshold2, operator, site, namedict):
         """Export bat results to BatSearch XML format."""
         from lxml import etree
         
@@ -1179,13 +1172,13 @@ class AviaNZ_batchProcess():
                         segments.parseJSON(os.path.join(root, filename))
                         
                         # Determine label from segments
-                        label = self._getBatLabel(segments, threshold1, threshold2)
+                        label = self.getBatLabel(segments, threshold1, threshold2)
                         
                         # Create XML elements
                         etree.SubElement(s1, "AssignedBatCategory").text = str(namedict[label])
                         etree.SubElement(s1, "AssignedSite").text = site
                         etree.SubElement(s1, "AssignedUser").text = operator
-                        etree.SubElement(s1, "RecTime").text = self._parseTimeDate(filename)
+                        etree.SubElement(s1, "RecTime").text = self.parseTimeDate(filename)
                         etree.SubElement(s1, "RecordingFileName").text = filename[:-5]
                         etree.SubElement(s1, "RecordingFolderName").text = ".\\" + os.path.split(root)[-1]
                         etree.SubElement(s1, "MeasureTimeFrom").text = str(0)
@@ -1197,7 +1190,7 @@ class AviaNZ_batchProcess():
                                          xml_declaration=True, encoding='utf-8'))
         return 1
     
-    def _exportBatCSV(self, dirName, savefile, threshold1, threshold2, operator):
+    def exportBatCSV(self, dirName, savefile, threshold1, threshold2, operator):
         """Export bat results to BatSearch CSV format."""
         f = open(os.path.join(dirName, savefile), 'w')
         f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
@@ -1210,7 +1203,7 @@ class AviaNZ_batchProcess():
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
-                    label = self._getBatLabel(segments, threshold1, threshold2)
+                    label = self.getBatLabel(segments, threshold1, threshold2)
                     if label == 'Non-bat':
                         label = ''
                     
@@ -1238,7 +1231,7 @@ class AviaNZ_batchProcess():
         f.close()
         return 1
     
-    def _exportBatPasses(self, dirName, savefile):
+    def exportBatPasses(self, dirName, savefile):
         """Export bat passes summary."""
         if not hasattr(self, 'sp'):
             self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
@@ -1289,7 +1282,7 @@ class AviaNZ_batchProcess():
         f.close()
         return 1
     
-    def _getBatLabel(self, segments, threshold1, threshold2):
+    def getBatLabel(self, segments, threshold1, threshold2):
         """Helper method to determine bat label from segments."""
         if len(segments) == 0:
             return 'Non-bat'
@@ -1314,7 +1307,7 @@ class AviaNZ_batchProcess():
         
         return 'Non-bat'
     
-    def _parseTimeDate(self, filename):
+    def parseTimeDate(self, filename):
         """Helper method to parse time/date from filename for BatSearch format."""
         if len(filename.split('_')[0]) == 6:
             # ddmmyy format
@@ -1329,7 +1322,6 @@ class AviaNZ_batchProcess():
             return ""
 
     def exportBatSurvey(self,dirName,responses,threshold1=0.85):
-        import datetime as dt
         # Export an excel file for the Bat survey database
         # TODO: turn into full excel?
         if responses is None:

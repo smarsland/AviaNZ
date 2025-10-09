@@ -277,7 +277,7 @@ class Clustering:
         """
         Cluster segments during training to make sub-filters.
 
-        This is called by DialogsTraining, after getSyllables has run
+        This is called by training wizards (BuildRecAdvWizard), after getSyllables has run
 
         Given wav + annotation files, plus set of syllables
             1) make them fixed-length by padding or clipping

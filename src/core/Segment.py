@@ -1381,7 +1381,7 @@ class PostProcess:
             nn_window_width = self.NNinputdim[0]
             sp = Spectrogram.Spectrogram(window_width=nn_window_width,
                                         incr=self.NNwindowInc[1])
-            sp.audio_data = AudioData(data=data, sample_rate=self.sampleRate, file_length=len(data), 
+            sp.audio_data = AudioData(data=data, sample_rate=self.sampleRate, 
                                       sample_format='float32', sample_size=32, channels=1)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
@@ -1463,7 +1463,7 @@ class PostProcess:
             nn_window_width = self.NNinputdim[0]
             sp = Spectrogram.Spectrogram(window_width=nn_window_width,
                                         incr=self.NNwindowInc[1])
-            sp.audio_data = AudioData(data=data, sample_rate=self.sampleRate, file_length=len(data), 
+            sp.audio_data = AudioData(data=data, sample_rate=self.sampleRate, 
                                       sample_format='float32', sample_size=32, channels=1)
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
@@ -1561,7 +1561,7 @@ class PostProcess:
         if newSegments.__len__() > 1:
             # Get avg energy
             sp = Spectrogram.Spectrogram()
-            sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, file_length=len(self.audioData), 
+            sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, 
                                       sample_format='float32', sample_size=32, channels=1)
             rawsg = sp.spectrogram()
             # Normalise
@@ -1605,7 +1605,7 @@ class PostProcess:
                 self.sampleRate = sp.audio_data.sample_rate
                 self.audioData = sp.audio_data.data
             else:
-                sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, file_length=len(self.audioData), 
+                sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, 
                                           sample_format='float32', sample_size=32, channels=1)
 
             # TODO: could denoise before fundamental frq. extraction
