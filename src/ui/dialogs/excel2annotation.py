@@ -1876,7 +1876,7 @@ class HumanClassify2(QDialog):
         self.sps = sps
         self.sgs = sgs
         # Check if playback is possible (e.g. for batmode):
-        haveaudio = all(len(sp.data)>0 for sp in sps if sp is not None)
+        haveaudio = all(len(sp.audio_data.data)>0 for sp in sps if sp is not None)
 
         self.lut = lut
         self.cmapInverted = cmapInverted
@@ -2009,7 +2009,7 @@ class HumanClassify2(QDialog):
         for i in self.indices2show:
             # This will contain pre-made slices of spec and audio
             sp = self.sps[i]
-            duration = len(sp.data)/sp.audio_data.sample_rate
+            duration = len(sp.audio_data.data)/sp.audio_data.sample_rate
 
             sg = self.sgs[i]
             
@@ -2046,8 +2046,8 @@ class HumanClassify2(QDialog):
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
             maxFreq = exampleSP.audio_data.sample_rate // 2
-        if len(exampleSP.data)>0:
-            duration = len(exampleSP.data)/exampleSP.audio_data.sample_rate
+        if len(exampleSP.audio_data.data)>0:
+            duration = len(exampleSP.audio_data.data)/exampleSP.audio_data.sample_rate
         else:
             duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
 

@@ -1610,7 +1610,7 @@ class ManualInterface(QMainWindow):
                     self.sp.maxFreqShow = 8000
 
                 # Parse wav format details based on file header:
-                self.datalength = np.shape(self.sp.data)[0]
+                self.datalength = np.shape(self.sp.audio_data.data)[0]
 
                 # self.sp.audio_data will be set
                 # self.sp.fileLength will be determined from wav header
@@ -2129,8 +2129,8 @@ class ManualInterface(QMainWindow):
         Has to do some work to get the axis labels correct.
         """
 
-        if len(self.sp.data)>0 and not self.batmode:
-            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.sp.data)
+        if len(self.sp.audio_data.data)>0 and not self.batmode:
+            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.sp.audio_data.data)
 
         self.timeaxis.setLabel('')
 
@@ -2247,7 +2247,7 @@ class ManualInterface(QMainWindow):
 
             # Passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.sp.data, self.sp.audio_data.sample_rate, window=0.25, inc=0.25)
+            e = ws.computeWaveletEnergy(self.sp.audio_data.data, self.sp.audio_data.sample_rate, window=0.25, inc=0.25)
             # e is 2^nlevels x nseconds
 
             # show only leaf nodes:
@@ -2270,12 +2270,12 @@ class ManualInterface(QMainWindow):
 
             # Preprocess
             # TODO: Other samplerates?
-            data = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
+            data = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             data = SignalProc.bandpassFilter(data, self.sp.audio_data.sample_rate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.sp.data, self.sp.audio_data.sample_rate)
+            e = ws.computeWaveletEnergy(self.sp.audio_data.data, self.sp.audio_data.sample_rate)
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
                 annotation[math.floor(s[0]):math.ceil(s[1])] = 1
@@ -2308,7 +2308,7 @@ class ManualInterface(QMainWindow):
             chpwin = round(0.25/minchpwin)*minchpwin
             print("Will use window of", chpwin, "s")
             # Resample and generate WP w/ all nodes for the current page
-            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=TGTSAMPLERATE)
+            datatoplot = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=TGTSAMPLERATE)
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
@@ -2413,7 +2413,7 @@ class ManualInterface(QMainWindow):
             we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
-                data = self.sp.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
+                data = self.sp.audio_data.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
                 post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audio_data.sample_rate, segments=[], subfilter={})
                 m, std, _ = post.wind_cal(data, self.sp.audio_data.sample_rate)
                 we_mean[w] = m
@@ -2439,9 +2439,9 @@ class ManualInterface(QMainWindow):
             we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(self.datalength/self.sp.audio_data.sample_rate)):
-                data = self.sp.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
+                data = self.sp.audio_data.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
                 tempsp = Spectrogram.Spectrogram()
-                tempsp.data = data
+                tempsp.audio_data.data = data
                 sgRaw = tempsp.spectrogram()
                 # Normalise
                 sgRaw -= np.mean(sgRaw, axis=0)
@@ -2470,24 +2470,24 @@ class ManualInterface(QMainWindow):
                 plotNodes = [48, 49, 52]
 
             # resample
-            audiodata = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
+            audiodata = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             
             WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
             if self.extra == "Filtered spectrogram, new + AA":
                 WF.WaveletPacket(plotNodes, 'symmetric', True, True)
-                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.sp.data)]
+                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.sp.audio_data.data)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
                 WF.WaveletPacket(plotNodes, 'symmetric', False)
-                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.sp.data)]
+                C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.sp.audio_data.data)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
                 WF.WaveletPacket(plotNodes, 'symmetric', False)
-                C = WF.reconstructWP2(plotNodes[0], False)[:len(self.sp.data)]
+                C = WF.reconstructWP2(plotNodes[0], False)[:len(self.sp.audio_data.data)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, False)[:len(C)]
 
@@ -2497,7 +2497,7 @@ class ManualInterface(QMainWindow):
             if self.sp.audio_data.sample_rate != 16000:
                 C = resampy.resample(C, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             tempsp = Spectrogram.Spectrogram()
-            tempsp.data = C
+            tempsp.audio_data.data = C
             sgRaw = tempsp.spectrogram()
             sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.audio_data.sample_rate
             sgRaw = sgRaw[:, :sgHeightReduction]
@@ -3663,7 +3663,7 @@ class ManualInterface(QMainWindow):
 
             # plot things
             # 1. decompose
-            datatoplot = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=spInfo['SampleRate'])
+            datatoplot = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=spInfo['SampleRate'])
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
@@ -3808,7 +3808,7 @@ class ManualInterface(QMainWindow):
             probs = 0
             if NNname in self.NNDicts.keys():
                 NNmodel = self.NNDicts[NNname]
-            post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data,
+            post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data,
                                        sampleRate=self.sp.audio_data.sample_rate,
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
                                        subfilter=speciesData['Filters'][0], NNmodel=NNmodel, cert=50)
@@ -3910,7 +3910,7 @@ class ManualInterface(QMainWindow):
 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
-            data = self.sp.data[int(starttime*self.sp.audio_data.sample_rate):int(endtime*self.sp.audio_data.sample_rate)]
+            data = self.sp.audio_data.data[int(starttime*self.sp.audio_data.sample_rate):int(endtime*self.sp.audio_data.sample_rate)]
             #data = self.sp.data[int(starttime*self.sp.sampleRate):int(endtime*self.sp.sampleRate)]
 
             # piece of spectrogram corresponding to this segment
@@ -3966,7 +3966,7 @@ class ManualInterface(QMainWindow):
                     segshape = Shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
-                    data = self.sp.data[int(segRelativeStart*self.sp.audio_data.sample_rate):int(segRelativeEnd*self.sp.audio_data.sample_rate)]
+                    data = self.sp.audio_data.data[int(segRelativeStart*self.sp.audio_data.sample_rate):int(segRelativeEnd*self.sp.audio_data.sample_rate)]
                     #data = self.sp.data[int(segRelativeStart*self.sp.sampleRate):int(segRelativeEnd*self.sp.sampleRate)]
                     W = 4*incr
                     segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.audio_data.sample_rate)
@@ -4051,14 +4051,14 @@ class ManualInterface(QMainWindow):
                 audiodata_backup_new = np.empty(
                     (np.shape(self.audiodata_backup)[0], np.shape(self.audiodata_backup)[1] + 1))
                 audiodata_backup_new[:, :-1] = np.copy(self.audiodata_backup)
-                audiodata_backup_new[:, -1] = np.copy(self.sp.data)
+                audiodata_backup_new[:, -1] = np.copy(self.sp.audio_data.data)
                 self.audiodata_backup = audiodata_backup_new
             else:
-                self.audiodata_backup = np.empty((np.shape(self.sp.data)[0], 1))
-                self.audiodata_backup[:, 0] = np.copy(self.sp.data)
+                self.audiodata_backup = np.empty((np.shape(self.sp.audio_data.data)[0], 1))
+                self.audiodata_backup[:, 0] = np.copy(self.sp.audio_data.data)
         else:
-            self.audiodata_backup = np.empty((np.shape(self.sp.data)[0], 1))
-            self.audiodata_backup[:, 0] = np.copy(self.sp.data)
+            self.audiodata_backup = np.empty((np.shape(self.sp.audio_data.data)[0], 1))
+            self.audiodata_backup[:, 0] = np.copy(self.sp.audio_data.data)
         self.showFreq_backup = [self.sp.minFreqShow, self.sp.maxFreqShow]
 
     def decomposeWP(self, x=None):
@@ -4067,7 +4067,7 @@ class ManualInterface(QMainWindow):
         """
         print("Decomposing to WP...")
         ot = time.time()
-        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.sp.audio_data.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
         maxLevel = 5
         allnodes = range(2 ** (maxLevel + 1) - 1)
         self.WFinst.WaveletPacket(allnodes, mode='symmetric', antialias=False)
@@ -4107,7 +4107,7 @@ class ManualInterface(QMainWindow):
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
             # extract the piece of audiodata under current segment
-            denoised = self.sp.data[start : stop]
+            denoised = self.sp.audio_data.data[start : stop]
 
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
             denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
@@ -4124,14 +4124,14 @@ class ManualInterface(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             # update full audiodata
-            self.sp.data[start : stop] = denoised
+            self.sp.audio_data.data[start : stop] = denoised
 
             # recalculate spectrogram
             _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             self.setSpectrogram()
 
             # Update the ampl image
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audio_data.sample_rate,num=self.datalength,endpoint=True),self.sp.data)
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audio_data.sample_rate,num=self.datalength,endpoint=True),self.sp.audio_data.data)
 
             # Update the spec & overview images.
             # Does not reset to start if the freqs aren't changed
@@ -4172,16 +4172,16 @@ class ManualInterface(QMainWindow):
                 # here we override default 0-Fs/2 returns
                 start = self.sp.minFreqShow
                 end = self.sp.maxFreqShow
-                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.audio_data.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
                 #self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
                     # TODO set costfn determines which leaves will be used, by default 'threshold' (universal threshold).
                     # fixed = use all leaves up to selected level. 'Entropy' is also tested and possible
-                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
+                    self.sp.audio_data.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
                 else:
                     # go with defaults
-                    self.sp.data = self.waveletDenoiser.waveletDenoise("soft", 3, aaRec=True, aaWP=False, costfn="fixed", noiseest="ols")
+                    self.sp.audio_data.data = self.waveletDenoiser.waveletDenoise("soft", 3, aaRec=True, aaWP=False, costfn="fixed", noiseest="ols")
 
             else:
                 # Spectrogram will deal with denoising
@@ -4192,7 +4192,7 @@ class ManualInterface(QMainWindow):
             _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             self.setSpectrogram()
 
-            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audio_data.sample_rate,num=self.datalength,endpoint=True),self.sp.data)
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sp.audio_data.sample_rate,num=self.datalength,endpoint=True),self.sp.audio_data.data)
 
             # Update the frequency axis
             self.redoFreqAxis(start, end, store=False)
@@ -4212,7 +4212,7 @@ class ManualInterface(QMainWindow):
         if hasattr(self,'audiodata_backup'):
             if self.audiodata_backup is not None:
                 if np.shape(self.audiodata_backup)[1]>0:
-                    self.sp.data = np.copy(self.audiodata_backup[:,-1])
+                    self.sp.audio_data.data = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
 
                     _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
@@ -4220,7 +4220,7 @@ class ManualInterface(QMainWindow):
 
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
-                        self.sp.data)
+                        self.sp.audio_data.data)
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.sp)
 
@@ -4251,13 +4251,13 @@ class ManualInterface(QMainWindow):
 
         sfmt = _sample_format_str(self.sp.audio_data)
         if sfmt == 'UInt8' or sfmt.endswith('UInt8'):
-            normalised_data = (self.sp.data - 128) / 128
+            normalised_data = (self.sp.audio_data.data - 128) / 128
         elif sfmt == 'Int16' or sfmt.endswith('Int16'):
-            normalised_data = self.sp.data / 32768
+            normalised_data = self.sp.audio_data.data / 32768
         elif sfmt == 'Int8' or sfmt.endswith('Int8'):
-            normalised_data = self.sp.data / 128
+            normalised_data = self.sp.audio_data.data / 128
         elif sfmt == 'Int32' or sfmt.endswith('Int32'):
-            normalised_data = self.sp.data / 2147483648
+            normalised_data = self.sp.audio_data.data / 2147483648
         else:
             print("ERROR: sampleSize not supported for format", sfmt)
             return
@@ -4299,7 +4299,7 @@ class ManualInterface(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
-                tosave = SignalProc.bandpassFilter(self.sp.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
+                tosave = SignalProc.bandpassFilter(self.sp.audio_data.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.playSpeed) 
                 sfmt = _sample_format_str(self.sp.audio_data)
@@ -4965,7 +4965,7 @@ class ManualInterface(QMainWindow):
         """
         maxampl = 0.001
         if self.datalength>0:
-            maxampl = np.max(self.sp.data)
+            maxampl = np.max(self.sp.audio_data.data)
         self.segmentDialog = Segmentation(maxampl,DOC=self.DOC, species=self.FilterDicts)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
@@ -4978,7 +4978,7 @@ class ManualInterface(QMainWindow):
         if self.CLI:
             maxampl = 0.001
             if self.datalength>0:
-                maxampl = np.max(self.sp.data)
+                maxampl = np.max(self.sp.audio_data.data)
             self.segmentDialog = Segmentation(maxampl)
 
         opstartingtime = time.time()
@@ -5062,7 +5062,7 @@ class ManualInterface(QMainWindow):
                 # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                ws.readBatch(self.sp.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
+                ws.readBatch(self.sp.audio_data.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 newSegments = ws.waveletSegment(0, wpmode="new")
                 # this will produce a list of lists (over subfilters)
             elif alg == 'WV Changepoint':
@@ -5071,7 +5071,7 @@ class ManualInterface(QMainWindow):
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 useWind = settings["wind"] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
-                ws.readBatch(self.sp.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=useWind)
+                ws.readBatch(self.sp.audio_data.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=useWind)
                 # nuisance-signal changepoint detector (alg 2)
                 # with all params passed:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])
@@ -5107,7 +5107,7 @@ class ManualInterface(QMainWindow):
                     if 'NN' in speciesData:
                         NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
-                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audio_data.sample_rate,
+                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, NNmodel=NNmodel, cert=50)
                     if NNmodel:
@@ -5131,7 +5131,7 @@ class ManualInterface(QMainWindow):
             else:
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
                 if settings["rain"]:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
@@ -5275,7 +5275,7 @@ class ManualInterface(QMainWindow):
                                         equal_loudness=self.sgEqualLoudness, onesided=self.config['sgOneSided'])
 
             # Get the data for the spectrogram
-            data1 = resampy.resample(self.sp.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=self.sppInfo[str(species)][4])
+            data1 = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=self.sppInfo[str(species)][4])
             sampleRate1 = self.sppInfo[str(species)][4]
             
             # TODO utilize self.sp / Spectrogram more here

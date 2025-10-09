@@ -1,29 +1,10 @@
 
 # Spectrogram.py
-# The spectrogram class holds the audiodata and the spectrogram made from it
-# Also holds functions that draw on the spectrogram 
-
 # Version 3.4 18/12/24
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
-#    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2024
-
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU General Public License for more details.
-
-#    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import scipy.signal as signal
-#import scipy.fftpack as fft
 import pyfftw as fft
 from scipy.stats import boxcox
 import resampy
@@ -31,102 +12,25 @@ import copy
 import gc
 from src.core import SignalProc
 from src.core import AudioData
-
-# Use PIL for image reading in core so we avoid PyQt dependencies
 from PIL import Image
-
-# for multitaper spec:
-specExtra = True
-#try:
-    #from spectrum import dpss, pmtm
-#except ImportError:
-    #specExtra = False
-
-# for fund freq
 from scipy.signal import medfilt
-# TODO: Needs some tidying up
+
+specExtra = True
 
 class Spectrogram:
-    """ This class reads and holds the audiodata and spectrogram, to be used in the main interface.
-    Inverse, denoise, and other processing algorithms are provided here.
-    Primary parameters are the width of a spectrogram window (window_width) and the shift between them (incr)
+    """Spectrogram computation and analysis for audio data.
+    
+    Key parameters: window_width (samples per window), incr (step size).
+    FFT size is 2*window_width with zero-padding.
     """
 
     def __init__(self, window_width=256, incr=128, minFreqShow=0, maxFreqShow=float("inf")):
-        # maxFreq = 0 means fall back to Fs/2 for any file.
         self.window_width=window_width
         self.incr=incr
         self.minFreqShow = minFreqShow
         self.maxFreqShow = maxFreqShow
-        # Store reference to AudioData instead of duplicating data
         self.audio_data = None
-
-        # Audio loader for file I/O
         self.audio_loader = AudioData.AudioLoader()
-
-    @property
-    def data(self):
-        """Access audio data through AudioData reference"""
-        if self.audio_data is None:
-            return None
-        return self.audio_data.data
-    
-    @data.setter 
-    def data(self, value):
-        """Set audio data - creates new AudioData if needed"""
-        if self.audio_data is None:
-            raise ValueError("audio_data must be set before assigning data via the data property")
-        else:
-            try:
-                # prefer centralized replacement
-                self.audio_data.replace_data(value)
-            except Exception:
-                self.audio_data.data = value
-
-    # # TODO: read less of the file
-    # def readFlac(self, file,silent=False):
-    #     soundfile = '/home/marslast/output.wav'
-    #     pyf = pyflac.FileDecoder(file,soundfile)
-    #     self.data, fs = pyf.process()
-    #     return
-
-    #     # take only left channel
-    #     if np.shape(np.shape(self.data))[0] > 1:
-    #         self.data = self.data[:, 0]
-    #     #if QtMM:
-    #     self.audioFormat.channels = 1
-
-    #     # force float type
-    #     if self.data.dtype != 'float':
-    #         self.data = self.data.astype('float')
-
-    #     # total file length in s read from header (useful for paging)
-    #     self.fileLength = len(self.data)/fs
-
-    #     #self.sampleRate = wavobj.rate
-
-    #     self.audio_data.sample_rate = fs
-    #     #self.audio_data.sample_rate = self.sampleRate
-    #     #self.audioFormat.sample_size = wavobj.sampwidth * 8
-    #     # Only 8-bit WAVs are unsigned:
-    #     # TODO!! Int16/Int32
-    #     self.audio_data.sample_format = QAudioFormat.SampleFormat.Int32
-
-    #     # *Freq sets hard bounds, *Show can limit the spec display
-    #     self.minFreq = 0
-    #     self.maxFreq = self.audio_data.sample_rate // 2
-    #     #self.maxFreq = self.sampleRate // 2
-    #     self.minFreqShow = max(self.minFreq, self.minFreqShow)
-    #     self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
-
-    #     #print("a",self.sampleRate, self.fileLength, np.shape(self.data))
-
-    #     if not silent:
-    #         #if QtMM:
-    #         #print("Detected format: %d channels, %d Hz, ** bit samples" % (self.audioFormat.channels, self.audio_data.sample_rate))
-    #         sf = str(self.audio_data.sample_format)
-    #         print("Detected format: %d channels, %d Hz, %s format" % (self.audioFormat.channels, self.audio_data.sample_rate, sf.split('.')[-1]))
-    #         #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channels, self.audio_data.sample_rate, self.audioFormat.sample_size))
 
     def readSoundFile(self, filepath, duration=None, offset=0, silent=False, **kwargs):
         """Load audio file using AudioLoader or BMP file directly.
@@ -140,7 +44,7 @@ class Spectrogram:
         """
         # Check if it's a BMP file - handle directly since it's spectrogram data
         if filepath.lower().endswith('.bmp'):
-            return self._load_bmp(filepath, duration, offset, silent, **kwargs)
+            return self.load_bmp(filepath, duration, offset, silent, **kwargs)
         
         # For audio files, use AudioLoader
         loaded_data = self.audio_loader.load_audio(filepath, duration, offset, silent)
@@ -155,7 +59,7 @@ class Spectrogram:
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
         
-    def _load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
+    def load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
         """Load BMP file (DOC bat recording format) directly as spectrogram data."""
         rotate = kwargs.get('rotate', True)
         repeat = kwargs.get('repeat', True)
@@ -233,14 +137,14 @@ class Spectrogram:
         return self.readSoundFile(filepath, duration, offset, silent, rotate=rotate, repeat=repeat)
 
     def resample(self, target):
-        if self.data is None or len(self.data)==0:
+        if self.audio_data.data is None or len(self.audio_data.data)==0:
             print("Warning: data is empty")
             return
         if target==self.audio_data.sample_rate:
             print("No resampling needed")
             return
 
-        resampled_data = resampy.resample(self.data, sr_orig=self.audio_data.sample_rate, sr_new=target)
+        resampled_data = resampy.resample(self.audio_data.data, sr_orig=self.audio_data.sample_rate, sr_new=target)
         # Use AudioData.replace_data to centralize metadata updates
         self.audio_data.replace_data(resampled_data, sample_rate=target)
 
@@ -375,8 +279,8 @@ class Spectrogram:
 
     def SnNR(self,startSignal,startNoise):
         # Compute the estimated signal-to-noise ratio
-        pS = np.sum(self.data[startSignal:startSignal+self.length]**2)/self.length
-        pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
+        pS = np.sum(self.audio_data.data[startSignal:startSignal+self.length]**2)/self.length
+        pN = np.sum(self.audio_data.data[startNoise:startNoise+self.length]**2)/self.length
         return 10.*np.log10(pS/pN)
 
     def equalLoudness(self,data):
@@ -405,23 +309,130 @@ class Spectrogram:
 
         return data
 
+    def create_window(self, window_type, window_width):
+        """Create windowing function."""
+        n = np.arange(window_width)
+        
+        if window_type == 'Hann':
+            return 0.5 * (1 - np.cos(2 * np.pi * n / (window_width - 1)))
+        elif window_type == 'Hamming':
+            # Hamming window
+            alpha = 0.54
+            beta = 1. - alpha
+            return alpha - beta * np.cos(2 * np.pi * n / (window_width - 1))
+        elif window_type == 'Blackman':
+            # Blackman window
+            alpha = 0.16
+            a0 = 0.5 * (1 - alpha)
+            a1 = 0.5
+            a2 = 0.5 * alpha
+            return (a0 - a1 * np.cos(2 * np.pi * n / (window_width - 1)) + 
+                   a2 * np.cos(4 * np.pi * n / (window_width - 1)))
+        elif window_type == 'BlackmanHarris':
+            # Blackman-Harris window
+            a0, a1, a2, a3 = 0.358375, 0.48829, 0.14128, 0.01168
+            return (a0 - a1 * np.cos(2 * np.pi * n / (window_width - 1)) + 
+                   a2 * np.cos(4 * np.pi * n / (window_width - 1)) - 
+                   a3 * np.cos(6 * np.pi * n / (window_width - 1)))
+        elif window_type == 'Welch':
+            return 1.0 - ((n - 0.5 * (window_width - 1)) / (0.5 * (window_width - 1))) ** 2
+        elif window_type == 'Parzen':
+            n_centered = n - 0.5 * window_width
+            quarter_width = 0.25 * window_width
+            half_width = 0.5 * window_width
+            
+            # Two-piece definition based on distance from center
+            condition = np.abs(n_centered) < quarter_width
+            return np.where(condition,
+                           1 - 6 * (n_centered / half_width) ** 2 * (1 - np.abs(n_centered) / half_width),
+                           2 * (1 - np.abs(n_centered) / half_width) ** 3)
+        elif window_type == 'Ones':
+            return np.ones(window_width)
+        else:
+            return 0.5 * (1 - np.cos(2 * np.pi * n / (window_width - 1))) # Hann
+
+    def compute_standard_spectrogram(self, data, window, window_width, incr, onesided=True, complex_values=False, need_even=False):
+        """Standard STFT with zero-padding. FFT size = 2*window_width."""
+        starts = range(0, len(data) - window_width + 1, incr)
+        if need_even:
+            starts = np.hstack((starts, np.zeros((window_width - len(data) % window_width), dtype=int)))
+
+        sg = np.zeros((len(starts), 2*window_width), dtype=complex)
+        fft_buffer = np.zeros(2 * window_width)
+        
+        for i, start_idx in enumerate(starts):
+            fft_buffer.fill(0.0)
+            center_start = window_width // 2
+            fft_buffer[center_start:center_start + window_width] = window * data[start_idx:start_idx + window_width]
+            fft_buffer = fft.interfaces.scipy_fft.fftshift(fft_buffer)
+            fft_buffer = np.roll(fft_buffer, -1)
+            sg[i, :] = fft.interfaces.scipy_fft.fft(fft_buffer)
+
+        if onesided:
+            sg = sg[:, :window_width]
+        if not complex_values:
+            sg = np.absolute(sg)
+        return sg
+
+    def compute_multitaper_spectrogram(self, data, window_width, incr, singleIm=True):
+        """Multi-tapered spectrogram."""
+        if not specExtra:
+            print("Multi-taper option not available")
+            return np.array([])
+            
+        try:
+            import dpss
+        except ImportError:
+            print("dpss module not found")
+            return np.array([])
+            
+        starts = range(0, len(data) - window_width + 1, incr)
+        [tapers, eigen] = dpss.dpss(window_width, 2.5, 3)
+        out = np.zeros(shape=(len(starts), window_width, 3))
+        
+        for i, start in enumerate(starts):
+            Sk, weights, eigen = dpss.pmtm(data[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=window_width)
+            for taper in range(3):
+                out[i, :, taper] = (abs(Sk[taper]) ** 2)[:window_width]
+            
+        return np.squeeze(np.sum(out, axis=2)) if singleIm else out
+
+    def compute_reassigned_spectrogram(self, data, window, window_width, incr):
+        """Reassigned spectrogram."""
+        starts = range(0, len(data) - window_width + 1, incr)
+        ft = np.zeros((len(starts), window_width), dtype='complex')
+        ft2 = np.zeros((len(starts), window_width), dtype='complex')
+        
+        for i in starts:
+            ft[i // incr, :] = fft.interfaces.scipy_fft.fft(window * data[i:i + window_width])[:window_width]
+            ft2[i // incr, :] = fft.interfaces.scipy_fft.fft(window * np.roll(data[i:i + window_width], 1))[:window_width]
+
+        CIF = np.mod(np.angle(ft * np.conj(ft2)) / (2 * np.pi), 1.0)
+        delay = (0.5 - np.mod(np.angle(ft * np.conj(np.roll(ft, 1, axis=1))) / (2 * np.pi), 1.0))
+
+        sample_rate = self.audio_data.sample_rate
+        times = (np.tile(np.arange(0, (len(data) - window_width) / sample_rate, incr / sample_rate) + 
+                        window_width / sample_rate / 2, (np.shape(delay)[1], 1)).T + 
+                delay * window_width / sample_rate)
+
+        sg, _, _ = np.histogram2d(times.flatten(), CIF.flatten(), 
+                                weights=np.abs(ft).flatten(), bins=np.shape(ft))
+        return np.absolute(sg[:, :window_width])
+
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType='Standard',sgScale='Linear',nfilters=128,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False,start=None,complex_values=False,stop=None,singleIm=True):
-        """ Compute the spectrogram from amplitude data
-        Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
-        Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
-        Options: multitaper version, but it's slow, mean normalised, even, one-sided.
-        This version is faster than the default versions in pylab and scipy.signal
-        Assumes that the values are not normalised.
-        """
+    def spectrogram(self, window_width=None, incr=None, window='Hann', sgType='Standard', 
+                   sgScale='Linear', nfilters=128, equal_loudness=False, mean_normalise=True, 
+                   onesided=True, need_even=False, start=None, complex_values=False, 
+                   stop=None, singleIm=True):
+        """Compute spectrogram using STFT. FFT size = 2*window_width with zero-padding."""
         # Work on a copy so we don't mutate the stored AudioData buffer
         if start is None:
-            data = self.data.copy() if self.data is not None else None
+            data = self.audio_data.data.copy() if self.audio_data.data is not None else None
         else:
             # TODO: Error checking
-            data = self.data[start:stop].copy()
+            data = self.audio_data.data[start:stop].copy()
         if data is None or len(data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
@@ -438,45 +449,8 @@ class Spectrogram:
         # Always initialize as complex since FFT returns complex values
         self.sg = np.zeros((((len(data)-window_width)//incr)+1,2*window_width), dtype=complex)
 
-        #self.sg = np.copy(data)
-        #if self.sg.dtype != 'float':
-            #self.sg = self.sg.astype('float')
-
-        # Set of window options
-        if window=='Hann':
-            # This is the Hann window
-            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
-        elif window=='Parzen':
-            # Parzen (window_width even)
-            n = np.arange(window_width) - 0.5*window_width
-            window = np.where(np.abs(n)<0.25*window_width,1 - 6*(n/(0.5*window_width))**2*(1-np.abs(n)/(0.5*window_width)), 2*(1-np.abs(n)/(0.5*window_width))**3)
-        elif window=='Welch':
-            # Welch
-            window = 1.0 - ((np.arange(window_width) - 0.5*(window_width-1))/(0.5*(window_width-1)))**2
-        elif window=='Hamming':
-            # Hamming
-            alpha = 0.54
-            beta = 1.-alpha
-            window = alpha - beta*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1))
-        elif window=='Blackman':
-            # Blackman
-            alpha = 0.16
-            a0 = 0.5*(1-alpha)
-            a1 = 0.5
-            a2 = 0.5*alpha
-            window = a0 - a1*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(window_width) / (window_width - 1))
-        elif window=='BlackmanHarris':
-            # Blackman-Harris
-            a0 = 0.358375
-            a1 = 0.48829
-            a2 = 0.14128
-            a3 = 0.01168
-            window = a0 - a1*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(window_width) / (window_width - 1)) - a3*np.cos(6 * np.pi * np.arange(window_width) / (window_width - 1))
-        elif window=='Ones':
-            window = np.ones(window_width)
-        else:
-            print("Unknown window, using Hann")
-            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
+        # Create the windowing function
+        window = self.create_window(window, window_width)
 
         if equal_loudness:
             data = self.equalLoudness(data)
@@ -485,92 +459,17 @@ class Spectrogram:
         if mean_normalise and data is not None:
             data = data - data.mean()
 
-        starts = range(0, len(data) - window_width + 1, incr)
-        #starts = range(0, len(self.sg) - window_width, incr)
-        # Returns either multiple channels or sums them and returns one
-        if sgType=='Multi-tapered':
-            # TODO: hard param -- 3 tapers
-            if specExtra:
-                import dpss
-                [tapers, eigen] = dpss.dpss(window_width, 2.5, 3)
-                counter = 0
-                out = np.zeros(shape=(len(starts),window_width,3))
-                for start in starts:
-                    Sk, weights, eigen = dpss.pmtm(data[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=window_width)
-                    Sk = abs(Sk)**2
-                    #Sk = np.mean(Sk.T * weights, axis=1)
-                    for taper in range(3):
-                        out[:,:,taper][counter:counter + 1,:] = Sk[taper][:window_width].T
-                    counter += 1  
-                if singleIm:
-                    out = np.squeeze(np.sum(out,axis=2))
-                self.sg = out
-                #print("MT: ",np.shape(out))
-            else:
-                print("Option not available")
-        elif sgType=='Reassigned':
-            ft = np.zeros((len(starts), window_width),dtype='complex')
-            ft2 = np.zeros((len(starts), window_width),dtype='complex')
-            for i in starts:
-                winddata = window * data[i:i + window_width]
-                #ft[i // incr, :] = fft.fft(winddata)[:window_width]
-                ft[i // incr, :] = fft.interfaces.scipy_fft.fft(winddata)[:window_width]
-
-                winddata = window * np.roll(data[i:i + window_width],1)
-                #ft2[i // incr, :] = fft.fft(winddata)[:window_width]
-                ft2[i // incr, :] = fft.interfaces.scipy_fft.fft(winddata)[:window_width]
-
-            #print("RS: ",np.shape(ft))
-            # Approximate the derivative by finite differences and get the angle of the complex number
-            CIF = np.mod(np.angle(ft*np.conj(ft2))/(2*np.pi),1.0)
-            delay = (0.5 - np.mod(np.angle(ft*np.conj(np.roll(ft,1,axis=1)))/(2*np.pi),1.0))
-
-            # Messiness. Need to work out where to put each pixel
-            # I wish I could think of a way that didn't need a histogram
-            times = np.tile(np.arange(0, (len(data) - window_width)/self.audio_data.sample_rate, incr/self.audio_data.sample_rate) + window_width/self.audio_data.sample_rate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.audio_data.sample_rate
-            #times = np.tile(np.arange(0, (len(data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
-            self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
-            #print("RS: ",np.shape(self.sg))
-
-            self.sg = np.absolute(self.sg[:, :window_width]) #+ 0.1
-
-            #print("SG range:", np.min(self.sg),np.max(self.sg))
-        else: # Normal spectrogram
-            if need_even:
-                starts = np.hstack((starts, np.zeros((window_width - len(data) % window_width),dtype=int)))
-
-            # this mode is optimized for speed, but reportedly sometimes
-            # results in crashes when lots of large files are batch processed.
-            # The FFTs here could be causing this, but I'm not sure.
-            fftBuffer = np.zeros(2*window_width)
-            #fftBuffer = np.zeros((len(starts), 2*window_width))
-            for i in starts:
-                #fftBuffer[i // incr, window_width//2:3*window_width//2] = np.multiply(window,data[i:i + window_width])
-                #print(np.shape(window),np.shape(data))
-                fftBuffer[window_width//2:3*window_width//2] = np.multiply(window,data[i:i + window_width])
-                fftBuffer = fft.interfaces.scipy_fft.fftshift(fftBuffer)
-
-                #fftBuffer = fft.fftshift(fftBuffer,axes=1)
-                # For exact match with matlab
-                fftBuffer = np.roll(fftBuffer,-1)
-                #fftBuffer = np.roll(fftBuffer,-1,axis=1)
-                self.sg[i//incr,:] = fft.interfaces.scipy_fft.fft(fftBuffer)
-
-            #fftBuffer = np.multiply(window, fftBuffer)
-
-            if onesided:
-                self.sg = self.sg[:,:window_width]
-                #self.sg = fft.fft(fft.fftshift(fftBuffer))[:, :window_width]
-            #else:
-                #fftBuffer = fft.fftshift(fftBuffer,axes=1)
-                #fftBuffer = np.roll(fftBuffer,-1)
-                #self.sg = fft.fft(fftBuffer)
-
-            if not complex_values:
-                self.sg = np.absolute(self.sg)
-            del fftBuffer
-            gc.collect()
-            #sg = (ft*np.conj(ft))[:,window_width // 2:].T
+        # Compute the appropriate spectrogram type
+        if sgType == 'Multi-tapered':
+            self.sg = self.compute_multitaper_spectrogram(data, window_width, incr, singleIm)
+        elif sgType == 'Reassigned':
+            self.sg = self.compute_reassigned_spectrogram(data, window, window_width, incr)
+        else:  # Standard spectrogram
+            # Use the refactored standard FFT method
+            self.sg = self.compute_standard_spectrogram(
+                data, window, window_width, incr, 
+                onesided=onesided, complex_values=complex_values, need_even=need_even
+            )
 
         if sgScale == 'Mel Frequency':
             self.convertToMel(filt='mel',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
@@ -627,7 +526,7 @@ class Spectrogram:
         # Stockwell transform (Brown et al. version)
         # Need to get the starts etc. sorted
 
-        width = len(self.data) // 2
+        width = len(self.audio_data.data) // 2
 
         # Gaussian window for frequencies
         f_half = np.arange(0, width + 1) / (2 * width)
@@ -635,7 +534,7 @@ class Spectrogram:
         p = 2 * np.pi * np.outer(f, 1 / f_half[1:])
         window = np.exp(-p ** 2 / 2).T
 
-        f_tran = fft.interfaces.scipy_fft.fft(self.data, 2*width, overwrite_x=True)
+        f_tran = fft.interfaces.scipy_fft.fft(self.audio_data.data, 2*width, overwrite_x=True)
         #f_tran = fft.fft(self.data, 2*width, overwrite_x=True)
         diag_con = np.linalg.toeplitz(np.conj(f_tran[:width + 1]), f_tran)
         # Remove zero freq line
@@ -660,7 +559,7 @@ class Spectrogram:
 
     def spectral_derivative(self, window_width, incr, K=2, threshold=0.5, returnAll=False):
         """ Compute the spectral derivative """
-        if self.data is None or len(self.data)==0:
+        if self.audio_data.data is None or len(self.audio_data.data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
         if not specExtra:
@@ -668,13 +567,13 @@ class Spectrogram:
             return
 
         # Compute the set of multi-tapered spectrograms
-        starts = range(0, len(self.data) - window_width, incr)
+        starts = range(0, len(self.audio_data.data) - window_width, incr)
         import dpss
         [tapers, eigen] = dpss.dpss(window_width, 2.5, K)
         sg = np.zeros((len(starts), window_width, K), dtype=complex)
         for k in range(K):
             for i in starts:
-                sg[i // incr, :, k] = tapers[:, k] * self.data[i:i + window_width]
+                sg[i // incr, :, k] = tapers[:, k] * self.audio_data.data[i:i + window_width]
             sg[:, :, k] = fft.interfaces.scipy_fft.fft(sg[:, :, k])
             #sg[:, :, k] = fft.fft(sg[:, :, k])
         sg = sg[:, window_width//2:, :]
@@ -771,7 +670,7 @@ class Spectrogram:
         # returns pitch in Hz for each window of Wsamples/2
         # over the entire data provided (so full page here)
         thr = 0.5
-        pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.audio_data.sample_rate)
+        pitchshape = Shapes.fundFreqShaper(self.audio_data.data, Wsamples, thr, self.audio_data.sample_rate)
         #pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.sampleRate)
         pitch = pitchshape.y  # pitch is a shape with y in Hz
 
@@ -895,10 +794,10 @@ class Spectrogram:
             #ncoeff = 2 + self.sampleRate // 1000
 
         window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
-        starts = range(0, len(self.data) - self.window_width, self.window_width)
+        starts = range(0, len(self.audio_data.data) - self.window_width, self.window_width)
         freqs = []
         for start in starts:
-            x = self.data[start:start + self.window_width]*window
+            x = self.audio_data.data[start:start + self.window_width]*window
             # High-pass filter
             x = signal.lfilter([1], [1., 0.63], x)
 
@@ -1061,22 +960,22 @@ class Spectrogram:
             return
         elif str(alg) == "Bandpass":
             try:
-                self.audio_data.replace_data(SignalProc.bandpassFilter(self.data,self.audio_data.sample_rate, start=start, end=end))
+                self.audio_data.replace_data(SignalProc.bandpassFilter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end))
             except Exception:
-                self.audio_data.data = SignalProc.bandpassFilter(self.data,self.audio_data.sample_rate, start=start, end=end)
+                self.audio_data.data = SignalProc.bandpassFilter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end)
             #self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
         elif str(alg) == "Butterworth Bandpass":
             try:
-                self.audio_data.replace_data(SignalProc.ButterworthBandpass(self.data, self.audio_data.sample_rate, low=start, high=end))
+                self.audio_data.replace_data(SignalProc.ButterworthBandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end))
             except Exception:
-                self.audio_data.data = SignalProc.ButterworthBandpass(self.data, self.audio_data.sample_rate, low=start, high=end)
+                self.audio_data.data = SignalProc.ButterworthBandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end)
             #self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
         else:
             # Median Filter
             try:
-                self.audio_data.replace_data(SignalProc.medianFilter(self.data,int(str(width))))
+                self.audio_data.replace_data(SignalProc.medianFilter(self.audio_data.data,int(str(width))))
             except Exception:
-                self.audio_data.data = SignalProc.medianFilter(self.data,int(str(width)))
+                self.audio_data.data = SignalProc.medianFilter(self.audio_data.data,int(str(width)))
 
     def generateFeaturesNN(self, seglen, real_spec_width, frame_size, frame_hop=None, NNfRange=None):
         '''

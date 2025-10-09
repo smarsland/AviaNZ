@@ -123,7 +123,7 @@ class NN:
     def generateImage(self, audiodata):
         ''' Generate spectrogram image'''
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
-        sp.data = audiodata
+        sp.audio_data.data = audiodata
         sp.audioFormat.sample_rate = self.fs
         sgRaw = sp.spectrogram(self.windowwidth, self.inc)
         maxg = np.max(sgRaw)

@@ -487,7 +487,7 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
 
     from src.core import Spectrogram
     sp = Spectrogram.Spectrogram(window, window)     # No overlap
-    sp.data = data
+    sp.audio_data.data = data
     sp.audioFormat.sample_rate = sampleRate
     sg = sp.spectrogram()
 

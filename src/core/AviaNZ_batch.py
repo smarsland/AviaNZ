@@ -480,13 +480,13 @@ class AviaNZ_batchProcess():
             samplesInPage = 900 * 16000
 
         # (ceil division for large integers)
-        numPages = (len(self.sp.data) - 1) // samplesInPage + 1
+        numPages = (len(self.sp.audio_data.data) - 1) // samplesInPage + 1
 
         # Actual segmentation happens here:
         for page in range(numPages):
             print("Segmenting page %d / %d" % (page+1, numPages))
             start = page*samplesInPage
-            end = min(start+samplesInPage, len(self.sp.data))
+            end = min(start+samplesInPage, len(self.sp.audio_data.data))
             # TODO: Still self.sp problems!
             thisPageLen = (end-start) / self.sp.audio_data.sample_rate
             #thisPageLen = (end-start) /16000 # self.sp.sampleRate
@@ -509,7 +509,7 @@ class AviaNZ_batchProcess():
                 # Post-process
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end], sampleRate=self.sp.audio_data.sample_rate, segments=thisPageSegs, subfilter={}, cert=0)
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data[start:end], sampleRate=self.sp.audio_data.sample_rate, segments=thisPageSegs, subfilter={}, cert=0)
                 #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 if self.options[8] != "":
                     post.joinGaps(self.options[9])
@@ -552,7 +552,7 @@ class AviaNZ_batchProcess():
                     useWind = self.options[1] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
                     # Note: readBatch will intelligently handle resampling from self.sp.audio_data.sample_rate
                     # to targetSampleRate, including node adjustment optimizations for 2x/4x ratios
-                    self.ws.readBatch(self.sp.data[start:end], self.sp.audio_data.sample_rate, 
+                    self.ws.readBatch(self.sp.audio_data.data[start:end], self.sp.audio_data.sample_rate, 
                                      d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=useWind)
                 
                 for speciesix in range(len(filtersAtSampleRate)):
@@ -646,7 +646,7 @@ class AviaNZ_batchProcess():
         subfilter = spInfo["Filters"][filtix]
         
         # PostProcess handles any needed resampling from current rate to target rate
-        post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.data[start:end],
+        post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data[start:end],
                             sampleRate=self.sp.audio_data.sample_rate, 
                             tgtsampleRate=spInfo["SampleRate"],
                             segments=segments[filtix], subfilter=subfilter,
@@ -712,7 +712,7 @@ class AviaNZ_batchProcess():
             segmentList.metadata = dict()
         segmentList.metadata["Operator"] = "Auto"
         segmentList.metadata["Reviewer"] = ""
-        segmentList.metadata["Duration"] = float(len(self.sp.data))/self.sp.audio_data.sample_rate
+        segmentList.metadata["Duration"] = float(len(self.sp.audio_data.data))/self.sp.audio_data.sample_rate
         segmentList.metadata["noiseLevel"] = None
         segmentList.metadata["noiseTypes"] = []
 
@@ -766,7 +766,7 @@ class AviaNZ_batchProcess():
         else:
             self.sp.readSoundFile(filename)
 
-        print("Read %d samples, %f s at %d Hz" % (len(self.sp.data), float(len(self.sp.data))/self.sp.audio_data.sample_rate, self.sp.audio_data.sample_rate))
+        print("Read %d samples, %f s at %d Hz" % (len(self.sp.audio_data.data), float(len(self.sp.audio_data.data))/self.sp.audio_data.sample_rate, self.sp.audio_data.sample_rate))
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
@@ -775,12 +775,12 @@ class AviaNZ_batchProcess():
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
             self.segments.metadata["Reviewer"] = ""
-            self.segments.metadata["Duration"] = float(len(self.sp.data))/self.sp.audio_data.sample_rate
+            self.segments.metadata["Duration"] = float(len(self.sp.audio_data.data))/self.sp.audio_data.sample_rate
             # wipe all segments:
             print("Wiping all previous segments")
             self.segments.clear()
         else:
-            hasmetadata = self.segments.parseJSON(filename+'.data', float(len(self.sp.data))/self.sp.audio_data.sample_rate)
+            hasmetadata = self.segments.parseJSON(filename+'.data', float(len(self.sp.audio_data.data))/self.sp.audio_data.sample_rate)
             if not hasmetadata:
                     # TODO: Should save this...
                     self.segments.metadata["Operator"] = "Auto"

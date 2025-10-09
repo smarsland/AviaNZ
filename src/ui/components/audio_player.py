@@ -183,7 +183,7 @@ class ControllableAudio(QAudioSink):
         start = max(0, int(start * self.audioFormat.sample_rate // 1000))
 
         if audiodata is None:
-            segment = self.sp.data[start:int(stop * self.audioFormat.sample_rate // 1000)]
+            segment = self.sp.audio_data.data[start:int(stop * self.audioFormat.sample_rate // 1000)]
         else:
             segment = audiodata
 

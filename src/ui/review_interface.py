@@ -897,7 +897,7 @@ class ReviewInterface(QMainWindow):
                         sp.sg = sp.normalisedSpec("Batmode")
                     else:
                         sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=True)
-                        sp.data = SignalProc.bandpassFilter(sp.data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                        sp.audio_data.data = SignalProc.bandpassFilter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
                         sp.sg = sp.spectrogram(window_width=self.config['window_width'], 
                                              incr=self.config['incr'],
                                              window=self.config['windowType'],
@@ -1695,7 +1695,7 @@ class ReviewInterface(QMainWindow):
                             sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.data = SignalProc.bandpassFilter(sp.data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                            sp.audio_data.data = SignalProc.bandpassFilter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             # TODO: Insist on log scale?
@@ -1768,7 +1768,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.audio_data.data, sp.audio_data.sample_rate, sp.incr,
                                                    original_segment, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
         else:
@@ -1797,7 +1797,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.audio_data.data, sp.audio_data.sample_rate, sp.incr,
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
 
@@ -1875,7 +1875,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.audio_data.data, sp.audio_data.sample_rate, sp.incr,
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
             else:
@@ -1925,7 +1925,7 @@ class ReviewInterface(QMainWindow):
                 else:
                     sg = sp.normalisedSpec(self.config['sgNormMode'])
 
-                self.humanClassifyDialog1.setImage(sg, sp.data, sp.audio_data.sample_rate, sp.incr,
+                self.humanClassifyDialog1.setImage(sg, sp.audio_data.data, sp.audio_data.sample_rate, sp.incr,
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
             else:

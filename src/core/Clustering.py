@@ -759,7 +759,7 @@ class Clustering:
         audiodata = self.loadFile(filename=filename, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
         start = seg[0]
         #self.sp = Spectrogram.Spectrogram()
-        self.sp.data = audiodata
+        self.sp.audio_data.data = audiodata
         self.sp.audioFormat.sample_rate = fs
         _ = self.sp.spectrogram()
         #if isinstance(audiodata,str):
@@ -912,7 +912,7 @@ class Clustering:
         
         #self.sp.resample(fs)
         sampleRate = self.sp.audioFormat.sample_rate
-        audiodata = self.sp.data
+        audiodata = self.sp.audio_data.data
 
         # # pre-process
         if denoise:
@@ -1036,7 +1036,7 @@ class Clustering:
                                                       offset=seg[0], fs=fs, denoise=denoise, f1=f_1, f2=f_2)
                         start = int(seg[0] * fs)
                         sp = Spectrogram.Spectrogram(256, 128)
-                        sp.data = audiodata
+                        sp.audio_data.data = audiodata
                         sp.audioFormat.sample_rate = fs
                         #sgRaw = sp.spectrogram(256, 128)
                         sgRaw = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])

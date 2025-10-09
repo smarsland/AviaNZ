@@ -698,7 +698,7 @@ class Segmenter:
     def data(self):
         """Access audio data through Spectrogram reference (no copy)."""
         if self.sp is not None:
-            return self.sp.data
+            return self.sp.audio_data.data
         return None
 
     def setNewData(self, sp):
@@ -1603,7 +1603,7 @@ class PostProcess:
             if fileName:
                 sp.readSoundFile(fileName, secs, seg[0])
                 self.sampleRate = sp.audio_data.sample_rate
-                self.audioData = sp.data
+                self.audioData = sp.audio_data.data
             else:
                 sp.audio_data = AudioData(data=self.audioData, sample_rate=self.sampleRate, file_length=len(self.audioData), 
                                           sample_format='float32', sample_size=32, channels=1)
@@ -1618,7 +1618,7 @@ class PostProcess:
                 Wsamples = int(minwin)
 
             # returns pitch in Hz for each window of Wsamples/2.
-            pitch = Shapes.fundFreqShaper(sp.data, Wsamples, thr, sp.audio_data.sample_rate)
+            pitch = Shapes.fundFreqShaper(sp.audio_data.data, Wsamples, thr, sp.audio_data.sample_rate)
             pitch = pitch.y
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]
