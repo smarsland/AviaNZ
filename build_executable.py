@@ -23,7 +23,7 @@ includefiles_list.append('Config/AviaNZconfig.txt')
 # Dependencies are automatically detected, but it might need
 # fine tuning.
 buildOptions = dict(
-    packages = ['numpy.core._methods','numpy.linalg._umath_linalg','numpy.lib.format','src.core.AviaNZ_batch','src.ui.colourMaps.colourMaps','src.ui.dialogs.segmentation','src.core.Segment','src.core.SignalProc','src.core.SupportClasses','src.core.WaveletSegment','src.core.WaveletFunctions','src.utils.wavio'],
+    packages = ['numpy.core._methods','numpy.linalg._umath_linalg','numpy.lib.format','src.core.batch_processor','src.ui.colourMaps.colourMaps','src.ui.dialogs.segmentation','src.core.Segment','src.core.SignalProc','src.core.SupportClasses','src.core.WaveletSegment','src.core.WaveletFunctions','src.utils.wavio'],
     excludes = ['tkinter'],
     includes = [] ,
     include_files = includefiles_list

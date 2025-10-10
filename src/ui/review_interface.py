@@ -32,7 +32,7 @@ import traceback
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
-from src.core.AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
+from src.utils.exceptions import GentleExitException
 from src.core import Spectrogram, SignalProc
 from src.core import Segment
 from src.core import SupportClasses

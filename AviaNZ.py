@@ -159,11 +159,31 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     if cli:
         print("Starting AviaNZ in CLI mode")
         if batchmode:
-            from src.core import AviaNZ_batch
+            from src.cli.batch_cli import run_cli_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
                 wind_str = "OLS wind filter (recommended)" if wind else "None"
-                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recognisers=recogniser, subset=subset, intermittent=intermittent, wind=wind_str, mergeSyllables=merge_syllables, overwrite=True, timeWindow_s=time_start, timeWindow_e=time_end, protocolSize=protocol_size, protocolInterval=protocol_interval, maxgap=maxgap, minlen=minlen, maxlen=maxlen)
-                print("Analysis complete, closing AviaNZ")
+                result = run_cli_batch(
+                    configdir=configdir, 
+                    directory=sdir1, 
+                    recognisers=[recogniser], 
+                    subset=subset, 
+                    intermittent=intermittent, 
+                    wind=wind_str, 
+                    mergeSyllables=merge_syllables, 
+                    overwrite=True, 
+                    timeWindow_s=time_start, 
+                    timeWindow_e=time_end, 
+                    protocolSize=protocol_size, 
+                    protocolInterval=protocol_interval, 
+                    maxgap=maxgap, 
+                    minlen=minlen, 
+                    maxlen=maxlen
+                )
+                if result == 0:
+                    print("Analysis complete, closing AviaNZ")
+                else:
+                    print("Analysis failed")
+                    sys.exit(result)
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
                 raise

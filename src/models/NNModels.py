@@ -190,3 +190,24 @@ def loadModelFromJson(jsonPath):
             })
     model_json = json.dumps(config)
     return model_from_json(model_json, custom_objects=customObjectScopes)
+
+
+def loadModelFromH5(h5Path):
+    """Load a model directly from an H5 file with compatibility handling."""
+    try:
+        return tf.keras.models.load_model(h5Path, custom_objects=customObjectScopes)
+    except (TypeError, ValueError) as e:
+        if 'dtype' in str(e) or 'GlorotUniform' in str(e):
+            print(f"Compatibility issue loading H5 model, trying alternative approach: {e}")
+            # Try loading with compile=False and then recompiling
+            try:
+                model = tf.keras.models.load_model(h5Path, compile=False, custom_objects=customObjectScopes)
+                # Recompile with default settings
+                model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+                return model
+            except Exception as e2:
+                print(f"Alternative loading also failed: {e2}")
+                # If both fail, suggest converting to JSON format
+                raise ValueError(f"Unable to load H5 model {h5Path}. Consider converting to JSON format. Original error: {e}")
+        else:
+            raise

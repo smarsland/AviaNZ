@@ -39,7 +39,7 @@ from src.core import SupportClasses
 from src.core import Spectrogram
 from src.models import NN
 from src.core import Segment, WaveletSegment
-from src.core import AviaNZ_batch
+from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
 
@@ -656,6 +656,21 @@ class NNtrain:
         return re.sub(r'[^A-Za-z0-9()-]', "_", species)
 
 
+class TestModeCallbacks(BatchProcessorCallbacks):
+    """Simple callbacks for test mode - auto-confirm everything"""
+    
+    def ask_resume_analysis(self, message: str) -> bool:
+        return False  # Don't resume in test mode
+        
+    def confirm_analysis_launch(self, message: str) -> bool:
+        return True  # Auto-confirm in test mode
+        
+    def update_progress(self, current: int, total: int, message: str) -> None:
+        pass  # Silent in test mode
+        
+    def check_cancelled(self) -> bool:
+        return False  # Never cancelled in test mode
+
 class NNtest:
     # Test a previously-trained NN
 
@@ -702,8 +717,16 @@ class NNtest:
             return
 
         # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
-        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test", sdir=self.testDir, recognisers=filtname, wind="None")
+        callbacks = TestModeCallbacks()
+        batch_processor = BatchProcessor(
+            configdir=self.configdir,
+            directory=self.testDir,
+            recognisers=[filtname],
+            callbacks=callbacks,
+            wind="None"
+        )
         # NOTE: will use wind-robust detection
+        batch_processor.process_files()
 
         # 2. Report statistics of WF followed by general post-proc steps (no NN but wind-merge neighbours-delete short)
         self.text = self.getSummary(NN=False)

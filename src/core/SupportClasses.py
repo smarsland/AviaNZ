@@ -271,25 +271,45 @@ class ConfigLoader(object):
             if "NN" not in filt:
                 continue
             elif filt["NN"]:
-                if species == "NZ Bats":
-                    model = NNModels.loadModelFromH5(os.path.join(dirnn, filt["NN"]["NN_name"]+'.h5'))
-                    targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
-                else:
-                    model = NNModels.loadModelFromJson(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.json')
-                    if os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5'):
-                        model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.h5')
-                    elif os.path.isfile(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5'):
-                        model.load_weights(os.path.join(dirnn, filt["NN"]["NN_name"]) + '.weights.h5')
-                    model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
-                    if 'fRange' in filt["NN"]:
-                        targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
-                                                    filt["NN"]["output"],
-                                                    filt["NN"]["windowInc"], filt["NN"]["thr"], True,
-                                                    filt["NN"]["fRange"]]
+                # Determine loading method based on NN_name and available files
+                nn_name = filt["NN"]["NN_name"]
+                h5_path = os.path.join(dirnn, nn_name + '.h5')
+                json_path = os.path.join(dirnn, nn_name + '.json')
+                
+                try:
+                    # Use H5 loading if only H5 file exists and no JSON, or if it's the original "NZ Bats" model
+                    if (nn_name == "NZ Bats" and os.path.isfile(h5_path) and not os.path.isfile(json_path)):
+                        model = NNModels.loadModelFromH5(h5_path)
+                        targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
+                    elif os.path.isfile(json_path):
+                        # Use JSON loading with weights
+                        model = NNModels.loadModelFromJson(json_path)
+                        if os.path.isfile(h5_path):
+                            model.load_weights(h5_path)
+                        elif os.path.isfile(os.path.join(dirnn, nn_name + '.weights.h5')):
+                            model.load_weights(os.path.join(dirnn, nn_name + '.weights.h5'))
+                        model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
+                        if 'fRange' in filt["NN"]:
+                            targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                        filt["NN"]["output"],
+                                                        filt["NN"]["windowInc"], filt["NN"]["thr"], True,
+                                                        filt["NN"]["fRange"]]
+                        else:
+                            targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                        filt["NN"]["output"], filt["NN"]["windowInc"],
+                                                        filt["NN"]["thr"], False]
+                    elif os.path.isfile(h5_path):
+                        # Fallback: try H5 loading even if we preferred JSON
+                        print(f"No JSON found for {nn_name}, trying H5 loading...")
+                        model = NNModels.loadModelFromH5(h5_path)
+                        # Store with species key for backward compatibility
+                        targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
                     else:
-                        targetmodels[filt["NN"]["NN_name"]] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
-                                                    filt["NN"]["output"], filt["NN"]["windowInc"],
-                                                    filt["NN"]["thr"], False]
+                        print(f"Warning: No model files found for {nn_name}")
+                        continue
+                except Exception as e:
+                    print(f"Error loading model {nn_name}: {e}")
+                    continue
         print("Loaded NN models:", list(targetmodels.keys()))
         return targetmodels
 

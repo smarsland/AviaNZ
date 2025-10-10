@@ -50,7 +50,6 @@ class LightedFileList(QListWidget):
         self.setMinimumWidth(150)
 
         # for the traffic light icons
-        self.pixmap = QPixmap(10, 10)
         self.blackpen = fn.mkPen(color=(160,160,160,255), width=2)
         self.tempsl = Segment.SegmentList()
 
@@ -209,27 +208,29 @@ class LightedFileList(QListWidget):
             return
 
         curritem = index[0]
+        # Create a new pixmap for each icon to avoid concurrent painter access
+        pixmap = QPixmap(10, 10)
         # Repainting identical to paintItem
         if cert == -1:
             # .data exists, but no annotations
-            self.pixmap.fill(QColor(255,255,255,0))
-            painter = QPainter(self.pixmap)
+            pixmap.fill(QColor(255,255,255,0))
+            painter = QPainter(pixmap)
             painter.setPen(self.blackpen)
-            painter.drawRect(self.pixmap.rect())
+            painter.drawRect(pixmap.rect())
             painter.end()
-            curritem.setIcon(QIcon(self.pixmap))
+            curritem.setIcon(QIcon(pixmap))
             # no change to self.minCertainty
         elif cert == 0:
-            self.pixmap.fill(self.ColourNone)
-            curritem.setIcon(QIcon(self.pixmap))
+            pixmap.fill(self.ColourNone)
+            curritem.setIcon(QIcon(pixmap))
             self.minCertainty = 0
         elif cert < 100:
-            self.pixmap.fill(self.ColourPossibleDark)
-            curritem.setIcon(QIcon(self.pixmap))
+            pixmap.fill(self.ColourPossibleDark)
+            curritem.setIcon(QIcon(pixmap))
             self.minCertainty = min(self.minCertainty, cert)
         else:
-            self.pixmap.fill(self.ColourNamed)
-            curritem.setIcon(QIcon(self.pixmap))
+            pixmap.fill(self.ColourNamed)
+            curritem.setIcon(QIcon(pixmap))
             # self.minCertainty cannot be changed by a cert=100 segment
 
     def paintItem(self, item, datafile):
@@ -256,32 +257,35 @@ class LightedFileList(QListWidget):
                 print(e)
                 mincert = -1
 
+            # Create a new pixmap for each icon to avoid concurrent painter access
+            pixmap = QPixmap(10, 10)
             if mincert == -1:
                 # .data exists, but no annotations
-                self.pixmap.fill(QColor(255,255,255,0))
-                painter = QPainter(self.pixmap)
+                pixmap.fill(QColor(255,255,255,0))
+                painter = QPainter(pixmap)
                 painter.setPen(self.blackpen)
-                painter.drawRect(self.pixmap.rect())
+                painter.drawRect(pixmap.rect())
                 painter.end()
-                item.setIcon(QIcon(self.pixmap))
+                item.setIcon(QIcon(pixmap))
 
                 # no change to self.minCertainty
             elif mincert == 0:
-                self.pixmap.fill(self.ColourNone)
-                item.setIcon(QIcon(self.pixmap))
+                pixmap.fill(self.ColourNone)
+                item.setIcon(QIcon(pixmap))
                 self.minCertainty = 0
             elif mincert < 100:
-                self.pixmap.fill(self.ColourPossibleDark)
-                item.setIcon(QIcon(self.pixmap))
+                pixmap.fill(self.ColourPossibleDark)
+                item.setIcon(QIcon(pixmap))
                 self.minCertainty = min(self.minCertainty, mincert)
             else:
-                self.pixmap.fill(self.ColourNamed)
-                item.setIcon(QIcon(self.pixmap))
+                pixmap.fill(self.ColourNamed)
+                item.setIcon(QIcon(pixmap))
                 # self.minCertainty cannot be changed by a cert=100 segment
         else:
             # no .data for this sound file
-            self.pixmap.fill(QColor(255,255,255,0))
-            item.setIcon(QIcon(self.pixmap))
+            pixmap = QPixmap(10, 10)
+            pixmap.fill(QColor(255,255,255,0))
+            item.setIcon(QIcon(pixmap))
 
         # collect some extra info about this file as we've read it anyway
         self.spList.update(filesp)

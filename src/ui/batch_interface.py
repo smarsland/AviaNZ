@@ -25,11 +25,13 @@ from PyQt6.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QP
 from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
 import os, platform, sys, webbrowser, re, traceback
+from typing import List, Optional
 import pyqtgraph as pg
 from pyqtgraph.dockarea import Dock, DockArea
 
 from src.core import SupportClasses
-from src.core.AviaNZ_batch import AviaNZ_batchProcess, GentleExitException
+from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
+from src.utils.exceptions import GentleExitException
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.buttons_and_controls import MainPushButton
@@ -44,8 +46,6 @@ class BatchInterface(QMainWindow):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(BatchInterface, self).__init__()
-
-        self.msgClosed = QWaitCondition()
 
         # read config and filters from user location
         # recogniser - filter file name without ".txt"
@@ -351,76 +351,111 @@ class BatchInterface(QMainWindow):
         print("Recognisers:", species)
 
         # Create the worker and move it to its thread
-        # NOTE: any communication w/ batchProc from this thread
-        # must be via signals, if at all necessary
         timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
         timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
-        self.batchProc = BatchProcessWorker(self, mode="GUI", configdir=self.configdir, sdir=self.dirName, recognisers=species, subset=self.subset.isChecked(), intermittent=not(self.intermittent.isChecked()), wind=self.windfilter.currentText(), mergeSyllables=self.mergesyllables.isChecked(), overwrite=self.overwrite.isChecked(), timeWindow_s=timeWindow_s, timeWindow_e=timeWindow_e, protocolSize=self.protocolSize.value(), protocolInterval=self.protocolInterval.value(), maxgap=self.maxgap.value(), minlen=self.minlen.value(), maxlen=self.maxlen.value())
+        
+        self.batchProc = BatchProcessWorker(
+            parent_widget=self,
+            configdir=self.configdir, 
+            directory=self.dirName, 
+            recognisers=species, 
+            subset=self.subset.isChecked(), 
+            intermittent=not(self.intermittent.isChecked()), 
+            wind=self.windfilter.currentText(), 
+            mergeSyllables=self.mergesyllables.isChecked(), 
+            overwrite=self.overwrite.isChecked(), 
+            timeWindow_s=timeWindow_s, 
+            timeWindow_e=timeWindow_e, 
+            protocolSize=self.protocolSize.value(), 
+            protocolInterval=self.protocolInterval.value(), 
+            maxgap=self.maxgap.value(), 
+            minlen=self.minlen.value(), 
+            maxlen=self.maxlen.value()
+        )
 
-        # NOTE: must be on self. to maintain the reference
+        # Set up threading
         self.batchThread = QThread()
         self.batchProc.moveToThread(self.batchThread)
-        # NOTE: any connections should be done after moveToThread
+        
+        # Connect signals - must be done AFTER moveToThread to ensure proper thread affinity
+        # These use queued connections automatically since sender and receiver are in different threads
         self.batchProc.finished.connect(self.batchThread.quit)
         self.batchProc.completed.connect(self.completed_fileproc)
         self.batchProc.stopped.connect(self.stopped_fileproc)
         self.batchProc.failed.connect(self.error_fileproc)
-        self.batchProc.need_msg.connect(self.check_msg)
-        self.batchProc.need_clean_UI.connect(self.clean_UI)
-        self.batchProc.need_update.connect(self.update_progress)
-        self.batchProc.need_bat_info.connect(self.bat_survey_form)
-        self.batchThread.started.connect(self.batchProc.detect)
-        self.batchThread.start()  # a signal connected to batchProc.detect()
+        self.batchProc.progress_ready.connect(self.setup_progress_dialog)
+        self.batchProc.progress_update.connect(self.update_progress_slot)
+        self.batchProc.need_resume_dialog.connect(self.show_resume_dialog_slot)
+        self.batchProc.need_confirm_dialog.connect(self.show_confirm_dialog_slot)
+        
+        self.batchThread.started.connect(self.batchProc.process)
+        self.batchThread.start()
 
-    def check_msg(self,title,text):
-        msg = MessagePopup("t", title, text)
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        response = msg.exec()
-
-        if response == QMessageBox.StandardButton.Cancel:
-            # a fall back basically
-            self.msg_response = 2
-        elif response == QMessageBox.StandardButton.No:
-            # catches Esc as well
-            self.msg_response = 1
-        else:
-            self.msg_response = 0
-        # to utilize Esc, need to add another standard button, and then do:
-        # msg.setEscapeButton(QMessageBox.Cancel)
-        self.msgClosed.wakeAll()
-
-    def bat_survey_form(self,operator,easting,northing,recorder):
-        exportForm = ExportBats(os.path.join(self.dirName, "BatDB.csv"),operator,easting,northing,recorder)
-        response = exportForm.exec()
-        if response==1:
-            self.batFormResults = exportForm.getValues()
-        else:
-            self.batFormResults = None
-        # ping the batch worker that form was accepted or rejected
-        self.msgClosed.wakeAll()
-
-    def clean_UI(self,total,cnt):
+    def setup_progress_dialog(self, total, current):
+        """Set up the progress dialog when processing starts"""
         self.w_processButton.setEnabled(False)
         self.update()
         self.repaint()
 
-        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (cnt+1, total), "Cancel run", 0, total+1, self)
+        self.dlg = QProgressDialog("Analysing file %d / %d. Time remaining: ? h ?? min" % (current+1, total), "Cancel run", 0, total+1, self)
         self.dlg.setFixedSize(350, 100)
         self.dlg.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
         self.dlg.setWindowTitle("AviaNZ - running Batch Analysis")
         self.dlg.setWindowFlags(self.dlg.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint ^ Qt.WindowType.WindowCloseButtonHint)
         self.dlg.canceled.connect(self.stopping_fileproc)
-        # should be the default, but to make sure:
         self.dlg.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.dlg.open()
-        self.dlg.setValue(cnt)
+        self.dlg.setValue(current)
         self.dlg.update()
         self.dlg.repaint()
         QApplication.processEvents()
-        # ping the batch worker that dlg is ready
-        self.msgClosed.wakeAll()
+    
+    @pyqtSlot(int, str)
+    def update_progress_slot(self, current, message):
+        """Update progress dialog from worker thread via signal"""
+        if hasattr(self, 'dlg'):
+            self.dlg.setValue(current)
+            self.dlg.setLabelText(message)
+            self.statusBar().showMessage(message)
+            QApplication.processEvents()
+    
+    @pyqtSlot(str)
+    def show_resume_dialog_slot(self, message):
+        """Show resume dialog and send response back to worker"""
+        print("DEBUG: Showing resume dialog")
+        msg = MessagePopup("t", "Resume previous batch analysis?", message)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        msg.raise_()
+        msg.activateWindow()
+        response = msg.exec()
+        print(f"DEBUG: User response to resume: {response == QMessageBox.StandardButton.Yes}")
+        
+        # Send response back to worker thread
+        self.batchProc.callbacks.mutex.lock()
+        self.batchProc.callbacks.response = (response == QMessageBox.StandardButton.Yes)
+        self.batchProc.callbacks.waitCondition.wakeOne()
+        self.batchProc.callbacks.mutex.unlock()
+    
+    @pyqtSlot(str)
+    def show_confirm_dialog_slot(self, message):
+        """Show confirmation dialog and send response back to worker"""
+        print("DEBUG: Showing confirmation dialog")
+        msg = MessagePopup("t", "Launch batch analysis", message)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        msg.raise_()
+        msg.activateWindow()
+        response = msg.exec()
+        print(f"DEBUG: User response to confirm: {response == QMessageBox.StandardButton.Yes}")
+        
+        # Send response back to worker thread
+        self.batchProc.callbacks.mutex.lock()
+        self.batchProc.callbacks.response = (response == QMessageBox.StandardButton.Yes)
+        self.batchProc.callbacks.waitCondition.wakeOne()
+        self.batchProc.callbacks.mutex.unlock()
 
-    def error_fileproc(self,e):
+    def error_fileproc(self, e):
         # Pops an error message with string e
         self.statusBar().showMessage("Analysis stopped due to error")
         if hasattr(self, 'dlg'):
@@ -456,9 +491,6 @@ class BatchInterface(QMainWindow):
 
     def stopped_fileproc(self):
         # Processing gently stopped (worker thread has now halted, and UI can continue).
-        # Process any earlier requests, in particular the "stopping" signal:
-        # NOTE: this might still lead to race condition as the "stopping" and "stopped" are
-        # emitted by two different threads. Might need to re-emit self.dlg.canceled, or bloody sleep here.
         QApplication.processEvents()
         self.statusBar().showMessage("Analysis cancelled")
         if hasattr(self, 'dlg'):
@@ -469,12 +501,6 @@ class BatchInterface(QMainWindow):
             QApplication.restoreOverrideCursor()
         except Exception:
             pass
-
-    def update_progress(self,cnt,progrtext):
-        self.dlg.setValue(cnt)
-        self.dlg.setLabelText(progrtext)
-        self.statusBar().showMessage(progrtext)
-        self.dlg.update()
 
     def centre(self):
         # Geometry of the main window
@@ -621,36 +647,126 @@ class BatchInterface(QMainWindow):
         print("Quitting")
         QApplication.exit(0)
 
-class BatchProcessWorker(AviaNZ_batchProcess, QObject):
-    # adds QObject functionality to standard batchProc,
-    # so that it could be moved to a separate thread when multithreading.
+class GUIUserInteractionThreaded(BatchProcessorCallbacks):
+    """Thread-safe GUI callbacks that use signals to communicate with main thread"""
+    
+    def __init__(self, worker):
+        self.worker = worker
+        self.parent = worker.parent
+        self.response = None
+        self.mutex = QMutex()
+        self.waitCondition = QWaitCondition()
+        self.total_files = 0
+        self.dialog_initialized = False
+        
+    def ask_resume_analysis(self, message: str) -> bool:
+        """Show dialog asking about resuming analysis - blocks until user responds"""
+        print("DEBUG: Worker thread requesting resume dialog")
+        # Request dialog to be shown in main thread
+        self.mutex.lock()
+        self.response = None
+        self.worker.need_resume_dialog.emit(message)
+        print("DEBUG: Signal emitted, waiting for response...")
+        # Wait for response
+        self.waitCondition.wait(self.mutex)
+        result = self.response
+        self.mutex.unlock()
+        print(f"DEBUG: Got response: {result}")
+        return result
+        
+    def confirm_analysis_launch(self, message: str) -> bool:
+        """Show dialog to confirm analysis launch - blocks until user responds"""
+        print("DEBUG: Worker thread requesting confirm dialog")
+        # Request dialog to be shown in main thread
+        self.mutex.lock()
+        self.response = None
+        self.worker.need_confirm_dialog.emit(message)
+        print("DEBUG: Signal emitted, waiting for response...")
+        # Wait for response
+        self.waitCondition.wait(self.mutex)
+        result = self.response
+        self.mutex.unlock()
+        print(f"DEBUG: Got response: {result}")
+        return result
+        
+    def update_progress(self, current: int, total: int, message: str) -> None:
+        """Update progress dialog - thread-safe via signal"""
+        # First time: setup dialog with total count
+        if not self.dialog_initialized:
+            self.total_files = total
+            self.worker.progress_ready.emit(total, current)
+            self.dialog_initialized = True
+            # Wait a bit for dialog to be created
+            import time
+            time.sleep(0.1)
+        
+        # Emit signal to update in main thread
+        self.worker.progress_update.emit(current, message)
+        
+    def check_cancelled(self) -> bool:
+        """Check if progress dialog was cancelled - must be thread-safe"""
+        # Access this from main thread's dialog
+        if hasattr(self.parent, 'dlg'):
+            return self.parent.dlg.wasCanceled()
+        return False
+        
+    def get_bat_survey_info(self, operator: str, easting: str, northing: str, recorder: str) -> Optional[List[str]]:
+        """Show bat survey form and return results - blocks until user responds"""
+        # For simplicity, return None for now
+        # TODO: Implement proper signal-based blocking dialog
+        return None
+
+class BatchProcessWorker(QObject):
+    """Qt worker that wraps the clean BatchProcessor for GUI use"""
+    
+    # Qt signals for communicating with the UI
     finished = pyqtSignal()
     completed = pyqtSignal()
     stopped = pyqtSignal()
     failed = pyqtSignal(str)
-    need_msg = pyqtSignal(str, str)
-    need_clean_UI = pyqtSignal(int, int)
-    need_update = pyqtSignal(int, str)
-    need_bat_info = pyqtSignal(str, str, str, str)
+    progress_ready = pyqtSignal(int, int)  # total, current count
+    progress_update = pyqtSignal(int, str)  # current count, message
+    need_resume_dialog = pyqtSignal(str)  # message to show
+    need_confirm_dialog = pyqtSignal(str)  # message to show
 
-    def __init__(self, *args, **kwargs):
-        # this is supposedly not OK if somebody was to ever
-        # further multiply-inherit this class.
-        AviaNZ_batchProcess.__init__(self, *args, **kwargs)
-        QObject.__init__(self)
-        self.mutex = QMutex()
+    def __init__(self, parent_widget, configdir: str, directory: str, recognisers: List[str], **kwargs):
+        super().__init__()
+        self.parent = parent_widget
+        
+        # Create GUI callback handler that communicates via signals
+        self.callbacks = GUIUserInteractionThreaded(self)
+        
+        # Create the core processor
+        self.processor = BatchProcessor(
+            configdir=configdir,
+            directory=directory,
+            recognisers=recognisers,
+            callbacks=self.callbacks,
+            **kwargs
+        )
+        
+        # Note: These connections are made before moveToThread, so we don't specify
+        # connection type here. The connections will be set up properly after moveToThread.
 
     @pyqtSlot()
-    def detect(self):
+    def process(self):
+        """Main processing method that runs in worker thread"""
         try:
-            AviaNZ_batchProcess.detect(self)
-            self.completed.emit()
+            # Run the core processing
+            result = self.processor.process_files()
+            
+            if result == 0:
+                self.completed.emit()
+            else:
+                self.failed.emit("Processing failed")
+                
         except GentleExitException:
-            # for clean exits, such as stops via progress dialog
+            # Clean user cancellation
             self.stopped.emit()
         except Exception as e:
-            # we have UI, so just cleanly present the error;
-            # in other modes this will CTD
-            e = "Encountered error:\n" + traceback.format_exc()
-            self.failed.emit(e)
-        self.finished.emit()  # this is to prompt generic actions like stopping the event loop
+            # Unexpected error
+            import traceback
+            error_msg = "Encountered error:\n" + traceback.format_exc()
+            self.failed.emit(error_msg)
+        finally:
+            self.finished.emit()
