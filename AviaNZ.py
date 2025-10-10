@@ -159,7 +159,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     if cli:
         print("Starting AviaNZ in CLI mode")
         if batchmode:
-            from src.cli.batch_cli import run_cli_batch
+            from cli.BatchCLI import run_cli_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
                 wind_str = "OLS wind filter (recommended)" if wind else "None"
                 result = run_cli_batch(

@@ -1,6 +1,3 @@
-# AudioLoader.py
-#
-# Handles loading of wav, flac files into AudioData objects.
 
 # Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
@@ -21,6 +18,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# AudioLoader.py
+#
+# Handles loading of wav, flac files into AudioData objects.
+
 import os
 import tempfile
 import shutil
@@ -32,7 +33,7 @@ from src.core import AudioData
 class AudioLoader:
     """Centralized audio file loading with format detection and validation."""
     
-    def load_audio(self, filepath, duration=None, offset=0, silent=False, **kwargs):
+    def load_audio(self, filepath, duration=None, offset=0, silent=False):
         """Load audio from file with automatic format detection"""
         # Validate file existence and size
         if not os.path.exists(filepath):

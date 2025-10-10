@@ -1588,7 +1588,7 @@ class ManualInterface(QMainWindow):
             if self.batmode:
                 self.sp.minFreqShow = self.config['minFreqBats']
                 self.sp.maxFreqShow = self.config['maxFreqBats']
-                successread = self.sp.readBmp(name)
+                successread = self.sp.readSoundFile(name)
                 if successread>0:
                     print("ERROR: file not loaded")
                     return
@@ -5550,7 +5550,7 @@ class ManualInterface(QMainWindow):
         """ Call the spectrogram inversion """
         print("Inverting spectrogram")
         if self.batmode:
-            self.sp.readBmp(self.filename,repeat=False)
+            self.sp.readSoundFile(self.filename, repeat=False)
 
         with pg.BusyCursor():
             # Determine appropriate sample rate for reconstruction

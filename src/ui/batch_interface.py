@@ -19,18 +19,16 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt6 import QtGui
-from PyQt6.QtGui import QIcon, QPixmap, QColor, QScreen
+from PyQt6.QtGui import QIcon, QPixmap, QColor
 from PyQt6.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QApplication, QComboBox, QLineEdit, QSlider, QListWidget, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QProgressDialog, QFileDialog, QDoubleSpinBox, QFormLayout, QStyle, QAbstractItemView, QButtonGroup
 from PyQt6.QtCore import Qt, QDir, QSize, QThread, QWaitCondition, QObject, QMutex, pyqtSignal, pyqtSlot
 
-import os, platform, sys, webbrowser, re, traceback
-from typing import List, Optional
+import os, webbrowser, re
 import pyqtgraph as pg
 from pyqtgraph.dockarea import Dock, DockArea
 
 from src.core import SupportClasses
-from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
+from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
 from src.utils.exceptions import GentleExitException
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
@@ -659,7 +657,7 @@ class GUIUserInteractionThreaded(BatchProcessorCallbacks):
         self.total_files = 0
         self.dialog_initialized = False
         
-    def ask_resume_analysis(self, message: str) -> bool:
+    def ask_resume_analysis(self, message):
         """Show dialog asking about resuming analysis - blocks until user responds"""
         print("DEBUG: Worker thread requesting resume dialog")
         # Request dialog to be shown in main thread
@@ -674,7 +672,7 @@ class GUIUserInteractionThreaded(BatchProcessorCallbacks):
         print(f"DEBUG: Got response: {result}")
         return result
         
-    def confirm_analysis_launch(self, message: str) -> bool:
+    def confirm_analysis_launch(self, message):
         """Show dialog to confirm analysis launch - blocks until user responds"""
         print("DEBUG: Worker thread requesting confirm dialog")
         # Request dialog to be shown in main thread
@@ -689,7 +687,7 @@ class GUIUserInteractionThreaded(BatchProcessorCallbacks):
         print(f"DEBUG: Got response: {result}")
         return result
         
-    def update_progress(self, current: int, total: int, message: str) -> None:
+    def update_progress(self, current, total, message):
         """Update progress dialog - thread-safe via signal"""
         # First time: setup dialog with total count
         if not self.dialog_initialized:
@@ -703,18 +701,12 @@ class GUIUserInteractionThreaded(BatchProcessorCallbacks):
         # Emit signal to update in main thread
         self.worker.progress_update.emit(current, message)
         
-    def check_cancelled(self) -> bool:
+    def check_cancelled(self):
         """Check if progress dialog was cancelled - must be thread-safe"""
         # Access this from main thread's dialog
         if hasattr(self.parent, 'dlg'):
             return self.parent.dlg.wasCanceled()
         return False
-        
-    def get_bat_survey_info(self, operator: str, easting: str, northing: str, recorder: str) -> Optional[List[str]]:
-        """Show bat survey form and return results - blocks until user responds"""
-        # For simplicity, return None for now
-        # TODO: Implement proper signal-based blocking dialog
-        return None
 
 class BatchProcessWorker(QObject):
     """Qt worker that wraps the clean BatchProcessor for GUI use"""
@@ -729,7 +721,7 @@ class BatchProcessWorker(QObject):
     need_resume_dialog = pyqtSignal(str)  # message to show
     need_confirm_dialog = pyqtSignal(str)  # message to show
 
-    def __init__(self, parent_widget, configdir: str, directory: str, recognisers: List[str], **kwargs):
+    def __init__(self, parent_widget, configdir, directory, recognisers, **kwargs):
         super().__init__()
         self.parent = parent_widget
         

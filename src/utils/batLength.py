@@ -94,7 +94,7 @@ def run(dirName):
                     if f.read(2) != b'BM':
                         print("Warning: file %s not formatted correctly, skipping" % filename)
                     else:
-                        sp.readBmp(filename, rotate=False,silent=True)
+                        sp.readSoundFile(filename, rotate=False, silent=True)
                         res = ClickSearch(sp.sg,sp.audioFormat.sample_rate)
                         if res is not None:
                             print(filename,(res[1]-res[0])*dt)

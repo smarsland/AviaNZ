@@ -48,7 +48,7 @@ class BirdDetector:
         self.configdir = configdir
     
     def detectBirdsInFile(self, sp, segments, species, filters, NNDicts, options, anySound=False, 
-                         testmode=False, segments_nonn=None, ui_callback=None):
+                         testmode=False, segments_nonn=None, check_cancelled=None):
         """
         Main bird detection method for a single file.
         
@@ -62,7 +62,7 @@ class BirdDetector:
             anySound: Whether to use generic "Any sound" detection
             testmode: Whether running in test mode
             segments_nonn: Additional segment list for test mode (without NN)
-            ui_callback: Optional callback for UI updates (function that takes no args and returns True if cancelled)
+            check_cancelled: Optional callback to check if user has cancelled (function that returns True if cancelled)
             
         Returns:
             None (modifies segments list in place)
@@ -84,11 +84,11 @@ class BirdDetector:
             
             # Process "Any Sound" detection if enabled
             if anySound:
-                self.processAnySound(sp, segments, start, end, options, ui_callback)
+                self.processAnySound(sp, segments, start, end, options, check_cancelled)
             
             # Process bird-specific filters
             self.processBirdFilters(sp, segments, species, filters, NNDicts, start, end, 
-                                   options, testmode, segments_nonn, ui_callback)
+                                   options, testmode, segments_nonn, check_cancelled)
     
     def calculatePageSize(self, sp, species, filters):
         """Calculate appropriate page size based on audio characteristics and filters."""
@@ -108,7 +108,7 @@ class BirdDetector:
             # Default page size
             return 900 * 16000
     
-    def processAnySound(self, sp, segments, start, end, options, ui_callback):
+    def processAnySound(self, sp, segments, start, end, options, check_cancelled):
         """Process generic "Any sound" detection using median clipping."""
         # Create spectrogram for median clipping
         if not hasattr(sp, 'sg') or sp.sg is None:
@@ -135,10 +135,10 @@ class BirdDetector:
                                  segments=thisPageSegs, 
                                  subfilter={}, cert=0)
         
-        if options[8] != "":  # mergeSyllables option
-            post.joinGaps(options[9])
-            post.deleteShort(options[10])
-            post.splitLong(options[11])
+        if options['mergeSyllables']:
+            post.joinGaps(options['maxgap'])
+            post.deleteShort(options['minlen'])
+            post.splitLong(options['maxlen'])
         
         # Adjust segment starts for pages
         if start != 0:
@@ -152,12 +152,12 @@ class BirdDetector:
         del seg
         gc.collect()
         
-        # Check for UI cancellation
-        if ui_callback and ui_callback():
+        # Check for cancellation
+        if check_cancelled and check_cancelled():
             raise GentleExitException
     
     def processBirdFilters(self, sp, segments, species, filters, NNDicts, start, end, 
-                          options, testmode, segments_nonn, ui_callback):
+                          options, testmode, segments_nonn, check_cancelled):
         """Process bird-specific filters using wavelet segmentation."""
         # Group filters by required sample rate
         uniqueSampleRates = set([filt["SampleRate"] for filt in filters])
@@ -180,7 +180,7 @@ class BirdDetector:
             
             # Initialize wavelet segmentation for bird processing
             ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
-            useWind = options[1] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
+            useWind = options['wind'] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
             ws.readBatch(sp.audio_data.data[start:end], sp.audio_data.sample_rate, 
                         d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=useWind)
             
@@ -192,7 +192,7 @@ class BirdDetector:
                 if "method" not in spInfo or spInfo["method"] == "wv":
                     thisPageSegs = ws.waveletSegment(speciesix, wpmode="new")
                 elif spInfo["method"] == "chp":
-                    thisPageSegs = ws.waveletSegmentChp(speciesix, alg=2, wind=options[1])
+                    thisPageSegs = ws.waveletSegmentChp(speciesix, alg=2, wind=options['wind'])
                 else:
                     print("ERROR: unrecognised method", spInfo["method"])
                     raise Exception
@@ -215,8 +215,8 @@ class BirdDetector:
                                              spInfo["species"], spInfo['Filters'][filtix], 
                                              sp.audio_data.sample_rate)
                         
-                        # Check for UI cancellation
-                        if ui_callback and ui_callback():
+                        # Check for cancellation
+                        if check_cancelled and check_cancelled():
                             raise GentleExitException
                     else:
                         # Test mode: process both with and without NN

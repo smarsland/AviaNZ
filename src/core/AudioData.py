@@ -1,6 +1,3 @@
-# AudioData.py
-#
-# Holds array and formats
 
 # Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
@@ -20,6 +17,10 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# AudioData.py
+#
+# Holds array and formats
 
 class AudioData:
     """Container for loaded audio data with metadata."""
@@ -42,3 +43,8 @@ class AudioData:
             sample_size=self.sample_size,
             channels=self.channels
         )
+
+    def get_duration(self):
+        """Calculate duration in seconds from audio data."""
+
+        return float(len(self.data)) / self.sample_rate

@@ -39,7 +39,7 @@ from src.core import SupportClasses
 from src.core import Spectrogram
 from src.models import NN
 from src.core import Segment, WaveletSegment
-from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
+from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
 
@@ -659,16 +659,16 @@ class NNtrain:
 class TestModeCallbacks(BatchProcessorCallbacks):
     """Simple callbacks for test mode - auto-confirm everything"""
     
-    def ask_resume_analysis(self, message: str) -> bool:
+    def ask_resume_analysis(self, message):
         return False  # Don't resume in test mode
         
-    def confirm_analysis_launch(self, message: str) -> bool:
+    def confirm_analysis_launch(self, message):
         return True  # Auto-confirm in test mode
         
-    def update_progress(self, current: int, total: int, message: str) -> None:
+    def update_progress(self, current, total, message):
         pass  # Silent in test mode
         
-    def check_cancelled(self) -> bool:
+    def check_cancelled(self):
         return False  # Never cancelled in test mode
 
 class NNtest:
@@ -723,7 +723,8 @@ class NNtest:
             directory=self.testDir,
             recognisers=[filtname],
             callbacks=callbacks,
-            wind="None"
+            wind="None",
+            testmode=True
         )
         # NOTE: will use wind-robust detection
         batch_processor.process_files()

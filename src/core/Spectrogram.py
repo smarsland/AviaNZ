@@ -17,6 +17,8 @@ from scipy.signal import medfilt
 
 specExtra = True
 
+BAT_SPECTROGRAM_TIME_PER_PIXEL = 0.002909090909090909
+
 class Spectrogram:
     """Spectrogram computation and analysis for audio data.
     
@@ -44,7 +46,7 @@ class Spectrogram:
         """
         # Check if it's a BMP file - handle directly since it's spectrogram data
         if filepath.lower().endswith('.bmp'):
-            return self.load_bmp(filepath, duration, offset, silent, **kwargs)
+            return self._load_bmp(filepath, duration, offset, silent, **kwargs)
         
         # For audio files, use AudioLoader
         loaded_data = self.audio_loader.load_audio(filepath, duration, offset, silent)
@@ -59,8 +61,11 @@ class Spectrogram:
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
         
-    def load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
-        """Load BMP file (DOC bat recording format) directly as spectrogram data."""
+    def _load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
+        """Load BMP file (DOC bat recording format) directly as spectrogram data.
+        
+        Private method - external code should use readSoundFile() which auto-detects format.
+        """
         rotate = kwargs.get('rotate', True)
         repeat = kwargs.get('repeat', True)
         
@@ -131,10 +136,27 @@ class Spectrogram:
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
         
         return 0  # BMP success indicator
+
+    def get_duration(self):
+        """Calculate duration of loaded audio or BMP spectrogram.
         
-    def readBmp(self, filepath, duration=None, offset=0, silent=False, rotate=True, repeat=True):
-        """Load BMP file - delegates to readSoundFile."""
-        return self.readSoundFile(filepath, duration, offset, silent, rotate=rotate, repeat=repeat)
+        Returns:
+            float: Duration in seconds
+        
+        For audio files, delegates to AudioData.get_duration().
+        For BMP files, calculates from spectrogram dimensions and time per pixel.
+        """
+        if self.audio_data is None:
+            return 0.0
+            
+        if self.audio_data.data is not None:
+            # Audio file - delegate to AudioData
+            return self.audio_data.get_duration()
+        else:
+            # BMP file - calculate from spectrogram dimensions
+            if hasattr(self, 'sg') and self.sg is not None:
+                return self.sg.shape[1] * BAT_SPECTROGRAM_TIME_PER_PIXEL
+            return 0.0
 
     def resample(self, target):
         if self.audio_data.data is None or len(self.audio_data.data)==0:

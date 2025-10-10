@@ -893,10 +893,10 @@ class ReviewInterface(QMainWindow):
                 # Load spectrogram data
                 try:
                     if batmode:
-                        sp.readBmp(filename, off=x1, duration=x2-x1, silent=True)
+                        sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
                         sp.sg = sp.normalisedSpec("Batmode")
                     else:
-                        sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=True)
+                        sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
                         sp.audio_data.data = SignalProc.bandpassFilter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
                         sp.sg = sp.spectrogram(window_width=self.config['window_width'], 
                                              incr=self.config['incr'],
@@ -1684,7 +1684,7 @@ class ReviewInterface(QMainWindow):
 
                         # Actual loading of the wav/bmp/spectrogram
                         if self.batmode:
-                            sp.readBmp(filename, off=x1, duration=x2-x1, silent=segix>1)
+                            sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=segix>1)
                             # sg was already normalised to 0-1 when loading
                             # with 1 being loudest
                             sp.sg = sp.normalisedSpec("Batmode")

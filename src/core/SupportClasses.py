@@ -95,7 +95,16 @@ class Log(object):
         self.filepath = path
         # self.file will be an IO stram opened by the main launcher
         self.species = species
-        self.settings = ','.join(map(str, settings))
+        # Convert settings dict to formatted string
+        if isinstance(settings, dict):
+            parts = []
+            for key, value in settings.items():
+                if value and value != "None" and value != False:
+                    parts.append(f"{key}={value}")
+            self.settings = ', '.join(parts) if parts else 'default'
+        else:
+            # Legacy support for list format
+            self.settings = ','.join(map(str, settings))
         self.oldAnalyses = []
         self.filesDone = []
         self.currentHeader = ""
