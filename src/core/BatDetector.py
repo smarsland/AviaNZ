@@ -149,8 +149,11 @@ class BatDetector:
         """
         print("Processing bat file...")
         
+        # Get input dimensions from the model
+        inputdim = NNmodel[2]
+        
         # Step 1: Detect clicks in spectrogram
-        click_label, data_test, count = self.clickSearch(sp, filename, virginia=True)
+        click_label, data_test, count = self.clickSearch(sp, filename, inputdim=inputdim, virginia=True)
         print(f"Click detection: {click_label}, {count} clicks found")
         
         if click_label != 'Click' or count == 0:
@@ -159,8 +162,10 @@ class BatDetector:
         
         # Step 2: Prepare data for NN classification
         model = NNmodel[0]
-        thr1 = NNmodel[5][0]
-        thr2 = NNmodel[5][1]
+        inputdim = NNmodel[2]  # Get input dimensions from the model
+        # Ensure thresholds are scalar values, not arrays
+        thr1 = float(np.atleast_1d(NNmodel[5][0])[0])
+        thr2 = float(np.atleast_1d(NNmodel[5][1])[0])
         
         # Convert data_test elements back to numpy arrays
         # data_test format: [[spectrogram_as_list, filename, count], ...]
@@ -185,7 +190,8 @@ class BatDetector:
         # Step 3: Run NN classification
         x_test = sg_test
         print(f"Shape before reshape: {x_test.shape}")
-        test_images = x_test.reshape(x_test.shape[0], 6, 512, 1)
+        # Use the model's input dimensions instead of hardcoded values
+        test_images = x_test.reshape(x_test.shape[0], inputdim[0], inputdim[1], 1)
         print(f"Shape after reshape: {test_images.shape}")
         test_images = test_images.astype('float32')
         
@@ -203,7 +209,7 @@ class BatDetector:
         thisPageStart = start / sp.audio_data.sample_rate
         return [[thisPageStart, thisPageLen, labels]]
     
-    def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, dt=None):
+    def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, dt=None, inputdim=None):
         """
         Update Dataset with current segment
         It take a piece of the spectrogram with fixed length centered in the click
@@ -216,37 +222,81 @@ class BatDetector:
             click_start: Start index of click
             click_end: End index of click
             dt: Time delta (unused)
+            inputdim: Target dimensions [time, freq] for extracted spectrograms (e.g., [64, 343])
+                      If None, uses legacy behavior of [6, 512]
             
         Returns:
             Tuple of (updated_featuress, updated_count)
         """
-        win_pixel = 1
+        # Use legacy dimensions if inputdim not provided
+        if inputdim is None:
+            inputdim = [6, 512]
+        
+        target_time_pixels = inputdim[0]
+        target_freq_bins = inputdim[1]
+        
+        # Calculate window size in time (pixels) needed to extract
+        # We want to extract a window centered on the click
+        # For backward compatibility with old models, when target is [6, 512]:
+        # - Extract 3 pixels (win_pixel=1 means center ±1)
+        # - Double it to 6 with np.repeat
+        # For new models like [64, 343]:
+        # - We need to extract more pixels and resize appropriately
+        
         ls = np.shape(spectrogram)[1] - 1
         click_center = int((click_start + click_end) / 2)
-
-        start_pixel = click_center - win_pixel
-        if start_pixel < 0:
-            win_pixel2 = win_pixel + np.abs(start_pixel)
-            start_pixel = 0
-        else:
-            win_pixel2 = win_pixel
-
-        end_pixel = click_center + win_pixel2
-        if end_pixel > ls:
-            start_pixel -= end_pixel - ls + 1
-            end_pixel = ls - 1
-            # this code above fails for sg less than 4 pixels wide
         
-        sgRaw = spectrogram[:, start_pixel:end_pixel + 1]  # note I am saving the spectrogram in the right dimension
-        sgRaw = np.repeat(sgRaw, 2, axis=1)
-        sgRaw = (np.flipud(sgRaw)).T  # flipped spectrogram to make it consistent with Niro Method
-        featuress.append([sgRaw.tolist(), file_name, count])  # not storing segment and label informations
+        # For backward compatibility: if target is [6, 512], use old method
+        if target_time_pixels == 6 and target_freq_bins == 512:
+            win_pixel = 1
+            start_pixel = click_center - win_pixel
+            if start_pixel < 0:
+                win_pixel2 = win_pixel + np.abs(start_pixel)
+                start_pixel = 0
+            else:
+                win_pixel2 = win_pixel
+
+            end_pixel = click_center + win_pixel2
+            if end_pixel > ls:
+                start_pixel -= end_pixel - ls + 1
+                end_pixel = ls - 1
+            
+            sgRaw = spectrogram[:, start_pixel:end_pixel + 1]
+            sgRaw = np.repeat(sgRaw, 2, axis=1)
+            sgRaw = (np.flipud(sgRaw)).T
+        else:
+            # For new models: extract a larger window and resize
+            # Extract approximately target_time_pixels / 2 on each side of click
+            win_pixel = target_time_pixels // 4  # Divide by 4 because we'll double it
+            if win_pixel < 1:
+                win_pixel = 1
+                
+            start_pixel = click_center - win_pixel
+            if start_pixel < 0:
+                start_pixel = 0
+                
+            end_pixel = click_center + win_pixel
+            if end_pixel > ls:
+                end_pixel = ls
+            
+            # Extract the window
+            sgRaw = spectrogram[:, start_pixel:end_pixel + 1]
+            
+            # Flip and transpose to get [time, freq] format
+            sgRaw = (np.flipud(sgRaw)).T
+            
+            # Resize to target dimensions using scipy or simple interpolation
+            from scipy import ndimage
+            zoom_factors = (target_time_pixels / sgRaw.shape[0], target_freq_bins / sgRaw.shape[1])
+            sgRaw = ndimage.zoom(sgRaw, zoom_factors, order=1)  # bilinear interpolation
+        
+        featuress.append([sgRaw.tolist(), file_name, count])
 
         count += 1
 
         return featuress, count
 
-    def clickSearch(self, sp, file, virginia=True):
+    def clickSearch(self, sp, file, inputdim=None, virginia=True):
         """
         Searches for clicks in the provided spectrogram, saves dataset
         Returns click_label, dataset and count of detections
@@ -264,6 +314,7 @@ class BatDetector:
         Args:
             sp: Spectrogram object with audio data and spectrogram (sp.sg)
             file: filename (NOTE originally was basename, now full filename)
+            inputdim: Target dimensions [time, freq] for extracted spectrograms (e.g., [64, 343])
             virginia: Boolean flag for processing mode
 
         Returns:
@@ -319,7 +370,7 @@ class BatDetector:
                         clicks[click_start:click_end + 1] = False
                     else:
                         # savedataset
-                        featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+                        featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt, inputdim)
                     # update
                     click_start = clicks_indices[0][i]
                     click_end = clicks_indices[0][i]
@@ -328,7 +379,7 @@ class BatDetector:
             if click_end - click_start + 1 > up_len:
                 clicks[click_start:click_end + 1] = False
             else:
-                featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+                featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt, inputdim)
 
             # Assigning: click label
             if np.any(clicks):

@@ -27,8 +27,8 @@ from src.core import Segment
 from src.core import WaveletSegment
 from src.core import SupportClasses
 from src.utils.exceptions import GentleExitException
-from core.BirdDetector import BirdDetector
-from core.BatDetector import BatDetector
+from src.core.BirdDetector import BirdDetector
+from src.core.BatDetector import BatDetector
 
 class BatchProcessorCallbacks:
     """Interface for user interaction callbacks - allows different implementations for CLI vs GUI"""
