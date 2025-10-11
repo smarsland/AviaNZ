@@ -1,6 +1,3 @@
-# bird_detector.py
-#
-# Bird detection logic extracted from AviaNZ_batch.py
 
 # Version 4.0 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
@@ -21,6 +18,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# BirdDetector.py
+#
+# Bird detection logic
+
 import gc
 import copy
 
@@ -37,36 +38,13 @@ class BirdDetector:
     """
     
     def __init__(self, config, configdir):
-        """
-        Initialize bird detector with configuration.
-        
-        Args:
-            config: Configuration dictionary containing spectrogram and processing settings
-            configdir: Configuration directory path
-        """
+        """Initialize bird detector with configuration."""
         self.config = config
         self.configdir = configdir
     
     def detectBirdsInFile(self, sp, segments, species, filters, NNDicts, options, anySound=False, 
                          testmode=False, segments_nonn=None, check_cancelled=None):
-        """
-        Main bird detection method for a single file.
-        
-        Args:
-            sp: Spectrogram object with loaded audio data
-            segments: SegmentList to store results in
-            species: List of species names being detected
-            filters: List of filter dictionaries
-            NNDicts: Neural network models dictionary
-            options: Processing options list
-            anySound: Whether to use generic "Any sound" detection
-            testmode: Whether running in test mode
-            segments_nonn: Additional segment list for test mode (without NN)
-            check_cancelled: Optional callback to check if user has cancelled (function that returns True if cancelled)
-            
-        Returns:
-            None (modifies segments list in place)
-        """
+        """Detect birds in audio file using wavelet segmentation and optional NN classification."""
         # Calculate page size based on audio sample rate
         samplesInPage = self.calculatePageSize(sp, species, filters)
         numPages = (len(sp.audio_data.data) - 1) // samplesInPage + 1
@@ -235,20 +213,7 @@ class BirdDetector:
                                              sp.audio_data.sample_rate)
     
     def postProcFull(self, segments, spInfo, filtix, start, end, NNmodel, sp):
-        """
-        Full bird-style postprocessing (NN, joinGaps, fundamental frequency, etc.)
-        
-        Args:
-            segments: list of segments over calltypes
-            spInfo: species info dict containing filter config including target SampleRate
-            filtix: index of current subfilter
-            start, end: start and end of this page, in samples (at original sample rate)
-            NNmodel: None or a neural network model for species classification
-            sp: Spectrogram object with audio data
-            
-        Returns:
-            list of processed segments
-        """
+        """Apply full post-processing: NN classification, gap joining, fundamental frequency detection."""
         subfilter = spInfo["Filters"][filtix]
         
         # PostProcess handles any needed resampling from current rate to target rate
@@ -286,7 +251,7 @@ class BirdDetector:
         return post.segments
     
     def makeGenericSegments(self, segmentsList, segmentsNew):
-        """Add generic segments for "Any sound" detection."""
+        """Add generic "Don't Know" segments."""
         y1 = 0
         y2 = 0
         species = "Don't Know"
@@ -294,7 +259,7 @@ class BirdDetector:
         segmentsList.addBasicSegments(segmentsNew, [y1, y2], species=species, certainty=cert)
     
     def makeBirdSegments(self, segmentsList, segmentsNew, filtName, species, subfilter, sampleRate):
-        """Add bird-specific segments with proper metadata."""
+        """Add bird segments with species labels and metadata."""
         y1 = subfilter["FreqRange"][0]
         y2 = min(subfilter["FreqRange"][1], sampleRate // 2)
         

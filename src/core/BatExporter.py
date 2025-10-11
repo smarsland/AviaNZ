@@ -1,12 +1,26 @@
-# BatExporter.py
-#
-# Bat detection results export functionality
 
-# Version 4.0 10/10/25
+# Version 4.0 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2024
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# BatExporter.py
+#
+# Bat detection results export functionality
 
 import os
 import fnmatch
@@ -19,31 +33,13 @@ class BatExporter:
     """Handles export of bat detection results to various formats"""
     
     def __init__(self, config, bat_detector=None):
-        """
-        Initialize bat exporter.
-        
-        Args:
-            config: Configuration dictionary
-            bat_detector: Optional BatDetector instance for click search
-        """
+        """Initialize bat exporter with config and optional bat_detector for click search."""
         self.config = config
         self.bat_detector = bat_detector
         self.sp = None
     
     def exportResults(self, dirName, format='xml', savefile=None, threshold1=0.85, threshold2=0.7):
-        """
-        Unified bat export method supporting multiple output formats.
-        
-        Args:
-            dirName: Directory containing bat detection results
-            format: Output format - 'xml' (BatSearch), 'csv' (BatSearch CSV), or 'passes' (bat passes)
-            savefile: Output filename (defaults based on format if None)
-            threshold1: Primary certainty threshold
-            threshold2: Secondary certainty threshold (can be None)
-            
-        Returns:
-            1 on success, 0 on failure
-        """
+        """Export bat detection results to xml/csv/passes format. Returns 1 on success, 0 on failure."""
         if not os.path.isdir(dirName):
             print("Folder doesn't exist")
             return 0
@@ -59,7 +55,7 @@ class BatExporter:
                 print(f"Unknown format: {format}")
                 return 0
         
-        operator = "AviaNZ 3.4"
+        operator = "AviaNZ 4.0"
         site = "Nowhere"
         namedict = {"Unassigned":0, "Non-bat":1, "Unknown":2, "Long Tail":3, "Short Tail":4, 
                     "Possible LT":5, "Possible ST":6, "Both":7}

@@ -24,19 +24,19 @@
 
 import math
 import numpy as np
-from src.core import Spectrogram
-
+from src.core import Segment
+from src.utils.exceptions import GentleExitException
+from scipy import ndimage
+        
 class BatDetector:
-    """
-    Handles bat detection using click detection, NN classification, and labeling.
-    """
+    """Handles bat detection using click detection, NN classification, and labeling."""
     
     def __init__(self):
         """Initialize bat detector."""
         pass
     
     def findBatNNModel(self, filters, NNDicts):
-        """Find and return the bat NN model from available models."""
+        """Find and return the bat NN model."""
         for filt in filters:
             if 'NN' in filt:
                 nn_name = filt['NN']['NN_name']
@@ -45,7 +45,7 @@ class BatDetector:
         return None
     
     def detectBatsInFile(self, sp, segments, currentFilename, filters, NNDicts, testmode=False, check_cancelled=None):
-        """Main bat detection method - handles BMP spectrograms and audio files."""
+        """Detect bats in BMP spectrogram or audio file using click detection and NN classification."""
         # Get NN model for bat classification
         NNmodel = self.findBatNNModel(filters, NNDicts)
         if NNmodel is None:
@@ -56,13 +56,12 @@ class BatDetector:
             print("Warning: Bat detection not fully supported in test mode")
             return
         
-        # Process entire file (no paging for now)
         batSegments = self.processBatFile(sp, currentFilename, NNmodel, check_cancelled)
         if len(batSegments) > 0:
             self.makeBatSegments(segments, batSegments[0])
     
     def processBatFile(self, sp, filename, NNmodel, check_cancelled=None):
-        """Detect clicks, run NN classification, and generate labels for entire file."""
+        """Process bat file: detect clicks, classify with NN, generate species labels."""
         print("Processing bat file...")
         
         # Get input dimensions and thresholds from model
@@ -77,7 +76,6 @@ class BatDetector:
         
         # Check for cancellation after click detection
         if check_cancelled and check_cancelled():
-            from src.utils.exceptions import GentleExitException
             raise GentleExitException
         
         if click_label != 'Click' or count == 0:
@@ -95,6 +93,7 @@ class BatDetector:
         sg_test = np.ndarray(shape=(num_spectrograms, first_sg.shape[0], first_sg.shape[1]), dtype=float)
         print(f'Number of spectrograms: {num_spectrograms}')
         
+        # TODO: check if this is intended
         for j in range(num_spectrograms):
             sg_array = np.array(data_test[j][0])
             maxg = np.max(sg_array)
@@ -120,8 +119,8 @@ class BatDetector:
         file_duration = sp.get_duration()
         return [[0, file_duration, labels]]
     
-    def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, dt=None, inputdim=None):
-        """Extract and resize spectrogram window centered on click, append to featuress."""
+    def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, inputdim=None):
+        """Extract and resize spectrogram patch around click for NN input."""
         if inputdim is None:
             raise ValueError("inputdim is required - must provide target dimensions for model input")
         
@@ -145,7 +144,6 @@ class BatDetector:
         sgRaw = (np.flipud(sgRaw)).T
         
         # Resize to target dimensions using bilinear interpolation
-        from scipy import ndimage
         zoom_factors = (target_time_pixels / sgRaw.shape[0], target_freq_bins / sgRaw.shape[1])
         sgRaw = ndimage.zoom(sgRaw, zoom_factors, order=1)
         
@@ -155,22 +153,21 @@ class BatDetector:
         return featuress, count
 
     def clickSearch(self, sp, file, inputdim=None, virginia=True, check_cancelled=None):
-        """Detect bat clicks in 24-54 kHz band; return extracted patches (virginia=True) or indices (virginia=False)."""
+        # virginia=True: full implementation by Virginia Listanti (extracts all click spectrograms)
+        # virginia=False: simplified implementation (finds first and last clicks only)
         imspec = sp.sg
         featuress = []
         count = 0
 
-        df = sp.audio_data.sample_rate // 2 / (np.shape(imspec)[0] + 1)  # frequency increment
-        dt = sp.incr / sp.audio_data.sample_rate  # sp.incr is set to 512 for bats
-        up_len = 17
-        
-        # Frequency band
-        f0 = 24000
-        index_f0 = -1 + math.floor(f0 / df)  # lower bound needs to be rounded down
-        f1 = 54000
-        index_f1 = -1 + math.ceil(f1 / df)  # upper bound needs to be rounded up
+        FREQ_LOW = 24000
+        FREQ_HIGH = 54000
 
-        # Mean in the frequency band
+        df = sp.audio_data.sample_rate // 2 / (np.shape(imspec)[0] + 1)
+        up_len = 17  # Maximum click length in pixels
+        
+        index_f0 = -1 + math.floor(FREQ_LOW / df)
+        index_f1 = -1 + math.ceil(FREQ_HIGH / df)
+
         mean_spec = np.mean(imspec[index_f0:index_f1, :], axis=0)
 
         # Threshold
@@ -185,19 +182,16 @@ class BatDetector:
         
         if virginia:
             clicks_indices = np.nonzero(clicks)
-            # check: if I have found somenthing
             if np.shape(clicks_indices)[1] == 0:
                 click_label = 'None'
                 return click_label, featuress, count
-                # not saving spectrograms
 
             # Discarding segments too long or too short and saving spectrogram images
             click_start = clicks_indices[0][0]
             click_end = clicks_indices[0][0]
             for i in range(1, np.shape(clicks_indices)[1]):
-                # Check for cancellation periodically (every 100 clicks)
+                # check for cancellation every 100
                 if check_cancelled and i % 100 == 0 and check_cancelled():
-                    from src.utils.exceptions import GentleExitException
                     raise GentleExitException
                 
                 if clicks_indices[0][i] == click_end + 1:
@@ -207,18 +201,15 @@ class BatDetector:
                         clicks[click_start:click_end + 1] = False
                     else:
                         # savedataset
-                        featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt, inputdim)
-                    # update
+                        featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, inputdim)
                     click_start = clicks_indices[0][i]
                     click_end = clicks_indices[0][i]
 
-            # checking last loop with end
             if click_end - click_start + 1 > up_len:
                 clicks[click_start:click_end + 1] = False
             else:
-                featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt, inputdim)
+                featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, inputdim)
 
-            # Assigning: click label
             if np.any(clicks):
                 click_label = 'Click'
             else:
@@ -273,7 +264,7 @@ class BatDetector:
                 return None
 
     def labelBatFile(self, predictions, thr1, thr2):
-        """Generate Long-tailed/Short-tailed bat labels from NN predictions using mean and best3mean thresholds."""
+        """Generate bat species labels from NN predictions using dual thresholds."""
 
         # Assessing file label
         # inizialization
@@ -297,19 +288,15 @@ class BatDetector:
         label = []
 
         if click_detected_flag:
-            # mean
+            # means
             LT_mean = np.mean(LT_prob) * 100
             ST_mean = np.mean(ST_prob) * 100
-
-            # best3mean
             LT_best3mean = 0
             ST_best3mean = 0
 
             # LT
             ind = np.array(LT_prob).argsort()[-3:][::-1]
-            # adding len ind in order to consider also the cases when we do not have 3 good examples
             if len(ind) == 1:
-                # this means that there is only one prob!
                 LT_best3mean += LT_prob[0]
             else:
                 for j in range(len(ind)):
@@ -319,9 +306,7 @@ class BatDetector:
 
             # ST
             ind = np.array(ST_prob).argsort()[-3:][::-1]
-            # adding len ind in order to consider also the cases when we do not have 3 good examples
             if len(ind) == 1:
-                # this means that there is only one prob!
                 ST_best3mean += ST_prob[0]
             else:
                 for j in range(len(ind)):
@@ -329,7 +314,6 @@ class BatDetector:
             ST_best3mean /= 3
             ST_best3mean *= 100
 
-            # ASSESSING FILE LABEL
             hasST = ST_mean >= thr1 or ST_best3mean >= thr2
             hasLT = LT_mean >= thr1 or LT_best3mean >= thr2
             hasSTlow = ST_mean < thr1 and ST_best3mean < thr2
@@ -359,10 +343,7 @@ class BatDetector:
         return label
     
     def makeBatSegments(self, segmentsList, segmentsNew):
-        """Add bat segment with labels to segment list."""
-        from src.core import Segment
-        
-        # Batmode: segmentsNew should be already prepared as: [x1, x2, labels]
+        """Add bat segment with species labels."""        
         y1 = 0
         y2 = 0
         if len(segmentsNew) != 3:
