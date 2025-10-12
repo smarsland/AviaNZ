@@ -26,7 +26,7 @@ import os
 import fnmatch
 import numpy as np
 
-from src.core import Segment
+from src.core import Annotation
 from src.core import Spectrogram
 
 class BatExporter:
@@ -83,7 +83,7 @@ class BatExporter:
                 for filename in files:
                     if filename.endswith('.data'):
                         s1 = etree.SubElement(start, "BatRecording")
-                        segments = Segment.SegmentList()
+                        segments = Annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
                         
                         label = self.getBatLabel(segments, threshold1, threshold2)
@@ -112,7 +112,7 @@ class BatExporter:
             files.sort()
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
                     label = self.getBatLabel(segments, threshold1, threshold2)
@@ -155,7 +155,7 @@ class BatExporter:
         for root, dirs, files in os.walk(dirName, topdown=True):
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
                     label = 'Non-bat'
@@ -170,8 +170,8 @@ class BatExporter:
                                 length = "{:.2f}".format((res[1] - res[0]) * Spectrogram.BAT_SPECTROGRAM_TIME_PER_PIXEL)
                         
                         seg = segments[0]
-                        c = [lab["certainty"] for lab in seg[4]]
-                        s = [lab["species"] for lab in seg[4]]
+                        c = [lab["certainty"] for lab in seg.labels]
+                        s = [lab["species"] for lab in seg.labels]
                         
                         if len(c) > 1:
                             label = 'Both'
@@ -232,7 +232,7 @@ class BatExporter:
         for root, dirs, files in os.walk(dirName, topdown=True):
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     label = self.getBatLabel(segments, threshold1, None)
                     if label == 'Long Tail' or label == 'Possible LT':
@@ -267,8 +267,8 @@ class BatExporter:
             return 'Non-bat'
         
         seg = segments[0]
-        c = [lab["certainty"] for lab in seg[4]]
-        s = [lab["species"] for lab in seg[4]]
+        c = [lab["certainty"] for lab in seg.labels]
+        s = [lab["species"] for lab in seg.labels]
         
         if len(c) > 1:
             return 'Both'

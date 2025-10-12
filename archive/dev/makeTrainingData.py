@@ -113,10 +113,10 @@ if os.path.isdir(dir):
                     sp.data = audiodata
                     sp.sampleRate = fs
                     _ = sp.spectrogram(256, 128)
-                    segment = Segment.Segmenter(sp, fs)
+                    segment = Segmentation.Segmenter(sp, fs)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:  # Sanity check
-                        segment = Segment.Segmenter(sp, fs)
+                        segment = Segmentation.Segmenter(sp, fs)
                         syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                     syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
                     #syls = segment.joinGaps(syls, minlen)

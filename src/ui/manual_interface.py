@@ -80,8 +80,11 @@ import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
+from src.core import Annotation
 from src.core import SupportClasses, WaveletSegment, WaveletFunctions, Clustering, SignalProc
-from src.core import Segment, Spectrogram
+from src.core import Spectrogram
+from src.core import Segmentation
+from src.core import AudioData
 from src.ui.components.audio_player import ControllableAudio
 from src.ui.components.axis_widgets import TimeAxisHour, TimeAxisMin
 from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider
@@ -103,7 +106,7 @@ from src.ui.dialogs.denoise import Denoise
 from src.ui.dialogs.excel2annotation import Excel2Annotation
 from src.ui.dialogs.tag2annotation import Tag2Annotation
 from src.ui.dialogs.backup_annotations import BackupAnnotation
-from src.ui.dialogs.segmentation import Segmentation
+from src.ui.dialogs.segmentation import SegmentationDialog
 from src.ui.dialogs.cluster import Cluster
 from src.ui.dialogs.operator_reviewer import OperatorReviewer
 from src.ui.dialogs.filter_manager import FilterManager
@@ -1078,7 +1081,7 @@ class ManualInterface(QMainWindow):
 
             # Special case for Confirm button because it requires yellow segment
             self.confirmButton.setEnabled(False)
-            for sp in self.segments[self.box1id][4]:
+            for sp in self.segments[self.box1id].labels:
                 if sp["certainty"]<100 and sp["species"]!="Don't Know":
                     self.confirmButton.setEnabled(True)
                     break
@@ -1101,7 +1104,7 @@ class ManualInterface(QMainWindow):
         currentSegment = self.segments[self.box1id]
         self.refreshOverviewWith(currentSegment, delete=True)
 
-        currentSegment[4] = new_labels        
+        currentSegment.labels = new_labels        
         if new_certainty==0:
             self.prevBoxCol = self.ColourNone
         elif new_certainty==50:
@@ -1121,17 +1124,17 @@ class ManualInterface(QMainWindow):
 
         self.updateText()
         self.updateColour()
-        self.segInfo.setText(currentSegment.infoString())
+        self.segInfo.setText(str(currentSegment))
         self.segmentsToSave = True
         QApplication.processEvents()
     
     def birdLabelsUpdated(self,new_labels,species_changed,callname_changed,new_certainty):
         currentSegment = self.segments[self.box1id]
         print("new_labels",new_labels)
-        print("segs",currentSegment[4])
+        print("segs",currentSegment.labels)
         self.refreshOverviewWith(currentSegment, delete=True)
 
-        currentSegment[4] = new_labels
+        currentSegment.labels = new_labels
         if new_certainty==0:
             self.prevBoxCol = self.ColourNone
         elif new_certainty==50:
@@ -1157,7 +1160,7 @@ class ManualInterface(QMainWindow):
             self.lastSpecies = [{"species": species_changed, "certainty": new_certainty, "filter": "M", "calltype": callname_changed}]
         self.updateText()
         self.updateColour()
-        self.segInfo.setText(currentSegment.infoString())
+        self.segInfo.setText(str(currentSegment))
         self.segmentsToSave = True
         QApplication.processEvents()
 
@@ -1211,7 +1214,7 @@ class ManualInterface(QMainWindow):
         if not self.multipleBirds:
             labels = []
         else:
-            labels = copy.deepcopy(self.segments[self.box1id][4])
+            labels = copy.deepcopy(self.segments[self.box1id].labels)
         
         labels.append({"species": species, "certainty": certainty})
         if "Don't Know" in [x["species"] for x in labels]:
@@ -1255,7 +1258,7 @@ class ManualInterface(QMainWindow):
         if not self.multipleBirds:
             labels = []
         else:
-            labels = copy.deepcopy(self.segments[self.box1id][4])
+            labels = copy.deepcopy(self.segments[self.box1id].labels)
             
         if species in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!=species]
@@ -1268,7 +1271,7 @@ class ManualInterface(QMainWindow):
         currentSegment = self.segments[self.box1id] if hasattr(self,'segments') and self.box1id>-1 else None
         if not currentSegment is None:
             self.reorderShortBirdList(currentSegment)
-            currentLabels = currentSegment[4]
+            currentLabels = currentSegment.labels
             if self.batmode:
                 self.menuSpeciesSelection = BatSelectionMenu(
                     batList=self.batList, 
@@ -1663,13 +1666,11 @@ class ManualInterface(QMainWindow):
             self.setSpectrogram()
 
             # ANNOTATIONS: init empty list
-            self.segments = Segment.SegmentList()
+            self.segments = Annotation.SegmentList()
             # Load any previous segments stored
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
-                # Populate it, add the metadata attribute
-                # (note: we're overwriting the JSON duration with actual full wav size)
-                hasmetadata = self.segments.parseJSON(self.filename+'.data', self.sp.fileLength)
-                if not hasmetadata:
+                self.segments.parseJSON(self.filename+'.data')
+                if self.segments.metadata["Operator"] == "":
                     self.segments.metadata["Operator"] = self.operator
                     self.segments.metadata["Reviewer"] = self.reviewer
                     self.segmentsToSave = True
@@ -1679,7 +1680,7 @@ class ManualInterface(QMainWindow):
                 # if there are any multi-species segments,
                 # switch the option on regardless of user preference
                 for s in self.segments:
-                    if len(s[4])>1:
+                    if len(s.labels)>1:
                         if not self.multipleBirds:
                             self.multipleBirds = True
                     for species,calltype in s.getKeysWithCalltypes():
@@ -1707,7 +1708,7 @@ class ManualInterface(QMainWindow):
                 else:
                     start = 0
                     end = self.datalength / self.sp.audio_data.sample_rate
-                newSegment = Segment.Segment([start, end, 0, 0, species])
+                newSegment = Annotation.Segment(start_time=start, end_time=end, freq_low=0, freq_high=0, labels=species)
                 self.segments.append(newSegment)
                 self.segmentsToSave = True
                 self.refreshFileColor()
@@ -1719,7 +1720,7 @@ class ManualInterface(QMainWindow):
             if hasattr(self,'seg'):
                 self.seg.setNewData(self.sp)
             else:
-                self.seg = Segment.Segmenter(self.sp, self.sp.audio_data.sample_rate)
+                self.seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
 
             # Update the Dialogs
             # Also close any ones that could get buggy when moving between bird-bat modes
@@ -2206,7 +2207,8 @@ class ManualInterface(QMainWindow):
         # If there are segments, show them
         if not self.cheatsheet and not self.zooniverse:
             for count in range(len(self.segments)):
-                self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count, remaking, coordsAbsolute=True)
+                seg = self.segments[count]
+                self.addSegment(seg.start_time, seg.end_time, seg.freq_low, seg.freq_high, seg.labels, False, count, remaking, coordsAbsolute=True)
 
             # This is the moving bar for the playback
             self.p_spec.addItem(self.bar, ignoreBounds=True)
@@ -2278,7 +2280,7 @@ class ManualInterface(QMainWindow):
             e = ws.computeWaveletEnergy(self.sp.audio_data.data, self.sp.audio_data.sample_rate)
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
-                annotation[math.floor(s[0]):math.ceil(s[1])] = 1
+                annotation[math.floor(s.start_time):math.ceil(s.end_time)] = 1
             w0 = np.where(annotation == 0)[0]
             w1 = np.where(annotation == 1)[0]
 
@@ -2414,7 +2416,7 @@ class ManualInterface(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
                 data = self.sp.audio_data.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
-                post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audio_data.sample_rate, segments=[], subfilter={})
+                post = Segmentation.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audio_data.sample_rate, segments=[], subfilter={})
                 m, std, _ = post.wind_cal(data, self.sp.audio_data.sample_rate)
                 we_mean[w] = m
                 we_std[w] = std
@@ -2441,7 +2443,8 @@ class ManualInterface(QMainWindow):
             for w in range(int(self.datalength/self.sp.audio_data.sample_rate)):
                 data = self.sp.audio_data.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
                 tempsp = Spectrogram.Spectrogram()
-                tempsp.audio_data.data = data
+                tempsp.audio_data = AudioData.AudioData(data=data, sample_rate=self.sp.audio_data.sample_rate,
+                                               sample_format='float32', sample_size=32, channels=1)
                 sgRaw = tempsp.spectrogram()
                 # Normalise
                 sgRaw -= np.mean(sgRaw, axis=0)
@@ -2497,7 +2500,8 @@ class ManualInterface(QMainWindow):
             if self.sp.audio_data.sample_rate != 16000:
                 C = resampy.resample(C, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             tempsp = Spectrogram.Spectrogram()
-            tempsp.audio_data.data = C
+            tempsp.audio_data = AudioData.AudioData(data=C, sample_rate=16000,
+                                           sample_format='float32', sample_size=32, channels=1)
             sgRaw = tempsp.spectrogram()
             sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.audio_data.sample_rate
             sgRaw = sgRaw[:, :sgHeightReduction]
@@ -2537,8 +2541,8 @@ class ManualInterface(QMainWindow):
             # using box coordinates
             x1 = self.convertSpectoAmpl(sender.pos()[0])
             x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-            self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])
-            self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])
+            self.segments[i].freq_low = self.convertYtoFreq(sender.pos()[1])
+            self.segments[i].freq_high = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])
             self.listLabels[i].setPos(sender.pos()[0], self.textpos)
         else:
             # using segment coordinates
@@ -2552,8 +2556,8 @@ class ManualInterface(QMainWindow):
         self.listRectanglesa1[i].blockSignals(False)
         self.segmentsToSave = True
 
-        self.segments[i][0] = x1 + self.startRead
-        self.segments[i][1] = x2 + self.startRead
+        self.segments[i].start_time = x1 + self.startRead
+        self.segments[i].end_time = x2 + self.startRead
 
         # update the overview boxes, step 2
         self.refreshOverviewWith(self.segments[i])
@@ -2591,8 +2595,8 @@ class ManualInterface(QMainWindow):
             self.segmentsToSave = True
             self.listRectanglesa2[i].blockSignals(False)
 
-            self.segments[i][0] = sender.getRegion()[0] + self.startRead
-            self.segments[i][1] = sender.getRegion()[1] + self.startRead
+            self.segments[i].start_time = sender.getRegion()[0] + self.startRead
+            self.segments[i].end_time = sender.getRegion()[1] + self.startRead
 
             # update the overview boxes, step 2
             self.refreshOverviewWith(self.segments[i])
@@ -2604,7 +2608,7 @@ class ManualInterface(QMainWindow):
 
         if self.box1id>-1:
             self.deselectSegment(self.box1id)
-        segtimes = [(seg[0], seg[1]) for seg in self.segments]
+        segtimes = [(seg.start_time, seg.end_time) for seg in self.segments]
         i = 0
         print("Adding segments (%d s every %d s)" %(self.config['protocolSize'], self.config['protocolInterval']))
         while i < self.segments.metadata["Duration"]:
@@ -2654,10 +2658,10 @@ class ManualInterface(QMainWindow):
 
         # Work out which overview segment this segment is in (could be more than one)
         # max/min deal with segments continuing past the edge of current page
-        inds = max(0, int(self.convertAmpltoSpec(segment[0]-self.startRead) / self.widthOverviewSegment))
-        inde = min(int(self.convertAmpltoSpec(segment[1]-self.startRead) / self.widthOverviewSegment), len(self.overviewSegments)-1)
+        inds = max(0, int(self.convertAmpltoSpec(segment.start_time-self.startRead) / self.widthOverviewSegment))
+        inde = min(int(self.convertAmpltoSpec(segment.end_time-self.startRead) / self.widthOverviewSegment), len(self.overviewSegments)-1)
 
-        for label in segment[4]:
+        for label in segment.labels:
             if label["certainty"] == 0:
                 # "red" label counter
                 if delete:
@@ -2751,7 +2755,7 @@ class ManualInterface(QMainWindow):
         if saveSeg or show:
             # Create a Segment. This will check for errors and standardize the labels
             # Note: we convert time from _relative to page_ to _relative to file start_
-            newSegment = Segment.Segment([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
+            newSegment = Annotation.Segment(start_time=startpoint+self.startRead, end_time=endpoint+self.startRead, freq_low=y1, freq_high=y2, labels=species)
 
             # Add the segment to the data
             if saveSeg:
@@ -2875,7 +2879,7 @@ class ManualInterface(QMainWindow):
             self.listRectanglesa2[boxid].update()
 
         # Show details of selection
-        self.segInfo.setText(self.segments[boxid].infoString())
+        self.segInfo.setText(str(self.segments[boxid]))
 
     def deselectSegment(self, boxid):
         """ Restores the segment colors and disables playback buttons."""
@@ -3299,7 +3303,7 @@ class ManualInterface(QMainWindow):
 
         # produce text from list of dicts
         text = []
-        for lab in seg[4]:
+        for lab in seg.labels:
             if lab["certainty"] == 50:
                 text.append(lab["species"] + '?')
             else:
@@ -3318,7 +3322,7 @@ class ManualInterface(QMainWindow):
         """
         if segID is None:
             segID = self.box1id
-        cert = min([lab["certainty"] for lab in self.segments[segID][4]])
+        cert = min([lab["certainty"] for lab in self.segments[segID].labels])
 
         if cert == 0:
             brush = self.ColourNone
@@ -3543,7 +3547,7 @@ class ManualInterface(QMainWindow):
         QApplication.setOverrideCursor(QtGui.QCursor(Qt.CursorShape.WaitCursor))
         # Identify the "current" annotation: selected or whatever is on screen
         if self.box1id > -1:
-            currx = self.segments[self.box1id][0]
+            currx = self.segments[self.box1id].start_time
             self.deselectSegment(self.box1id)
         else:
             minX, maxX = self.overviewImageRegion.getRegion()
@@ -3553,13 +3557,13 @@ class ManualInterface(QMainWindow):
         targetix = None
         for segix in range(len(self.segments)):
             seg = self.segments[segix]
-            if seg[0]<=currx:
+            if seg.start_time<=currx:
                 continue
             # Note that the segments are not sorted by time,
             # hence some extra mess to find the next one:
-            if targetix is not None and seg[0]>=self.segments[targetix][0]:
+            if targetix is not None and seg.start_time>=self.segments[targetix].start_time:
                 continue
-            for lab in seg[4]:
+            for lab in seg.labels:
                 if lab["certainty"]<=maxcert:
                     targetix = segix
         if targetix is None:
@@ -3808,7 +3812,7 @@ class ManualInterface(QMainWindow):
             probs = 0
             if NNname in self.NNDicts.keys():
                 NNmodel = self.NNDicts[NNname]
-            post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data,
+            post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data,
                                        sampleRate=self.sp.audio_data.sample_rate,
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
                                        subfilter=speciesData['Filters'][0], NNmodel=NNmodel, cert=50)
@@ -3901,12 +3905,12 @@ class ManualInterface(QMainWindow):
         for seg in self.segments:
             # Important because all manual mode functions should operate on the current page only:
             # skip segments that are not visible in this page
-            if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
+            if seg.end_time<=self.startRead or seg.start_time>=self.startRead + self.datalengthSec:
                 continue
 
             # coordinates in seconds from current page start, bounded at page borders:
-            starttime = max(0, seg[0]-self.startRead)
-            endtime = min(seg[1]-self.startRead, self.datalengthSec)
+            starttime = max(0, seg.start_time-self.startRead)
+            endtime = min(seg.end_time-self.startRead, self.datalengthSec)
 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
@@ -4115,9 +4119,9 @@ class ManualInterface(QMainWindow):
             # bandpass to selected zones, if it's a box
             # TODO this could be done faster: pass to waveletDenoise and
             # do not reconstruct from nodes outside the specified band
-            if self.segments[self.box1id][3]>0:
-                bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
-                top = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
+            if self.segments[self.box1id].freq_high>0:
+                bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id].freq_low)
+                top = min(self.segments[self.box1id].freq_high, self.sp.maxFreq-0.1)
                 print("Extracting samples between %d-%d Hz" % (bottom, top))
                 denoised = SignalProc.bandpassFilter(denoised, sampleRate=self.sp.audio_data.sample_rate, start=bottom, end=top)
 
@@ -4237,26 +4241,14 @@ class ManualInterface(QMainWindow):
         before_extension = self.filename.rsplit('.', 1)[0]
         extension = self.filename[len(before_extension):]
         filename = before_extension + '_d' + extension
-        def _sample_format_str(fmt_obj):
-            # Accept QAudioFormat or AudioData or raw string
-            try:
-                # QAudioFormat: fmt_obj.sample_format may be an enum
-                sf = fmt_obj.sample_format
-                return str(sf).split('.')[-1]
-            except Exception:
-                try:
-                    return str(fmt_obj.sample_format)
-                except Exception:
-                    return str(fmt_obj)
-
-        sfmt = _sample_format_str(self.sp.audio_data)
-        if sfmt == 'UInt8' or sfmt.endswith('UInt8'):
+        sfmt = self.sp.audio_data.sample_format
+        if sfmt == 'UInt8':
             normalised_data = (self.sp.audio_data.data - 128) / 128
-        elif sfmt == 'Int16' or sfmt.endswith('Int16'):
+        elif sfmt == 'Int16':
             normalised_data = self.sp.audio_data.data / 32768
-        elif sfmt == 'Int8' or sfmt.endswith('Int8'):
+        elif sfmt == 'Int8':
             normalised_data = self.sp.audio_data.data / 128
-        elif sfmt == 'Int32' or sfmt.endswith('Int32'):
+        elif sfmt == 'Int32':
             normalised_data = self.sp.audio_data.data / 2147483648
         else:
             print("ERROR: sampleSize not supported for format", sfmt)
@@ -4283,8 +4275,8 @@ class ManualInterface(QMainWindow):
             if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 x1 = self.listRectanglesa2[self.box1id].pos().x()
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
-                y1 = max(self.sp.minFreq, self.segments[self.box1id][2])
-                y2 = min(self.segments[self.box1id][3], self.sp.maxFreq)
+                y1 = max(self.sp.minFreq, self.segments[self.box1id].freq_low)
+                y2 = min(self.segments[self.box1id].freq_high, self.sp.maxFreq)
                 y1 = self.sp.minFreq
                 y2 = self.sp.maxFreq
             else:
@@ -4302,14 +4294,14 @@ class ManualInterface(QMainWindow):
                 tosave = SignalProc.bandpassFilter(self.sp.audio_data.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
                 if changespeed:
                     tosave = SignalProc.wsola(tosave,self.playSpeed) 
-                sfmt = _sample_format_str(self.sp.audio_data)
-                if sfmt == 'UInt8' or sfmt.endswith('UInt8'):
+                sfmt = self.sp.audio_data.sample_format
+                if sfmt == 'UInt8':
                     normalised_data = (tosave - 128) / 128
-                elif sfmt == 'Int16' or sfmt.endswith('Int16'):
+                elif sfmt == 'Int16':
                     normalised_data = tosave / 32768
-                elif sfmt == 'Int8' or sfmt.endswith('Int8'):
+                elif sfmt == 'Int8':
                     normalised_data = tosave / 128
-                elif sfmt == 'Int32' or sfmt.endswith('Int32'):
+                elif sfmt == 'Int32':
                     normalised_data = tosave / 2147483648
                 else:
                     print("ERROR: sampleSize not supported for format", sfmt)
@@ -4671,7 +4663,7 @@ class ManualInterface(QMainWindow):
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
                     tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
-                    tagSegments = Segment.SegmentList()
+                    tagSegments = Annotation.SegmentList()
 
                     # First get the metadata
                     operator = ""
@@ -4699,7 +4691,7 @@ class ManualInterface(QMainWindow):
                         print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
                         # TODO: Test
-                        import Spectrogram 
+                        from src.core import Spectrogram 
                         sp = Spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.audioFormat.sample_rate
@@ -4713,7 +4705,7 @@ class ManualInterface(QMainWindow):
                         for elem in troot:
                             try:
                                 species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
-                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), float(elem[4].text), float(elem[3].text), species])
+                                newSegment = Annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=float(elem[4].text), freq_high=float(elem[3].text), labels=species)
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file {1}".format(elem[0].text,tagFile))
@@ -4788,7 +4780,7 @@ class ManualInterface(QMainWindow):
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
                     tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
-                    tagSegments = Segment.SegmentList()
+                    tagSegments = Annotation.SegmentList()
 
                     # First get the metadata
                     operator = ""
@@ -4815,7 +4807,7 @@ class ManualInterface(QMainWindow):
                     except:
                         print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
-                        import Spectrogram 
+                        from src.core import Spectrogram 
                         sp = Spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate
@@ -4831,7 +4823,7 @@ class ManualInterface(QMainWindow):
                             try:
                                 species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
                                 # TODO: Get the size right! Something weird about the freqs
-                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), 0,0, species])
+                                newSegment = Annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=0, freq_high=0, labels=species)
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file %s" %elem[0],tagFile)
@@ -4895,7 +4887,7 @@ class ManualInterface(QMainWindow):
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
                     tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
-                    tagSegments = Segment.SegmentList()
+                    tagSegments = Annotation.SegmentList()
                     try:
                         # First get the metadata
                         operator = ""
@@ -4922,7 +4914,7 @@ class ManualInterface(QMainWindow):
                             try:
                                 species = spDict[int(elem[0].text)]
                                 # TODO: Get the size right!
-                                newSegment = Segment.Segment([float(elem[1].text), float(elem[1].text) + float(elem[2].text), elem[3].text, elem[4].text, species])
+                                newSegment = Annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=elem[3].text, freq_high=elem[4].text, labels=species)
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file %s" %elem[0],tagfile)
@@ -4966,7 +4958,7 @@ class ManualInterface(QMainWindow):
         maxampl = 0.001
         if self.datalength>0:
             maxampl = np.max(self.sp.audio_data.data)
-        self.segmentDialog = Segmentation(maxampl,DOC=self.DOC, species=self.FilterDicts)
+        self.segmentDialog = SegmentationDialog(maxampl,DOC=self.DOC, species=self.FilterDicts)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
@@ -4979,7 +4971,7 @@ class ManualInterface(QMainWindow):
             maxampl = 0.001
             if self.datalength>0:
                 maxampl = np.max(self.sp.audio_data.data)
-            self.segmentDialog = Segmentation(maxampl)
+            self.segmentDialog = SegmentationDialog(maxampl)
 
         opstartingtime = time.time()
         print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.localtime()))
@@ -5006,7 +4998,7 @@ class ManualInterface(QMainWindow):
                 # Only show segments which are at least partly visible in this page:
                 for ix in reversed(oldsegs):
                     seg = self.segments[ix]
-                    if seg[0] > self.startRead + self.datalengthSec or seg[1] < self.startRead:
+                    if seg.start_time > self.startRead + self.datalengthSec or seg.end_time < self.startRead:
                         oldsegs.remove(ix)
 
                 todelete = []
@@ -5107,7 +5099,7 @@ class ManualInterface(QMainWindow):
                     if 'NN' in speciesData:
                         NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
-                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
+                    post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, NNmodel=NNmodel, cert=50)
                     if NNmodel:
@@ -5131,7 +5123,7 @@ class ManualInterface(QMainWindow):
             else:
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
+                post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
                 if settings["rain"]:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
@@ -5185,7 +5177,7 @@ class ManualInterface(QMainWindow):
         self.segments = copy.deepcopy(self.prevSegments)
         # So here we only need to show them:
         for seg in self.prevSegments:
-            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], saveSeg=False, coordsAbsolute=True)
+            self.addSegment(seg.start_time, seg.end_time, seg.freq_low, seg.freq_high, seg.labels, saveSeg=False, coordsAbsolute=True)
         self.segmentsToSave = True
 
     def exportSeg(self):
@@ -5402,8 +5394,8 @@ class ManualInterface(QMainWindow):
         if self.media_obj.isPlayingorPaused():
             self.stopPlayback()
         elif self.box1id > -1:
-            low = max(0.1, self.sp.minFreq, self.segments[self.box1id][2])
-            high = min(self.segments[self.box1id][3], self.sp.maxFreq-0.1)
+            low = max(0.1, self.sp.minFreq, self.segments[self.box1id].freq_low)
+            high = min(self.segments[self.box1id].freq_high, self.sp.maxFreq-0.1)
             self.playSelectedSegment(low,high)
             self.speedButton.setEnabled(False)
 
@@ -5598,7 +5590,7 @@ class ManualInterface(QMainWindow):
             fn5 = os.path.basename(fn5)
         hasMultipleSegments = False
         for s in self.segments:
-            if len(s[4])>1:
+            if len(s.labels)>1:
                 hasMultipleSegments=True
 
         params = [
@@ -5948,7 +5940,7 @@ class ManualInterface(QMainWindow):
             self.refreshOverviewWith(self.segments[id])
             self.updateText(id)
             self.updateColour(id)
-            self.segInfo.setText(self.segments[id].infoString())
+            self.segInfo.setText(str(self.segments[id]))
             self.segmentsToSave = True
 
     def deleteSegment(self,id=-1,hr=False):
@@ -6049,7 +6041,7 @@ class ManualInterface(QMainWindow):
         if len(self.segments)==0:
             mincert = -1
         else:
-            mincert = min([lab["certainty"] for seg in self.segments for lab in seg[4]])
+            mincert = min([lab["certainty"] for seg in self.segments for lab in seg.labels])
         self.listFiles.refreshFile(os.path.basename(self.filename), mincert)
 
     def saveSegments(self):

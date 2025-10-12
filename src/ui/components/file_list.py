@@ -30,7 +30,7 @@ import soundfile as sf
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 from PyQt6.QtCore import Qt, QDir
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QIcon, QColor
-from src.core import Segment
+from src.core import Annotation
 
 
 class LightedFileList(QListWidget):
@@ -51,7 +51,7 @@ class LightedFileList(QListWidget):
 
         # for the traffic light icons
         self.blackpen = fn.mkPen(color=(160,160,160,255), width=2)
-        self.tempsl = Segment.SegmentList()
+        self.tempsl = Annotation.SegmentList()
 
     def fill(self, soundDir, fileName, recursive=False, readFmt=False, addWavNum=False):
         """ read folder contents, populate the list widget.
@@ -142,10 +142,10 @@ class LightedFileList(QListWidget):
                                         self.tempsl.parseJSON(dataf, silent=True)
                                         if len(self.tempsl)>0:
                                             # collect any species present
-                                            filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+                                            filesp = [lab["species"] for seg in self.tempsl for lab in seg.labels]
                                             self.spList.update(filesp)
                                             # min certainty
-                                            cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                                            cert = [lab["certainty"] for seg in self.tempsl for lab in seg.labels]
                                             if cert:
                                                 mincert = min(cert)
                                                 if self.minCertainty > mincert:
@@ -244,13 +244,13 @@ class LightedFileList(QListWidget):
                     # .data exists, but empty - "file was looked at"
                     mincert = -1
                 else:
-                    cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                    cert = [lab["certainty"] for seg in self.tempsl for lab in seg.labels]
                     if cert:
                         mincert = min(cert)
                     else:
                         mincert = -1
                     # also collect any species present
-                    filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+                    filesp = [lab["species"] for seg in self.tempsl for lab in seg.labels]
             except Exception as e:
                 # .data exists, but unreadable
                 print("Could not determine certainty for file", datafile)

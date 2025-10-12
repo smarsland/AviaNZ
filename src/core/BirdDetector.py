@@ -25,8 +25,8 @@
 import gc
 import copy
 
-from src.core import Spectrogram
-from src.core import Segment
+from src.core import Segmentation
+from src.core import Annotation
 from src.core import WaveletSegment
 from src.utils.exceptions import GentleExitException
 
@@ -74,18 +74,10 @@ class BirdDetector:
             if sp.audio_data.sample_rate <= 4000:
                 # Low frequency recordings (e.g., bittern at 4000 Hz)
                 return 300 * sp.audio_data.sample_rate  # ~5 min pages
-            else:
-                # Standard recordings: use 15 min pages normalized to 16 kHz
-                return 900 * 16000
         
-        elif "NZ Bats" not in species:
-            # For bird detection without pre-loaded spectrogram
-            # Current implementation: use standard 15 min pages for all cases
-            return 900 * 16000
-        else:
-            # Default page size
-            return 900 * 16000
-    
+        # Standard recordings: use 15 min pages normalized to 16 kHz
+        return 900 * 16000
+        
     def processAnySound(self, sp, segments, start, end, options, check_cancelled):
         """Process generic "Any sound" detection using median clipping."""
         # Create spectrogram for median clipping
@@ -101,13 +93,13 @@ class BirdDetector:
                              onesided=self.config['sgOneSided'],
                              start=start, stop=end)
         
-        seg = Segment.Segmenter(sp, sp.audio_data.sample_rate)
+        seg = Segmentation.Segmenter(sp, sp.audio_data.sample_rate)
         thisPageSegs = seg.medianClip(thr=3.5)
         
         # Post-process
         print("Segments detected: ", len(thisPageSegs))
         print("Post-processing...")
-        post = Segment.PostProcess(configdir=self.configdir, 
+        post = Segmentation.PostProcess(configdir=self.configdir, 
                                  audioData=sp.audio_data.data[start:end], 
                                  sampleRate=sp.audio_data.sample_rate, 
                                  segments=thisPageSegs, 
@@ -217,7 +209,7 @@ class BirdDetector:
         subfilter = spInfo["Filters"][filtix]
         
         # PostProcess handles any needed resampling from current rate to target rate
-        post = Segment.PostProcess(configdir=self.configdir, 
+        post = Segmentation.PostProcess(configdir=self.configdir, 
                                  audioData=sp.audio_data.data[start:end],
                                  sampleRate=sp.audio_data.sample_rate, 
                                  tgtsampleRate=spInfo["SampleRate"],
@@ -256,7 +248,7 @@ class BirdDetector:
         y2 = 0
         species = "Don't Know"
         cert = 0.0
-        segmentsList.addBasicSegments(segmentsNew, [y1, y2], species=species, certainty=cert)
+        segmentsList.addFromTimeRanges(segmentsNew, y1, y2, species=species, certainty=cert)
     
     def makeBirdSegments(self, segmentsList, segmentsNew, filtName, species, subfilter, sampleRate):
         """Add bird segments with species labels and metadata."""
@@ -264,7 +256,7 @@ class BirdDetector:
         y2 = min(subfilter["FreqRange"][1], sampleRate // 2)
         
         for s in segmentsNew:
-            segment = Segment.Segment([s[0][0], s[0][1], y1, y2, 
-                                     [{"species": species, "certainty": s[1], 
-                                       "filter": filtName, "calltype": subfilter["calltype"]}]])
+            segment = Annotation.Segment(start_time=s[0][0], end_time=s[0][1], freq_low=y1, freq_high=y2, 
+                                     labels=[{"species": species, "certainty": s[1], 
+                                       "filter": filtName, "calltype": subfilter["calltype"]}])
             segmentsList.addSegment(segment)

@@ -120,7 +120,7 @@ class FlowLayout(QLayout):
 
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
-    buttonDragged = QtCore.pyqtSignal(int,object)
+    buttonDragged = QtCore.pyqtSignal(float, object)
 
     def __init__(self):
         super().__init__()
@@ -130,7 +130,11 @@ class Layout(pg.LayoutWidget):
         ev.accept()
 
     def dropEvent(self, ev):
-        self.buttonDragged.emit(ev.position().y(),ev.source())
+        # Get the drop position relative to this widget
+        dropPos = ev.position() if hasattr(ev, 'position') else ev.posF()
+        yPos = dropPos.y()
+        print(f"DROP EVENT: y={yPos}, source={ev.source()}")
+        self.buttonDragged.emit(yPos, ev.source())
         ev.setDropAction(Qt.DropAction.MoveAction)
         ev.accept()
 

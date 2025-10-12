@@ -1,8 +1,5 @@
-# Clustering.py
-#
-# Cluster segments
 
-# Version 3.4 18/12/24
+# Version 4.0 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,39 +18,31 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# Clustering.py
+#
+# Cluster segments
+
 import numpy as np
-import random
 import os
 import librosa
 
 from src.core import WaveletSegment
 from src.core import WaveletFunctions
 from src.core import Spectrogram
-from src.core import Segment
+from src.core import Annotation
+from src.core import Segmentation
 from src.core import SignalProc
+from src.core import AudioData
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import scale
-from sklearn.mixture import GaussianMixture
-from sklearn.decomposition import PCA
 
-from sklearn.cluster import KMeans
-from sklearn.cluster import MiniBatchKMeans
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import Birch
-from sklearn.cluster import SpectralClustering
-from sklearn.cluster import MeanShift
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.cluster import AffinityPropagation
-# from sklearn.cluster import OPTICS
-# from sklearn import cluster_optics_dbscan
-from sklearn import metrics
-from sklearn.manifold import TSNE
+
 from statistics import mode
 from sklearn.metrics.pairwise import pairwise_distances
-
-import soundfile as sf
-
 
 class Clustering:
     # This class implements various clustering algorithms and performance measures for the AviaNZ interface
@@ -66,126 +55,9 @@ class Clustering:
         self.targets = labels
         self.n_clusters = nclusters
 
-    def setnClusters(self,nc):
-        # Sets the number of clusters as 5 unless otherwise told
-        if nc > 0:
-            self.n_clusters = nc
-        else:
-            self.n_clusters = 5
-
     def custom_dist(self, x, y):
             d, _ = librosa.sequence.dtw(x, y, metric='euclidean')
             return d[d.shape[0] - 1][d.shape[1] - 1]
-
-    def clusteringScore1(self, labels_true, labels):
-        """ Evaluate clustering performance using different scores when ground truth labels are present.
-        """
-        arc = self.adjustedRandScore(labels_true, labels)
-        ami = self.adjustedMutualInfo(labels_true, labels)
-        h = self.homogeneityScore(labels_true, labels)
-        c = self.completenessScore(labels_true, labels)
-        v = self.vMeasureScore(labels_true, labels)
-
-        return arc, ami, h, c, v
-
-    def clusteringScore2(self, features, labels):
-        """ Evaluate clustering performance using different scores when ground truth labels are NOT present.
-        """
-        sc = self.silhouetteCoef(features, labels)
-
-        return sc
-
-    def homogeneityScore(self, labels_true, labels):
-        """ Homogeneity: each cluster contains only members of a single class.
-            score - between 0.0 and 1.0.
-            1.0 perfectly homogeneous
-        """
-        hs = metrics.homogeneity_score(labels_true, labels)
-        print("Homogeneity: %0.3f" % hs)
-
-        return hs
-
-    def completenessScore(self, labels_true, labels):
-        """ Completeness: all members of a given class are assigned to the same cluster.
-            score - between 0.0 and 1.0.
-            1.0 perfectly complete
-        """
-        cs = metrics.completeness_score(labels_true, labels)
-        print("Completeness: %0.3f" % cs)
-
-        return cs
-
-    def vMeasureScore(self, labels_true, labels):
-        """ V-measure is the harmonic mean between homogeneity and completeness.
-            score - between 0.0 and 1.0.
-            1.0 perfectly complete labeling
-        """
-        vs = metrics.v_measure_score(labels_true, labels)
-        print("V-measure: %0.3f" % vs)
-
-        return vs
-
-    def adjustedRandScore(self, labels_true, labels):
-        """ Measures the similarity of the two assignments, ignoring permutations and with chance normalization.
-            score - between -1.0 and 1.0.
-            Random labelings will have score close to 0.0.
-            1.0 perfect match.
-        """
-        ari = metrics.adjusted_rand_score(labels_true, labels)
-        print("Adjusted Rand Index: %0.3f" % ari)
-
-        return ari
-
-    def adjustedMutualInfo(self, labels_true, labels):
-        """ Adjusted Mutual Information between two clusterings. Measures the agreement of the two assignments,
-            ignoring permutations.
-            score - =< 1.0.
-            1.0 perfect match.
-        """
-        ami = metrics.adjusted_mutual_info_score(labels_true, labels)
-        print("Adjusted Mutual Information: %0.3f" % ami)
-
-        return ami
-
-    def silhouetteCoef(self, features, labels):
-        """ When the ground truth labels are not present.
-            Mean Silhouette Coefficient of all samples.
-            Calculated using the mean intra-cluster distance and the mean nearest-cluster distance for each
-            sample.
-            score - between -1.0 and 1.0 (perfect).
-            score close to zero: overlapping clusters.
-            negative score: a sample has been assigned to the wrong cluster, as a different cluster is more similar.
-        """
-        sc = metrics.silhouette_score(features, labels)
-        print("Silhouette Coefficient: %0.3f" % sc)
-
-        return sc
-
-    def kMeans(self, init='k-means++', n_clusters=8, n_init=10):
-        """ K-Means clustering.
-            Useful when: general-purpose, even cluster size, flat geometry, not too many clusters.
-        """
-        model = KMeans(init=init, n_clusters=n_clusters, n_init=n_init)
-        model.fit(self.features)
-
-        return model
-
-    def miniBatchKmeans(self, n_clusters=8, init='k-means++', max_iter=100, batch_size=25):
-        """ Variant of the K-Means algorithm, uses mini-batches to reduce the computation time.
-        """
-        model = MiniBatchKMeans(n_clusters=n_clusters, init=init, max_iter=max_iter, batch_size=batch_size)
-        model.fit(self.features)
-
-        return model
-
-    def meanShift(self):
-        """ A sliding-window-based algorithm that attempts to find dense areas of data points.
-            Usecase: many clusters, uneven cluster size, non-flat geometry.
-        """
-        model = MeanShift()
-        model.fit(self.features)
-
-        return model
 
     # def DBscan(self, eps=0.5, min_samples=5, metric='euclidean'):
     def DBscan(self, eps=0.5, min_samples=5):
@@ -193,11 +65,8 @@ class Clustering:
             Finds core samples of high density and expands clusters from them.
             Usecase: non-flat geometry, uneven cluster sizes
         """
-        # model = DBSCAN(eps=eps, min_samples=min_samples, metric=metric)
-        # model = DBSCAN(eps=eps, min_samples=min_samples, metric=self.custom_dist)
         model = DBSCAN(metric='precomputed')
         d = pairwise_distances(self.features, self.features, metric=self.custom_dist)
-        # model.fit(self.features)
         model.fit(d)
 
         return model
@@ -213,20 +82,6 @@ class Clustering:
 
         return model
 
-    def spectralClustering(self, n_clusters=8, eigen_solver=None, random_state=None, n_init=10, gamma=1.0,
-                           affinity='rbf', n_neighbors=10, eigen_tol=0.0, assign_labels='kmeans', degree=3,
-                           coef0=1, kernel_params=None, n_jobs=None):
-        """ Requires the number of clusters to be specified. Good for small number of classes.
-            Usecase: few clusters, even cluster size, non-flat geometry.
-        """
-        model = SpectralClustering(n_clusters=n_clusters, eigen_solver=eigen_solver, random_state=random_state,
-                                   n_init=n_init, gamma=gamma, affinity=affinity, n_neighbors=n_neighbors,
-                                   eigen_tol=eigen_tol, assign_labels=assign_labels, degree=degree, coef0=coef0,
-                                   kernel_params=kernel_params, n_jobs=n_jobs)
-        model.fit(self.features)
-
-        return model
-
     def agglomerativeClustering(self, n_clusters=3, distance_threshold=None, linkage='ward', affinity='euclidean',
                                 compute_full_tree=False):
         """ A Hierarchical clustering using a bottom up approach: each observation starts in its own cluster, and
@@ -238,40 +93,8 @@ class Clustering:
                                         metric=affinity, compute_full_tree=compute_full_tree)
         d = pairwise_distances(self.features, self.features, metric=self.custom_dist)
         model.fit(d)
-        # model.fit(self.features)
 
         return model
-
-    def GMM(self, n_components=3, covariance_type='full', tol=0.001, reg_covar=1e-06, max_iter=100, n_init=1,
-            init_params='kmeans'):
-        """ Gaussian mixture model. Not scalable.
-            Usecase: flat geometry, good for density estimation.
-        """
-        model = GaussianMixture(n_components=n_components, covariance_type=covariance_type, tol=tol,
-                                reg_covar=reg_covar, max_iter=max_iter, n_init=n_init, init_params=init_params)
-        model.fit(self.features)
-        model.labels_ = model.predict(self.features)
-
-        return model
-
-    def affinityPropagation(self, damping=0.5, max_iter=200, convergence_iter=15):
-        """ Affinity Propagation.
-            Usecase: many clusters, uneven cluster size, non-flat geometry.
-        """
-        model = AffinityPropagation(damping=damping, max_iter=max_iter, convergence_iter=convergence_iter)
-        model.fit(self.features)
-
-        return model
-
-    def som(self, mapsize):
-        """ Self Organising Map
-        """
-        import sompy
-        som = sompy.SOMFactory.build(self.features, [], mask=None, mapshape='planar', lattice='rect', normalization='var',
-                                     initialization='pca', neighborhood='gaussian', training='batch', name='sompy')
-        som.train()
-
-        return som
 
     def cluster(self, dataset, dirname, fs, species, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
         """
@@ -366,27 +189,19 @@ class Clustering:
                 we = we.mean(axis=1)
                 if weInds:
                     we = we[weInds]
-                # if f1 != 0 and f2 != 0:
-                #     we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f1, f2
                 features.append(we)
                 record.insert(3, we)
             elif feature == 'chroma':
                 chroma = librosa.feature.chroma_cqt(y=audiodata, sr=fs)
-                # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
                 chroma = scale(chroma, axis=1)
                 features.append(chroma)
                 record.insert(3, chroma)
 
         # 5. Actual clustering
-        # features = TSNE().fit_transform(features)
-        # TODO: If have some template examples, use them?
-        # There are three ways to do this: (i) cluster as is, then see if all of the named ones are in a class (and move the others), (ii) try from sklearn.semi_supervised import LabelSpreading or similar or (iii) use them as nearest neighbour templates
         self.features = features
 
         model = self.trainModel()
         predicted_labels = model.labels_
-        #print(predicted_labels)
-        # clusters = len(set(model.labels_))
 
         # Attach the label to each syllable
         for i in range(len(predicted_labels)):
@@ -423,7 +238,7 @@ class Clustering:
                 if record[:2] == rec[:2]:
                     record[3].append(rec[3])
 
-        # Make the labels continous, e.g. agglomerative may have produced 0, 2, 3, ...
+        # Make the labels continuous, e.g. agglomerative may have produced 0, 2, 3, ...
         ulabels = list(set(labels))
         nclasses = len(ulabels)
         dic = []
@@ -434,193 +249,12 @@ class Clustering:
         # Update the labels
         for i in range(len(clustered_dataset)):
             clustered_dataset[i].insert(4, dic[labels[i]])
-            # clustered_dataset format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-        
+
         print("clustered_dataset", clustered_dataset)
         print("nclasses", nclasses)
         print("duration", duration)
 
         return clustered_dataset, nclasses, duration
-
-    def getCalls(self,trainDir,species,fs):
-        # TODO: Check this!
-        """ Gets all labelled segments for the specified species. Those with a calltype annotation are given it, the others have a None label
-        Returns [parent_audio_file, [segment], class_label], dict of class labels and counts
-        """
-        self.sp = Spectrogram.Spectrogram(256,128)
-        calls = []
-        calltypes = {}
-        duration = []
-
-        listOfDataFiles = []
-        listOfSoundFiles = []
-        for root, dirs, files in os.walk(trainDir):
-            for file in files:
-                if file.lower().endswith('.data'):
-                    listOfDataFiles.append(os.path.join(root, file))
-                elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
-                    listOfSoundFiles.append(os.path.join(root, file))
-
-        for file in listOfDataFiles:
-            if file[:-5] in listOfSoundFiles:
-                # Read the annotation
-                segments = Segment.SegmentList()
-                segments.parseJSON(os.path.join(trainDir, file))
-                soundfile = os.path.join(trainDir, file[:-5])
-                SpSegs = segments.getSpecies(species)
-                #print(SpSegs)
-            
-                if len(SpSegs) > 0:
-                    # Load the file
-                    #self.sp.readSoundFile(soundfile)
-                    #audiodata = sp.data.tolist()
-
-                    # For each segment
-                    for segix in SpSegs:
-                        seg = segments[segix]
-                        # See if it has a calltype label
-                        for label in seg[4]:
-                            if label["species"] == species:
-                                if "calltype" in label:
-                                    if label["calltype"] in calltypes:
-                                        calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
-                                    else:
-                                        calltypes.update({label["calltype"]:1})
-                                    ct = label["calltype"]
-                                else:
-                                    ct = None
-
-                            calls.append([soundfile, seg, ct])
-                
-                                # Find the syllables inside this segment
-                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                                # TODO: is median clipping still best option?
-                                # TODO: SRM: HERE
-                                #syls = self.findSyllablesSeg(soundfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
-                                # TODO: Something weird with self.clusters It's a dict except when it isn't...
-                                #CTsegments.append([soundfile, seg, syls, ct])
-                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(ct)]])
-                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
-                                # TODO: What's the point of this duration?
-                                #duration.append(seg[1]-seg[0])
-        #print(calltypes)                     
-        return calls, calltypes #, np.median(duration)
-
-    def getSyllables(self,trainDir,species,fs):
-        # TODO: Check this!
-        """ Gets all syllables. Those with a calltype annotation are given it, the others have a None label
-        Returns [parent_audio_file, [segment], [syllables], class_label], dict of class labels and counts #, median duration
-        """
-        self.sp = Spectrogram.Spectrogram(256,128)
-        CTsegments = []
-        calltypes = {}
-        duration = []
-
-        listOfDataFiles = []
-        listOfSoundFiles = []
-        for root, dirs, files in os.walk(trainDir):
-            for file in files:
-                if file.lower().endswith('.data'):
-                    listOfDataFiles.append(os.path.join(root, file))
-                elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
-                    listOfSoundFiles.append(os.path.join(root, file))
-
-        for file in listOfDataFiles:
-            if file[:-5] in listOfSoundFiles:
-                # Read the annotation
-                segments = Segment.SegmentList()
-                segments.parseJSON(os.path.join(trainDir, file))
-                soundfile = os.path.join(trainDir, file[:-5])
-                SpSegs = segments.getSpecies(species)
-                #print(SpSegs)
-            
-                if len(SpSegs) > 0:
-                    # Load the file
-                    #self.sp.readSoundFile(soundfile)
-                    #audiodata = sp.data.tolist()
-
-                    # For each segment
-                    for segix in SpSegs:
-                        seg = segments[segix]
-                        # See if it has a calltype label
-                        for label in seg[4]:
-                            if label["species"] == species:
-                                if "calltype" in label:
-                                    if label["calltype"] in calltypes:
-                                        calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
-                                    else:
-                                        calltypes.update({label["calltype"]:1})
-                                    ct = label["calltype"]
-                                else:
-                                    ct = None
-
-                                CTsegments.append([soundfile, seg, syls, ct])
-                
-                                # Find the syllables inside this segment
-                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                                # TODO: is median clipping still best option?
-                                # TODO: SRM: HERE
-                                #syls = self.findSyllablesSeg(soundfile,seg=seg, fs=fs, denoise=False, minlen=0.2)
-                                # TODO: Something weird with self.clusters It's a dict except when it isn't...
-                                #CTsegments.append([soundfile, seg, syls, ct])
-                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(ct)]])
-                                ##CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
-                                # TODO: What's the point of this duration?
-                                #duration.append(seg[1]-seg[0])
-        #print(calltypes)                     
-        return CTsegments, calltypes #, np.median(duration)
-
-    def getClustersGT_OLD(self):
-        """ Gets call type clusters from annotations
-         returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
-        """
-        ctTexts = []
-        CTsegments = []
-        duration = []
-        cl = Clustering.Clustering([], [], 5)
-
-        listOfDataFiles = []
-        listOfSoundFiles = []
-        for root, dirs, files in os.walk(self.field("trainDir")):
-            for file in files:
-                if file.lower().endswith('.data'):
-                    listOfDataFiles.append(os.path.join(root, file))
-                elif file.lower().endswith('.wav') or file.lower().endswith('.flac'):
-                    listOfSoundFiles.append(os.path.join(root, file))
-
-        # TODO Why are there 2 versions of these loops
-        for file in listOfDataFiles:
-            if file[:-5] in listOfSoundFiles:
-                # Read the annotation
-                segments = Segment.SegmentList()
-                segments.parseJSON(file)
-                SpSegs = segments.getSpecies(self.field("species"))
-                for segix in SpSegs:
-                    seg = segments[segix]
-                    for label in seg[4]:
-                        if label["species"] == self.field("species") and "calltype" in label:
-                            if label["calltype"] not in ctTexts:
-                                ctTexts.append(label["calltype"])
-        for i in range(len(ctTexts)):
-            self.clusters[i] = ctTexts[i]
-
-        for file in listOfDataFiles:
-            if file[:-5] in listOfSoundFiles:
-                # Read the annotation
-                segments = Segment.SegmentList()
-                soundfile = os.path.join(self.field("trainDir"), file[:-5])
-                segments.parseJSON(os.path.join(self.field("trainDir"), file))
-                SpSegs = segments.getSpecies(self.field("species"))
-                for segix in SpSegs:
-                    seg = segments[segix]
-                    for label in seg[4]:
-                        if label["species"] == self.field("species") and "calltype" in label:
-                            # Find the syllables inside this segment
-                            # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
-                            syls = self.findSyllablesSeg(soundfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
-                            CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
-                            duration.append(seg[1]-seg[0])
-        return CTsegments, len(self.clusters), np.median(duration)
 
     def nodesInRange(self, nlevels, f1, f2, fs):
         ''' Return the indices (nodes) to keep
@@ -646,7 +280,7 @@ class Clustering:
                 for file in files:
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                         # Read the annotation
-                        segments = Segment.SegmentList()
+                        segments = Annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
                         # keep the right species
                         if species:
@@ -655,14 +289,14 @@ class Clustering:
                             thisSpSegs = np.arange(len(segments)).tolist()
                         for segix in thisSpSegs:
                             seg = segments[segix]
-                            lowlist.append(seg[2])
-                            highlist.append(seg[3])
+                            lowlist.append(seg.freq_low)
+                            highlist.append(seg.freq_high)
 
         # File mode (from the main interface)
         elif os.path.isfile(dirname):
             if (dirname.lower().endswith('.wav') or dirname.lower().endswith('.flac')) and os.path.exists(dirname + '.data'):
                 # Read the annotation
-                segments = Segment.SegmentList()
+                segments = Annotation.SegmentList()
                 segments.parseJSON(dirname + '.data')
                 # keep the right species
                 if species:
@@ -671,8 +305,8 @@ class Clustering:
                     thisSpSegs = np.arange(len(segments)).tolist()
                 for segix in thisSpSegs:
                     seg = segments[segix]
-                    lowlist.append(seg[2])
-                    highlist.append(seg[3])
+                    lowlist.append(seg.freq_low)
+                    highlist.append(seg.freq_high)
 
             if len(thisSpSegs) < self.n_clusters:
                 self.n_clusters = len(thisSpSegs)//2
@@ -720,7 +354,7 @@ class Clustering:
                 for file in files:
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                         # Read the annotation
-                        segments = Segment.SegmentList()
+                        segments = Annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
                         if species:
                             thisSpSegs = segments.getSpecies(species)
@@ -735,7 +369,7 @@ class Clustering:
         elif os.path.isfile(dirname):
             if (dirname.lower().endswith('.wav') or dirname.lower().endswith('.flac')) and os.path.exists(dirname + '.data'):
                 # Read the annotation
-                segments = Segment.SegmentList()
+                segments = Annotation.SegmentList()
                 segments.parseJSON(dirname + '.data')
                 if species:
                     thisSpSegs = segments.getSpecies(species)
@@ -753,62 +387,45 @@ class Clustering:
         """ Find syllables in the segment using median clipping - single segment
         :return: syllables list
         """
-        # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
-        # And should avoid opening file more than once
-        # And since have made spectrogram, pass it back
-        audiodata = self.loadFile(filename=filename, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
-        start = seg[0]
-        #self.sp = Spectrogram.Spectrogram()
-        self.sp.audio_data.data = audiodata
-        self.sp.audioFormat.sample_rate = fs
+        audiodata = self.loadFile(filename=filename, duration=seg.end_time - seg.start_time, offset=seg.start_time, fs=fs, denoise=denoise)
+        start = seg.start_time
+        self.sp.audio_data = AudioData.AudioData(data=audiodata, sample_rate=fs,
+                                        sample_format='float32', sample_size=32, channels=1)
         _ = self.sp.spectrogram()
-        #if isinstance(audiodata,str):
-            #audiodata = self.loadFile(filename=audiodata, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise)
-            #start = seg[0]
-            #self.sp = Spectrogram.Spectrogram()
-            #self.sp.data = audiodata
-            #self.sp.sampleRate = fs
-            #_ = self.sp.spectrogram()
-        #else:
-            # File is already loaded, make the spectrogram of the call
-            # TODO: Check
-            #_ = self.sp.spectrogram(start=self.sp.convertAmpltoSpec(seg[0]),stop=self.sp.convertAmpltoSpec(seg[1]))
             
-        # Show only the segment frequencies to the median clipping and avoid overlapping noise - better than filtering when loading audiodata (it could make aliasing effect)
+        # Show only the segment frequencies to the median clipping and avoid overlapping noise
         linear = np.linspace(0, fs / 2, int(self.sp.window_width/2))
         # check segment type to determine if upper freq bound is OK
-        if seg[3]==0:
+        if seg.freq_high==0:
             print("Warning: auto-detecting freq bound for full-height segments")
             fhigh = fs//2
         else:
-            fhigh = seg[3]
-        ind_flow = (np.abs(linear - seg[2])).argmin()
+            fhigh = seg.freq_high
+        ind_flow = (np.abs(linear - seg.freq_low)).argmin()
         ind_fhigh = (np.abs(linear - fhigh)).argmin()
         self.sp.sg = self.sp.sg[:, ind_flow:ind_fhigh]
 
-        segment = Segment.Segmenter(self.sp, fs)
+        segmentation = Segmentation.Segmenter(self.sp, fs)
 
-        syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+        syls = segmentation.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
         if len(syls) == 0:  # Sanity check
             # Try again with lower threshold
             # TODO: Why reinitialise?
-            segment = Segment.Segmenter(self.sp, fs)
-            syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+            segmentation = Segmentation.Segmenter(self.sp, fs)
+            syls = segmentation.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
 
         # Merge overlapped segments
-        syls = segment.checkSegmentOverlap(syls)
-        syls = segment.deleteShort(syls, minlen)
+        syls = segmentation.checkSegmentOverlap(syls)
+        syls = segmentation.deleteShort(syls, minlen)
         syls = [[s[0] + start, s[1] + start] for s in syls]
 
         # Sanity check, e.g. when user annotates syllables tightly, median clipping may not detect it
         if len(syls) == 0:
-            syls = [[start, seg[1]]]
+            syls = [[start, seg.end_time]]
         if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  
-            syls = [[start, seg[1]]]
+            syls = [[start, seg.end_time]]
 
-        # TODO: Check
-        #syls_sg = [self.sp.sg for s in syls]
-        return syls #, syls_sg
+        return syls
 
     def trainModel(self):
         """ Clustering model"""
@@ -832,14 +449,6 @@ class Clustering:
             else:
                 model = self.agglomerativeClustering(n_clusters=self.n_clusters, distance_threshold=None, linkage='average', affinity='precomputed')
 
-            # # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
-            # if not self.n_clusters:
-            #     model = self.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
-            #                                          linkage='complete')
-            # else:
-            #     model = self.agglomerativeClustering(n_clusters=self.n_clusters, compute_full_tree=False,
-            #                                          distance_threshold=None, linkage='complete')
-            # # model.fit_predict(self.features)
         return model
 
     def getClusterCenter(self, cluster, fs, f1, f2, feature, duration, n_mels=24, denoise=False):
@@ -894,7 +503,6 @@ class Clustering:
                     fc.append(we)
                 elif feature == 'chroma':
                     chroma = librosa.feature.chroma_cqt(y=audiodata, sr=fs)
-                    # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
                     chroma = scale(chroma, axis=1)
                     fc.append(chroma)
         return np.mean(fc, axis=0)
@@ -910,315 +518,18 @@ class Clustering:
         print(filename,duration,offset)
         self.sp.readSoundFile(filename, duration, offset, silent=silent)
         
-        #self.sp.resample(fs)
-        sampleRate = self.sp.audioFormat.sample_rate
+        sampleRate = self.sp.audio_data.sample_rate
         audiodata = self.sp.audio_data.data
 
-        # # pre-process
+        # Pre-process
         if denoise:
             WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=10, samplerate=fs)
             audiodata = WF.waveletDenoise(thresholdType='soft', maxLevel=10)
 
         if f1 != 0 and f2 != 0:
-            # audiodata = SignalProc.ButterworthBandpass(audiodata, sampleRate, f1, f2)
             audiodata = SignalProc.bandpassFilter(audiodata, sampleRate, f1, f2)
 
         return audiodata
-
-    def cluster_by_dist(self, dir, species, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False, single=False,
-                        distance='dtw', max_clusters=10):
-        """
-        Given wav + annotation files,
-            1) identify syllables using median clipping/ FIR
-            2) generate features WE/MFCC/chroma
-            3) calculate DTW distances and decide class/ generate new class
-        :param dir: directory of audio and annotations
-        :param feature: 'WE' or 'MFCC' or 'chroma'
-        :param n_mels: number of mel coefs for MFCC
-        :param fs: prefered sampling frequency, 0 leads to calculate it from the anotations
-        :param minlen: min syllable length in secs
-        :param f_1: lower frequency bound, 0 leads to calculate it from the anotations
-        :param f_2: upper frequency bound, 0 leads to calculate it from the anotations
-        :param denoise: wavelet denoise
-        :param single: True means when there are multiple syllables in a segment, add only one syllable to the cluster info
-        :param distance: 'dtw' or 'xcor'
-        :return: possible clusters
-        """
-        from scipy import signal
-
-        # Get flow and fhigh for bandpass from annotations
-        lowlist = []
-        highlist = []
-        srlist = []
-        for root, dirs, files in os.walk(str(dir)):
-            for file in files:
-                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
-                    info = sf.info(os.path.join(root, file))
-                    rate = info.samplerate
-                    srlist.append(rate)
-                    # Read the annotation
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(os.path.join(root, file + '.data'))
-                    # keep the right species
-                    if species:
-                        thisSpSegs = segments.getSpecies(species)
-                    else:
-                        thisSpSegs = np.arange(len(segments)).tolist()
-                    for segix in thisSpSegs:
-                        seg = segments[segix]
-                        lowlist.append(seg[2])
-                        highlist.append(seg[3])
-        print(lowlist)
-        print(highlist)
-        print(srlist)
-        if f_1 == 0:
-            f_1 = np.min(lowlist)
-        if f_2 == 0:
-            f_2 = np.median(highlist)
-
-        if fs == 0:
-            arr = [4000, 8000, 16000]
-            pos = np.abs(arr - np.median(highlist) * 2).argmin()
-            fs = arr[pos]
-
-        print('fs: ', fs)
-
-        if fs > np.min(srlist):
-            print(fs)
-            fs = np.min(srlist)
-
-        if fs < f_2 * 2 + 50:
-            f_2 = fs // 2 - 50
-
-        minlen_samples = minlen * fs
-
-        print('Frequency band:', f_1, '-', f_2)
-        print('fs: ', fs)
-
-        # Find the lower and upper bounds (relevant to the frq range), when the range is given
-        if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
-            mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs / 2, htk=False)
-            ind_flow = (np.abs(mels - f_1)).argmin()
-            ind_fhigh = (np.abs(mels - f_2)).argmin()
-
-        elif feature == 'we' and f_1 != 0 and f_2 != 0:
-            linear = np.linspace(0, fs / 2, 62)
-            ind_flow = (np.abs(linear - f_1)).argmin()
-            ind_fhigh = (np.abs(linear - f_2)).argmin()
-
-        # Ready for clustering
-        max_clusters = max_clusters
-        n_clusters = 0
-        clusters = []
-        for root, dirs, files in os.walk(str(dir)):
-            for file in files:
-                if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
-                    # Read the annotation
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(os.path.join(root, file + '.data'))
-                    # keep the right species
-                    if species:
-                        thisSpSegs = segments.getSpecies(species)
-                    else:
-                        thisSpSegs = np.arange(len(segments)).tolist()
-
-                    # Sort the segments longest to shortest, would be a good idea to avoid making first class with only
-                    # one member :)
-                    segments_len = [segments[segix][1] - segments[segix][0] for segix in thisSpSegs]
-                    inds = np.argsort(segments_len)[::-1]
-                    sortedsegments = [segments[i] for i in inds]
-
-                    # Now find syllables within each segment, median clipping
-                    for seg in sortedsegments:
-                        if seg[0] == -1:
-                            continue
-                        audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
-                                                      offset=seg[0], fs=fs, denoise=denoise, f1=f_1, f2=f_2)
-                        start = int(seg[0] * fs)
-                        sp = Spectrogram.Spectrogram(256, 128)
-                        sp.audio_data.data = audiodata
-                        sp.audioFormat.sample_rate = fs
-                        #sgRaw = sp.spectrogram(256, 128)
-                        sgRaw = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
-                        segment = Segment.Segmenter(sp=sp, fs=fs)
-                        syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                        if len(syls) == 0:  # Try again with FIR
-                            syls = segment.segmentByFIR(threshold=0.05)
-                        syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
-                        syls = [[int(s[0] * fs), int(s[1] * fs)] for s in syls]
-
-                        if len(syls) == 0:  # Sanity check, when annotating syllables tight,
-                            syls = [[0, int((seg[1] - seg[0]) * fs)]]  # median clipping doesn't detect it.
-                        if len(syls) > 1:
-                            # TODO: samples to seconds
-                            syls = segment.joinGaps(syls, minlen_samples)  # Merge short segments
-                        if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen_samples:  # Sanity check
-                            syls = [[0, int((seg[1] - seg[0]) * fs)]]
-                        temp = [[np.round((x[0] + start) / fs, 2), np.round((x[1] + start) / fs, 2)] for x in syls]
-                        print('\nCurrent:', seg, '--> syllables >', minlen, 'secs ', temp)
-
-                        # Calculate features of the syllables in the current segment.
-                        f = []
-                        for s in syls:
-                            data = audiodata[s[0]:s[1]]
-                            if feature == 'mfcc':  # MFCC
-                                mfcc = librosa.feature.mfcc(y=data, sr=fs, n_mfcc=n_mels)
-                                if f_1 != 0 and f_2 != 0:
-                                    mfcc = mfcc[ind_flow:ind_fhigh, :]  # Limit the frequency to the fixed range [f_1, f_2]
-                                mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
-                                mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
-                                mfcc = scale(mfcc, axis=1)
-                                # librosa.display.specshow(mfcc, sr=fs, x_axis='time')
-                                # m = [i for sublist in mfcc for i in sublist]
-                                f.append(mfcc)
-
-                            elif feature == 'we':  # Wavelet Energy
-                                ws = WaveletSegment.WaveletSegment(spInfo={})
-                                we = ws.computeWaveletEnergy(data=data, sampleRate=fs, nlevels=5, wpmode='new')
-                                we = we.mean(axis=1)
-                                if f_1 != 0 and f_2 != 0:
-                                    we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f_1, f_2
-                                f.append(we)
-                            elif feature == 'chroma':
-                                chroma = librosa.feature.chroma_cqt(y=data, sr=fs)
-                                # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
-                                chroma = scale(chroma, axis=1)
-                                f.append(chroma)
-
-                        matched = False
-                        if n_clusters == 0:
-                            print('**Case 1: First class')
-                            newclass = self.class_create(label=n_clusters, syl=syls, features=f, f_low=seg[2],
-                                                         f_high=seg[3], segs=[(os.path.join(root, file), seg)],
-                                                         single=single, dist_method=distance)
-                            clusters.append(newclass)
-                            n_clusters += 1
-                            print('Created new class: Class ', "'", newclass["label"], "'", ',\tIn-class_d: ',
-                                  newclass["d"], '\tf_low: ', newclass["f_low"], '\tf_high: ', newclass["f_high"])
-                            matched = True
-                        if not matched:
-                            # See if the syllables in the current seg match with any existing class
-                            min_ds = []  # Keep track of the minimum distances to each class
-                            clusters = random.sample(clusters, len(clusters))  # Shuffle the clusters to avoid bias
-                            for c in range(len(clusters)):
-                                f_c = clusters[c]["features"]  # features of the current class c
-                                dist_c = np.zeros((len(f_c), len(f)))  # distances to the current class c
-                                for i in range(len(f_c)):
-                                    for j in range(len(f)):
-                                        if distance == 'dtw':
-                                            d, _ = librosa.sequence.dtw(f_c[i], f[j], metric='euclidean')
-                                            dist_c[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
-                                        elif distance == 'xcor':
-                                            corr = signal.correlate(f_c[i], f[j], mode='full')
-                                            dist_c[i, j] = np.sum(corr) / max(len(f_c[i]), len(f[j]))
-
-                                # Min distance to the current class
-                                print('Distance to Class ', clusters[c]["label"], ': ', np.amin(dist_c[dist_c != 0]),
-                                      '( In-class distance: ', clusters[c]["d"], ')')
-                                min_ds.append(np.amin(dist_c[dist_c != 0]))
-
-                            # Now get the clusters sorted according to the min dist
-                            ind = np.argsort(min_ds)
-                            min_ds = np.sort(min_ds)
-                            # make the cluster order
-                            clusters = [clusters[i] for i in ind]
-                            for c in range(len(clusters)):
-                                if (clusters[c]["d"] != 0) and min_ds[c] < (clusters[c]["d"] + clusters[c]["d"] * 0.1):
-                                    print('**Case 2: Found a match with a class > one syllable')
-                                    print('Class ', clusters[c]["label"], ', dist ', min_ds[c])
-                                    # Update this class
-                                    clusters[c] = self.class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
-                                                               newf_high=seg[3], newsyl=syls,
-                                                               newseg=(os.path.join(root, file), seg), single=single,
-                                                               dist_method=distance)
-                                    matched = True
-                                    break  # found a match, exit from the for loop, go to the next segment
-
-                                elif c < len(clusters) - 1:
-                                    continue  # continue to the next class
-
-                        # Checked most of the classes by now, if still no match found, check the classes with only one
-                        # data point (clusters[c]["d"] == 0).
-                        # Note the arbitrary thr.
-                        if not matched:
-                            if distance == 'dtw':
-                                thr = 25
-                            elif distance == 'xcor':
-                                thr = 1000
-                            for c in range(len(clusters)):
-                                if clusters[c]["d"] == 0 and min_ds[c] < thr:
-                                    print('**Case 3: In-class dist of ', clusters[c]["label"], '=', clusters[c]["d"],
-                                          'and this example < ', thr, ' dist')
-                                    print('Class ', clusters[c]["label"], ', dist ', min_ds[c])
-                                    # Update this class
-                                    clusters[c] = self.class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
-                                                               newf_high=seg[3], newsyl=syls,
-                                                               newseg=(os.path.join(root, file), seg), single=single,
-                                                               dist_method=distance)
-                                    matched = True
-                                    break  # Break the search and go to the next segment
-
-                        # If no match found yet, check the max clusters
-                        if not matched:
-                            if n_clusters == max_clusters:
-                                print('**Case 4: Reached max classes, therefore adding current seg to the closest '
-                                      'class... ')
-                                # min_ind = np.argmin(min_ds)
-                                # classes are sorted in ascending order of distance already
-                                for c in range(len(clusters)):
-                                    if min_ds[c] <= 4 * clusters[c]["d"] or clusters[c]["d"] == 0:
-                                        print('Class ', clusters[c]["label"], ', dist ', min_ds[c],
-                                              '(in-class distance:', clusters[c]["d"], ')')
-                                        # Update this class
-                                        clusters[c] = self.class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
-                                                                   newf_high=seg[3], newsyl=syls,
-                                                                   newseg=(os.path.join(root, file), seg),
-                                                                   single=single,
-                                                                   dist_method=distance)
-                                        matched = True
-                                        break
-                                if not matched:
-                                    print('Class ', clusters[0]["label"], ', dist ', min_ds[0],
-                                          '(in-class distance:', clusters[0]["d"], ')')
-                                    # Update this class
-                                    # TODO: don't update the class as it is an outlier?
-                                    clusters[0] = self.class_update(cluster=clusters[0], newfeatures=f, newf_low=seg[2],
-                                                               newf_high=seg[3], newsyl=syls,
-                                                               newseg=(os.path.join(root, file), seg), single=single,
-                                                               dist_method=distance)
-                                    matched = True
-                                continue  # Continue to next segment
-
-                        #  If still no luck, create a new class
-                        if not matched:
-                            print('**Case 5: None of Case 1-4')
-                            newclass = self.class_create(label=n_clusters, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
-                                                    segs=[(os.path.join(root, file), seg)], single=single,
-                                                    dist_method=distance)
-                            print('Created a new class: Class ', n_clusters + 1)
-                            clusters.append(newclass)
-                            n_clusters += 1
-                            print('Created new class: Class ', "'", newclass["label"], "'", ',\tin-class_d: ',
-                                  newclass["d"], '\tf_low: ', newclass["f_low"], '\tf_high: ', newclass["f_high"])
-
-        print('\n\n--------------Clusters created-------------------')
-        clustered_segs = []
-        for c in range(len(clusters)):
-            print('Class ', clusters[c]['label'], ': ', len(clusters[c]['segs']))
-            for s in range(len(clusters[c]['segs'])):
-                print('\t', clusters[c]['segs'][s])
-                if single:
-                    clustered_segs.append([clusters[c]['segs'][s][0], clusters[c]['segs'][s][1],
-                                           [clusters[c]['features'][s]], clusters[c]['label']])
-                else:
-                    clustered_segs.append([clusters[c]['segs'][s][0], clusters[c]['segs'][s][1], clusters[c]['label']])
-
-        # Clustered segments
-        print('\n\n################### Clustered segments ############################')
-        for s in clustered_segs:
-            print(s)
-        return clustered_segs, fs, n_clusters, 1
-        # return clustered_dataset, fs, nclasses, duration
 
     def class_create(self, label, syl, features, f_low, f_high, segs, single=False, dist_method='dtw'):
         """ Create a new class

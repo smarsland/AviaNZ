@@ -57,6 +57,8 @@ class BatchInterface(QMainWindow):
         self.FilterDicts = self.ConfigLoader.filters(filtersDir)
         if "NZ Bats" in self.FilterDicts:
             del self.FilterDicts["NZ Bats"]
+        if "NZ Bats_NP" in self.FilterDicts:
+            del self.FilterDicts["NZ Bats_NP"]
 
         self.dirName=''
         self.statusBar().showMessage("Select a directory to process")
@@ -152,8 +154,10 @@ class BatchInterface(QMainWindow):
         windlabel = QLabel("Specify wind filter (or select None). Only used with chp filters.")
         self.windfilter = QComboBox()
         self.windfilter.addItems(["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)", "None"])
-        self.overwrite = QCheckBox("Overwrite existing annotations")
-        self.overwrite.setChecked(True)
+        self.overwriteSpecies = QCheckBox("Overwrite segments for selected species")
+        self.overwriteSpecies.setChecked(True)
+        self.overwriteAll = QCheckBox("Overwrite all annotations in files")
+        self.overwriteAll.setChecked(False)
 
         self.mergesyllables = QCheckBox("Merge Syllables For 'Any sound'")
         self.mergesyllables.setChecked(False)
@@ -245,7 +249,8 @@ class BatchInterface(QMainWindow):
         #self.boxWind.setLayout(formWind)
         #self.d_detection.addWidget(self.boxWind, row=8, col=0, colspan=4)
         #self.boxWind.hide()
-        self.d_detection.addWidget(self.overwrite,row=7,col=0, colspan=2)
+        self.d_detection.addWidget(self.overwriteSpecies,row=7,col=0, colspan=2)
+        self.d_detection.addWidget(self.overwriteAll,row=8,col=0, colspan=2)
         self.d_detection.addWidget(self.mergesyllables,row=9,col=0, colspan=2)
         #self.d_detection.addWidget(self.mergesyllables2,row=9,col=2, colspan=2)
         self.boxPost = QGroupBox()
@@ -338,7 +343,7 @@ class BatchInterface(QMainWindow):
         #      Is that what we want? I figured it would just be doing the detection. 
 
         if self.batfilter.isChecked():
-            species = "NZ Bats"
+            species = "NZ Bats_NP"
             self.w_processButton.setEnabled(True)
         else:
             selected = self.w_spe1.selectedItems()
@@ -361,7 +366,8 @@ class BatchInterface(QMainWindow):
             intermittent=not(self.intermittent.isChecked()), 
             wind=self.windfilter.currentText(), 
             mergeSyllables=self.mergesyllables.isChecked(), 
-            overwrite=self.overwrite.isChecked(), 
+            overwriteSpecies=self.overwriteSpecies.isChecked(),
+            overwriteAll=self.overwriteAll.isChecked(),
             timeWindow_s=timeWindow_s, 
             timeWindow_e=timeWindow_e, 
             protocolSize=self.protocolSize.value(), 

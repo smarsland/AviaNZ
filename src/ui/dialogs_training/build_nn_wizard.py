@@ -52,7 +52,7 @@ from src.core import SupportClasses
 from src.core import Spectrogram
 from src.core import WaveletSegment
 from src.core import WaveletFunctions
-from src.core import Segment
+from src.core import Annotation
 from src.core import Clustering
 from src.core import Training
 
@@ -418,9 +418,9 @@ class BuildNNWizard(QWizard):
                 for file in files:
                     soundFile = os.path.join(root, file)
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                        segments = Segment.SegmentList()
+                        segments = Annotation.SegmentList()
                         segments.parseJSON(soundFile + '.data')
-                        cert = [lab["certainty"] if lab["species"] == self.nntrain.species else 100 for seg in segments for lab in seg[4]]
+                        cert = [lab["certainty"] if lab["species"] == self.nntrain.species else 100 for seg in segments for lab in seg.labels]
                         if cert:
                             mincert = min(cert)
                             if minCertainty > mincert:
@@ -670,7 +670,7 @@ class BuildNNWizard(QWizard):
                 sp = Spectrogram.Spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
                 sp.readSoundFile(filename, duration, offset)
                 sp.resample(self.nntrain.fs)
-                sp.audioFormat.sample_rate = self.nntrain.fs
+                sp.audio_data.sample_rate = self.nntrain.fs
                 sgRaw = sp.spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
                 sgRaw = sgRaw[:self.nntrain.imgsize[0]]
                 # Frequency masking
@@ -688,7 +688,7 @@ class BuildNNWizard(QWizard):
                 # determine colour map
                 self.lut = colourMaps.getLookupTable(self.config['cmap'])
 
-                picbtn = PicButton(1, np.fliplr(sg), sp, sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, cluster=True)
+                picbtn = PicButton(1, np.fliplr(sg), sp, sp.audio_data, self.imgsec.value(), 0, 0, self.lut, cluster=True)
                 if i == 0:
                     pic = QPixmap.fromImage(picbtn.im1)
                     self.img1.setPixmap(pic.scaledToHeight(175))

@@ -592,8 +592,8 @@ class ExcelIO():
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits - use datetime formatting
-                tstart = startTimeFile + timedelta(milliseconds=int(seg[0]*1000))
-                tend = startTimeFile + timedelta(milliseconds=int(seg[1]*1000))
+                tstart = startTimeFile + timedelta(milliseconds=int(seg.start_time*1000))
+                tend = startTimeFile + timedelta(milliseconds=int(seg.end_time*1000))
                 if precisionMS:
                     # Format with milliseconds
                     ws.cell(row=r, column=2, value=tstart.strftime("%H:%M:%S.%f")[:-3])
@@ -602,17 +602,17 @@ class ExcelIO():
                     ws.cell(row=r, column=2, value=tstart.strftime("%H:%M:%S"))
                     ws.cell(row=r, column=3, value=tend.strftime("%H:%M:%S"))
                 # Freq limits
-                if seg[3]!=0:
-                    ws.cell(row=r, column=4, value=int(seg[2]))
-                    ws.cell(row=r, column=5, value=int(seg[3]))
+                if seg.freq_high!=0:
+                    ws.cell(row=r, column=4, value=int(seg.freq_low))
+                    ws.cell(row=r, column=5, value=int(seg.freq_high))
                 if currsp=="Any sound":
                     # print species and certainty and call type
-                    text = [lab["species"] for lab in seg[4]]
+                    text = [lab["species"] for lab in seg.labels]
                     ws.cell(row=r, column=6, value=", ".join(text))
-                    text = [str(lab["certainty"]) for lab in seg[4]]
+                    text = [str(lab["certainty"]) for lab in seg.labels]
                     ws.cell(row=r, column=7, value=", ".join(text))
                     strct = []
-                    for lab in seg[4]:
+                    for lab in seg.labels:
                         if "calltype" in lab:
                             strct.append(str(lab["calltype"]))
                         else:
@@ -634,10 +634,10 @@ class ExcelIO():
                     # SRM: As desired for bittern (H. Caley)
                     # The segments are sorted into order of start time
                     Previous=1
-                    while i-Previous>=0 and speciesSegs[i-Previous][1] > seg[0]:
+                    while i-Previous>=0 and speciesSegs[i-Previous].end_time > seg.start_time:
                         Previous += 1
                     Next = 1
-                    while i+Next<len(speciesSegs) and speciesSegs[i+Next][0] < seg[1]:
+                    while i+Next<len(speciesSegs) and speciesSegs[i+Next].start_time < seg.end_time:
                         Next += 1
                     ws.cell(row=r, column=8, value=", ".join(str(Next+Previous-2)))
                 r += 1
@@ -722,7 +722,7 @@ class ExcelIO():
         speciesList = set(speciesList)
         for segl in segments:
             for seg in segl:
-                speciesList.update([lab["species"] for lab in seg[4]])
+                speciesList.update([lab["species"] for lab in seg.labels])
         speciesList.add("Any sound")
         print("The following species were detected for export:", speciesList)
 
@@ -810,9 +810,9 @@ class ExcelIO():
                     # (for this wav file)
                     speciesCerts = []
                     for seg in segsl:
-                        for lab in seg[4]:
+                        for lab in seg.labels:
                             if lab["species"]==species:
-                                speciesCerts.append([seg[0], seg[1], lab["certainty"]])
+                                speciesCerts.append([seg.start_time, seg.end_time, lab["certainty"]])
 
                     # export presence/absence and max certainty
                     self.writeToExcelp2(wb, speciesCerts, segsl.filename)

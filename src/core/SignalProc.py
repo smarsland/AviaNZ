@@ -1,15 +1,35 @@
 
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2024
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 # SignalProc.py
+
 # This file holds signal processing functions that don't use the full spectrogram or audio data
+
 import scipy.signal as signal
 import pyfftw as fft
-#import scipy.fftpack as fft
+from itertools import chain, repeat
 import numpy as np
 import copy
-# Note: Spectrogram import moved to function level to avoid circular imports
+
+from src.core import AudioData
+from src.core import Spectrogram
 
 def ButterworthBandpass(data,sampleRate,low=0,high=None,band=0.005):
     """ Basic IIR bandpass filter.
@@ -268,44 +288,10 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
     # Getting overflow warnings with 32 bit...
     #wave = wave.astype('float64')
     total_windowing_sum = np.zeros(((np.shape(sg)[0]) * incr + windowSize - 1))
-    #Virginia: adding different windows
-
     
-   # Set of window options
-    if window=='Hann':
-        # This is the Hann window
-        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)))
-    elif window=='Parzen':
-        # Parzen (window_width even)
-        n = np.arange(windowSize) - 0.5*windowSize
-        window = np.where(np.abs(n)<0.25*windowSize,1 - 6*(n/(0.5*windowSize))**2*(1-np.abs(n)/(0.5*windowSize)), 2*(1-np.abs(n)/(0.5*windowSize))**3)
-    elif window=='Welch':
-        # Welch
-        window = 1.0 - ((np.arange(windowSize) - 0.5*(windowSize-1))/(0.5*(windowSize-1)))**2
-    elif window=='Hamming':
-        # Hamming
-        alpha = 0.54
-        beta = 1.-alpha
-        window = alpha - beta*np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1))
-    elif window=='Blackman':
-        # Blackman
-        alpha = 0.16
-        a0 = 0.5*(1-alpha)
-        a1 = 0.5
-        a2 = 0.5*alpha
-        window = a0 - a1*np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)) + a2*np.cos(4 * np.pi * np.arange(windowSize) / (windowSize - 1))
-    elif window=='BlackmanHarris':
-        # Blackman-Harris
-        a0 = 0.358375
-        a1 = 0.48829
-        a2 = 0.14128
-        a3 = 0.01168
-        window = a0 - a1*np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)) + a2*np.cos(4 * np.pi * np.arange(windowSize) / (windowSize - 1)) - a3*np.cos(6 * np.pi * np.arange(windowSize) / (windowSize - 1))
-    elif window=='Ones':
-        window = np.ones(windowSize)
-    else:
-        print("Unknown window, using Hann")
-        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(windowSize) / (windowSize - 1)))
+    # Use Spectrogram's window function instead of duplicating code
+    sp = Spectrogram.Spectrogram()
+    window = sp.create_window(window, windowSize)
 
     for i in range(sg.shape[0]):
         wave_start = incr * i
@@ -509,19 +495,15 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
                 very close-range calls
     :return: a binary list of length len(data) indicating presence of impulsive noise (0) otherwise (1)
     """
-    # for impulse masking
-    from itertools import chain, repeat
-
     # Calculate window length
     w1 = np.floor(sampleRate/250)      # Window length of 1/250 sec selected experimentally
     arr = [2 ** i for i in range(5, 11)]
     pos = np.abs(arr - w1).argmin()
     window = arr[pos]
 
-    from src.core import Spectrogram
     sp = Spectrogram.Spectrogram(window, window)     # No overlap
-    sp.audio_data.data = data
-    sp.audioFormat.sample_rate = sampleRate
+    sp.audio_data = AudioData.AudioData(data=data, sample_rate=sampleRate,
+                               sample_format='float32', sample_size=32, channels=1)
     sg = sp.spectrogram()
 
     # For each frq band get sections where energy exceeds some (90%) percentile, engp

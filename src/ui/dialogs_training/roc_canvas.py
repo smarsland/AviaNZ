@@ -52,7 +52,7 @@ from src.core import SupportClasses
 from src.core import Spectrogram
 from src.core import WaveletSegment
 from src.core import WaveletFunctions
-from src.core import Segment
+from src.core import Annotation
 from src.core import Clustering
 from src.core import Training
 

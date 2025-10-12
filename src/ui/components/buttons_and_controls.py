@@ -38,7 +38,8 @@ class PicButton(QAbstractButton):
     def __init__(self, index, spec, data_source, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False, scaleToButton=False):
         super(PicButton, self).__init__(parent)
         self.index = index
-        self.mark = "green"
+        # In cluster mode, start with no mark; in review mode, start with "green" (uncertain/to review)
+        self.mark = "none" if cluster else "green"
         self.spec = spec
         self.unbufStart = unbufStart
         self.unbufStop = unbufStop
@@ -61,13 +62,17 @@ class PicButton(QAbstractButton):
             self.guidelines = [0]*len(self.guides)
             self.guidecol = [QColor(*col) for col in guidecol]
 
-        # Store reference to data source instead of copying data
+        # Store reference to data source (Spectrogram object) instead of copying data
         self.data_source = data_source
         
-        # check if playback possible (e.g. batmode)
-        if data_source is not None and hasattr(data_source, 'data') and data_source.data is not None and len(data_source.data)>0:
-            self.noaudio = False
-            self.playButton.clicked.connect(self.playImage)
+        # check if playback possible (e.g. batmode - check if audio_data has actual samples)
+        if data_source is not None and hasattr(data_source, 'audio_data'):
+            audio_data = data_source.audio_data
+            if audio_data and hasattr(audio_data, 'data') and audio_data.data is not None and len(audio_data.data)>0:
+                self.noaudio = False
+                self.playButton.clicked.connect(self.playImage)
+            else:
+                self.noaudio = True
         else:
             self.noaudio = True
 
@@ -126,24 +131,7 @@ class PicButton(QAbstractButton):
                 painter.drawLine(0, pos, self.im1.size().width(), pos)
             painter.end()
 
-        # start with "?" mark
-        self.setImage_cluster() if self.cluster else self.setImage_overview()
-
-    def setImage_cluster(self):
-        painter = QPainter(self.im2)
-        painter.fillRect(0, 0, 40, 40, QColor(255, 255, 255, 200))
-        painter.setPen(QPen(QColor(0, 0, 0), 4))
-        painter.setFont(QFont("Helvetica", 20))
-        painter.drawText(12, 30, "?")
-        painter.end()
-
-    def setImage_overview(self):
-        painter = QPainter(self.im2)
-        painter.fillRect(160, 0, 40, 25, QColor(255, 255, 255, 200))
-        painter.setPen(QPen(QColor(0, 0, 0), 2))
-        painter.setFont(QFont("Helvetica", 14))
-        painter.drawText(175, 18, "?")
-        painter.end()
+        # Note: don't paint "?" here - it will be painted in paintEvent if needed
         
     def resizeEvent(self, event):
         if self.scaleToButton:
@@ -156,30 +144,61 @@ class PicButton(QAbstractButton):
             painter = QPainter(self)
             painter.drawImage(event.rect(), self.im2)
 
-            # Add coloured frame to indicate the mark:
-            # green = confirmed, red = delete, yellow = uncertain
-            pen = QPen()
-            if self.mark == "red":
-                pen.setColor(QColor(255, 0, 0))
-            elif self.mark == "yellow":
-                pen.setColor(QColor(255, 255, 0))
-            elif self.mark == "green":
-                pen.setColor(QColor(0, 255, 0))
+            # Add markers based on mark state
+            if self.cluster:
+                # Cluster mode: selected items get a blue overlay
+                if self.mark == "selected":
+                    painter.fillRect(0, 0, self.width(), self.height(), QColor(0, 150, 255, 80))
             else:
-                pen.setColor(QColor(255, 255, 255))
-            pen.setWidth(4)
+                # Overview/quick mode: show large symbols covering the image
+                if self.mark == "green":
+                    # Confirmed/reviewed - show nothing (blank/tick state)
+                    pass
+                elif self.mark == "red":
+                    # Marked for deletion - show large "X" covering image
+                    painter.fillRect(0, 0, self.width(), self.height(), QColor(255, 255, 255, 180))
+                    painter.setPen(QPen(QColor(255, 0, 0), 6))
+                    painter.setFont(QFont("Helvetica", 80, QFont.Weight.Bold))
+                    # Center the X
+                    fm = painter.fontMetrics()
+                    x = (self.width() - fm.horizontalAdvance("X")) // 2
+                    y = (self.height() + fm.ascent() - fm.descent()) // 2
+                    painter.drawText(x, y, "X")
+                elif self.mark == "yellow":
+                    # Questioned/uncertain - show large "?" covering image
+                    painter.fillRect(0, 0, self.width(), self.height(), QColor(255, 255, 255, 180))
+                    painter.setPen(QPen(QColor(200, 150, 0), 6))
+                    painter.setFont(QFont("Helvetica", 80, QFont.Weight.Bold))
+                    # Center the ?
+                    fm = painter.fontMetrics()
+                    x = (self.width() - fm.horizontalAdvance("?")) // 2
+                    y = (self.height() + fm.ascent() - fm.descent()) // 2
+                    painter.drawText(x, y, "?")
+
+            # Add coloured frame to indicate the mark:
+            pen = QPen()
+            if self.cluster:
+                # Cluster mode: selected = bright color, not selected = white
+                if self.mark == "selected":
+                    pen.setColor(QColor(0, 200, 255))  # Bright blue for selected
+                else:
+                    pen.setColor(QColor(200, 200, 200))  # Light gray for unselected
+            else:
+                # Review mode: green = confirmed, red = delete, yellow = uncertain
+                if self.mark == "red":
+                    pen.setColor(QColor(255, 0, 0))
+                elif self.mark == "yellow":
+                    pen.setColor(QColor(255, 255, 0))
+                elif self.mark == "green":
+                    pen.setColor(QColor(0, 255, 0))
+                else:
+                    pen.setColor(QColor(255, 255, 255))
+            # Scale border width based on button size (minimum 3, maximum 8)
+            borderWidth = max(3, min(8, min(self.width(), self.height()) // 50))
+            pen.setWidth(borderWidth)
             painter.setPen(pen)
 
             painter.drawRect(event.rect())
-
-            # add playback button on top if hovering over the button
-            if self.mouseIn:
-                self.playButton.show()
-                if not self.noaudio:
-                    # Position the playback button
-                    iconSize = min(self.width(), self.height()) // 4
-                    self.playButton.resize(iconSize, iconSize)
-                    self.playButton.move((self.width() - iconSize) // 2, (self.height() - iconSize) // 2)
 
     def enterEvent(self, QEvent):
         # to reset the icon if it didn't stop cleanly
@@ -188,7 +207,14 @@ class PicButton(QAbstractButton):
             return
         if not self.media_obj.isPlaying():
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        
+        # Position and size the playback button in top-left corner
+        # Scale between 30-60 pixels based on button size
+        iconSize = max(30, min(60, min(self.width(), self.height()) // 4))
+        self.playButton.resize(iconSize, iconSize)
+        self.playButton.move(0, 0)  # Exactly in top-left corner
         self.playButton.show()
+        self.update()  # Force repaint to show play button
 
     def leaveEvent(self, QEvent):
         self.mouseIn = False
@@ -196,6 +222,7 @@ class PicButton(QAbstractButton):
             return
         if not self.media_obj.isPlaying():
             self.playButton.hide()
+        self.update()  # Force repaint to hide play button
 
     def mouseMoveEvent(self, ev):
         if ev.buttons() != Qt.MouseButton.LeftButton:
@@ -213,8 +240,16 @@ class PicButton(QAbstractButton):
             self.stopPlayback()
         else:
             self.playButton.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaStop))
-            if self.data_source and hasattr(self.data_source, 'data') and self.data_source.data is not None:
-                self.media_obj.loadArray(self.data_source.data)
+            # data_source is a Spectrogram, so access audio_data.data
+            if self.data_source and hasattr(self.data_source, 'audio_data'):
+                audio_data = self.data_source.audio_data
+                if audio_data and hasattr(audio_data, 'data') and audio_data.data is not None and len(audio_data.data) > 0:
+                    # loadArray() loads and starts playback automatically
+                    self.media_obj.loadArray(audio_data.data)
+                else:
+                    print("DEBUG: No audio data to play")
+            else:
+                print("DEBUG: data_source doesn't have audio_data attribute")
 
     def endListener(self):
         timeel = self.media_obj.elapsedUSecs() // 1000
@@ -235,10 +270,11 @@ class PicButton(QAbstractButton):
         # cycle through CONFIRM / DELETE / RECHECK marks
 
         if self.cluster:
-            if self.mark == "green":
-                self.mark = "red"
+            # In cluster mode, toggle between selected and not selected
+            if self.mark == "selected":
+                self.mark = "none"
             else:
-                self.mark = "green"
+                self.mark = "selected"
         else:
             if self.mark == "green":
                 self.mark = "red"
@@ -246,7 +282,8 @@ class PicButton(QAbstractButton):
                 self.mark = "yellow"
             else:
                 self.mark = "green"
-        self.paintEvent(ev)
+        # Don't call paintEvent directly, just trigger a repaint
+        self.update()
         self.repaint()
         QApplication.processEvents()
 

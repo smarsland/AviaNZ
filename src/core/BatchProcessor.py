@@ -27,10 +27,11 @@ import time
 import soundfile as sf
 
 from src.core import Spectrogram
-from src.core import Segment
+from src.core import Annotation
 from src.core import SupportClasses
 from src.core import BirdDetector
 from src.core import BatDetector
+from src.core import Segmentation
 
 # Constants
 SAMPLES_PER_PAGE_16KHZ = 900 * 16000
@@ -63,7 +64,8 @@ class BatchProcessor:
                  callbacks=None,
                  subset=False, intermittent=False, 
                  wind="None", mergeSyllables=False, 
-                 overwrite=True, timeWindow_s=0, timeWindow_e=0,
+                 overwrite=None, overwriteSpecies=True, overwriteAll=False,
+                 timeWindow_s=0, timeWindow_e=0,
                  protocolSize=15, protocolInterval=300, 
                  maxgap=1, minlen=0.2, maxlen=10,
                  testmode=False):
@@ -79,7 +81,13 @@ class BatchProcessor:
         
         # Parameters
         self.dirName = directory
-        self.overwrite = overwrite
+        # Backward compatibility: if overwrite is specified, use it for overwriteSpecies
+        if overwrite is not None:
+            self.overwriteSpecies = overwrite
+            self.overwriteAll = False
+        else:
+            self.overwriteSpecies = overwriteSpecies
+            self.overwriteAll = overwriteAll
         self.callbacks = callbacks
         self.testmode = testmode
         
@@ -157,7 +165,9 @@ class BatchProcessor:
         message = f"Species: {speciesStr}, options: {opts}.\nNumber of files to analyse: {total}, {cnt} done so far.\n"
         message += f"Log file stored in {self.dirName}/LastAnalysisLog.txt.\n"
         
-        if self.overwrite:
+        if self.overwriteAll:
+            message += "\nWarning: ALL previous annotations in these files will be deleted!\n"
+        elif self.overwriteSpecies:
             message += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
             
         message = "Analysis will be launched with these options:\n" + message + "\nConfirm?"
@@ -179,7 +189,7 @@ class BatchProcessor:
         
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                isBatMode = any("NZ Bats" in species for species in self.species)
+                isBatMode = any("NZ Bats" in species or species == "NZ Bats_NP" for species in self.species)
                 
                 if not isBatMode and (filename.lower().endswith('.wav') or filename.lower().endswith('.flac')):
                     allsoundfiles.append(os.path.join(root, filename))
@@ -239,7 +249,7 @@ class BatchProcessor:
             print(f"File {filename} empty, skipping")
             return False
 
-        isBatMode = any("NZ Bats" in species for species in self.species)
+        isBatMode = any("NZ Bats" in species or species == "NZ Bats_NP" for species in self.species)
         
         with open(filename, 'br') as f:
             first2char = f.read(2)
@@ -285,7 +295,7 @@ class BatchProcessor:
         print("Loading file...")
         self.currentFilename = filename
         
-        isBatMode = any("NZ Bats" in species for species in self.species)
+        isBatMode = any("NZ Bats" in species or species == "NZ Bats_NP" for species in self.species)
         
         self.loadFile(filename, isBatMode)
         
@@ -294,7 +304,7 @@ class BatchProcessor:
 
         # Initialize segments_nonn for testmode
         if self.testmode:
-            self.segments_nonn = Segment.SegmentList()
+            self.segments_nonn = Annotation.SegmentList()
 
         if self.options['intermittent']:
             self.addRegularSegments(filename, self.options['protocolSize'], self.options['protocolInterval'])
@@ -316,7 +326,7 @@ class BatchProcessor:
     def detectFile(self, filters):
         """Actual worker for a file in the detection loop."""
         # Check if this is bat processing
-        if any('NZ Bats' in species for species in self.species):
+        if any('NZ Bats' in species or species == "NZ Bats_NP" for species in self.species):
             self.bat_detector.detectBatsInFile(
                 sp=self.sp,
                 segments=self.segments,
@@ -358,31 +368,39 @@ class BatchProcessor:
             duration = self.sp.get_duration()
             print("Read BMP spectrogram: %d x %d pixels, %f s at %d Hz" % (self.sp.sg.shape[0], self.sp.sg.shape[1], duration, self.sp.audio_data.sample_rate))
 
-        self.segments = Segment.SegmentList()
+        self.segments = Annotation.SegmentList()
         
         duration = self.sp.get_duration()
         
-        if bats or anysound or not os.path.isfile(filename + '.data'):
+        # If overwriteAll is set, or if we're in bat/anysound mode, or no .data file exists:
+        # wipe everything
+        if self.overwriteAll or bats or anysound or not os.path.isfile(filename + '.data'):
             self.segments.metadata["Operator"] = "Auto"
             self.segments.metadata["Reviewer"] = ""
             self.segments.metadata["Duration"] = duration
             print("Wiping all previous segments")
             self.segments.clear()
         else:
+            # Load existing annotations
             hasmetadata = self.segments.parseJSON(filename+'.data', duration)
             if not hasmetadata:
                 self.segments.metadata["Operator"] = "Auto"
                 self.segments.metadata["Reviewer"] = ""
                 self.segments.metadata["Duration"] = duration
-            for species in self.species:
-                if species in self.FilterDicts:
-                    spname = self.FilterDicts[species]["species"]
-                    print("Wiping species", spname)
-                    oldsegs = self.segments.getSpecies(spname)
-                    for i in reversed(oldsegs):
-                        wipeAll = self.segments[i].wipeSpecies(spname)
-                        if wipeAll:
-                            del self.segments[i]
+            
+            # If overwriteSpecies is set, remove annotations for the selected species
+            if self.overwriteSpecies:
+                for species in self.species:
+                    if species in self.FilterDicts:
+                        spname = self.FilterDicts[species]["species"]
+                        print("Wiping species", spname)
+                        oldsegs = self.segments.getSpecies(spname)
+                        for i in reversed(oldsegs):
+                            wipeAll = self.segments[i].wipeSpecies(spname)
+                            if wipeAll:
+                                del self.segments[i]
+            # If neither overwrite option is set, keep all existing annotations
+            # and just add new detections
             print("%d segments loaded from .data file" % len(self.segments))
 
     def saveAnnotation(self, filename, segmentList, suffix=".data"):
@@ -410,5 +428,5 @@ class BatchProcessor:
             end_time = min(i + length, nseconds)
             segments.append([i, end_time])
             i += interval
-        post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
-        self.segments.addBasicSegments(post.segments, [0, 0], species="Don't Know", certainty=0.0)
+        post = Segmentation.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        self.segments.addFromTimeRanges(post.segments, 0, 0, species="Don't Know", certainty=0.0)

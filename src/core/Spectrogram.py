@@ -1,19 +1,39 @@
 
-# Spectrogram.py
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
+
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2024
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Spectrogram.py
+
+# Contains the spectrogram object, optional reference to some AudioData, and some basic methods.
 
 import numpy as np
 import scipy.signal as signal
 import pyfftw as fft
 from scipy.stats import boxcox
 import resampy
-import copy
-import gc
-from src.core import SignalProc
-from src.core import AudioLoader
 from PIL import Image
 from scipy.signal import medfilt
+
+from src.core import SignalProc
+from src.core import AudioLoader
+from src.core import AudioData
+
 
 specExtra = True
 
@@ -46,7 +66,7 @@ class Spectrogram:
         """
         # Check if it's a BMP file - handle directly since it's spectrogram data
         if filepath.lower().endswith('.bmp'):
-            return self._load_bmp(filepath, duration, offset, silent, **kwargs)
+            return self.load_bmp(filepath, duration, offset, silent, **kwargs)
         
         # For audio files, use AudioLoader
         loaded_data = self.audio_loader.load_audio(filepath, duration, offset, silent)
@@ -61,7 +81,7 @@ class Spectrogram:
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
         
-    def _load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
+    def load_bmp(self, filepath, duration=None, offset=0, silent=False, **kwargs):
         """Load BMP file (DOC bat recording format) directly as spectrogram data.
         
         Private method - external code should use readSoundFile() which auto-detects format.
@@ -102,9 +122,8 @@ class Spectrogram:
         file_length = (w - 2) * 512 + 256  # incr=512, window_width=256 for BMP
         
         # Create AudioData for BMP (core use only)
-        # BMP files don't have actual audio, so create dummy AudioData with no data array
-        from src.core.AudioData import AudioData
-        self.audio_data = AudioData(data=None, sample_rate=176000,
+        # BMP files don't have actual audio, so create dummy AudioData with no data array 
+        self.audio_data = AudioData.AudioData(data=None, sample_rate=176000,
                                      sample_format='Int16', sample_size=16, channels=0)
         
         # Trim to specified offset and duration
@@ -279,10 +298,9 @@ class Spectrogram:
 
     def setData(self,audiodata,sampleRate=None):
         if self.audio_data is None:
-            from src.core.AudioData import AudioData
             if sampleRate is None:
                 raise ValueError("sampleRate must be provided when creating new AudioData")
-            self.audio_data = AudioData(
+            self.audio_data = AudioData.AudioData(
                 data=audiodata,
                 sample_rate=sampleRate,
                 sample_format='float32',

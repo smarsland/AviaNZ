@@ -48,14 +48,15 @@ from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider,
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.layout_widgets import Layout
+from src.ui.dialogs_training.roc_canvas import ROCCanvas
 from src.core import SupportClasses
 from src.core import Spectrogram
 from src.core import WaveletSegment
 from src.core import WaveletFunctions
-from src.core import Segment
+from src.core import Annotation
 from src.core import Clustering
 from src.core import Training
-
+from src.core import AudioData
 from src.models import NNModels
 
 import math
@@ -361,12 +362,12 @@ class BuildRecAdvWizard(QWizard):
             calltypes = {}
             for file in listOfDataFiles:
                 # Read the annotation
-                segments = Segment.SegmentList()
+                segments = Annotation.SegmentList()
                 segments.parseJSON(file)
                 SpSegs = segments.getSpecies(self.field("species"))
                 for segix in SpSegs:
                     seg = segments[segix]
-                    for label in seg[4]:
+                    for label in seg.labels:
                         if label["species"] == self.field("species") and "calltype" in label:
                             if label["calltype"] in calltypes:
                                 calltypes.update({label["calltype"]:calltypes[label["calltype"] ] + 1})
@@ -397,12 +398,12 @@ class BuildRecAdvWizard(QWizard):
             for file in listOfDataFiles:
                 if file[:-5] in listOfSoundFiles:
                     # Read the annotation
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(file)
                     SpSegs = segments.getSpecies(self.field("species"))
                     for segix in SpSegs:
                         seg = segments[segix]
-                        for label in seg[4]:
+                        for label in seg.labels:
                             if label["species"] == self.field("species") and "calltype" in label:
                                 if label["calltype"] not in ctTexts:
                                     ctTexts.append(label["calltype"])
@@ -412,19 +413,19 @@ class BuildRecAdvWizard(QWizard):
             for file in listOfDataFiles:
                 if file[:-5] in listOfSoundFiles:
                     # Read the annotation
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     soundfile = os.path.join(self.field("trainDir"), file[:-5])
                     segments.parseJSON(os.path.join(self.field("trainDir"), file))
                     SpSegs = segments.getSpecies(self.field("species"))
                     for segix in SpSegs:
                         seg = segments[segix]
-                        for label in seg[4]:
+                        for label in seg.labels:
                             if label["species"] == self.field("species") and "calltype" in label:
                                 # Find the syllables inside this segment
                                 # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
                                 syls = cl.findSyllablesSeg(soundfile, seg, fs=self.field("fs"), denoise=False, minlen=0.2)
                                 CTsegments.append([soundfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
-                                duration.append(seg[1]-seg[0])
+                                duration.append(seg.end_time - seg.start_time)
             return CTsegments, len(self.clusters), np.median(duration)
 
         def backupDatafiles(self):
@@ -443,27 +444,66 @@ class BuildRecAdvWizard(QWizard):
             """ Update annotation files. Assign call types suggested by clusters and remove any segment deleted in the
             clustering. Keep a backup of the original .data."""
             self.backupDatafiles()
-            print("Updating annotation files ", self.field("trainDir"))
-            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
-            for file in listOfDataFiles:
-                # Read the annotation
-                segments = Segment.SegmentList()
-                newsegments = Segment.SegmentList()
-                segments.parseJSON(os.path.join(self.field("trainDir"), file))
-                allSpSegs = np.arange(len(segments)).tolist()
-                newsegments.metadata = segments.metadata
-                for segix in allSpSegs:
-                    seg = segments[segix]
-                    if self.field("species") not in [fil["species"] for fil in seg[4]]:
-                        newsegments.addSegment(seg) # leave non-target segments unchanged
+            print("=== UPDATE ANNOTATIONS ===")
+            print(f"Valid clusters: {self.clusters}")
+            print(f"Total segments in wizard: {len(self.segments)}")
+            
+            # Check for invalid cluster IDs
+            invalid_count = 0
+            for i, seg in enumerate(self.segments):
+                if seg[-1] not in self.clusters:
+                    print(f"  WARNING: Segment {i} has invalid cluster ID {seg[-1]}")
+                    invalid_count += 1
+            print(f"Segments with invalid cluster IDs: {invalid_count}")
+            
+            # Group segments by filename
+            segments_by_file = {}
+            for seg_data in self.segments:
+                # seg_data format: [filename, Segment_object, syls, cluster_ID]
+                filename = seg_data[0]
+                if filename not in segments_by_file:
+                    segments_by_file[filename] = []
+                segments_by_file[filename].append(seg_data)
+            
+            print(f"Updating annotation files for {len(segments_by_file)} files")
+            
+            # Update each file
+            for filename, file_segments in segments_by_file.items():
+                datafile = filename + ".data"
+                print(f"\nProcessing: {os.path.basename(datafile)}")
+                
+                # Load original segments
+                original_segments = Annotation.SegmentList()
+                original_segments.parseJSON(datafile)
+                print(f"  Original segments: {len(original_segments)}")
+                
+                # Create new segment list
+                newsegments = Annotation.SegmentList()
+                newsegments.metadata = original_segments.metadata
+                
+                # Keep non-target species segments unchanged
+                for seg in original_segments:
+                    if self.field("species") not in [fil["species"] for fil in seg.labels]:
+                        newsegments.addSegment(seg)
+                
+                # Add target species segments with updated call types
+                for seg_data in file_segments:
+                    seg = seg_data[1]  # The Segment object
+                    cluster_id = seg_data[-1]
+                    
+                    if cluster_id in self.clusters:
+                        # Update the calltype label
+                        species_idx = [fil["species"] for fil in seg.labels].index(self.field("species"))
+                        seg.labels[species_idx]["calltype"] = self.clusters[cluster_id]
+                        newsegments.addSegment(seg)
+                        print(f"  Updated segment {seg.start_time:.1f}-{seg.end_time:.1f} -> {self.clusters[cluster_id]}")
                     else:
-                        for seg2 in self.segments:
-                            if seg2[1] == seg:
-                                # find the index of target sp and update call type
-                                # TODO: Bug here
-                                seg[4][[fil["species"] for fil in seg[4]].index(self.field("species"))]["calltype"] = self.clusters[seg2[-1]]
-                                newsegments.addSegment(seg)
-                newsegments.saveJSON(os.path.join(self.field("trainDir"), file))
+                        print(f"  WARNING: Segment has invalid cluster ID {cluster_id}, skipping")
+                
+                print(f"  Saving {len(newsegments)} segments")
+                newsegments.saveJSON(datafile)
+            
+            print("=== UPDATE ANNOTATIONS DONE ===\n")
 
         def merge(self):
             """ Listener for the merge button. Merge the rows (clusters) checked into one cluster.
@@ -529,11 +569,30 @@ class BuildRecAdvWizard(QWizard):
             """ Listener for Apply button to move the selected segments to another cluster.
                 Change the cluster ID of those selected buttons and redraw all the clusters.
             """
-            # TODO: check: I think the dict is always in descending order down screen?
             self.segsChanged = True
-            # The first line seemed neater, but the verticalSpacing() doesn't update when you rescale the window
-            #movetoID = dragPosy//(self.picbuttons[0].size().height()+self.flowLayout.layout.verticalSpacing())
-            movetoID = dragPosy//(self.flowLayout.layout.geometry().height()//self.nclasses)
+            
+            # Find which row was dropped on by checking the Y positions of widgets in each row
+            # Look at the textboxes (first widget in each row) to determine row boundaries
+            movetoID = 0
+            minDistance = float('inf')
+            
+            for r in range(self.nclasses):
+                if r < len(self.tboxes):
+                    # Get the Y position of this row's label
+                    rowY = self.tboxes[r].y()
+                    rowHeight = self.tboxes[r].height()
+                    rowCenter = rowY + rowHeight / 2
+                    
+                    # Find the closest row center
+                    distance = abs(dragPosy - rowCenter)
+                    if distance < minDistance:
+                        minDistance = distance
+                        movetoID = r
+            
+            print(f"dragPosy={dragPosy}, calculated movetoID={movetoID}")
+            
+            # Clamp to valid cluster range just in case
+            movetoID = max(0, min(movetoID, self.nclasses - 1))
 
             # drags which start and end in the same cluster most likely were just long clicks:
             for ix in range(len(self.picbuttons)):
@@ -543,12 +602,24 @@ class BuildRecAdvWizard(QWizard):
                         return
 
             # Even if the button that was dragged isn't highlighted, make it so
-            source.mark = 'yellow'
+            source.mark = 'selected'
 
+            print(f"\n=== MOVING SEGMENTS ===")
+            print(f"Target cluster ID: {movetoID}")
+            print(f"Row positions:")
+            for r in range(self.nclasses):
+                if r < len(self.tboxes):
+                    print(f"  Row {r}: y={self.tboxes[r].y()}, height={self.tboxes[r].height()}")
+            
+            moved_count = 0
             for ix in range(len(self.picbuttons)):
-                if self.picbuttons[ix].mark == 'yellow':
+                if self.picbuttons[ix].mark == 'selected':
+                    old_cluster = self.segments[ix][-1]
                     self.segments[ix][-1] = movetoID
-                    self.picbuttons[ix].mark = 'unknown'
+                    self.picbuttons[ix].mark = 'none'
+                    moved_count += 1
+                    print(f"  Moved segment {ix} from cluster {old_cluster} to {movetoID}")
+            print(f"Total moved: {moved_count}")
 
             # update self.clusters, delete clusters with no members
             todelete = []
@@ -560,8 +631,11 @@ class BuildRecAdvWizard(QWizard):
                         break
                 if empty:
                     todelete.append(ID)
-
+            
+            print(f"Empty clusters to delete: {todelete}")
+            print(f"BEFORE clearButtons: {len(self.picbuttons)} buttons")
             self.clearButtons()
+            print(f"AFTER clearButtons: {len(self.picbuttons)} buttons")
 
             # Generate new class labels
             if len(todelete) > 0:
@@ -591,9 +665,10 @@ class BuildRecAdvWizard(QWizard):
                 self.clusters = clusters
                 print('after move: ', self.clusters)
 
-                # update the segments
+                # update the segments - only those that need relabeling
                 for seg in self.segments:
-                    seg[-1] = labels[seg[-1]]
+                    if seg[-1] in labels:
+                        seg[-1] = labels[seg[-1]]
 
                 self.nclasses = nclasses
 
@@ -611,7 +686,7 @@ class BuildRecAdvWizard(QWizard):
             # There should be at least one segment selected to proceed
             proceed = False
             for ix in range(len(self.picbuttons)):
-                if self.picbuttons[ix].mark == 'yellow':
+                if self.picbuttons[ix].mark == 'selected':
                     proceed = True
                     break
 
@@ -638,9 +713,9 @@ class BuildRecAdvWizard(QWizard):
                 print('after adding new cluster: ', self.clusters)
 
                 for ix in range(len(self.picbuttons)):
-                    if self.picbuttons[ix].mark == 'yellow':
+                    if self.picbuttons[ix].mark == 'selected':
                         self.segments[ix][-1] = newID
-                        self.picbuttons[ix].mark = 'unknown'
+                        self.picbuttons[ix].mark = 'none'
 
                 # Delete clusters with no members left and update self.clusters before adding the new cluster
                 todelete = []
@@ -700,7 +775,7 @@ class BuildRecAdvWizard(QWizard):
             """
             inds = []
             for ix in range(len(self.picbuttons)):
-                if self.picbuttons[ix].mark == 'yellow':
+                if self.picbuttons[ix].mark == 'selected':
                     inds.append(ix)
 
             if len(inds)==0:
@@ -800,17 +875,17 @@ class BuildRecAdvWizard(QWizard):
             print(len(self.segments))
             print(self.segments)
 
-            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
+            maxspecsize = max([seg[1].end_time-seg[1].start_time for seg in self.segments]) * self.field("fs") // 256
 
             # Create the buttons for each segment
             self.minsg = 1
             self.maxsg = 1
             for seg in self.segments:
                 sp = Spectrogram.Spectrogram(512, 256)
-                sp.readSoundFile(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+                sp.readSoundFile(seg[0], seg[1].end_time-seg[1].start_time, seg[1].start_time, silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                incr = 256 * sp.audioFormat.sample_rate // self.field("fs")
+                incr = 256 * sp.audio_data.sample_rate // self.field("fs")
                 #_ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                 sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                 #sg = sp.normalisedSpec("Log")
@@ -824,7 +899,7 @@ class BuildRecAdvWizard(QWizard):
                 self.minsg = min(self.minsg, np.min(sg))
                 self.maxsg = max(self.maxsg, np.max(sg))
 
-                newButton = PicButton(1, np.fliplr(sg), sp, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+                newButton = PicButton(1, np.fliplr(sg), sp, sp.audio_data, seg[1].end_time-seg[1].start_time, 0, seg[1].end_time, self.lut, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
@@ -846,15 +921,14 @@ class BuildRecAdvWizard(QWizard):
                         # TODO: get length right
     #def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
                         # Create temporary AudioData object for this specific audio segment
-                        from src.core.AudioData import AudioData
-                        temp_audio_data = AudioData(
+                        temp_audio_data = AudioData.AudioData(
                             data=calls[i][j],
-                            sample_rate=sp.audioFormat.sample_rate,
+                            sample_rate=sp.audio_data.sample_rate,
                             file_length=len(calls[i][j]),
-                            audio_format=sp.audioFormat
+                            audio_format=sp.audio_data
                         )
-                        newButton = PicButton(1, np.fliplr(ims[i][j]), temp_audio_data, sp.audioFormat, len(calls[i][j])/sp.audioFormat.sample_rate, 0, len(calls[i][j]), self.lut, cluster=True)
-                        #newButton = PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audioFormat, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
+                        newButton = PicButton(1, np.fliplr(ims[i][j]), temp_audio_data, sp.audio_data, len(calls[i][j])/sp.audio_data.sample_rate, 0, len(calls[i][j]), self.lut, cluster=True)
+                        #newButton = PicButton(1, np.fliplr(ims[i][j]), sp.data, sp.audio_data, calls[1][1]-calls[1][0], 0, seg[1][1], self.lut, cluster=True)
                         self.picbuttons.append(newButton)
                         self.clusters = calltypes
             else:
@@ -864,17 +938,17 @@ class BuildRecAdvWizard(QWizard):
                 self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
                 # largest spec will be this wide
-                maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
+                maxspecsize = max([seg[1].end_time-seg[1].start_time for seg in self.segments]) * self.field("fs") // 256
 
                 # Create the buttons for each segment
                 self.minsg = 1
                 self.maxsg = 1
                 for seg in self.segments:
                     sp = Spectrogram.Spectrogram(512, 256)
-                    sp.readSoundFile(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+                    sp.readSoundFile(seg[0], seg[1].end_time-seg[1].start_time, seg[1].start_time, silent=True)
     
                     # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                    incr = 256 * sp.audioFormat.sample_rate // self.field("fs")
+                    incr = 256 * sp.audio_data.sample_rate // self.field("fs")
                     #_ = sp.spectrogram(window='Hann', sgType='Standard',incr=incr, mean_normalise=True, onesided=True, need_even=False)
                     sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
                     #sg = sp.normalisedSpec("Log")
@@ -887,7 +961,7 @@ class BuildRecAdvWizard(QWizard):
                     self.minsg = min(self.minsg, np.min(sg))
                     self.maxsg = max(self.maxsg, np.max(sg))
 
-                    newButton = PicButton(1, np.fliplr(sg), sp, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, cluster=True)
+                    newButton = PicButton(1, np.fliplr(sg), sp, sp.audio_data, seg[1].end_time-seg[1].start_time, 0, seg[1].end_time, self.lut, cluster=True)
                     self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
@@ -904,7 +978,7 @@ class BuildRecAdvWizard(QWizard):
                 else:
                     for ix in range(len(self.segments)):
                         if self.segments[ix][-1] == ID:
-                            self.picbuttons[ix].mark = 'unknown'
+                            self.picbuttons[ix].mark = 'none'
                             self.picbuttons[ix].buttonClicked = False
                             self.picbuttons[ix].setChecked(False)
                             self.picbuttons[ix].repaint()
@@ -912,11 +986,21 @@ class BuildRecAdvWizard(QWizard):
         def updateButtons(self):
             """ Draw the existing buttons, and create check- and text-boxes.
             Called when merging clusters or initializing the page. """
+            print(f"=== updateButtons called ===")
+            print(f"Total segments: {len(self.segments)}")
+            print(f"Total picbuttons: {len(self.picbuttons)}")
+            print(f"nclasses: {self.nclasses}")
+            
+            # Count segments per cluster
+            for r in range(self.nclasses):
+                count = sum(1 for seg in self.segments if seg[-1] == r)
+                print(f"  Cluster {r} ({self.clusters[r]}): {count} segments")
+            
             self.cboxes = []    # List of check boxes
             self.tboxes = []    # Corresponding list of text boxes
+            
             for r in range(self.nclasses):
                 c = 0
-                # print('**', self.clusters[r])
                 tbox = QLineEdit(self.clusters[r])
                 tbox.setMinimumWidth(80)
                 tbox.setMaximumHeight(150)
@@ -932,24 +1016,33 @@ class BuildRecAdvWizard(QWizard):
                 self.flowLayout.addWidget(self.cboxes[-1], r, c)
                 c += 1
                 # Find the segments under this class and show them
-                print(len(self.segments))
+                # Keep them in their original order from the segments list
+                buttons_added = 0
                 for segix in range(len(self.segments)):
                     if self.segments[segix][-1] == r:
+                        print(f"  Adding button {segix} to row {r}, col {c}")
                         self.flowLayout.addWidget(self.picbuttons[segix], r, c)
-                        c += 1
                         self.picbuttons[segix].show()
+                        c += 1
+                        buttons_added += 1
+                print(f"  Row {r}: added {buttons_added} buttons")
+            
             self.flowLayout.adjustSize()
             self.flowLayout.update()
+            print(f"=== updateButtons done ===\n")
             # Apply colour and volume levels
             self.specControls.emitAll()
 
         def clearButtons(self):
             """ Remove existing buttons, call when merging clusters
             """
+            print(f"=== clearButtons called ===")
+            print(f"Layout item count before clear: {self.flowLayout.layout.count()}")
             for ch in self.cboxes:
                 ch.hide()
             for tbx in self.tboxes:
                 tbx.hide()
+            items_removed = 0
             for btnum in reversed(range(self.flowLayout.layout.count())):
                 item = self.flowLayout.layout.itemAt(btnum)
                 if item is not None:
@@ -958,7 +1051,11 @@ class BuildRecAdvWizard(QWizard):
                     del self.flowLayout.items[item.widget()]
                     del self.flowLayout.rows[r][c]
                     item.widget().hide()
+                    items_removed += 1
+            print(f"Items removed from layout: {items_removed}")
+            print(f"Layout item count after clear: {self.flowLayout.layout.count()}")
             self.flowLayout.update()
+            print(f"=== clearButtons done ===\n")
 
         def setColourLevels(self, brightness, contrast):
             """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
@@ -1087,7 +1184,7 @@ class BuildRecAdvWizard(QWizard):
             fs = int(self.field("fs")) // 4000 * 4000
 
             # self.segments is already selected to be this cluster only
-            pageSegs = Segment.SegmentList()
+            pageSegs = Annotation.SegmentList()
             for longseg in self.segments:
                 # long seg has format: [file [segment] clusternum]
                 pageSegs.addSegment(longseg[1])
@@ -1317,7 +1414,7 @@ class BuildRecAdvWizard(QWizard):
                     for file in files:
                         soundFile = os.path.join(root, file)
                         if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                            pageSegs = Segment.SegmentList()
+                            pageSegs = Annotation.SegmentList()
                             pageSegs.parseJSON(soundFile + '.data')
 
                             # CLUSTERS COME IN HERE:

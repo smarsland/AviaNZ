@@ -25,7 +25,7 @@ import copy
 import numpy as np
 import time, os, math, csv, gc
 from src.core import Spectrogram
-from src.core import Segment
+from src.core import Segmentation
 from src.core import SignalProc
 from ext import ce_denoise as ce
 from ext import ce_detect
@@ -157,7 +157,7 @@ class WaveletSegment:
 
             # merge neighbours in order to convert the detections into segments
             # note: detected np[0 1 1 1] becomes [[1,3]]
-            segmenter = Segment.Segmenter()
+            segmenter = Segmentation.Segmenter()
             detected = segmenter.convert01(detected)
             detected = segmenter.joinGaps(detected, maxgap=0)
             detected_allsubf.append(detected)
@@ -1301,7 +1301,7 @@ class WaveletSegment:
 
         # now, need to go over the segments and find any overlapping ones (i.e. combine across nodes).
         # NOTE: will sort them
-        s = Segment.Segmenter()
+        s = Segmentation.Segmenter()
         outsegs = s.checkSegmentOverlap(detected)
         print("After merge:", outsegs)
 

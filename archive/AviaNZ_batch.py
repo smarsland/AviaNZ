@@ -25,8 +25,8 @@ import gc, os, re, fnmatch
 import numpy as np
 
 from src.core import Spectrogram
-from src.core import SignalProc
-from src.core import Segment
+from src.core import Segmentation
+from src.core import Annotation
 from src.core import WaveletSegment
 from src.core import SupportClasses
 
@@ -364,16 +364,16 @@ class AviaNZ_batchProcess():
             # ALL SYSTEMS GO: process this file
             print("Loading file...")
             self.currentFilename = filename  # Track current file for bat processing
-            self.segments = Segment.SegmentList()
+            self.segments = Annotation.SegmentList()
             self.loadFile(filename,"NZ Bats" in self.species)
             if self.overwrite:
                 print("Clearing old segments")
-                self.segments = Segment.SegmentList()
+                self.segments = Annotation.SegmentList()
             print('Segments in this file: ', self.segments)
             startCount = len(self.segments)
 
             if self.testmode:
-                self.segments_nonn = Segment.SegmentList()
+                self.segments_nonn = Annotation.SegmentList()
             if self.options[5] == "Intermittent: ":
                 try:
                     self.addRegularSegments(filename,self.options[6],self.options[7])
@@ -436,7 +436,7 @@ class AviaNZ_batchProcess():
         while i < nseconds:
             segments.append([i, i + length])
             i += interval
-        post = Segment.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        post = Segmentation.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
         self.makeSegments(self.segments, post.segments)
 
     def detectFile(self, speciesStr, filters):
@@ -503,14 +503,14 @@ class AviaNZ_batchProcess():
                     print("LOADING SP 1")
                     self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
                 _ = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'],start=start,stop=end)
-                self.seg = Segment.Segmenter(self.sp, self.sp.audio_data.sample_rate)
+                self.seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
                 # Post-process
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data[start:end], sampleRate=self.sp.audio_data.sample_rate, segments=thisPageSegs, subfilter={}, cert=0)
-                #post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
+                post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data[start:end], sampleRate=self.sp.audio_data.sample_rate, segments=thisPageSegs, subfilter={}, cert=0)
+                #post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sp.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 if self.options[8] != "":
                     post.joinGaps(self.options[9])
                     post.deleteShort(self.options[10])
@@ -646,7 +646,7 @@ class AviaNZ_batchProcess():
         subfilter = spInfo["Filters"][filtix]
         
         # PostProcess handles any needed resampling from current rate to target rate
-        post = Segment.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data[start:end],
+        post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data[start:end],
                             sampleRate=self.sp.audio_data.sample_rate, 
                             tgtsampleRate=spInfo["SampleRate"],
                             segments=segments[filtix], subfilter=subfilter,
@@ -686,14 +686,14 @@ class AviaNZ_batchProcess():
             y2 = 0
             if len(segmentsNew)!=3:
                 print("Warning: segment format does not match bat mode")
-            segment = Segment.Segment([segmentsNew[0], segmentsNew[1], y1, y2, segmentsNew[2]])
+            segment = Annotation.Segment([segmentsNew[0], segmentsNew[1], y1, y2, segmentsNew[2]])
             segmentsList.addSegment(segment)
         elif subfilter is not None:
             # for wavelet segments: (same as self.species!="Any sound")
             y1 = subfilter["FreqRange"][0]
             y2 = min(subfilter["FreqRange"][1], self.sp.audio_data.sample_rate//2)
             for s in segmentsNew:
-                segment = Segment.Segment([s[0][0], s[0][1], y1, y2, [{"species": species, "certainty": s[1], "filter": filtName, "calltype": subfilter["calltype"]}]])
+                segment = Annotation.Segment([s[0][0], s[0][1], y1, y2, [{"species": species, "certainty": s[1], "filter": filtName, "calltype": subfilter["calltype"]}]])
                 segmentsList.addSegment(segment)
         else:
             # for generic all-species segments:
@@ -769,7 +769,7 @@ class AviaNZ_batchProcess():
         print("Read %d samples, %f s at %d Hz" % (len(self.sp.audio_data.data), float(len(self.sp.audio_data.data))/self.sp.audio_data.sample_rate, self.sp.audio_data.sample_rate))
 
         # Read in stored segments (useful when doing multi-species)
-        self.segments = Segment.SegmentList()
+        self.segments = Annotation.SegmentList()
         if bats or anysound or not os.path.isfile(filename + '.data'):
             # Initialize default metadata values
             self.segments.metadata = dict()
@@ -1175,7 +1175,7 @@ class AviaNZ_batchProcess():
                 for filename in files:
                     if filename.endswith('.data'):
                         s1 = etree.SubElement(start, "BatRecording")
-                        segments = Segment.SegmentList()
+                        segments = Annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
                         
                         # Determine label from segments
@@ -1207,7 +1207,7 @@ class AviaNZ_batchProcess():
             files.sort()
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
                     label = self._getBatLabel(segments, threshold1, threshold2)
@@ -1252,7 +1252,7 @@ class AviaNZ_batchProcess():
         for root, dirs, files in os.walk(dirName, topdown=True):
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
                     label = 'Non-bat'
@@ -1376,7 +1376,7 @@ class AviaNZ_batchProcess():
         for root, dirs, files in os.walk(dirName,topdown=True):
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     if len(segments)>0:
                         seg = segments[0]

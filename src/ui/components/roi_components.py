@@ -44,7 +44,7 @@ def mouseDragEventFlexible(self, ev):
     if ev.isFinish():
         if self.isMoving:
             for r in self.rois:
-                r.handleMoveFinished()
+                r.stateChangeFinished()
         self.isMoving = False
     elif ev.isStart():
         for r in self.rois:
@@ -140,6 +140,7 @@ class ShadedRectROI(ShadedROI):
         pg.ROI.__init__(self, pos, size, movable=movable, **args)
         self.parent = parent
         self.mouseHovering = False
+        self.isMoving = False
         self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
         self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
         self.transparent = True
@@ -158,13 +159,27 @@ class ShadedRectROI(ShadedROI):
     def mouseDragEvent(self, ev):
         if ev.isStart():
             if ev.button() != self.parent.MouseDrawingButton:
-                self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
-                self.isMoving = True
+                self.setSelected(True)
+                if self.translatable:
+                    self.isMoving = True
+                    self.preMoveState = self.getState()
+                    self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
+                    self.sigRegionChangeStarted.emit(self)
+                    ev.accept()
+                else:
+                    ev.ignore()
         elif ev.isFinish():
             if self.translatable:
-                for segment in self.parent.segments:
-                    if segment[4] == self:
-                        self.parent.segmentMoved(segment)
+                if self.isMoving:
+                    self.stateChangeFinished()
+                    # Find the segment index by looking up this ROI in listRectanglesa2
+                    try:
+                        segment_index = self.parent.listRectanglesa2.index(self)
+                        if hasattr(self.parent, 'segmentMoved'):
+                            self.parent.segmentMoved(self.parent.segments[segment_index])
+                    except (ValueError, AttributeError):
+                        pass  # ROI not found or segmentMoved doesn't exist
+                self.isMoving = False
             return
 
         if self.translatable and self.isMoving and ev.buttons() != self.parent.MouseDrawingButton:

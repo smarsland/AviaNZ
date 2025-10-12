@@ -24,7 +24,7 @@
 import Clustering
 import numpy as np
 import pandas as pd
-import os, wavio
+import os
 import librosa
 from sklearn.preprocessing import scale
 from sklearn.decomposition import PCA
@@ -420,7 +420,7 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
                     start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                    segment = Segmentation.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:      # Try again with FIR
                         syls = segment.segmentByFIR(threshold=0.05)

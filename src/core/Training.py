@@ -35,10 +35,11 @@ import matplotlib.pyplot as plt
 from time import strftime, gmtime
 import math
 
+from src.core import Annotation
 from src.core import SupportClasses
 from src.core import Spectrogram
 from src.models import NN
-from src.core import Segment, WaveletSegment
+from src.core import WaveletSegment
 from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
@@ -65,6 +66,7 @@ class NNtrain:
         self.tmpdir1 = False
         self.tmpdir2 = False
         self.ROCdata = {}
+        self.trainN = []  # Initialize trainN to avoid AttributeError if genSegmentDataset fails
 
         self.CLI = CLI
         if CLI:
@@ -704,7 +706,7 @@ class NNtest:
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     self.manSegNum += len(segments.getSpecies(species))
                     # Currently, we ignore call types here and just
@@ -771,13 +773,13 @@ class NNtest:
     def findCTsegments(self, datafile, calltypei):
         calltypeSegments = []
         species = self.currfilt["species"]
-        segments = Segment.SegmentList()
+        segments = Annotation.SegmentList()
         segments.parseJSON(datafile)
         if len(self.calltypes) == 1:
             ctSegments = segments.getSpecies(species)
         else:
             ctSegments = segments.getCalltype(species, self.calltypes[calltypei])
-        calltypeSegments = [segments[indx][:2] for indx in ctSegments]
+        calltypeSegments = [[segments[indx].start_time, segments[indx].end_time] for indx in ctSegments]
 
         return calltypeSegments
 

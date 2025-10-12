@@ -24,14 +24,14 @@ def outputBatPasses(self,dirName,savefile='BatPasses.csv'):
        return 0
     tally = 0
     import os
-    from src.core import Segment
+    from src.core import Annotation
     for root, dirs, files in os.walk(dirName, topdown=True):
         nfiles = len(files)
         if nfiles > 0:
             for count in range(nfiles):
                 filename = files[count]
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     # TODO:Should be able to remove this...
                     label = 'Non-bat'
@@ -100,7 +100,7 @@ def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,thresh
     from lxml import etree 
     import os
     import fnmatch
-    from src.core import Segment
+    from src.core import Annotation
 
     # TODO: Get version label!
     operator = "AviaNZ 3.0"
@@ -124,7 +124,7 @@ def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,thresh
                 #filename = files[count]
                 if filename.endswith('.data'):
                     s1 = etree.SubElement(start,"BatRecording")
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     # TODO:Should be able to remove this...
                     label = 'Non-bat'
@@ -204,7 +204,7 @@ def exportToBatSearch_2(self,dirName,savefile='BatData.xml',threshold1=0.85,thre
     # TODO: Use xml properly
     # TODO: Check date
     import os
-    from src.core import Segment
+    from src.core import Annotation
     
     operator = "AviaNZ 3.0"
     site = "Nowhere"
@@ -222,7 +222,7 @@ def exportToBatSearch_2(self,dirName,savefile='BatData.xml',threshold1=0.85,thre
             for count in range(nfiles):
                 filename = files[count]
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     # TODO:Should be able to remove this...
                     label = 'Non-bat'
@@ -297,7 +297,7 @@ def exportToBatSearch_1(self, dirName, savefile='BatData.xml'):
     # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
     # No error checking
     import os
-    from src.core import Segment
+    from src.core import Annotation
     
     operator = "AviaNZ 3.1"
     site = "Nowhere"
@@ -316,7 +316,7 @@ def exportToBatSearch_1(self, dirName, savefile='BatData.xml'):
             for count in range(nfiles):
                 filename = files[count]
                 if filename.endswith('.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     # TODO:Should be able to remove this...
                     label = 'Non-bat'
@@ -369,7 +369,7 @@ def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85
     """DEPRECATED: Use exportBatResults(dirName, format='csv') instead."""
     # This produces a csv file that looks like the one from Bat Search. 
     import os
-    from src.core import Segment
+    from src.core import Annotation
 
     f = open(os.path.join(dirName,writefile),'w')
     f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
@@ -378,7 +378,7 @@ def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85
         files.sort()
         for filename in files:
             if filename.endswith('.data'):
-                segments = Segment.SegmentList()
+                segments = Annotation.SegmentList()
                 segments.parseJSON(os.path.join(root, filename))
                 if len(segments)>0:
                     seg = segments[0]

@@ -32,8 +32,10 @@ import math
 
 from src.core import Spectrogram
 from src.core import WaveletSegment
-from src.core import Segment
+from src.core import Annotation
+from src.core import Segmentation
 from src.core import SupportClasses
+from src.core import AudioData
 import librosa
 
 import soundfile as sf
@@ -123,8 +125,8 @@ class NN:
     def generateImage(self, audiodata):
         ''' Generate spectrogram image'''
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
-        sp.audio_data.data = audiodata
-        sp.audioFormat.sample_rate = self.fs
+        sp.audio_data = AudioData.AudioData(data=audiodata, sample_rate=self.fs, 
+                                   sample_format='float32', sample_size=32, channels=1)
         sgRaw = sp.spectrogram(self.windowwidth, self.inc)
         maxg = np.max(sgRaw)
         return np.rot90(sgRaw / maxg).tolist()
@@ -434,7 +436,7 @@ class GenerateData:
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     if len(self.calltypes) == 1:
                         ctSegments = segments.getSpecies(self.species)
@@ -443,11 +445,11 @@ class GenerateData:
                     for indx in ctSegments:
                         seg = segments[indx]
                         # skip uncertain segments
-                        cert = [lab["certainty"] if lab["species"] == self.species else 100 for lab in seg[4]]
+                        cert = [lab["certainty"] if lab["species"] == self.species else 100 for lab in seg.labels]
                         if cert:
                             mincert = min(cert)
                             if mincert == 100:
-                                calltypeSegments.append([soundFile, seg[:2], calltypei])
+                                calltypeSegments.append([soundFile, [seg.start_time, seg.end_time], calltypei])
 
         return calltypeSegments
 
@@ -465,7 +467,7 @@ class GenerateData:
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
@@ -488,7 +490,7 @@ class GenerateData:
             if os.stat(soundFile).st_size != 0:
                 sppSegments = []
                 if os.path.isfile(soundFile + '.data'):
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     sppSegments = [segments[i] for i in segments.getSpecies(self.species)]
                 for segAuto in item[1]:
@@ -509,14 +511,14 @@ class GenerateData:
         '''
         manSegNum = 0
         noiseSegments = []
-        segmenter = Segment.Segmenter()
+        segmenter = Segmentation.Segmenter()
         print('Generating GT...')
         for root, dirs, files in os.walk(dirName):
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     # Generate GT files from annotations in dir1
-                    segments = Segment.SegmentList()
+                    segments = Annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
@@ -526,9 +528,9 @@ class GenerateData:
                     segments.exportGT(soundFile, self.species, resolution=1.0)
 
                     print('Determining noise...')
-                    autoseg = Segment.SegmentList()
+                    autoseg = Annotation.SegmentList()
                     for sec in range(math.floor(segments.metadata["Duration"])-1):
-                        if not any([sec >= seg[0] and sec <= seg[1] for seg in segments]):
+                        if not any([sec >= seg.start_time and sec <= seg.end_time for seg in segments]):
                             autoseg.addSegment([sec, sec+1, 0, 0, []])
                     autoSegments = segmenter.joinGaps(autoseg, maxgap=0)
 
@@ -600,7 +602,7 @@ class GenerateData:
         eps = 0.0005
         N = [0 for i in range(len(self.calltypes) + 1)]
         sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
-        sp.audioFormat.sample_rate = self.fs
+        # audio_data will be initialized by readSoundFile, then resampled to self.fs
 
         for record in dataset:
             # Compute features, also consider tiny segments because this would be the case for song birds.

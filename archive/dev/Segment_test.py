@@ -27,7 +27,7 @@ def testMC():
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128)
     sg = sp.spectrogram(data=data,window_width=256,incr=128,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
-    s = Segment.Segmenter(data,sg,sp,fs)
+    s = Segmentation.Segmenter(data,sg,sp,fs)
 
     #print np.shape(sg)
 

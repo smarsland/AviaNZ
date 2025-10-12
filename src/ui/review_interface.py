@@ -34,7 +34,7 @@ import pyqtgraph as pg
 
 from src.utils.exceptions import GentleExitException
 from src.core import Spectrogram, SignalProc
-from src.core import Segment
+from src.core import Annotation
 from src.core import SupportClasses
 from src.ui.components.buttons_and_controls import MainPushButton
 from src.ui.components.popups import MessagePopup
@@ -486,11 +486,7 @@ class ReviewInterface(QMainWindow):
             
             # Update species list
             self.spList = list(self.listFiles.spList)
-            # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
-            try:
-                self.spList.remove("Don't Know")
-            except Exception:
-                pass
+            # Keep "Don't Know" in the list so it can be reviewed separately
                 
             # Update dropdown
             self.w_spe1.clear()
@@ -518,16 +514,21 @@ class ReviewInterface(QMainWindow):
         self.w_dir.setPlainText(self.dirName)
 
         # Find species names from the annotations
+        # Store current selection before clearing
+        currentSpecies = self.w_spe1.currentText()
+        
         self.spList = list(self.listFiles.spList)
-        # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
-        try:
-            self.spList.remove("Don't Know")
-        except Exception:
-            pass
+        # Keep "Don't Know" in the list so it can be reviewed separately
         # self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItem('All species')
         self.w_spe1.addItems(self.spList)
+        
+        # Restore previous selection if it still exists
+        if currentSpecies:
+            index = self.w_spe1.findText(currentSpecies)
+            if index >= 0:
+                self.w_spe1.setCurrentIndex(index)
 
         # Also detect samplerates on dir change
         if len(self.listFiles.fsList) > 0:
@@ -659,7 +660,10 @@ class ReviewInterface(QMainWindow):
             }
 
             # Collect segments for processing
-            relevantIndices = self.segments.getSpecies(self.species) if self.species != 'All species' else range(len(self.segments))
+            # Note: self.segments already filtered in processFileForReview to include relevant segments
+            # For specific species, this includes segments without the label (need review) AND
+            # segments with the label but low certainty
+            relevantIndices = range(len(self.segments))
             for idx in relevantIndices:
                 seg = self.segments[idx]
                 self.allSegments.append({
@@ -730,10 +734,10 @@ class ReviewInterface(QMainWindow):
 
         # Load segments
         with pg.BusyCursor():
-            self.allsegments = Segment.SegmentList()
+            self.allsegments = Annotation.SegmentList()
             self.allsegments.parseJSON(filename+'.data')
 
-            self.segments = Segment.SegmentList()
+            self.segments = Annotation.SegmentList()
             self.segments.parseJSON(filename+'.data')
 
             # Separate out segments which do not need review
@@ -742,25 +746,42 @@ class ReviewInterface(QMainWindow):
                 goodenough = True
                 if self.species == 'All species':
                     # For "All species" mode, check all labels
-                    for lab in seg[4]:
+                    for lab in seg.labels:
                         if lab["certainty"] <= self.certBox.value():
                             goodenough = False
+                elif self.species == "Don't Know":
+                    # For "Don't Know" mode, only keep segments with "Don't Know" labels
+                    dontknow_labels = [lab for lab in seg.labels if lab["species"] == "Don't Know"]
+                    
+                    if dontknow_labels:
+                        # Has "Don't Know" label(s) - check certainty
+                        for lab in dontknow_labels:
+                            if lab["certainty"] <= self.certBox.value():
+                                goodenough = False
+                    else:
+                        # No "Don't Know" labels - skip this segment
+                        goodenough = True
                 else:
                     # For specific species mode, only check labels for that species
-                    species_labels = [lab for lab in seg[4] if lab["species"] == self.species]
-                    for lab in species_labels:
-                        if lab["certainty"] <= self.certBox.value():
-                            goodenough = False
-                    # If no labels for this species exist, keep the segment for review
-                    if not species_labels:
+                    species_labels = [lab for lab in seg.labels if lab["species"] == self.species]
+                    
+                    if species_labels:
+                        # Has label(s) for target species - check certainty
+                        for lab in species_labels:
+                            if lab["certainty"] <= self.certBox.value():
+                                goodenough = False
+                    elif len(seg.labels) == 0:
+                        # No labels at all - keep for potential labeling
                         goodenough = False
+                    # else: Has labels for OTHER species only - skip this segment
                         
                 if goodenough:
                     self.goodsegments.append(seg)
                     self.segments.remove(seg)
 
         # Skip review dialog if there's no segments passing relevant criteria
-        if len(self.segments)==0 or self.species!='All species' and len(self.segments.getSpecies(self.species))==0:
+        # Note: self.segments now contains all segments that need review, including those without labels
+        if len(self.segments)==0:
             print("No segments found in file %s" % filename)
             return None
 
@@ -774,7 +795,7 @@ class ReviewInterface(QMainWindow):
             thisspsegs = self.segments.getSpecies(self.species)
             for si in thisspsegs:
                 seg = self.segments[si]
-                chunksize = max(chunksize, seg[1]-seg[0])
+                chunksize = max(chunksize, seg.end_time - seg.start_time)
             print("Auto-setting view size to:", chunksize)
 
         _ = self.segments.orderTime()
@@ -831,7 +852,7 @@ class ReviewInterface(QMainWindow):
             Returns 1 for clean completion, 0 for Esc press.
         """
         from collections import defaultdict
-        import Spectrogram
+        from src.core import Spectrogram
         
         # Group segments by file for efficient loading
         segments_by_file = defaultdict(list)
@@ -840,9 +861,10 @@ class ReviewInterface(QMainWindow):
             segments_by_file[filename].append(segData)
         
         # Create segment list and spectrogram list for all segments
-        all_segment_list = Segment.SegmentList()
+        all_segment_list = Annotation.SegmentList()
         all_sps = []
         all_indices = []
+        all_batmodes = []  # Track batmode for each segment
         
         idx_counter = 0
         for filename, file_segments in segments_by_file.items():
@@ -879,14 +901,14 @@ class ReviewInterface(QMainWindow):
                 
                 if chunksize > 0:
                     halfChunk = 1.1/2 * chunksize
-                    mid = (seg[0]+seg[1])/2
+                    mid = (seg.start_time + seg.end_time)/2
                     x1 = max(0, mid-halfChunk)
                     x2 = min(duration, mid+halfChunk)
-                    x1nob = max(seg[0], x1)
-                    x2nob = min(seg[1], x2)
+                    x1nob = max(seg.start_time, x1)
+                    x2nob = min(seg.end_time, x2)
                 else:
-                    x1nob = seg[0]
-                    x2nob = seg[1]
+                    x1nob = seg.start_time
+                    x2nob = seg.end_time
                     x1 = max(x1nob - self.config['reviewSpecBuffer'], 0)
                     x2 = min(x2nob + self.config['reviewSpecBuffer'], duration)
                 
@@ -922,6 +944,7 @@ class ReviewInterface(QMainWindow):
                     all_segment_list.addSegment(seg)
                     all_sps.append(sp)
                     all_indices.append(idx_counter)
+                    all_batmodes.append(batmode)
                     
                     # Store mapping back to original file/index
                     if not hasattr(self, '_quick_mapping'):
@@ -936,6 +959,7 @@ class ReviewInterface(QMainWindow):
                     all_segment_list.addSegment(seg)
                     all_sps.append(None)
                     all_indices.append(idx_counter)
+                    all_batmodes.append(batmode)
                     self._quick_mapping[idx_counter] = (filename, orig_idx)
                     idx_counter += 1
         
@@ -950,9 +974,9 @@ class ReviewInterface(QMainWindow):
         
         # Create normalized spectrograms
         sgs = []
-        for sp in all_sps:
+        for idx, sp in enumerate(all_sps):
             if sp is not None:
-                if batmode:
+                if all_batmodes[idx]:
                     sgs.append(sp.sg)
                 else:
                     sgs.append(sp.normalisedSpec(self.config['sgNormMode']))
@@ -960,7 +984,9 @@ class ReviewInterface(QMainWindow):
                 sgs.append(None)
         
         # Set up frequency guides
-        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and batmode):
+        # For mixed mode (bat and non-bat segments), show guides if any segment is bat mode
+        any_batmode = any(all_batmodes)
+        if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and any_batmode):
             guides = self.config['guidepos']
         else:
             guides = None
@@ -1050,10 +1076,10 @@ class ReviewInterface(QMainWindow):
                     # Duplicate segment
                     seg.confirmLabels(self.species)
                     new_seg = copy.deepcopy(seg)
-                    new_seg[0] += 0.1
-                    new_seg[1] += 0.1
-                    new_seg[2] += 50
-                    new_seg[3] += 50
+                    new_seg.start_time += 0.1
+                    new_seg.end_time += 0.1
+                    new_seg.freq_low += 50
+                    new_seg.freq_high += 50
                     toadd.append(new_seg)
             
             # Apply deletions (reverse order to preserve indices)
@@ -1066,10 +1092,7 @@ class ReviewInterface(QMainWindow):
             # Re-add good segments
             segments.extend(goodsegments)
             
-            # Save the file
-            cleanexit = segments.saveJSON(filename + '.data', self.reviewer)
-            if cleanexit != 1:
-                print(f"Warning: could not save segments for {filename}!")
+            segments.saveJSON(filename + '.data', self.reviewer)
         
         # Clean up
         delattr(self, '_quick_changes')
@@ -1122,12 +1145,12 @@ class ReviewInterface(QMainWindow):
         with pg.BusyCursor():
             for filename in alldatas:
                 print("Reading segments from", filename)
-                segments = Segment.SegmentList()
+                segments = Annotation.SegmentList()
                 segments.parseJSON(filename)
 
                 # Determine all species detected in at least one file
                 for seg in segments:
-                    spList.update([lab["species"] for lab in seg[4]])
+                    spList.update([lab["species"] for lab in seg.labels])
 
                 # sort by time and save
                 segments.orderTime()
@@ -1471,10 +1494,7 @@ class ReviewInterface(QMainWindow):
             self.segments.clear()  # Clear existing segments
             self.segments.extend(unique_segments)  # Add all final segments
             
-            # Save the file
-            cleanexit = self.segments.saveJSON(filename + '.data', self.reviewer)
-            if cleanexit != 1:
-                print(f"Warning: could not save segments for {filename}!")
+            self.segments.saveJSON(filename + '.data', self.reviewer)
     
     def _saveCurrentSegmentState(self):
         """Save any species changes made to the current segment immediately
@@ -1539,12 +1559,12 @@ class ReviewInterface(QMainWindow):
                 
                 # Apply certainty changes (deletion is handled separately in _saveChanges)
                 if state == 'questioned':
-                    if len(segment[4]) > 0:
-                        for label in segment[4]:
+                    if len(segment.labels) > 0:
+                        for label in segment.labels:
                             label["certainty"] = 50
                 elif state == 'accepted':
-                    if len(segment[4]) > 0:
-                        for label in segment[4]:
+                    if len(segment.labels) > 0:
+                        for label in segment.labels:
                             label["certainty"] = 100
                 # Note: 'deleted' state is handled in _saveChanges by removing segments
         else:
@@ -1557,24 +1577,24 @@ class ReviewInterface(QMainWindow):
                 
                 # Apply certainty changes (deletion is handled separately in humanClassifyClose2)
                 if state == 'questioned':
-                    if len(segment[4]) > 0:
-                        for label in segment[4]:
+                    if len(segment.labels) > 0:
+                        for label in segment.labels:
                             label["certainty"] = 50
                 elif state == 'accepted':
-                    if len(segment[4]) > 0:
-                        for label in segment[4]:
+                    if len(segment.labels) > 0:
+                        for label in segment.labels:
                             label["certainty"] = 100
                 # Note: 'deleted' state is handled in humanClassifyClose2 by removing segments
                     
                 segment = self.segments[segmentIndex]
                 
                 if state == 'questioned':
-                    if len(segment[4]) > 0:
-                        for label in segment[4]:
+                    if len(segment.labels) > 0:
+                        for label in segment.labels:
                             label["certainty"] = 50
                 elif state == 'accepted':
-                    if len(segment[4]) > 0:
-                        for label in segment[4]:
+                    if len(segment.labels) > 0:
+                        for label in segment.labels:
                             label["certainty"] = 100
                 # Note: deletion handled separately
 
@@ -1590,7 +1610,7 @@ class ReviewInterface(QMainWindow):
         # Set up current file context
         self.filename = filename
         filedata = self.allFileData[filename]
-        self.segments = Segment.SegmentList()
+        self.segments = Annotation.SegmentList()
         self.segments.append(segment)
         self.allsegments = filedata['allsegments']
         
@@ -1647,13 +1667,17 @@ class ReviewInterface(QMainWindow):
                     return
                 print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
 
-                # For single sp, no need to load all segments, but don't want to edit self.segments
-                if self.species is not None and self.species != "All species":
-                    self.indices2show = self.segments.getSpecies(species)
+                # In one-by-one cross-file mode, always load all segments (usually just 1)
+                # Otherwise filter by species if needed
+                if hasattr(self, 'allSegmentsToReview'):
+                    # One-by-one mode: load whatever segments we have
+                    self.indices2show = list(range(len(self.segments)))
                 else:
-                    self.indices2show = range(len(self.segments))
-
-                print(self.indices2show)
+                    # Single-file review mode: filter by species if needed
+                    if self.species is not None and self.species != "All species":
+                        self.indices2show = self.segments.getSpecies(species)
+                    else:
+                        self.indices2show = list(range(len(self.segments)))
                 if chunksize is not None:
                     halfChunk = 1.1/2 * chunksize
 
@@ -1665,18 +1689,18 @@ class ReviewInterface(QMainWindow):
                         sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
 
                         if chunksize is not None:
-                            mid = (seg[0]+seg[1])/2
+                            mid = (seg.start_time + seg.end_time)/2
                             # buffered limits in audiodata (sec) = display limits
                             x1 = max(0, mid-halfChunk)
                             x2 = min(duration, mid+halfChunk)
 
                             # unbuffered limits in audiodata
-                            x1nob = max(seg[0], x1)
-                            x2nob = min(seg[1], x2)
+                            x1nob = max(seg.start_time, x1)
+                            x2nob = min(seg.end_time, x2)
                         else:
                             # unbuffered limits in audiodata
-                            x1nob = seg[0]
-                            x2nob = seg[1]
+                            x1nob = seg.start_time
+                            x2nob = seg.end_time
 
                             # buffered limits in audiodata (sec) = display limits
                             x1 = max(x1nob - self.config['reviewSpecBuffer'], 0)
@@ -1692,7 +1716,7 @@ class ReviewInterface(QMainWindow):
                             maxsg = 1
                         else:
                             # segix>1 to print the format details only once for each file
-                            sp.readSoundFile(filename, off=x1, duration=x2-x1, silent=segix>1)
+                            sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
                             sp.audio_data.data = SignalProc.bandpassFilter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
@@ -1846,38 +1870,9 @@ class ReviewInterface(QMainWindow):
                 self.loadCurrentSegment()
                 self.box1id = 0  # Reset to first (only) segment in current load
             
-            # Display current segment (whether we moved forward or not)
+            # Display current segment
             if self.currentSegmentIndex < len(self.allSegmentsToReview):
-                # Update title
-                self.humanClassifyDialog1.setWindowTitle(f"AviaNZ - reviewing segment {self.currentSegmentIndex + 1}/{len(self.allSegmentsToReview)}")
-                
-                # Show the segment
-                seg = self.segments[0]  # Only one segment loaded
-                lab = seg[4]
-
-                # update "done/to go" numbers based on actual status counts
-                self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.segsQuestioned, len(self.allSegmentsToReview))
-
-                # select the Spectrogram with relevant data
-                sp = self.sps[0]  # Only one segment loaded
-
-                # these pass the axis limits set by slider
-                minFreq = max(self.fLow.value(), 0)
-                maxFreq = min(self.fHigh.value(), sp.audio_data.sample_rate//2)
-
-                if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and self.batmode):
-                    guides = [sp.convertFreqtoY(f) for f in self.config['guidepos']]
-                else:
-                    guides = None
-
-                if self.batmode:
-                    sg = sp.normalisedSpec("Batmode")
-                else:
-                    sg = sp.normalisedSpec(self.config['sgNormMode'])
-
-                self.humanClassifyDialog1.setImage(sg, sp.audio_data.data, sp.audio_data.sample_rate, sp.incr,
-                                                   seg, sp.x1nobspec, sp.x2nobspec,
-                                                   guides, minFreq, maxFreq)
+                self.showCurrentSegment()
             else:
                 # End of all segments - finish review
                 self._finishReviewDialog()
@@ -1889,7 +1884,7 @@ class ReviewInterface(QMainWindow):
 
                 # Show the next segment
                 seg = self.segments[self.indices2show[self.box1id]]
-                lab = seg[4]
+                lab = seg.labels
 
                 # update "done/to go" numbers:
                 if self.returned:
@@ -2059,10 +2054,10 @@ class ReviewInterface(QMainWindow):
             
         for i in range(numCopies):
             newSeg = copy.deepcopy(currSeg)
-            newSeg[0] += (i+1)*0.1  # Start time offset
-            newSeg[1] += (i+1)*0.1  # End time offset
-            newSeg[2] += (i+1)*50   # Low freq offset
-            newSeg[3] += (i+1)*50   # High freq offset
+            newSeg.start_time += (i+1)*0.1  # Start time offset
+            newSeg.end_time += (i+1)*0.1  # End time offset
+            newSeg.freq_low += (i+1)*50   # Low freq offset
+            newSeg.freq_high += (i+1)*50   # High freq offset
             self.toadd[current_filename].append(newSeg)
 
         self.returned = False
@@ -2170,7 +2165,7 @@ class ReviewInterface(QMainWindow):
         """
         # Clean up any old-style deletion markers
         for seg in reversed(self.segments):
-            if len(seg[4]) > 0 and seg[4][0].get("species") == "-To Be Deleted-":
+            if len(seg.labels) > 0 and seg.labels[0].get("species") == "-To Be Deleted-":
                 print("Removing legacy marked segment:", seg)
                 self.segments.remove(seg)
 

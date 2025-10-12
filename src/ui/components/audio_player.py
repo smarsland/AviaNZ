@@ -137,12 +137,23 @@ class ControllableAudio(QAudioSink):
         # Otherwise assumes that the QAudioOutput was stopped/reset. In that case the updated 
         # position is passed as start, and playing starts anew from there.
         print("---", self.state(),start)
-        if self.state() == QAudio.State.SuspendedState:
-            print("resuming")
+        if self.state() == QAudio.State.SuspendedState and start == self.timeoffset:
+            print("resuming from same position")
+            self.audioThreadPaused = False
             self.resume()
             if self.useBar:
                 self.NotifyTimer.start(30)
         else:
+            current_state = self.state()
+            if current_state == QAudio.State.IdleState or current_state == QAudio.State.SuspendedState or current_state == QAudio.State.ActiveState:
+                print("cleaning up previous playback, state was:", current_state)
+                self.audioThreadLoading = False
+                if self.audioThread is not None:
+                    self.audioThread.join()
+                self.stop()
+                self.reset()
+                sleep(0.05)
+            self.audioThreadPaused = False
             self.playSeg(start,stop)
 
     @pyqtSlot()
@@ -200,15 +211,40 @@ class ControllableAudio(QAudioSink):
         # Plays the entire audiodata 
         # Gets the format, then puts the data in a buffer
         # and then starts the QAudioOutput from that buffer
-        fmt_str = self.audioFormat.sample_format
-        if 'Int16' in fmt_str:
-            audiodata = audiodata.astype('int16')  
-        elif 'Int32' in fmt_str:
-            audiodata = audiodata.astype('int32')  
-        elif 'UInt8' in fmt_str or 'UInt8' == fmt_str:
-            audiodata = audiodata.astype('uint8')  
+        
+        # Normalize audio to appropriate range for target bit depth
+        if len(audiodata) > 0:
+            max_val = np.abs(audiodata).max()
+            if max_val > 0:
+                fmt_str = self.audioFormat.sample_format
+                if 'Int16' in fmt_str:
+                    audiodata = (audiodata / max_val * 32767).astype('int16')
+                elif 'Int32' in fmt_str:
+                    audiodata = (audiodata / max_val * 2147483647).astype('int32')
+                elif 'UInt8' in fmt_str or 'UInt8' == fmt_str:
+                    audiodata = ((audiodata / max_val * 127) + 128).astype('uint8')
+                else:
+                    print("ERROR: sampleFormat %s not supported" % fmt_str)
+            else:
+                fmt_str = self.audioFormat.sample_format
+                if 'Int16' in fmt_str:
+                    audiodata = audiodata.astype('int16')
+                elif 'Int32' in fmt_str:
+                    audiodata = audiodata.astype('int32')
+                elif 'UInt8' in fmt_str or 'UInt8' == fmt_str:
+                    audiodata = audiodata.astype('uint8')
+                else:
+                    print("ERROR: sampleFormat %s not supported" % fmt_str)
         else:
-            print("ERROR: sampleFormat %s not supported" % fmt_str)
+            fmt_str = self.audioFormat.sample_format
+            if 'Int16' in fmt_str:
+                audiodata = audiodata.astype('int16')
+            elif 'Int32' in fmt_str:
+                audiodata = audiodata.astype('int32')
+            elif 'UInt8' in fmt_str or 'UInt8' == fmt_str:
+                audiodata = audiodata.astype('uint8')
+            else:
+                print("ERROR: sampleFormat %s not supported" % fmt_str)
 
         # double mono sound to get two channels -- simplifies reading
         chcount = self.audioFormat.channels
@@ -220,9 +256,11 @@ class ControllableAudio(QAudioSink):
         self.InBuffer = QBuffer(self.audioByteArray)
         self.InBuffer.open(QIODevice.OpenModeFlag.ReadOnly)
         self.bytesWritten = 0
+        print(f"loadArray: audiodata length={len(audiodata)}, buffer size={len(self.audioByteArray)}")
         sleep(0.2)
         self.audioThreadLoading = True
         self.audioBuffer = self.start()
+        print(f"loadArray: after start(), state={self.state()}, error={self.error()}")
         self.audioThread = threading.Thread(target=self.fillBuffer)
         self.audioThread.start()
 

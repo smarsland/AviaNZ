@@ -336,7 +336,7 @@ class HumanClassify1(QDialog):
         self.shortBirdList = ["Don't Know"] + [x for x in self.shortBirdList if x != "Don't Know"][:29]
     
     def batLabelsUpdated(self,new_labels,species_changed,new_certainty):
-        self.currentSegment[4] = new_labels        
+        self.currentSegment.labels = new_labels        
                 
         # Put the selected bird name at the top of the list.
         if self.reorderShortList:
@@ -347,7 +347,7 @@ class HumanClassify1(QDialog):
             self.batList.insert(0,species_changed)
     
     def birdLabelsUpdated(self,new_labels,species_changed,callname_changed,new_certainty):
-        self.currentSegment[4] = new_labels
+        self.currentSegment.labels = new_labels
         
         # Put the selected bird name at the top of the list.
         if self.reorderShortList:
@@ -403,7 +403,7 @@ class HumanClassify1(QDialog):
         self.longBirdList = sorted(self.longBirdList, key=str.lower)
         self.knownCalls[species] = []
 
-        labels = copy.deepcopy(self.currentSegment[4])
+        labels = copy.deepcopy(self.currentSegment.labels)
         labels.append({"species": species, "certainty": certainty})
         if "Don't Know" in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!="Don't Know"]
@@ -444,7 +444,7 @@ class HumanClassify1(QDialog):
 
         self.knownCalls[species].append(callname)
 
-        labels = copy.deepcopy(self.currentSegment[4])
+        labels = copy.deepcopy(self.currentSegment.labels)
         if species in [x["species"] for x in labels]:
             labels = [x for x in labels if x["species"]!=species]
         labels.append({"species": species, "certainty": certainty, "calltype": callname})
@@ -517,8 +517,8 @@ class HumanClassify1(QDialog):
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
         # Add time markers next to the lines
-        time1 = QTime(0,0,0).addSecs(int(segment[0])).toString('hh:mm:ss')
-        time2 = QTime(0,0,0).addSecs(int(segment[1])).toString('hh:mm:ss')
+        time1 = QTime(0,0,0).addSecs(int(segment.start_time)).toString('hh:mm:ss')
+        time2 = QTime(0,0,0).addSecs(int(segment.end_time)).toString('hh:mm:ss')
         self.segTimeText1.setText(time1)
         self.segTimeText2.setText(time2)
         self.segTimeText1.setPos(startV, SgSize)
@@ -539,7 +539,7 @@ class HumanClassify1(QDialog):
         self.updateTitle()
 
         # Extract the call type of the (first) species
-        labels = self.segment[4]
+        labels = self.segment.labels
         if "calltype" in labels[0]:
             self.ctLabel.setText(labels[0]["calltype"])
         else:
@@ -550,7 +550,7 @@ class HumanClassify1(QDialog):
     
     def updateTitle(self):
         specnames = []
-        labels = self.segment[4]
+        labels = self.segment.labels
         for lab in labels:
             specnames.append(lab["species"]+" ["+lab["calltype"]+"]" if "calltype" in lab else lab["species"])
         specnames = list(set(specnames))
@@ -558,7 +558,7 @@ class HumanClassify1(QDialog):
 
     def updateSelectionMenu(self):
         self.reorderShortBirdList(self.segment)
-        currentLabels = self.segment[4]
+        currentLabels = self.segment.labels
         if self.batmode:
             self.menuSpeciesSelection = BatSelectionMenu(
                 batList=self.batList, 

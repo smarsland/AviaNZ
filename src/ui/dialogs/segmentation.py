@@ -55,7 +55,7 @@ pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
 
-class Segmentation(QDialog):
+class SegmentationDialog(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them

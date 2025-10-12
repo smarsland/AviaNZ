@@ -33,7 +33,7 @@ import datetime as dt
 
 # sys.path.append('..')
 from ext import SplitLauncher
-import Segment
+from src.core import Annotation
 from src.ui.components.popups import MessagePopup
 
 
@@ -411,7 +411,7 @@ class SplitData(QMainWindow):
             Determines the original input length from the metadata segment[1].
         """
         print("Splitting data file", infile)
-        segs = Segment.SegmentList()
+        segs = Annotation.SegmentList()
         try:
             segs.parseJSON(infile)
         except Exception as e:
@@ -446,7 +446,7 @@ class SplitData(QMainWindow):
         # (output is determined by ceiling division)
         allSegs = []
         for i in range(int(maxtime-1) // cutlen + 1):
-            onelist = Segment.SegmentList()
+            onelist = Annotation.SegmentList()
             onelist.metadata = segs.metadata.copy()
             onelist.metadata["Duration"] = min(self.cutLen, maxtime-i*self.cutLen)
             allSegs.append(onelist)
@@ -466,7 +466,7 @@ class SplitData(QMainWindow):
                     adjend = b[1] - filenum*cutlen
                 else:
                     adjend = cutlen
-                allSegs[int(filenum)].addSegment([adjst, adjend, b[2], b[3], b[4]])
+                allSegs[int(filenum)].addSegments([adjst, adjend, b[2], b[3], b[4]])
 
         # save files, while increasing the filename datestamps
         for a in range(len(allSegs)):

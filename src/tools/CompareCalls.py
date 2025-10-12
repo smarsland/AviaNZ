@@ -13,9 +13,9 @@ import pyqtgraph as pg
 
 from src.ui.components.popups import MessagePopup
 from src.ui.components.buttons_and_controls import BrightContrVol
-import Segment
-import Spectrogram
-import colourMaps
+from src.core import Annotation
+from src.core import Spectrogram
+from src.ui.colourMaps import colourMaps
 
 
 class CompareCalls(QMainWindow):
@@ -220,7 +220,7 @@ class CompareCalls(QMainWindow):
             spList = []
             for sl in self.annots:
                 if len(sl)>0:
-                    filesp = [lab["species"] for seg in sl for lab in seg[4]]
+                    filesp = [lab["species"] for seg in sl for lab in seg.labels]
                     spList.extend(filesp)
             spList = list(set(spList))
             self.clockSpBox.addItems(spList)
@@ -289,7 +289,7 @@ class CompareCalls(QMainWindow):
                             d = dt.datetime.strptime(datestamp, "%d%m%y_%H%M%S")
                 print("Recorder ", recname, " timestamp ", d)
                 # timestamp identified, so read this file:
-                segs = Segment.SegmentList()
+                segs = Annotation.SegmentList()
                 try:
                     segs.parseJSON(f, silent=True)
                 except Exception as e:

@@ -46,5 +46,4 @@ class AudioData:
 
     def get_duration(self):
         """Calculate duration in seconds from audio data."""
-
         return float(len(self.data)) / self.sample_rate

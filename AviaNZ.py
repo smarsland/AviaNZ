@@ -246,8 +246,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 from src.ui import review_interface
                 avianz = review_interface.ReviewInterface(configdir=configdir)
             elif task==4:
-                from src.tools import SplitAnnotations
-                avianz = SplitAnnotations.SplitData()
+                from src.ui import split_interface
+                avianz = split_interface.SplitData()
 
             # catch bad initialiation
             if avianz:
