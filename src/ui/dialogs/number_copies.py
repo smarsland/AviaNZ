@@ -23,39 +23,23 @@
 
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-import os
-import shutil
 
-from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import *
-from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
+from PyQt6.QtWidgets import QLabel, QDialog, QPushButton, QVBoxLayout, QSpinBox # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPoint, QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
+from PyQt6.QtCore import Qt
 
 import pyqtgraph as pg
 
-import numpy as np
-from src.ui.colourMaps import colourMaps
-from src.ui.components.audio_player import ControllableAudio
-from src.ui.components.buttons_and_controls import BrightContrVol, MainPushButton, PicButton
-from src.ui.components.popups import MessagePopup
-from src.ui.components.layout_widgets import PartlyResizableGLW
-from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
-from src.core import Spectrogram
-from src.core import SupportClasses
-import openpyxl
-import json
-from scipy.stats import boxcox
 
-import copy
 
-import re
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
 
-class getNumberCopiesPlus(QDialog):
+class GetNumberCopiesPlus(QDialog):
+    # Select number of max copies, check for wind, rain, metadata, operator/reviewer stats
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Multiple Calls')

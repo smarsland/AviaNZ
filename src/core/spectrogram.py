@@ -27,9 +27,9 @@ from scipy.stats import boxcox
 import resampy
 from PIL import Image
 
-from src.core import SignalProc
-from src.core import AudioLoader
-from src.core import AudioData
+from core import signal_proc
+from core import audio_loader
+from core import audio_data
 
 BAT_SPECTROGRAM_TIME_PER_PIXEL = 0.002909090909090909
 
@@ -62,7 +62,7 @@ class Spectrogram:
             return self.load_bmp(filepath, duration, offset, silent, **kwargs)
         
         # For audio files, use AudioLoader
-        audio_loader = AudioLoader.AudioLoader()
+        audio_loader = audio_loader.AudioLoader()
         loaded_data = audio_loader.load_audio(filepath, duration, offset, silent)
         
         # Store reference to AudioData - it has all the format info built in
@@ -117,7 +117,7 @@ class Spectrogram:
         
         # Create AudioData for BMP (core use only)
         # BMP files don't have actual audio, so create dummy AudioData with no data array 
-        self.audio_data = AudioData.AudioData(data=None, sample_rate=176000,
+        self.audio_data = audio_data.AudioData(data=None, sample_rate=176000,
                                      sample_format='Int16', sample_size=16, channels=0)
         
         # Trim to specified offset and duration
@@ -294,7 +294,7 @@ class Spectrogram:
         if self.audio_data is None:
             if sampleRate is None:
                 raise ValueError("sampleRate must be provided when creating new AudioData")
-            self.audio_data = AudioData.AudioData(
+            self.audio_data = audio_data.AudioData(
                 data=audiodata,
                 sample_rate=sampleRate,
                 sample_format='float32',
@@ -514,8 +514,8 @@ class Spectrogram:
         # Time: current frame index + time offset (in samples) / incr
         time_bins = np.tile(np.arange(num_frames), (window_width, 1)).T + time_reassign / incr
         
-        # Frequency: current frequency bin + frequency offset (normalized by sample rate) * window_width * 2
-        freq_bins = np.tile(np.arange(window_width), (num_frames, 1)) + freq_reassign * nfft / self.audio_data.sample_rate
+        # Frequency: current frequency bin + frequency offset (normalized) * window_width
+        freq_bins = np.tile(np.arange(window_width), (num_frames, 1)) + freq_reassign * window_width
         
         # Clamp to valid ranges
         time_bins = np.clip(time_bins, 0, num_frames - 1)
@@ -826,7 +826,7 @@ class Spectrogram:
 
     def formants(self,ncoeff=None):
         # First look at formants. Snell and Milinazzo '93 method
-        from src.utils import LevinsonDurbanRecursion
+        from utils import levinson_durban_recursion
 
         if ncoeff is None:
             # TODO
@@ -842,7 +842,7 @@ class Spectrogram:
             x = signal.lfilter([1], [1., 0.63], x)
 
             # LPC
-            A, e, k = LevinsonDurbanRecursion.LPC(x, ncoeff)
+            A, e, k = levinson_durban_recursion.LPC(x, ncoeff)
             A = np.squeeze(A)
 
             # Extract roots, turn into angles
@@ -894,14 +894,14 @@ class Spectrogram:
             print("Don't use this interface for wavelets")
             return
         elif str(alg) == "Bandpass":
-            self.audio_data.data = SignalProc.bandpassFilter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end)
-            #self.data = SignalProc.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
+            self.audio_data.data = signal_proc.bandpass_filter(self.audio_data.data,self.audio_data.sample_rate, start=start, end=end)
+            #self.data = SignalProc.bandpass_filter(self.data,self.sampleRate, start=start, end=end)
         elif str(alg) == "Butterworth Bandpass":
-            self.audio_data.data = SignalProc.ButterworthBandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end)
-            #self.data = SignalProc.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
+            self.audio_data.data = signal_proc.butterworth_bandpass(self.audio_data.data, self.audio_data.sample_rate, low=start, high=end)
+            #self.data = SignalProc.butterworth_bandpass(self.data, self.sampleRate, low=start, high=end)
         else:
             # Median Filter
-            self.audio_data.data = SignalProc.medianFilter(self.audio_data.data,int(str(width)))
+            self.audio_data.data = signal_proc.median_filter(self.audio_data.data,int(str(width)))
 
     def extractSpectrogramFrame(self, sgRaw, frame_idx, hop_seconds, spec_frame_width, 
                                    sample_rate, adjust_last=False):

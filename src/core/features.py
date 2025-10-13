@@ -22,9 +22,9 @@
 
 import numpy as np
 import librosa
-from src.core import Spectrogram
-from src.core import WaveletSegment
-from src.core import AudioData
+from core import spectrogram
+from core import wavelet_segment
+from core import audio_data
 
 
 class Features:
@@ -44,8 +44,8 @@ class Features:
         self.sampleRate = sampleRate
         self.window_width = window_width
         self.incr = incr
-        sp = Spectrogram.Spectrogram(window_width=self.window_width, incr=self.incr)
-        sp.audio_data = AudioData.AudioData(data=self.data, sample_rate=self.sampleRate, 
+        sp = spectrogram.Spectrogram(window_width=self.window_width, incr=self.incr)
+        sp.audio_data = audio_data.AudioData(data=self.data, sample_rate=self.sampleRate, 
                                    sample_format='float32', sample_size=32, channels=1)
         self.sg = sp.spectrogram(sgType='Standard', window_width=self.window_width, incr=self.incr, window='Ones')
         self.sg = self.sg**2
@@ -67,7 +67,7 @@ class Features:
 
     def get_WE(self, nlevels=5):
         """ Wavelet energies """
-        ws = WaveletSegment.WaveletSegment(spInfo=[])
+        ws = wavelet_segment.WaveletSegment(spInfo=[])
         WE = ws.computeWaveletEnergy(data=self.data, sampleRate=self.sampleRate, nlevels=nlevels, wpmode='new')
         return WE
 
@@ -107,7 +107,7 @@ class Features:
         Compute the Sound Analysis Pro features, i.e., Wiener entropy, spectral derivative, and their variants.
         Most of the code is in Spectrogram.py
         """
-        sp = Spectrogram.Spectrogram(sampleRate=fs, window_width=256, incr=128)
+        sp = spectrogram.Spectrogram(sampleRate=fs, window_width=256, incr=128)
     
         spectral_deriv, sg, freq_mod, wiener_entropy, mean_freq, contours = sp.spectral_derivative(
             data, fs, window_width=window_width, incr=incr, K=2, threshold=0.5, returnAll=True

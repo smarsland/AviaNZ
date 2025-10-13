@@ -1,6 +1,6 @@
 
 import os,math
-from src.core import SignalProc
+from core import signal_proc
 import numpy as np
 
 def ClickSearch(imspec, sampleRate):
@@ -78,7 +78,7 @@ def ClickSearch(imspec, sampleRate):
         return None
 
 def run(dirName):
-    sp = SignalProc.SignalProc(1024,512)
+    sp = signal_proc.SignalProc(1024,512)
     dt=0.002909090909090909
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:

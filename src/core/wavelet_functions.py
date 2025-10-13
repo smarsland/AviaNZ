@@ -27,9 +27,9 @@ from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
-from src.utils import Wavelet
-from src.core import Spectrogram
-from src.core import SignalProc
+from utils import wavelet
+from core import spectrogram
+from core import signal_proc
 
 # A pair of helper functions that are often useful:
 def graycode(n):
@@ -140,7 +140,7 @@ class WaveletFunctions:
         self.tree = None
         self.treefs = samplerate
 
-        self.wavelet = Wavelet.Wavelet(name=wavelet)
+        self.wavelet = wavelet.Wavelet(name=wavelet)
 
     def ShannonEntropy(self,s):
         """ Compute the Shannon entropy of data
@@ -442,7 +442,7 @@ class WaveletFunctions:
         """
         wv = self.wavelet
         data = self.tree[node]
-        sp = Spectrogram.Spectrogram()
+        sp = spectrogram.Spectrogram()
 
         lvl = math.floor(math.log2(node+1))
         # position of node in its level (0-based)
@@ -466,12 +466,12 @@ class WaveletFunctions:
 
             if antialiasFilter:
                 # BETTER METHOD for antialiasing
-                # essentially same as SignalProc.ButterworthBandpass,
+                # essentially same as SignalProc.butterworth_bandpass,
                 # just stripped to minimum for speed.
                 low = nodepos / numnodes*2
                 high = (nodepos+1) / numnodes*2
                 print("antialiasing by filtering between %.3f-%.3f FN" %(low, high))
-                data = SignalProc.FastButterworthBandpass(data, low, high)
+                data = signal_proc.fast_butterworth_bandpass(data, low, high)
             else:
                 # OLD METHOD for antialiasing
                 # just setting image frequencies to 0

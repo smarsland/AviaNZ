@@ -24,12 +24,13 @@ import os, re
 import time
 import soundfile as sf
 
-from src.core import Spectrogram
-from src.core import Annotation
-from src.core import SupportClasses
-from src.core import BirdDetector
-from src.core import BatDetector
-from src.core import Segmentation
+from core import spectrogram
+from core import annotation
+from core import config_loader
+from core import batch_log
+from core import bird_detector
+from core import bat_detector
+from core import segmentation
 
 # Constants
 SAMPLES_PER_PAGE_16KHZ = 900 * 16000
@@ -71,7 +72,7 @@ class BatchProcessor:
         # Configuration
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.ConfigLoader = config_loader.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
         
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
@@ -116,8 +117,8 @@ class BatchProcessor:
             self.species.remove("Any sound")
 
         # Initialize detector classes
-        self.bird_detector = BirdDetector.BirdDetector(self.config, self.configdir)
-        self.bat_detector = BatDetector.BatDetector()
+        self.bird_detector = bird_detector.BirdDetector(self.config, self.configdir)
+        self.bat_detector = bat_detector.BatDetector()
 
     def process_files(self):
         """Main processing method. Returns 0 on success, 1 on error."""
@@ -136,7 +137,7 @@ class BatchProcessor:
         total = len(allsoundfiles)
 
         self.filesDone = []
-        self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, self.options)
+        self.log = batch_log.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, self.options)
         
         if self.log.possibleAppend:
             filesExistAndDone = self.log.getDoneFiles(allsoundfiles)
@@ -302,7 +303,7 @@ class BatchProcessor:
 
         # Initialize segments_nonn for testmode
         if self.testmode:
-            self.segments_nonn = Annotation.SegmentList()
+            self.segments_nonn = annotation.SegmentList()
 
         if self.options['intermittent']:
             self.addRegularSegments(filename, self.options['protocolSize'], self.options['protocolInterval'])
@@ -353,7 +354,7 @@ class BatchProcessor:
 
     def loadFile(self, filename, bats=False, anysound=False, impMask=False):
         """Load audio file and prepare for processing."""
-        self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
+        self.sp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
 
         if bats:
             self.sp.readSoundFile(filename, rotate=False)
@@ -366,7 +367,7 @@ class BatchProcessor:
             duration = self.sp.get_duration()
             print("Read BMP spectrogram: %d x %d pixels, %f s at %d Hz" % (self.sp.sg.shape[0], self.sp.sg.shape[1], duration, self.sp.audio_data.sample_rate))
 
-        self.segments = Annotation.SegmentList()
+        self.segments = annotation.SegmentList()
         
         duration = self.sp.get_duration()
         
@@ -426,5 +427,5 @@ class BatchProcessor:
             end_time = min(i + length, nseconds)
             segments.append([i, end_time])
             i += interval
-        post = Segmentation.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        post = segmentation.PostProcess(configdir=self.configdir, audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
         self.segments.addFromTimeRanges(post.segments, 0, 0, species="Don't Know", certainty=0.0)

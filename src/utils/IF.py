@@ -33,7 +33,7 @@ import types
 from scipy import optimize
 import scipy.special as spec
 
-class ec_class:
+class EcClass:
     #reproduce homonimous structure in the original code
     def __init__(self, method=2, param=[],PathOpt='on'):
         self.param=param
@@ -219,7 +219,7 @@ class IF:
         p_amplitude=np.zeros((L))*math.nan
         idr=np.zeros((L))*math.nan
         #dfreq=np.zeros((NF-1,2))
-        ec_info=ec_class(self.method, self.pars, self.PathOpt)
+        ec_info=EcClass(self.method, self.pars, self.PathOpt)
 
         #Determine the frequency resolution
         #MATLAB diff difference between adjacent elements along first array dim
@@ -518,7 +518,7 @@ class IF:
             p_amplitude[tn1:tn2+1]=np.abs(TFR[np.ravel_multi_index([p_index[tn1:tn2+1],np.arange(tn1,tn2+1)],np.shape(TFR))]) #check
 
             #define ec_info
-            ec_info = ec_class(self.method, self.pars, self.PathOpt)
+            ec_info = EcClass(self.method, self.pars, self.PathOpt)
             ec_info.efreq=efreq
             ec_info.eind=eind
             ec_info.pfreq=tfsupp[0,:]

@@ -34,17 +34,17 @@ import matplotlib.pyplot as plt
 from time import strftime, gmtime
 import math
 
-from src.core import Annotation
-from src.core import SupportClasses
+from core import annotation
+from core import config_loader
 from src.models import NN
-from src.core import WaveletSegment
-from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
+from core import wavelet_segment
+from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
 
 from src.models import NNModels
 
-class NNtrain:
+class NNTrain:
 
     def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
         # Two important things: 
@@ -55,7 +55,7 @@ class NNtrain:
 
         self.filterdir = filterdir
         self.configdir =configdir
-        cl = SupportClasses.ConfigLoader()
+        cl = config_loader.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
         
@@ -670,7 +670,7 @@ class TestModeCallbacks(BatchProcessorCallbacks):
     def check_cancelled(self):
         return False  # Never cancelled in test mode
 
-class NNtest:
+class NNTest:
     # Test a previously-trained NN
 
     def __init__(self,testDir,currfilt,filtname,configdir,filterdir,CLI=False):
@@ -703,7 +703,7 @@ class NNtest:
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     self.manSegNum += len(segments.getSpecies(species))
                     # Currently, we ignore call types here and just
@@ -733,7 +733,7 @@ class NNtest:
 
         # 3. Report statistics of WF followed by post-proc steps (wind-NN-merge neighbours-delete short)
         if "NN" in self.currfilt:
-            cl = SupportClasses.ConfigLoader()
+            cl = config_loader.ConfigLoader()
             filterlist = cl.filters(self.filterdir, bats=False)
             NNDicts = cl.getNNmodels(filterlist, self.filterdir, [filtname])
             #if len(NNDicts.keys()) == 1:
@@ -770,7 +770,7 @@ class NNtest:
     def findCTsegments(self, datafile, calltypei):
         calltypeSegments = []
         species = self.currfilt["species"]
-        segments = Annotation.SegmentList()
+        segments = annotation.SegmentList()
         segments.parseJSON(datafile)
         if len(self.calltypes) == 1:
             ctSegments = segments.getSpecies(species)
@@ -782,7 +782,7 @@ class NNtest:
 
     def getSummary(self, NN=False):
         autoSegCTnum = [0] * len(self.calltypes)
-        ws = WaveletSegment.WaveletSegment()
+        ws = wavelet_segment.WaveletSegment()
         TP = FP = TN = FN = 0
         for root, dirs, files in os.walk(self.testDir):
             for file in files:

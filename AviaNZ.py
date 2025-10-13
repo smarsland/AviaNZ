@@ -77,7 +77,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     try:
         import platform, json, shutil
         from jsonschema import validate
-        from src.core import SupportClasses
+        from core import config_loader
     except Exception as e:
         print("ERROR: could not import packages")
         raise
@@ -107,7 +107,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             raise
 
     # pre-run check of config file validity
-    confloader = SupportClasses.ConfigLoader()
+    confloader = config_loader.ConfigLoader()
     configschema = json.load(open("Config/config.schema"))
     learnparschema = json.load(open("Config/learnpar.schema"))
     try:
@@ -159,7 +159,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     if cli:
         print("Starting AviaNZ in CLI mode")
         if batchmode:
-            from cli.BatchCLI import run_cli_batch
+            from cli.batch_cli import run_cli_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
                 wind_str = "OLS wind filter (recommended)" if wind else "None"
                 result = run_cli_batch(
@@ -188,19 +188,19 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
                 raise
         elif training:
-            from src.core import Training
+            from core import training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
-                training = Training.NNtrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
+                training = training.NNTrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
                 training.cliTrain()
                 print("Training complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dirs (-d and -e) and recogniser name (-r) are essential for training")
                 raise
         elif testing:
-            from src.core import Training
+            from core import training
             filts = confloader.filters(filterdir)
             if os.path.isdir(sdir1) and recogniser in filts:
-                testing = Training.NNtest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
+                testing = training.NNTest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
                 print("Testing complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for training")

@@ -23,33 +23,19 @@
 
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-import os
-import shutil
 
-from PyQt6 import QtCore, QtGui
+from PyQt6 import QtCore
 from PyQt6.QtGui import *
-from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
+from PyQt6.QtWidgets import QDialog, QLineEdit, QVBoxLayout, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPoint, QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
+from PyQt6.QtCore import Qt
 
 import pyqtgraph as pg
 
 import numpy as np
 from src.ui.colourMaps import colourMaps
-from src.ui.components.audio_player import ControllableAudio
-from src.ui.components.buttons_and_controls import BrightContrVol, MainPushButton, PicButton
-from src.ui.components.popups import MessagePopup
-from src.ui.components.layout_widgets import PartlyResizableGLW
-from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
-from src.core import Spectrogram
-from src.core import SupportClasses
-import openpyxl
-import json
-from scipy.stats import boxcox
-
-import copy
-
-import re
+from src.ui.components.buttons_and_controls import BrightContrVol, PicButton
+from core import spectrogram
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -112,7 +98,7 @@ class Cluster(QDialog):
         self.minsg = 1
         self.maxsg = 1
         for seg in self.segments:
-            sp = Spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
+            sp = spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
             sp.readSoundFile(seg[0], seg[1].end_time - seg[1].start_time, seg[1].start_time)
             #_ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             self.sg = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])

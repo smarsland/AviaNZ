@@ -26,30 +26,18 @@
 import os
 import shutil
 
-from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import *
-from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
+from PyQt6.QtWidgets import QLabel, QDialog, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QVBoxLayout # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPoint, QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
+from PyQt6.QtCore import Qt
 
 import pyqtgraph as pg
 
-import numpy as np
-from src.ui.colourMaps import colourMaps
-from src.ui.components.audio_player import ControllableAudio
-from src.ui.components.buttons_and_controls import BrightContrVol, MainPushButton, PicButton
 from src.ui.components.popups import MessagePopup
-from src.ui.components.layout_widgets import PartlyResizableGLW
-from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
-from src.core import Spectrogram
-from src.core import SupportClasses
-import openpyxl
+from core import config_loader
 import json
-from scipy.stats import boxcox
 
-import copy
 
-import re
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -137,7 +125,7 @@ class FilterManager(QDialog):
 
     def readContents(self):
         self.listFiles.clear()
-        cl = SupportClasses.ConfigLoader()
+        cl = config_loader.ConfigLoader()
         self.FilterDict = cl.filters(self.filtdir, bats=True)
         for file in self.FilterDict:
             item = QListWidgetItem(self.listFiles)

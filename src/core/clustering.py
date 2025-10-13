@@ -24,13 +24,13 @@ import numpy as np
 import os
 import librosa
 
-from src.core import WaveletSegment
-from src.core import WaveletFunctions
-from src.core import Spectrogram
-from src.core import Annotation
-from src.core import Segmentation
-from src.core import SignalProc
-from src.core import AudioData
+from core import wavelet_segment
+from core import wavelet_functions
+from core import spectrogram
+from core import annotation
+from core import segmentation
+from core import signal_proc
+from core import audio_data
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import scale
@@ -182,7 +182,7 @@ class Clustering:
                 features.append(mfcc)
                 record.insert(3, mfcc)
             elif feature == 'we':  # Wavelet Energy
-                ws = WaveletSegment.WaveletSegment(spInfo={})
+                ws = wavelet_segment.WaveletSegment(spInfo={})
                 we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=nlevels, wpmode='new')
                 we = we.mean(axis=1)
                 if weInds:
@@ -260,7 +260,7 @@ class Clustering:
         allnodes = range(1, 2 ** (nlevels + 1) - 1)
         inband = []
         for i in allnodes:
-            flow, fhigh = WaveletFunctions.getWCFreq(i, fs)
+            flow, fhigh = wavelet_functions.getWCFreq(i, fs)
             if flow < f2 and fhigh > f1:
                 inband.append(i-1)
 
@@ -278,7 +278,7 @@ class Clustering:
                 for file in files:
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                         # Read the annotation
-                        segments = Annotation.SegmentList()
+                        segments = annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
                         # keep the right species
                         if species:
@@ -294,7 +294,7 @@ class Clustering:
         elif os.path.isfile(dirname):
             if (dirname.lower().endswith('.wav') or dirname.lower().endswith('.flac')) and os.path.exists(dirname + '.data'):
                 # Read the annotation
-                segments = Annotation.SegmentList()
+                segments = annotation.SegmentList()
                 segments.parseJSON(dirname + '.data')
                 # keep the right species
                 if species:
@@ -352,7 +352,7 @@ class Clustering:
                 for file in files:
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
                         # Read the annotation
-                        segments = Annotation.SegmentList()
+                        segments = annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
                         if species:
                             thisSpSegs = segments.getSpecies(species)
@@ -367,7 +367,7 @@ class Clustering:
         elif os.path.isfile(dirname):
             if (dirname.lower().endswith('.wav') or dirname.lower().endswith('.flac')) and os.path.exists(dirname + '.data'):
                 # Read the annotation
-                segments = Annotation.SegmentList()
+                segments = annotation.SegmentList()
                 segments.parseJSON(dirname + '.data')
                 if species:
                     thisSpSegs = segments.getSpecies(species)
@@ -387,7 +387,7 @@ class Clustering:
         """
         audiodata = self.loadFile(filename=filename, duration=seg.end_time - seg.start_time, offset=seg.start_time, fs=fs, denoise=denoise)
         start = seg.start_time
-        self.sp.audio_data = AudioData.AudioData(data=audiodata, sample_rate=fs,
+        self.sp.audio_data = audio_data.AudioData(data=audiodata, sample_rate=fs,
                                         sample_format='float32', sample_size=32, channels=1)
         _ = self.sp.spectrogram()
             
@@ -403,13 +403,13 @@ class Clustering:
         ind_fhigh = (np.abs(linear - fhigh)).argmin()
         self.sp.sg = self.sp.sg[:, ind_flow:ind_fhigh]
 
-        segmentation = Segmentation.Segmenter(self.sp, fs)
+        segmentation = segmentation.Segmenter(self.sp, fs)
 
         syls = segmentation.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
         if len(syls) == 0:  # Sanity check
             # Try again with lower threshold
             # TODO: Why reinitialise?
-            segmentation = Segmentation.Segmenter(self.sp, fs)
+            segmentation = segmentation.Segmenter(self.sp, fs)
             syls = segmentation.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
 
         # Merge overlapped segments
@@ -493,7 +493,7 @@ class Clustering:
                     mfcc = [i for sublist in mfcc for i in sublist]
                     fc.append(mfcc)
                 elif feature == 'we':  # Wavelet Energy
-                    ws = WaveletSegment.WaveletSegment(spInfo={})
+                    ws = wavelet_segment.WaveletSegment(spInfo={})
                     we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new')
                     we = we.mean(axis=1)
                     if f1 != 0 and f2 != 0:
@@ -512,7 +512,7 @@ class Clustering:
         if duration == 0:
             duration = None
 
-        self.sp = Spectrogram.Spectrogram(256, 128)
+        self.sp = spectrogram.Spectrogram(256, 128)
         print(filename,duration,offset)
         self.sp.readSoundFile(filename, duration, offset, silent=silent)
         
@@ -521,11 +521,11 @@ class Clustering:
 
         # Pre-process
         if denoise:
-            WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=10, samplerate=fs)
+            WF = wavelet_functions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=10, samplerate=fs)
             audiodata = WF.waveletDenoise(thresholdType='soft', maxLevel=10)
 
         if f1 != 0 and f2 != 0:
-            audiodata = SignalProc.bandpassFilter(audiodata, sampleRate, f1, f2)
+            audiodata = signal_proc.bandpass_filter(audiodata, sampleRate, f1, f2)
 
         return audiodata
 

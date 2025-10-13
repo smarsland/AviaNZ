@@ -30,7 +30,7 @@ from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import QLabel, QDialog, QComboBox, QCheckBox, QPushButton, QLineEdit, QSlider, QFileDialog, QHBoxLayout, QVBoxLayout, QFormLayout, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QToolButton, QStyle, QScrollArea # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import QPoint, QPointF, QTime, Qt, QSize, pyqtSignal, pyqtSlot, QDir, QTimer
+from PyQt6.QtCore import QPointF, QTime, Qt, QSize, pyqtSignal, QDir, QTimer
 
 import pyqtgraph as pg
 
@@ -41,11 +41,10 @@ from src.ui.components.buttons_and_controls import BrightContrVol, MainPushButto
 from src.ui.components.popups import MessagePopup
 from src.ui.components.layout_widgets import PartlyResizableGLW
 from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
-from src.core import Spectrogram
-from src.core import SupportClasses
+from core import spectrogram
+from core import config_loader
 import openpyxl
 import json
-from scipy.stats import boxcox
 
 import copy
 
@@ -374,7 +373,7 @@ class OperatorReviewer(QDialog):
         return [self.name1.text(),self.name2.text()]
 
 #======
-class addNoiseData(QDialog):
+class AddNoiseData(QDialog):
     # Class for the noise data dialog box
     def __init__(self, noiseLevel, noiseTypes, parent=None):
         QDialog.__init__(self, parent)
@@ -2275,7 +2274,7 @@ class FilterManager(QDialog):
 
     def readContents(self):
         self.listFiles.clear()
-        cl = SupportClasses.ConfigLoader()
+        cl = config_loader.ConfigLoader()
         self.FilterDict = cl.filters(self.filtdir, bats=True)
         for file in self.FilterDict:
             item = QListWidgetItem(self.listFiles)
@@ -2539,7 +2538,7 @@ class Cluster(QDialog):
         self.minsg = 1
         self.maxsg = 1
         for seg in self.segments:
-            sp = Spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
+            sp = spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
             sp.readSoundFile(seg[0], seg[1].end_time - seg[1].start_time, seg[1].start_time)
             #_ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             self.sg = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
@@ -2771,7 +2770,7 @@ class Shapes(QDialog):
         print('pars', pars)
         return(method, pars)
 
-class getNumberCopiesPlus(QDialog):
+class GetNumberCopiesPlus(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Multiple Calls')

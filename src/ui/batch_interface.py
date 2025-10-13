@@ -27,8 +27,8 @@ import os, webbrowser, re
 import pyqtgraph as pg
 from pyqtgraph.dockarea import Dock, DockArea
 
-from src.core import SupportClasses
-from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
+from core import config_loader
+from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 from src.utils.exceptions import GentleExitException
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
@@ -50,7 +50,7 @@ class BatchInterface(QMainWindow):
         # (Duplicated w/ the worker, but is needed here as well)
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.ConfigLoader = config_loader.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
 
         filtersDir = os.path.join(configdir, self.config['FiltersDir'])

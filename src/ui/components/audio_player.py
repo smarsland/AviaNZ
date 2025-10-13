@@ -30,7 +30,7 @@ from time import sleep
 from PyQt6.QtCore import QTimer, QIODevice, QBuffer, QByteArray, pyqtSlot
 from PyQt6.QtMultimedia import QAudio, QAudioSink, QAudioFormat, QMediaDevices
 
-from src.core import SignalProc
+from core import signal_proc
 
 try:
     import librosa
@@ -199,7 +199,7 @@ class ControllableAudio(QAudioSink):
             segment = audiodata
 
         if low is not None:
-            segment = SignalProc.bandpassFilter(segment, self.audioFormat.sample_rate, start=low, end=high)
+            segment = signal_proc.bandpass_filter(segment, self.audioFormat.sample_rate, start=low, end=high)
 
         if self.playbackSpeed != 1.0 and librosa is not None:
             segment = librosa.effects.time_stretch(segment.astype('float'), rate=self.playbackSpeed)

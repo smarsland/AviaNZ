@@ -26,10 +26,10 @@ from itertools import chain, repeat
 import numpy as np
 import copy
 
-from src.core import AudioData
-from src.core import Spectrogram
+from core import audio_data
+from core import spectrogram
 
-def ButterworthBandpass(data,sampleRate,low=0,high=None,band=0.005):
+def butterworth_bandpass(data,sampleRate,low=0,high=None,band=0.005):
     """ Basic IIR bandpass filter.
         Identifies order of filter, max 10. If single-stage polynomial is unstable,
         switches to order 30, second-order filter.
@@ -113,7 +113,7 @@ def ButterworthBandpass(data,sampleRate,low=0,high=None,band=0.005):
 
     return data
 
-def FastButterworthBandpass(data,low=0,high=None):
+def fast_butterworth_bandpass(data,low=0,high=None):
     """ Basic IIR bandpass filter.
         Streamlined to be fast - for use in antialiasing etc.
         Tries to construct a filter of order 7, with critical bands at +-0.002 Fn.
@@ -173,7 +173,7 @@ def FastButterworthBandpass(data,low=0,high=None):
 
     return data
 
-def bandpassFilter(data,sampleRate,start=0,end=-1):
+def bandpass_filter(data,sampleRate,start=0,end=-1):
     """ FIR bandpass filter
     128 taps, Hamming window, very basic.
     """
@@ -212,9 +212,9 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
     return signal.lfilter(taps, 1.0, data)
 
 # The next functions perform spectrogram inversion
-def invertSpectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True, sampleRate=16000):
-    from src.core import Spectrogram
-    sp = Spectrogram.Spectrogram()
+def invert_spectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True, sampleRate=16000):
+    from core import spectrogram
+    sp = spectrogram.Spectrogram()
     
     # Determine if this is a one-sided or two-sided spectrogram
     # One-sided: magnitude-only spectrograms from BMP files or regular display
@@ -287,7 +287,7 @@ def inversion_iteration(sg, incr, calculate_offset=True, iteration = 0, window='
     total_windowing_sum = np.zeros(((np.shape(sg)[0]) * incr + windowSize - 1))
     
     # Use Spectrogram's window function instead of duplicating code
-    sp = Spectrogram.Spectrogram()
+    sp = spectrogram.Spectrogram()
     window = sp.create_window(window, windowSize)
 
     for i in range(sg.shape[0]):
@@ -351,7 +351,7 @@ def fast_xcorr(x1,x2):
     y = fft.interfaces.scipy_fft.fftshift(fft.interfaces.scipy_fft.ifft(X1*np.conj(X2)))
     return y[1:]
 
-def medianFilter(data,width=11):
+def median_filter(data,width=11):
     # Median Filtering
     # Uses smaller width windows at edges to remove edge effects
     # TODO: Use abs rather than pure median?
@@ -467,7 +467,7 @@ def wsola(x, s, win_type='hann', win_size=1024, syn_hop_size=512, tolerance=512)
 
     return y.squeeze()
 
-def impMask(data,sampleRate,engp=90, fp=0.75):
+def imp_mask(data,sampleRate,engp=90, fp=0.75):
     """
     Impulse mask
     :param engp: energy percentile (for rows of the spectrogram)
@@ -498,8 +498,8 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
     pos = np.abs(arr - w1).argmin()
     window = arr[pos]
 
-    sp = Spectrogram.Spectrogram(window, window)     # No overlap
-    sp.audio_data = AudioData.AudioData(data=data, sample_rate=sampleRate,
+    sp = spectrogram.Spectrogram(window, window)     # No overlap
+    sp.audio_data = audio_data.AudioData(data=data, sample_rate=sampleRate,
                                sample_format='float32', sample_size=32, channels=1)
     sg = sp.spectrogram()
 
@@ -518,7 +518,7 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
     # When an impulsive noise detected, it's better to check neighbours to make sure its not a bird call
     # very close to the microphone.
     imp_inds = np.where(impulse > 0)[0].tolist()
-    imp = countConsecutive(imp_inds, len(impulse))
+    imp = count_consecutive(imp_inds, len(impulse))
 
     impulse = []
     for item in imp:
@@ -537,7 +537,7 @@ def impulse_cal(data,sampleRate, engp=90, fp=0.75, blocksize=10):
 
     return impulse
 
-def countConsecutive(nums, length):
+def count_consecutive(nums, length):
     gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
     edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
     edges = list(zip(edges, edges))
@@ -550,3 +550,13 @@ def countConsecutive(nums, length):
         t += 1
     return res
 
+
+# Deprecated function names for backward compatibility
+# These will be removed in a future version
+ButterworthBandpass = butterworth_bandpass
+FastButterworthBandpass = fast_butterworth_bandpass
+bandpassFilter = bandpass_filter
+invertSpectrogram = invert_spectrogram
+medianFilter = median_filter
+impMask = imp_mask
+countConsecutive = count_consecutive

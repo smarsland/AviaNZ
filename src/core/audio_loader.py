@@ -26,7 +26,7 @@ import shutil
 import soundfile as sf
 import pyflac
 from src.utils import wavio
-from src.core import AudioData
+from core import audio_data
 
 class AudioLoader:
     """Centralized audio file loading with format detection and validation."""
@@ -97,7 +97,7 @@ class AudioLoader:
         if not silent:
             print(f"Detected format: 1 channel, {sample_rate} Hz, {samp_fmt} format")
 
-        return AudioData.AudioData(
+        return audio_data.AudioData(
             data=data,
             sample_rate=sample_rate,
             sample_format=samp_fmt,

@@ -32,16 +32,17 @@ import traceback
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
+from core import config_loader, signal_proc
 from src.utils.exceptions import GentleExitException
-from src.core import Spectrogram, SignalProc
-from src.core import Annotation
-from src.core import SupportClasses
+from core import spectrogram
+from core import annotation
+from core import excel_export
 from src.ui.components.buttons_and_controls import MainPushButton
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.dialogs.human_classify_batch import HumanClassify2
 from src.ui.dialogs.human_classify_single import HumanClassify1
-from src.ui.dialogs.number_copies import getNumberCopiesPlus
+from src.ui.dialogs.number_copies import GetNumberCopiesPlus
 from src.ui.colourMaps import colourMaps
 
 import webbrowser, copy
@@ -62,7 +63,7 @@ class ReviewInterface(QMainWindow):
 
         # At this point, the main config file should already be ensured to exist.
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.ConfigLoader = config_loader.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
 
         # For some calltype functionality, a list of current filters is needed
@@ -734,10 +735,10 @@ class ReviewInterface(QMainWindow):
 
         # Load segments
         with pg.BusyCursor():
-            self.allsegments = Annotation.SegmentList()
+            self.allsegments = annotation.SegmentList()
             self.allsegments.parseJSON(filename+'.data')
 
-            self.segments = Annotation.SegmentList()
+            self.segments = annotation.SegmentList()
             self.segments.parseJSON(filename+'.data')
 
             # Separate out segments which do not need review
@@ -852,7 +853,7 @@ class ReviewInterface(QMainWindow):
             Returns 1 for clean completion, 0 for Esc press.
         """
         from collections import defaultdict
-        from src.core import Spectrogram
+        from core import spectrogram
         
         # Group segments by file for efficient loading
         segments_by_file = defaultdict(list)
@@ -861,7 +862,7 @@ class ReviewInterface(QMainWindow):
             segments_by_file[filename].append(segData)
         
         # Create segment list and spectrogram list for all segments
-        all_segment_list = Annotation.SegmentList()
+        all_segment_list = annotation.SegmentList()
         all_sps = []
         all_indices = []
         all_batmodes = []  # Track batmode for each segment
@@ -897,7 +898,7 @@ class ReviewInterface(QMainWindow):
                 seg = segData['segment']
                 orig_idx = segData['index']
                 # Create spectrogram for this segment
-                sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
+                sp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
                 
                 if chunksize > 0:
                     halfChunk = 1.1/2 * chunksize
@@ -919,7 +920,7 @@ class ReviewInterface(QMainWindow):
                         sp.sg = sp.normalisedSpec("Batmode")
                     else:
                         sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
-                        sp.audio_data.data = SignalProc.bandpassFilter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                        sp.audio_data.data = signal_proc.bandpass_filter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
                         sp.sg = sp.spectrogram(window_width=self.config['window_width'], 
                                              incr=self.config['incr'],
                                              window=self.config['windowType'],
@@ -1145,7 +1146,7 @@ class ReviewInterface(QMainWindow):
         with pg.BusyCursor():
             for filename in alldatas:
                 print("Reading segments from", filename)
-                segments = Annotation.SegmentList()
+                segments = annotation.SegmentList()
                 segments.parseJSON(filename)
 
                 # Determine all species detected in at least one file
@@ -1162,7 +1163,7 @@ class ReviewInterface(QMainWindow):
                 allsegs.append(segments)
 
             # Export the actual Excel
-            excel = SupportClasses.ExcelIO()
+            excel = excel_export.ExcelIO()
             excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList), precisionMS=self.timePrecisionBox.currentIndex()==1)
 
         if excsuccess!=1:
@@ -1610,7 +1611,7 @@ class ReviewInterface(QMainWindow):
         # Set up current file context
         self.filename = filename
         filedata = self.allFileData[filename]
-        self.segments = Annotation.SegmentList()
+        self.segments = annotation.SegmentList()
         self.segments.append(segment)
         self.allsegments = filedata['allsegments']
         
@@ -1686,7 +1687,7 @@ class ReviewInterface(QMainWindow):
                     if segix in self.indices2show:
                         seg = self.segments[segix]
                         # note that sp also stores the range of shown freqs
-                        sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
+                        sp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
 
                         if chunksize is not None:
                             mid = (seg.start_time + seg.end_time)/2
@@ -1719,7 +1720,7 @@ class ReviewInterface(QMainWindow):
                             sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=segix>1)
 
                             # Filter the audiodata based on initial sliders
-                            sp.audio_data.data = SignalProc.bandpassFilter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                            sp.audio_data.data = signal_proc.bandpass_filter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
 
                             # Generate the spectrogram
                             # TODO: Insist on log scale?
@@ -2032,7 +2033,7 @@ class ReviewInterface(QMainWindow):
         # For Plus functionality, we still need to confirm the labels immediately
         # since we're creating copies based on the current segment state
         currSeg.confirmLabels(None if self.species == 'All species' else self.species)
-        getNumCopies = getNumberCopiesPlus()
+        getNumCopies = GetNumberCopiesPlus()
         response = getNumCopies.exec()
         
         if response == 0:

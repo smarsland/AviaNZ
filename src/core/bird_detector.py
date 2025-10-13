@@ -23,9 +23,9 @@
 import gc
 import copy
 
-from src.core import Segmentation
-from src.core import Annotation
-from src.core import WaveletSegment
+from core import segmentation
+from core import annotation
+from core import wavelet_segment
 from src.utils.exceptions import GentleExitException
 
 
@@ -91,13 +91,13 @@ class BirdDetector:
                              onesided=self.config['sgOneSided'],
                              start=start, stop=end)
         
-        seg = Segmentation.Segmenter(sp, sp.audio_data.sample_rate)
+        seg = segmentation.Segmenter(sp, sp.audio_data.sample_rate)
         thisPageSegs = seg.medianClip(thr=3.5)
         
         # Post-process
         print("Segments detected: ", len(thisPageSegs))
         print("Post-processing...")
-        post = Segmentation.PostProcess(configdir=self.configdir, 
+        post = segmentation.PostProcess(configdir=self.configdir, 
                                  audioData=sp.audio_data.data[start:end], 
                                  sampleRate=sp.audio_data.sample_rate, 
                                  segments=thisPageSegs, 
@@ -147,7 +147,7 @@ class BirdDetector:
             print(f"Processing sample rate {targetSampleRate} Hz for species: {speciesAtSampleRate}")
             
             # Initialize wavelet segmentation for bird processing
-            ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
+            ws = wavelet_segment.WaveletSegment(wavelet='dmey2')
             useWind = options['wind'] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
             ws.readBatch(sp.audio_data.data[start:end], sp.audio_data.sample_rate, 
                         d=False, spInfo=filtersAtSampleRate, wpmode="new", wind=useWind)
@@ -207,7 +207,7 @@ class BirdDetector:
         subfilter = spInfo["Filters"][filtix]
         
         # PostProcess handles any needed resampling from current rate to target rate
-        post = Segmentation.PostProcess(configdir=self.configdir, 
+        post = segmentation.PostProcess(configdir=self.configdir, 
                                  audioData=sp.audio_data.data[start:end],
                                  sampleRate=sp.audio_data.sample_rate, 
                                  tgtsampleRate=spInfo["SampleRate"],
@@ -254,7 +254,7 @@ class BirdDetector:
         y2 = min(subfilter["FreqRange"][1], sampleRate // 2)
         
         for s in segmentsNew:
-            segment = Annotation.Segment(start_time=s[0][0], end_time=s[0][1], freq_low=y1, freq_high=y2, 
+            segment = annotation.Segment(start_time=s[0][0], end_time=s[0][1], freq_low=y1, freq_high=y2, 
                                      labels=[{"species": species, "certainty": s[1], 
                                        "filter": filtName, "calltype": subfilter["calltype"]}])
             segmentsList.addSegment(segment)

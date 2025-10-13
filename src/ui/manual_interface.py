@@ -81,11 +81,12 @@ import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
-from src.core import Annotation
-from src.core import SupportClasses, WaveletSegment, WaveletFunctions, Clustering, SignalProc
-from src.core import Spectrogram
-from src.core import Segmentation
-from src.core import AudioData
+from core import clustering, config_loader, excel_export, signal_proc, wavelet_functions
+from core import annotation
+from core import wavelet_segment
+from core import spectrogram
+from core import segmentation
+from core import audio_data
 from src.ui.components.audio_player import ControllableAudio
 from src.ui.components.axis_widgets import TimeAxisHour, TimeAxisMin
 from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider
@@ -96,13 +97,13 @@ from src.ui.components.roi_components import LinearRegionItem2, LinearRegionItem
 from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
 from src.ui.components.viewbox_extensions import ChildInfoViewBox, DemousedViewBox, DragViewBox
 from src.ui.colourMaps import colourMaps
-from src.utils import Shapes
+from utils import shapes
 
 # Individual dialog imports
 from src.ui.dialogs.diagnostic import Diagnostic
 from src.ui.dialogs.diagnosticNN import DiagnosticNN
 from src.ui.dialogs.spectrogram_dialog import SpectrogramDialog
-from src.ui.dialogs.shapes import Shapes as ShapesDialog
+from ui.dialogs.shapes_analysis_dialog import ShapesDialog
 from src.ui.dialogs.denoise import Denoise
 from src.ui.dialogs.excel2annotation import Excel2Annotation
 from src.ui.dialogs.tag2annotation import Tag2Annotation
@@ -111,7 +112,7 @@ from src.ui.dialogs.segmentation import SegmentationDialog
 from src.ui.dialogs.cluster import Cluster
 from src.ui.dialogs.operator_reviewer import OperatorReviewer
 from src.ui.dialogs.filter_manager import FilterManager
-from src.ui.dialogs.add_noise_data import addNoiseData
+from src.ui.dialogs.add_noise_data import AddNoiseData
 
 # Training dialog imports  
 from src.ui.dialogs_training.build_recognizer_wizard import BuildRecAdvWizard
@@ -155,7 +156,7 @@ class ManualInterface(QMainWindow):
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.ConfigLoader = config_loader.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
         print("Config loaded")
@@ -1008,6 +1009,7 @@ class ManualInterface(QMainWindow):
 
         if not self.DOC:
             self.showDiagnosticTick.setEnabled(not self.batmode)
+            self.showDiagnosticNN.setEnabled(not self.batmode)
             self.extraMenu.setEnabled(not self.batmode)
             self.setExtraPlot("none")
             self.showFormant.setEnabled(not self.batmode)
@@ -1535,13 +1537,13 @@ class ManualInterface(QMainWindow):
                 # Create an instance of the Signal Processing class
                 if not hasattr(self, 'sp'):
                     if self.cheatsheet:
-                        self.sp = Spectrogram.Spectrogram(512,256, 0, 0)
+                        self.sp = spectrogram.Spectrogram(512,256, 0, 0)
                     else:
                         minFreqShow = self.config['minFreq']
                         maxFreqShow = self.config['maxFreq']
                         if hasattr(self, 'spectrogramDialog'):
                             [_, _, _, _, _, _, _,minFreqShow,maxFreqShow,_,_] = self.spectrogramDialog.getValues()
-                        self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreqShow, maxFreqShow)
+                        self.sp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreqShow, maxFreqShow)
 
                 self.currentFileSection = 0
 
@@ -1665,7 +1667,7 @@ class ManualInterface(QMainWindow):
             self.setSpectrogram()
 
             # ANNOTATIONS: init empty list
-            self.segments = Annotation.SegmentList()
+            self.segments = annotation.SegmentList()
             # Load any previous segments stored
             if os.path.isfile(self.filename + '.data') and os.stat(self.filename+'.data').st_size > 0:
                 self.segments.parseJSON(self.filename+'.data')
@@ -1696,7 +1698,7 @@ class ManualInterface(QMainWindow):
                 species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
                 start = 0
                 end = self.datalength / self.sp.audio_data.sample_rate
-                newSegment = Annotation.Segment(start_time=start, end_time=end, freq_low=0, freq_high=0, labels=species)
+                newSegment = annotation.Segment(start_time=start, end_time=end, freq_low=0, freq_high=0, labels=species)
                 self.segments.append(newSegment)
                 self.segmentsToSave = True
                 self.refreshFileColor()
@@ -1902,7 +1904,7 @@ class ManualInterface(QMainWindow):
         
         # Returns pitch in Hz for each window
         thr = 0.5
-        pitchshape = Shapes.fundFreqShaper(self.sp.audio_data.data, Wsamples, thr, self.sp.audio_data.sample_rate)
+        pitchshape = shapes.fundFreqShaper(self.sp.audio_data.data, Wsamples, thr, self.sp.audio_data.sample_rate)
         pitch = pitchshape.y  # pitch is a shape with y in Hz
 
         # Find out which marks should be visible
@@ -1912,10 +1914,10 @@ class ManualInterface(QMainWindow):
             return []
 
         # Identify segments using the original scale
-        segs = Segmentation.Segmenter.convert01(ind)
-        segs = Segmentation.Segmenter.deleteShort(segs, 2)
-        segs = Segmentation.Segmenter.joinGaps(segs, 2)
-        segs = Segmentation.Segmenter.deleteShort(segs, 4)
+        segs = segmentation.Segmenter.convert01(ind)
+        segs = segmentation.Segmenter.deleteShort(segs, 2)
+        segs = segmentation.Segmenter.joinGaps(segs, 2)
+        segs = segmentation.Segmenter.deleteShort(segs, 4)
 
         yadjfact = 2/self.sp.audio_data.sample_rate*np.shape(self.sg)[1]
 
@@ -2286,7 +2288,7 @@ class ManualInterface(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # Passing dummy spInfo because we only use this for a function
-            ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
+            ws = wavelet_segment.WaveletSegment(spInfo={}, wavelet='dmey2')
             e = ws.computeWaveletEnergy(self.sp.audio_data.data, self.sp.audio_data.sample_rate, window=0.25, inc=0.25)
             # e is 2^nlevels x nseconds
 
@@ -2311,10 +2313,10 @@ class ManualInterface(QMainWindow):
             # Preprocess
             # TODO: Other samplerates?
             data = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
-            data = SignalProc.bandpassFilter(data, self.sp.audio_data.sample_rate, 100, 16000)
+            data = signal_proc.bandpass_filter(data, self.sp.audio_data.sample_rate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
-            ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
+            ws = wavelet_segment.WaveletSegment(spInfo={}, wavelet='dmey2')
             e = ws.computeWaveletEnergy(self.sp.audio_data.data, self.sp.audio_data.sample_rate)
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
@@ -2329,7 +2331,7 @@ class ManualInterface(QMainWindow):
                 # Map a long vector of rs to different image areas
                 level = int(math.log(count+2, 2))
                 node = count+2 - 2**level
-                node = WaveletFunctions.graycode(node)
+                node = wavelet_functions.graycode(node)
                 r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
             r[:, 0] = np.linspace(np.min(r), np.max(r), num=64)
             # Propagate along x
@@ -2349,10 +2351,10 @@ class ManualInterface(QMainWindow):
             print("Will use window of", chpwin, "s")
             # Resample and generate WP w/ all nodes for the current page
             datatoplot = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=TGTSAMPLERATE)
-            WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
+            WF = wavelet_functions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
-            node_freqs = [sum(WaveletFunctions.getWCFreq(n, TGTSAMPLERATE))/2 for n in range(31, 63)]
+            node_freqs = [sum(wavelet_functions.getWCFreq(n, TGTSAMPLERATE))/2 for n in range(31, 63)]
 
             xs = np.arange(0, self.datalengthSec, chpwin)
             # xs = xs[:-1] # TODO TMP only for bittern
@@ -2414,7 +2416,7 @@ class ManualInterface(QMainWindow):
                 # really tailored to our polynomial fit
                 # TODO see if sklearn model, to be added in v1.0, is any better
                 regx_poly = np.column_stack((np.ones(len(regx)), regx, regx**2, regx**3))
-                pol = WaveletFunctions.QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
+                pol = wavelet_functions.QuantReg(regy, regx_poly, q=0.20, max_iter=250, p_tol=1e-3)
                 predR = pol(np.log(nodecentres[tgt]))
 
                 # Cubic fit
@@ -2454,7 +2456,7 @@ class ManualInterface(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
                 data = self.sp.audio_data.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
-                post = Segmentation.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audio_data.sample_rate, segments=[], subfilter={})
+                post = segmentation.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sp.audio_data.sample_rate, segments=[], subfilter={})
                 m, std, _ = post.wind_cal(data, self.sp.audio_data.sample_rate)
                 we_mean[w] = m
                 we_std[w] = std
@@ -2480,8 +2482,8 @@ class ManualInterface(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(self.datalength/self.sp.audio_data.sample_rate)):
                 data = self.sp.audio_data.data[int(w*self.sp.audio_data.sample_rate):int((w+1)*self.sp.audio_data.sample_rate)]
-                tempsp = Spectrogram.Spectrogram()
-                tempsp.audio_data = AudioData.AudioData(data=data, sample_rate=self.sp.audio_data.sample_rate,
+                tempsp = spectrogram.Spectrogram()
+                tempsp.audio_data = audio_data.AudioData(data=data, sample_rate=self.sp.audio_data.sample_rate,
                                                sample_format='float32', sample_size=32, channels=1)
                 sgRaw = tempsp.spectrogram()
                 # Normalise
@@ -2513,7 +2515,7 @@ class ManualInterface(QMainWindow):
             # resample
             audiodata = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             
-            WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
+            WF = wavelet_functions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
             if self.extra == "Filtered spectrogram, new + AA":
@@ -2537,8 +2539,8 @@ class ManualInterface(QMainWindow):
             # TODO: Check this one
             if self.sp.audio_data.sample_rate != 16000:
                 C = resampy.resample(C, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
-            tempsp = Spectrogram.Spectrogram()
-            tempsp.audio_data = AudioData.AudioData(data=C, sample_rate=16000,
+            tempsp = spectrogram.Spectrogram()
+            tempsp.audio_data = audio_data.AudioData(data=C, sample_rate=16000,
                                            sample_format='float32', sample_size=32, channels=1)
             sgRaw = tempsp.spectrogram()
             sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sp.audio_data.sample_rate
@@ -2793,7 +2795,7 @@ class ManualInterface(QMainWindow):
         if saveSeg or show:
             # Create a Segment. This will check for errors and standardize the labels
             # Note: we convert time from _relative to page_ to _relative to file start_
-            newSegment = Annotation.Segment(start_time=startpoint+self.startRead, end_time=endpoint+self.startRead, freq_low=y1, freq_high=y2, labels=species)
+            newSegment = annotation.Segment(start_time=startpoint+self.startRead, end_time=endpoint+self.startRead, freq_low=y1, freq_high=y2, labels=species)
 
             # Add the segment to the data
             if saveSeg:
@@ -3707,7 +3709,7 @@ class ManualInterface(QMainWindow):
             # 1. decompose
             datatoplot = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=spInfo['SampleRate'])
 
-            WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
+            WF = wavelet_functions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
             xs = np.arange(0, self.datalengthSec, WINSIZE)
@@ -3735,7 +3737,7 @@ class ManualInterface(QMainWindow):
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
-                C = SignalProc.bandpassFilter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
+                C = signal_proc.bandpass_filter(C, spInfo['SampleRate'], spSubf['FreqRange'][0], spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -3752,7 +3754,7 @@ class ManualInterface(QMainWindow):
                 print("Node %i: mean %f, SD %f, range %f - %f" % (node, meanC, sdC, min(persecE), max(persecE)))
 
                 # get true freqs of this band
-                freqmin, freqmax = WaveletFunctions.getWCFreq(node, spInfo['SampleRate'])
+                freqmin, freqmax = wavelet_functions.getWCFreq(node, spInfo['SampleRate'])
                 # convert freqs to spec Y units
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
@@ -3850,7 +3852,7 @@ class ManualInterface(QMainWindow):
             probs = 0
             if NNname in self.NNDicts.keys():
                 NNmodel = self.NNDicts[NNname]
-            post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data,
+            post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data,
                                        sampleRate=self.sp.audio_data.sample_rate,
                                        tgtsampleRate=speciesData["SampleRate"], segments=segment,
                                        subfilter=speciesData['Filters'][0], NNmodel=NNmodel, cert=50)
@@ -4002,13 +4004,13 @@ class ManualInterface(QMainWindow):
                 if method=="stupidShaper":
                     # placeholder method:
                     adjusted_segm = [segRelativeStart, segRelativeEnd, segm[2], segm[3], segm[4]]
-                    segshape = Shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
+                    segshape = shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
                     data = self.sp.audio_data.data[int(segRelativeStart*self.sp.audio_data.sample_rate):int(segRelativeEnd*self.sp.audio_data.sample_rate)]
                     #data = self.sp.data[int(segRelativeStart*self.sp.sampleRate):int(segRelativeEnd*self.sp.sampleRate)]
                     W = 4*incr
-                    segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.audio_data.sample_rate)
+                    segshape = shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.audio_data.sample_rate)
                     #segshape = Shapes.fundFreqShaper(data, W, thr=0.5, fs=self.sp.sampleRate)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
@@ -4025,7 +4027,7 @@ class ManualInterface(QMainWindow):
                         markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
-                    segshape = Shapes.instantShaper(sg, self.sp.audio_data.sample_rate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
+                    segshape = shapes.instantShaper(sg, self.sp.audio_data.sample_rate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
                     #segshape = Shapes.instantShaper(sg, self.sp.sampleRate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
                     # shape.tstart is relative to segment start (0)
                     # so we also need to add the segment start
@@ -4106,7 +4108,7 @@ class ManualInterface(QMainWindow):
         """
         print("Decomposing to WP...")
         ot = time.time()
-        self.WFinst = WaveletFunctions.WaveletFunctions(data=self.sp.audio_data.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+        self.WFinst = wavelet_functions.WaveletFunctions(data=self.sp.audio_data.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
         maxLevel = 5
         allnodes = range(2 ** (maxLevel + 1) - 1)
         self.WFinst.WaveletPacket(allnodes, mode='symmetric', antialias=False)
@@ -4148,7 +4150,7 @@ class ManualInterface(QMainWindow):
             # extract the piece of audiodata under current segment
             denoised = self.sp.audio_data.data[start : stop]
 
-            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+            WF = wavelet_functions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
             denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
 
             # bandpass to selected zones, if it's a box
@@ -4158,7 +4160,7 @@ class ManualInterface(QMainWindow):
                 bottom = max(0.1, self.sp.minFreq, self.segments[self.box1id].freq_low)
                 top = min(self.segments[self.box1id].freq_high, self.sp.maxFreq-0.1)
                 print("Extracting samples between %d-%d Hz" % (bottom, top))
-                denoised = SignalProc.bandpassFilter(denoised, sampleRate=self.sp.audio_data.sample_rate, start=bottom, end=top)
+                denoised = signal_proc.bandpass_filter(denoised, sampleRate=self.sp.audio_data.sample_rate, start=bottom, end=top)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -4211,7 +4213,7 @@ class ManualInterface(QMainWindow):
                 # here we override default 0-Fs/2 returns
                 start = self.sp.minFreqShow
                 end = self.sp.maxFreqShow
-                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.audio_data.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+                self.waveletDenoiser = wavelet_functions.WaveletFunctions(data=self.sp.audio_data.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
                 #self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
@@ -4324,9 +4326,9 @@ class ManualInterface(QMainWindow):
                 filename = str(filename)
                 if not filename.endswith('.wav'):
                     filename = filename + '.wav'
-                tosave = SignalProc.bandpassFilter(self.sp.audio_data.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
+                tosave = signal_proc.bandpass_filter(self.sp.audio_data.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
                 if changespeed:
-                    tosave = SignalProc.wsola(tosave,self.playSpeed) 
+                    tosave = signal_proc.wsola(tosave,self.playSpeed) 
                 sfmt = self.sp.audio_data.sample_format
                 if sfmt == 'UInt8':
                     normalised_data = (tosave - 128) / 128
@@ -4696,7 +4698,7 @@ class ManualInterface(QMainWindow):
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
                     tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
-                    tagSegments = Annotation.SegmentList()
+                    tagSegments = annotation.SegmentList()
 
                     # First get the metadata
                     operator = ""
@@ -4724,8 +4726,8 @@ class ManualInterface(QMainWindow):
                         print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
                         # TODO: Test
-                        from src.core import Spectrogram 
-                        sp = Spectrogram.Spectrogram(512,256, 0, 0)
+                        from core import spectrogram 
+                        sp = spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.audioFormat.sample_rate
            
@@ -4738,7 +4740,7 @@ class ManualInterface(QMainWindow):
                         for elem in troot:
                             try:
                                 species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
-                                newSegment = Annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=float(elem[4].text), freq_high=float(elem[3].text), labels=species)
+                                newSegment = annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=float(elem[4].text), freq_high=float(elem[3].text), labels=species)
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file {1}".format(elem[0].text,tagFile))
@@ -4813,7 +4815,7 @@ class ManualInterface(QMainWindow):
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
                     tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
-                    tagSegments = Annotation.SegmentList()
+                    tagSegments = annotation.SegmentList()
 
                     # First get the metadata
                     operator = ""
@@ -4840,8 +4842,8 @@ class ManualInterface(QMainWindow):
                     except:
                         print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
-                        from src.core import Spectrogram 
-                        sp = Spectrogram.Spectrogram(512,256, 0, 0)
+                        from core import spectrogram 
+                        sp = spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate
                         #duration = sp.fileLength / sp.sampleRate
@@ -4856,7 +4858,7 @@ class ManualInterface(QMainWindow):
                             try:
                                 species = [{"species": spDict[int(elem[0].text)], "certainty": 100, "filter": "M"}]
                                 # TODO: Get the size right! Something weird about the freqs
-                                newSegment = Annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=0, freq_high=0, labels=species)
+                                newSegment = annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=0, freq_high=0, labels=species)
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file %s" %elem[0],tagFile)
@@ -4920,7 +4922,7 @@ class ManualInterface(QMainWindow):
                 if file.endswith('.tag'):
                     tagFile = os.path.join(root, file)
                     tagFileMinusExtension = tagFile.rsplit('.', 1)[0]
-                    tagSegments = Annotation.SegmentList()
+                    tagSegments = annotation.SegmentList()
                     try:
                         # First get the metadata
                         operator = ""
@@ -4947,7 +4949,7 @@ class ManualInterface(QMainWindow):
                             try:
                                 species = spDict[int(elem[0].text)]
                                 # TODO: Get the size right!
-                                newSegment = Annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=elem[3].text, freq_high=elem[4].text, labels=species)
+                                newSegment = annotation.Segment(start_time=float(elem[1].text), end_time=float(elem[1].text) + float(elem[2].text), freq_low=elem[3].text, freq_high=elem[4].text, labels=species)
                                 tagSegments.append(newSegment)
                             except KeyError:
                                 print("{0} not in bird list for file %s" %elem[0],tagfile)
@@ -5016,7 +5018,7 @@ class ManualInterface(QMainWindow):
         alg, settings = self.segmentDialog.getValues()
 
         # Create segmenter for non-species-specific algorithms
-        seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
+        seg = segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
 
         with pg.BusyCursor():
             filtname = str(settings["filtname"])
@@ -5089,7 +5091,7 @@ class ManualInterface(QMainWindow):
             elif alg == 'Wavelet Filter':
                 # Old WF filter, not compatible with wind removal:
                 speciesData = self.FilterDicts[filtname]
-                ws = WaveletSegment.WaveletSegment(speciesData)
+                ws = wavelet_segment.WaveletSegment(speciesData)
                 ws.readBatch(self.sp.audio_data.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 newSegments = ws.waveletSegment(0, wpmode="new")
                 # this will produce a list of lists (over subfilters)
@@ -5097,7 +5099,7 @@ class ManualInterface(QMainWindow):
                 print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
-                ws = WaveletSegment.WaveletSegment(speciesData)
+                ws = wavelet_segment.WaveletSegment(speciesData)
                 useWind = settings["wind"] in ["OLS wind filter (recommended)", "Robust wind filter (experimental, slow)"]
                 ws.readBatch(self.sp.audio_data.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=useWind)
                 # nuisance-signal changepoint detector (alg 2)
@@ -5135,7 +5137,7 @@ class ManualInterface(QMainWindow):
                     if 'NN' in speciesData:
                         NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
-                    post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
+                    post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=subfilter, NNmodel=NNmodel, cert=50)
                     if NNmodel:
@@ -5159,7 +5161,7 @@ class ManualInterface(QMainWindow):
             else:
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
-                post = Segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
+                post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
                 if settings["rain"]:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
@@ -5261,7 +5263,7 @@ class ManualInterface(QMainWindow):
 
         # excel should be split by page size, but for short files just give the file size
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
-        excel = SupportClasses.ExcelIO()
+        excel = excel_export.ExcelIO()
         self.segments.filename = self.filename
         success = excel.export([self.segments], self.SoundFileDir, action=action, pagelenarg=datalen, numpages=self.nFileSections, startTime=self.startTime, precisionMS=self.batmode)
         # add user notification
@@ -5281,13 +5283,13 @@ class ManualInterface(QMainWindow):
         # print ("inside find Matches: ", species)
         segments = []
         # Create segmenter for cross-correlation
-        seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
+        seg = segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
         
         if species != 'Choose species...' and os.path.exists('Sound Files/' + species):
             self.statusLeft.setText("Finding matches...")
             print("Reading template/s")
             # Todo: do more than one template and merge result?
-            sp_temp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
+            sp_temp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
             sp_temp.readSoundFile('Sound Files/'+species+'/train1_1.wav')
 
             # Parse wav format details based on file header:
@@ -5362,7 +5364,7 @@ class ManualInterface(QMainWindow):
         """
         # TODO: Probably broken!
         if len(self.segments) > 1:
-            cl = Clustering.Clustering([], [], 5)
+            cl = clustering.Clustering([], [], 5)
             # TODO: This is the signature
             segments, nclasses, duration = cl.cluster(dataset,self.sp.audio_data.sample_rate, None, feature='we')
             self.clusterD = Cluster(segments, self.sp.audio_data.sample_rate, nclasses, self.config)
@@ -5538,7 +5540,7 @@ class ManualInterface(QMainWindow):
         if "noiseTypes" not in self.segments.metadata:
             self.segments.metadata["noiseTypes"] = []
 
-        self.getNoiseDataDialog = addNoiseData(self.segments.metadata["noiseLevel"], self.segments.metadata["noiseTypes"])
+        self.getNoiseDataDialog = AddNoiseData(self.segments.metadata["noiseLevel"], self.segments.metadata["noiseTypes"])
         self.getNoiseDataDialog.activate.clicked.connect(self.getNoiseData)
         self.getNoiseDataDialog.exec()
 
@@ -5592,7 +5594,7 @@ class ManualInterface(QMainWindow):
                 
             # Use the original spectrogram parameters to maintain correct timing
             # Most spectrograms are one-sided magnitude spectrograms, so use bmp=True logic
-            new_wave = SignalProc.invertSpectrogram(self.sp.sg, incr=self.sp.incr, sampleRate=sampleRate, bmp=True)
+            new_wave = signal_proc.invert_spectrogram(self.sp.sg, incr=self.sp.incr, sampleRate=sampleRate, bmp=True)
             #filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
             fileMinusExtension = self.filename.rsplit('.', 1)[0]
             filename = fileMinusExtension+'_recon.wav'

@@ -22,7 +22,7 @@
 
 import math
 import numpy as np
-from src.core import Annotation
+from core import annotation
 from src.utils.exceptions import GentleExitException
 from scipy import ndimage
         
@@ -346,5 +346,5 @@ class BatDetector:
         y2 = 0
         if len(segmentsNew) != 3:
             print("Warning: segment format does not match bat mode")
-        segment = Annotation.Segment(start_time=segmentsNew[0], end_time=segmentsNew[1], freq_low=y1, freq_high=y2, labels=segmentsNew[2])
+        segment = annotation.Segment(start_time=segmentsNew[0], end_time=segmentsNew[1], freq_low=y1, freq_high=y2, labels=segmentsNew[2])
         segmentsList.addSegment(segment)

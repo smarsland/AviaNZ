@@ -1,7 +1,5 @@
-# WaveletSegment.py
-# Wavelet Segmentation
 
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -19,14 +17,17 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from src.core import WaveletFunctions
+
+# Wavelet segmentation
+
+from core import wavelet_functions
 import resampy
 import copy
 import numpy as np
 import time, os, math, csv, gc
-from src.core import Spectrogram
-from src.core import Segmentation
-from src.core import SignalProc
+from core import spectrogram
+from core import segmentation
+from core import signal_proc
 from ext import ce_denoise as ce
 from ext import ce_detect
 from itertools import combinations
@@ -43,7 +44,7 @@ class WaveletSegment:
             # for now, we default to the first subfilter:
             print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
 
-        self.sp = Spectrogram.Spectrogram(256, 128)
+        self.sp = spectrogram.Spectrogram(256, 128)
 
     def readBatch(self, data, sampleRate, d, spInfo, wpmode="new", wind=False):
         """ File (or page) loading for batch mode. Must be followed by self.waveletSegment.
@@ -81,7 +82,7 @@ class WaveletSegment:
             print("Adjusting nodes for upsampling to", fsOut)
             for filter in self.spInfo:
                 for subfilter in filter["Filters"]:
-                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = wavelet_functions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
             # Don't want to resample again, so fsTarget = fsIn
             fsOut = sampleRate
         elif fsOut == 4*sampleRate:
@@ -89,8 +90,8 @@ class WaveletSegment:
             # same. Wouldn't recommend repeating for larger ratios than 4x
             for filter in self.spInfo:
                 for subfilter in filter["Filters"]:
-                    downsampled2x = WaveletFunctions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                    subfilter["WaveletParams"]['nodes'] = WaveletFunctions.adjustNodes(downsampled2x, "down2")
+                    downsampled2x = wavelet_functions.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = wavelet_functions.adjustNodes(downsampled2x, "down2")
             # Don't want to resample again, so fsTarget = fsIn
             fsOut = sampleRate
         # Could also similarly "downsample" by adding an extra convolution, but it's way slower
@@ -122,7 +123,7 @@ class WaveletSegment:
         allnodes = list(set(allnodes))
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
-        self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
+        self.WF = wavelet_functions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
         if wpmode == "pywt":
             print("ERROR: pywt wpmode is deprecated, use new or aa")
             return
@@ -157,7 +158,7 @@ class WaveletSegment:
 
             # merge neighbours in order to convert the detections into segments
             # note: detected np[0 1 1 1] becomes [[1,3]]
-            segmenter = Segmentation.Segmenter()
+            segmenter = segmentation.Segmenter()
             detected = segmenter.convert01(detected)
             detected = segmenter.joinGaps(detected, maxgap=0)
             detected_allsubf.append(detected)
@@ -255,7 +256,7 @@ class WaveletSegment:
 
         # 2a. prefilter audio to species freq range
         for filenum in range(len(self.audioList)):
-            self.audioList[filenum] = SignalProc.bandpassFilter(self.audioList[filenum],
+            self.audioList[filenum] = signal_proc.bandpass_filter(self.audioList[filenum],
                                             self.spInfo['SampleRate'],
                                             start=subfilter['FreqRange'][0],
                                             end=subfilter['FreqRange'][1])
@@ -278,7 +279,7 @@ class WaveletSegment:
             print("Extracting energies from file", filenum+1)
             data = self.audioList[filenum]
 
-            self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+            self.WF = wavelet_functions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
 
             # Generate a full 5 level wavelet packet decomposition
             if learnMode == "recaa" or learnMode == "recold":
@@ -343,7 +344,7 @@ class WaveletSegment:
         for node_un in range(14, 62):
             # corresponding node in a rooted tree (as used by WF)
             node = node_un + 1
-            nodefrl, nodefru = WaveletFunctions.getWCFreq(node, self.spInfo["SampleRate"])
+            nodefrl, nodefru = wavelet_functions.getWCFreq(node, self.spInfo["SampleRate"])
             if nodefrl < freqrange[1] and nodefru > freqrange[0]:
                 # node has some overlap with the target range, so can be tested
                 nodeList.append(node)
@@ -367,7 +368,7 @@ class WaveletSegment:
             currWCs = np.zeros((62, filenwins))
             # Generate a full 5 level wavelet packet decomposition
             # (this will not be downsampled. antialias=False means no post-filtering)
-            self.WF = WaveletFunctions.WaveletFunctions(data=self.audioList[indexF], wavelet=self.wavelet, maxLevel=5, samplerate=self.spInfo['SampleRate'])
+            self.WF = wavelet_functions.WaveletFunctions(data=self.audioList[indexF], wavelet=self.wavelet, maxLevel=5, samplerate=self.spInfo['SampleRate'])
             self.WF.WaveletPacket(nodeList, mode='symmetric', antialias=False)
             for node in nodeList:
                 nodeE, noderealwindow = self.WF.extractE(node, window, wpantialias=True)
@@ -699,7 +700,7 @@ class WaveletSegment:
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
 
         # generate a WP on all of the data
-        WF = WaveletFunctions.WaveletFunctions(data, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
+        WF = wavelet_functions.WaveletFunctions(data, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
         if wpmode == "pywt":
             print("ERROR: pywt mode deprecated, use new or aa")
             return
@@ -1023,7 +1024,7 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = SignalProc.bandpassFilter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
+                C = signal_proc.bandpass_filter(C, win_sr, subfilter['FreqRange'][0], subfilter['FreqRange'][1])
 
             C = np.abs(C)
             N = len(C)
@@ -1151,7 +1152,7 @@ class WaveletSegment:
                     continue
                 if node==31 or node==47:  # skip extreme nodes with filtering artifacts
                     continue
-                nodecenter = sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2
+                nodecenter = sum(wavelet_functions.getWCFreq(node, wf.treefs))/2
                 if nodecenter>=6000:  # skip high freqs when estimating wind
                     continue
                 wind_nodes.append(node)
@@ -1198,7 +1199,7 @@ class WaveletSegment:
                 if window<=0.1 and wf.treefs<16000:
                     qrbiasadjust = 0.4
 
-            tgtnodecenters = np.log([sum(WaveletFunctions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
+            tgtnodecenters = np.log([sum(wavelet_functions.getWCFreq(node, wf.treefs))/2 for node in nodelist])
             windE = np.maximum(windE, 1e-10)
             windE = np.log(windE)
             for w in range(datalen):
@@ -1208,7 +1209,7 @@ class WaveletSegment:
                     pol = np.polynomial.polynomial.Polynomial.fit(regx,regy,3)
                 elif wind=="Robust wind filter (experimental, slow)":
                     # TODO sklearn will add quantreg in v1.0, see if it is any better
-                    pol = WaveletFunctions.QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
+                    pol = wavelet_functions.QuantReg(regy, regx, q=0.2, max_iter=250, p_tol=1e-3)
                 else:
                     print("ERROR: unrecognized wind adjustment %s" % wind)
                     raise
@@ -1301,7 +1302,7 @@ class WaveletSegment:
 
         # now, need to go over the segments and find any overlapping ones (i.e. combine across nodes).
         # NOTE: will sort them
-        s = Segmentation.Segmenter()
+        s = segmentation.Segmenter()
         outsegs = s.checkSegmentOverlap(detected)
         print("After merge:", outsegs)
 
@@ -1495,7 +1496,7 @@ class WaveletSegment:
         # avoid low-level nodes
         low_level_nodes = list(range(14))
         for item in nodes1:
-            itemfrl, itemfru = WaveletFunctions.getWCFreq(item, self.spInfo["SampleRate"])
+            itemfrl, itemfru = wavelet_functions.getWCFreq(item, self.spInfo["SampleRate"])
             if item not in low_level_nodes and itemfrl < freqrange[1] and itemfru > freqrange[0]:
                 bestnodes.append(item)
 
@@ -1533,7 +1534,7 @@ class WaveletSegment:
 
         # Get the five level wavelet decomposition
         if d:
-            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
+            WF = wavelet_functions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
             denoisedData = WF.waveletDenoise(thresholdType='soft', maxLevel=5)
             del WF
         else:
@@ -1662,7 +1663,7 @@ class WaveletSegment:
 
         # Do impulse masking by default
         if impMask:
-            self.sp.audio_data.data = SignalProc.impMask(self.sp.audio_data.data,self.sp.audio_data.sample_rate)
+            self.sp.audio_data.data = signal_proc.imp_mask(self.sp.audio_data.data,self.sp.audio_data.sample_rate)
 
         fileAnnotations = []
         # Get the segmentation from the txt file

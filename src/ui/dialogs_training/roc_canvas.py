@@ -24,41 +24,17 @@
 # Dialogs used for filter training / testing.
 # These are relatively complicated wizards which also do file I/O
 
-import os
-import time
-import platform
-import copy
-from shutil import copyfile
-import json
 
-from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
-from PyQt6.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
+from PyQt6.QtWidgets import QApplication
 
-import matplotlib.markers as mks
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import pyqtgraph as pg
 
 import numpy as np
-from src.ui.colourMaps import colourMaps
-from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider, PicButton
-from src.ui.components.popups import MessagePopup
-from src.ui.components.file_list import LightedFileList
-from src.ui.components.layout_widgets import Layout
-from src.core import SupportClasses
-from src.core import Spectrogram
-from src.core import WaveletSegment
-from src.core import WaveletFunctions
-from src.core import Annotation
-from src.core import Clustering
-from src.core import Training
 
-from src.models import NNModels
 
-import math
 
 class ROCCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=6, dpi=100):

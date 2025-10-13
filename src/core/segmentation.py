@@ -20,10 +20,10 @@
 
 # Code to extract segments from sound files
 
-from src.core import Spectrogram
-from src.core import SupportClasses
-from src.core import AudioData
-from src.utils import Shapes
+from core import spectrogram
+from core import config_loader
+from core import audio_data
+from utils import shapes
 
 import numpy as np
 import scipy.ndimage as spi
@@ -532,7 +532,7 @@ class Segmenter:
         # returns pitch in Hz for each window of Wsamples/2.
         # As this uses the full audio data, it is up to caller to adjust times
         # to real seconds if the data only contained e.g. a segment
-        shape = Shapes.fundFreqShaper(self.sp.audio_data.data, W, thr, self.sp.audio_data.sample_rate)
+        shape = shapes.fundFreqShaper(self.sp.audio_data.data, W, thr, self.sp.audio_data.sample_rate)
 
         pitch = shape.y
         if len(pitch)==0:
@@ -623,11 +623,11 @@ class PostProcess:
         self.configdir = configdir
         # Store as AudioData object for consistency with Spectrogram API
         if audioData is not None:
-            if isinstance(audioData, AudioData.AudioData):
+            if isinstance(audioData, audio_data.AudioData):
                 self.audioData = audioData
             else:
                 # Convert raw numpy array to AudioData object
-                self.audioData = AudioData.AudioData(
+                self.audioData = audio_data.AudioData(
                     data=audioData, 
                     sample_rate=sampleRate,
                     sample_format='float32',
@@ -657,7 +657,7 @@ class PostProcess:
             except Exception as e:
                 print(f"Warning: Could not configure GPU memory growth: {e}")
 
-            cl = SupportClasses.ConfigLoader()
+            cl = config_loader.ConfigLoader()
             self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
             self.NNmodel = NNmodel[0]    # NNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
@@ -740,7 +740,7 @@ class PostProcess:
             duration: Duration of the segment in seconds
         """
         nn_window_width = self.NNinputdim[0]
-        sp = Spectrogram.Spectrogram(window_width=nn_window_width, incr=self.NNwindowInc[1])
+        sp = spectrogram.Spectrogram(window_width=nn_window_width, incr=self.NNwindowInc[1])
         sp.audio_data = audio_data
         
         if self.sampleRate != self.tgtsampleRate:
@@ -795,7 +795,7 @@ class PostProcess:
             # Extract audio segment as AudioData object
             start_sample = int(seg[0][0] * self.sampleRate)
             end_sample = int(seg[0][1] * self.sampleRate)
-            segment_audio = AudioData.AudioData(
+            segment_audio = audio_data.AudioData(
                 data=self.audioData.data[start_sample:end_sample],
                 sample_rate=self.sampleRate,
                 sample_format='float32',
@@ -930,7 +930,7 @@ class PostProcess:
             seg = self.segments[segix][0]
             secs = int(seg[1] - seg[0])
             
-            sp = Spectrogram.Spectrogram(256, 128)
+            sp = spectrogram.Spectrogram(256, 128)
             if fileName:
                 sp.readSoundFile(fileName, secs, seg[0])
                 self.sampleRate = sp.audio_data.sample_rate
@@ -943,7 +943,7 @@ class PostProcess:
                 print("Extending window width to ", minwin)
                 Wsamples = int(minwin)
 
-            pitch = Shapes.fundFreqShaper(sp.audio_data.data, Wsamples, thr, sp.audio_data.sample_rate)
+            pitch = shapes.fundFreqShaper(sp.audio_data.data, Wsamples, thr, sp.audio_data.sample_rate)
             pitch = pitch.y
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]

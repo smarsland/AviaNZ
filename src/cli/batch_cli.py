@@ -22,7 +22,7 @@
 #
 # For running the batch processor from the terminal
 
-from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
+from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 from src.utils.exceptions import GentleExitException
 
 

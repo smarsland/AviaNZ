@@ -1,9 +1,5 @@
 
-# NN.py
-#
-# NN for the AviaNZ program
-
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,7 +17,8 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#     from PyQt5.QtGui import QIcon, QPixmap
+
+# NN for the AviaNZ program
 
 import tensorflow as tf
 from skimage.transform import resize
@@ -30,23 +27,17 @@ import json, os
 import numpy as np
 import math
 
-from src.core import Spectrogram
-from src.core import WaveletSegment
-from src.core import Annotation
-from src.core import Segmentation
-from src.core import SupportClasses
-from src.core import AudioData
+from core import spectrogram
+from core import wavelet_segment
+from core import annotation
+from core import segmentation
+from core import config_loader
+from core import audio_data
 import librosa
 
 import soundfile as sf
 
 from src.models import NNModels
-
-# from sklearn.metrics import confusion_matrix
-# from numpy import expand_dims
-# from keras_preprocessing.image import ImageDataGenerator
-# import pyqtgraph as pg
-# import SupportClasses
 
 class NN:
     """ This class implements NN training and data augmentation in AviaNZ.
@@ -63,7 +54,7 @@ class NN:
         self.fs = fs
         self.modelArchitecture = modelArchitecture
 
-        cl = SupportClasses.ConfigLoader()
+        cl = config_loader.ConfigLoader()
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
     # Custom data augmentation
@@ -124,8 +115,8 @@ class NN:
 
     def generateImage(self, audiodata):
         ''' Generate spectrogram image'''
-        sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
-        sp.audio_data = AudioData.AudioData(data=audiodata, sample_rate=self.fs, 
+        sp = spectrogram.Spectrogram(self.windowwidth, self.inc)
+        sp.audio_data = audio_data.AudioData(data=audiodata, sample_rate=self.fs, 
                                    sample_format='float32', sample_size=32, channels=1)
         sgRaw = sp.spectrogram(self.windowwidth, self.inc)
         maxg = np.max(sgRaw)
@@ -436,7 +427,7 @@ class GenerateData:
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.data' in files:
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     if len(self.calltypes) == 1:
                         ctSegments = segments.getSpecies(self.species)
@@ -467,7 +458,7 @@ class GenerateData:
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
@@ -479,7 +470,7 @@ class GenerateData:
             print("ERROR: no segments for species %s found" % self.species)
             return
 
-        ws = WaveletSegment.WaveletSegment(self.filter, 'dmey2')
+        ws = wavelet_segment.WaveletSegment(self.filter, 'dmey2')
         autoSegments = ws.waveletSegment_nn(dirName, self.filter)  # [(filename, [segments]), ...]
 
         #  now the diff between segment and autoSegments
@@ -490,7 +481,7 @@ class GenerateData:
             if os.stat(soundFile).st_size != 0:
                 sppSegments = []
                 if os.path.isfile(soundFile + '.data'):
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     sppSegments = [segments[i] for i in segments.getSpecies(self.species)]
                 for segAuto in item[1]:
@@ -511,14 +502,14 @@ class GenerateData:
         '''
         manSegNum = 0
         noiseSegments = []
-        segmenter = Segmentation.Segmenter()
+        segmenter = segmentation.Segmenter()
         print('Generating GT...')
         for root, dirs, files in os.walk(dirName):
             for file in files:
                 soundFile = os.path.join(root, file)
                 if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
                     # Generate GT files from annotations in dir1
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(soundFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                     manSegNum += len(sppSegments)
@@ -528,7 +519,7 @@ class GenerateData:
                     segments.exportGT(soundFile, self.species, resolution=1.0)
 
                     print('Determining noise...')
-                    autoseg = Annotation.SegmentList()
+                    autoseg = annotation.SegmentList()
                     for sec in range(math.floor(segments.metadata["Duration"])-1):
                         if not any([sec >= seg.start_time and sec <= seg.end_time for seg in segments]):
                             autoseg.addSegment([sec, sec+1, 0, 0, []])
@@ -601,7 +592,7 @@ class GenerateData:
         dhop = hop
         eps = 0.0005
         N = [0 for i in range(len(self.calltypes) + 1)]
-        sp = Spectrogram.Spectrogram(self.windowwidth, self.inc)
+        sp = spectrogram.Spectrogram(self.windowwidth, self.inc)
         # audio_data will be initialized by readSoundFile, then resampled to self.fs
 
         for record in dataset:

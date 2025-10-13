@@ -20,7 +20,7 @@
 
 # Data objects for handling segments
 
-from src.core import SupportClasses
+from core import MessagePopup
 
 import numpy as np
 import json
@@ -195,7 +195,7 @@ class Segment:
                     text += "\nWhile trying to remove key "+str(species)+" from "+ str(self.labels)
                     text += "\nWhich had keys" + str(self.keys)
                     try:
-                        msg = SupportClasses.MessagePopup("w", "ERROR - please report", text)
+                        msg = MessagePopup.MessagePopup("w", "ERROR - please report", text)
                         if hasattr(msg, 'exec'):
                             msg.exec()
                     except Exception:

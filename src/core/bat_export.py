@@ -24,8 +24,8 @@ import os
 import fnmatch
 import numpy as np
 
-from src.core import Annotation
-from src.core import Spectrogram
+from core import annotation
+from core import spectrogram
 
 class BatExporter:
     """Handles export of bat detection results to various formats"""
@@ -81,7 +81,7 @@ class BatExporter:
                 for filename in files:
                     if filename.endswith('.data'):
                         s1 = etree.SubElement(start, "BatRecording")
-                        segments = Annotation.SegmentList()
+                        segments = annotation.SegmentList()
                         segments.parseJSON(os.path.join(root, filename))
                         
                         label = self.getBatLabel(segments, threshold1, threshold2)
@@ -110,7 +110,7 @@ class BatExporter:
             files.sort()
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
                     label = self.getBatLabel(segments, threshold1, threshold2)
@@ -143,7 +143,7 @@ class BatExporter:
     def exportPasses(self, dirName, savefile):
         """Export bat passes summary."""
         if self.sp is None:
-            self.sp = Spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
+            self.sp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'])
         
         f = open(os.path.join(dirName, savefile), 'w')
         f.write("Tally,Night,Site,Detector,Detector Name,Bat species (L or S), Time of bat pass (24 hour clock e.g. 23:41:11),Length of bat pass (s),Feeding buzz present (yes/no)\n")
@@ -153,7 +153,7 @@ class BatExporter:
         for root, dirs, files in os.walk(dirName, topdown=True):
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     
                     label = 'Non-bat'
@@ -165,7 +165,7 @@ class BatExporter:
                         if self.bat_detector:
                             res = self.bat_detector.clickSearch(self.sp, None, virginia=False)
                             if res is not None:
-                                length = "{:.2f}".format((res[1] - res[0]) * Spectrogram.BAT_SPECTROGRAM_TIME_PER_PIXEL)
+                                length = "{:.2f}".format((res[1] - res[0]) * spectrogram.BAT_SPECTROGRAM_TIME_PER_PIXEL)
                         
                         seg = segments[0]
                         c = [lab["certainty"] for lab in seg.labels]
@@ -230,7 +230,7 @@ class BatExporter:
         for root, dirs, files in os.walk(dirName, topdown=True):
             for filename in files:
                 if filename.endswith('.data'):
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(os.path.join(root, filename))
                     label = self.getBatLabel(segments, threshold1, None)
                     if label == 'Long Tail' or label == 'Possible LT':

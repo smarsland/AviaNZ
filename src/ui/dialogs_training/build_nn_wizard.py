@@ -25,40 +25,24 @@
 # These are relatively complicated wizards which also do file I/O
 
 import os
-import time
 import platform
-import copy
-from shutil import copyfile
-import json
 
 from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
-from PyQt6.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
+from PyQt6.QtCore import QDir, Qt
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QVBoxLayout, QHBoxLayout, QCheckBox, QRadioButton, QGridLayout, QFileDialog, QAbstractItemView
 
-import matplotlib.markers as mks
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 import pyqtgraph as pg
 
 import numpy as np
 from src.ui.colourMaps import colourMaps
-from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider, PicButton
-from src.ui.components.popups import MessagePopup
+from src.ui.components.buttons_and_controls import CustomSlider, PicButton
 from src.ui.components.file_list import LightedFileList
-from src.ui.components.layout_widgets import Layout
-from src.core import SupportClasses
-from src.core import Spectrogram
-from src.core import WaveletSegment
-from src.core import WaveletFunctions
-from src.core import Annotation
-from src.core import Clustering
-from src.core import Training
+from core import config_loader
+from core import spectrogram
+from core import annotation
+from core import training
 
-from src.models import NNModels
 
-import math
 
 class BuildNNWizard(QWizard):
     # Main init of the NN training wizard
@@ -76,7 +60,7 @@ class BuildNNWizard(QWizard):
 
         self.rocpages = []
 
-        self.nntrain = Training.NNtrain(configdir, filtdir)
+        self.nntrain = training.NNTrain(configdir, filtdir)
 
         # P1
         self.browsedataPage = BuildNNWizard.WPageData(self.nntrain, config)
@@ -259,7 +243,7 @@ class BuildNNWizard(QWizard):
             self.certainty2 = True
             self.hasant1 = False
             self.hasant2 = False
-            cl = SupportClasses.ConfigLoader()
+            cl = config_loader.ConfigLoader()
             self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
             self.msgmdir = QLabel("")
@@ -418,7 +402,7 @@ class BuildNNWizard(QWizard):
                 for file in files:
                     soundFile = os.path.join(root, file)
                     if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                        segments = Annotation.SegmentList()
+                        segments = annotation.SegmentList()
                         segments.parseJSON(soundFile + '.data')
                         cert = [lab["certainty"] if lab["species"] == self.nntrain.species else 100 for seg in segments for lab in seg.labels]
                         if cert:
@@ -667,7 +651,7 @@ class BuildNNWizard(QWizard):
                 if duration == 0:
                     duration = None
                 offset = self.nntrain.traindata[ind][1][0]
-                sp = Spectrogram.Spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
+                sp = spectrogram.Spectrogram(self.nntrain.windowWidth, self.nntrain.windowInc)
                 sp.readSoundFile(filename, duration, offset)
                 sp.resample(self.nntrain.fs)
                 sp.audio_data.sample_rate = self.nntrain.fs

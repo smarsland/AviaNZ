@@ -29,35 +29,26 @@ import time
 import platform
 import copy
 from shutil import copyfile
-import json
 
 from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
-from PyQt6.QtCore import QDir, Qt, QEvent, QSize, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QFileDialog, QScrollArea, QWidget, QAbstractItemView
+from PyQt6.QtCore import QDir, Qt, QEvent, QSize
+from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QFileDialog, QScrollArea, QAbstractItemView
 
-import matplotlib.markers as mks
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 import pyqtgraph as pg
 
 import numpy as np
 from src.ui.colourMaps import colourMaps
-from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider, PicButton
+from src.ui.components.buttons_and_controls import BrightContrVol, PicButton
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.layout_widgets import Layout
 from src.ui.dialogs_training.roc_canvas import ROCCanvas
-from src.core import SupportClasses
-from src.core import Spectrogram
-from src.core import WaveletSegment
-from src.core import WaveletFunctions
-from src.core import Annotation
-from src.core import Clustering
-from src.core import Training
-from src.core import AudioData
-from src.models import NNModels
+from core import spectrogram
+from core import wavelet_segment
+from core import wavelet_functions
+from core import annotation
+from core import clustering
+from core import audio_data
 
 import math
 
@@ -297,7 +288,7 @@ class BuildRecAdvWizard(QWizard):
                     # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
                     # self.nclasses: number of class_labels
                     # duration: median length of segments
-                    self.cluster = Clustering.Clustering([], [], 5)
+                    self.cluster = clustering.Clustering([], [], 5)
                     f1,f2 = self.cluster.getFrqRange(self.field("trainDir"),self.field("species"),self.field("fs"))
                     dataset = self.cluster.findSyllables(self.field("trainDir"),self.field("species"),0.2,self.field("fs"),f1,f2,False)
                     self.segments, self.nclasses, self.duration = self.cluster.cluster(dataset, self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
@@ -362,7 +353,7 @@ class BuildRecAdvWizard(QWizard):
             calltypes = {}
             for file in listOfDataFiles:
                 # Read the annotation
-                segments = Annotation.SegmentList()
+                segments = annotation.SegmentList()
                 segments.parseJSON(file)
                 SpSegs = segments.getSpecies(self.field("species"))
                 for segix in SpSegs:
@@ -384,7 +375,7 @@ class BuildRecAdvWizard(QWizard):
             ctTexts = []
             CTsegments = []
             duration = []
-            cl = Clustering.Clustering([], [], 5)
+            cl = clustering.Clustering([], [], 5)
 
             listOfDataFiles = []
             listOfSoundFiles = []
@@ -398,7 +389,7 @@ class BuildRecAdvWizard(QWizard):
             for file in listOfDataFiles:
                 if file[:-5] in listOfSoundFiles:
                     # Read the annotation
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     segments.parseJSON(file)
                     SpSegs = segments.getSpecies(self.field("species"))
                     for segix in SpSegs:
@@ -413,7 +404,7 @@ class BuildRecAdvWizard(QWizard):
             for file in listOfDataFiles:
                 if file[:-5] in listOfSoundFiles:
                     # Read the annotation
-                    segments = Annotation.SegmentList()
+                    segments = annotation.SegmentList()
                     soundfile = os.path.join(self.field("trainDir"), file[:-5])
                     segments.parseJSON(os.path.join(self.field("trainDir"), file))
                     SpSegs = segments.getSpecies(self.field("species"))
@@ -473,12 +464,12 @@ class BuildRecAdvWizard(QWizard):
                 print(f"\nProcessing: {os.path.basename(datafile)}")
                 
                 # Load original segments
-                original_segments = Annotation.SegmentList()
+                original_segments = annotation.SegmentList()
                 original_segments.parseJSON(datafile)
                 print(f"  Original segments: {len(original_segments)}")
                 
                 # Create new segment list
-                newsegments = Annotation.SegmentList()
+                newsegments = annotation.SegmentList()
                 newsegments.metadata = original_segments.metadata
                 
                 # Keep non-target species segments unchanged
@@ -881,7 +872,7 @@ class BuildRecAdvWizard(QWizard):
             self.minsg = 1
             self.maxsg = 1
             for seg in self.segments:
-                sp = Spectrogram.Spectrogram(512, 256)
+                sp = spectrogram.Spectrogram(512, 256)
                 sp.readSoundFile(seg[0], seg[1].end_time-seg[1].start_time, seg[1].start_time, silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
@@ -921,7 +912,7 @@ class BuildRecAdvWizard(QWizard):
                         # TODO: get length right
     #def __init__(self, index, spec, audiodata, audioFormat, duration, unbufStart, unbufStop, lut, guides=None, guidecol=None, loop=False, parent=None, cluster=False):
                         # Create temporary AudioData object for this specific audio segment
-                        temp_audio_data = AudioData.AudioData(
+                        temp_audio_data = audio_data.AudioData(
                             data=calls[i][j],
                             sample_rate=sp.audio_data.sample_rate,
                             file_length=len(calls[i][j]),
@@ -944,7 +935,7 @@ class BuildRecAdvWizard(QWizard):
                 self.minsg = 1
                 self.maxsg = 1
                 for seg in self.segments:
-                    sp = Spectrogram.Spectrogram(512, 256)
+                    sp = spectrogram.Spectrogram(512, 256)
                     sp.readSoundFile(seg[0], seg[1].end_time-seg[1].start_time, seg[1].start_time, silent=True)
     
                     # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
@@ -1184,7 +1175,7 @@ class BuildRecAdvWizard(QWizard):
             fs = int(self.field("fs")) // 4000 * 4000
 
             # self.segments is already selected to be this cluster only
-            pageSegs = Annotation.SegmentList()
+            pageSegs = annotation.SegmentList()
             for longseg in self.segments:
                 # long seg has format: [file [segment] clusternum]
                 pageSegs.addSegment(longseg[1])
@@ -1414,7 +1405,7 @@ class BuildRecAdvWizard(QWizard):
                     for file in files:
                         soundFile = os.path.join(root, file)
                         if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and os.stat(soundFile).st_size != 0 and file + '.data' in files:
-                            pageSegs = Annotation.SegmentList()
+                            pageSegs = annotation.SegmentList()
                             pageSegs.parseJSON(soundFile + '.data')
 
                             # CLUSTERS COME IN HERE:
@@ -1439,14 +1430,14 @@ class BuildRecAdvWizard(QWizard):
             # calculate cluster centres
             # (self.segments is already selected to be this cluster only)
             with pg.BusyCursor():
-                cl = Clustering.Clustering([], [], 5)
+                cl = clustering.Clustering([], [], 5)
                 self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
 
             # Get detection measures over all M,thr combinations
             print("starting wavelet training")
             with pg.BusyCursor():
                 opstartingtime = time.time()
-                ws = WaveletSegment.WaveletSegment(self.wizard().speciesData)
+                ws = wavelet_segment.WaveletSegment(self.wizard().speciesData)
                 if self.method=="wv":
                     # returns 2d lists of nodes over M x thr, or stats over M x thr
                     numthr = 50
@@ -1484,7 +1475,7 @@ class BuildRecAdvWizard(QWizard):
         def getFrqBands(self, nodes):
             fRanges = []
             for node in nodes:
-                f1, f2 = WaveletFunctions.getWCFreq(node, self.field("fs"))
+                f1, f2 = wavelet_functions.getWCFreq(node, self.field("fs"))
                 print(node, f1, f2)
                 fRanges.append([f1, f2])
             return fRanges

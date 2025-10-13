@@ -30,7 +30,7 @@ import soundfile as sf
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 from PyQt6.QtCore import Qt, QDir
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QIcon, QColor
-from src.core import Annotation
+from core import annotation
 
 
 class LightedFileList(QListWidget):
@@ -51,7 +51,7 @@ class LightedFileList(QListWidget):
 
         # for the traffic light icons
         self.blackpen = fn.mkPen(color=(160,160,160,255), width=2)
-        self.tempsl = Annotation.SegmentList()
+        self.tempsl = annotation.SegmentList()
 
     def fill(self, soundDir, fileName, recursive=False, readFmt=False, addWavNum=False):
         """ read folder contents, populate the list widget.

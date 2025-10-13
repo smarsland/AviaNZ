@@ -13,8 +13,8 @@ import pyqtgraph as pg
 
 from src.ui.components.popups import MessagePopup
 from src.ui.components.buttons_and_controls import BrightContrVol
-from src.core import Annotation
-from src.core import Spectrogram
+from core import annotation
+from core import spectrogram
 from src.ui.colourMaps import colourMaps
 
 
@@ -289,7 +289,7 @@ class CompareCalls(QMainWindow):
                             d = dt.datetime.strptime(datestamp, "%d%m%y_%H%M%S")
                 print("Recorder ", recname, " timestamp ", d)
                 # timestamp identified, so read this file:
-                segs = Annotation.SegmentList()
+                segs = annotation.SegmentList()
                 try:
                     segs.parseJSON(f, silent=True)
                 except Exception as e:
@@ -923,10 +923,10 @@ class CompareCallsDialog(QDialog):
             wav2start = 900-wavlen
             print("Warning: adjusting shown period since requested segment %d-%d is not in file" %(wav2start, wav2start+wavlen))
 
-        self.sp1 = Spectrogram.Spectrogram(256, 128)
+        self.sp1 = spectrogram.Spectrogram(256, 128)
         self.sp1.readSoundFile(wav1, off=wav1start, duration=wavlen)
         #self.sp1.readSoundFile(wav1, off=wav1start, duration=wav1len)
-        self.sp2 = Spectrogram.Spectrogram(256, 128)
+        self.sp2 = spectrogram.Spectrogram(256, 128)
         self.sp2.readSoundFile(wav2, off=wav2start, duration=wavlen)
         #self.sp2.readSoundFile(wav2, off=wav2start, duration=wav2len)
         _ = self.sp1.spectrogram()
