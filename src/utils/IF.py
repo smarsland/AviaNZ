@@ -70,11 +70,11 @@ class Wp:
         self.twfmax=[]
         self.C=[]
         self.omg=[]
-        self.xi1=-np.Inf
-        self.xi2=np.Inf
+        self.xi1=-np.inf
+        self.xi2=np.inf
         self.ompeak=[]
-        self.t1=-np.Inf
-        self.t2=np.Inf
+        self.t1=-np.inf
+        self.t2=np.inf
         self.tpeak=[]
         if window_name=='Hann':
             q=4.4*window_length
@@ -356,7 +356,7 @@ class IF:
                 #Correct "bad" places, if present
                 idb=np.argwhere((np.isnan(dp)) | (np.abs(dp)>1) | (idf==0) | (idf==NF-1))
 
-                if idb:
+                if idb.size > 0:
                     idb = np.ravel_multi_index(idb, np.shape(dp))
                     Indeces_peaks[idnt[idb]]=idf[idb]
                     Frequency_peaks[idnt[idb]]=freq[idf[idb]]

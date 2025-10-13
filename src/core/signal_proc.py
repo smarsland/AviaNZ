@@ -180,7 +180,7 @@ def bandpass_filter(data,sampleRate,start=0,end=-1):
 
     if data is None:
         print("No data given")
-        return
+        return None
     if sampleRate is None:
         print("No sample rate given")
         return data

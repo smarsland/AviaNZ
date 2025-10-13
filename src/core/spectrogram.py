@@ -62,8 +62,8 @@ class Spectrogram:
             return self.load_bmp(filepath, duration, offset, silent, **kwargs)
         
         # For audio files, use AudioLoader
-        audio_loader = audio_loader.AudioLoader()
-        loaded_data = audio_loader.load_audio(filepath, duration, offset, silent)
+        loader = audio_loader.AudioLoader()
+        loaded_data = loader.load_audio(filepath, duration, offset, silent)
         
         # Store reference to AudioData - it has all the format info built in
         self.audio_data = loaded_data
@@ -826,7 +826,7 @@ class Spectrogram:
 
     def formants(self,ncoeff=None):
         # First look at formants. Snell and Milinazzo '93 method
-        from utils import levinson_durban_recursion
+        from src.utils import levinson_durban_recursion
 
         if ncoeff is None:
             # TODO

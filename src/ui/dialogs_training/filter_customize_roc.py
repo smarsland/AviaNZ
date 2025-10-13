@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidg
 import pyqtgraph as pg
 
 import numpy as np
+from src.ui.dialogs_training.roc_canvas import ROCCanvas
 from src.core import config_loader
 
 

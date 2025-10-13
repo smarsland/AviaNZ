@@ -403,18 +403,18 @@ class Clustering:
         ind_fhigh = (np.abs(linear - fhigh)).argmin()
         self.sp.sg = self.sp.sg[:, ind_flow:ind_fhigh]
 
-        segmentation = segmentation.Segmenter(self.sp, fs)
+        segmenter = segmentation.Segmenter(self.sp, fs)
 
-        syls = segmentation.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+        syls = segmenter.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
         if len(syls) == 0:  # Sanity check
             # Try again with lower threshold
             # TODO: Why reinitialise?
-            segmentation = segmentation.Segmenter(self.sp, fs)
-            syls = segmentation.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+            segmenter = segmentation.Segmenter(self.sp, fs)
+            syls = segmenter.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
 
         # Merge overlapped segments
-        syls = segmentation.checkSegmentOverlap(syls)
-        syls = segmentation.deleteShort(syls, minlen)
+        syls = segmenter.checkSegmentOverlap(syls)
+        syls = segmenter.deleteShort(syls, minlen)
         syls = [[s[0] + start, s[1] + start] for s in syls]
 
         # Sanity check, e.g. when user annotates syllables tightly, median clipping may not detect it
@@ -521,7 +521,7 @@ class Clustering:
 
         # Pre-process
         if denoise:
-            WF = wavelet_functions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=10, samplerate=fs)
+            WF = wavelet_functions.WaveletFunctions(data=audiodata, wavelet_name='dmey2', maxLevel=10, samplerate=fs)
             audiodata = WF.waveletDenoise(thresholdType='soft', maxLevel=10)
 
         if f1 != 0 and f2 != 0:

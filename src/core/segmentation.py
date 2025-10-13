@@ -23,7 +23,7 @@
 from src.core import spectrogram
 from src.core import config_loader
 from src.core import audio_data
-from utils import shapes
+from src.utils import shapes
 
 import numpy as np
 import scipy.ndimage as spi
@@ -240,13 +240,29 @@ class Segmenter:
         """Merge segments within maxgap units (2-element format).
         
         Merges segments if the gap between them is <= maxgap.
-        Operates on 2-element segments: [[start, end], [start, end], ...]
-        Example: [[1,3], [5,7]] with maxgap=3 -> [[1,7]]
+        
+        Args:
+            segments: Can be:
+                - List of [start, end] pairs: [[start1, end1], [start2, end2], ...]
+                - SegmentList containing Segment objects (will extract time bounds)
+                - numpy array of segments
+            maxgap: Maximum gap (in seconds) to merge across
+            
+        Returns:
+            List of merged [start, end] pairs: [[start, end], ...]
+            
+        Example: 
+            [[1,3], [5,7]] with maxgap=3 -> [[1,7]]
         """
         if isinstance(segments, np.ndarray):
             segments = segments.tolist()
         if len(segments) == 0:
             return []
+        
+        # Handle Segment objects from annotation.SegmentList by extracting time bounds
+        from src.core import annotation
+        if len(segments) > 0 and isinstance(segments[0], annotation.Segment):
+            segments = [[seg.start_time, seg.end_time] for seg in segments]
         
         segments = sorted(segments, key=lambda x: x[0])
         out = []

@@ -87,6 +87,7 @@ class ControllableAudio(QAudioSink):
         self.audioThreadPaused = False
         self.playbackSpeed = 1.0
         self.bytesWritten = 0
+        self.playbackStartTime = 0  # track when playback started
     
     def _convertToQtFormat(self, audio_data):
         """Convert AudioData format to PyQt6 QAudioFormat."""
@@ -112,6 +113,15 @@ class ControllableAudio(QAudioSink):
     
     def setSpeed(self, speed):
         self.playbackSpeed = speed
+
+    def processedUSecs(self):
+        """Get elapsed microseconds from the audio device.
+        This is a replacement for the old QAudioOutput.processedUSecs() from PyQt5.
+        Uses QAudioSink.elapsedUSecs() which tracks actual audio device playback time.
+        """
+        if self.state() == QAudio.State.ActiveState or self.state() == QAudio.State.SuspendedState:
+            return self.elapsedUSecs()
+        return 0
 
     @pyqtSlot()
     def isPlaying(self):
@@ -188,26 +198,44 @@ class ControllableAudio(QAudioSink):
         # and plays it, optionally at a different speed and after bandpassing
 
         self.timeoffset = max(0, start)
-        start = max(0, int(start * self.audioFormat.sample_rate // 1000))
+        start_sample = max(0, int(start * self.audioFormat.sample_rate // 1000))
+        stop_sample = int(stop * self.audioFormat.sample_rate // 1000)
 
         if audiodata is None:
-            segment = self.sp.audio_data.data[start:int(stop * self.audioFormat.sample_rate // 1000)]
+            segment = self.sp.audio_data.data[start_sample:stop_sample]
         else:
             segment = audiodata
 
+        print(f"playSeg: start={start}ms, stop={stop}ms, start_sample={start_sample}, stop_sample={stop_sample}, segment length={len(segment) if segment is not None else 'None'}")
+        print(f"playSeg: low={low}, high={high}")
+
         if low is not None:
-            segment = signal_proc.bandpass_filter(segment, self.audioFormat.sample_rate, start=low, end=high)
+            filtered = signal_proc.bandpass_filter(segment, self.audioFormat.sample_rate, start=low, end=high)
+            if filtered is not None:
+                segment = filtered
+                print(f"playSeg: after bandpass filter, segment length={len(segment)}")
+            else:
+                print("Warning: bandpass filter returned None, playing unfiltered segment")
 
         if self.playbackSpeed != 1.0 and librosa is not None:
             segment = librosa.effects.time_stretch(segment.astype('float'), rate=self.playbackSpeed)
 
-        print("Play starting ",start)
+        print(f"Play starting at sample {start_sample}, segment length={len(segment) if segment is not None else 'None'}")
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
         # Plays the entire audiodata 
         # Gets the format, then puts the data in a buffer
         # and then starts the QAudioOutput from that buffer
+        
+        # Safety check for None or empty data
+        if audiodata is None:
+            print("ERROR: Cannot play - no audio data provided")
+            return
+        
+        if len(audiodata) == 0:
+            print("ERROR: Cannot play - audio data is empty")
+            return
         
         # Normalize audio to appropriate range for target bit depth
         if len(audiodata) > 0:
@@ -265,12 +293,14 @@ class ControllableAudio(QAudioSink):
             self.NotifyTimer.start(30)
 
     def fillBuffer(self):
+        print(f"fillBuffer: starting, bytesAvailable={self.InBuffer.bytesAvailable()}, audioThreadLoading={self.audioThreadLoading}")
         while self.InBuffer.bytesAvailable() > 0 and self.audioThreadLoading:
             if self.bytesFree() > 0 and not self.audioThreadPaused:
                 data = self.InBuffer.read(min(self.bytesFree(), self.InBuffer.bytesAvailable()))
                 self.audioBuffer.write(data)
                 self.bytesWritten += len(data)
             sleep(0.01)
+        print(f"fillBuffer: ending, bytesWritten={self.bytesWritten}, state={self.state()}")
 
     @pyqtSlot()
     def applyVolSlider(self, value):

@@ -95,8 +95,8 @@ class Cluster(QDialog):
             sp = spectrogram.Spectrogram(self.config['window_width'],self.config['incr'])
             sp.readSoundFile(seg[0], seg[1].end_time - seg[1].start_time, seg[1].start_time)
             #_ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
-            self.sg = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
-            #self.sg = sp.normalisedSpec("Log")
+            self.sg = sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
+            self.sg = sp.normalisedSpec(self.config['sgNormMode'])
 
             self.minsg = min(self.minsg, np.min(self.sg))
             self.maxsg = max(self.maxsg, np.max(self.sg))

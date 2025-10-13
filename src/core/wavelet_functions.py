@@ -27,7 +27,7 @@ from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
-from utils import wavelet
+from src.utils import wavelet
 from src.core import spectrogram
 from src.core import signal_proc
 
@@ -124,14 +124,14 @@ class WaveletFunctions:
         ConvertWaveletNodeName
     """
 
-    def __init__(self,data,wavelet,maxLevel,samplerate):
+    def __init__(self,data,wavelet_name,maxLevel,samplerate):
         """ Gets the data and makes the wavelet, loading dmey2 (an exact match to Matlab's dmey) from a file.
             Stores some basic properties of the data (samplerate).
         """
         if data is None:
             print("ERROR: data must be provided")
             return
-        if wavelet is None:
+        if wavelet_name is None:
             print("ERROR: wavelet must be provided")
             return
 
@@ -140,7 +140,7 @@ class WaveletFunctions:
         self.tree = None
         self.treefs = samplerate
 
-        self.wavelet = wavelet.Wavelet(name=wavelet)
+        self.wavelet = wavelet.Wavelet(name=wavelet_name)
 
     def ShannonEntropy(self,s):
         """ Compute the Shannon entropy of data

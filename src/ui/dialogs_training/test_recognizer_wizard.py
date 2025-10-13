@@ -225,11 +225,10 @@ class TestRecWizard(QWizard):
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.setOptions(QWizard.WizardOption.NoBackButtonOnStartPage)
 
-        cl = ConfigLoader.ConfigLoader()
+        cl = config_loader.ConfigLoader()
         self.filterlist = cl.filters(filtdir, bats=False)
         configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        ConfigLoader = ConfigLoader.ConfigLoader()
-        config = ConfigLoader.config(configfile)
+        config = cl.config(configfile)
         browsedataPage = TestRecWizard.WPageData(config, self.filterlist, filter=filter)
         browsedataPage.registerField("testDir*", browsedataPage.testDirName)
         browsedataPage.registerField("recognisers*", browsedataPage.recognisers, "currentText", browsedataPage.recognisers.currentTextChanged)

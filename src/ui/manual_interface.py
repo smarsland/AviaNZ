@@ -63,7 +63,7 @@ import sys, os, json, platform, re, shutil, csv
 from shutil import copyfile
 
 from PyQt6 import QtCore, QtGui
-from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap, QCursor
+from PyQt6.QtGui import QIcon, QKeySequence, QPixmap, QCursor
 from PyQt6.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QStyle, QWizard, QGraphicsBlurEffect, QCheckBox
 # The two below will move from QtWidgets
 from PyQt6.QtGui import QActionGroup, QShortcut
@@ -80,7 +80,7 @@ import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
-from src.core import clustering, config_loader, excel_export, signal_proc, wavelet_functions
+from src.core import clustering, config_loader, excel_export, signal_proc, wavelet_functions, features
 from src.core import annotation
 from src.core import wavelet_segment
 from src.core import spectrogram
@@ -96,13 +96,13 @@ from src.ui.components.roi_components import LinearRegionItem2, LinearRegionItem
 from src.ui.components.species_menus import BatSelectionMenu, BirdSelectionMenu
 from src.ui.components.viewbox_extensions import ChildInfoViewBox, DemousedViewBox, DragViewBox
 from src.ui.colourMaps import colourMaps
-from utils import shapes
+from src.utils import shapes
 
 # Individual dialog imports
 from src.ui.dialogs.diagnostic import Diagnostic
 from src.ui.dialogs.diagnosticNN import DiagnosticNN
 from src.ui.dialogs.spectrogram_dialog import SpectrogramDialog
-from ui.dialogs.shapes_analysis_dialog import ShapesDialog
+from src.ui.dialogs.shapes_analysis_dialog import ShapesDialog
 from src.ui.dialogs.denoise import Denoise
 from src.ui.dialogs.excel2annotation import Excel2Annotation
 from src.ui.dialogs.tag2annotation import Tag2Annotation
@@ -118,7 +118,6 @@ from src.ui.dialogs_training.build_recognizer_wizard import BuildRecAdvWizard
 from src.ui.dialogs_training.build_nn_wizard import BuildNNWizard
 from src.ui.dialogs_training.test_recognizer_wizard import TestRecWizard
 from src.ui.dialogs_training.filter_customize_roc import FilterCustomiseROC
-from functools import partial
 import re
 import resampy
 import soundfile as sf
@@ -158,6 +157,19 @@ class ManualInterface(QMainWindow):
         self.ConfigLoader = config_loader.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
+        
+        # Ensure integer config values are actually integers (not strings)
+        # This can happen if config was edited manually or saved from UI incorrectly
+        integer_keys = ['window_width', 'incr', 'nfilters', 'maxSearchDepth', 
+                       'specMouseAction', 'brightness', 'contrast', 'timeStart', 
+                       'timeEnd', 'maxgap', 'minlen', 'maxlen']
+        for key in integer_keys:
+            if key in self.config and isinstance(self.config[key], str):
+                try:
+                    self.config[key] = int(self.config[key])
+                except (ValueError, TypeError):
+                    print(f"Warning: Could not convert config['{key}'] to integer")
+        
         print("Config loaded")
 
         # Load filters
@@ -2350,7 +2362,7 @@ class ManualInterface(QMainWindow):
             print("Will use window of", chpwin, "s")
             # Resample and generate WP w/ all nodes for the current page
             datatoplot = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=TGTSAMPLERATE)
-            WF = wavelet_functions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
+            WF = wavelet_functions.WaveletFunctions(data=datatoplot, wavelet_name='dmey2', maxLevel=5, samplerate=TGTSAMPLERATE)
             WF.WaveletPacket(range(31, 63))
             # list all the node frequency centers
             node_freqs = [sum(wavelet_functions.getWCFreq(n, TGTSAMPLERATE))/2 for n in range(31, 63)]
@@ -2514,7 +2526,7 @@ class ManualInterface(QMainWindow):
             # resample
             audiodata = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=16000)
             
-            WF = wavelet_functions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
+            WF = wavelet_functions.WaveletFunctions(data=audiodata, wavelet_name='dmey2', maxLevel=5, samplerate=16000)
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
             if self.extra == "Filtered spectrogram, new + AA":
@@ -3708,7 +3720,7 @@ class ManualInterface(QMainWindow):
             # 1. decompose
             datatoplot = resampy.resample(self.sp.audio_data.data, sr_orig=self.sp.audio_data.sample_rate, sr_new=spInfo['SampleRate'])
 
-            WF = wavelet_functions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
+            WF = wavelet_functions.WaveletFunctions(data=datatoplot, wavelet_name='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
             xs = np.arange(0, self.datalengthSec, WINSIZE)
@@ -3932,8 +3944,6 @@ class ManualInterface(QMainWindow):
 
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
-
-        import Features
         fileMinusExtension = self.filename.rsplit('.', 1)[0]
         cs = open(fileMinusExtension + '_features.csv', "w")
         cs.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
@@ -3965,7 +3975,7 @@ class ManualInterface(QMainWindow):
             print("Calculating statistics on this segment...")
 
             # TODO: Workout the units
-            f = Features.Features(data=data, sampleRate=self.sp.audio_data.sample_rate, window_width=self.config['window_width'], incr=self.config['incr'])
+            f = features.Features(data=data, sampleRate=self.sp.audio_data.sample_rate, window_width=self.config['window_width'], incr=self.config['incr'])
             avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
             print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
             cs.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
@@ -3991,18 +4001,18 @@ class ManualInterface(QMainWindow):
             for segm in self.segments:
                 segshape = None
                 # convert from absolute to relative-to-page times
-                segRelativeStart = segm[0]-self.startRead
-                segRelativeEnd = segm[1]-self.startRead
+                segRelativeStart = segm.start_time - self.startRead
+                segRelativeEnd = segm.end_time - self.startRead
 
                 # skip if they are not in this page:
                 if segRelativeEnd<0 or segRelativeStart>self.datalengthSec:
-                    print("skipping out of page segment", segm[0], "-", segm[1])
+                    print("skipping out of page segment", segm.start_time, "-", segm.end_time)
                     allshapes.append(segshape)
                     continue
 
                 if method=="stupidShaper":
                     # placeholder method:
-                    adjusted_segm = [segRelativeStart, segRelativeEnd, segm[2], segm[3], segm[4]]
+                    adjusted_segm = [segRelativeStart, segRelativeEnd, segm.freq_low, segm.freq_high, segm.labels]
                     segshape = shapes.stupidShaper(adjusted_segm, specxunit, specyunit)
                 elif method=="fundFreqShaper":
                     # Fundamental frequency:
@@ -4021,9 +4031,9 @@ class ManualInterface(QMainWindow):
                     spend = math.ceil(self.convertAmpltoSpec(segRelativeEnd))
                     sg = np.copy(self.sp.sg[spstart:spend,:])
                     # mask freqs outside the currently marked segment
-                    if segm[3]>0:
-                        markedylow = math.floor(self.convertFreqtoY(segm[2]))
-                        markedyupp = math.ceil(self.convertFreqtoY(segm[3]))
+                    if segm.freq_high > 0:
+                        markedylow = math.floor(self.convertFreqtoY(segm.freq_low))
+                        markedyupp = math.ceil(self.convertFreqtoY(segm.freq_high))
                         sg[:,:markedylow] = 0
                         sg[:,markedyupp:] = 0
                     segshape = shapes.instantShaper(sg, self.sp.audio_data.sample_rate, incr, self.config['window_width'], self.config['windowType'], IFmethod, IFsettings)
@@ -4107,7 +4117,7 @@ class ManualInterface(QMainWindow):
         """
         print("Decomposing to WP...")
         ot = time.time()
-        self.WFinst = wavelet_functions.WaveletFunctions(data=self.sp.audio_data.data, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+        self.WFinst = wavelet_functions.WaveletFunctions(data=self.sp.audio_data.data, wavelet_name="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
         maxLevel = 5
         allnodes = range(2 ** (maxLevel + 1) - 1)
         self.WFinst.WaveletPacket(allnodes, mode='symmetric', antialias=False)
@@ -4149,7 +4159,7 @@ class ManualInterface(QMainWindow):
             # extract the piece of audiodata under current segment
             denoised = self.sp.audio_data.data[start : stop]
 
-            WF = wavelet_functions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+            WF = wavelet_functions.WaveletFunctions(data=denoised, wavelet_name=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
             denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, noiseest=noiseest, costfn="fixed")
 
             # bandpass to selected zones, if it's a box
@@ -4212,7 +4222,7 @@ class ManualInterface(QMainWindow):
                 # here we override default 0-Fs/2 returns
                 start = self.sp.minFreqShow
                 end = self.sp.maxFreqShow
-                self.waveletDenoiser = wavelet_functions.WaveletFunctions(data=self.sp.audio_data.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
+                self.waveletDenoiser = wavelet_functions.WaveletFunctions(data=self.sp.audio_data.data, wavelet_name=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.audio_data.sample_rate)
                 #self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.sp.data, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sp.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
@@ -5363,9 +5373,15 @@ class ManualInterface(QMainWindow):
         """
         # TODO: Probably broken!
         if len(self.segments) > 1:
+            # Convert segments to the format expected by cluster:
+            # dataset format: [[file1, seg1, [syl_start, syl_end]], ...]
+            # For now, treat each segment as a single syllable
+            dataset = []
+            for seg in self.segments:
+                dataset.append([self.filename, seg, [seg.start_time, seg.end_time]])
+            
             cl = clustering.Clustering([], [], 5)
-            # TODO: This is the signature
-            segments, nclasses, duration = cl.cluster(dataset,self.sp.audio_data.sample_rate, None, feature='we')
+            segments, nclasses, duration = cl.cluster(dataset, self.filename, self.sp.audio_data.sample_rate, None, feature='we')
             self.clusterD = Cluster(segments, self.sp.audio_data.sample_rate, nclasses, self.config)
             self.clusterD.show()
         else:
@@ -5785,6 +5801,9 @@ class ManualInterface(QMainWindow):
                     self.p_ampl.setCursor(QtGui.QCursor(QPixmap('src/resources/images/cursor.bmp'), 0, 0))
                 self.bar.btn = self.MouseDrawingButton
             elif childName == 'Mouse settings.Spectrogram mouse action':
+                # Ensure data is an integer (in case it comes as string from the UI)
+                if isinstance(data, str):
+                    data = int(data)
                 self.config['specMouseAction'] = data
                 self.p_spec.enableDrag = data==3 and not self.readonly.isChecked()
             elif childName == 'Paging.Page size':

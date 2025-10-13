@@ -38,7 +38,7 @@ from src.core import annotation
 from src.core import config_loader
 from src.models import NN
 from src.core import wavelet_segment
-from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
+from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
 

@@ -20,7 +20,7 @@
 
 # For running the batch processor from the terminal
 
-from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
+from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 from src.utils.exceptions import GentleExitException
 
 

@@ -468,7 +468,7 @@ class GenerateData:
                     segments.exportGT(soundFile, self.species, resolution=1.0)
         if manSegNum == 0:
             print("ERROR: no segments for species %s found" % self.species)
-            return
+            return []
 
         ws = wavelet_segment.WaveletSegment(self.filter, 'dmey2')
         autoSegments = ws.waveletSegment_nn(dirName, self.filter)  # [(filename, [segments]), ...]
@@ -519,10 +519,11 @@ class GenerateData:
                     segments.exportGT(soundFile, self.species, resolution=1.0)
 
                     print('Determining noise...')
-                    autoseg = annotation.SegmentList()
+                    # Build simple [start, end] segments for noise regions (no need for full Segment objects)
+                    autoseg = []
                     for sec in range(math.floor(segments.metadata["Duration"])-1):
                         if not any([sec >= seg.start_time and sec <= seg.end_time for seg in segments]):
-                            autoseg.addSegment([sec, sec+1, 0, 0, []])
+                            autoseg.append([sec, sec+1])
                     autoSegments = segmenter.joinGaps(autoseg, maxgap=0)
 
                     print("autoSeg, file", soundFile, autoSegments)
@@ -531,7 +532,7 @@ class GenerateData:
 
         if manSegNum == 0:
             print("ERROR: no segments for species %s found" % self.species)
-            return
+            return []
 
         return noiseSegments
 

@@ -124,7 +124,7 @@ class ExcelIO():
                     # only print certainty and call type
                     strcert = []
                     strct = []
-                    for lab in seg[4]:
+                    for lab in seg.labels:
                         if lab["species"]==currsp:
                             strcert.append(str(lab["certainty"]))
                             if "calltype" in lab:

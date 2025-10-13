@@ -53,7 +53,7 @@ class HumanClassify2(QDialog):
         12. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, sgs, segments, indicestoshow, label, lut, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None):
+    def __init__(self, sps, sgs, segments, indicestoshow, label, lut, cmapInverted, brightness, contrast, guidefreq=None, guidecol=None, loop=False, filename=None, lazyLoadParams=None, saveCallback=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -67,17 +67,23 @@ class HumanClassify2(QDialog):
 
         self.setWindowIcon(QIcon('src/resources/images/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowType.WindowContextHelpButtonHint) | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
-        # Let the user quit without bothering rest of it
 
-        self.sps = sps
-        self.sgs = sgs
-        # Check if playback is possible (e.g. for batmode):
-        haveaudio = all(len(sp.audio_data.data)>0 for sp in sps if sp is not None)
+        self.lazyLoadParams = lazyLoadParams
+        self.lazyLoadEnabled = lazyLoadParams is not None
+        self.saveCallback = saveCallback
+        
+        if self.lazyLoadEnabled:
+            self.sps = [None] * len(indicestoshow)
+            self.sgs = [None] * len(indicestoshow)
+            self.loadedPages = set()
+        else:
+            self.sps = sps
+            self.sgs = sgs
+            haveaudio = all(len(sp.audio_data.data)>0 for sp in sps if sp is not None)
 
         self.lut = lut
         self.cmapInverted = cmapInverted
 
-        # Filter segments for the requested species
         self.segments = segments
         self.indices2show = indicestoshow
 
@@ -95,6 +101,8 @@ class HumanClassify2(QDialog):
         # Batmode customizations:
         self.guidefreq = guidefreq
         self.guidecol = guidecol
+        if self.lazyLoadEnabled:
+            haveaudio = not lazyLoadParams.get('batmode', False)
         if not haveaudio:
             self.specControls.volSlider.setEnabled(False)
             self.specControls.volIcon.setEnabled(False)
@@ -192,30 +200,120 @@ class HumanClassify2(QDialog):
         # Plan B could be to measure the sizes of the top/bottom boxes and subtract them
         # self.boxSpaceAdjustment = vboxTop.sizeHint().height() + vboxBot.sizeHint().height()
 
-    def createButtons(self):
-        """ Create the button objects, add audio, calculate spec, etc.
-            So that when users flips through pages, we only need to
-            retrieve the right ones from resizeEvent.
-            No return, fills out self.buttons.
-        """
-        self.buttons = []
-        self.marked = []
-        self.minsg = 1
-        self.maxsg = 1
-        for i in self.indices2show:
-            # This will contain pre-made slices of spec and audio
-            sp = self.sps[i]
-            duration = len(sp.audio_data.data)/sp.audio_data.sample_rate
+    def closeEvent(self, event):
+        if self.saveCallback:
+            self.saveCallback(self)
+        event.accept()
 
-            sg = self.sgs[i]
+    def loadSpectrogramsForPage(self, pageNum):
+        if not self.lazyLoadEnabled:
+            return
+        
+        if pageNum in self.loadedPages:
+            return
             
-            # Seems that image is backwards?
+        from src.core import spectrogram
+        from src.core import signal_proc
+        
+        buttonsPerPage = self.maxRows * self.maxCols
+        startIdx = pageNum * buttonsPerPage
+        endIdx = min(startIdx + buttonsPerPage, len(self.indices2show))
+        
+        params = self.lazyLoadParams
+        config = params['config']
+        
+        for localIdx in range(startIdx, endIdx):
+            globalIdx = self.indices2show[localIdx]
+            
+            if self.sps[localIdx] is not None:
+                continue
+                
+            segData = params['segmentData'][globalIdx]
+            filename = segData['filename']
+            seg = segData['segment']
+            chunksize = segData['chunksize']
+            batmode = segData['batmode']
+            duration = segData['duration']
+            samplerate = segData['samplerate']
+            minFreq = segData['minFreq']
+            maxFreq = segData['maxFreq']
+            
+            sp = spectrogram.Spectrogram(config['window_width'], config['incr'], minFreq, maxFreq)
+            
+            if chunksize > 0:
+                halfChunk = 1.1/2 * chunksize
+                mid = (seg.start_time + seg.end_time)/2
+                x1 = max(0, mid-halfChunk)
+                x2 = min(duration, mid+halfChunk)
+                x1nob = max(seg.start_time, x1)
+                x2nob = min(seg.end_time, x2)
+            else:
+                x1nob = seg.start_time
+                x2nob = seg.end_time
+                x1 = max(x1nob - config['reviewSpecBuffer'], 0)
+                x2 = min(x2nob + config['reviewSpecBuffer'], duration)
+            
+            if batmode:
+                sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
+                sp.sg = sp.normalisedSpec("Batmode")
+            else:
+                sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
+                sp.audio_data.data = signal_proc.bandpass_filter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                sp.sg = sp.spectrogram(window_width=config['window_width'], 
+                                     incr=config['incr'],
+                                     window=config['windowType'],
+                                     sgType=config['sgType'],
+                                     sgScale=config['sgScale'],
+                                     nfilters=config['nfilters'],
+                                     mean_normalise=config['sgMeanNormalise'],
+                                     equal_loudness=config['sgEqualLoudness'],
+                                     onesided=config['sgOneSided'])
+                
+                height = sp.audio_data.sample_rate//2 / np.shape(sp.sg)[1]
+                pixelstart = int(minFreq/height)
+                pixelend = int(maxFreq/height)
+                sp.sg = sp.sg[:,pixelstart:pixelend]
+            
+            sp.x1nobspec = sp.convertAmpltoSpec(x1nob-x1)
+            sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
+            
+            self.sps[localIdx] = sp
+            if batmode:
+                self.sgs[localIdx] = sp.sg
+            else:
+                self.sgs[localIdx] = sp.normalisedSpec(config['sgNormMode'])
+        
+        self.loadedPages.add(pageNum)
+
+    def loadAndCreateButtonsForPage(self, pageNum):
+        if not self.lazyLoadEnabled:
+            return
+        
+        if pageNum in self.loadedPages:
+            return
+            
+        self.loadSpectrogramsForPage(pageNum)
+        
+        buttonsPerPage = self.maxRows * self.maxCols
+        startIdx = pageNum * buttonsPerPage
+        endIdx = min(startIdx + buttonsPerPage, len(self.indices2show))
+        
+        for localIdx in range(startIdx, endIdx):
+            if self.buttons[localIdx] is not None:
+                continue
+                
+            sp = self.sps[localIdx]
+            if sp is None:
+                continue
+                
+            globalIdx = self.indices2show[localIdx]
+            duration = len(sp.audio_data.data)/sp.audio_data.sample_rate
+            sg = self.sgs[localIdx]
             sg = np.fliplr(sg)
 
             self.minsg = min(self.minsg, np.min(sg))
             self.maxsg = max(self.maxsg, np.max(sg))
 
-            # Batmode guides, in y of this particular spectrogram:
             if self.guidefreq is not None:
                 gy = [0]*len(self.guidefreq)
                 for gix in range(len(self.guidefreq)):
@@ -223,23 +321,66 @@ class HumanClassify2(QDialog):
             else:
                 gy = None
 
-            # Create the button:
-            # args: index, spec, data_source (Spectrogram or AudioData), audioFormat (AudioData or Spectrogram), duration, ubstart, ubstop (in spec units)
-            # data_source is used for playback (needs .data attribute with audio samples)
-            # audioFormat is passed to ControllableAudio for format info
-
-            newButton = PicButton(i, sg, sp, sp.audio_data, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
+            newButton = PicButton(globalIdx, sg, sp, sp.audio_data, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
             newButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
             newButton.setMinimumSize(10, 10)
-            self.buttons.append(newButton)
-            self.buttons[-1].buttonClicked=False
-            self.marked.append(False)
+            newButton.buttonClicked = False
+            self.buttons[localIdx] = newButton
+
+    def createButtons(self):
+        """ Create the button objects, add audio, calculate spec, etc.
+            So that when users flips through pages, we only need to
+            retrieve the right ones from resizeEvent.
+            No return, fills out self.buttons.
+        """
+        if self.lazyLoadEnabled:
+            self.buttons = [None] * len(self.indices2show)
+            self.marked = [False] * len(self.indices2show)
+            self.minsg = 1
+            self.maxsg = 1
+            self.loadAndCreateButtonsForPage(0)
+        else:
+            self.buttons = []
+            self.marked = []
+            self.minsg = 1
+            self.maxsg = 1
+            for localIdx, globalIdx in enumerate(self.indices2show):
+                sp = self.sps[localIdx]
+                duration = len(sp.audio_data.data)/sp.audio_data.sample_rate
+                sg = self.sgs[localIdx]
+                sg = np.fliplr(sg)
+
+                self.minsg = min(self.minsg, np.min(sg))
+                self.maxsg = max(self.maxsg, np.max(sg))
+
+                if self.guidefreq is not None:
+                    gy = [0]*len(self.guidefreq)
+                    for gix in range(len(self.guidefreq)):
+                        gy[gix] = sp.convertFreqtoY(self.guidefreq[gix])
+                else:
+                    gy = None
+
+                newButton = PicButton(globalIdx, sg, sp, sp.audio_data, duration, sp.x1nobspec, sp.x2nobspec, self.lut, guides=gy, guidecol=self.guidecol, loop=self.loop, scaleToButton=True)
+                newButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.MinimumExpanding)
+                newButton.setMinimumSize(10, 10)
+                self.buttons.append(newButton)
+                self.buttons[-1].buttonClicked=False
+                self.marked.append(False)
         self.redrawButtons()
 
     def redrawButtons(self):
-        # create one frequency axis
-        # (all of them are identical b/c only 1 file shown at each time)
-        exampleSP = self.sps[self.indices2show[0]]
+        if len(self.buttons) == 0:
+            return
+            
+        exampleSP = None
+        for sp in self.sps:
+            if sp is not None:
+                exampleSP = sp
+                break
+        
+        if exampleSP is None:
+            return
+            
         minFreq = exampleSP.minFreqShow
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
@@ -249,42 +390,54 @@ class HumanClassify2(QDialog):
         else:
             duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
 
-        butNum = 0
+        if self.lazyLoadEnabled:
+            buttonsPerPage = self.maxRows * self.maxCols
+            endPos = min(self.butStart + buttonsPerPage, len(self.buttons))
+            buttonsToShow = [b for b in self.buttons[self.butStart:endPos] if b is not None]
+            numButtonsToShow = len(buttonsToShow)
+        else:
+            numButtonsToShow = min(self.maxRows * self.maxCols, len(self.buttons) - self.butStart)
 
-        numRows = min(self.maxCols,int(np.ceil(np.sqrt(len(self.buttons)))))
-        numCols = min(self.maxRows,int(np.ceil(len(self.buttons)/numRows)))
+        numRows = min(self.maxRows, int(np.ceil(np.sqrt(numButtonsToShow))))
+        numCols = min(self.maxCols, int(np.ceil(numButtonsToShow / numRows))) if numRows > 0 else 0
 
         for row in range(self.maxRows):
-            if row<numRows:
+            if row < numRows:
                 self.flowLayout.setRowStretch(row, 1)
             else:
                 self.flowLayout.setRowStretch(row, 0)
-        for col in range(numCols):
-            if col<numCols:
+        for col in range(self.maxCols):
+            if col < numCols:
                 self.flowLayout.setColumnStretch(col, 1)
             else:
                 self.flowLayout.setColumnStretch(col, 0)
 
+        butNum = 0
         for row in range(numRows):
             for col in range(numCols):
-                self.flowLayout.addWidget(self.buttons[self.butStart+butNum], row, col)
-                self.buttons[self.butStart+butNum].show()
-                butNum += 1
-                if self.butStart+butNum==len(self.buttons):
-                    # stop if we are out of segments
+                actualIdx = self.butStart + butNum
+                if actualIdx >= len(self.buttons):
                     break
-            if self.butStart+butNum==len(self.buttons):
-                # stop if we are out of segments
+                
+                btn = self.buttons[actualIdx]
+                if btn is not None:
+                    self.flowLayout.addWidget(btn, row, col)
+                    btn.show()
+                
+                butNum += 1
+                if actualIdx + 1 >= len(self.buttons):
+                    break
+            if actualIdx + 1 >= len(self.buttons):
                 break
 
         self.repaint()
         QApplication.processEvents()
 
     def volSliderMoved(self, value):
-        # try/pass to avoid race situations when smth is not initialized
         try:
             for btn in self.buttons:
-                btn.media_obj.applyVolSlider(value)
+                if btn is not None:
+                    btn.media_obj.applyVolSlider(value)
         except Exception:
             pass
 
@@ -335,12 +488,19 @@ class HumanClassify2(QDialog):
             Updates current segment position, and calls other functions
             to deal with actual page recount/redraw.
         """
+        if self.saveCallback:
+            self.saveCallback(self)
+        
         buttonsPerPage = self.maxRows * self.maxCols
-        # clear buttons while self.butStart is still old:
         self.clearButtons()
         self.butStart = min(len(self.buttons), self.butStart+buttonsPerPage)
+        
+        if self.lazyLoadEnabled:
+            pageNum = self.butStart // buttonsPerPage
+            with pg.BusyCursor():
+                self.loadAndCreateButtonsForPage(pageNum)
+        
         self.countPages()
-        # redraw buttons:
         self.redrawButtons()
 
     def prevPage(self):
@@ -348,18 +508,25 @@ class HumanClassify2(QDialog):
             Updates current segment position, and calls other functions
             to deal with actual page recount/redraw.
         """
+        if self.saveCallback:
+            self.saveCallback(self)
+        
         buttonsPerPage = self.maxRows * self.maxCols
-        # clear buttons while self.butStart is still old:
         self.clearButtons()
         self.butStart = max(0, self.butStart-buttonsPerPage)
+        
+        if self.lazyLoadEnabled:
+            pageNum = self.butStart // buttonsPerPage
+            with pg.BusyCursor():
+                self.loadAndCreateButtonsForPage(pageNum)
+        
         self.countPages()
-        # redraw buttons:
         self.redrawButtons()
 
     def clearButtons(self):
         for btn in self.buttons:
-            btn.stopPlayback()
-        # clear pic buttons
+            if btn is not None:
+                btn.stopPlayback()
         for i in reversed(range(self.flowLayout.count())):
             item = self.flowLayout.itemAt(i)
             widget = item.widget()
@@ -370,9 +537,10 @@ class HumanClassify2(QDialog):
 
     def toggleAll(self):
         buttonsPerPage = self.maxRows * self.maxCols
-        for butNum in range(self.butStart,min(self.butStart+buttonsPerPage,len(self.buttons))):
-            self.buttons[butNum].changePic(False)
-        #self.update()
+        for butNum in range(self.butStart, min(self.butStart+buttonsPerPage, len(self.buttons))):
+            btn = self.buttons[butNum]
+            if btn is not None:
+                btn.changePic(False)
         self.repaint()
         QApplication.processEvents()
 
@@ -386,6 +554,7 @@ class HumanClassify2(QDialog):
         colRange = colourMaps.getColourRange(self.minsg, self.maxsg, brightness, contrast, self.cmapInverted)
 
         for btn in self.buttons:
-            btn.stopPlayback()
-            btn.setImage(colRange)
-            btn.update()
+            if btn is not None:
+                btn.stopPlayback()
+                btn.setImage(colRange)
+                btn.update()

@@ -123,7 +123,7 @@ class WaveletSegment:
         allnodes = list(set(allnodes))
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
-        self.WF = wavelet_functions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
+        self.WF = wavelet_functions.WaveletFunctions(data=denoisedData, wavelet_name=self.wavelet, maxLevel=20, samplerate=fsOut)
         if wpmode == "pywt":
             print("ERROR: pywt wpmode is deprecated, use new or aa")
             return
@@ -279,7 +279,7 @@ class WaveletSegment:
             print("Extracting energies from file", filenum+1)
             data = self.audioList[filenum]
 
-            self.WF = wavelet_functions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+            self.WF = wavelet_functions.WaveletFunctions(data=data, wavelet_name=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
 
             # Generate a full 5 level wavelet packet decomposition
             if learnMode == "recaa" or learnMode == "recold":
@@ -368,7 +368,7 @@ class WaveletSegment:
             currWCs = np.zeros((62, filenwins))
             # Generate a full 5 level wavelet packet decomposition
             # (this will not be downsampled. antialias=False means no post-filtering)
-            self.WF = wavelet_functions.WaveletFunctions(data=self.audioList[indexF], wavelet=self.wavelet, maxLevel=5, samplerate=self.spInfo['SampleRate'])
+            self.WF = wavelet_functions.WaveletFunctions(data=self.audioList[indexF], wavelet_name=self.wavelet, maxLevel=5, samplerate=self.spInfo['SampleRate'])
             self.WF.WaveletPacket(nodeList, mode='symmetric', antialias=False)
             for node in nodeList:
                 nodeE, noderealwindow = self.WF.extractE(node, window, wpantialias=True)
@@ -700,7 +700,7 @@ class WaveletSegment:
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
 
         # generate a WP on all of the data
-        WF = wavelet_functions.WaveletFunctions(data, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
+        WF = wavelet_functions.WaveletFunctions(data, wavelet_name=self.wavelet, maxLevel=20, samplerate=sampleRate)
         if wpmode == "pywt":
             print("ERROR: pywt mode deprecated, use new or aa")
             return
@@ -1534,7 +1534,7 @@ class WaveletSegment:
 
         # Get the five level wavelet decomposition
         if d:
-            WF = wavelet_functions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
+            WF = wavelet_functions.WaveletFunctions(data=data, wavelet_name=self.wavelet, maxLevel=20, samplerate=fsOut)
             denoisedData = WF.waveletDenoise(thresholdType='soft', maxLevel=5)
             del WF
         else:

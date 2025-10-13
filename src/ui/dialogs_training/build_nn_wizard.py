@@ -33,6 +33,7 @@ import numpy as np
 from src.ui.colourMaps import colourMaps
 from src.ui.components.buttons_and_controls import CustomSlider, PicButton
 from src.ui.components.file_list import LightedFileList
+from src.ui.dialogs_training.roc_canvas import ROCCanvas
 from src.core import config_loader
 from src.core import spectrogram
 from src.core import annotation

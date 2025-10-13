@@ -685,10 +685,8 @@ class ReviewInterface(QMainWindow):
             print("Processing segments in quick review mode")
             success = self.reviewAllSegmentsQuick(self.allSegments)
             if success == 0:
-                print("Review stopped")
+                print("Review stopped - changes saved up to current page")
                 filesuccess = 0
-            else:
-                self.saveQuickResults()
         else:
             # ONE-BY-ONE MODE: Go through each segment individually
             print("Processing segments one-by-one")
@@ -852,152 +850,92 @@ class ReviewInterface(QMainWindow):
             Returns 1 for clean completion, 0 for Esc press.
         """
         from collections import defaultdict
-        from src.core import spectrogram
         
-        # Group segments by file for efficient loading
         segments_by_file = defaultdict(list)
         for segData in allSegments:
             filename = segData['filename']
             segments_by_file[filename].append(segData)
         
-        # Create segment list and spectrogram list for all segments
         all_segment_list = annotation.SegmentList()
-        all_sps = []
         all_indices = []
-        all_batmodes = []  # Track batmode for each segment
+        segment_metadata = []
+        
+        if not hasattr(self, '_quick_mapping'):
+            self._quick_mapping = {}
         
         idx_counter = 0
+        any_batmode = False
+        
         for filename, file_segments in segments_by_file.items():
             file_data = self.allFileData[filename]
             chunksize = file_data['chunksize']
             
-            # Determine file format
             if filename.lower().endswith('.bmp'):
                 batmode = True
+                any_batmode = True
             else:
                 batmode = False
             
-            # Load file metadata
             if batmode:
-                # For bat files, get duration from existing segments
                 duration = max(segData['segment'][1] for segData in file_segments) + 1.0
-                samplerate = 1  # Placeholder for bmp files
+                samplerate = 1
             else:
                 import soundfile as sf
                 info = sf.info(filename)
                 samplerate = info.samplerate
                 duration = info.frames / samplerate
             
-            # Get frequency range
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), samplerate//2) if not batmode else 200000
             
-            # Process each segment from this file
             for segData in file_segments:
                 seg = segData['segment']
                 orig_idx = segData['index']
-                # Create spectrogram for this segment
-                sp = spectrogram.Spectrogram(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
                 
-                if chunksize > 0:
-                    halfChunk = 1.1/2 * chunksize
-                    mid = (seg.start_time + seg.end_time)/2
-                    x1 = max(0, mid-halfChunk)
-                    x2 = min(duration, mid+halfChunk)
-                    x1nob = max(seg.start_time, x1)
-                    x2nob = min(seg.end_time, x2)
-                else:
-                    x1nob = seg.start_time
-                    x2nob = seg.end_time
-                    x1 = max(x1nob - self.config['reviewSpecBuffer'], 0)
-                    x2 = min(x2nob + self.config['reviewSpecBuffer'], duration)
+                metadata = {
+                    'filename': filename,
+                    'segment': seg,
+                    'chunksize': chunksize,
+                    'batmode': batmode,
+                    'duration': duration,
+                    'samplerate': samplerate,
+                    'minFreq': minFreq,
+                    'maxFreq': maxFreq
+                }
                 
-                # Load spectrogram data
-                try:
-                    if batmode:
-                        sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
-                        sp.sg = sp.normalisedSpec("Batmode")
-                    else:
-                        sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
-                        sp.audio_data.data = signal_proc.bandpass_filter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
-                        sp.sg = sp.spectrogram(window_width=self.config['window_width'], 
-                                             incr=self.config['incr'],
-                                             window=self.config['windowType'],
-                                             sgType=self.config['sgType'],
-                                             sgScale=self.config['sgScale'],
-                                             nfilters=self.config['nfilters'],
-                                             mean_normalise=self.config['sgMeanNormalise'],
-                                             equal_loudness=self.config['sgEqualLoudness'],
-                                             onesided=self.config['sgOneSided'])
-                        
-                        # Trim spectrogram to frequency range
-                        height = sp.audio_data.sample_rate//2 / np.shape(sp.sg)[1]
-                        pixelstart = int(minFreq/height)
-                        pixelend = int(maxFreq/height)
-                        sp.sg = sp.sg[:,pixelstart:pixelend]
-                    
-                    # Store unbuffered limits
-                    sp.x1nobspec = sp.convertAmpltoSpec(x1nob-x1)
-                    sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
-                    
-                    # Add to collections
-                    all_segment_list.addSegment(seg)
-                    all_sps.append(sp)
-                    all_indices.append(idx_counter)
-                    all_batmodes.append(batmode)
-                    
-                    # Store mapping back to original file/index
-                    if not hasattr(self, '_quick_mapping'):
-                        self._quick_mapping = {}
-                    self._quick_mapping[idx_counter] = (filename, orig_idx)
-                    
-                    idx_counter += 1
-                    
-                except Exception as e:
-                    print(f"Error loading segment from {filename}: {e}")
-                    # Add placeholder
-                    all_segment_list.addSegment(seg)
-                    all_sps.append(None)
-                    all_indices.append(idx_counter)
-                    all_batmodes.append(batmode)
-                    self._quick_mapping[idx_counter] = (filename, orig_idx)
-                    idx_counter += 1
+                segment_metadata.append(metadata)
+                all_segment_list.addSegment(seg)
+                all_indices.append(idx_counter)
+                self._quick_mapping[idx_counter] = (filename, orig_idx)
+                idx_counter += 1
         
         if len(all_segment_list) == 0:
             return 1
         
-        # Set up color map
         cmap = self.config['cmap']
         pos, colour, mode = colourMaps.colourMaps(cmap)
         cmap = pg.ColorMap(pos, colour)
         lut = cmap.getLookupTable(0.0, 1.0, 256)
         
-        # Create normalized spectrograms
-        sgs = []
-        for idx, sp in enumerate(all_sps):
-            if sp is not None:
-                if all_batmodes[idx]:
-                    sgs.append(sp.sg)
-                else:
-                    sgs.append(sp.normalisedSpec(self.config['sgNormMode']))
-            else:
-                sgs.append(None)
-        
-        # Set up frequency guides
-        # For mixed mode (bat and non-bat segments), show guides if any segment is bat mode
-        any_batmode = any(all_batmodes)
         if self.config['guidelinesOn']=='always' or (self.config['guidelinesOn']=='bat' and any_batmode):
             guides = self.config['guidepos']
         else:
             guides = None
         
-        # Create and show dialog with ALL segments - let HumanClassify2 handle pagination
+        lazyLoadParams = {
+            'segmentData': segment_metadata,
+            'config': self.config,
+            'batmode': any_batmode
+        }
+        
         dialog_title = f"Quick Review - {self.species} ({len(all_segment_list)} segments)"
-        dialog = HumanClassify2(all_sps, sgs, all_segment_list, all_indices,
+        dialog = HumanClassify2(None, None, all_segment_list, all_indices,
                                        self.species, lut, self.config['invertColourMap'],
                                        self.config['brightness'], self.config['contrast'],
                                        guidefreq=guides, guidecol=self.config['guidecol'],
-                                       loop=self.loopBox.isChecked(), filename=dialog_title)
+                                       loop=self.loopBox.isChecked(), filename=dialog_title,
+                                       lazyLoadParams=lazyLoadParams,
+                                       saveCallback=self.saveCurrentPage)
         
         if hasattr(self, 'dialogPos'):
             dialog.resize(self.dialogSize)
@@ -1008,23 +946,20 @@ class ReviewInterface(QMainWindow):
         success = dialog.exec()
         
         return success
+    
+    def saveCurrentPage(self, dialog):
+        """ Called when navigating pages or closing - saves current page's changes """
+        self.collectButtonStates(dialog)
+        self.saveQuickResults()
 
-    def humanClassifyClose2_quick(self, dialog):
-        """ Handles the close event for quick review dialog """
-        # Store dialog properties
-        self.dialogSize = dialog.size()
-        self.dialogPos = dialog.pos()
-        self.config['brightness'] = dialog.specControls.brightSlider.value()
-        self.config['contrast'] = dialog.specControls.contrSlider.value()
-        if not self.config['invertColourMap']:
-            self.config['brightness'] = 100-self.config['brightness']
-        
-        # Process button states and update segments
+    def collectButtonStates(self, dialog):
+        """ Collects current button states from dialog """
         if not hasattr(self, '_quick_changes'):
             self._quick_changes = {}
             
         for btn in dialog.buttons:
-            btn.stopPlayback()
+            if btn is None:
+                continue
             quick_idx = btn.index
             
             if quick_idx in self._quick_mapping:
@@ -1033,8 +968,23 @@ class ReviewInterface(QMainWindow):
                 if filename not in self._quick_changes:
                     self._quick_changes[filename] = {}
                 
-                # Store the button state for later processing
                 self._quick_changes[filename][orig_idx] = btn.mark
+
+    def humanClassifyClose2_quick(self, dialog):
+        """ Handles the close event for quick review dialog """
+        self.dialogSize = dialog.size()
+        self.dialogPos = dialog.pos()
+        self.config['brightness'] = dialog.specControls.brightSlider.value()
+        self.config['contrast'] = dialog.specControls.contrSlider.value()
+        if not self.config['invertColourMap']:
+            self.config['brightness'] = 100-self.config['brightness']
+        
+        for btn in dialog.buttons:
+            if btn is not None:
+                btn.stopPlayback()
+        
+        self.collectButtonStates(dialog)
+        self.saveQuickResults()
         
         dialog.done(1)
 
