@@ -1,10 +1,5 @@
-# coding=latin-1
 
-# file_list.py
-# File management widgets for the AviaNZ program
-
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -23,14 +18,16 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# File management widgets for the AviaNZ program
+
 import os
 import pyqtgraph as pg
 import pyqtgraph.functions as fn
 import soundfile as sf
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 from PyQt6.QtCore import Qt, QDir
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QIcon, QColor
-from core import annotation
+from PyQt6.QtGui import QPixmap, QPainter, QIcon, QColor
+from src.core import annotation
 
 
 class LightedFileList(QListWidget):

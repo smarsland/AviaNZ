@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -20,14 +20,14 @@
 
 # Wavelet segmentation
 
-from core import wavelet_functions
+from src.core import wavelet_functions
 import resampy
 import copy
 import numpy as np
 import time, os, math, csv, gc
-from core import spectrogram
-from core import segmentation
-from core import signal_proc
+from src.core import spectrogram
+from src.core import segmentation
+from src.core import signal_proc
 from ext import ce_denoise as ce
 from ext import ce_detect
 from itertools import combinations

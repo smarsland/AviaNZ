@@ -1,7 +1,6 @@
-# Version 3.4 18/12/24
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
-# This contains all the GUI parts for batch running of AviaNZ.
+# Version 4.1 09/10/25
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2024
@@ -27,7 +26,7 @@ import os, webbrowser, re
 import pyqtgraph as pg
 from pyqtgraph.dockarea import Dock, DockArea
 
-from core import config_loader
+from src.core import config_loader
 from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 from src.utils.exceptions import GentleExitException
 from src.ui.components.popups import MessagePopup

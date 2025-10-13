@@ -1,5 +1,5 @@
 
-# Version 4.0 9/10/25
+# Version 4.1 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -24,13 +24,13 @@ import numpy as np
 import os
 import librosa
 
-from core import wavelet_segment
-from core import wavelet_functions
-from core import spectrogram
-from core import annotation
-from core import segmentation
-from core import signal_proc
-from core import audio_data
+from src.core import wavelet_segment
+from src.core import wavelet_functions
+from src.core import spectrogram
+from src.core import annotation
+from src.core import segmentation
+from src.core import signal_proc
+from src.core import audio_data
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import scale

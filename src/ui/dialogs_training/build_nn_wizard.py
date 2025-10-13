@@ -1,8 +1,5 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for the various dialog boxes
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,14 +18,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Dialogs used for filter training / testing.
-# These are relatively complicated wizards which also do file I/O
-
 import os
 import platform
 
 from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
 from PyQt6.QtCore import QDir, Qt
+
+from src.ui.components.validators import FiltValidator
 from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QVBoxLayout, QHBoxLayout, QCheckBox, QRadioButton, QGridLayout, QFileDialog, QAbstractItemView
 
 import pyqtgraph as pg
@@ -37,10 +33,10 @@ import numpy as np
 from src.ui.colourMaps import colourMaps
 from src.ui.components.buttons_and_controls import CustomSlider, PicButton
 from src.ui.components.file_list import LightedFileList
-from core import config_loader
-from core import spectrogram
-from core import annotation
-from core import training
+from src.core import config_loader
+from src.core import spectrogram
+from src.core import annotation
+from src.core import training
 
 
 
@@ -950,23 +946,7 @@ class BuildNNWizard(QWizard):
             self.enterFiltName = QLineEdit()
             self.enterFiltName.textChanged.connect(self.textChanged)
 
-            class FiltValidator(QValidator):
-                def validate(self, input, pos):
-                    if not input.endswith('.txt'):
-                        input = input+'.txt'
-                    if input==".txt" or input=="":
-                        return(QValidator.State.Intermediate, input, pos)
-                    elif input=="M.txt":
-                        print("filter name \"M\" reserved for manual annotations")
-                        return(QValidator.State.Intermediate, input, pos)
-                    elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
-                        print("duplicated input", input)
-                        return(QValidator.State.Intermediate, input, pos)
-                    else:
-                        return(QValidator.State.Acceptable, input, pos)
-
-            trainFiltValid = FiltValidator()
-            trainFiltValid.listFiles = self.listFiles
+            trainFiltValid = FiltValidator(self.listFiles, check_reserved_m=True)
             self.enterFiltName.setValidator(trainFiltValid)
             space = QLabel('').setFixedSize(30, 50)
 

@@ -1,8 +1,5 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for the various dialog boxes
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -20,10 +17,6 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-# Dialogs used for filter training / testing.
-# These are relatively complicated wizards which also do file I/O
-
 
 from PyQt6.QtWidgets import QApplication
 

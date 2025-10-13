@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -27,9 +27,9 @@ from scipy.stats import boxcox
 import resampy
 from PIL import Image
 
-from core import signal_proc
-from core import audio_loader
-from core import audio_data
+from src.core import signal_proc
+from src.core import audio_loader
+from src.core import audio_data
 
 BAT_SPECTROGRAM_TIME_PER_PIXEL = 0.002909090909090909
 

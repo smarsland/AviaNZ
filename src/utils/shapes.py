@@ -1,7 +1,5 @@
-# Shapes.py
-# Shape container class and detection functions for the AviaNZ program
 
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -19,6 +17,8 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Shape container class and detection functions for the AviaNZ program
 
 import math
 import numpy as np

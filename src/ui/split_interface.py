@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
 
-# Wrapper script to SplitWav audio splitter.
-# Splits wavs, and AviaNZ-format annotation files.
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
-# This file: Julius Juodakis
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2024
@@ -23,17 +18,15 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QStyle
 from PyQt6.QtCore import QDir, Qt
 from PyQt6.QtGui import QIcon
-import sys
 import os
 import datetime as dt
 
 # sys.path.append('..')
 from ext import SplitLauncher
-from core import annotation
+from src.core import annotation
 from src.ui.components.popups import MessagePopup
 
 

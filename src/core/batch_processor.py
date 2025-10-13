@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -18,19 +18,19 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Core batch processing without UI dependencies
+# Core batch processing
 
 import os, re
 import time
 import soundfile as sf
 
-from core import spectrogram
-from core import annotation
-from core import config_loader
-from core import batch_log
-from core import bird_detector
-from core import bat_detector
-from core import segmentation
+from src.core import spectrogram
+from src.core import annotation
+from src.core import config_loader
+from src.core import batch_log
+from src.core import bird_detector
+from src.core import bat_detector
+from src.core import segmentation
 
 # Constants
 SAMPLES_PER_PAGE_16KHZ = 900 * 16000

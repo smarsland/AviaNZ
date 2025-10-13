@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -22,11 +22,11 @@
 
 import os
 import json
-from core.MessagePopup import MessagePopup
+from src.core import message_popup
 from src.models import NNModels
 
 
-class ConfigLoader(object):
+class ConfigLoader:
     """ This deals with reading main config files.
         Not much functionality, but lots of exception handling,
         so moved it out separately.
@@ -45,7 +45,7 @@ class ConfigLoader(object):
             return config
         except ValueError:
             # if JSON looks corrupt, quit:
-            #msg = MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            #msg = message_popup.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             #msg.exec()
             print("ERROR: file " + file + " corrupt, delete it to restore default")
             raise
@@ -173,14 +173,14 @@ class ConfigLoader(object):
             except ValueError as e:
                 # if JSON looks corrupt, quit and suggest deleting:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = message_popup.MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             # if file is not found at all, quit, user must recreate the file or change path
             print(e)
-            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
+            msg = message_popup.MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
 
@@ -205,13 +205,13 @@ class ConfigLoader(object):
                 return readlist
             except ValueError as e:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = message_popup.MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg = message_popup.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
     
@@ -240,13 +240,13 @@ class ConfigLoader(object):
                 return knownCalls
             except ValueError as e:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "Warning: file " + knowncallsfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = message_popup.MessagePopup("w", "Bad species list", "Warning: file " + knowncallsfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg = message_popup.MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec()
             return None
 
@@ -271,13 +271,13 @@ class ConfigLoader(object):
                 return readlist
             except ValueError as e:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg = message_popup.MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec()
                 return None
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
+            msg = message_popup.MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
             msg.exec()
             return None
 
@@ -290,7 +290,7 @@ class ConfigLoader(object):
             return config
         except ValueError:
             # if JSON looks corrupt, quit:
-            msg = MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            msg = message_popup.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec()
             raise
 
@@ -312,7 +312,7 @@ class ConfigLoader(object):
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
+            msg = message_popup.MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
             msg.exec()
     
     # Dumps the provided dictionary into the corresponding known calls file
@@ -335,7 +335,7 @@ class ConfigLoader(object):
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Unwriteable known calls list", "Warning: Failed to write known calls list to " + file)
+            msg = message_popup.MessagePopup("w", "Unwriteable known calls list", "Warning: Failed to write known calls list to " + file)
             msg.exec()
 
     # Dumps the provided JSON array to the corresponding config file.

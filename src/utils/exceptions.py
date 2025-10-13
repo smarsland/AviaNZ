@@ -1,8 +1,5 @@
-# exceptions.py
-#
-# Custom exceptions for AviaNZ batch processing
 
-# Version 4.0 9/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,6 +18,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# Custom exceptions for AviaNZ batch processing
 
 class GentleExitException(Exception):
     """Exception raised when user requests to cancel processing gracefully"""

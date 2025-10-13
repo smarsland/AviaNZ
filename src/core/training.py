@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -34,10 +34,10 @@ import matplotlib.pyplot as plt
 from time import strftime, gmtime
 import math
 
-from core import annotation
-from core import config_loader
+from src.core import annotation
+from src.core import config_loader
 from src.models import NN
-from core import wavelet_segment
+from src.core import wavelet_segment
 from core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf

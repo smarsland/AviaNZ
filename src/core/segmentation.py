@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -20,9 +20,9 @@
 
 # Code to extract segments from sound files
 
-from core import spectrogram
-from core import config_loader
-from core import audio_data
+from src.core import spectrogram
+from src.core import config_loader
+from src.core import audio_data
 from utils import shapes
 
 import numpy as np

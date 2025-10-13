@@ -1,7 +1,6 @@
-# Version 3.4 18/12/24
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
-# This contains all the GUI parts for batch running of AviaNZ.
+# Version 4.1 09/10/25
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2024
@@ -32,11 +31,11 @@ import traceback
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph as pg
 
-from core import config_loader, signal_proc
+from src.core import config_loader, signal_proc
 from src.utils.exceptions import GentleExitException
-from core import spectrogram
-from core import annotation
-from core import excel_export
+from src.core import spectrogram
+from src.core import annotation
+from src.core import excel_export
 from src.ui.components.buttons_and_controls import MainPushButton
 from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
@@ -853,7 +852,7 @@ class ReviewInterface(QMainWindow):
             Returns 1 for clean completion, 0 for Esc press.
         """
         from collections import defaultdict
-        from core import spectrogram
+        from src.core import spectrogram
         
         # Group segments by file for efficient loading
         segments_by_file = defaultdict(list)

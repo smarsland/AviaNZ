@@ -1,5 +1,5 @@
 
-# Version 4.0 9/10/25
+# Version 4.1 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -23,9 +23,9 @@
 import gc
 import copy
 
-from core import segmentation
-from core import annotation
-from core import wavelet_segment
+from src.core import segmentation
+from src.core import annotation
+from src.core import wavelet_segment
 from src.utils.exceptions import GentleExitException
 
 

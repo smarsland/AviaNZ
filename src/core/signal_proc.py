@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -26,8 +26,8 @@ from itertools import chain, repeat
 import numpy as np
 import copy
 
-from core import audio_data
-from core import spectrogram
+from src.core import audio_data
+from src.core import spectrogram
 
 def butterworth_bandpass(data,sampleRate,low=0,high=None,band=0.005):
     """ Basic IIR bandpass filter.
@@ -213,7 +213,7 @@ def bandpass_filter(data,sampleRate,start=0,end=-1):
 
 # The next functions perform spectrogram inversion
 def invert_spectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True, sampleRate=16000):
-    from core import spectrogram
+    from src.core import spectrogram
     sp = spectrogram.Spectrogram()
     
     # Determine if this is a one-sided or two-sided spectrogram

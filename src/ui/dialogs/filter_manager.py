@@ -1,8 +1,5 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for the various dialog boxes
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,23 +18,21 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Dialogs used by the AviaNZ program
-# Since most of them just get user selections, they are mostly just a mess of UI things
 import os
 import shutil
 
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import QLabel, QDialog, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QVBoxLayout # listing some explicitly to make syntax checks lighter
 from PyQt6.QtWidgets import *
+
+from src.ui.components.validators import FiltValidator
 from PyQt6.QtCore import Qt
 
 import pyqtgraph as pg
 
 from src.ui.components.popups import MessagePopup
-from core import config_loader
+from src.core import config_loader
 import json
-
-
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -69,20 +64,7 @@ class FilterManager(QDialog):
         # rename a filter
         self.enterFiltName = QLineEdit()
 
-        class FiltValidator(QValidator):
-            def validate(self, input, pos):
-                if not input.endswith('.txt'):
-                    input = input+'.txt'
-                if input==".txt" or input=="":
-                    return(QValidator.State.Intermediate, input, pos)
-                if self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
-                    print("duplicated input", input)
-                    return(QValidator.State.Intermediate, input, pos)
-                else:
-                    return(QValidator.State.Acceptable, input, pos)
-
-        renameFiltValid = FiltValidator()
-        renameFiltValid.listFiles = self.listFiles
+        renameFiltValid = FiltValidator(self.listFiles, check_reserved_m=False)
         self.enterFiltName.setValidator(renameFiltValid)
 
         self.renameBtn = QPushButton("Rename")

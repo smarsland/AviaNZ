@@ -1,7 +1,6 @@
-# Version 3.4 18/12/24
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
-# This is the main class for the AviaNZ interface.
+# Version 4.1 09/10/25
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2024
@@ -81,12 +80,12 @@ import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
-from core import clustering, config_loader, excel_export, signal_proc, wavelet_functions
-from core import annotation
-from core import wavelet_segment
-from core import spectrogram
-from core import segmentation
-from core import audio_data
+from src.core import clustering, config_loader, excel_export, signal_proc, wavelet_functions
+from src.core import annotation
+from src.core import wavelet_segment
+from src.core import spectrogram
+from src.core import segmentation
+from src.core import audio_data
 from src.ui.components.audio_player import ControllableAudio
 from src.ui.components.axis_widgets import TimeAxisHour, TimeAxisMin
 from src.ui.components.buttons_and_controls import BrightContrVol, CustomSlider
@@ -4726,7 +4725,7 @@ class ManualInterface(QMainWindow):
                         print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
                         # TODO: Test
-                        from core import spectrogram 
+                        from src.core import spectrogram 
                         sp = spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.audioFormat.sample_rate
@@ -4842,7 +4841,7 @@ class ManualInterface(QMainWindow):
                     except:
                         print("Can't read %s.p or missing data" %tagFileMinusExtension)
                         # Otherwise, load the wav file
-                        from core import spectrogram 
+                        from src.core import spectrogram 
                         sp = spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
                         duration = sp.fileLength / sp.sampleRate

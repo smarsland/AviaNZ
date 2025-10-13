@@ -1,8 +1,5 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for the various dialog boxes
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,9 +18,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Dialogs used for filter training / testing.
-# These are relatively complicated wizards which also do file I/O
-
 import os
 import time
 import platform
@@ -32,6 +26,8 @@ from shutil import copyfile
 
 from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
 from PyQt6.QtCore import QDir, Qt, QEvent, QSize
+
+from src.ui.components.validators import FiltValidator
 from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QFileDialog, QScrollArea, QAbstractItemView
 
 import pyqtgraph as pg
@@ -43,12 +39,12 @@ from src.ui.components.popups import MessagePopup
 from src.ui.components.file_list import LightedFileList
 from src.ui.components.layout_widgets import Layout
 from src.ui.dialogs_training.roc_canvas import ROCCanvas
-from core import spectrogram
-from core import wavelet_segment
-from core import wavelet_functions
-from core import annotation
-from core import clustering
-from core import audio_data
+from src.core import spectrogram
+from src.core import wavelet_segment
+from src.core import wavelet_functions
+from src.core import annotation
+from src.core import clustering
+from src.core import audio_data
 
 import math
 
@@ -1534,23 +1530,7 @@ class BuildRecAdvWizard(QWizard):
             # filter file name
             self.enterFiltName = QLineEdit()
 
-            class FiltValidator(QValidator):
-                def validate(self, input, pos):
-                    if not input.endswith('.txt'):
-                        input = input+'.txt'
-                    if input==".txt" or input=="":
-                        return(QValidator.State.Intermediate, input, pos)
-                    elif input=="M.txt":
-                        print("filter name \"M\" reserved for manual annotations")
-                        return(QValidator.State.Intermediate, input, pos)
-                    elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
-                        print("duplicated input", input)
-                        return(QValidator.State.Intermediate, input, pos)
-                    else:
-                        return(QValidator.State.Acceptable, input, pos)
-
-            trainFiltValid = FiltValidator()
-            trainFiltValid.listFiles = self.listFiles
+            trainFiltValid = FiltValidator(self.listFiles, check_reserved_m=True)
             self.enterFiltName.setValidator(trainFiltValid)
 
             # layouts

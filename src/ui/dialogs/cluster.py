@@ -1,8 +1,5 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for the various dialog boxes
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,9 +18,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Dialogs used by the AviaNZ program
-# Since most of them just get user selections, they are mostly just a mess of UI things
-
 from PyQt6 import QtCore
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import QDialog, QLineEdit, QVBoxLayout, QScrollArea # listing some explicitly to make syntax checks lighter
@@ -35,7 +29,7 @@ import pyqtgraph as pg
 import numpy as np
 from src.ui.colourMaps import colourMaps
 from src.ui.components.buttons_and_controls import BrightContrVol, PicButton
-from core import spectrogram
+from src.core import spectrogram
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')

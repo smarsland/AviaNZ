@@ -1,8 +1,6 @@
-# Version 3.4 18/12/24
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
-# This is the script that starts AviaNZ. It processes command line options
-# and then calls either part of the GUI, or runs on the command line directly.
+# Version 4.1 09/10/25
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2024
@@ -20,8 +18,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# This is the script that starts AviaNZ. It processes command line options
+# and then calls either part of the GUI, or runs on the command line directly.
+
 import click
-import sys
 
 # Command line running to run a filter is something like
 # python AviaNZ.py -c -b -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -r "Morepork" -w
@@ -77,7 +77,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
     try:
         import platform, json, shutil
         from jsonschema import validate
-        from core import config_loader
+        from src.core import config_loader
     except Exception as e:
         print("ERROR: could not import packages")
         raise
@@ -188,7 +188,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
                 raise
         elif training:
-            from core import training
+            from src.core import training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
                 training = training.NNTrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
                 training.cliTrain()
@@ -197,7 +197,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("ERROR: valid input dirs (-d and -e) and recogniser name (-r) are essential for training")
                 raise
         elif testing:
-            from core import training
+            from src.core import training
             filts = confloader.filters(filterdir)
             if os.path.isdir(sdir1) and recogniser in filts:
                 testing = training.NNTest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
@@ -220,6 +220,12 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         print("Starting AviaNZ in GUI mode")
         from PyQt6.QtWidgets import QApplication
         from PyQt6 import QtCore
+        
+        # Register the UI MessagePopup implementation for core modules to use
+        from src.ui.components.popups import MessagePopup as UIMessagePopup
+        from src.core import message_popup
+        message_popup.set_message_popup_class(UIMessagePopup)
+        
         #QApplication.setAttribute(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         app = QApplication(sys.argv)
         # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)

@@ -3,7 +3,6 @@
 # Reads a data file, gets the appropriate times for 10 second sound files, clips those and saves them
 # See also associated shell file
 
-import wavio
 import math
 import numpy as np
 import json

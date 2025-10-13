@@ -1,5 +1,5 @@
 
-# Version 4.0 9/10/25
+# Version 4.1 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -24,8 +24,8 @@ import os
 import fnmatch
 import numpy as np
 
-from core import annotation
-from core import spectrogram
+from src.core import annotation
+from src.core import spectrogram
 
 class BatExporter:
     """Handles export of bat detection results to various formats"""

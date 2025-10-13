@@ -1,6 +1,6 @@
 
 import os,math
-from core import signal_proc
+from src.core import signal_proc
 import numpy as np
 
 def ClickSearch(imspec, sampleRate):

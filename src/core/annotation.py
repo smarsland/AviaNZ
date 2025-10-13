@@ -1,5 +1,5 @@
 
-# Version 4.0 09/10/25
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -20,7 +20,7 @@
 
 # Data objects for handling segments
 
-from core import MessagePopup
+from src.core import message_popup
 
 import numpy as np
 import json
@@ -195,7 +195,7 @@ class Segment:
                     text += "\nWhile trying to remove key "+str(species)+" from "+ str(self.labels)
                     text += "\nWhich had keys" + str(self.keys)
                     try:
-                        msg = MessagePopup.MessagePopup("w", "ERROR - please report", text)
+                        msg = message_popup.MessagePopup("w", "ERROR - please report", text)
                         if hasattr(msg, 'exec'):
                             msg.exec()
                     except Exception:

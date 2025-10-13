@@ -1,8 +1,5 @@
 
-# This is part of the AviaNZ interface
-# Holds most of the code for the various dialog boxes
-
-# Version 3.4 18/12/24
+# Version 4.1 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -21,21 +18,20 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Dialogs used for filter training / testing.
-# These are relatively complicated wizards which also do file I/O
-
 import os
 import copy
 import json
 
 from PyQt6.QtGui import QIcon, QValidator
+
+from src.ui.components.validators import FiltValidator
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QDialog, QLineEdit, QVBoxLayout, QHBoxLayout, QRadioButton, QGridLayout, QWidget, QAbstractItemView
 
 import pyqtgraph as pg
 
 import numpy as np
-from core import config_loader
+from src.core import config_loader
 
 
 
@@ -118,23 +114,7 @@ class FilterCustomiseROC(QDialog):
         self.enterFiltName = QLineEdit()
         self.btnSave = QPushButton('Save')
 
-        class FiltValidator(QValidator):
-            def validate(self, input, pos):
-                if not input.endswith('.txt'):
-                    input = input+'.txt'
-                if input==".txt" or input=="":
-                    return(QValidator.State.Intermediate, input, pos)
-                elif input=="M.txt":
-                    print("filter name \"M\" reserved for manual annotations")
-                    return(QValidator.State.Intermediate, input, pos)
-                elif self.listFiles.findItems(input, Qt.MatchFlag.MatchExactly):
-                    print("duplicated input", input)
-                    return(QValidator.State.Intermediate, input, pos)
-                else:
-                    return(QValidator.State.Acceptable, input, pos)
-
-        renameFiltValid = FiltValidator()
-        renameFiltValid.listFiles = self.listFiles
+        renameFiltValid = FiltValidator(self.listFiles, check_reserved_m=True)
         self.enterFiltName.setValidator(renameFiltValid)
 
         self.listFiles.itemSelectionChanged.connect(self.onFilterSelect)
