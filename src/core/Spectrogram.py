@@ -18,8 +18,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Spectrogram.py
-
 # Contains the spectrogram object, optional reference to some AudioData, and some basic methods.
 
 import numpy as np
@@ -28,14 +26,10 @@ import pyfftw as fft
 from scipy.stats import boxcox
 import resampy
 from PIL import Image
-from scipy.signal import medfilt
 
 from src.core import SignalProc
 from src.core import AudioLoader
 from src.core import AudioData
-
-
-specExtra = True
 
 BAT_SPECTROGRAM_TIME_PER_PIXEL = 0.002909090909090909
 
@@ -52,7 +46,6 @@ class Spectrogram:
         self.minFreqShow = minFreqShow
         self.maxFreqShow = maxFreqShow
         self.audio_data = None
-        self.audio_loader = AudioLoader.AudioLoader()
 
     def readSoundFile(self, filepath, duration=None, offset=0, silent=False, **kwargs):
         """Load audio file using AudioLoader or BMP file directly.
@@ -69,7 +62,8 @@ class Spectrogram:
             return self.load_bmp(filepath, duration, offset, silent, **kwargs)
         
         # For audio files, use AudioLoader
-        loaded_data = self.audio_loader.load_audio(filepath, duration, offset, silent)
+        audio_loader = AudioLoader.AudioLoader()
+        loaded_data = audio_loader.load_audio(filepath, duration, offset, silent)
         
         # Store reference to AudioData - it has all the format info built in
         self.audio_data = loaded_data
@@ -413,49 +407,130 @@ class Spectrogram:
         return sg
 
     def compute_multitaper_spectrogram(self, data, window_width, incr, singleIm=True):
-        """Multi-tapered spectrogram."""
-        if not specExtra:
-            print("Multi-taper option not available")
-            return np.array([])
-            
+        """Multi-tapered spectrogram.
+        
+        Returns a one-sided spectrum (positive frequencies only) with shape 
+        (num_frames, window_width) to match the standard spectrogram output.
+        """
         try:
-            import dpss
+            from src.utils import dpss
         except ImportError:
             print("dpss module not found")
             return np.array([])
             
         starts = range(0, len(data) - window_width + 1, incr)
         [tapers, eigen] = dpss.dpss(window_width, 2.5, 3)
+        # Use 2*window_width for NFFT to match standard spectrogram behavior
+        nfft = 2 * window_width
         out = np.zeros(shape=(len(starts), window_width, 3))
         
         for i, start in enumerate(starts):
-            Sk, weights, eigen = dpss.pmtm(data[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=window_width)
+            # Compute with NFFT=2*window_width to get proper frequency resolution
+            Sk, weights, eigen = dpss.pmtm(data[start:start + window_width], v=tapers, e=eigen, show=False, NFFT=nfft)
             for taper in range(3):
+                # Take only positive frequencies (one-sided spectrum)
                 out[i, :, taper] = (abs(Sk[taper]) ** 2)[:window_width]
             
         return np.squeeze(np.sum(out, axis=2)) if singleIm else out
 
     def compute_reassigned_spectrogram(self, data, window, window_width, incr):
-        """Reassigned spectrogram."""
-        starts = range(0, len(data) - window_width + 1, incr)
-        ft = np.zeros((len(starts), window_width), dtype='complex')
-        ft2 = np.zeros((len(starts), window_width), dtype='complex')
+        """Reassigned spectrogram using Auger-Flandrin method.
         
-        for i in starts:
-            ft[i // incr, :] = fft.interfaces.scipy_fft.fft(window * data[i:i + window_width])[:window_width]
-            ft2[i // incr, :] = fft.interfaces.scipy_fft.fft(window * np.roll(data[i:i + window_width], 1))[:window_width]
-
-        CIF = np.mod(np.angle(ft * np.conj(ft2)) / (2 * np.pi), 1.0)
-        delay = (0.5 - np.mod(np.angle(ft * np.conj(np.roll(ft, 1, axis=1))) / (2 * np.pi), 1.0))
-
-        sample_rate = self.audio_data.sample_rate
-        times = (np.tile(np.arange(0, (len(data) - window_width) / sample_rate, incr / sample_rate) + 
-                        window_width / sample_rate / 2, (np.shape(delay)[1], 1)).T + 
-                delay * window_width / sample_rate)
-
-        sg, _, _ = np.histogram2d(times.flatten(), CIF.flatten(), 
-                                weights=np.abs(ft).flatten(), bins=np.shape(ft))
-        return np.absolute(sg[:, :window_width])
+        Computes time-frequency reassignment by calculating STFTs with:
+        - Standard window h
+        - Time-weighted window (t*h) for time reassignment  
+        - Window derivative (dh/dt) for frequency reassignment
+        
+        Returns a one-sided spectrum (positive frequencies only) with shape 
+        (num_frames, window_width) to match the standard spectrogram output.
+        """
+        starts = range(0, len(data) - window_width + 1, incr)
+        nfft = 2 * window_width
+        num_frames = len(starts)
+        
+        # Compute time-weighted window and window derivative
+        t = np.arange(window_width) - window_width // 2
+        time_window = t * window
+        
+        # Window derivative (central differences)
+        window_deriv = np.zeros(window_width)
+        window_deriv[1:-1] = (window[2:] - window[:-2]) / 2.0
+        window_deriv[0] = window[1] - window[0]
+        window_deriv[-1] = window[-1] - window[-2]
+        
+        # Compute three STFTs
+        stft_h = np.zeros((num_frames, nfft), dtype='complex')
+        stft_th = np.zeros((num_frames, nfft), dtype='complex')
+        stft_dh = np.zeros((num_frames, nfft), dtype='complex')
+        
+        padded = np.zeros(nfft)
+        
+        for idx, i in enumerate(starts):
+            segment = data[i:i + window_width]
+            
+            # Standard STFT with window h
+            padded.fill(0.0)
+            center_start = window_width // 2
+            padded[center_start:center_start + window_width] = window * segment
+            padded = fft.interfaces.scipy_fft.fftshift(padded)
+            padded = np.roll(padded, -1)
+            stft_h[idx, :] = fft.interfaces.scipy_fft.fft(padded)
+            
+            # STFT with time-weighted window
+            padded.fill(0.0)
+            padded[center_start:center_start + window_width] = time_window * segment
+            padded = fft.interfaces.scipy_fft.fftshift(padded)
+            padded = np.roll(padded, -1)
+            stft_th[idx, :] = fft.interfaces.scipy_fft.fft(padded)
+            
+            # STFT with derivative of window
+            padded.fill(0.0)
+            padded[center_start:center_start + window_width] = window_deriv * segment
+            padded = fft.interfaces.scipy_fft.fftshift(padded)
+            padded = np.roll(padded, -1)
+            stft_dh[idx, :] = fft.interfaces.scipy_fft.fft(padded)
+        
+        # Take only positive frequencies
+        stft_h = stft_h[:, :window_width]
+        stft_th = stft_th[:, :window_width]
+        stft_dh = stft_dh[:, :window_width]
+        
+        # Compute reassignment operators
+        # Avoid division by zero
+        eps = 1e-10
+        magnitude = np.abs(stft_h)
+        threshold = eps * np.max(magnitude)
+        valid = magnitude > threshold
+        
+        # Time reassignment: real part of (t*h STFT) / (h STFT)
+        time_reassign = np.zeros((num_frames, window_width))
+        time_reassign[valid] = np.real(stft_th[valid] / stft_h[valid])
+        
+        # Frequency reassignment: imaginary part of (dh STFT) / (h STFT) / (2*pi)
+        freq_reassign = np.zeros((num_frames, window_width))
+        freq_reassign[valid] = np.imag(stft_dh[valid] / stft_h[valid]) / (2.0 * np.pi)
+        
+        # Convert reassignments to bin indices
+        # Time: current frame index + time offset (in samples) / incr
+        time_bins = np.tile(np.arange(num_frames), (window_width, 1)).T + time_reassign / incr
+        
+        # Frequency: current frequency bin + frequency offset (normalized by sample rate) * window_width * 2
+        freq_bins = np.tile(np.arange(window_width), (num_frames, 1)) + freq_reassign * nfft / self.audio_data.sample_rate
+        
+        # Clamp to valid ranges
+        time_bins = np.clip(time_bins, 0, num_frames - 1)
+        freq_bins = np.clip(freq_bins, 0, window_width - 1)
+        
+        # Create reassigned spectrogram using histogram
+        sg, _, _ = np.histogram2d(
+            time_bins.flatten(), 
+            freq_bins.flatten(),
+            weights=magnitude.flatten(),
+            bins=[num_frames, window_width],
+            range=[[0, num_frames], [0, window_width]]
+        )
+        
+        return sg
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
@@ -600,13 +675,10 @@ class Spectrogram:
         if self.audio_data.data is None or len(self.audio_data.data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
-        if not specExtra:
-            print("Option not available")
-            return
 
         # Compute the set of multi-tapered spectrograms
         starts = range(0, len(self.audio_data.data) - window_width, incr)
-        import dpss
+        from src.utils import dpss
         [tapers, eigen] = dpss.dpss(window_width, 2.5, K)
         sg = np.zeros((len(starts), window_width, K), dtype=complex)
         for k in range(K):
@@ -691,76 +763,6 @@ class Spectrogram:
         else:
             return None, None
 
-    def drawFundFreq(self, seg):
-        """ Produces marks of fundamental freq to be drawn on the spectrogram.
-            Return is a list of (x, y) segments w/ x,y - lists in spec coords
-        """
-        from src.utils import Shapes
-        # Estimate fund freq, using windows of 2 spec FFT lengths (4 columns)
-        # to make life easier:
-        Wsamples = 4*self.incr
-        # No set minfreq cutoff here, but warn of the lower limit for
-        # reliable estimation (i.e max period such that 3 periods
-        # fit in the F0 window):
-        minReliableFreq = self.audio_data.sample_rate / (Wsamples/3)
-        #minReliableFreq = self.sampleRate / (Wsamples/3)
-        print("Warning: F0 estimation below %d Hz will be unreliable" % minReliableFreq)
-        # returns pitch in Hz for each window of Wsamples/2
-        # over the entire data provided (so full page here)
-        thr = 0.5
-        pitchshape = Shapes.fundFreqShaper(self.audio_data.data, Wsamples, thr, self.audio_data.sample_rate)
-        #pitchshape = Shapes.fundFreqShaper(self.data, Wsamples, thr, self.sampleRate)
-        pitch = pitchshape.y  # pitch is a shape with y in Hz
-
-        # find out which marks should be visible
-        ind = np.logical_and(pitch > self.minFreqShow+50, pitch < self.maxFreqShow)
-        if not np.any(ind):
-            print("Warning: no fund. freq. identified in this page")
-            return
-
-        # ffreq is calculated over windows of size W
-        # first, identify segments using that original scale:
-        segs = seg.convert01(ind)
-        segs = seg.deleteShort(segs, 2)
-        segs = seg.joinGaps(segs, 2)
-        # extra round to delete those which didn't merge with any longer segments
-        segs = seg.deleteShort(segs, 4)
-
-        yadjfact = 2/self.audio_data.sample_rate*np.shape(self.sg)[1]
-        #yadjfact = 2/self.sampleRate*np.shape(self.sg)[1]
-
-        # then create the x sequence (in spec coordinates)
-        starts = np.arange(len(pitch)) * pitchshape.tunit + pitchshape.tstart # in seconds
-        # (pitchshape.tstart should always be 0 here as it used full data)
-        starts = starts * self.audio_data.sample_rate / self.incr  # in spec columns
-        #starts = starts * self.sampleRate / self.incr  # in spec columns
-
-        # then convert segments back to positions in each array:
-        out = []
-        for s in segs:
-            # convert [s, e] to [s s+1 ... e-1 e]
-            ixs = np.arange(s[0], s[1])
-            # retrieve all pitch and start positions corresponding to this segment
-            pitchSeg = pitch[ixs]
-            # Adjust pitch marks to the visible freq range on the spec
-            y = ((pitchSeg-self.minFreqShow)*yadjfact).astype('int')
-            # smooth the pitch lines
-            medfiltsize = min((len(y)-1)//2*2+1, 15)
-            y = medfilt(y, medfiltsize)
-            # joinGaps can introduce no-pitch pixels, which cause
-            # smoothed segments to have 0 ends. Trim those:
-            trimst = 0
-            while y[trimst]==0 and trimst<medfiltsize//2:
-                trimst += 1
-            trime = len(y)-1
-            while y[trime]==0 and trime>len(y)-medfiltsize//2:
-                trime -= 1
-            y = y[trimst:trime]
-            ixs = ixs[trimst:trime]
-
-            out.append((starts[ixs], y))
-        return out
-
     def drawFormants(self,ncoeff=None):
 
         ys = self.formants(ncoeff)
@@ -824,7 +826,7 @@ class Spectrogram:
 
     def formants(self,ncoeff=None):
         # First look at formants. Snell and Milinazzo '93 method
-        from LevinsonDurbanRecursion import LPC
+        from src.utils import LevinsonDurbanRecursion
 
         if ncoeff is None:
             # TODO
@@ -840,7 +842,7 @@ class Spectrogram:
             x = signal.lfilter([1], [1., 0.63], x)
 
             # LPC
-            A, e, k = LPC(x, ncoeff)
+            A, e, k = LevinsonDurbanRecursion.LPC(x, ncoeff)
             A = np.squeeze(A)
 
             # Extract roots, turn into angles
@@ -852,111 +854,6 @@ class Spectrogram:
             #freqs.append(sorted(angles / 2 / np.pi * self.sampleRate))
 
         return freqs
-
-    # TODO: is anything below used?
-    def clickSearch(self,thresh=3):
-        """
-        searches for clicks in the provided imspec, saves dataset
-        returns click_label, dataset and count of detections
-    
-        The search is made on the spectrogram image that we know to be generated with parameters (1024,512)
-        Click presence is assessed for each spectrogram column: if the mean in the
-        frequency band [f0, f1] (*) is bigger than a threshold we have a click
-        thr=mean(all_spec)+thresh*std(all_spec) (*)
-    
-        The clicks are discarded if longer than 0.05 sec
-    
-        imspec: unrotated spectrogram (rows=time)
-        file: NOTE originally was basename, now full filename
-        """
-        import math
-        imspec = self.sg[:,::8].T
-        print('click',np.shape(imspec))
-        df=self.audio_data.sample_rate//2 /(np.shape(imspec)[0]+1)  # frequency increment
-        #df=self.sampleRate//2 /(np.shape(imspec)[0]+1)  # frequency increment
-        # up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
-        up_len=17
-        # up_len=math.ceil((0.5/11)/dt)
-    
-        # Frequency band
-        f0=24000
-        index_f0=-1+math.floor(f0/df)  # lower bound needs to be rounded down
-        f1=54000
-        index_f1=-1+math.ceil(f1/df)  # upper bound needs to be rounded up
-    
-        # Mean in the frequency band
-        mean_spec=np.mean(imspec[index_f0:index_f1,:], axis=0)
-    
-        # Threshold
-        mean_spec_all=np.mean(imspec, axis=0)[2:]
-        thr_spec=(np.mean(mean_spec_all)+thresh*np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
-    
-        ## clickfinder
-        # check when the mean is bigger than the threshold
-        # clicks is an array which elements are equal to 1 only where the sum is bigger
-        # than the mean, otherwise are equal to 0
-        clicks = mean_spec>thr_spec
-        inds = np.where(clicks>0)[0]
-        if (len(inds)) > 0:
-            # Have found something, now find first that isn't too long
-            flag = False
-            start = inds[0]
-            while flag:
-                i=1
-                while inds[i]-inds[i-1] == 1:
-                    i+=1
-                end = i
-                if end-start<up_len:
-                    flag=True
-                else:
-                    start = inds[end+1]
-    
-            first = start
-
-            # And last that isn't too long
-            flag = False
-            end = inds[-1]
-            while flag:
-                i=len(inds)-1
-                while inds[i]-inds[i-1] == 1:
-                    i-=1
-                start = i
-                if end-start<up_len:
-                    flag=True
-                else:
-                    end = inds[start-1]
-            last = end
-            print(first,last)
-            return [first,last]
-        else:
-            return None
-    
-    def denoiseImage(self,sg,thr=1.2):
-        from skimage.restoration import (denoise_tv_chambolle, denoise_bilateral, denoise_wavelet, estimate_sigma)
-        sigma_est = estimate_sigma(sg, multichannel=False, average_sigmas=True)
-        sgnew = denoise_tv_chambolle(sg, weight=0.2, multichannel=False)
-        #sgnew = denoise_bilateral(sg, sigma_color=0.05, sigma_spatial=15, multichannel=False)
-        #sgnew = denoise_wavelet(sg, multichannel=False)
-
-        return sgnew
-
-    def denoiseImage2(self,sg,filterSize=5):
-        # Filter size is odd
-        [x,y] = np.shape(sg)
-        width = filterSize//2
-        
-        sgnew = np.zeros(np.shape(sg))
-        sgnew[0:width+1,:] = sg[0:width+1,:]
-        sgnew[-width:,:] = sg[-width:,:]
-        sgnew[:,0:width+1] = sg[:,0:width+1]
-        sgnew[:,-width:] = sg[:,-width:]
-
-        for i in range(width,x-width):
-            for j in range(width,y-width):
-               sgnew[i,j] = np.median(sg[i-width:i+width+1,j-width:j+width+1]) 
-
-        print(sgnew)
-        return sgnew
 
     def mark_rain(self, sg, thr=0.9):
         row, col = np.shape(sg.T)
@@ -1006,19 +903,60 @@ class Spectrogram:
             # Median Filter
             self.audio_data.data = SignalProc.medianFilter(self.audio_data.data,int(str(width)))
 
+    def extractSpectrogramFrame(self, sgRaw, frame_idx, hop_seconds, spec_frame_width, 
+                                   sample_rate, adjust_last=False):
+        """Extract and normalize a single frame from spectrogram.
+        
+        Args:
+            sgRaw: Full spectrogram array (time x frequency)
+            frame_idx: Index of the frame to extract
+            hop_seconds: Hop size in seconds between frames
+            spec_frame_width: Width of each frame in spectrogram bins
+            sample_rate: Audio sample rate
+            adjust_last: If True, adjust the last frame to fit; if False, return None for incomplete frames
+            
+        Returns:
+            Tuple of (normalized_rotated_frame, success) where success is True if frame was extracted
+        """
+        sgstart = int(hop_seconds * frame_idx * sample_rate / self.incr)
+        sgend = sgstart + spec_frame_width
+        
+        if sgend > np.shape(sgRaw)[0]:
+            if adjust_last and sgstart < np.shape(sgRaw)[0]:
+                # Adjust to include the last frame
+                sgend = np.shape(sgRaw)[0]
+                sgstart = max(0, np.shape(sgRaw)[0] - spec_frame_width)
+            else:
+                return None, False
+        
+        sgRaw_frame = sgRaw[sgstart:sgend, :]
+        
+        # Normalize
+        maxg = np.max(sgRaw_frame)
+        if maxg > 0:
+            sgRaw_frame = sgRaw_frame / maxg
+        
+        # Rotate for display convention (frequency on y-axis, time on x-axis)
+        return np.rot90(sgRaw_frame), True
+
     def generateFeaturesNN(self, seglen, real_spec_width, frame_size, frame_hop=None, NNfRange=None):
         '''
-        Prepare a syllable to input to the NN model
+        Prepare a syllable to input to the NN model for inference.
         Returns the features (spectrogram for each frame)
-        seglen: length of this segment (self.data), in s
-        frame_size: length of each frame, in s
-        real_spec_width: number of spectrogram columns in each frame
-            (slightly differs from expected b/c of boundary effects,
-             so passing w/ a precalculated adjustment)
-        frame_hop: hop between frames, in s, or None to not overlap
-            (i.e. hop by 1 frame_size)
-        NNfRange: frequency list [f1, f2], if not None, sets
-            spectrogram pixels outside f1:f2 to 0
+        
+        Args:
+            seglen: length of this segment (self.data), in s
+            frame_size: length of each frame, in s
+            real_spec_width: number of spectrogram columns in each frame
+                (slightly differs from expected b/c of boundary effects,
+                 so passing w/ a precalculated adjustment)
+            frame_hop: hop between frames, in s, or None to not overlap
+                (i.e. hop by 1 frame_size)
+            NNfRange: frequency list [f1, f2], if not None, sets
+                spectrogram pixels outside f1:f2 to 0
+                
+        Returns:
+            4D numpy array of shape (n_frames, height, width, 1) ready for model input
         '''
         # determine the number of frames:
         if frame_hop is None:
@@ -1040,80 +978,25 @@ class Spectrogram:
             self.sg[:, 0:lb] = 0.0
             self.sg[:, ub:] = 0.0
 
-        # extract each frame:
+        # Extract each frame using shared logic
         featuress = np.empty((n, spec_height, real_spec_width, 1), dtype=np.float32)
+        frames_filled = 0  # Track how many frames were successfully filled
+        
         for i in range(n):
-            sgstart = int(frame_hop * i * self.audio_data.sample_rate / self.incr)
-            #sgstart = int(frame_hop * i * self.sampleRate / self.incr)
-            sgend = sgstart + real_spec_width
-            # Skip the last bits if they don't comprise a full frame:
-            if sgend > np.shape(self.sg)[0]:
-                print("Warning: dropping frame at", sgend, n)
-                # Alternatively could adjust:
-                # sgstart = np.shape(sp.sg)[0] - real_spec_width
-                # sgend = np.shape(sp.sg)[0]
-                i = i-1
+            frame, success = self.extractSpectrogramFrame(
+                self.sg, i, frame_hop, real_spec_width, 
+                self.audio_data.sample_rate, adjust_last=False
+            )
+            
+            if not success:
+                print("Warning: dropping incomplete frame at index", i, "of", n)
                 break
-            sgRaw = self.sg[sgstart:sgend, :, np.newaxis]
+            
+            # Add channel dimension for CNN input
+            featuress[i, :, :, :] = frame[:, :, np.newaxis]
+            frames_filled = i + 1
 
-            # Standardize/rescale here.
-            # NOTE the resulting features are on linear scale, not dB
-            maxg = np.max(sgRaw)
-            featuress[i, :, :, :] = np.rot90(sgRaw / maxg)
-
-        # NOTE using i to account for possible loop break
-        # this may be needed for dealing w/ boundary issues
-        # which is maybe possible if the spec window is larger than the
-        # NN frame size, or due to inconsistent rounding
-        featuress = featuress[:(i+1), :, :, :]
-        return featuress
-
-    def generateFeaturesNN2(self, seglen, real_spec_width, frame_size, frame_hop=None):
-        '''
-        Prepare a syllable to input to the NN model
-        Returns the features (currently the spectrogram)
-        '''
-        # determine the number of frames:
-        if frame_hop is None:
-            n = seglen // frame_size
-            frame_hop = frame_size
-        else:
-            n = (seglen-frame_size) // frame_hop + 1
-        n = int(n)
-
-        sgRaw1 = self.spectrogram(window='Hann')
-        sgRaw2 = self.spectrogram(window='Hamming')
-        sgRaw3 = self.spectrogram(window='Welch')
-
-        spec_height = np.shape(self.sg)[1]
-
-        # extract each frame:
-        featuress = np.empty((n, spec_height, real_spec_width, 3))
-
-        for i in range(n):
-            sgstart = int(frame_hop * i * self.audio_data.sample_rate / self.incr)
-            #sgstart = int(frame_hop * i * self.sampleRate / self.incr)
-            sgend = sgstart + real_spec_width
-            # Skip the last bits if they don't comprise a full frame:
-            if sgend > np.shape(self.sg)[0]:
-                print("Warning: dropping frame at", sgend, n)
-                # Alternatively could adjust:
-                # sgstart = np.shape(sp.sg)[0] - real_spec_width
-                # sgend = np.shape(sp.sg)[0]
-                break
-
-            # Standardize/rescale here.
-            # NOTE the resulting features are on linear scale, not dB
-            sgRaw_i = np.empty((real_spec_width, spec_height, 3), dtype=np.float32)
-            sgRaw_i[:, :, 0] = sgRaw1[sgstart:sgend, :] / np.max(sgRaw1[sgstart:sgend, :])
-            sgRaw_i[:, :, 1] = sgRaw2[sgstart:sgend, :] / np.max(sgRaw2[sgstart:sgend, :])
-            sgRaw_i[:, :, 2] = sgRaw3[sgstart:sgend, :] / np.max(sgRaw3[sgstart:sgend, :])
-            featuress[i, :, :, :] = np.rot90(sgRaw_i)
-
-        # NOTE using i to account for possible loop break
-        # this may be needed for dealing w/ boundary issues
-        # which is maybe possible if the spec window is larger than the
-        # NN frame size
-        featuress = featuress[:i, :, :, :]
-        return featuress
-
+        # Return only the successfully filled frames
+        # (may be needed for dealing w/ boundary issues when the spec window 
+        # is larger than the NN frame size, or due to inconsistent rounding)
+        return featuress[:frames_filled, :, :, :]

@@ -18,16 +18,13 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Features.py
-#
-# Code to extract various features from sound files
+# Code to extract various features from sound data
 
 import numpy as np
 import librosa
 from src.core import Spectrogram
 from src.core import WaveletSegment
 from src.core import AudioData
-import soundfile as sf
 
 
 class Features:
@@ -53,19 +50,8 @@ class Features:
         self.sg = sp.spectrogram(sgType='Standard', window_width=self.window_width, incr=self.incr, window='Ones')
         self.sg = self.sg**2
 
-    def setNewData(self, data, sampleRate):
-        self.data = data
-        self.sampleRate = sampleRate
-        sp = Spectrogram.Spectrogram(window_width=self.window_width, incr=self.incr)
-        sp.audio_data = AudioData.AudioData(data=self.data, sample_rate=self.sampleRate, 
-                                   sample_format='float32', sample_size=32, channels=1)
-        self.sg = sp.spectrogram(sgType='Standard', window_width=self.window_width, incr=self.incr, window='Ones')
-        self.sg = self.sg**2
-
     def get_mfcc(self, n_mfcc=48, n_bins=32, delta=True):
-        """
-        Use librosa to get the MFCC coefficients.
-        """
+        """ Use librosa to get the MFCC coefficients. """
         mfcc = librosa.feature.mfcc(y=self.data, sr=self.sampleRate, n_mfcc=n_mfcc, n_fft=2048, hop_length=512)
         if delta:
             if n_bins == 8:
@@ -80,9 +66,7 @@ class Features:
         return mfcc
 
     def get_WE(self, nlevels=5):
-        """
-        Wavelet energies
-        """
+        """ Wavelet energies """
         ws = WaveletSegment.WaveletSegment(spInfo=[])
         WE = ws.computeWaveletEnergy(data=self.data, sampleRate=self.sampleRate, nlevels=nlevels, wpmode='new')
         return WE
@@ -132,17 +116,3 @@ class Features:
         goodness_of_pitch = sp.goodness_of_pitch(spectral_deriv, sg)
     
         return spectral_deriv, goodness_of_pitch, freq_mod, contours, wiener_entropy, mean_freq
-
-
-def loadFile(filename):
-    """
-    Load an audio file and prepare it for feature extraction.
-    """
-    audiodata, sampleRate = sf.read(filename)
-
-    if audiodata.dtype != 'float':
-        audiodata = audiodata.astype('float')
-    if np.shape(np.shape(audiodata))[0] > 1:
-        audiodata = audiodata[:, 0]
-
-    return audiodata, sampleRate

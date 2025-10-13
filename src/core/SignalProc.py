@@ -18,8 +18,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# SignalProc.py
-
 # This file holds signal processing functions that don't use the full spectrogram or audio data
 
 import scipy.signal as signal
@@ -213,7 +211,6 @@ def bandpassFilter(data,sampleRate,start=0,end=-1):
     #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
     return signal.lfilter(taps, 1.0, data)
 
-# TODO: Here or in spectrogram? Needs some work either way
 # The next functions perform spectrogram inversion
 def invertSpectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True, sampleRate=16000):
     from src.core import Spectrogram

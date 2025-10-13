@@ -18,8 +18,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Segmentation.py
-#
 # Code to extract segments from sound files
 
 from src.core import Spectrogram
@@ -108,13 +106,6 @@ class Segmenter:
         self.sp = sp
         self.mingap = mingap
         self.minlength = minlength
-
-    def setNewData(self, sp):
-        """Update the segmenter when the spectrogram changes.
-        
-        Called when user changes window width, increment, etc. in the UI.
-        """
-        self.sp = sp
 
     def bestSegments(self,FIRthr=0.7, medianClipthr=3.0, yinthr=0.9):
         """ A reasonably good segmentaion - a merged version of FIR, median clipping, and fundamental frequency using yin"""
@@ -246,23 +237,26 @@ class Segmenter:
 
     @staticmethod
     def joinGaps(segments, maxgap=3):
-        """Merge segments within maxgap units (Segment objects).
+        """Merge segments within maxgap units (2-element format).
         
-        Expects a list/SegmentList of Segment objects.
-        Returns list of [start, end] pairs.
+        Merges segments if the gap between them is <= maxgap.
+        Operates on 2-element segments: [[start, end], [start, end], ...]
+        Example: [[1,3], [5,7]] with maxgap=3 -> [[1,7]]
         """
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
         if len(segments) == 0:
             return []
         
-        segments.sort(key=lambda seg: seg.start_time)
+        segments = sorted(segments, key=lambda x: x[0])
         out = []
         i = 0
         while i < len(segments):
-            start = segments[i].start_time
-            end = segments[i].end_time
-            while i+1 < len(segments) and segments[i+1].start_time - end <= maxgap:
+            start = segments[i][0]
+            end = segments[i][1]
+            while i+1 < len(segments) and segments[i+1][0] - end <= maxgap:
                 i += 1
-                end = max(end, segments[i].end_time)
+                end = max(end, segments[i][1])
             out.append([start, end])
             i += 1
         return out
@@ -429,8 +423,7 @@ class Segmenter:
         return segs
 
     def segmentByPower(self, thr=1.):
-        """ Segmentation simply on the power
-        """
+        """ Segmentation simply on the power"""
         maxFreqs = 10. * np.log10(np.max(self.sp.sg, axis=1))
         maxFreqs = medfilt(maxFreqs, 21)
         ind = maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))

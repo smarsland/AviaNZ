@@ -656,18 +656,15 @@ class GenerateData:
             for i in range(int(n)):
                 if verbose:
                     print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '**')
-                # Sgram images
-                sgstart = int(hop * i * self.fs / sp.incr)
-                sgend = sgstart + specFrameSize
-                if sgend > np.shape(sgRaw)[0]:
-                    # Adjusting the final frame to be full width
-                    sgend = np.shape(sgRaw)[0]
-                    sgstart = np.shape(sgRaw)[0] - specFrameSize
-                sgRaw_i = sgRaw[sgstart:sgend, :]
-
-                # Normalize and rotate
-                maxg = np.max(sgRaw_i)
-                sgRaw_i = np.rot90(sgRaw_i / maxg)
+                
+                # Extract frame using shared Spectrogram method
+                sgRaw_i, success = sp.extractSpectrogramFrame(
+                    sgRaw, i, hop, specFrameSize, self.fs, adjust_last=(i == int(n) - 1)
+                )
+                
+                if not success:
+                    print("Warning: skipping incomplete frame", i, "for", record[0])
+                    continue
 
                 # Save train data: individual images as npy
                 np.save(os.path.join(dirName, str(record[-1]),

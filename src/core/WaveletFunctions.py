@@ -1,8 +1,5 @@
 
-# WaveletFunctions.py
-# Class containing wavelet specific methods
-
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -20,6 +17,9 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Class containing wavelet specific methods
+
 import numpy as np
 import math
 # import scipy.fftpack as fft

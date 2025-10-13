@@ -73,6 +73,7 @@ from PyQt6.QtMultimedia import QAudio, QAudioFormat
 
 import numpy as np
 from scipy.ndimage.filters import median_filter
+from scipy.signal import medfilt
 
 import pyqtgraph as pg
 from pyqtgraph.dockarea import DockArea, Dock
@@ -461,8 +462,6 @@ class ManualInterface(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Invert spectrogram",self.invertSpectrogram)
-            #actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
-            #actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
         actionMenu.addSeparator()
         self.segmentAction = actionMenu.addAction("Segment","Ctrl+S",self.segmentationDialog)
@@ -1695,19 +1694,8 @@ class ManualInterface(QMainWindow):
             # Bat mode: initialize with an empty segment for the entire file
             if self.batmode and len(self.segments)==0:
                 species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
-                # SRM: TODO: keep this? If so, needs a parameter...
-                self.useClicks = True
-                if self.useClicks:
-                    result = self.sp.clickSearch()
-                    if result is not None:
-                        start = self.convertSpectoAmpl(result[0])
-                        end = self.convertSpectoAmpl(result[1])
-                    else:
-                        start = 0
-                        end = self.datalength / self.sp.audio_data.sample_rate
-                else:
-                    start = 0
-                    end = self.datalength / self.sp.audio_data.sample_rate
+                start = 0
+                end = self.datalength / self.sp.audio_data.sample_rate
                 newSegment = Annotation.Segment(start_time=start, end_time=end, freq_low=0, freq_high=0, labels=species)
                 self.segments.append(newSegment)
                 self.segmentsToSave = True
@@ -1716,11 +1704,6 @@ class ManualInterface(QMainWindow):
             self.drawProtocolMarks()
 
             self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
-
-            if hasattr(self,'seg'):
-                self.seg.setNewData(self.sp)
-            else:
-                self.seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
 
             # Update the Dialogs
             # Also close any ones that could get buggy when moving between bird-bat modes
@@ -1907,13 +1890,68 @@ class ManualInterface(QMainWindow):
         self.config['showAnnotationOverview'] = True
         self.useAmplitudeCheck()
         
+    def drawFundFreq(self):
+        """ Compute fundamental frequency marks for the spectrogram.
+            Return is a list of (x, y) segments w/ x,y - lists in spec coords
+        """
+        # Estimate fund freq, using windows of 2 spec FFT lengths (4 columns)
+        Wsamples = 4*self.sp.incr
+        # Warn of the lower limit for reliable estimation:
+        minReliableFreq = self.sp.audio_data.sample_rate / (Wsamples/3)
+        print("Warning: F0 estimation below %d Hz will be unreliable" % minReliableFreq)
+        
+        # Returns pitch in Hz for each window
+        thr = 0.5
+        pitchshape = Shapes.fundFreqShaper(self.sp.audio_data.data, Wsamples, thr, self.sp.audio_data.sample_rate)
+        pitch = pitchshape.y  # pitch is a shape with y in Hz
+
+        # Find out which marks should be visible
+        ind = np.logical_and(pitch > self.sp.minFreqShow+50, pitch < self.sp.maxFreqShow)
+        if not np.any(ind):
+            print("Warning: no fund. freq. identified in this page")
+            return []
+
+        # Identify segments using the original scale
+        segs = Segmentation.Segmenter.convert01(ind)
+        segs = Segmentation.Segmenter.deleteShort(segs, 2)
+        segs = Segmentation.Segmenter.joinGaps(segs, 2)
+        segs = Segmentation.Segmenter.deleteShort(segs, 4)
+
+        yadjfact = 2/self.sp.audio_data.sample_rate*np.shape(self.sg)[1]
+
+        # Create the x sequence (in spec coordinates)
+        starts = np.arange(len(pitch)) * pitchshape.tunit + pitchshape.tstart # in seconds
+        starts = starts * self.sp.audio_data.sample_rate / self.sp.incr  # in spec columns
+
+        # Convert segments back to positions in each array
+        out = []
+        for s in segs:
+            ixs = np.arange(s[0], s[1])
+            pitchSeg = pitch[ixs]
+            # Adjust pitch marks to the visible freq range on the spec
+            y = ((pitchSeg-self.sp.minFreqShow)*yadjfact).astype('int')
+            # Smooth the pitch lines
+            medfiltsize = min((len(y)-1)//2*2+1, 15)
+            y = medfilt(y, medfiltsize)
+            # Trim zero ends from smoothing
+            trimst = 0
+            while y[trimst]==0 and trimst<medfiltsize//2:
+                trimst += 1
+            trime = len(y)-1
+            while y[trime]==0 and trime>len(y)-medfiltsize//2:
+                trime -= 1
+            y = y[trimst:trime]
+            ixs = ixs[trimst:trime]
+            out.append((starts[ixs], y))
+        return out
+
     def showFundamentalFreq(self):
-        """ Calls the Spectrogram class to compute, and then draws, the fundamental frequency"""
+        """ Computes and draws the fundamental frequency"""
 
         with pg.BusyCursor():
             if self.showFundamental.isChecked():
                 self.statusLeft.setText("Drawing fundamental frequency...")
-                segs = self.sp.drawFundFreq(self.seg)
+                segs = self.drawFundFreq()
 
                 # Get the individual pieces
                 self.segmentPlots = []
@@ -3886,9 +3924,6 @@ class ManualInterface(QMainWindow):
                 if incr != self.config['incr'] or window_width != self.config['window_width']:
                     self.config['incr'] = incr
                     self.config['window_width'] = window_width
-                    if hasattr(self, 'seg'):
-                        self.seg.setNewData(self.sp)
-
                     self.loadFile(self.filename)
         self.redoFreqAxis(newMinFreqShow,newMaxFreqShow,changedY=changedY)
 
@@ -4225,8 +4260,6 @@ class ManualInterface(QMainWindow):
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
                         self.sp.audio_data.data)
-                    if hasattr(self,'seg'):
-                        self.seg.setNewData(self.sp)
 
                     if hasattr(self, 'showFreq_backup'):
                         self.redoFreqAxis(self.showFreq_backup[0], self.showFreq_backup[1])
@@ -4982,6 +5015,9 @@ class ManualInterface(QMainWindow):
         # settings is a dict with parameters for various possible methods
         alg, settings = self.segmentDialog.getValues()
 
+        # Create segmenter for non-species-specific algorithms
+        seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
+
         with pg.BusyCursor():
             filtname = str(settings["filtname"])
             self.statusLeft.setText('Segmenting...')
@@ -5026,29 +5062,29 @@ class ManualInterface(QMainWindow):
 
             # NON-SPECIFIC methods here (produce "Don't Know"):
             if alg == 'Default':
-                newSegments = self.seg.bestSegments()
+                newSegments = seg.bestSegments()
             elif alg == 'Median Clipping':
-                newSegments = self.seg.medianClip(settings["medThr"], minSegment=self.config['minSegment'])
-                newSegments = self.seg.checkSegmentOverlap(newSegments)
+                newSegments = seg.medianClip(settings["medThr"], minSegment=self.config['minSegment'])
+                newSegments = seg.checkSegmentOverlap(newSegments)
                 # will also remove too short segments (medSize is set in ms because sliders limited to int)
                 # print("before length", newSegments)
-                # newSegments = self.seg.deleteShort(newSegments, minlength=medSize/1000)
+                # newSegments = seg.deleteShort(newSegments, minlength=medSize/1000)
             elif alg == 'Harma':
-                newSegments = self.seg.Harma(float(str(settings["HarmaThr1"])),float(str(settings["HarmaThr2"])),minSegment=self.config['minSegment'])
-                newSegments = self.seg.checkSegmentOverlap(newSegments)
+                newSegments = seg.Harma(float(str(settings["HarmaThr1"])),float(str(settings["HarmaThr2"])),minSegment=self.config['minSegment'])
+                newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'Power':
-                newSegments = self.seg.segmentByPower(float(str(settings["PowerThr"])))
-                newSegments = self.seg.checkSegmentOverlap(newSegments)
+                newSegments = seg.segmentByPower(float(str(settings["PowerThr"])))
+                newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'Onsets':
-                newSegments = self.seg.onsets()
-                newSegments = self.seg.checkSegmentOverlap(newSegments)
+                newSegments = seg.onsets()
+                newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'Fundamental Frequency':
-                newSegments = self.seg.yinSegs(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
+                newSegments = seg.yinSegs(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
                                                          int(str(settings["FFwindow"])))
-                newSegments = self.seg.checkSegmentOverlap(newSegments)
+                newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'FIR':
-                newSegments = self.seg.segmentByFIR(float(str(settings["FIRThr1"])))
-                newSegments = self.seg.checkSegmentOverlap(newSegments)
+                newSegments = seg.segmentByFIR(float(str(settings["FIRThr1"])))
+                newSegments = seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
             elif alg == 'Wavelet Filter':
                 # Old WF filter, not compatible with wind removal:
@@ -5244,6 +5280,9 @@ class ManualInterface(QMainWindow):
         # TODO: Remove?
         # print ("inside find Matches: ", species)
         segments = []
+        # Create segmenter for cross-correlation
+        seg = Segmentation.Segmenter(self.sp, self.sp.audio_data.sample_rate)
+        
         if species != 'Choose species...' and os.path.exists('Sound Files/' + species):
             self.statusLeft.setText("Finding matches...")
             print("Reading template/s")
@@ -5274,7 +5313,7 @@ class ManualInterface(QMainWindow):
             sp_temp.data = data1
             sp_temp.audioFormat.sample_rate = sampleRate1
             sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
-            indices = self.seg.findCCMatches(sgRaw_temp,sgRaw,thr)
+            indices = seg.findCCMatches(sgRaw_temp,sgRaw,thr)
             # scale indices to match with self.samplerate
             indices = [i*self.sp.audio_data.sample_rate/sampleRate1 for i in indices]
             y1 = self.convertFreqtoY(self.sppInfo[str(species)][2]/2)
@@ -5307,7 +5346,7 @@ class ManualInterface(QMainWindow):
             sgRaw = self.sp.spectrogram(window_width=self.config['window_width'], incr=self.config['incr'],window=self.config['windowType'],sgType=self.config['sgType'],sgScale=self.config['sgScale'],nfilters=self.config['nfilters'],mean_normalise=self.config['sgMeanNormalise'],equal_loudness=self.config['sgEqualLoudness'],onesided=self.config['sgOneSided'])
             segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sp.audio_data.sample_rate
-            indices = self.seg.findCCMatches(segment,sgRaw,thr)
+            indices = seg.findCCMatches(segment,sgRaw,thr)
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter

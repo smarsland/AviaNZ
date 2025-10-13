@@ -18,8 +18,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# BatchProcessor.py
-#
 # Core batch processing without UI dependencies
 
 import os, re

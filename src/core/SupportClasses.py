@@ -1,8 +1,5 @@
 
-# SupportClasses.py
-# Support classes for the AviaNZ program
-
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -20,6 +17,8 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Contains small classes which are used throughout AviaNZ
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font

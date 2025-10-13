@@ -1,5 +1,5 @@
 
-# Version 3.4 18/12/24
+# Version 4.0 09/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
@@ -25,7 +25,6 @@ from shutil import copyfile
 from shutil import disk_usage
 
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.models import model_from_json
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
@@ -37,7 +36,6 @@ import math
 
 from src.core import Annotation
 from src.core import SupportClasses
-from src.core import Spectrogram
 from src.models import NN
 from src.core import WaveletSegment
 from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
@@ -45,7 +43,6 @@ from src.core.BatchProcessor import BatchProcessor, BatchProcessorCallbacks
 import soundfile as sf
 
 from src.models import NNModels
-from tensorflow.keras.utils import custom_object_scope
 
 class NNtrain:
 
