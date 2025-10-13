@@ -61,13 +61,18 @@ class Spectrogram:
         if filepath.lower().endswith('.bmp'):
             return self.load_bmp(filepath, duration, offset, silent, **kwargs)
         
-        # For audio files, use AudioLoader
+        # For audio files, get total file duration first (before loading partial)
         loader = audio_loader.AudioLoader()
+        file_info = loader.get_file_info(filepath)
+        total_duration = file_info[1]  # (rate, nseconds, nchannels, sampwidth)
+        
+        # Now load the requested portion
         loaded_data = loader.load_audio(filepath, duration, offset, silent)
         
         # Store reference to AudioData - it has all the format info built in
         self.audio_data = loaded_data
-        self.fileLength = len(loaded_data.data) if loaded_data.data is not None else 0
+        # fileLength is TOTAL file duration, not just the loaded portion
+        self.fileLength = total_duration
         self.minFreq = 0
         self.maxFreq = loaded_data.sample_rate // 2
         
@@ -140,7 +145,7 @@ class Spectrogram:
         
         # Store spectrogram data directly
         self.sg = img2
-        self.fileLength = file_length
+        self.fileLength = file_length / 176000.0  # Convert samples to seconds
         self.minFreq = 0
         self.maxFreq = 88000  # 176000 / 2
         
@@ -185,7 +190,7 @@ class Spectrogram:
 
         self.minFreq = 0
         self.maxFreq = self.audio_data.sample_rate // 2
-        self.fileLength = len(resampled_data)
+        self.fileLength = len(resampled_data) / float(target)  # Convert samples to seconds
 
     def convertAmpltoSpec(self, x):
         """ Unit conversion, for easier use wherever spectrograms are needed """

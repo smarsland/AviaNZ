@@ -4738,7 +4738,7 @@ class ManualInterface(QMainWindow):
                         from src.core import spectrogram 
                         sp = spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
-                        duration = sp.fileLength / sp.audioFormat.sample_rate
+                        duration = sp.fileLength  # fileLength is now in seconds
            
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                                 
@@ -4854,8 +4854,7 @@ class ManualInterface(QMainWindow):
                         from src.core import spectrogram 
                         sp = spectrogram.Spectrogram(512,256, 0, 0)
                         sp.readSoundFile(tagFileMinusExtension + '.wav', 0, 0)
-                        duration = sp.fileLength / sp.sampleRate
-                        #duration = sp.fileLength / sp.sampleRate
+                        duration = sp.fileLength  # fileLength is now in seconds
         
                     tagSegments.metadata = {"Operator": operator, "Reviewer": reviewer, "Duration": duration}
                         
