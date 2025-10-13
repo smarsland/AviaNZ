@@ -258,7 +258,7 @@ def invert_spectrogram(sg, incr=32, nits=10, window='Hamming', bmp=True, sampleR
         # Handle pathological cases (all zeros, etc.)
         new_wave = np.zeros_like(new_wave)
     elif max_val > 0.95:  # If close to clipping
-        new_wave = new_wave * (0.8 / max_val)  # Scale to 80% of max to leave headroom
+        new_wave = new_wave * (1.0 / max_val)
     
     return new_wave
 
