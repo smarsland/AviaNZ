@@ -851,6 +851,9 @@ class ReviewInterface(QMainWindow):
         """
         from collections import defaultdict
         
+        self._quick_mapping = {}
+        self._quick_changes = {}
+        
         segments_by_file = defaultdict(list)
         for segData in allSegments:
             filename = segData['filename']
@@ -859,9 +862,6 @@ class ReviewInterface(QMainWindow):
         all_segment_list = annotation.SegmentList()
         all_indices = []
         segment_metadata = []
-        
-        if not hasattr(self, '_quick_mapping'):
-            self._quick_mapping = {}
         
         idx_counter = 0
         any_batmode = False
@@ -956,6 +956,10 @@ class ReviewInterface(QMainWindow):
         """ Collects current button states from dialog """
         if not hasattr(self, '_quick_changes'):
             self._quick_changes = {}
+        
+        if not hasattr(self, '_quick_mapping'):
+            print("Warning: _quick_mapping not initialized")
+            return
             
         for btn in dialog.buttons:
             if btn is None:
