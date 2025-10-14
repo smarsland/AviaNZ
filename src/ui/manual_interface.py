@@ -2278,7 +2278,7 @@ class ManualInterface(QMainWindow):
                 speed = 0.5
             elif speedchar == 190:
                 speed = 0.75
-        self.playSpeed = 1/float(speed)
+        self.playSpeed = float(speed)
         self.media_obj.setSpeed(self.playSpeed)
 
     def setExtraPlot(self, plotname):
@@ -5474,7 +5474,7 @@ class ManualInterface(QMainWindow):
         """ Listener called on sound notify (every 30 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        eltime = self.media_obj.processedUSecs() // 1000 // self.playSpeed + self.media_obj.timeoffset
+        eltime = self.media_obj.processedUSecs() // 1000 * self.playSpeed + self.media_obj.timeoffset
             
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
