@@ -24,7 +24,6 @@ import os, gc, re, json, tempfile
 from shutil import copyfile
 from shutil import disk_usage
 
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
@@ -42,7 +41,7 @@ from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
 
-from models import NN_models
+from src.models import NN_models
 
 class NNTrain:
 
@@ -265,6 +264,32 @@ class NNTrain:
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
         self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop, specFrameSize=self.imgsize[1])
 
+    def augment_width_shift(self, images, num_needed, batch_size):
+        '''Apply horizontal shift augmentation to images using NumPy.
+        Mimics ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest').
+        '''
+        augmented = []
+        num_batches = int(np.ceil(num_needed / batch_size))
+        
+        for batch_idx in range(num_batches):
+            batch = []
+            for _ in range(batch_size):
+                img = images[np.random.randint(0, len(images))]
+                width = img.shape[1]
+                shift = int(np.random.uniform(-0.3, 0.3) * width)
+                
+                if shift > 0:
+                    shifted = np.pad(img, ((0, 0), (shift, 0), (0, 0)), mode='edge')[:, :width, :]
+                elif shift < 0:
+                    shifted = np.pad(img, ((0, 0), (0, -shift), (0, 0)), mode='edge')[:, -width:, :]
+                else:
+                    shifted = img
+                
+                batch.append(shifted)
+            augmented.extend(batch)
+        
+        return np.array(augmented[:num_needed])
+
     def train(self):
         # Create temp dir to hold img data and model
         try:
@@ -307,26 +332,12 @@ class NNTrain:
         filenames, labels = nn.getImglist(self.tmpdir1.name)
         labels = np.argmax(labels, axis=1)
         ns = [np.shape(np.where(labels == i)[0])[0] for i in range(len(self.calltypes) + 1)]
-        # create image data augmentation generator in-build
-        datagen = ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest')
         # Data augmentation for each call type
         for ct in range(len(self.calltypes) + 1):
             if self.LearningDict['t'] - ns[ct] > self.LearningDict['batchsize']:
-                # load this ct images
                 samples = nn.loadCTImg(os.path.join(self.tmpdir1.name, str(ct)))
-                # prepare iterator
-                it = datagen.flow(samples, batch_size=self.LearningDict['batchsize'])
-                # generate samples
-                try:
-                    batch = next(it)
-                except TypeError:
-                    batch = it.next()
-                for j in range(int((self.LearningDict['t'] - ns[ct]) / self.LearningDict['batchsize'])):
-                    try:
-                        newbatch = next(it)
-                    except TypeError:
-                        newbatch = it.next()
-                    batch = np.vstack((batch, newbatch))
+                num_needed = self.LearningDict['t'] - ns[ct]
+                batch = self.augment_width_shift(samples, num_needed, self.LearningDict['batchsize'])
                 # Save augmented data
                 k = 0
                 for sgRaw in batch:
@@ -336,7 +347,6 @@ class NNTrain:
                 try:
                     del batch
                     del samples
-                    del newbatch
                 except:
                     pass
                 gc.collect()

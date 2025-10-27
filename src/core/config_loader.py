@@ -23,7 +23,7 @@
 import os
 import json
 from src.core import message_popup
-from models import NN_models
+from src.models import NN_models
 
 
 class ConfigLoader:

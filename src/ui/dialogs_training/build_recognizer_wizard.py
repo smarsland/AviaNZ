@@ -22,6 +22,7 @@ import os
 import time
 import platform
 import copy
+import json
 from shutil import copyfile
 
 from PyQt6.QtGui import QIcon, QValidator, QPixmap, QColor
@@ -350,7 +351,12 @@ class BuildRecAdvWizard(QWizard):
             for file in listOfDataFiles:
                 # Read the annotation
                 segments = annotation.SegmentList()
-                segments.parseJSON(file)
+                try:
+                    segments.parseJSON(file)
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"Warning: Skipping invalid annotation file {file}: {e}")
+                    continue
+                    
                 SpSegs = segments.getSpecies(self.field("species"))
                 for segix in SpSegs:
                     seg = segments[segix]

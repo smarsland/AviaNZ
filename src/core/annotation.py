@@ -296,7 +296,10 @@ class SegmentList(list):
             silent: Suppress info messages
         """
         with open(file, 'r') as f:
-            annots = json.load(f)
+            content = f.read().strip()
+            if not content:
+                raise ValueError(f"Empty JSON file: {file}")
+            annots = json.loads(content)
 
         if len(annots) == 0:
             raise ValueError("Empty annotation file")

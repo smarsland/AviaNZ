@@ -53,11 +53,10 @@ def CNNModel(imageHeight,imageWidth,outputDim):
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
-
 customObjectScopes = {}
 if version.parse(tf.__version__) >= version.parse("2.13.0"):
     from keras.saving import register_keras_serializable
-    
+
     @register_keras_serializable()
     class SequentialWrapper(tf.keras.models.Sequential):
         pass

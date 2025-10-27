@@ -20,7 +20,10 @@
 
 # NN for the AviaNZ program
 
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 from skimage.transform import resize
 
 import json, os
@@ -45,28 +48,30 @@ from src.models import NN_models
 
 def configure_gpu_memory():
     """Configure GPU memory settings for the current framework."""
-    try:
-        physical_devices = tf.config.list_physical_devices('GPU')
-        if physical_devices:
-            tf.config.experimental.set_memory_growth(physical_devices[0], True)
-    except Exception as e:
-        print(f"Warning: Could not configure GPU memory growth: {e}")
+    if torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(0.9)
+        print(f"GPU available: {torch.cuda.get_device_name(0)}")
+    else:
+        print("GPU not available, using CPU")
 
 
 def predict_batch(model, features):
     """Run batch prediction on features using the given model.
     
     Args:
-        model: Trained TensorFlow/Keras model
+        model: Trained PyTorch model
         features: numpy array of features to predict on
         
     Returns:
         numpy array of predictions
     """
-    # TensorFlow implementation:
-    tensor_input = tf.convert_to_tensor(features, dtype=tf.float32)
-    predictions = model(tensor_input)
-    return predictions.numpy() if hasattr(predictions, 'numpy') else predictions
+    model.eval()
+    device = next(model.parameters()).device
+    
+    with torch.no_grad():
+        tensor_input = torch.tensor(features, dtype=torch.float32).to(device)
+        predictions = model(tensor_input)
+        return predictions.cpu().numpy()
 
 
 class NN:
@@ -335,10 +340,12 @@ class NN:
                     lbl = file.split('_')[0]
                     labels.append(int(lbl))
 
-        # One hot vector representation of the labels
-        labels = tf.keras.utils.to_categorical(np.array(labels), len(self.calltypes) + 1)
+        labels = np.array(labels)
+        num_classes = len(self.calltypes) + 1
+        labels_onehot = np.zeros((len(labels), num_classes))
+        labels_onehot[np.arange(len(labels)), labels] = 1
 
-        return filenames, labels
+        return filenames, labels_onehot
 
     def getOriginalImglist(self, dirName):
         ''' Returns only the original image filenames and labels in dirName:
@@ -353,68 +360,215 @@ class NN:
                     lbl = file.split('_')[0]
                     labels.append(int(lbl))
 
-        # One hot vector representation of the labels
-        labels = tf.keras.utils.to_categorical(np.array(labels), len(self.calltypes) + 1)
+        labels = np.array(labels)
+        num_classes = len(self.calltypes) + 1
+        labels_onehot = np.zeros((len(labels), num_classes))
+        labels_onehot[np.arange(len(labels)), labels] = 1
 
-        return filenames, labels
+        return filenames, labels_onehot
 
     def createArchitecture(self):
         '''
         Sets self.model
         '''
         if self.modelArchitecture == 'CNN':
-            self.model = NN_models.CNNModel(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+            self.model = NN_models.CNNModel(self.imageheight, self.imagewidth, len(self.calltypes)+1)
         elif self.modelArchitecture == 'AudioSpectogramTransformer':
-            self.model = NN_models.AudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+            raise ValueError("AudioSpectogramTransformer not yet implemented in PyTorch")
         elif self.modelArchitecture == 'AudioSpectogramTransformer (pre-trained ViT)':
-            self.model = NN_models.PretrainedAudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+            raise ValueError("AudioSpectogramTransformer (pre-trained ViT) not yet implemented in PyTorch")
         else:
             raise ValueError("Model architecture not supported")
+        
+        if torch.cuda.is_available():
+            self.model = self.model.cuda()
+        
+        print(self.model)
 
     def train2(self, modelsavepath):
         ''' Train the model - keep all in memory '''
-
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(
-            modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5",
-            monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
-            save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
-        self.history = self.model.fit(self.train_images, self.train_labels,
-                                      batch_size=32,
-                                      epochs=50,
-                                      verbose=2,
-                                      validation_data=(self.val_images, self.val_labels),
-                                      callbacks=[checkpoint, early],
-                                      shuffle=True)
-        # Save the model
-        # Serialize model to JSON
-        model_json = self.model.to_json()
-        with open(modelsavepath + "/model.json", "w") as json_file:
-            json_file.write(model_json)
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(device)
+        
+        criterion = nn.BCELoss()
+        optimizer = optim.Adam(self.model.parameters())
+        
+        train_images_tensor = torch.tensor(self.train_images, dtype=torch.float32)
+        train_labels_tensor = torch.tensor(self.train_labels, dtype=torch.float32)
+        val_images_tensor = torch.tensor(self.val_images, dtype=torch.float32)
+        val_labels_tensor = torch.tensor(self.val_labels, dtype=torch.float32)
+        
+        train_dataset = torch.utils.data.TensorDataset(train_images_tensor, train_labels_tensor)
+        val_dataset = torch.utils.data.TensorDataset(val_images_tensor, val_labels_tensor)
+        
+        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+        
+        best_val_acc = 0.0
+        patience_counter = 0
+        self.history = {'loss': [], 'accuracy': [], 'val_loss': [], 'val_accuracy': []}
+        
+        for epoch in range(50):
+            self.model.train()
+            train_loss = 0.0
+            train_correct = 0
+            train_total = 0
+            
+            for images, labels in train_loader:
+                images, labels = images.to(device), labels.to(device)
+                
+                optimizer.zero_grad()
+                outputs = self.model(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                
+                train_loss += loss.item()
+                predicted = torch.argmax(outputs, 1)
+                actual = torch.argmax(labels, 1)
+                train_correct += (predicted == actual).sum().item()
+                train_total += labels.size(0)
+            
+            train_loss /= len(train_loader)
+            train_acc = train_correct / train_total
+            
+            self.model.eval()
+            val_loss = 0.0
+            val_correct = 0
+            val_total = 0
+            
+            with torch.no_grad():
+                for images, labels in val_loader:
+                    images, labels = images.to(device), labels.to(device)
+                    outputs = self.model(images)
+                    loss = criterion(outputs, labels)
+                    
+                    val_loss += loss.item()
+                    predicted = torch.argmax(outputs, 1)
+                    actual = torch.argmax(labels, 1)
+                    val_correct += (predicted == actual).sum().item()
+                    val_total += labels.size(0)
+            
+            val_loss /= len(val_loader)
+            val_acc = val_correct / val_total
+            
+            self.history['loss'].append(train_loss)
+            self.history['accuracy'].append(train_acc)
+            self.history['val_loss'].append(val_loss)
+            self.history['val_accuracy'].append(val_acc)
+            
+            print(f'Epoch {epoch+1}/50 - loss: {train_loss:.4f} - accuracy: {train_acc:.4f} - val_loss: {val_loss:.4f} - val_accuracy: {val_acc:.4f}')
+            
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                patience_counter = 0
+                checkpoint_path = os.path.join(modelsavepath, f"{epoch+1:02d}-{val_loss:.2f}-{val_acc:.2f}.pt")
+                NN_models.saveModel(self.model, checkpoint_path)
+                print(f'Saved checkpoint to {checkpoint_path}')
+            else:
+                patience_counter += 1
+                if patience_counter >= 5:
+                    print(f'Early stopping at epoch {epoch+1}')
+                    break
+        
+        final_path = os.path.join(modelsavepath, "model.pt")
+        NN_models.saveModel(self.model, final_path)
         print("Saved model to ", modelsavepath)
 
     def train(self, modelsavepath, training_batch_generator, validation_batch_generator):
         ''' Train the model - use image generator '''
-
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.weights.h5", monitor=self.LearningDict['monitor'], verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor=self.LearningDict['monitor'], min_delta=0, patience=self.LearningDict['patience'], verbose=1, mode='auto')
-
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(device)
+        
+        criterion = nn.BCELoss()
+        optimizer = optim.Adam(self.model.parameters())
+        
         epochs = self.LearningDict['epochs']
-        self.history = self.model.fit(training_batch_generator,
-                                      epochs=epochs,
-                                      verbose=1,
-                                      validation_data=validation_batch_generator,
-                                      callbacks=[checkpoint, early])
-
-        # Save the model
-        # Serialize model to JSON
-        model_json = self.model.to_json()
-        with open(modelsavepath + "/model.json", "w") as json_file:
-            json_file.write(model_json)
+        patience = self.LearningDict['patience']
+        monitor = self.LearningDict['monitor']
+        
+        best_metric = 0.0 if 'acc' in monitor else float('inf')
+        patience_counter = 0
+        self.history = {'loss': [], 'accuracy': [], 'val_loss': [], 'val_accuracy': []}
+        
+        for epoch in range(epochs):
+            self.model.train()
+            train_loss = 0.0
+            train_correct = 0
+            train_total = 0
+            
+            for batch_idx in range(len(training_batch_generator)):
+                images, labels = training_batch_generator[batch_idx]
+                images = torch.tensor(images, dtype=torch.float32).to(device)
+                labels = torch.tensor(labels, dtype=torch.float32).to(device)
+                
+                optimizer.zero_grad()
+                outputs = self.model(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                
+                train_loss += loss.item()
+                predicted = torch.argmax(outputs, 1)
+                actual = torch.argmax(labels, 1)
+                train_correct += (predicted == actual).sum().item()
+                train_total += labels.size(0)
+            
+            train_loss /= len(training_batch_generator)
+            train_acc = train_correct / train_total
+            
+            self.model.eval()
+            val_loss = 0.0
+            val_correct = 0
+            val_total = 0
+            
+            with torch.no_grad():
+                for batch_idx in range(len(validation_batch_generator)):
+                    images, labels = validation_batch_generator[batch_idx]
+                    images = torch.tensor(images, dtype=torch.float32).to(device)
+                    labels = torch.tensor(labels, dtype=torch.float32).to(device)
+                    
+                    outputs = self.model(images)
+                    loss = criterion(outputs, labels)
+                    
+                    val_loss += loss.item()
+                    predicted = torch.argmax(outputs, 1)
+                    actual = torch.argmax(labels, 1)
+                    val_correct += (predicted == actual).sum().item()
+                    val_total += labels.size(0)
+            
+            val_loss /= len(validation_batch_generator)
+            val_acc = val_correct / val_total
+            
+            self.history['loss'].append(train_loss)
+            self.history['accuracy'].append(train_acc)
+            self.history['val_loss'].append(val_loss)
+            self.history['val_accuracy'].append(val_acc)
+            
+            print(f'Epoch {epoch+1}/{epochs} - loss: {train_loss:.4f} - accuracy: {train_acc:.4f} - val_loss: {val_loss:.4f} - val_accuracy: {val_acc:.4f}')
+            
+            current_metric = val_acc if 'acc' in monitor else val_loss
+            
+            if ('acc' in monitor and current_metric > best_metric) or ('loss' in monitor and current_metric < best_metric):
+                best_metric = current_metric
+                patience_counter = 0
+                checkpoint_path = os.path.join(modelsavepath, f"{epoch+1:02d}-{val_loss:.2f}-{val_acc:.2f}.pt")
+                NN_models.saveModel(self.model, checkpoint_path)
+                print(f'Saved checkpoint to {checkpoint_path}')
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print(f'Early stopping at epoch {epoch+1}')
+                    break
+        
+        final_path = os.path.join(modelsavepath, "model.pt")
+        NN_models.saveModel(self.model, final_path)
         print("Saved model to ", modelsavepath)
 
 class GenerateData:
@@ -698,7 +852,7 @@ class GenerateData:
         return N
 
 
-class CustomGenerator(tf.keras.utils.Sequence):
+class CustomGenerator:
 
     def __init__(self, image_filenames, labels, batch_size, traindir, imghight, imgwidth, channels):
         self.image_filenames = image_filenames
@@ -710,11 +864,10 @@ class CustomGenerator(tf.keras.utils.Sequence):
         self.channels = channels
 
     def __len__(self):
-        return (np.ceil(len(self.image_filenames) / float(self.batch_size))).astype(np.int64)
+        return int(np.ceil(len(self.image_filenames) / float(self.batch_size)))
 
     def __getitem__(self, idx):
         batch_x = self.image_filenames[idx * self.batch_size: (idx + 1) * self.batch_size]
         batch_y = self.labels[idx * self.batch_size: (idx + 1) * self.batch_size]
 
-        # return np.array([resize(imread(os.path.join(self.train_dir , str(file_name))), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]) / 255.0, np.array(batch_y)
         return np.array([resize(np.load(file_name), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]), np.array(batch_y)
