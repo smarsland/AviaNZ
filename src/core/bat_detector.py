@@ -1,9 +1,9 @@
 
-# Version 4.1 9/10/25
+# Version 3.5 9/10/25
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti, Giotto Frean
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2024
+#    Copyright (C) 2017--2025
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
