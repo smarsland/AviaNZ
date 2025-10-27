@@ -42,7 +42,7 @@ from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
 
-from src.models import NNModels
+from models import NN_models
 
 class NNTrain:
 
@@ -382,7 +382,7 @@ class NNTrain:
         model = os.path.join(self.tmpdir2.name, 'model.json')
         self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
         # Load the model and prepare
-        model = NNModels.loadModelFromJson(model)
+        model = NN_models.loadModelFromJson(model)
         # Load weights into new model
         model.load_weights(self.bestweight)
         # Compile the model

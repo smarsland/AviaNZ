@@ -37,7 +37,7 @@ import librosa
 
 import soundfile as sf
 
-from src.models import NNModels
+from models import NN_models
 
 
 # ========== Inference Utilities ==========
@@ -363,11 +363,11 @@ class NN:
         Sets self.model
         '''
         if self.modelArchitecture == 'CNN':
-            self.model = NNModels.CNNModel(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+            self.model = NN_models.CNNModel(self.imageheight,self.imagewidth,len(self.calltypes)+1)
         elif self.modelArchitecture == 'AudioSpectogramTransformer':
-            self.model = NNModels.AudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+            self.model = NN_models.AudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
         elif self.modelArchitecture == 'AudioSpectogramTransformer (pre-trained ViT)':
-            self.model = NNModels.PretrainedAudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
+            self.model = NN_models.PretrainedAudioSpectogramTransformer(self.imageheight,self.imagewidth,len(self.calltypes)+1)
         else:
             raise ValueError("Model architecture not supported")
 

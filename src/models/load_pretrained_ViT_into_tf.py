@@ -1,12 +1,5 @@
-from transformers import ViTImageProcessor, ViTModel
-from PIL import Image
-import requests
-import torchinfo
-import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
-from NNModels import PatchLayer, PositionalEmbedding, TransformerBlock, AudioSpectogramTransformer
-import torch
+from transformers import ViTModel
+from models.NN_models import AudioSpectogramTransformer
 
 # The following is code to convert a ViT transformer from pytorch to tensorflow. 
 # Pytorch puts the outputs first, so a lot of weights need to be transposed. 

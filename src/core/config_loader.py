@@ -23,7 +23,7 @@
 import os
 import json
 from src.core import message_popup
-from src.models import NNModels
+from models import NN_models
 
 
 class ConfigLoader:
@@ -116,7 +116,7 @@ class ConfigLoader:
                 try:
                     if os.path.isfile(json_path):
                         # Use JSON loading with weights
-                        model = NNModels.loadModelFromJson(json_path)
+                        model = NN_models.loadModelFromJson(json_path)
                         if os.path.isfile(h5_path):
                             model.load_weights(h5_path)
                         elif os.path.isfile(os.path.join(dirnn, nn_name + '.weights.h5')):
@@ -134,7 +134,7 @@ class ConfigLoader:
                     elif os.path.isfile(h5_path):
                         # Fallback: try H5 loading even if we preferred JSON
                         print(f"No JSON found for {nn_name}, trying H5 loading...")
-                        model = NNModels.loadModelFromH5(h5_path)
+                        model = NN_models.loadModelFromH5(h5_path)
                         # Store with species key for backward compatibility
                         targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
                     else:

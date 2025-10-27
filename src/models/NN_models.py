@@ -21,12 +21,8 @@
 # Holds the models for NN training, does some saving / loading stuff
 
 import tensorflow as tf
-import os
-import shutil
 from packaging import version
-import h5py
 import json
-from tensorflow.keras.models import model_from_json
 import numpy as np
 
 def CNNModel(imageHeight,imageWidth,outputDim):
@@ -58,8 +54,8 @@ def CNNModel(imageHeight,imageWidth,outputDim):
     return model
 
 class PatchLayer(tf.keras.layers.Layer):
-    def __init__(self, patchSize, patchOverlap):
-        super(PatchLayer, self).__init__()
+    def __init__(self, patchSize, patchOverlap, **kwargs):
+        super(PatchLayer, self).__init__(**kwargs)
         self.patchSize = patchSize
         self.patchOverlap = patchOverlap
 
@@ -74,24 +70,61 @@ class PatchLayer(tf.keras.layers.Layer):
         patches = tf.reshape(patches, [tf.shape(patches)[0], -1, self.patchSize, self.patchSize, 3])
         return patches
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "patchSize": self.patchSize,
+            "patchOverlap": self.patchOverlap,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 class PositionalEmbedding(tf.keras.layers.Layer):
-    def __init__(self, numPatches, embeddingDim):
-        super().__init__()
-        self.pos_emb = self.add_weight("pos_emb", shape=[1, numPatches, embeddingDim], initializer="random_normal")
+    def __init__(self, numPatches, embeddingDim, **kwargs):
+        super().__init__(**kwargs)
+        self.numPatches = numPatches
+        self.embeddingDim = embeddingDim
+        self.pos_emb = self.add_weight(name="pos_emb", shape=[1, numPatches, embeddingDim], initializer="random_normal")
 
     def call(self, x):
         return x + self.pos_emb
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "numPatches": self.numPatches,
+            "embeddingDim": self.embeddingDim,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 class TransformerBlock(tf.keras.layers.Layer):
-    def __init__(self, numHeads, inputDim, ffDim, dropoutRate=0.1):
-        super(TransformerBlock, self).__init__()
+    def __init__(self, numHeads, inputDim, ffDim, dropoutRate=0.1, **kwargs):
+        super(TransformerBlock, self).__init__(**kwargs)
+        self.numHeads = numHeads
+        self.inputDim = inputDim
+        self.ffDim = ffDim
+        self.dropoutRate = dropoutRate
+
+    def build(self, input_shape):
         self.layerNormBefore = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.attn = tf.keras.layers.MultiHeadAttention(num_heads=numHeads, key_dim=inputDim//numHeads, dropout=dropoutRate)
+        self.attn = tf.keras.layers.MultiHeadAttention(
+            num_heads=self.numHeads, 
+            key_dim=self.inputDim//self.numHeads, 
+            dropout=self.dropoutRate
+        )
         self.layerNormAfter = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         self.ff = tf.keras.Sequential([
-            tf.keras.layers.Dense(ffDim, activation=tf.nn.gelu),
-            tf.keras.layers.Dense(inputDim)
+            tf.keras.layers.Dense(self.ffDim, activation=tf.nn.gelu),
+            tf.keras.layers.Dense(self.inputDim)
         ])
+        super(TransformerBlock, self).build(input_shape)
 
     def call(self, inputs, training=False):
         inputsNorm = self.layerNormBefore(inputs)
@@ -102,9 +135,23 @@ class TransformerBlock(tf.keras.layers.Layer):
         ffOutputWithResidual = attnOutputWithResidual + ffOutput
         return ffOutputWithResidual
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "numHeads": self.numHeads,
+            "inputDim": self.inputDim,
+            "ffDim": self.ffDim,
+            "dropoutRate": self.dropoutRate,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 class ClsTokenLayer(tf.keras.layers.Layer):
-    def __init__(self, embedding_dim):
-        super(ClsTokenLayer, self).__init__()
+    def __init__(self, embedding_dim, **kwargs):
+        super(ClsTokenLayer, self).__init__(**kwargs)
         self.embedding_dim = embedding_dim
 
     def build(self, input_shape):
@@ -122,6 +169,17 @@ class ClsTokenLayer(tf.keras.layers.Layer):
         # repeat clsToken for each input
         clsTokenRepeated = tf.repeat(self.clsToken, repeats=tf.shape(inputs)[0], axis=0) 
         return tf.concat([clsTokenRepeated, inputs], axis=1)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "embedding_dim": self.embedding_dim,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 def AudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
     patchSize = 16
@@ -167,12 +225,12 @@ def AudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
     return model
 
 def PretrainedAudioSpectogramTransformer(imageHeight, imageWidth, outputDim):
-    if not imageHeight==224 or not imageWidth==224:
+    if imageHeight != 224 or imageWidth != 224:
         print("Error: pretrained model requires imageHeight and imageWidth are set to 224. Change this in the learning parameters file.")
         return
-    model = AudioSpectogramTransformer(224,224,outputDim)
+    model = AudioSpectogramTransformer(224, 224, outputDim)
     print("Loading weights...")
-    loadWeights(model, "pre-trained_ViT.weights.h5")
+    model.load_weights("pre-trained_ViT.weights.h5")
     return model
 
 
@@ -212,7 +270,7 @@ def loadModelFromJson(jsonPath):
                 }
             })
     model_json = json.dumps(config)
-    return model_from_json(model_json, custom_objects=customObjectScopes)
+    return tf.keras.models.model_from_json(model_json, custom_objects=customObjectScopes)
 
 
 def loadModelFromH5(h5Path):
