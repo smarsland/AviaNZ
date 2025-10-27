@@ -39,6 +39,36 @@ import soundfile as sf
 
 from src.models import NNModels
 
+
+# ========== Inference Utilities ==========
+# These functions support model inference in production/detection workflows
+
+def configure_gpu_memory():
+    """Configure GPU memory settings for the current framework."""
+    try:
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if physical_devices:
+            tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    except Exception as e:
+        print(f"Warning: Could not configure GPU memory growth: {e}")
+
+
+def predict_batch(model, features):
+    """Run batch prediction on features using the given model.
+    
+    Args:
+        model: Trained TensorFlow/Keras model
+        features: numpy array of features to predict on
+        
+    Returns:
+        numpy array of predictions
+    """
+    # TensorFlow implementation:
+    tensor_input = tf.convert_to_tensor(features, dtype=tf.float32)
+    predictions = model(tensor_input)
+    return predictions.numpy() if hasattr(predictions, 'numpy') else predictions
+
+
 class NN:
     """ This class implements NN training and data augmentation in AviaNZ.
     """

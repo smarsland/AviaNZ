@@ -34,7 +34,6 @@ import copy
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
 import skimage.measure as skm
-import tensorflow as tf
 
 DIAMOND_3X3 = np.array([[0, 1, 0],
                          [1, 1, 1],
@@ -665,13 +664,9 @@ class PostProcess:
             self.segments.append([seg, cert])
 
         if NNmodel:
-            # Configure TensorFlow GPU memory growth to prevent it from allocating all GPU memory at once
-            try:
-                physical_devices = tf.config.list_physical_devices('GPU')
-                if physical_devices:
-                    tf.config.experimental.set_memory_growth(physical_devices[0], True)
-            except Exception as e:
-                print(f"Warning: Could not configure GPU memory growth: {e}")
+            # Configure GPU memory for the ML framework (TF or PyTorch)
+            from src.models import NN
+            NN.configure_gpu_memory()
 
             cl = config_loader.ConfigLoader()
             self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
@@ -768,6 +763,17 @@ class PostProcess:
         return featuress.astype('float32')
 
     def predict_nn_batched(self, featuress, batchsize=5):
+        """Run batched NN prediction using framework adapter.
+        
+        Args:
+            featuress: numpy array of features [numframes, height, width, channels]
+            batchsize: number of frames to process at once
+            
+        Returns:
+            numpy array of probabilities [numframes, num_classes]
+        """
+        from src.models import NN
+        
         numframes = featuress.shape[0]
         if numframes == 0:
             return None
@@ -775,7 +781,8 @@ class PostProcess:
         probs = np.empty((numframes, len(self.NNoutputs)))
         for start in range(0, numframes, batchsize):
             end = min(numframes, start + batchsize)
-            p = self.NNmodel(tf.convert_to_tensor(featuress[start:end, :, :, :], dtype=tf.float32))
+            batch_features = featuress[start:end, :, :, :]
+            p = NN.predict_batch(self.NNmodel, batch_features)
             probs[start:end, :] = p
         return probs
 

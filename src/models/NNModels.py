@@ -27,6 +27,7 @@ from packaging import version
 import h5py
 import json
 from tensorflow.keras.models import model_from_json
+import numpy as np
 
 def CNNModel(imageHeight,imageWidth,outputDim):
     apply_same_padding =  imageHeight < 120 or imageWidth < 120
@@ -233,3 +234,4 @@ def loadModelFromH5(h5Path):
                 raise ValueError(f"Unable to load H5 model {h5Path}. Consider converting to JSON format. Original error: {e}")
         else:
             raise
+
