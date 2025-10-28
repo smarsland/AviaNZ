@@ -1190,7 +1190,7 @@ class BuildRecAdvWizard(QWizard):
             if np.max(f_high) == 0:
                 # happens when no segments have y limits
                 f_high = fs/2
-            self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
+            self.fHigh.setValue(int(min(fs/2, int(np.max(f_high)))))
 
             # this is just the minimum call length:
             self.minlen.setText(str(round(np.min(len_min),2)))
@@ -1301,6 +1301,11 @@ class BuildRecAdvWizard(QWizard):
                 tpr_cl = event.ydata
                 if tpr_cl is None or fpr_cl is None:
                     return
+                
+                # Check if training has completed
+                if self.TPR is None or self.FPR is None:
+                    print("Training not yet completed, please wait...")
+                    return
 
                 # get M and thr for closest point
                 distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
@@ -1374,6 +1379,9 @@ class BuildRecAdvWizard(QWizard):
                 self.filtSummary.itemAt(itemnum).widget().hide()
             self.tpr_near = -1
             self.fpr_near = -1
+            # Initialize TPR and FPR to prevent AttributeError in onclick before training completes
+            self.TPR = None
+            self.FPR = None
 
             # parse fields specific to this subfilter
             fLow = int(self.field("fLow"+str(self.pageId)))

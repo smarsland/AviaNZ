@@ -24,6 +24,7 @@ from src.core import spectrogram
 from src.core import config_loader
 from src.core import audio_data
 from src.utils import shapes
+from src.models import inference
 
 import numpy as np
 import scipy.ndimage as spi
@@ -664,9 +665,7 @@ class PostProcess:
             self.segments.append([seg, cert])
 
         if NNmodel:
-            # Configure GPU memory for the ML framework (TF or PyTorch)
-            from src.models import NN
-            NN.configure_gpu_memory()
+            inference.configure_gpu_memory()
 
             cl = config_loader.ConfigLoader()
             self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
@@ -772,8 +771,6 @@ class PostProcess:
         Returns:
             numpy array of probabilities [numframes, num_classes]
         """
-        from src.models import NN
-        
         numframes = featuress.shape[0]
         if numframes == 0:
             return None
@@ -782,7 +779,7 @@ class PostProcess:
         for start in range(0, numframes, batchsize):
             end = min(numframes, start + batchsize)
             batch_features = featuress[start:end, :, :, :]
-            p = NN.predict_batch(self.NNmodel, batch_features)
+            p = inference.predict_batch(self.NNmodel, batch_features)
             probs[start:end, :] = p
         return probs
 
@@ -880,7 +877,7 @@ class PostProcess:
             featuress = self.generate_nn_features(segment_audio, seg[0][1] - seg[0][0])
             
             if np.shape(featuress)[0] > 0:
-                probs = self.NNmodel.predict(featuress)
+                probs = inference.predict_batch(self.NNmodel, featuress)
             else:
                 probs = 0
         return self.NNwindow, probs

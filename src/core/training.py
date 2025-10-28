@@ -35,13 +35,14 @@ import math
 
 from src.core import annotation
 from src.core import config_loader
-from src.models import NN
+from src.models import augmentation
+from src.models import data_generator
+from src.models import loader
+from src.models import inference
 from src.core import wavelet_segment
 from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
 
 import soundfile as sf
-
-from src.models import NN_models
 
 class NNTrain:
 
@@ -165,7 +166,7 @@ class NNTrain:
     def genSegmentDataset(self, hasAnnotation):
         # Prepares segments for input to the learners
         self.traindata = []
-        self.DataGen = NN.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
+        self.DataGen = data_generator.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
 
         # For manually annotated data where the user is confident about full annotation, 
         # choose anything else in the spectrograms as noise examples
@@ -193,10 +194,14 @@ class NNTrain:
         if not self.folderTrain2=="":
             # For wavelet outputs that have been manually verified get noise segments from .corrections
             if os.path.isdir(self.folderTrain2):
+                print(f"Looking for correction files in: {self.folderTrain2}")
+                print(f"Species: {self.species}")
+                print(f"Clean species: {self.cleanSpecies(self.species)}")
                 for root, dirs, files in os.walk(str(self.folderTrain2)):
                     for file in files:
                         print("File: ", file)
                         if (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections' in files:
+                            print(f"Found .corrections file for {file}")
                             # Read the .correction (from allspecies review)
                             cfile = os.path.join(root, file + '.corrections')
                             soundfile = os.path.join(root, file)
@@ -227,6 +232,7 @@ class NNTrain:
                                     self.traindata.append([soundfile, seg[0][:2], len(self.calltypes)])
                                     self.correction = True
                         elif (file.lower().endswith('.wav') or file.lower().endswith('.flac')) and file + '.corrections_' + self.cleanSpecies(self.species) in files:
+                            print(f"Found .corrections_{self.cleanSpecies(self.species)} file for {file}")
                             # Read the .correction (from single sp review)
                             cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
                             soundfile = os.path.join(root, file)
@@ -243,6 +249,7 @@ class NNTrain:
                                     continue
                                 else:
                                     # store this as "noise" calltype
+                                    print(f"Adding noise segment from correction file: {seg[:2]}")
                                     self.traindata.append([soundfile, seg[:2], len(self.calltypes)])
                                     self.correction = True
 
@@ -305,7 +312,7 @@ class NNTrain:
         print('Temporary model dir:', self.tmpdir2.name)
 
         # Find train segments belong to each class
-        self.DataGen = NN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.f1, self.f2)
+        self.DataGen = data_generator.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.f1, self.f2)
 
         # Find how many images with default hop (=imgWidth), adjust hop to make a good number of images also keep space
         # for some in-built augmenting (width-shift)
@@ -325,7 +332,7 @@ class NNTrain:
         print("\t%s:\t%d\n" % ("Noise", self.Nimg[-1]))
 
         # NN training
-        nn = NN.NN(self.configdir, self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.modelArchitecture)
+        nn = augmentation.NN(self.configdir, self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.modelArchitecture)
 
         # 1. Data augmentation
         print('Data augmenting...')
@@ -363,8 +370,8 @@ class NNTrain:
         filenamesall, labelsall = shuffle(filenamesall, labelsall)
         
         X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall, labelsall, test_size=self.LearningDict['test_size'], random_state=1)
-        training_batch_generator = NN.CustomGenerator(X_train_filenames, y_train, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
-        validation_batch_generator = NN.CustomGenerator(X_val_filenames, y_val, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
+        training_batch_generator = data_generator.CustomGenerator(X_train_filenames, y_train, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
+        validation_batch_generator = data_generator.CustomGenerator(X_val_filenames, y_val, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
 
         print('Creating NN architecture...')
         nn.createArchitecture()
@@ -384,21 +391,17 @@ class NNTrain:
         epoch = []
         for r, d, files in os.walk(self.tmpdir2.name):
             for f in files:
-                if f.endswith('.weights.h5'):
-                    epoch.append(int(f.split('.weights.h5')[0][:2]))
+                if f.endswith('.pth'):
+                    epoch.append(int(f.split('-')[0]))
                     weights.append(f)
-            j = np.argmax(epoch)
-            weightfile = weights[j]
+        j = np.argmax(epoch)
+        weightfile = weights[j]
         model = os.path.join(self.tmpdir2.name, 'model.json')
         self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
         # Load the model and prepare
-        model = NN_models.loadModelFromJson(model)
+        model = loader.loadModelFromJson(model)
         # Load weights into new model
-        model.load_weights(self.bestweight)
-        # Compile the model
-        model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'],
-                      metrics=self.LearningDict['metrics'])
-        # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model = loader.loadWeights(model, self.bestweight)
         print('Loaded NN model from ', self.tmpdir2.name)
 
         TPs = [0 for i in range(len(self.calltypes) + 1)]
@@ -543,7 +546,8 @@ class NNTrain:
         self.FNs = []
 
         # Predict and temp plot
-        pre = model.predict(testimages)
+        pre = inference.predict_batch(model, testimages)
+        
         ctprob = [[] for i in range(len(self.calltypes) + 1)]
         for i in range(len(targets)):
             if targets[i] == ct:
@@ -613,7 +617,7 @@ class NNTrain:
 
             modelfile = os.path.join(self.filterdir, NN_name + '.json')
             weightsrc = self.bestweight
-            weightfile = os.path.join(self.filterdir, NN_name + '.h5')
+            weightfile = os.path.join(self.filterdir, NN_name + '.pth')
 
             filename = os.path.join(self.filterdir, self.filterName)
             if not filename.lower().endswith('.txt'):

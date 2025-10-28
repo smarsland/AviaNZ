@@ -521,7 +521,8 @@ class SegmentList(list):
            resolution = math.gcd(window, inc)
         """
         # number of segments of width window at inc overlap
-        duration = int(np.ceil(self.metadata["Duration"] / resolution))
+        # Use floor to match wavelet extraction (which can't handle partial windows)
+        duration = int(np.floor(self.metadata["Duration"] / resolution))
         filenameNoExtension = filename.rsplit('.', 1)[0]
         eFile = filenameNoExtension + '-GT.txt'
 

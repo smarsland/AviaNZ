@@ -313,24 +313,31 @@ class WaveletSegment:
         """
         if len(self.spInfo["Filters"])>1:
             print("ERROR: must provide only 1 subfilter at a time!")
-            return
+            raise ValueError("Must provide only 1 subfilter at a time!")
         else:
             subfilter = self.spInfo["Filters"][0]
 
         # verify that the provided window will result in an integer
         # number of WCs at any level <=5
-        estWCperWindow = math.ceil(window * self.spInfo['SampleRate']/32)
-        estrealwindow = estWCperWindow / self.spInfo['SampleRate']*32
-        if not np.isclose(estrealwindow, window, rtol=0.0001):
+        MINCHPWIN = 32 / self.spInfo['SampleRate']
+        estWCperWindow = math.ceil(window / MINCHPWIN)
+        estrealwindow = estWCperWindow * MINCHPWIN
+        if not np.isclose(estrealwindow, window, rtol=0.001, atol=1e-9):
             print("ERROR: provided window (%f s) will not produce an integer number of WCs. This is currently disabled for safety." % window)
-            return
+            print("       Expected a multiple of %.6f s, but got %.6f s (rounded to %.6f s)" % (MINCHPWIN, window, estrealwindow))
+            raise ValueError("Provided window (%f s) will not produce an integer number of WCs" % window)
+        
+        # Note: we use the requested window for annotation loading.
+        # Individual nodes may have slightly different realized windows,
+        # but the code handles ±1 window differences.
+        # Using the base window here ensures annotations are calculated consistently.
 
         # 1. read wavs and annotations into self.annotation, self.audioList
         self.filenames = []
         self.loadDirectoryChp(dirName=dirName, window=window)
         if len(self.annotation) == 0:
             print("ERROR: no files loaded!")
-            return
+            raise RuntimeError("No valid training files could be loaded!")
 
         nwins = [len(annot) for annot in self.annotation]
 
@@ -373,18 +380,16 @@ class WaveletSegment:
             for node in nodeList:
                 nodeE, noderealwindow = self.WF.extractE(node, window, wpantialias=True)
                 allwindows[node-1, indexF] = noderealwindow
-                # the wavelet energies may in theory have one more or less windows than annots
-                # b/c they adjust the window size to use integer number of WCs.
-                # If they differ by <=1, we allow that and just equalize them:
-                if filenwins==len(nodeE)+1:
-                    currWCs[node-1,:-1] = nodeE
-                    currWCs[node-1,-1] = currWCs[node-1,-2] # repeat last element
-                elif filenwins==len(nodeE)-1:
-                    # drop last WC
-                    currWCs[node-1,:] = nodeE[:-1]
-                elif np.abs(filenwins-len(nodeE))>1:
-                    print("ERROR: lengths of annotations and energies differ:", filenwins, len(nodeE))
-                    return
+                # the wavelet energies may in theory have different number of windows than annots
+                # because each node adjusts the window size to use integer number of WCs.
+                # We handle this by adjusting the arrays to match:
+                if filenwins > len(nodeE):
+                    # pad with last value
+                    currWCs[node-1,:len(nodeE)] = nodeE
+                    currWCs[node-1,len(nodeE):] = nodeE[-1] if len(nodeE) > 0 else 0
+                elif filenwins < len(nodeE):
+                    # truncate
+                    currWCs[node-1,:] = nodeE[:filenwins]
                 else:
                     currWCs[node-1,:] = nodeE
 
@@ -1622,7 +1627,9 @@ class WaveletSegment:
                     self.filenames.append(soundFile)
 
                     # adds to self.annotation array, also sets self.sp data and sampleRate
-                    self.loadDataChp(soundFile, window)
+                    if not self.loadDataChp(soundFile, window):
+                        print(f"Skipping file {soundFile} due to loading error")
+                        continue
 
                     # resample, denoise and store the resulting audio data:
                     # note: preprocessing is a side effect on data
@@ -1659,7 +1666,11 @@ class WaveletSegment:
         filenameNoExtension = filename.rsplit('.', 1)[0]
         filenameAnnotation = filenameNoExtension + '-GT.txt'
 
-        self.sp.readSoundFile(filename)
+        try:
+            self.sp.readSoundFile(filename)
+        except Exception as e:
+            print(f"ERROR: Could not read audio file {filename}: {e}")
+            return False
 
         # Do impulse masking by default
         if impMask:
@@ -1706,7 +1717,11 @@ class WaveletSegment:
         filenameAnnotation = filenameNoExtension + '-GT.txt'
 
         # Read data. No impulse masking
-        self.sp.readSoundFile(filename)
+        try:
+            self.sp.readSoundFile(filename)
+        except Exception as e:
+            print(f"ERROR: Could not read audio file {filename}: {e}")
+            return False
 
         # Get the segmentation from the txt file
         with open(filenameAnnotation, encoding='utf-8') as f:
@@ -1716,11 +1731,14 @@ class WaveletSegment:
             d = d[:-1]
 
         # A sanity check as the durations will be used in F1 score
-        nwins = math.ceil(len(self.sp.audio_data.data) / self.sp.audio_data.sample_rate / window)
+        # Use floor to match wavelet extraction (which can't handle partial windows)
+        nwins = math.floor(len(self.sp.audio_data.data) / self.sp.audio_data.sample_rate / window)
         if len(d) != nwins:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), nwins))
+            print("       File has %.2f seconds, window is %.6f s, giving %d windows" % (
+                len(self.sp.audio_data.data) / self.sp.audio_data.sample_rate, window, nwins))
             self.annotation = []
-            return
+            return False
 
         # for each window, store 0/1 presence
         fileAnnotations = np.array([int(row[1]) for row in d])
@@ -1729,3 +1747,4 @@ class WaveletSegment:
         presblocks = sum(fileAnnotations)
         totalblocks = sum([len(a) for a in self.annotation])
         print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (nwins, presblocks, totalblocks))
+        return True

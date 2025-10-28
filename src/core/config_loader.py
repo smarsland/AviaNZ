@@ -23,7 +23,7 @@
 import os
 import json
 from src.core import message_popup
-from src.models import NN_models
+from src.models import loader
 
 
 class ConfigLoader:
@@ -110,18 +110,15 @@ class ConfigLoader:
             elif filt["NN"]:
                 # Determine loading method based on NN_name and available files
                 nn_name = filt["NN"]["NN_name"]
-                h5_path = os.path.join(dirnn, nn_name + '.h5')
+                pth_path = os.path.join(dirnn, nn_name + '.pth')
                 json_path = os.path.join(dirnn, nn_name + '.json')
                 
                 try:
                     if os.path.isfile(json_path):
                         # Use JSON loading with weights
-                        model = NN_models.loadModelFromJson(json_path)
-                        if os.path.isfile(h5_path):
-                            model.load_weights(h5_path)
-                        elif os.path.isfile(os.path.join(dirnn, nn_name + '.weights.h5')):
-                            model.load_weights(os.path.join(dirnn, nn_name + '.weights.h5'))
-                        model.compile(loss=filt["NN"]["loss"], optimizer=filt["NN"]["optimizer"], metrics=['accuracy'])
+                        model = loader.loadModelFromJson(json_path)
+                        if os.path.isfile(pth_path):
+                            model = loader.loadWeights(model, pth_path)
                         if 'fRange' in filt["NN"]:
                             targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
                                                         filt["NN"]["output"],
@@ -131,10 +128,10 @@ class ConfigLoader:
                             targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
                                                         filt["NN"]["output"], filt["NN"]["windowInc"],
                                                         filt["NN"]["thr"], False]
-                    elif os.path.isfile(h5_path):
-                        # Fallback: try H5 loading even if we preferred JSON
-                        print(f"No JSON found for {nn_name}, trying H5 loading...")
-                        model = NN_models.loadModelFromH5(h5_path)
+                    elif os.path.isfile(pth_path):
+                        # Fallback: try direct loading
+                        print(f"No JSON found for {nn_name}, trying direct loading...")
+                        model = loader.loadModelFromH5(pth_path)
                         # Store with species key for backward compatibility
                         targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
                     else:

@@ -950,7 +950,8 @@ class ReviewInterface(QMainWindow):
     def saveCurrentPage(self, dialog):
         """ Called when navigating pages or closing - saves current page's changes """
         self.collectButtonStates(dialog)
-        self.saveQuickResults()
+        # Save to disk after each page to prevent data loss
+        self.saveQuickResults(incrementalSave=True)
 
     def collectButtonStates(self, dialog):
         """ Collects current button states from dialog """
@@ -987,39 +988,99 @@ class ReviewInterface(QMainWindow):
             if btn is not None:
                 btn.stopPlayback()
         
+        # Collect and save the final page
         self.collectButtonStates(dialog)
-        self.saveQuickResults()
+        self.saveQuickResults(incrementalSave=False)
+        
+        # Clean up tracking variables
+        if hasattr(self, '_quick_changes'):
+            delattr(self, '_quick_changes')
+        if hasattr(self, '_quick_mapping'):
+            delattr(self, '_quick_mapping')
         
         dialog.done(1)
 
-    def saveQuickResults(self):
-        """ Saves all changes from quick review back to the original files """
+    def saveQuickResults(self, incrementalSave=False):
+        """ Saves all changes from quick review back to the original files 
+        
+        Args:
+            incrementalSave: If True, only save new changes and keep tracking.
+                           If False, save all changes and allow cleanup.
+        """
         if not hasattr(self, '_quick_changes'):
             return
+        
+        # Track which changes have already been saved to disk
+        if not hasattr(self, '_quick_saved'):
+            self._quick_saved = {}
+        
+        # Track deleted segments for correction files
+        if not hasattr(self, '_quick_corrections'):
+            self._quick_corrections = {}
             
         for filename, changes in self._quick_changes.items():
             if filename not in self.allFileData:
                 continue
+            
+            # Find changes that haven't been saved yet
+            if filename not in self._quick_saved:
+                self._quick_saved[filename] = {}
+            
+            new_changes = {}
+            for orig_idx, mark in changes.items():
+                if orig_idx not in self._quick_saved[filename] or self._quick_saved[filename][orig_idx] != mark:
+                    new_changes[orig_idx] = mark
+            
+            if not new_changes:
+                continue  # No new changes for this file
                 
             file_data = self.allFileData[filename]
-            segments = file_data['segments']
+            
+            # Need to reload segments from disk to get current state
+            # (in case we modified and saved them in a previous page)
+            segments = annotation.SegmentList()
+            segments.parseJSON(filename + '.data')
+            
+            # Filter to get the segments we care about (matching our original collection)
+            # We need to rebuild the mapping because indices may have changed
             goodsegments = file_data['goodsegments']
             
             todelete = []
             toadd = []
+            outputErrors = []  # For correction files
             
-            # Process changes for this file
-            for orig_idx, mark in changes.items():
-                if orig_idx >= len(segments):
+            # Process new changes for this file
+            for orig_idx, mark in new_changes.items():
+                # Find the segment by matching the original segment we collected
+                orig_seg = file_data['segments'][orig_idx]
+                
+                # Find this segment in the current segments list
+                found_idx = None
+                for idx, seg in enumerate(segments):
+                    if (seg.start_time == orig_seg.start_time and 
+                        seg.end_time == orig_seg.end_time and
+                        seg.freq_low == orig_seg.freq_low and
+                        seg.freq_high == orig_seg.freq_high):
+                        found_idx = idx
+                        break
+                
+                if found_idx is None:
+                    # Segment was already deleted in a previous save
+                    self._quick_saved[filename][orig_idx] = mark
                     continue
                     
-                seg = segments[orig_idx]
+                seg = segments[found_idx]
                 
                 if mark == "red":
+                    # Save a copy for correction file BEFORE wiping
+                    # Convert Segment to list format for JSON serialization
+                    cSeg = copy.deepcopy(seg).to_list()
+                    outputErrors.append(cSeg)
+                    
                     # Remove all labels for the current species
                     wipedAll = seg.wipeSpecies(self.species)
                     if wipedAll:
-                        todelete.append(orig_idx)
+                        todelete.append(found_idx)
                 elif mark == "yellow":
                     # Set uncertainty
                     seg.questionLabels(self.species)
@@ -1035,6 +1096,15 @@ class ReviewInterface(QMainWindow):
                     new_seg.freq_low += 50
                     new_seg.freq_high += 50
                     toadd.append(new_seg)
+                
+                # Mark this change as saved
+                self._quick_saved[filename][orig_idx] = mark
+            
+            # Accumulate deleted segments for correction file
+            if len(outputErrors) > 0:
+                if filename not in self._quick_corrections:
+                    self._quick_corrections[filename] = []
+                self._quick_corrections[filename].extend(outputErrors)
             
             # Apply deletions (reverse order to preserve indices)
             for idx in reversed(sorted(todelete)):
@@ -1043,15 +1113,36 @@ class ReviewInterface(QMainWindow):
             # Add new segments
             segments.extend(toadd)
             
-            # Re-add good segments
-            segments.extend(goodsegments)
+            # Re-add good segments (only if this is the first save for this file)
+            # Check if we haven't added them before
+            if filename not in getattr(self, '_quick_goodsegments_added', set()):
+                segments.extend(goodsegments)
+                if not hasattr(self, '_quick_goodsegments_added'):
+                    self._quick_goodsegments_added = set()
+                self._quick_goodsegments_added.add(filename)
             
             segments.saveJSON(filename + '.data', self.reviewer)
         
-        # Clean up
-        delattr(self, '_quick_changes')
-        if hasattr(self, '_quick_mapping'):
-            delattr(self, '_quick_mapping')
+        # Save ALL correction files at the end (only when not incremental)
+        if not incrementalSave and self.config.get('saveCorrections', True):
+            speciesClean = re.sub(r'[^A-Za-z0-9()-]', "_", self.species)
+            for filename, corrections in getattr(self, '_quick_corrections', {}).items():
+                if len(corrections) > 0:
+                    correctionFile = filename + '.corrections_' + speciesClean
+                    # Delete old correction file first to avoid duplicates
+                    if os.path.isfile(correctionFile):
+                        os.remove(correctionFile)
+                    self.saveCorrectJSON(correctionFile, corrections, mode=2, reviewer=self.reviewer)
+                    print(f"Saved {len(corrections)} corrections to {correctionFile}")
+        
+        # Only clean up when doing the final save
+        if not incrementalSave:
+            if hasattr(self, '_quick_saved'):
+                delattr(self, '_quick_saved')
+            if hasattr(self, '_quick_goodsegments_added'):
+                delattr(self, '_quick_goodsegments_added')
+            if hasattr(self, '_quick_corrections'):
+                delattr(self, '_quick_corrections')
 
     def exportExcel(self):
         """ Launched manually by pressing the button.

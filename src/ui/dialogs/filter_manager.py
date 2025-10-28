@@ -163,10 +163,8 @@ class FilterManager(QDialog):
             sources.append(os.path.join(self.filtdir, currfilt["RONN"] + ".json"))
 
         if "NN" in currfilt:
-            if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".h5")):
-                sources.append(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".h5"))
-            elif os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".weights.h5")):
-                sources.append(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".weights.h5"))
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".pth")):
+                sources.append(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".pth"))
             # bat filters do not have jsons:
             if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".json")):
                 sources.append(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".json"))
@@ -216,12 +214,9 @@ class FilterManager(QDialog):
                 sources.append(JSONsource)
                 targets.append(os.path.join(self.filtdir, filt["ROCWF"] + ".json"))
             if "NN" in filt:
-                if os.path.isfile(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".h5")): # old tensorflow version of saving weights
-                    sources.append(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".h5"))
-                    targets.append(os.path.join(self.filtdir, filt["NN"]["NN_name"] + ".h5"))
-                elif os.path.isfile(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".weights.h5")): # new
-                    sources.append(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".weights.h5"))
-                    targets.append(os.path.join(self.filtdir, filt["NN"]["NN_name"] + ".weights.h5"))
+                if os.path.isfile(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".pth")):
+                    sources.append(os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".pth"))
+                    targets.append(os.path.join(self.filtdir, filt["NN"]["NN_name"] + ".pth"))
                 # bat filters do not have jsons:
                 JSONsource = os.path.join(os.path.dirname(source), filt["NN"]["NN_name"] + ".json")
                 if os.path.isfile(JSONsource):
@@ -282,10 +277,8 @@ class FilterManager(QDialog):
             sources.append(currfilt["RONN"] + ".json")
 
         if "NN" in currfilt:
-            if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".h5")): # old tensorflow version of saving weights
-                sources.append(currfilt["NN"]["NN_name"] + ".h5")
-            elif os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".weights.h5")): # new
-                sources.append(currfilt["NN"]["NN_name"] + ".weights.h5")
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".pth")):
+                sources.append(currfilt["NN"]["NN_name"] + ".pth")
             # bat filters do not have jsons:
             if os.path.isfile(os.path.join(self.filtdir, currfilt["NN"]["NN_name"] + ".json")):
                 sources.append(currfilt["NN"]["NN_name"] + ".json")

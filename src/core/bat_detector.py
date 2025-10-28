@@ -23,6 +23,7 @@
 import math
 import numpy as np
 from src.core import annotation
+from src.models import inference
 from src.utils.exceptions import GentleExitException
 from scipy import ndimage
         
@@ -103,7 +104,7 @@ class BatDetector:
         print(f"Shape after reshape: {test_images.shape}")
         test_images = test_images.astype('float32')
         
-        predictions = model.predict(test_images)
+        predictions = inference.predict_batch(model, test_images)
         
         # Step 4: Generate labels from predictions
         print('Assessing file label...')
