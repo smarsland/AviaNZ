@@ -44,6 +44,23 @@ class ChannelsLastFlatten(nn.Module):
 
 
 class TFtoPyTorchConverter:
+    """
+    Converts TensorFlow/Keras models to PyTorch.
+    
+    Supports two TensorFlow weight formats:
+    
+    1. Old format (.h5):
+       - Weight path: layer_name/layer_name/kernel:0
+       - Bias path: layer_name/layer_name/bias:0
+       - Example: conv2d/conv2d/kernel:0
+    
+    2. New format (.weights.h5, TensorFlow 2.x):
+       - Weight path: layers/layer_name/vars/0
+       - Bias path: layers/layer_name/vars/1
+       - Example: layers/conv2d/vars/0
+    
+    The format is automatically detected based on HDF5 file structure.
+    """
     def __init__(self, json_path, h5_path=None):
         self.json_path = json_path
         self.h5_path = h5_path
@@ -158,11 +175,27 @@ class TFtoPyTorchConverter:
         else:
             raise NotImplementedError(f"Activation {activation} not yet supported for Dense")
     
+    def _detect_weights_format(self, h5file):
+        """Detect whether this is old (.h5) or new (.weights.h5) format.
+        
+        Returns:
+            'old' if old format (layer_name/layer_name/kernel:0)
+            'new' if new format (layers/layer_name/vars/0)
+        """
+        # Check for new format signature
+        if 'layers' in h5file:
+            return 'new'
+        # Old format has layer names directly at root
+        return 'old'
+    
     def _load_weights(self, model):
         if not self.h5_path:
             return
         
         with h5py.File(self.h5_path, 'r') as h5file:
+            # Detect format
+            weights_format = self._detect_weights_format(h5file)
+            
             # Get the top-level children (not all nested modules)
             modules_list = list(model.children())
             
@@ -190,7 +223,14 @@ class TFtoPyTorchConverter:
                     else:
                         conv_layer = module
                     
-                    kernel_path = f"{layer_name}/{layer_name}/kernel:0"
+                    # Get kernel data based on format
+                    if weights_format == 'new':
+                        kernel_path = f"layers/{layer_name}/vars/0"
+                        bias_path = f"layers/{layer_name}/vars/1"
+                    else:  # old format
+                        kernel_path = f"{layer_name}/{layer_name}/kernel:0"
+                        bias_path = f"{layer_name}/{layer_name}/bias:0"
+                    
                     if kernel_path in h5file:
                         kernel_data = h5file[kernel_path][:]
                         # TensorFlow: (H, W, in_channels, out_channels)
@@ -202,7 +242,6 @@ class TFtoPyTorchConverter:
                         
                         conv_layer.weight.data = torch.from_numpy(kernel_torch).float()
                     
-                    bias_path = f"{layer_name}/{layer_name}/bias:0"
                     if bias_path in h5file and conv_layer.bias is not None:
                         bias_data = h5file[bias_path][:]
                         conv_layer.bias.data = torch.from_numpy(bias_data).float()
@@ -218,7 +257,14 @@ class TFtoPyTorchConverter:
                     else:
                         linear_layer = module
                     
-                    kernel_path = f"{layer_name}/{layer_name}/kernel:0"
+                    # Get kernel data based on format
+                    if weights_format == 'new':
+                        kernel_path = f"layers/{layer_name}/vars/0"
+                        bias_path = f"layers/{layer_name}/vars/1"
+                    else:  # old format
+                        kernel_path = f"{layer_name}/{layer_name}/kernel:0"
+                        bias_path = f"{layer_name}/{layer_name}/bias:0"
+                    
                     if kernel_path in h5file:
                         kernel_data = h5file[kernel_path][:]
                         # TensorFlow: (in_features, out_features)
@@ -230,7 +276,6 @@ class TFtoPyTorchConverter:
                         
                         linear_layer.weight.data = torch.from_numpy(kernel_torch).float()
                     
-                    bias_path = f"{layer_name}/{layer_name}/bias:0"
                     if bias_path in h5file and linear_layer.bias is not None:
                         bias_data = h5file[bias_path][:]
                         linear_layer.bias.data = torch.from_numpy(bias_data).float()

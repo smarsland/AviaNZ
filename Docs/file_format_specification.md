@@ -112,10 +112,11 @@ Thus, a full filter file may look like this:
       "NN": {"NN_name": "Kiwi (Little spotted)", "loss": "binary_crossentropy", "optimizer": "adam", "win": 0.25, "inputdim": [128, 30], "output": {"0": "M", "1": "F", "2": "Noise", "3": "Silence"}, "windowInc":[256, 128], "thr":[0.5, 0.3]}
     }
 
-## NN files (.JSON/.h5/.hdf5)
+## NN files (.JSON/.h5/.weights.h5)
 
-A NN model has two files: model architecture is stored in a JSON file and the weights are stored in a Hierarchical Data Format 5 file (.h5 or .hdf5).
+A NN model has two files: model architecture is stored in a JSON file and the weights are stored in a Hierarchical Data Format 5 file (.h5, .weights.h5, or .hdf5).
 All the NN models are stored in the user configdir/Filters and referred in the corresponding Filter files.
+The loader will check for `.h5` first, then fall back to `.weights.h5` if the regular `.h5` file is missing.
 
 ## Correction files (.corrections/ .corrections_species)
 

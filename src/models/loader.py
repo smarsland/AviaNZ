@@ -39,11 +39,13 @@ def loadModel(nn_name, dirnn):
     Loading priority:
         1. If .pth exists -> load directly (native PyTorch model)
         2. If .json + .h5 exist -> detect old TensorFlow model and convert
-        3. Otherwise -> raise error
+        3. If .json + .weights.h5 exist -> detect old TensorFlow model and convert
+        4. Otherwise -> raise error
     """
     pth_path = os.path.join(dirnn, nn_name + '.pth')
     json_path = os.path.join(dirnn, nn_name + '.json')
     h5_path = os.path.join(dirnn, nn_name + '.h5')
+    weights_h5_path = os.path.join(dirnn, nn_name + '.weights.h5')
     
     # Priority 1: Load native PyTorch model
     if os.path.isfile(pth_path):
@@ -53,14 +55,30 @@ def loadModel(nn_name, dirnn):
         return model
     
     # Priority 2: Convert legacy TensorFlow model
-    elif os.path.isfile(json_path) and os.path.isfile(h5_path):
-        print(f"⚠️  Detected legacy TensorFlow model: {nn_name}")
-        print(f"    Converting to PyTorch format...")
+    # Check for both .h5 and .weights.h5, preferring .h5
+    weights_path = None
+    if os.path.isfile(json_path):
+        if os.path.isfile(h5_path):
+            weights_path = h5_path
+            weights_ext = '.h5'
+        elif os.path.isfile(weights_h5_path):
+            weights_path = weights_h5_path
+            weights_ext = '.weights.h5'
+    
+    if weights_path:
+        # Determine format for user feedback
+        if weights_ext == '.weights.h5':
+            format_msg = "newer TensorFlow 2.x format"
+        else:
+            format_msg = "legacy TensorFlow format"
+        
+        print(f"⚠️  Detected {format_msg}: {nn_name}")
+        print(f"    Converting to PyTorch format (using {weights_ext})...")
         
         from src.models.tf_to_torch_converter import convert_tf_model_to_pytorch
         
         try:
-            model = convert_tf_model_to_pytorch(json_path, h5_path)
+            model = convert_tf_model_to_pytorch(json_path, weights_path)
             model.eval()
             
             print(f"    ✓ Conversion successful!")
@@ -78,14 +96,14 @@ def loadModel(nn_name, dirnn):
     elif os.path.isfile(json_path):
         raise FileNotFoundError(
             f"Found {nn_name}.json but missing weights file. "
-            f"Need either {nn_name}.pth (PyTorch) or {nn_name}.h5 (TensorFlow legacy)"
+            f"Need either {nn_name}.pth (PyTorch), {nn_name}.h5, or {nn_name}.weights.h5"
         )
     
     # Nothing found
     else:
         raise FileNotFoundError(
             f"No model files found for '{nn_name}' in {dirnn}. "
-            f"Expected either {nn_name}.pth or {nn_name}.json + {nn_name}.h5"
+            f"Expected either {nn_name}.pth or {nn_name}.json + ({nn_name}.h5 or {nn_name}.weights.h5)"
         )
 
 
