@@ -108,37 +108,29 @@ class ConfigLoader:
             if "NN" not in filt:
                 continue
             elif filt["NN"]:
-                # Determine loading method based on NN_name and available files
                 nn_name = filt["NN"]["NN_name"]
-                pth_path = os.path.join(dirnn, nn_name + '.pth')
-                json_path = os.path.join(dirnn, nn_name + '.json')
                 
                 try:
-                    if os.path.isfile(json_path):
-                        # Use JSON loading with weights
-                        model = loader.loadModelFromJson(json_path)
-                        if os.path.isfile(pth_path):
-                            model = loader.loadWeights(model, pth_path)
-                        if 'fRange' in filt["NN"]:
-                            targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
-                                                        filt["NN"]["output"],
-                                                        filt["NN"]["windowInc"], filt["NN"]["thr"], True,
-                                                        filt["NN"]["fRange"]]
-                        else:
-                            targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
-                                                        filt["NN"]["output"], filt["NN"]["windowInc"],
-                                                        filt["NN"]["thr"], False]
-                    elif os.path.isfile(pth_path):
-                        # Fallback: try direct loading
-                        print(f"No JSON found for {nn_name}, trying direct loading...")
-                        model = loader.loadModelFromH5(pth_path)
-                        # Store with species key for backward compatibility
-                        targetmodels[species] = [model, filt["NN"]["win"], filt["NN"]["inputdim"], filt["NN"]["output"], filt["NN"]["windowInc"], filt["NN"]["thr"]]
+                    # Use smart loader that handles both PyTorch and TensorFlow models
+                    model = loader.loadModel(nn_name, dirnn)
+                    
+                    # Store model with metadata
+                    if 'fRange' in filt["NN"]:
+                        targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                    filt["NN"]["output"],
+                                                    filt["NN"]["windowInc"], filt["NN"]["thr"], True,
+                                                    filt["NN"]["fRange"]]
                     else:
-                        print(f"Warning: No model files found for {nn_name}")
-                        continue
+                        targetmodels[nn_name] = [model, filt["NN"]["win"], filt["NN"]["inputdim"],
+                                                    filt["NN"]["output"], filt["NN"]["windowInc"],
+                                                    filt["NN"]["thr"], False]
+                except FileNotFoundError as e:
+                    print(f"Warning: {e}")
+                    continue
                 except Exception as e:
                     print(f"Error loading model {nn_name}: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
         print("Loaded NN models:", list(targetmodels.keys()))
         return targetmodels
