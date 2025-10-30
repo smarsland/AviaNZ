@@ -48,9 +48,7 @@ class ModelTrainer:
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
     def createArchitecture(self):
-        """
-        Sets self.model
-        """
+        """ Sets self.model """
         if self.modelArchitecture == 'CNN':
             self.model = architectures.CNNModel(self.imageheight, self.imagewidth, len(self.calltypes)+1)
             self.model = self.model.to(self.device)
@@ -58,7 +56,7 @@ class ModelTrainer:
             raise ValueError("Model architecture not supported")
 
     def train(self, modelsavepath, training_batch_generator, validation_batch_generator):
-        """ Train the model - use image generator """
+        """ Train the model using image generators. """
 
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)

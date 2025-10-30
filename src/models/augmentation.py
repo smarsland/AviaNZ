@@ -27,31 +27,14 @@ from src.core import audio_data
 
 
 def add_noise(image, noise_image, noise_range=(0.2, 0.8)):
-    """Add random percentage of noise_image to image.
-    
-    Args:
-        image: original image
-        noise_image: noise image to add
-        noise_range: tuple of (min, max) for noise scaling factor
-        
-    Returns:
-        new image with added noise
-    """
+    """ Add random percentage of noise_image to image. """
     noise_factor = np.random.uniform(noise_range[0], noise_range[1])
     new_image = image + noise_image * noise_factor
     return new_image
 
 
 def time_stretch(data, rate):
-    """Time stretch audio data by given rate.
-    
-    Args:
-        data: audio data array
-        rate: stretch rate (>1 speeds up, <1 slows down)
-        
-    Returns:
-        stretched audio data with same length as input
-    """
+    """ Time stretch audio data by given rate (>1 speeds up, <1 slows down). """
     input_length = len(data)
     data = librosa.effects.time_stretch(data, rate=rate)
     if len(data) > input_length:
@@ -62,19 +45,7 @@ def time_stretch(data, rate):
 
 
 def change_speed_random(audiodata, fs, windowwidth, inc, mu=1.0, sigma=0.05):
-    """Change the speed of audio data randomly and generate spectrogram image.
-    
-    Args:
-        audiodata: audio data array
-        fs: sample rate
-        windowwidth: window width for spectrogram
-        inc: increment for spectrogram
-        mu: mean of normal distribution for rate
-        sigma: std dev of normal distribution for rate
-        
-    Returns:
-        spectrogram image after speed change
-    """
+    """ Change the speed of audio data randomly and generate spectrogram image. """
     s = np.random.normal(mu, sigma, 1000)
     rate = s[int(np.random.random() * 1000)]
     newdata = time_stretch(audiodata, rate)
@@ -83,17 +54,7 @@ def change_speed_random(audiodata, fs, windowwidth, inc, mu=1.0, sigma=0.05):
 
 
 def generate_spectrogram_image(audiodata, fs, windowwidth, inc):
-    """Generate spectrogram image from audio data.
-    
-    Args:
-        audiodata: audio data array
-        fs: sample rate
-        windowwidth: window width for spectrogram
-        inc: increment for spectrogram
-        
-    Returns:
-        normalized and rotated spectrogram as list
-    """
+    """ Generate normalized and rotated spectrogram image from audio data. """
     sp = spectrogram.Spectrogram(windowwidth, inc)
     sp.audio_data = audio_data.AudioData(
         data=audiodata, 
@@ -108,19 +69,7 @@ def generate_spectrogram_image(audiodata, fs, windowwidth, inc):
 
 
 def augment_width_shift(images, num_needed, batch_size=32, shift_range=0.3):
-    """Apply horizontal shift augmentation to images.
-    
-    Mimics ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest').
-    
-    Args:
-        images: array of images to augment
-        num_needed: number of augmented images needed
-        batch_size: size of batches to process
-        shift_range: maximum shift as fraction of width (e.g., 0.3 = 30%)
-        
-    Returns:
-        array of augmented images
-    """
+    """ Apply horizontal shift augmentation to images. Mimics ImageDataGenerator width_shift. """
     augmented = []
     num_batches = int(np.ceil(num_needed / batch_size))
     
@@ -145,19 +94,7 @@ def augment_width_shift(images, num_needed, batch_size=32, shift_range=0.3):
 
 
 def generate_batch_noise(images, noise_pool, n, imageheight, imagewidth, noise_range=(0.2, 0.8)):
-    """Generate a batch of n new images by adding noise.
-    
-    Args:
-        images: set of original images
-        noise_pool: pool of noise images
-        n: number of new images to generate
-        imageheight: height of images
-        imagewidth: width of images
-        noise_range: tuple of (min, max) for noise scaling factor
-        
-    Returns:
-        array of new images with added noise
-    """
+    """ Generate a batch of n new images by adding noise. """
     new_images = np.ndarray(shape=(n, imageheight, imagewidth, 1), dtype=float)
     for i in range(n):
         img = images[np.random.randint(0, len(images))]
@@ -167,22 +104,7 @@ def generate_batch_noise(images, noise_pool, n, imageheight, imagewidth, noise_r
 
 
 def generate_batch_noise_from_audio(audios, noise_pool, n, fs, length, windowwidth, inc, imageheight, imagewidth):
-    """Generate a batch of n new images by adding audio noise then generating spectrograms.
-    
-    Args:
-        audios: set of original audio arrays
-        noise_pool: pool of noise audio arrays
-        n: number of new images to generate
-        fs: sample rate
-        length: length of audio in seconds
-        windowwidth: window width for spectrogram
-        inc: increment for spectrogram
-        imageheight: height of output images
-        imagewidth: width of output images
-        
-    Returns:
-        array of new spectrogram images
-    """
+    """ Generate a batch of n new spectrogram images by adding audio noise. """
     nsamp = fs * length
     new_audios = np.ndarray(shape=(n, nsamp), dtype=float)
     for i in range(n):
@@ -198,22 +120,7 @@ def generate_batch_noise_from_audio(audios, noise_pool, n, fs, length, windowwid
 
 
 def generate_batch_change_speed(audios, n, fs, windowwidth, inc, imageheight, imagewidth, mu=1.0, sigma=0.05):
-    """Generate a batch of n new images by changing audio speed.
-    
-    Args:
-        audios: set of original audio arrays
-        n: number of new images to generate
-        fs: sample rate
-        windowwidth: window width for spectrogram
-        inc: increment for spectrogram
-        imageheight: height of output images
-        imagewidth: width of output images
-        mu: mean of normal distribution for rate
-        sigma: std dev of normal distribution for rate
-        
-    Returns:
-        array of new spectrogram images
-    """
+    """ Generate a batch of n new spectrogram images by randomly changing audio speed. """
     new_images = np.ndarray(shape=(n, imageheight, imagewidth, 1), dtype=float)
     for i in range(n):
         audio = audios[np.random.randint(0, len(audios))]

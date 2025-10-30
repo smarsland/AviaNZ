@@ -31,17 +31,8 @@ import os
 
 
 def loadModel(nn_name, dirnn):
-    """
-    Smart model loader that handles both PyTorch and legacy TensorFlow models.
-    
-    Args:
-        nn_name: Base name of the model (without extension)
-        dirnn: Directory containing model files
-        
-    Returns:
-        Loaded PyTorch model in evaluation mode
-        
-    Loading priority:
+    """ Smart model loader that handles both PyTorch and legacy TensorFlow models.
+        Loading priority:
         1. If .pth exists -> load directly (native PyTorch model)
         2. If .json + .h5 exist -> detect old TensorFlow model and convert
         3. If .json + .weights.h5 exist -> detect old TensorFlow model and convert
@@ -118,13 +109,8 @@ def loadModel(nn_name, dirnn):
 # ============================================================================
 
 def loadModelFromJson(jsonPath):
-    """
-    Load NEW PyTorch model architecture from training config JSON.
-    
-    Note: This is for NEWLY TRAINED models only, not for loading existing models!
-    The JSON format here is different from TensorFlow's JSON format.
-    
-    For loading existing models, use loadModel() instead.
+    """ Load NEW PyTorch model architecture from training config JSON.
+        For loading existing models, use loadModel() instead.
     """
     with open(jsonPath, "r") as f:
         config = json.load(f)
@@ -143,12 +129,7 @@ def loadModelFromJson(jsonPath):
 
 
 def loadWeights(model, weightsPath):
-    """
-    Load weights (.pth) into an existing PyTorch model.
-    
-    Used during training evaluation to load checkpoint weights.
-    For loading complete models, use loadModel() instead.
-    """
+    """ Load weights (.pth) into an existing PyTorch model. """
     model.load_state_dict(torch.load(weightsPath, map_location='cpu', weights_only=True))
     model.eval()
     return model

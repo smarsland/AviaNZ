@@ -61,10 +61,7 @@ class TrainingDataGenerator:
         self.imagewidth = imagewidth
 
     def findCTsegments(self, dirName, calltypei):
-        """ dirName got reviewed.data or manual.data
-            Find calltype segments
-            :returns ct segments [[filename, seg, label], ...]
-        """
+        """ Find calltype segments from reviewed/manual annotations. """
 
         calltypeSegments = []
         for root, dirs, files in os.walk(dirName):
@@ -88,11 +85,7 @@ class TrainingDataGenerator:
         return calltypeSegments
 
     def findNoisesegments(self, dirName):
-        """ dirName got manually annotated GT.data
-        Generates auto segments by running wavelet detection
-        Find noise segments by diff of auto segments and GT.data
-        :returns noise segments [[filename, seg, label], ...]
-        """
+        """ Find noise segments by running wavelet detection and comparing with GT. """
         manSegNum = 0
         noiseSegments = []
         print('Generating GT...')
@@ -134,11 +127,7 @@ class TrainingDataGenerator:
         return noiseSegments
 
     def findAllsegments(self, dirName):
-        """ dirName got manually annotated GT.data
-        Generates noise segments as the complement to GT segments
-        (i.e. every not marked second is used as noise)
-        :returns noise segments [[filename, seg, label], ...]
-        """
+        """ Find noise segments as the complement to GT segments (unmarked seconds). """
         manSegNum = 0
         noiseSegments = []
         segmenter = segmentation.Segmenter()
@@ -175,12 +164,7 @@ class TrainingDataGenerator:
         return seg[0]<=segGT[1] and seg[1]>=segGT[0]
 
     def getImgCount(self, dirName, dataset, hop):
-        """
-        Read the segment library and estimate the number of NN images per class
-        :param dataset: segments in the form of [[file, [segment], label], ..]
-        :param hop: list of hops for different classes
-        :return: a list
-        """
+        """ Estimate the number of NN images per class from segment library. """
         dhop = hop
         eps = 0.0005
         N = [0 for i in range(len(self.calltypes) + 1)]
@@ -217,16 +201,7 @@ class TrainingDataGenerator:
         return N
 
     def generateFeatures(self, dirName, dataset, hop, specFrameSize, verbose=False):
-        """
-        Read the segment library and generate features, training.
-        Similar to SignalProc.generateFeaturesNN, except this one saves images
-            to disk instead of returning them.
-        :param dataset: segments in the form of [[file, [segment], label], ..]
-        :param hop:
-        :param specFrameSize: size of the spectrogram frame. We can't just use the window width, because that has been rounded to an integer,
-            and we want the final image to be a set width. 
-        :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
-        """
+        """ Generate and save training features from segment library. Saves images to disk. """
         count = 0
         dhop = hop
         eps = 0.0005
@@ -327,47 +302,18 @@ class SpectrogramDataset(Dataset):
 # =============================================================================
 
 def load_calltype_images(dirName, imageheight, imagewidth):
-    """Load images from a call type subdirectory.
-    
-    Args:
-        dirName: directory containing .npy image files
-        imageheight: target image height
-        imagewidth: target image width
-        
-    Returns:
-        array of images resized to (imageheight, imagewidth, 1)
-    """
+    """ Load and resize images from a call type subdirectory. """
     filenames, labels = get_image_list(dirName, imageheight, imagewidth, num_classes=None)
     return np.array([resize(np.load(file_name), (imageheight, imagewidth, 1)) for file_name in filenames])
 
 
 def load_image_batch(filenames, imageheight, imagewidth):
-    """Load a batch of images given filenames.
-    
-    Args:
-        filenames: list of .npy file paths
-        imageheight: target image height
-        imagewidth: target image width
-        
-    Returns:
-        array of images resized to (imageheight, imagewidth, 1)
-    """
+    """ Load and resize a batch of images from filenames. """
     return np.array([resize(np.load(file_name), (imageheight, imagewidth, 1)) for file_name in filenames])
 
 
 def load_image_data(file, imageheight, imagewidth, noisepool=False):
-    """Load image features and labels from NPZ file.
-    
-    Args:
-        file: path to .npz file with images
-        imageheight: expected image height
-        imagewidth: expected image width
-        noisepool: if True, only return features without labels
-        
-    Returns:
-        if noisepool: features array
-        else: (features, targets) tuple
-    """
+    """ Load image features and labels from NPZ file. """
     import json
     
     npzfile = file
@@ -411,18 +357,7 @@ def load_image_data(file, imageheight, imagewidth, noisepool=False):
 
 
 def load_audio_data(file, fs, length, noisepool=False):
-    """Load audio features and labels from JSON file.
-    
-    Args:
-        file: path to JSON file with audio data
-        fs: sample rate
-        length: length of audio in seconds
-        noisepool: if True, only return features without labels
-        
-    Returns:
-        if noisepool: features array
-        else: (features, targets) tuple
-    """
+    """ Load audio features and labels from JSON file. """
     import json
     
     with open(file) as f:
@@ -459,19 +394,7 @@ def load_audio_data(file, fs, length, noisepool=False):
 
 
 def load_all_image_data(dirName, imageheight, imagewidth, num_calltypes):
-    """Read all NPZ datasets from dirName and organize by call type.
-    
-    Args:
-        dirName: directory containing .npz files
-        imageheight: expected image height
-        imagewidth: expected image width
-        num_calltypes: number of call types (not including noise class)
-        
-    Returns:
-        (sgCT, ns) tuple where:
-        - sgCT: list of arrays, one per class, containing images
-        - ns: list of sample counts per class
-    """
+    """ Read all NPZ datasets and organize by call type. """
     sg = None
     target = None
     pos = 0
@@ -504,19 +427,7 @@ def load_all_image_data(dirName, imageheight, imagewidth, num_calltypes):
 
 
 def get_image_list(dirName, imageheight, imagewidth, num_classes):
-    """Get list of image filenames and one-hot labels from directory.
-    
-    Args:
-        dirName: directory to scan for .npy files
-        imageheight: not used, kept for compatibility
-        imagewidth: not used, kept for compatibility
-        num_classes: number of classes for one-hot encoding (including noise)
-        
-    Returns:
-        (filenames, labels_onehot) tuple where:
-        - filenames: list of file paths
-        - labels_onehot: one-hot encoded labels array
-    """
+    """ Get list of image filenames and one-hot labels from directory. """
     filenames = []
     labels = []
 
@@ -539,17 +450,7 @@ def get_image_list(dirName, imageheight, imagewidth, num_classes):
 
 
 def get_original_image_list(dirName, num_classes):
-    """Get list of original (non-augmented) image filenames and labels.
-    
-    Args:
-        dirName: directory to scan for .npy files
-        num_classes: number of classes for one-hot encoding (including noise)
-        
-    Returns:
-        (filenames, labels_onehot) tuple where:
-        - filenames: list of file paths (excluding _aug files)
-        - labels_onehot: one-hot encoded labels array
-    """
+    """ Get list of original (non-augmented) image filenames and labels. """
     filenames = []
     labels = []
 

@@ -23,21 +23,13 @@ import torch
 
 
 def configure_gpu_memory():
-    """Configure GPU memory settings for PyTorch."""
+    """ Configure GPU memory settings for PyTorch. """
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
 def predict_batch(model, features):
-    """Run batch prediction on features using the given model.
-    
-    Args:
-        model: PyTorch model
-        features: NumPy array or Tensor with shape (batch, height, width, channels) or (batch, height, width)
-        
-    Returns:
-        NumPy array of predictions
-    """
+    """ Run batch prediction using the model. """
     model.eval()
     with torch.no_grad():
         if isinstance(features, torch.Tensor):

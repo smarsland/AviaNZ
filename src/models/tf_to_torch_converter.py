@@ -26,15 +26,8 @@ import numpy as np
 
 
 class ChannelsLastFlatten(nn.Module):
-    """
-    Custom flatten layer that reorders dimensions to match TensorFlow's 
-    channels-last flattening order.
-    
-    TensorFlow: (batch, height, width, channels) -> (batch, height * width * channels)
-    PyTorch: (batch, channels, height, width) -> (batch, height * width * channels)
-    
-    This layer permutes (batch, C, H, W) -> (batch, H, W, C) before flattening
-    to match TensorFlow's memory layout.
+    """ Custom flatten layer matching TensorFlow's channels-last flattening order.
+        Permutes (batch, C, H, W) -> (batch, H, W, C) before flattening.
     """
     def forward(self, x):
         # Permute from (batch, channels, height, width) to (batch, height, width, channels)
@@ -44,22 +37,8 @@ class ChannelsLastFlatten(nn.Module):
 
 
 class TFtoPyTorchConverter:
-    """
-    Converts TensorFlow/Keras models to PyTorch.
-    
-    Supports two TensorFlow weight formats:
-    
-    1. Old format (.h5):
-       - Weight path: layer_name/layer_name/kernel:0
-       - Bias path: layer_name/layer_name/bias:0
-       - Example: conv2d/conv2d/kernel:0
-    
-    2. New format (.weights.h5, TensorFlow 2.x):
-       - Weight path: layers/layer_name/vars/0
-       - Bias path: layers/layer_name/vars/1
-       - Example: layers/conv2d/vars/0
-    
-    The format is automatically detected based on HDF5 file structure.
+    """ Converts TensorFlow/Keras models to PyTorch.
+        Supports old (.h5) and new (.weights.h5) TensorFlow formats. Auto-detects format.
     """
     def __init__(self, json_path, h5_path=None):
         self.json_path = json_path
@@ -151,7 +130,7 @@ class TFtoPyTorchConverter:
         return nn.Dropout(p=rate)
     
     def _convert_flatten(self, config):
-        """Convert TensorFlow Flatten to custom channels-last flatten."""
+        """ Convert TensorFlow Flatten to custom channels-last flatten. """
         return ChannelsLastFlatten()
     
     def _convert_dense(self, config):
@@ -176,12 +155,7 @@ class TFtoPyTorchConverter:
             raise NotImplementedError(f"Activation {activation} not yet supported for Dense")
     
     def _detect_weights_format(self, h5file):
-        """Detect whether this is old (.h5) or new (.weights.h5) format.
-        
-        Returns:
-            'old' if old format (layer_name/layer_name/kernel:0)
-            'new' if new format (layers/layer_name/vars/0)
-        """
+        """ Detect whether this is old (.h5) or new (.weights.h5) format. """
         # Check for new format signature
         if 'layers' in h5file:
             return 'new'
