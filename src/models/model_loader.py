@@ -18,7 +18,12 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# PyTorch model loading utilities
+# Trained model loading utilities
+# 
+# This module handles loading of trained PyTorch models and conversion
+# from legacy TensorFlow/Keras models (.h5, .weights.h5) to PyTorch format.
+# 
+# For training data loading, see data_generator.py
 
 import torch
 import json

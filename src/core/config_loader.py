@@ -23,7 +23,7 @@
 import os
 import json
 from src.core import message_popup
-from src.models import loader
+from src.models import model_loader
 
 
 class ConfigLoader:
@@ -112,7 +112,7 @@ class ConfigLoader:
                 
                 try:
                     # Use smart loader that handles both PyTorch and TensorFlow models
-                    model = loader.loadModel(nn_name, dirnn)
+                    model = model_loader.loadModel(nn_name, dirnn)
                     
                     # Store model with metadata
                     if 'fRange' in filt["NN"]:

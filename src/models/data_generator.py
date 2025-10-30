@@ -32,8 +32,8 @@ from src.core import segmentation
 from src.core import spectrogram
 
 
-class GenerateData:
-    """ This class implements NN data preparation. There are different ways:
+class TrainingDataGenerator:
+    """ This class implements training data preparation. There are different ways:
     1. when manually annotated recordings are presented (.wav and GT.data along with call type info). In this case run
     the existing recogniser (WF) over the data set and get the diff to find FP segments (Noise class). And .data has TP/
     call type segments
@@ -301,7 +301,7 @@ class GenerateData:
         return N
 
 
-class CustomGenerator(Dataset):
+class SpectrogramDataset(Dataset):
 
     def __init__(self, image_filenames, labels, batch_size, traindir, imghight, imgwidth, channels):
         self.image_filenames = image_filenames
@@ -320,3 +320,248 @@ class CustomGenerator(Dataset):
         batch_y = self.labels[idx * self.batch_size: (idx + 1) * self.batch_size]
 
         return np.array([resize(np.load(file_name), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]), np.array(batch_y)
+
+
+# =============================================================================
+# Data Loading Utilities
+# =============================================================================
+
+def load_calltype_images(dirName, imageheight, imagewidth):
+    """Load images from a call type subdirectory.
+    
+    Args:
+        dirName: directory containing .npy image files
+        imageheight: target image height
+        imagewidth: target image width
+        
+    Returns:
+        array of images resized to (imageheight, imagewidth, 1)
+    """
+    filenames, labels = get_image_list(dirName, imageheight, imagewidth, num_classes=None)
+    return np.array([resize(np.load(file_name), (imageheight, imagewidth, 1)) for file_name in filenames])
+
+
+def load_image_batch(filenames, imageheight, imagewidth):
+    """Load a batch of images given filenames.
+    
+    Args:
+        filenames: list of .npy file paths
+        imageheight: target image height
+        imagewidth: target image width
+        
+    Returns:
+        array of images resized to (imageheight, imagewidth, 1)
+    """
+    return np.array([resize(np.load(file_name), (imageheight, imagewidth, 1)) for file_name in filenames])
+
+
+def load_image_data(file, imageheight, imagewidth, noisepool=False):
+    """Load image features and labels from NPZ file.
+    
+    Args:
+        file: path to .npz file with images
+        imageheight: expected image height
+        imagewidth: expected image width
+        noisepool: if True, only return features without labels
+        
+    Returns:
+        if noisepool: features array
+        else: (features, targets) tuple
+    """
+    import json
+    
+    npzfile = file
+    dataz = np.load(npzfile)
+    numarrays = len(dataz)
+
+    fileMinusExtension = file.rsplit('.', 1)[0]
+    labfile = fileMinusExtension + '_labels.json'
+    
+    if not noisepool:
+        with open(labfile) as f:
+            labels = json.load(f)
+
+    features = np.ndarray(shape=(numarrays, imageheight, imagewidth), dtype=float)
+
+    badind = []
+    if noisepool:
+        i = 0
+        for key in dataz.files:
+            if np.shape(dataz[key]) == (imageheight, imagewidth):
+                features[i][:] = dataz[key][:]
+            else:
+                badind.append(i)
+            i += 1
+        features = np.delete(features, badind, 0)
+        return features
+    else:
+        targets = np.zeros((numarrays, 1))
+        i = 0
+        for key in dataz.files:
+            if np.shape(dataz[key]) == (imageheight, imagewidth):
+                features[i][:] = dataz[key][:]
+                targets[i][0] = labels[key]
+            else:
+                badind.append(i)
+            i += 1
+
+        features = np.delete(features, badind, 0)
+        targets = np.delete(targets, badind, 0)
+        return features, targets
+
+
+def load_audio_data(file, fs, length, noisepool=False):
+    """Load audio features and labels from JSON file.
+    
+    Args:
+        file: path to JSON file with audio data
+        fs: sample rate
+        length: length of audio in seconds
+        noisepool: if True, only return features without labels
+        
+    Returns:
+        if noisepool: features array
+        else: (features, targets) tuple
+    """
+    import json
+    
+    with open(file) as f:
+        data = json.load(f)
+    
+    nsamp = fs * length
+    features = np.ndarray(shape=(np.shape(data)[0], nsamp), dtype=float)
+    badind = []
+    
+    if noisepool:
+        for i in range(0, np.shape(data)[0]):
+            if len(data[i][0]) == nsamp:
+                features[i][:] = data[i][0][:]
+            elif len(data[i][0]) > nsamp:
+                features[i][:] = data[i][0][:nsamp]
+            else:
+                badind.append(i)
+        features = np.delete(features, badind, 0)
+        return features
+    else:
+        targets = np.zeros((np.shape(data)[0], 1))
+        for i in range(0, np.shape(data)[0]):
+            if len(data[i][0]) == nsamp:
+                features[i][:] = data[i][0][:]
+                targets[i][0] = data[i][-1]
+            elif len(data[i][0]) > nsamp:
+                features[i][:] = data[i][0][:nsamp]
+                targets[i][0] = data[i][-1]
+            else:
+                badind.append(i)
+        features = np.delete(features, badind, 0)
+        targets = np.delete(targets, badind, 0)
+        return features, targets
+
+
+def load_all_image_data(dirName, imageheight, imagewidth, num_calltypes):
+    """Read all NPZ datasets from dirName and organize by call type.
+    
+    Args:
+        dirName: directory containing .npz files
+        imageheight: expected image height
+        imagewidth: expected image width
+        num_calltypes: number of call types (not including noise class)
+        
+    Returns:
+        (sgCT, ns) tuple where:
+        - sgCT: list of arrays, one per class, containing images
+        - ns: list of sample counts per class
+    """
+    sg = None
+    target = None
+    pos = 0
+    
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.npz'):
+                print('reading ', file)
+                sg1, target1 = load_image_data(os.path.join(dirName, file), imageheight, imagewidth)
+                if not pos:
+                    sg = sg1
+                    target = target1
+                    pos += np.shape(target1)[0]
+                else:
+                    sg = np.vstack((sg, sg1))
+                    target = np.vstack((target, target1))
+                    pos += np.shape(target1)[0]
+
+    ns = [np.shape(np.where(target == i)[0])[0] for i in range(num_calltypes + 1)]
+    sgCT = [np.empty((n, imageheight, imagewidth), dtype=float) for n in ns]
+    idxs = [np.random.permutation(np.where(target == i)[0]).tolist() for i in range(num_calltypes + 1)]
+    
+    for ct in range(num_calltypes + 1):
+        i = 0
+        for j in idxs[ct]:
+            sgCT[ct][i][:] = sg[j][:]
+            i += 1
+    
+    return sgCT, ns
+
+
+def get_image_list(dirName, imageheight, imagewidth, num_classes):
+    """Get list of image filenames and one-hot labels from directory.
+    
+    Args:
+        dirName: directory to scan for .npy files
+        imageheight: not used, kept for compatibility
+        imagewidth: not used, kept for compatibility
+        num_classes: number of classes for one-hot encoding (including noise)
+        
+    Returns:
+        (filenames, labels_onehot) tuple where:
+        - filenames: list of file paths
+        - labels_onehot: one-hot encoded labels array
+    """
+    filenames = []
+    labels = []
+
+    for root, dirs, files in os.walk(dirName):
+        for file in files:
+            if file.endswith('.npy'):
+                filenames.append(os.path.join(root, file))
+                lbl = file.split('_')[0]
+                labels.append(int(lbl))
+
+    if num_classes is None:
+        # Infer from max label
+        num_classes = max(labels) + 1
+    
+    labels_onehot = np.zeros((len(labels), num_classes))
+    for i, lbl in enumerate(labels):
+        labels_onehot[i, lbl] = 1
+
+    return filenames, labels_onehot
+
+
+def get_original_image_list(dirName, num_classes):
+    """Get list of original (non-augmented) image filenames and labels.
+    
+    Args:
+        dirName: directory to scan for .npy files
+        num_classes: number of classes for one-hot encoding (including noise)
+        
+    Returns:
+        (filenames, labels_onehot) tuple where:
+        - filenames: list of file paths (excluding _aug files)
+        - labels_onehot: one-hot encoded labels array
+    """
+    filenames = []
+    labels = []
+
+    for root, dirs, files in os.walk(dirName):
+        for file in files:
+            if file.endswith('.npy') and '_aug' not in file:
+                filenames.append(os.path.join(root, file))
+                lbl = file.split('_')[0]
+                labels.append(int(lbl))
+
+    labels_onehot = np.zeros((len(labels), num_classes))
+    for i, lbl in enumerate(labels):
+        labels_onehot[i, lbl] = 1
+
+    return filenames, labels_onehot

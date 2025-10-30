@@ -46,7 +46,7 @@ class CNNModel(nn.Module):
         self.pool4 = nn.MaxPool2d(kernel_size=2)
         self.dropout4 = nn.Dropout(0.2)
         
-        self.flatten_size = self._get_flatten_size(imageHeight, imageWidth)
+        self.flatten_size = self.get_flatten_size(imageHeight, imageWidth)
         
         self.fc1 = nn.Linear(self.flatten_size, 256)
         self.dropout5 = nn.Dropout(0.5)
@@ -55,7 +55,7 @@ class CNNModel(nn.Module):
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)
     
-    def _get_flatten_size(self, height, width):
+    def get_flatten_size(self, height, width):
         x = torch.zeros(1, 1, height, width)
         
         x = self.conv1(x)

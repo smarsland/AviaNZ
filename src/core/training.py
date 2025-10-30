@@ -35,9 +35,10 @@ import math
 
 from src.core import annotation
 from src.core import config_loader
+from src.models import model_trainer
 from src.models import augmentation
 from src.models import data_generator
-from src.models import loader
+from src.models import model_loader
 from src.models import inference
 from src.core import wavelet_segment
 from src.core.batch_processor import BatchProcessor, BatchProcessorCallbacks
@@ -166,7 +167,7 @@ class NNTrain:
     def genSegmentDataset(self, hasAnnotation):
         # Prepares segments for input to the learners
         self.traindata = []
-        self.DataGen = data_generator.GenerateData(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
+        self.DataGen = data_generator.TrainingDataGenerator(self.currfilt, 0, 0, 0, 0, 0, 0, 0)
 
         # For manually annotated data where the user is confident about full annotation, 
         # choose anything else in the spectrograms as noise examples
@@ -271,32 +272,6 @@ class NNTrain:
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
         self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop, specFrameSize=self.imgsize[1])
 
-    def augment_width_shift(self, images, num_needed, batch_size):
-        '''Apply horizontal shift augmentation to images using NumPy.
-        Mimics ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest').
-        '''
-        augmented = []
-        num_batches = int(np.ceil(num_needed / batch_size))
-        
-        for batch_idx in range(num_batches):
-            batch = []
-            for _ in range(batch_size):
-                img = images[np.random.randint(0, len(images))]
-                width = img.shape[1]
-                shift = int(np.random.uniform(-0.3, 0.3) * width)
-                
-                if shift > 0:
-                    shifted = np.pad(img, ((0, 0), (shift, 0), (0, 0)), mode='edge')[:, :width, :]
-                elif shift < 0:
-                    shifted = np.pad(img, ((0, 0), (0, -shift), (0, 0)), mode='edge')[:, -width:, :]
-                else:
-                    shifted = img
-                
-                batch.append(shifted)
-            augmented.extend(batch)
-        
-        return np.array(augmented[:num_needed])
-
     def train(self):
         # Create temp dir to hold img data and model
         try:
@@ -312,7 +287,7 @@ class NNTrain:
         print('Temporary model dir:', self.tmpdir2.name)
 
         # Find train segments belong to each class
-        self.DataGen = data_generator.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.f1, self.f2)
+        self.DataGen = data_generator.TrainingDataGenerator(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.f1, self.f2)
 
         # Find how many images with default hop (=imgWidth), adjust hop to make a good number of images also keep space
         # for some in-built augmenting (width-shift)
@@ -331,20 +306,20 @@ class NNTrain:
             print("\t%s:\t%d\n" % (self.calltypes[i], self.Nimg[i]))
         print("\t%s:\t%d\n" % ("Noise", self.Nimg[-1]))
 
-        # NN training
-        nn = augmentation.NN(self.configdir, self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.modelArchitecture)
+        # Model training
+        nn = model_trainer.ModelTrainer(self.configdir, self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1], self.modelArchitecture)
 
         # 1. Data augmentation
         print('Data augmenting...')
-        filenames, labels = nn.getImglist(self.tmpdir1.name)
+        filenames, labels = data_generator.get_image_list(self.tmpdir1.name, nn.imageheight, nn.imagewidth, len(self.calltypes) + 1)
         labels = np.argmax(labels, axis=1)
         ns = [np.shape(np.where(labels == i)[0])[0] for i in range(len(self.calltypes) + 1)]
         # Data augmentation for each call type
         for ct in range(len(self.calltypes) + 1):
             if self.LearningDict['t'] - ns[ct] > self.LearningDict['batchsize']:
-                samples = nn.loadCTImg(os.path.join(self.tmpdir1.name, str(ct)))
+                samples = data_generator.load_calltype_images(os.path.join(self.tmpdir1.name, str(ct)), nn.imageheight, nn.imagewidth)
                 num_needed = self.LearningDict['t'] - ns[ct]
-                batch = self.augment_width_shift(samples, num_needed, self.LearningDict['batchsize'])
+                batch = augmentation.augment_width_shift(samples, num_needed, self.LearningDict['batchsize'])
                 # Save augmented data
                 k = 0
                 for sgRaw in batch:
@@ -359,7 +334,7 @@ class NNTrain:
                 gc.collect()
 
         # 2. TRAIN - use custom image generator
-        filenamesall, labelsall = nn.getImglist(self.tmpdir1.name)
+        filenamesall, labelsall = data_generator.get_image_list(self.tmpdir1.name, nn.imageheight, nn.imagewidth, len(self.calltypes) + 1)
         print('Final NN images...')
         labelsalld = np.argmax(labelsall, axis=1)
         ns = [np.shape(np.where(labelsalld == i)[0])[0] for i in range(len(self.calltypes) + 1)]
@@ -370,8 +345,8 @@ class NNTrain:
         filenamesall, labelsall = shuffle(filenamesall, labelsall)
         
         X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall, labelsall, test_size=self.LearningDict['test_size'], random_state=1)
-        training_batch_generator = data_generator.CustomGenerator(X_train_filenames, y_train, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
-        validation_batch_generator = data_generator.CustomGenerator(X_val_filenames, y_val, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
+        training_batch_generator = data_generator.SpectrogramDataset(X_train_filenames, y_train, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
+        validation_batch_generator = data_generator.SpectrogramDataset(X_val_filenames, y_val, self.LearningDict['batchsize'], self.tmpdir1.name, nn.imageheight, nn.imagewidth, 1)
 
         print('Creating NN architecture...')
         nn.createArchitecture()
@@ -399,9 +374,9 @@ class NNTrain:
         model = os.path.join(self.tmpdir2.name, 'model.json')
         self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
         # Load the model and prepare
-        model = loader.loadModelFromJson(model)
+        model = model_loader.loadModelFromJson(model)
         # Load weights into new model
-        model = loader.loadWeights(model, self.bestweight)
+        model = model_loader.loadWeights(model, self.bestweight)
         print('Loaded NN model from ', self.tmpdir2.name)
 
         TPs = [0 for i in range(len(self.calltypes) + 1)]
@@ -424,9 +399,9 @@ class NNTrain:
             print('Img directory DOES NOT exist')
         
         for i in range(int(np.ceil(N / self.LearningDict['batchsize_ROC']))):
-            # imagesb = nn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            # imagesb = data_generator.load_image_batch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)], nn.imageheight, nn.imagewidth)
             # labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
-            imagesb = nn.loadImgBatch(X_val_filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            imagesb = data_generator.load_image_batch(X_val_filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)], nn.imageheight, nn.imagewidth)
             labelsb = y_val[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
             for ct in range(len(self.calltypes) + 1):
                 res, ctp = self.testCT(ct, imagesb, labelsb, model)  # res=[thrlist, TPs, FPs, TNs, FNs], ctp=[[0to0 probs], [0to1 probs], [0to2 probs]]
