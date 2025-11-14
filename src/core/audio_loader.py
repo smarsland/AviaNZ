@@ -69,14 +69,19 @@ class AudioLoader:
         """Load WAV file using wavio."""
         wavobj = wavio.read(filepath, duration, offset)
         data = wavobj.data
+        del wavobj
         
         # Take only left channel
         if len(data.shape) > 1:
+            old_data = data
             data = data[:, 0]
+            del old_data
         
         # Force float type
         if data.dtype != 'float':
+            old_data = data
             data = data.astype('float')
+            del old_data
         
         # Get format info
         info = sf.info(filepath)

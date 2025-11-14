@@ -223,6 +223,9 @@ class HumanClassify2(QDialog):
         config = params['config']
         
         for localIdx in range(startIdx, endIdx):
+            if localIdx >= len(self.sps):
+                break
+            
             globalIdx = self.indices2show[localIdx]
             
             if self.sps[localIdx] is not None:
@@ -258,7 +261,9 @@ class HumanClassify2(QDialog):
                 sp.sg = sp.normalisedSpec("Batmode")
             else:
                 sp.readSoundFile(filename, offset=x1, duration=x2-x1, silent=True)
-                sp.audio_data.data = signal_proc.bandpass_filter(sp.audio_data.data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                original_data = sp.audio_data.data
+                sp.audio_data.data = signal_proc.bandpass_filter(original_data, sp.audio_data.sample_rate, minFreq, maxFreq)
+                del original_data
                 sp.sg = sp.spectrogram(window_width=config['window_width'], 
                                      incr=config['incr'],
                                      window=config['windowType'],
@@ -282,14 +287,12 @@ class HumanClassify2(QDialog):
                 self.sgs[localIdx] = sp.sg
             else:
                 self.sgs[localIdx] = sp.normalisedSpec(config['sgNormMode'])
+                del sp.sg
         
         self.loadedPages.add(pageNum)
 
     def loadAndCreateButtonsForPage(self, pageNum):
         if not self.lazyLoadEnabled:
-            return
-        
-        if pageNum in self.loadedPages:
             return
             
         self.loadSpectrogramsForPage(pageNum)
@@ -299,9 +302,15 @@ class HumanClassify2(QDialog):
         endIdx = min(startIdx + buttonsPerPage, len(self.indices2show))
         
         for localIdx in range(startIdx, endIdx):
+            if localIdx >= len(self.buttons):
+                break
+            
             if self.buttons[localIdx] is not None:
                 continue
                 
+            if localIdx >= len(self.sps):
+                break
+            
             sp = self.sps[localIdx]
             if sp is None:
                 continue
@@ -393,8 +402,7 @@ class HumanClassify2(QDialog):
         if self.lazyLoadEnabled:
             buttonsPerPage = self.maxRows * self.maxCols
             endPos = min(self.butStart + buttonsPerPage, len(self.buttons))
-            buttonsToShow = [b for b in self.buttons[self.butStart:endPos] if b is not None]
-            numButtonsToShow = len(buttonsToShow)
+            numButtonsToShow = endPos - self.butStart
         else:
             numButtonsToShow = min(self.maxRows * self.maxCols, len(self.buttons) - self.butStart)
 
@@ -492,13 +500,25 @@ class HumanClassify2(QDialog):
             self.saveCallback(self)
         
         buttonsPerPage = self.maxRows * self.maxCols
+        if buttonsPerPage == 0:
+            return
+        
+        oldPageNum = self.butStart // buttonsPerPage
+        newButStart = min(len(self.buttons), self.butStart + buttonsPerPage)
+        newPageNum = newButStart // buttonsPerPage
+        
+        if newPageNum == oldPageNum:
+            return
+        
+        if self.lazyLoadEnabled and newPageNum != oldPageNum:
+            self.clearPageData(oldPageNum)
+        
         self.clearButtons()
-        self.butStart = min(len(self.buttons), self.butStart+buttonsPerPage)
+        self.butStart = newButStart
         
         if self.lazyLoadEnabled:
-            pageNum = self.butStart // buttonsPerPage
             with pg.BusyCursor():
-                self.loadAndCreateButtonsForPage(pageNum)
+                self.loadAndCreateButtonsForPage(newPageNum)
         
         self.countPages()
         self.redrawButtons()
@@ -512,17 +532,58 @@ class HumanClassify2(QDialog):
             self.saveCallback(self)
         
         buttonsPerPage = self.maxRows * self.maxCols
+        if buttonsPerPage == 0:
+            return
+        
+        oldPageNum = self.butStart // buttonsPerPage
+        newButStart = max(0, self.butStart - buttonsPerPage)
+        newPageNum = newButStart // buttonsPerPage
+        
+        if newPageNum == oldPageNum:
+            return
+        
+        if self.lazyLoadEnabled and newPageNum != oldPageNum:
+            self.clearPageData(oldPageNum)
+        
         self.clearButtons()
-        self.butStart = max(0, self.butStart-buttonsPerPage)
+        self.butStart = newButStart
         
         if self.lazyLoadEnabled:
-            pageNum = self.butStart // buttonsPerPage
             with pg.BusyCursor():
-                self.loadAndCreateButtonsForPage(pageNum)
+                self.loadAndCreateButtonsForPage(newPageNum)
         
         self.countPages()
         self.redrawButtons()
 
+    def clearPageData(self, pageNum):
+        if not self.lazyLoadEnabled:
+            return
+        
+        buttonsPerPage = self.maxRows * self.maxCols
+        startIdx = pageNum * buttonsPerPage
+        endIdx = min(startIdx + buttonsPerPage, len(self.buttons))
+        
+        for localIdx in range(startIdx, endIdx):
+            if localIdx >= len(self.buttons):
+                break
+            
+            if self.buttons[localIdx] is not None:
+                self.buttons[localIdx].stopPlayback()
+                self.buttons[localIdx].deleteLater()
+                self.buttons[localIdx] = None
+            
+            if localIdx < len(self.sps) and self.sps[localIdx] is not None:
+                if hasattr(self.sps[localIdx], 'audio_data'):
+                    if hasattr(self.sps[localIdx].audio_data, 'data'):
+                        del self.sps[localIdx].audio_data.data
+                self.sps[localIdx] = None
+            
+            if localIdx < len(self.sgs) and self.sgs[localIdx] is not None:
+                self.sgs[localIdx] = None
+        
+        if pageNum in self.loadedPages:
+            self.loadedPages.remove(pageNum)
+    
     def clearButtons(self):
         for btn in self.buttons:
             if btn is not None:
