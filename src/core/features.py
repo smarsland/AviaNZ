@@ -50,21 +50,6 @@ class Features:
         self.sg = sp.spectrogram(sgType='Standard', window_width=self.window_width, incr=self.incr, window='Ones')
         self.sg = self.sg**2
 
-    def get_mfcc(self, n_mfcc=48, n_bins=32, delta=True):
-        """ Use librosa to get the MFCC coefficients. """
-        mfcc = librosa.feature.mfcc(y=self.data, sr=self.sampleRate, n_mfcc=n_mfcc, n_fft=2048, hop_length=512)
-        if delta:
-            if n_bins == 8:
-                mfcc_delta = librosa.feature.delta(mfcc, width=5)
-            else:
-                mfcc_delta = librosa.feature.delta(mfcc)
-            mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
-
-        mfcc -= np.mean(mfcc, axis=0)
-        mfcc /= np.max(np.abs(mfcc), axis=0)
-
-        return mfcc
-
     def get_WE(self, nlevels=5):
         """ Wavelet energies """
         ws = wavelet_segment.WaveletSegment(spInfo=[])

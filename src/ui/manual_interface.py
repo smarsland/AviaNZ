@@ -5085,9 +5085,6 @@ class ManualInterface(QMainWindow):
             elif alg == 'Power':
                 newSegments = seg.segmentByPower(float(str(settings["PowerThr"])))
                 newSegments = seg.checkSegmentOverlap(newSegments)
-            elif alg == 'Onsets':
-                newSegments = seg.onsets()
-                newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'Fundamental Frequency':
                 newSegments = seg.yinSegs(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
                                                          int(str(settings["FFwindow"])))

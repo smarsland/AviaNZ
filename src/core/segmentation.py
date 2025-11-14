@@ -513,22 +513,6 @@ class Segmenter:
                 segments.append([i[0], i[1]])
         return segments
 
-    def onsets(self, thr=3.0):
-        """ Segmentation using the onset times from librosa.
-        There are no offset times -- compute an energy drop?
-        A straw man really.
-        """
-        o_env = librosa.onset.onset_strength(self.sp.audio_data.data, sr=self.sp.audio_data.sample_rate, aggregate=np.median)
-        cutoff = np.mean(o_env) + thr * np.std(o_env)
-        o_env = np.where(o_env > cutoff, o_env, 0)
-        onsets = librosa.onset.onset_detect(onset_envelope=o_env, sr=self.sp.audio_data.sample_rate)
-        times = librosa.frames_to_time(np.arange(len(o_env)), sr=self.sp.audio_data.sample_rate)
-
-        segments = []
-        for i in range(len(onsets)):
-            segments.append([times[onsets[i]],times[onsets[i]]+0.2])
-        return segments
-
     def yinSegs(self, minfreq=100, minperiods=3, thr=0.5, W=1000):
         """ Segmentation by computing the fundamental frequency.
             Uses the Yin algorithm of de Cheveigne and Kawahara (2002).

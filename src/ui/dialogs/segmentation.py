@@ -142,9 +142,6 @@ class SegmentationDialog(QDialog):
         self.Harmalabel = QLabel("Set decibel threshold")
         Box.addWidget(self.Harmalabel)
 
-        #self.Onsetslabel = QLabel("Onsets: No parameters")
-        #Box.addWidget(self.Onsetslabel)
-
         self.medlabel = QLabel("Set median threshold")
         self.medlabel.show()
 
@@ -340,8 +337,6 @@ class SegmentationDialog(QDialog):
             self.Fundminperiodslabel.show()
             self.Fundthrlabel.show()
             self.Fundwindowlabel.show()
-        #elif alg == "Onsets":
-        #    self.Onsetslabel.show()
         elif alg == "FIR":
             self.FIRThr1text.show()
             self.FIRThr1.show()
