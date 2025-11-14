@@ -20,10 +20,10 @@
 # Data augmentation functions for audio and spectrograms
 
 import numpy as np
-import librosa
 
 from src.core import spectrogram
 from src.core import audio_data
+from src.core import signal_proc
 
 
 def add_noise(image, noise_image, noise_range=(0.2, 0.8)):
@@ -36,7 +36,10 @@ def add_noise(image, noise_image, noise_range=(0.2, 0.8)):
 def time_stretch(data, rate):
     """ Time stretch audio data by given rate (>1 speeds up, <1 slows down). """
     input_length = len(data)
-    data = librosa.effects.time_stretch(data, rate=rate)
+    # wsola uses stretch factor (inverse of rate): larger values = longer/slower
+    # rate: >1 speeds up (shorter), <1 slows down (longer)
+    # so we pass 1/rate to wsola
+    data = signal_proc.wsola(data, 1.0/rate)
     if len(data) > input_length:
         data = data[:input_length]
     else:

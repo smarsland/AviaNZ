@@ -4337,7 +4337,7 @@ class ManualInterface(QMainWindow):
                     filename = filename + '.wav'
                 tosave = signal_proc.bandpass_filter(self.sp.audio_data.data[int(x1):int(x2)], sampleRate=self.sp.audio_data.sample_rate,start=y1, end=y2)
                 if changespeed:
-                    tosave = signal_proc.wsola(tosave,self.playSpeed) 
+                    tosave = signal_proc.wsola(tosave, 1.0/self.playSpeed) 
                 sfmt = self.sp.audio_data.sample_format
                 if sfmt == 'UInt8':
                     normalised_data = (tosave - 128) / 128

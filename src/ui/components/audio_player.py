@@ -29,11 +29,6 @@ from PyQt6.QtMultimedia import QAudio, QAudioSink, QAudioFormat, QMediaDevices
 
 from src.core import signal_proc
 
-try:
-    import librosa
-except ImportError:
-    librosa = None
-
 
 class ControllableAudio(QAudioSink):
     # This carries out the audio playback 
@@ -217,8 +212,8 @@ class ControllableAudio(QAudioSink):
             else:
                 print("Warning: bandpass filter returned None, playing unfiltered segment")
 
-        if self.playbackSpeed != 1.0 and librosa is not None:
-            segment = librosa.effects.time_stretch(segment.astype('float'), rate=self.playbackSpeed)
+        if self.playbackSpeed != 1.0:
+            segment = signal_proc.wsola(segment, 1.0/self.playbackSpeed)
 
         print(f"Play starting at sample {start_sample}, segment length={len(segment) if segment is not None else 'None'}")
         self.loadArray(segment)
