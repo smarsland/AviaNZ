@@ -46,9 +46,41 @@ def loadModel(nn_name, dirnn):
     # Priority 1: Load native PyTorch model
     if os.path.isfile(pth_path):
         print(f"Loading PyTorch model: {nn_name}.pth")
-        model = torch.load(pth_path, map_location='cpu', weights_only=False)
-        model.eval()
-        return model
+        loaded = torch.load(pth_path, map_location='cpu', weights_only=False)
+        
+        if hasattr(loaded, 'eval'):
+            loaded.eval()
+            return loaded
+        elif isinstance(loaded, dict):
+            if os.path.isfile(json_path):
+                print(f"  Detected state_dict file, loading architecture from {nn_name}.json")
+                with open(json_path, 'r') as f:
+                    config = json.load(f)
+                
+                model_type = config.get('model_type', 'CNN')
+                
+                if model_type == 'AST':
+                    from src.models import architectures
+                    num_classes = config.get('num_classes', 2)
+                    model = architectures.ASTModel(num_classes=num_classes)
+                elif model_type == 'CNN':
+                    from src.models import architectures
+                    input_size = config.get('input_size', [128, 400])
+                    num_classes = config.get('num_classes', 2)
+                    model = architectures.CNNModel(input_size[0], input_size[1], num_classes)
+                else:
+                    raise ValueError(f"Unknown model_type: {model_type}")
+                
+                model.load_state_dict(loaded)
+                model.eval()
+                return model
+            else:
+                raise RuntimeError(
+                    f"Loaded state_dict from {nn_name}.pth but no {nn_name}.json found. "
+                    f"Need config file to reconstruct model architecture."
+                )
+        else:
+            raise RuntimeError(f"Unexpected object type in {nn_name}.pth: {type(loaded)}")
     
     # Priority 2: Convert legacy TensorFlow model
     # Check for both .h5 and .weights.h5, preferring .h5
