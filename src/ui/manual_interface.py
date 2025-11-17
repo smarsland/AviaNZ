@@ -5118,6 +5118,145 @@ class ManualInterface(QMainWindow):
                     newSegments = self.findMatches(float(str(settings["CCThr1"])), filtname)
                 else:
                     newSegments = self.findMatches(float(str(settings["CCThr1"])))
+            elif alg == 'NN_Model':
+                import json
+                import os
+                import torch
+                from src.models import model_loader, inference
+                
+                config_name = filtname
+                model_name = settings.get("nnModelFile")
+                min_confidence = settings["nnConfidence"]
+                
+                if config_name == "No models found" or not model_name:
+                    msg = MessagePopup("w", "No Models", "No models available in the Models directory!")
+                    msg.exec()
+                    return
+                
+                config_path = os.path.join('Models', f'{config_name}_config.json')
+                
+                if not os.path.exists(config_path):
+                    msg = MessagePopup("w", "Config Missing", f"Config file not found: {config_path}")
+                    msg.exec()
+                    return
+                
+                with open(config_path, 'r') as f:
+                    model_config = json.load(f)
+                
+                model = model_loader.loadModel(model_name, 'Models')
+                model.eval()
+                
+                model_sample_rate = model_config.get('sample_rate', 32000)
+                current_sample_rate = self.sp.audio_data.sample_rate
+                
+                if current_sample_rate != model_sample_rate:
+                    msg = MessagePopup("w", "Sample Rate Mismatch", 
+                        f"Audio sample rate ({current_sample_rate} Hz) does not match model's expected rate ({model_sample_rate} Hz). "
+                        f"The audio should be resampled to {model_sample_rate} Hz for proper inference. Continue anyway?")
+                    msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                    reply = msg.exec()
+                    if reply == QMessageBox.StandardButton.No:
+                        return
+                
+                spec_params = model_config.get('spectrogram_params', {})
+                current_params = {
+                    'windowType': self.config['windowType'],
+                    'sgType': self.config['sgType'],
+                    'sgScale': self.config['sgScale'],
+                    'mean_normalise': self.config['sgMeanNormalise'],
+                    'equal_loudness': self.config['sgEqualLoudness'],
+                    'nfilters': self.config['nfilters']
+                }
+                
+                needs_recompute = False
+                for key, value in spec_params.items():
+                    if key in current_params and current_params[key] != value:
+                        needs_recompute = True
+                        break
+                
+                window_seconds = model_config.get('window_seconds', 0.025)
+                hop_seconds = model_config.get('hop_seconds', 0.01)
+                
+                window_width = int(window_seconds * current_sample_rate)
+                incr = int(hop_seconds * current_sample_rate)
+                
+                if needs_recompute or self.config['window_width'] != window_width or self.config['incr'] != incr:
+                    self.statusLeft.setText('Recomputing spectrogram with model parameters...')
+                    QApplication.processEvents()
+                    
+                    self.config['windowType'] = spec_params.get('windowType', 'Hann')
+                    self.config['sgType'] = spec_params.get('sgType', 'Standard')
+                    self.config['sgScale'] = spec_params.get('sgScale', 'Linear')
+                    self.config['sgMeanNormalise'] = spec_params.get('mean_normalise', True)
+                    self.config['sgEqualLoudness'] = spec_params.get('equal_loudness', False)
+                    self.config['nfilters'] = spec_params.get('nfilters', 128)
+                    self.config['window_width'] = window_width
+                    self.config['incr'] = incr
+                    
+                    _ = self.sp.spectrogram(
+                        window_width=window_width,
+                        incr=incr,
+                        window=self.config['windowType'],
+                        sgType=self.config['sgType'],
+                        sgScale=self.config['sgScale'],
+                        nfilters=self.config['nfilters'],
+                        mean_normalise=self.config['sgMeanNormalise'],
+                        equal_loudness=self.config['sgEqualLoudness'],
+                        onesided=self.config['sgOneSided']
+                    )
+                    self.setSpectrogram()
+                
+                self.statusLeft.setText('Running NN inference...')
+                QApplication.processEvents()
+                
+                time_bins = model_config.get('time_bins', 400)
+                freq_bins = model_config.get('freq_bins', 128)
+                spec_transform = model_config.get('spec_transform', 'Log')
+                
+                sg = self.sp.sg.copy()
+                
+                if sg.shape[1] < freq_bins:
+                    freq_bins = sg.shape[1]
+                
+                if spec_transform == 'Log':
+                    sg = np.log10(sg + 1e-10)
+                
+                total_time_frames = sg.shape[0]
+                predictions = []
+                segment_times = []
+                
+                for start_frame in range(0, total_time_frames, time_bins):
+                    end_frame = min(start_frame + time_bins, total_time_frames)
+                    
+                    if end_frame - start_frame < time_bins:
+                        segment = np.zeros((time_bins, freq_bins))
+                        actual_frames = end_frame - start_frame
+                        segment[:actual_frames, :] = sg[start_frame:end_frame, :freq_bins]
+                    else:
+                        segment = sg[start_frame:end_frame, :freq_bins]
+                    
+                    segment = segment.reshape(1, time_bins, freq_bins, 1)
+                    
+                    pred = inference.predict_batch(model, segment)
+                    predictions.append(pred[0])
+                    
+                    start_time = start_frame * incr / current_sample_rate
+                    end_time = end_frame * incr / current_sample_rate
+                    segment_times.append((start_time, end_time))
+                
+                newSegments = []
+                for i, (pred, (start_time, end_time)) in enumerate(zip(predictions, segment_times)):
+                    max_prob_idx = np.argmax(pred)
+                    max_prob = pred[max_prob_idx]
+                    
+                    if max_prob >= min_confidence:
+                        y1 = 0
+                        y2 = current_sample_rate // 2
+                        
+                        species_label = f"Class_{max_prob_idx}"
+                        certainty = int(max_prob * 100)
+                        
+                        newSegments.append([[start_time, end_time], certainty, species_label, y1, y2])
             else:
                 print("ERROR: unrecognised algorithm", alg)
                 return
@@ -5196,6 +5335,11 @@ class ManualInterface(QMainWindow):
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
+            elif alg == 'NN_Model':
+                for seg in newSegments:
+                    self.addSegment(seg[0][0] + self.startRead, seg[0][1] + self.startRead, seg[3], seg[4],
+                            [{"species": seg[2], "certainty": seg[1], "filter": filtname}], index=-1, coordsAbsolute=True)
+                    self.segmentsToSave = True
             else:
                 for seg in newSegments:
                     self.addSegment(seg[0][0],seg[0][1])

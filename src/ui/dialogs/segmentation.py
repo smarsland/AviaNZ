@@ -25,9 +25,6 @@ from PyQt6.QtCore import Qt
 
 import pyqtgraph as pg
 
-
-
-
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
@@ -48,7 +45,7 @@ class SegmentationDialog(QDialog):
         if DOC:
             self.algs.addItems(["WV Changepoint", "Wavelet Filter", "FIR", "Median Clipping"])
         else:
-            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Harma","Power","WV Changepoint","Wavelet Filter","Cross-Correlation"])
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Harma","Power","WV Changepoint","Wavelet Filter","Cross-Correlation","NN_Model"])
         self.algs.currentTextChanged.connect(self.changeBoxes)
         #self.algs.currentIndexChanged.connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
@@ -131,6 +128,16 @@ class SegmentationDialog(QDialog):
         self.CCThr1.setSingleStep(0.1)
         self.CCThr1.setValue(0.4)
 
+        self.nnModellabel = QLabel("Select Model")
+        self.nnModel = QComboBox()
+        self.populateNNModels()
+
+        self.nnConfidencelabel = QLabel("Minimum Confidence (%)")
+        self.nnConfidence = QDoubleSpinBox()
+        self.nnConfidence.setRange(0, 100)
+        self.nnConfidence.setSingleStep(5)
+        self.nnConfidence.setValue(50)
+
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
         Box.addStretch(1)
@@ -208,6 +215,11 @@ class SegmentationDialog(QDialog):
 
         Box.addWidget(self.CCThr1)
 
+        Box.addWidget(self.nnModellabel)
+        Box.addWidget(self.nnModel)
+        Box.addWidget(self.nnConfidencelabel)
+        Box.addWidget(self.nnConfidence)
+
         self.medSize = QSlider(Qt.Orientation.Horizontal)
         self.medSize.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.medSize.setTickInterval(100)
@@ -284,6 +296,26 @@ class SegmentationDialog(QDialog):
         else:
             self.changeBoxes("Default")
 
+    def populateNNModels(self):
+        import os
+        import glob
+        models_dir = 'Models'
+        json_files = glob.glob(os.path.join(models_dir, '*_config.json'))
+        models = []
+        for json_file in json_files:
+            base_name = os.path.basename(json_file).replace('_config.json', '')
+            pth_path = os.path.join(models_dir, base_name + '.pth')
+            
+            if os.path.exists(pth_path):
+                models.append((base_name, base_name))
+        
+        models.sort()
+        if models:
+            for config_name, model_name in models:
+                self.nnModel.addItem(config_name, model_name)
+        else:
+            self.nnModel.addItem("No models found")
+
     def hideAll(self):
         for w in range(self.layout().count()):
             item = self.layout().itemAt(w)
@@ -344,6 +376,15 @@ class SegmentationDialog(QDialog):
             self.CCThr1.show()
             self.specieslabel_cc.show()
             self.species_cc.show()
+        elif alg == "NN_Model":
+            self.nnModellabel.show()
+            self.nnModel.show()
+            self.nnConfidencelabel.show()
+            self.nnConfidence.show()
+            self.maxgaplbl.hide()
+            self.maxgap.hide()
+            self.minlenlbl.hide()
+            self.minlen.hide()
         else:
             #"Wavelet Filter" or "WV Changepoint"
             self.specieslabel.show()
@@ -384,11 +425,15 @@ class SegmentationDialog(QDialog):
             filtname = self.species_chp.currentText()
         elif alg=="Cross-Correlation":
             filtname = self.species_cc.currentText()
+        elif alg=="NN_Model":
+            filtname = self.nnModel.currentText()
+            model_filename = self.nnModel.currentData()
         else:
             filtname = None
+            model_filename = None
         settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "wind": self.wind.currentText()}
+                    "wind": self.wind.currentText(), "nnConfidence": self.nnConfidence.value()/100, "nnModelFile": model_filename}
         return(alg, settings)
