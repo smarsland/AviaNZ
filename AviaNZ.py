@@ -62,8 +62,13 @@ import click
 @click.argument('command', nargs=-1)
 
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, time_start, time_end, protocol_size, protocol_interval, maxgap, minlen, maxlen, subset, intermittent, merge_syllables, command):
+    # Suppress TensorFlow messages (if it gets imported somehow)
+    import os
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+    
     # adapt path to allow this to be launched from wherever
-    import sys, os
+    import sys
     if getattr(sys, 'frozen', False):
         appdir = sys._MEIPASS
     else:

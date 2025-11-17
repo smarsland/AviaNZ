@@ -40,6 +40,7 @@ def loadModel(nn_name, dirnn):
     """
     pth_path = os.path.join(dirnn, nn_name + '.pth')
     json_path = os.path.join(dirnn, nn_name + '.json')
+    config_json_path = os.path.join(dirnn, nn_name + '_config.json')
     h5_path = os.path.join(dirnn, nn_name + '.h5')
     weights_h5_path = os.path.join(dirnn, nn_name + '.weights.h5')
     
@@ -52,9 +53,11 @@ def loadModel(nn_name, dirnn):
             loaded.eval()
             return loaded
         elif isinstance(loaded, dict):
-            if os.path.isfile(json_path):
-                print(f"  Detected state_dict file, loading architecture from {nn_name}.json")
-                with open(json_path, 'r') as f:
+            # Try _config.json first (new convention), then .json (old convention)
+            config_file = config_json_path if os.path.isfile(config_json_path) else json_path
+            if os.path.isfile(config_file):
+                print(f"  Detected state_dict file, loading architecture from {os.path.basename(config_file)}")
+                with open(config_file, 'r') as f:
                     config = json.load(f)
                 
                 model_type = config.get('model_type', 'CNN')
@@ -62,7 +65,15 @@ def loadModel(nn_name, dirnn):
                 if model_type == 'AST':
                     from src.models import architectures
                     num_classes = config.get('num_classes', 2)
-                    model = architectures.ASTModel(num_classes=num_classes)
+                    input_size = config.get('input_size', None)
+                    multilabel = config.get('multilabel', False)
+                    dropout = config.get('dropout', 0.1)
+                    model = architectures.AST(
+                        num_classes=num_classes,
+                        multilabel=multilabel,
+                        input_size=input_size,
+                        dropout=dropout
+                    )
                 elif model_type == 'CNN':
                     from src.models import architectures
                     input_size = config.get('input_size', [128, 400])
@@ -76,7 +87,7 @@ def loadModel(nn_name, dirnn):
                 return model
             else:
                 raise RuntimeError(
-                    f"Loaded state_dict from {nn_name}.pth but no {nn_name}.json found. "
+                    f"Loaded state_dict from {nn_name}.pth but no {nn_name}.json or {nn_name}_config.json found. "
                     f"Need config file to reconstruct model architecture."
                 )
         else:

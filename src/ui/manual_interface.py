@@ -5149,14 +5149,22 @@ class ManualInterface(QMainWindow):
                 model_sample_rate = model_config.get('sample_rate', 32000)
                 current_sample_rate = self.sp.audio_data.sample_rate
                 
+                # Resample audio if needed (without modifying original)
+                audio_for_inference = self.sp.audio_data.data
                 if current_sample_rate != model_sample_rate:
-                    msg = MessagePopup("w", "Sample Rate Mismatch", 
-                        f"Audio sample rate ({current_sample_rate} Hz) does not match model's expected rate ({model_sample_rate} Hz). "
-                        f"The audio should be resampled to {model_sample_rate} Hz for proper inference. Continue anyway?")
-                    msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                    reply = msg.exec()
-                    if reply == QMessageBox.StandardButton.No:
-                        return
+                    self.statusLeft.setText(f'Resampling audio from {current_sample_rate} Hz to {model_sample_rate} Hz...')
+                    QApplication.processEvents()
+                    
+                    import librosa
+                    audio_for_inference = librosa.resample(
+                        self.sp.audio_data.data.astype(np.float32), 
+                        orig_sr=current_sample_rate, 
+                        target_sr=model_sample_rate
+                    )
+                    # Use model sample rate for spectrogram computation
+                    inference_sr = model_sample_rate
+                else:
+                    inference_sr = current_sample_rate
                 
                 spec_params = model_config.get('spectrogram_params', {})
                 current_params = {
@@ -5177,34 +5185,29 @@ class ManualInterface(QMainWindow):
                 window_seconds = model_config.get('window_seconds', 0.025)
                 hop_seconds = model_config.get('hop_seconds', 0.01)
                 
-                window_width = int(window_seconds * current_sample_rate)
-                incr = int(hop_seconds * current_sample_rate)
+                window_width = int(window_seconds * inference_sr)
+                incr = int(hop_seconds * inference_sr)
                 
-                if needs_recompute or self.config['window_width'] != window_width or self.config['incr'] != incr:
-                    self.statusLeft.setText('Recomputing spectrogram with model parameters...')
-                    QApplication.processEvents()
-                    
-                    self.config['windowType'] = spec_params.get('windowType', 'Hann')
-                    self.config['sgType'] = spec_params.get('sgType', 'Standard')
-                    self.config['sgScale'] = spec_params.get('sgScale', 'Linear')
-                    self.config['sgMeanNormalise'] = spec_params.get('mean_normalise', True)
-                    self.config['sgEqualLoudness'] = spec_params.get('equal_loudness', False)
-                    self.config['nfilters'] = spec_params.get('nfilters', 128)
-                    self.config['window_width'] = window_width
-                    self.config['incr'] = incr
-                    
-                    _ = self.sp.spectrogram(
-                        window_width=window_width,
-                        incr=incr,
-                        window=self.config['windowType'],
-                        sgType=self.config['sgType'],
-                        sgScale=self.config['sgScale'],
-                        nfilters=self.config['nfilters'],
-                        mean_normalise=self.config['sgMeanNormalise'],
-                        equal_loudness=self.config['sgEqualLoudness'],
-                        onesided=self.config['sgOneSided']
-                    )
-                    self.setSpectrogram()
+                # Always compute a fresh spectrogram from the (potentially resampled) audio
+                self.statusLeft.setText('Computing spectrogram with model parameters...')
+                QApplication.processEvents()
+                
+                # Create temporary spectrogram object for inference
+                import src.core.spectrogram as spectrogram
+                temp_sp = spectrogram.Spectrogram(window_width, incr)
+                temp_sp.readWav(audio_for_inference, inference_sr)
+                
+                _ = temp_sp.spectrogram(
+                    window_width=window_width,
+                    incr=incr,
+                    window=spec_params.get('windowType', 'Hann'),
+                    sgType=spec_params.get('sgType', 'Standard'),
+                    sgScale=spec_params.get('sgScale', 'Linear'),
+                    nfilters=spec_params.get('nfilters', 128),
+                    mean_normalise=spec_params.get('mean_normalise', True),
+                    equal_loudness=spec_params.get('equal_loudness', False),
+                    onesided=True
+                )
                 
                 self.statusLeft.setText('Running NN inference...')
                 QApplication.processEvents()
@@ -5213,7 +5216,7 @@ class ManualInterface(QMainWindow):
                 freq_bins = model_config.get('freq_bins', 128)
                 spec_transform = model_config.get('spec_transform', 'Log')
                 
-                sg = self.sp.sg.copy()
+                sg = temp_sp.sg.copy()
                 
                 if sg.shape[1] < freq_bins:
                     freq_bins = sg.shape[1]
@@ -5240,23 +5243,46 @@ class ManualInterface(QMainWindow):
                     pred = inference.predict_batch(model, segment)
                     predictions.append(pred[0])
                     
-                    start_time = start_frame * incr / current_sample_rate
-                    end_time = end_frame * incr / current_sample_rate
+                    start_time = start_frame * incr / inference_sr
+                    end_time = end_frame * incr / inference_sr
                     segment_times.append((start_time, end_time))
                 
                 newSegments = []
+                segment_metadata = {}  # Map (start_time, class_idx) to certainty for multilabel support
+                multilabel = model_config.get('multilabel', False)
+                
                 for i, (pred, (start_time, end_time)) in enumerate(zip(predictions, segment_times)):
-                    max_prob_idx = np.argmax(pred)
-                    max_prob = pred[max_prob_idx]
-                    
-                    if max_prob >= min_confidence:
-                        y1 = 0
-                        y2 = current_sample_rate // 2
+                    if multilabel:
+                        # Multilabel: check each class independently, create segment for each above threshold
+                        for class_idx, prob in enumerate(pred):
+                            # Clamp probability to [0, 1] range in case of numerical issues
+                            prob = np.clip(prob, 0.0, 1.0)
+                            if prob >= min_confidence:
+                                certainty = int(prob * 100)
+                                
+                                # Create separate segment for each detected class
+                                seg_key = (start_time, class_idx)
+                                if start_time not in [s[0] for s in newSegments]:
+                                    newSegments.append([start_time, end_time])
+                                segment_metadata[seg_key] = certainty
+                    else:
+                        # Single-label: use argmax
+                        max_prob_idx = np.argmax(pred)
+                        max_prob = pred[max_prob_idx]
+                        # Clamp probability to [0, 1] range
+                        max_prob = np.clip(max_prob, 0.0, 1.0)
                         
-                        species_label = f"Class_{max_prob_idx}"
-                        certainty = int(max_prob * 100)
-                        
-                        newSegments.append([[start_time, end_time], certainty, species_label, y1, y2])
+                        if max_prob >= min_confidence:
+                            certainty = int(max_prob * 100)
+                            
+                            # Use 2-element format for post-processing: [[start, end]]
+                            newSegments.append([start_time, end_time])
+                            # Store metadata keyed by (start_time, class_idx)
+                            segment_metadata[(start_time, max_prob_idx)] = certainty
+                
+                print(f'Segments detected (above {int(min_confidence*100)}% confidence): {len(newSegments)}')
+                if len(newSegments) > 0:
+                    print(f'  Example segments: {newSegments[:3]}')
             else:
                 print("ERROR: unrecognised algorithm", alg)
                 return
@@ -5266,7 +5292,7 @@ class ManualInterface(QMainWindow):
             # 2. Delete rainy segments
             # 3. Check fundamental frq
             # 4. Merge neighbours
-            # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
+            # 5. Delete short segments
             if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print(newSegments)
@@ -5303,15 +5329,35 @@ class ManualInterface(QMainWindow):
 
                     newSegments[filtix] = post.segments
             else:
-                print('Segments detected: ', len(newSegments))
-                print('Post-processing...')
-                post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate, segments=newSegments, subfilter={})
-                if settings["rain"]:
-                    post.rainClick()
-                    print('After rain segments: ', len(post.segments))
-                post.joinGaps(maxgap=settings["maxgap"])
-                post.deleteShort(minlength=settings["minlen"])
-                newSegments = post.segments
+                print(f'Segments detected: {len(newSegments)}')
+                if len(newSegments) > 0:
+                    print('Post-processing...')
+                    # Don't use PostProcess cert parameter - we'll restore individual certainties
+                    post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, 
+                                                   sampleRate=self.sp.audio_data.sample_rate, 
+                                                   segments=newSegments, subfilter={}, cert=0)
+                    if settings["rain"]:
+                        post.rainClick()
+                        print(f'After rain removal: {len(post.segments)} segments')
+                    post.joinGaps(maxgap=settings["maxgap"])
+                    print(f'Segments remaining after merge (gap <={settings["maxgap"]:.2f} secs): {len(post.segments)}')
+                    post.deleteShort(minlength=settings["minlen"])
+                    print(f'Segments remaining after deleting short (<{settings["minlen"]:.2f} secs): {len(post.segments)}')
+                    
+                    # Restore original certainties by matching start times
+                    if alg == 'NN_Model':
+                        for seg in post.segments:
+                            start_time = seg[0][0]
+                            # Find the class(es) for this segment
+                            matching_keys = [k for k in segment_metadata.keys() if k[0] == start_time]
+                            if matching_keys:
+                                # Use the highest certainty if multiple classes
+                                max_cert = max(segment_metadata[k] for k in matching_keys)
+                                seg[1] = max_cert  # Replace averaged certainty with original
+                    
+                    newSegments = post.segments
+                else:
+                    print('No segments to post-process.')
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
@@ -5336,9 +5382,31 @@ class ManualInterface(QMainWindow):
                                 [{"species": filtspecies, "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             elif alg == 'NN_Model':
+                y1 = 0
+                y2 = self.sp.audio_data.sample_rate // 2  # Use original sample rate for display
                 for seg in newSegments:
-                    self.addSegment(seg[0][0] + self.startRead, seg[0][1] + self.startRead, seg[3], seg[4],
-                            [{"species": seg[2], "certainty": seg[1], "filter": filtname}], index=-1, coordsAbsolute=True)
+                    start_time = seg[0][0]
+                    # Get all classes detected for this segment
+                    matching_keys = [(k[1], segment_metadata[k]) for k in segment_metadata.keys() if k[0] == start_time]
+                    
+                    if matching_keys:
+                        if multilabel and len(matching_keys) > 1:
+                            # Multiple species detected - create one label per species
+                            labels = []
+                            for class_idx, certainty in matching_keys:
+                                species_label = f"Class_{class_idx}"
+                                labels.append({"species": species_label, "certainty": certainty})
+                        else:
+                            # Single species
+                            class_idx, certainty = matching_keys[0]
+                            species_label = f"Class_{class_idx}"
+                            labels = [{"species": species_label, "certainty": certainty}]
+                    else:
+                        # Merged segment - use generic label and certainty from PostProcess
+                        labels = [{"species": "NN Detection (merged)", "certainty": seg[1]}]
+                    
+                    self.addSegment(seg[0][0] + self.startRead, seg[0][1] + self.startRead, y1, y2,
+                            labels, index=-1, coordsAbsolute=True)
                     self.segmentsToSave = True
             else:
                 for seg in newSegments:

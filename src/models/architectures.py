@@ -21,6 +21,77 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from transformers import ViTModel, ViTConfig
+
+
+class AST(nn.Module):
+    """Vision Transformer for spectrogram-based bird sound classification.
+    
+    Uses a ViT pretrained on ImageNet to process spectrograms as images.
+    """
+    
+    def __init__(self, num_classes, multilabel=False, input_size=None, dropout=0.1):
+        super().__init__()
+        self.num_classes = num_classes
+        self.multilabel = multilabel
+        self.input_size = input_size  # Store expected input size (H, W) - for reference only
+        
+        # Load pretrained ViT model (ImageNet-21k)
+        self.vit = ViTModel.from_pretrained("google/vit-base-patch16-224-in21k")
+        
+        # Update config to accept 1 channel
+        self.vit.config.num_channels = 1
+        
+        # Adapt patch embedding to 1 input channel by averaging RGB weights
+        proj = self.vit.embeddings.patch_embeddings.projection
+        if isinstance(proj, nn.Conv2d) and proj.in_channels == 3:
+            new_proj = nn.Conv2d(
+                1,
+                proj.out_channels,
+                kernel_size=proj.kernel_size,
+                stride=proj.stride,
+                padding=proj.padding,
+                bias=proj.bias is not None,
+            )
+            with torch.no_grad():
+                w = proj.weight.mean(dim=1, keepdim=True)
+                new_proj.weight.copy_(w)
+                if proj.bias is not None:
+                    new_proj.bias.copy_(proj.bias)
+            self.vit.embeddings.patch_embeddings.projection = new_proj
+            
+            # Also update the patch_embeddings attributes
+            self.vit.embeddings.patch_embeddings.num_channels = 1
+        
+        # Replace classifier head with dropout for regularization
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(self.vit.config.hidden_size, num_classes)
+
+    def forward(self, x):
+        x = x.float()
+
+        # 1) Per-sample min-max normalization to [0,1]
+        # Hardcoded normalization settings for ViT input
+        # Compute min/max over spatial dims (and channels)
+        x_min = x.amin(dim=(1, 2, 3), keepdim=True)
+        x_max = x.amax(dim=(1, 2, 3), keepdim=True)
+        denom = (x_max - x_min).clamp_min(1e-6)  # Numerical stability
+        x = (x - x_min) / denom
+        x = x.clamp(0.0, 1.0)
+
+        # 2) Apply ViT input normalization (ImageNet convention): (x - mean) / std
+        # For ImageNet ViT checkpoints, mean=std=0.5 maps [0,1] -> [-1,1]
+        mean = torch.tensor([0.5], device=x.device, dtype=x.dtype).view(1, -1, 1, 1)
+        std = torch.tensor([0.5], device=x.device, dtype=x.dtype).view(1, -1, 1, 1)
+        x = (x - mean) / std
+
+        # Pass through ViT with interpolate_pos_encoding to handle variable sizes
+        outputs = self.vit(pixel_values=x, interpolate_pos_encoding=True)
+        cls = outputs.last_hidden_state[:, 0]
+        cls = self.dropout(cls)
+        logits = self.classifier(cls)
+        return logits
 
 
 class CNNModel(nn.Module):

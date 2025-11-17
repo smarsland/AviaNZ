@@ -381,10 +381,6 @@ class SegmentationDialog(QDialog):
             self.nnModel.show()
             self.nnConfidencelabel.show()
             self.nnConfidence.show()
-            self.maxgaplbl.hide()
-            self.maxgap.hide()
-            self.minlenlbl.hide()
-            self.minlen.hide()
         else:
             #"Wavelet Filter" or "WV Changepoint"
             self.specieslabel.show()
