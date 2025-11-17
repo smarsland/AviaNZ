@@ -9,6 +9,9 @@ SplitWav
 # vim swap files
 *.swp
 
+# models
+*.pt
+
 # ignore temp files produced during analysis
 Sound Files/*
 !Sound Files/*bmp
