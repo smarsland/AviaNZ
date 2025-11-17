@@ -11,6 +11,7 @@ SplitWav
 
 # models
 *.pt
+Models/*
 
 # ignore temp files produced during analysis
 Sound Files/*
