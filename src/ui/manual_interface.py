@@ -5150,20 +5150,25 @@ class ManualInterface(QMainWindow):
                 current_sample_rate = self.sp.audio_data.sample_rate
                 
                 # Resample audio if needed (without modifying original)
-                audio_for_inference = self.sp.audio_data.data
                 if current_sample_rate != model_sample_rate:
                     self.statusLeft.setText(f'Resampling audio from {current_sample_rate} Hz to {model_sample_rate} Hz...')
                     QApplication.processEvents()
                     
-                    import librosa
-                    audio_for_inference = librosa.resample(
-                        self.sp.audio_data.data.astype(np.float32), 
-                        orig_sr=current_sample_rate, 
-                        target_sr=model_sample_rate
+                    import src.core.spectrogram as spectrogram
+                    import src.core.audio_data as audio_data
+                    temp_sp = spectrogram.Spectrogram(self.sp.window_width, self.sp.incr)
+                    temp_sp.audio_data = audio_data.AudioData(
+                        data=self.sp.audio_data.data.copy(),
+                        sample_rate=current_sample_rate,
+                        sample_format='float32',
+                        sample_size=32,
+                        channels=1
                     )
-                    # Use model sample rate for spectrogram computation
+                    temp_sp.resample(model_sample_rate)
+                    audio_for_inference = temp_sp.audio_data.data
                     inference_sr = model_sample_rate
                 else:
+                    audio_for_inference = self.sp.audio_data.data
                     inference_sr = current_sample_rate
                 
                 spec_params = model_config.get('spectrogram_params', {})
@@ -5257,6 +5262,7 @@ class ManualInterface(QMainWindow):
                 newSegments = []
                 segment_metadata = {}  # Map (start_time, class_idx) to certainty for multilabel support
                 multilabel = model_config.get('multilabel', False)
+                class_names = model_config.get('class_names', [])
                 
                 for i, (pred, (start_time, end_time)) in enumerate(zip(predictions, segment_times)):
                     # Convert logits to probabilities
@@ -5403,12 +5409,20 @@ class ManualInterface(QMainWindow):
                             # Multiple species detected - create one label per species
                             labels = []
                             for class_idx, certainty in matching_keys:
-                                species_label = f"Class_{class_idx}"
+                                # Use actual species name from class_names if available
+                                if class_names and 0 <= class_idx < len(class_names):
+                                    species_label = class_names[class_idx]
+                                else:
+                                    species_label = f"Class_{class_idx}"
                                 labels.append({"species": species_label, "certainty": certainty})
                         else:
                             # Single species
                             class_idx, certainty = matching_keys[0]
-                            species_label = f"Class_{class_idx}"
+                            # Use actual species name from class_names if available
+                            if class_names and 0 <= class_idx < len(class_names):
+                                species_label = class_names[class_idx]
+                            else:
+                                species_label = f"Class_{class_idx}"
                             labels = [{"species": species_label, "certainty": certainty}]
                     else:
                         # No metadata found - shouldn't happen
