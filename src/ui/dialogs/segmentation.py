@@ -138,6 +138,9 @@ class SegmentationDialog(QDialog):
         self.nnConfidence.setSingleStep(5)
         self.nnConfidence.setValue(50)
 
+        self.nnPostProcess = QCheckBox("Enable post-processing (merge/filter segments)")
+        self.nnPostProcess.setChecked(True)
+
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
         Box.addStretch(1)
@@ -219,6 +222,7 @@ class SegmentationDialog(QDialog):
         Box.addWidget(self.nnModel)
         Box.addWidget(self.nnConfidencelabel)
         Box.addWidget(self.nnConfidence)
+        Box.addWidget(self.nnPostProcess)
 
         self.medSize = QSlider(Qt.Orientation.Horizontal)
         self.medSize.setTickPosition(QSlider.TickPosition.TicksBelow)
@@ -381,6 +385,12 @@ class SegmentationDialog(QDialog):
             self.nnModel.show()
             self.nnConfidencelabel.show()
             self.nnConfidence.show()
+            self.nnPostProcess.show()
+            self.rain.show()
+            self.maxgaplbl.show()
+            self.maxgap.show()
+            self.minlenlbl.show()
+            self.minlen.show()
         else:
             #"Wavelet Filter" or "WV Changepoint"
             self.specieslabel.show()
@@ -431,5 +441,5 @@ class SegmentationDialog(QDialog):
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "wind": self.wind.currentText(), "nnConfidence": self.nnConfidence.value()/100, "nnModelFile": model_filename}
+                    "wind": self.wind.currentText(), "nnConfidence": self.nnConfidence.value()/100, "nnModelFile": model_filename, "nnPostProcess": self.nnPostProcess.isChecked()}
         return(alg, settings)
