@@ -5235,7 +5235,8 @@ class ManualInterface(QMainWindow):
                     sg = temp_sp.sg.copy()
                 
                 # Rotate to match training format: (time, freq) -> (freq, time)
-                sg = np.rot90(sg)
+                # .copy() needed because rot90 creates negative strides
+                sg = np.rot90(sg).copy()
                 
                 # Now sg is (freq, time)
                 if sg.shape[0] < freq_bins:
@@ -5315,17 +5316,35 @@ class ManualInterface(QMainWindow):
                     print(f'  Example segments: {newSegments[:3]}')
                     print(f'  Example metadata: {list(segment_metadata.items())[:3]}')
                 
-                # Skip post-processing for NN_Model - convert to expected format with certainties
+                print('Post-processing...')
+                post = segmentation.PostProcess(
+                    configdir=self.configdir,
+                    audioData=self.sp.audio_data.data,
+                    sampleRate=self.sp.audio_data.sample_rate,
+                    segments=newSegments,
+                    subfilter={},
+                    cert=0
+                )
+                if settings["rain"]:
+                    post.rainClick()
+                    print(f'After rain removal: {len(post.segments)} segments')
+                post.joinGaps(maxgap=settings["maxgap"])
+                print(f'Segments remaining after merge (gap <={settings["maxgap"]:.2f} secs): {len(post.segments)}')
+                post.deleteShort(minlength=settings["minlen"])
+                print(f'Segments remaining after deleting short (<{settings["minlen"]:.2f} secs): {len(post.segments)}')
+                newSegments = post.segments
+                
+                # Convert to expected format with certainties
                 newSegments_with_cert = []
                 for seg in newSegments:
-                    start_time = seg[0]
+                    start_time = seg[0][0]  # seg is [[start, end], cert] from PostProcess
                     # Find matching certainty
                     matching_keys = [(k[1], segment_metadata[k]) for k in segment_metadata.keys() if k[0] == start_time]
                     if matching_keys:
                         certainty = matching_keys[0][1]  # Use first match certainty
                     else:
                         certainty = 50  # Fallback
-                    newSegments_with_cert.append([[seg[0], seg[1]], certainty])
+                    newSegments_with_cert.append([[seg[0][0], seg[0][1]], certainty])
                 newSegments = newSegments_with_cert
             elif alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
