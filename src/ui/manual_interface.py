@@ -5194,8 +5194,15 @@ class ManualInterface(QMainWindow):
                 
                 # Create temporary spectrogram object for inference
                 import src.core.spectrogram as spectrogram
+                import src.core.audio_data as audio_data
                 temp_sp = spectrogram.Spectrogram(window_width, incr)
-                temp_sp.readWav(audio_for_inference, inference_sr)
+                temp_sp.audio_data = audio_data.AudioData(
+                    data=audio_for_inference,
+                    sample_rate=inference_sr,
+                    sample_format='float32',
+                    sample_size=32,
+                    channels=1
+                )
                 
                 _ = temp_sp.spectrogram(
                     window_width=window_width,
@@ -5252,9 +5259,15 @@ class ManualInterface(QMainWindow):
                 multilabel = model_config.get('multilabel', False)
                 
                 for i, (pred, (start_time, end_time)) in enumerate(zip(predictions, segment_times)):
+                    # Convert logits to probabilities
                     if multilabel:
-                        # Multilabel: check each class independently, create segment for each above threshold
-                        for class_idx, prob in enumerate(pred):
+                        # Multilabel: apply sigmoid to get independent probabilities
+                        import torch.nn.functional as F
+                        pred_tensor = torch.from_numpy(pred)
+                        probs = torch.sigmoid(pred_tensor).numpy()
+                        
+                        # Check each class independently, create segment for each above threshold
+                        for class_idx, prob in enumerate(probs):
                             # Clamp probability to [0, 1] range in case of numerical issues
                             prob = np.clip(prob, 0.0, 1.0)
                             if prob >= min_confidence:
@@ -5266,16 +5279,20 @@ class ManualInterface(QMainWindow):
                                     newSegments.append([start_time, end_time])
                                 segment_metadata[seg_key] = certainty
                     else:
-                        # Single-label: use argmax
-                        max_prob_idx = np.argmax(pred)
-                        max_prob = pred[max_prob_idx]
+                        # Single-label: apply softmax to get probabilities
+                        import torch.nn.functional as F
+                        pred_tensor = torch.from_numpy(pred)
+                        probs = F.softmax(pred_tensor, dim=0).numpy()
+                        
+                        max_prob_idx = np.argmax(probs)
+                        max_prob = probs[max_prob_idx]
                         # Clamp probability to [0, 1] range
                         max_prob = np.clip(max_prob, 0.0, 1.0)
                         
                         if max_prob >= min_confidence:
                             certainty = int(max_prob * 100)
                             
-                            # Use 2-element format for post-processing: [[start, end]]
+                            # Add segment with time and store metadata separately
                             newSegments.append([start_time, end_time])
                             # Store metadata keyed by (start_time, class_idx)
                             segment_metadata[(start_time, max_prob_idx)] = certainty
@@ -5283,17 +5300,21 @@ class ManualInterface(QMainWindow):
                 print(f'Segments detected (above {int(min_confidence*100)}% confidence): {len(newSegments)}')
                 if len(newSegments) > 0:
                     print(f'  Example segments: {newSegments[:3]}')
-            else:
-                print("ERROR: unrecognised algorithm", alg)
-                return
-
-            # Post-process
-            # 1. Delete windy segments
-            # 2. Delete rainy segments
-            # 3. Check fundamental frq
-            # 4. Merge neighbours
-            # 5. Delete short segments
-            if alg == 'Wavelet Filter' or alg == 'WV Changepoint':
+                    print(f'  Example metadata: {list(segment_metadata.items())[:3]}')
+                
+                # Skip post-processing for NN_Model - convert to expected format with certainties
+                newSegments_with_cert = []
+                for seg in newSegments:
+                    start_time = seg[0]
+                    # Find matching certainty
+                    matching_keys = [(k[1], segment_metadata[k]) for k in segment_metadata.keys() if k[0] == start_time]
+                    if matching_keys:
+                        certainty = matching_keys[0][1]  # Use first match certainty
+                    else:
+                        certainty = 50  # Fallback
+                    newSegments_with_cert.append([[seg[0], seg[1]], certainty])
+                newSegments = newSegments_with_cert
+            elif alg == 'Wavelet Filter' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print(newSegments)
                 print('Post-processing...')
@@ -5329,10 +5350,10 @@ class ManualInterface(QMainWindow):
 
                     newSegments[filtix] = post.segments
             else:
+                # Other algorithms (Default, Median Clipping, etc.)
                 print(f'Segments detected: {len(newSegments)}')
                 if len(newSegments) > 0:
                     print('Post-processing...')
-                    # Don't use PostProcess cert parameter - we'll restore individual certainties
                     post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, 
                                                    sampleRate=self.sp.audio_data.sample_rate, 
                                                    segments=newSegments, subfilter={}, cert=0)
@@ -5343,18 +5364,6 @@ class ManualInterface(QMainWindow):
                     print(f'Segments remaining after merge (gap <={settings["maxgap"]:.2f} secs): {len(post.segments)}')
                     post.deleteShort(minlength=settings["minlen"])
                     print(f'Segments remaining after deleting short (<{settings["minlen"]:.2f} secs): {len(post.segments)}')
-                    
-                    # Restore original certainties by matching start times
-                    if alg == 'NN_Model':
-                        for seg in post.segments:
-                            start_time = seg[0][0]
-                            # Find the class(es) for this segment
-                            matching_keys = [k for k in segment_metadata.keys() if k[0] == start_time]
-                            if matching_keys:
-                                # Use the highest certainty if multiple classes
-                                max_cert = max(segment_metadata[k] for k in matching_keys)
-                                seg[1] = max_cert  # Replace averaged certainty with original
-                    
                     newSegments = post.segments
                 else:
                     print('No segments to post-process.')
@@ -5402,8 +5411,8 @@ class ManualInterface(QMainWindow):
                             species_label = f"Class_{class_idx}"
                             labels = [{"species": species_label, "certainty": certainty}]
                     else:
-                        # Merged segment - use generic label and certainty from PostProcess
-                        labels = [{"species": "NN Detection (merged)", "certainty": seg[1]}]
+                        # No metadata found - shouldn't happen
+                        labels = [{"species": "NN Detection", "certainty": 50}]
                     
                     self.addSegment(seg[0][0] + self.startRead, seg[0][1] + self.startRead, y1, y2,
                             labels, index=-1, coordsAbsolute=True)
