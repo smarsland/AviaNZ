@@ -5228,29 +5228,36 @@ class ManualInterface(QMainWindow):
                 freq_bins = model_config.get('freq_bins', 128)
                 spec_transform = model_config.get('spec_transform', 'Log')
                 
-                sg = temp_sp.sg.copy()
-                
-                if sg.shape[1] < freq_bins:
-                    freq_bins = sg.shape[1]
-                
+                # Use the built-in normalisedSpec method for log transform
                 if spec_transform == 'Log':
-                    sg = np.log10(sg + 1e-10)
+                    sg = temp_sp.normalisedSpec("Log")
+                else:
+                    sg = temp_sp.sg.copy()
                 
-                total_time_frames = sg.shape[0]
+                # Rotate to match training format: (time, freq) -> (freq, time)
+                sg = np.rot90(sg)
+                
+                # Now sg is (freq, time)
+                if sg.shape[0] < freq_bins:
+                    freq_bins = sg.shape[0]
+                
+                total_time_frames = sg.shape[1]  # Time is now dimension 1
                 predictions = []
                 segment_times = []
                 
                 for start_frame in range(0, total_time_frames, time_bins):
                     end_frame = min(start_frame + time_bins, total_time_frames)
                     
+                    # Extract in (freq, time) format
                     if end_frame - start_frame < time_bins:
-                        segment = np.zeros((time_bins, freq_bins))
+                        segment = np.zeros((freq_bins, time_bins))
                         actual_frames = end_frame - start_frame
-                        segment[:actual_frames, :] = sg[start_frame:end_frame, :freq_bins]
+                        segment[:, :actual_frames] = sg[:freq_bins, start_frame:end_frame]
                     else:
-                        segment = sg[start_frame:end_frame, :freq_bins]
+                        segment = sg[:freq_bins, start_frame:end_frame]
                     
-                    segment = segment.reshape(1, time_bins, freq_bins, 1)
+                    # Reshape to (1, freq, time, 1) - model normalizes internally
+                    segment = segment.reshape(1, freq_bins, time_bins, 1)
                     
                     pred = inference.predict_batch(model, segment)
                     predictions.append(pred[0])
