@@ -64,6 +64,7 @@ def loadModel(nn_name, dirnn):
                 
                 if model_type == 'AST':
                     from src.models import architectures
+                    import torch.nn as nn
                     num_classes = config.get('num_classes', 2)
                     input_size = config.get('input_size', None)
                     multilabel = config.get('multilabel', False)
@@ -74,15 +75,35 @@ def loadModel(nn_name, dirnn):
                         input_size=input_size,
                         dropout=dropout
                     )
+                    
+                    # Handle position embeddings size mismatch for AST models
+                    # (trained model may have interpolated position embeddings)
+                    pos_emb_key = 'ast.embeddings.position_embeddings'
+                    if pos_emb_key in loaded:
+                        saved_pos_emb = loaded[pos_emb_key]
+                        current_pos_emb = model.state_dict()[pos_emb_key]
+                        
+                        if saved_pos_emb.shape != current_pos_emb.shape:
+                            print(f"  Position embeddings shape mismatch: "
+                                  f"saved {saved_pos_emb.shape} vs current {current_pos_emb.shape}")
+                            print(f"  Using saved (interpolated) position embeddings from trained model")
+                            # Replace the position embeddings parameter with the saved one
+                            model.ast.embeddings.position_embeddings = nn.Parameter(saved_pos_emb)
+                            # Remove from loaded dict to avoid error
+                            loaded.pop(pos_emb_key)
+                    
+                    # Load remaining state dict
+                    missing_keys, unexpected_keys = model.load_state_dict(loaded, strict=False)
+                    
                 elif model_type == 'CNN':
                     from src.models import architectures
                     input_size = config.get('input_size', [128, 400])
                     num_classes = config.get('num_classes', 2)
                     model = architectures.CNNModel(input_size[0], input_size[1], num_classes)
+                    model.load_state_dict(loaded)
                 else:
                     raise ValueError(f"Unknown model_type: {model_type}")
                 
-                model.load_state_dict(loaded)
                 model.eval()
                 return model
             else:
