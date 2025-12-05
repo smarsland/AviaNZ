@@ -3626,8 +3626,8 @@ class ManualInterface(QMainWindow):
 
         target = self.segments[targetix]
 
-        if target[0]>self.startRead + self.datalengthSec:
-            pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
+        if target.start_time>self.startRead + self.datalengthSec:
+            pagenum, relstart = divmod(target.start_time, self.config['maxFileShow'])
             pagenum = int(pagenum+1)
             if pagenum > self.nFileSections:
                 print("Warning: annotation outside file bounds")
@@ -3636,7 +3636,7 @@ class ManualInterface(QMainWindow):
                 msg.exec()
                 return
             self.moveTo5mins(pagenum)
-        newminT = target[0] - self.startRead - self.windowSize / 2  # in s
+        newminT = target.start_time - self.startRead - self.windowSize / 2  # in s
         newminX = self.convertAmpltoSpec(newminT)  # in spec pixels
         newmaxX = self.convertAmpltoSpec(newminT + self.windowSize)
         # This will trigger update of the other views
