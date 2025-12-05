@@ -621,13 +621,13 @@ class ManualInterface(QMainWindow):
 
         # The buttons to move through the overview
         self.leftBtn = QPushButton()
-        self.leftBtn.setIcon(QIcon("img/overview-back.png"))
+        self.leftBtn.setIcon(QIcon("src/resources/images/overview-back.png"))
         self.leftBtn.setIconSize(QtCore.QSize(7, 28))
         self.leftBtn.setMinimumWidth(16)
         self.leftBtn.clicked.connect(self.moveLeft)
         self.leftBtn.setToolTip("Move view back")
         self.rightBtn = QPushButton()
-        self.rightBtn.setIcon(QIcon("img/overview-next.png"))
+        self.rightBtn.setIcon(QIcon("src/resources/images/overview-next.png"))
         self.rightBtn.setIconSize(QtCore.QSize(7, 28))
         self.rightBtn.setMinimumWidth(16)
         self.rightBtn.clicked.connect(self.moveRight)
