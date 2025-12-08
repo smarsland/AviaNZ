@@ -24,6 +24,7 @@ scipy==1.15.3
 scikit-image==0.25.2
 soundfile==0.13.1
 tensorflow==2.19.0
+transformers
 PyQt6==6.9.0
 
 # For those without AVX2 support:
