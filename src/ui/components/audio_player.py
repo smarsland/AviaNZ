@@ -69,42 +69,23 @@ class ControllableAudio(QAudioSink):
         print(f"--- Audio device: {audioDevice.description()}")
         print(f"--- Requested format: {qtAudioFormat.sampleRate()} Hz, {qtAudioFormat.sampleFormat()}, {qtAudioFormat.channelCount()} channel(s)")
         
-        # Check if format is supported, and try alternatives if not
+        # Check if format is supported, and use device's preferred format if not
         if not audioDevice.isFormatSupported(qtAudioFormat):
             print(f"WARNING: Requested audio format not supported by device '{audioDevice.description()}'")
-            print("Attempting to find a compatible format...")
-            
-            # Try alternative formats in order of preference
-            alternatives = []
-            
-            # Try different sample rates
-            for rate in [qtAudioFormat.sampleRate(), 48000, 44100, 22050, 16000]:
-                # Try mono and stereo
-                for channels in [1, 2]:
-                    # Try different sample formats
-                    for fmt in [QAudioFormat.SampleFormat.Int16, 
-                               QAudioFormat.SampleFormat.Float,
-                               QAudioFormat.SampleFormat.Int32]:
-                        testFormat = QAudioFormat()
-                        testFormat.setSampleRate(rate)
-                        testFormat.setChannelCount(channels)
-                        testFormat.setSampleFormat(fmt)
-                        
-                        if audioDevice.isFormatSupported(testFormat):
-                            alternatives.append((testFormat, rate, channels, fmt))
-            
-            if alternatives:
-                # Use the first supported alternative
-                qtAudioFormat, rate, channels, fmt = alternatives[0]
-                print(f"Using alternative format: {rate} Hz, {fmt}, {channels} channel(s)")
-                # Update our internal format tracking
-                self.audioFormat.sample_rate = rate
-                self.audioFormat.channels = channels
-                self.audioFormat.sample_format = str(fmt).split('.')[-1]
-            else:
-                print("ERROR: No supported audio format found on this device!")
-                print("This may be a driver compatibility issue on ARM-based Windows systems.")
-                print("Please check Windows audio settings and ensure audio drivers are up to date.")
+            # Use the device's preferred format instead
+            qtAudioFormat = audioDevice.preferredFormat()
+            print(f"Using device preferred format: {qtAudioFormat.sampleRate()} Hz, {qtAudioFormat.sampleFormat()}, {qtAudioFormat.channelCount()} channel(s)")
+            # Update our internal format tracking and sampwidth
+            self.audioFormat.sample_rate = qtAudioFormat.sampleRate()
+            self.audioFormat.channels = qtAudioFormat.channelCount()
+            fmt = qtAudioFormat.sampleFormat()
+            self.audioFormat.sample_format = str(fmt).split('.')[-1]
+            if fmt == QAudioFormat.SampleFormat.Int16:
+                self.sampwidth = 2
+            elif fmt == QAudioFormat.SampleFormat.Int32 or fmt == QAudioFormat.SampleFormat.Float:
+                self.sampwidth = 4
+            elif fmt == QAudioFormat.SampleFormat.UInt8:
+                self.sampwidth = 1
         else:
             print(f"--- Format is supported by device")
         
