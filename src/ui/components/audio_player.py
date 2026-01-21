@@ -64,7 +64,51 @@ class ControllableAudio(QAudioSink):
             print(f"ERROR: sample format {sfmt} not supported (size {self.audioFormat.sample_size})")
             self.sampwidth = 2  # default
         
-        super(ControllableAudio, self).__init__(QMediaDevices.defaultAudioOutput(), format=qtAudioFormat)
+        # Check if the default audio device supports the requested format
+        audioDevice = QMediaDevices.defaultAudioOutput()
+        print(f"--- Audio device: {audioDevice.description()}")
+        print(f"--- Requested format: {qtAudioFormat.sampleRate()} Hz, {qtAudioFormat.sampleFormat()}, {qtAudioFormat.channelCount()} channel(s)")
+        
+        # Check if format is supported, and try alternatives if not
+        if not audioDevice.isFormatSupported(qtAudioFormat):
+            print(f"WARNING: Requested audio format not supported by device '{audioDevice.description()}'")
+            print("Attempting to find a compatible format...")
+            
+            # Try alternative formats in order of preference
+            alternatives = []
+            
+            # Try different sample rates
+            for rate in [qtAudioFormat.sampleRate(), 48000, 44100, 22050, 16000]:
+                # Try mono and stereo
+                for channels in [1, 2]:
+                    # Try different sample formats
+                    for fmt in [QAudioFormat.SampleFormat.Int16, 
+                               QAudioFormat.SampleFormat.Float,
+                               QAudioFormat.SampleFormat.Int32]:
+                        testFormat = QAudioFormat()
+                        testFormat.setSampleRate(rate)
+                        testFormat.setChannelCount(channels)
+                        testFormat.setSampleFormat(fmt)
+                        
+                        if audioDevice.isFormatSupported(testFormat):
+                            alternatives.append((testFormat, rate, channels, fmt))
+            
+            if alternatives:
+                # Use the first supported alternative
+                qtAudioFormat, rate, channels, fmt = alternatives[0]
+                print(f"Using alternative format: {rate} Hz, {fmt}, {channels} channel(s)")
+                # Update our internal format tracking
+                self.audioFormat.sample_rate = rate
+                self.audioFormat.channels = channels
+                self.audioFormat.sample_format = str(fmt).split('.')[-1]
+            else:
+                print("ERROR: No supported audio format found on this device!")
+                print("This may be a driver compatibility issue on ARM-based Windows systems.")
+                print("Please check Windows audio settings and ensure audio drivers are up to date.")
+        else:
+            print(f"--- Format is supported by device")
+        
+        super(ControllableAudio, self).__init__(audioDevice, format=qtAudioFormat)
         self.bytesPerSecond = int(self.sampwidth * self.audioFormat.sample_rate * self.audioFormat.channels)
         # TODO: or the size of the data if < 4 secs
         self.setBufferSize(int(self.bytesPerSecond/0.25)) # 4 s buffer
@@ -281,6 +325,18 @@ class ControllableAudio(QAudioSink):
         self.audioThreadLoading = True
         self.audioBuffer = self.start()
         print(f"loadArray: after start(), state={self.state()}, error={self.error()}")
+        
+        # Check if audio device failed to start
+        if self.state() == QAudio.State.StoppedState and self.error() == QAudio.Error.OpenError:
+            print("ERROR: Failed to open audio device!")
+            print("This is likely due to unsupported audio format on your hardware.")
+            print("Possible causes:")
+            print("  - ARM-based Windows systems may have limited audio driver support")
+            print("  - Audio device may not support the sample rate or bit depth")
+            print("  - Try updating your audio drivers or using different audio output settings")
+            self.audioThreadLoading = False
+            return
+        
         self.audioThread = threading.Thread(target=self.fillBuffer)
         self.audioThread.start()
 
