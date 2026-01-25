@@ -1,7 +1,5 @@
 # ignore compiled python sources
 *.pyc
-# ignore Python cache directories
-__pycache__/
 # ignore compiled C objects
 *.so
 SplitWav
@@ -9,9 +7,12 @@ SplitWav
 # vim swap files
 *.swp
 
-# models
+# model files
+*.h5
+*.keras
 *.pt
 Models/*
+kaytoo/*
 
 # ignore temp files produced during analysis
 Sound Files/*
@@ -49,4 +50,11 @@ Docs/FilterTraining.soc
 # default configs - if this is not distributed
 # AviaNZconfig.txt
 
+# ignore the .github stuff
 .github/
+
+# model comparison results
+comparison_results/
+
+Joe_MO_Results/*
+MoreporkResults/*
