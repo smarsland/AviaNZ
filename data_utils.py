@@ -773,7 +773,7 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
                 positions = batch['positions'].to(device)
                 mask = batch['mask'].to(device)
                 target = batch['label'].to(device)
-                output = model(patches, positions, mask)
+                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
             else:
                 # Standard mode
                 data, target = batch
