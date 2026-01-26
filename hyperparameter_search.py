@@ -80,9 +80,18 @@ def objective(trial, data_folder, output_base, fixed_args):
         
         return best_val_loss
         
+    except optuna.TrialPruned:
+        # Re-raise pruning exceptions from intermediate callbacks
+        raise
     except Exception as e:
-        print(f"Trial {trial.number} failed: {e}")
-        raise optuna.TrialPruned()
+        import traceback
+        print(f"\n{'='*80}")
+        print(f"Trial {trial.number} FAILED with exception:")
+        print(f"{'='*80}")
+        traceback.print_exc()
+        print(f"{'='*80}\n")
+        trial.set_user_attr('error', str(e))
+        raise  # Let it fail properly instead of masking as pruned
 
 def main():
     parser = argparse.ArgumentParser(

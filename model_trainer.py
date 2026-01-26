@@ -607,7 +607,8 @@ class ASTTrainer:
             if self.trial is not None:
                 import optuna
                 self.trial.report(val_loss, epoch)
-                if self.trial.should_prune():
+                # Only check for pruning if not the last epoch
+                if epoch < self.max_epochs - 1 and self.trial.should_prune():
                     print(f"Trial pruned at epoch {epoch+1}")
                     raise optuna.TrialPruned()
         
