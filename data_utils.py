@@ -765,9 +765,20 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
     all_targets = []
     
     with torch.no_grad():
-        for data, target in data_loader:
-            data = data.to(device)
-            output = model(data)
+        for batch in data_loader:
+            # Handle both sparse and standard formats
+            if isinstance(batch, dict):
+                # Sparse patches mode
+                patches = batch['patches'].to(device)
+                positions = batch['positions'].to(device)
+                mask = batch['mask'].to(device)
+                target = batch['label'].to(device)
+                output = model(patches, positions, mask)
+            else:
+                # Standard mode
+                data, target = batch
+                data = data.to(device)
+                output = model(data)
             
             if target.dim() == 2:
                 pred = output.argmax(dim=1)
