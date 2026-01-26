@@ -695,7 +695,9 @@ class ASTTrainer:
         best_val_loss = min(val_losses)
         
         if self.trial is not None:
-            return best_val_loss
+            # Return negative accuracy for Optuna (it minimizes, we want to maximize accuracy)
+            # Use best_val_acc which is the actual performance metric (F1 for multilabel, acc otherwise)
+            return -best_val_acc
         
         return {
             'model': model,
@@ -754,29 +756,29 @@ class ASTTrainer:
         filename = 'ast_model_best.pt' if best else 'ast_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
         
-        # Save configuration for model deployment (only once, same for both models)
+        # Always save configuration for model deployment
+        model_config = config.get_model_config()
+        
+        # Override with actual dimensions used during training
+        model_config['freq_bins'] = self.img_height
+        model_config['time_bins'] = self.img_width
+        
+        # Add model-specific information
+        model_config['model_type'] = 'MultiScaleAST' if self.use_multiscale else 'AST'
+        model_config['num_classes'] = model.num_classes
+        model_config['multilabel'] = model.multilabel
+        model_config['class_names'] = self.data['class_names']
+        model_config['use_reconstruction'] = self.use_reconstruction
+        model_config['use_sparse_patches'] = self.use_sparse_patches
+        model_config['num_sparse_patches'] = self.num_sparse_patches
+        
+        # Save to JSON
+        config_path = os.path.join(self.output_folder, 'ast_model_config.json')
+        with open(config_path, 'w') as f:
+            json.dump(model_config, f, indent=2)
+        
         if best:
-            model_config = config.get_model_config()
-            
-            # Override with actual dimensions used during training
-            model_config['freq_bins'] = self.img_height
-            model_config['time_bins'] = self.img_width
-            
-            # Add model-specific information
-            model_config['model_type'] = 'MultiScaleAST' if self.use_multiscale else 'AST'
-            model_config['num_classes'] = model.num_classes
-            model_config['multilabel'] = model.multilabel
-            model_config['class_names'] = self.data['class_names']
-            model_config['use_reconstruction'] = self.use_reconstruction  # List of class names
-            model_config['use_sparse_patches'] = self.use_sparse_patches
-            model_config['num_sparse_patches'] = self.num_sparse_patches
-            
-            # Save to JSON
-            config_path = os.path.join(self.output_folder, 'ast_model_config.json')
-            with open(config_path, 'w') as f:
-                json.dump(model_config, f, indent=2)
-            
-            print(f"Saved model configuration to ast_model_config.json")
+            print(f"Saved best model and configuration")
             print(f"Classes ({model.num_classes}): {', '.join(self.data['class_names'])}")
     
     def _save_history(self, train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs):

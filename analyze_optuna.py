@@ -57,22 +57,25 @@ def analyze_study(storage_path, study_name='ast_sparse_search'):
     print(f"\nTrials with full results: {len(all_finished)}")
     
     if all_finished:
-        # Get best val loss from intermediate values for finished_pruned trials
-        def get_final_loss(t):
+        # Get best metric from intermediate values for finished_pruned trials
+        def get_final_metric(t):
             if t.state == optuna.trial.TrialState.COMPLETE:
                 return t.value
             elif hasattr(t, 'intermediate_values') and t.intermediate_values:
+                # Return negative of last intermediate value (which was -accuracy)
                 return t.intermediate_values[max(t.intermediate_values.keys())]
             return float('inf')
         
-        all_finished_sorted = sorted(all_finished, key=get_final_loss)
+        all_finished_sorted = sorted(all_finished, key=get_final_metric)
         best_trial = all_finished_sorted[0]
         
         print(f"\n{'='*80}")
         print("BEST TRIAL")
         print("="*80)
         print(f"Trial #: {best_trial.number}")
-        print(f"Final Validation Loss: {get_final_loss(best_trial):.6f}")
+        metric_value = get_final_metric(best_trial)
+        # Convert back to positive (accuracy/F1)
+        print(f"Best Validation Accuracy/F1: {-metric_value:.6f}")
         print("\nBest hyperparameters:")
         for key, value in sorted(best_trial.params.items()):
             print(f"  {key:25s}: {value}")
@@ -81,8 +84,8 @@ def analyze_study(storage_path, study_name='ast_sparse_search'):
         print("TOP 10 TRIALS")
         print("="*80)
         for i, trial in enumerate(all_finished_sorted[:10], 1):
-            final_loss = get_final_loss(trial)
-            print(f"\n{i}. Trial {trial.number}: val_loss = {final_loss:.6f}")
+            metric_value = get_final_metric(trial)
+            print(f"\n{i}. Trial {trial.number}: val_acc/F1 = {-metric_value:.6f}")
             key_params = ['learning_rate', 'mixup_alpha', 'dropout', 'weight_decay', 'use_focal_loss', 'normalize', 'scheduler_type']
             for key in key_params:
                 if key in trial.params:
@@ -93,31 +96,33 @@ def analyze_study(storage_path, study_name='ast_sparse_search'):
         print("="*80)
         
         df = pd.DataFrame([t.params for t in all_finished])
-        df['val_loss'] = [get_final_loss(t) for t in all_finished]
+        df['metric'] = [get_final_metric(t) for t in all_finished]
+        df['val_acc'] = [-m for m in df['metric']]  # Convert back to positive
         df['trial_num'] = [t.number for t in all_finished]
         
         for param in sorted(df.columns):
-            if param in ['val_loss', 'trial_num']:
+            if param in ['metric', 'val_acc', 'trial_num']:
                 continue
             print(f"\n{param}:")
             if df[param].dtype in ['float64', 'int64']:
                 print(f"  Range: {df[param].min():.6f} to {df[param].max():.6f}")
                 print(f"  Mean: {df[param].mean():.6f}")
-                corr = df[param].corr(df['val_loss'])
-                print(f"  Correlation with val_loss: {corr:+.3f} {'(lower is better)' if corr < 0 else '(higher is worse)' if corr > 0.1 else '(minimal effect)'}")
+                # Correlation with metric (negative, so negative correlation = good)
+                corr = df[param].corr(df['val_acc'])
+                print(f"  Correlation with val_acc: {corr:+.3f} {'(higher is better)' if corr > 0.1 else '(lower is better)' if corr < -0.1 else '(minimal effect)'}")
                 # Show best values
-                best_5 = df.nsmallest(5, 'val_loss')[param]
+                best_5 = df.nlargest(5, 'val_acc')[param]
                 print(f"  Best 5 trials used: {list(best_5.round(6))}")
             else:
                 value_counts = df[param].value_counts()
                 print(f"  Distribution: {dict(value_counts)}")
-                print(f"  Avg val_loss by value:")
+                print(f"  Avg val_acc by value:")
                 for val in sorted(df[param].unique()):
                     subset = df[df[param] == val]
-                    avg_loss = subset['val_loss'].mean()
-                    min_loss = subset['val_loss'].min()
+                    avg_acc = subset['val_acc'].mean()
+                    max_acc = subset['val_acc'].max()
                     count = len(subset)
-                    print(f"    {str(val):20s}: avg={avg_loss:.6f}, best={min_loss:.6f}, n={count}")
+                    print(f"    {str(val):20s}: avg={avg_acc:.6f}, best={max_acc:.6f}, n={count}")
         
         print(f"\n{'='*80}")
         print("KEY INSIGHTS")
