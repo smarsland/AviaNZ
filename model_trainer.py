@@ -437,7 +437,6 @@ class ASTTrainer:
                             loss = criterion(output, target_idx)
                     
                     if self.use_reconstruction:
-                        import config
                         target_spec = data.squeeze(1) if data.dim() == 4 else data
                         target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
                         recon_loss = F.mse_loss(recon, target_spec)
