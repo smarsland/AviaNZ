@@ -161,7 +161,7 @@ class ASTTrainer:
                  use_multiscale=False, use_class_weights=False, freeze_layers=None,
                  use_reconstruction=False, recon_weight=0.1, normalize=False,
                  use_sparse_patches=False, num_sparse_patches=20, dropout=0.2,
-                 bce_smoothing=0.0, trial=None):
+                 bce_smoothing=0.0, trial=None, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -192,10 +192,16 @@ class ASTTrainer:
         self.dropout = dropout
         self.bce_smoothing = bce_smoothing
         self.trial = trial
+        self.use_amp = use_amp and torch.cuda.is_available()
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        if self.use_amp:
+            print(f"Using Automatic Mixed Precision (AMP) for faster training")
+        
+        # Initialize gradient scaler for AMP
+        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         # Load data
         data_loader = DataLoader(data_folder, noise_folder=noise_folder)
@@ -208,11 +214,13 @@ class ASTTrainer:
         self.img_width = time_bins if time_bins is not None else config.DEFAULT_TIME_BINS   # Time bins (width)
         
         # Create data loaders with config defaults
+        # Use more workers and prefetch for faster GPU utilization
+        num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader, self.val_loader = create_data_loaders(
             self.data, batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
-            num_workers=2, width_downsizing=None, mixup_alpha=mixup_alpha,
+            num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
             use_class_balancing=self.use_class_balancing, normalize=self.normalize,
             use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches
         )
@@ -227,9 +235,10 @@ class ASTTrainer:
                 cropping_mode='center', noise_ratio=0.0, spec_transform=None,
                 width_downsizing=None
             )
+            num_workers = 4 if torch.cuda.is_available() else 2
             self.eval_train_loader = TorchDataLoader(
                 eval_dataset, batch_size=batch_size, shuffle=False,
-                num_workers=2, pin_memory=True
+                num_workers=num_workers, pin_memory=True
             )
             self.current_sample_weights = None
         
@@ -395,45 +404,55 @@ class ASTTrainer:
                     optimizer.zero_grad()
                     
                     # Forward with sparse patches
-                    if self.use_reconstruction:
-                        output, recon = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                    else:
-                        output = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        if self.use_reconstruction:
+                            output, recon = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                        else:
+                            output = model(patches, sparse_mode=True, positions=positions, mask=mask)
                 else:
                     # Standard mode: batch is (data, target) tuple
                     data, target = batch
-                    data, target = data.to(self.device), target.to(self.device)
+                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                     
                     optimizer.zero_grad()
                     
+                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        if self.use_reconstruction:
+                            output, recon = model(data)
+                        else:
+                            output = model(data)
+                
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    if self.multilabel:
+                        loss = criterion(output, target)
+                    else:
+                        # Detect soft (mixup) labels: if any row has fractional values (not strictly 0/1)
+                        if target.dim() == 2 and not torch.equal(target, target.round()):
+                            # Proper soft-label cross-entropy (KL to one-hot mixing)
+                            log_probs = F.log_softmax(output, dim=1)
+                            loss = -(target * log_probs).sum(dim=1).mean()
+                        else:
+                            # Hard labels path (one-hot vectors)
+                            target_idx = target.argmax(dim=1)
+                            loss = criterion(output, target_idx)
+                    
                     if self.use_reconstruction:
-                        output, recon = model(data)
-                    else:
-                        output = model(data)
+                        import config
+                        target_spec = data.squeeze(1) if data.dim() == 4 else data
+                        target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
+                        recon_loss = F.mse_loss(recon, target_spec)
+                        loss = loss + self.recon_weight * recon_loss
                 
-                if self.multilabel:
-                    loss = criterion(output, target)
+                if self.use_amp:
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    self.scaler.step(optimizer)
+                    self.scaler.update()
                 else:
-                    # Detect soft (mixup) labels: if any row has fractional values (not strictly 0/1)
-                    if target.dim() == 2 and not torch.equal(target, target.round()):
-                        # Proper soft-label cross-entropy (KL to one-hot mixing)
-                        log_probs = F.log_softmax(output, dim=1)
-                        loss = -(target * log_probs).sum(dim=1).mean()
-                    else:
-                        # Hard labels path (one-hot vectors)
-                        target_idx = target.argmax(dim=1)
-                        loss = criterion(output, target_idx)
-                
-                if self.use_reconstruction:
-                    import config
-                    target_spec = data.squeeze(1) if data.dim() == 4 else data
-                    target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
-                    recon_loss = F.mse_loss(recon, target_spec)
-                    loss = loss + self.recon_weight * recon_loss
-                
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
                 
                 train_loss += loss.item()
                 
@@ -479,18 +498,20 @@ class ASTTrainer:
                         mask = batch['mask'].to(self.device)
                         target = batch['label'].to(self.device)
                         
-                        if self.use_reconstruction:
-                            output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                        else:
-                            output = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                        with torch.cuda.amp.autocast(enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                            else:
+                                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
                     else:
                         data, target = batch
-                        data, target = data.to(self.device), target.to(self.device)
+                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                         
-                        if self.use_reconstruction:
-                            output, _ = model(data)
-                        else:
-                            output = model(data)
+                        with torch.cuda.amp.autocast(enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, _ = model(data)
+                            else:
+                                output = model(data)
                     
                     if self.multilabel:
                         val_loss += criterion(output, target).item()
@@ -646,12 +667,13 @@ class ASTTrainer:
             
             with torch.no_grad():
                 for data, target in self.val_loader:
-                    data, target = data.to(self.device), target.to(self.device)
+                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                     
-                    if self.use_reconstruction:
-                        output, _ = model(data)
-                    else:
-                        output = model(data)
+                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        if self.use_reconstruction:
+                            output, _ = model(data)
+                        else:
+                            output = model(data)
                     
                     if self.multilabel:
                         val_loss += criterion(output, target).item()
@@ -826,7 +848,7 @@ class CNNTrainer:
                  pretrained_path=None, use_class_balancing=False, weight_decay=0.0,
                  noise_ratio=0.0, noise_folder=None, freq_bins=None, time_bins=None,
                  use_confusion_sampling=False, confusion_eval_freq=None,
-                 confusion_boost_factor=None, confusion_top_k=None, use_focal_loss=False, normalize=False):
+                 confusion_boost_factor=None, confusion_top_k=None, use_focal_loss=False, normalize=False, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -848,10 +870,16 @@ class CNNTrainer:
         self.confusion_boost_factor = confusion_boost_factor if confusion_boost_factor is not None else config.DEFAULT_CONFUSION_BOOST_FACTOR
         self.confusion_top_k = confusion_top_k
         self.normalize = normalize
+        self.use_amp = use_amp and torch.cuda.is_available()
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        if self.use_amp:
+            print(f"Using Automatic Mixed Precision (AMP) for faster training")
+        
+        # Initialize gradient scaler for AMP
+        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         # Load data
         data_loader = DataLoader(data_folder, noise_folder=noise_folder)
@@ -863,11 +891,12 @@ class CNNTrainer:
         self.img_width = time_bins if time_bins is not None else config.DEFAULT_TIME_BINS   # Time bins (width)
         
         # Create data loaders with config defaults
+        num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader, self.val_loader = create_data_loaders(
             self.data, batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
-            num_workers=2, width_downsizing=None, mixup_alpha=mixup_alpha,
+            num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
             use_class_balancing=self.use_class_balancing, normalize=self.normalize,
             use_sparse_patches=False, num_sparse_patches=20
         )
@@ -882,9 +911,10 @@ class CNNTrainer:
                 cropping_mode='center', noise_ratio=0.0, spec_transform=None,
                 width_downsizing=None, normalize=self.normalize
             )
+            num_workers = 4 if torch.cuda.is_available() else 2
             self.eval_train_loader = TorchDataLoader(
                 eval_dataset, batch_size=batch_size, shuffle=False,
-                num_workers=2, pin_memory=True
+                num_workers=num_workers, pin_memory=True
             )
             self.current_sample_weights = None
         
@@ -955,27 +985,36 @@ class CNNTrainer:
             all_train_targets = []
             
             for batch_idx, (data, target) in enumerate(self.train_loader):
-                data, target = data.to(self.device), target.to(self.device)
+                data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                 
                 optimizer.zero_grad()
-                output = model(data)
                 
-                if self.multilabel:
-                    loss = criterion(output, target)
-                else:
-                    # Detect soft (mixup) labels
-                    if target.dim() == 2 and not torch.equal(target, target.round()):
-                        # Soft-label cross-entropy with logits
-                        log_probs = F.log_softmax(output, dim=1)
-                        loss = -(target * log_probs).sum(dim=1).mean()
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    output = model(data)
+                    
+                    if self.multilabel:
+                        loss = criterion(output, target)
                     else:
-                        # Hard labels - use CrossEntropyLoss with label smoothing
-                        target_idx = target.argmax(dim=1)
-                        loss = criterion(output, target_idx)
+                        # Detect soft (mixup) labels
+                        if target.dim() == 2 and not torch.equal(target, target.round()):
+                            # Soft-label cross-entropy with logits
+                            log_probs = F.log_softmax(output, dim=1)
+                            loss = -(target * log_probs).sum(dim=1).mean()
+                        else:
+                            # Hard labels - use CrossEntropyLoss with label smoothing
+                            target_idx = target.argmax(dim=1)
+                            loss = criterion(output, target_idx)
                 
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
+                if self.use_amp:
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    self.scaler.step(optimizer)
+                    self.scaler.update()
+                else:
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
                 
                 train_loss += loss.item()
                 
@@ -1014,8 +1053,10 @@ class CNNTrainer:
             all_val_targets = []
             with torch.no_grad():
                 for data, target in self.val_loader:
-                    data, target = data.to(self.device), target.to(self.device)
-                    output = model(data)
+                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                    
+                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        output = model(data)
                     
                     if self.multilabel:
                         val_loss += criterion(output, target).item()
@@ -1111,10 +1152,11 @@ class CNNTrainer:
                     spec_transform=None, width_downsizing=None, normalize=self.normalize
                 )
                 
+                num_workers = 4 if torch.cuda.is_available() else 2
                 self.train_loader = TorchDataLoader(
                     train_dataset, batch_size=self.batch_size,
                     shuffle=False, sampler=new_sampler,
-                    num_workers=2, pin_memory=True,
+                    num_workers=num_workers, pin_memory=True,
                     collate_fn=train_collate_fn
                 )
                 
@@ -1250,7 +1292,7 @@ class PixelPredictionTrainer:
     
     def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
                  learning_rate, model_type='cnn', pretrained_path=None,
-                 freq_bins=None, time_bins=None, normalize=False):
+                 freq_bins=None, time_bins=None, normalize=False, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -1260,9 +1302,15 @@ class PixelPredictionTrainer:
         self.model_type = model_type
         self.pretrained_path = pretrained_path
         self.normalize = normalize
+        self.use_amp = use_amp and torch.cuda.is_available()
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        if self.use_amp:
+            print(f"Using Automatic Mixed Precision (AMP) for faster training")
+        
+        # Initialize gradient scaler for AMP
+        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         self.img_height = freq_bins if freq_bins is not None else config.DEFAULT_FREQ_BINS
         self.img_width = time_bins if time_bins is not None else config.DEFAULT_TIME_BINS
@@ -1319,13 +1367,14 @@ class PixelPredictionTrainer:
             spec_transform="Log", training=False
         )
         
+        num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader = TorchDataLoader(
             train_dataset, batch_size=self.batch_size, shuffle=True,
-            num_workers=2, pin_memory=True
+            num_workers=num_workers, pin_memory=True
         )
         self.val_loader = TorchDataLoader(
             val_dataset, batch_size=self.batch_size, shuffle=False,
-            num_workers=2, pin_memory=True
+            num_workers=num_workers, pin_memory=True
         )
     
     def train(self):
@@ -1361,15 +1410,22 @@ class PixelPredictionTrainer:
             train_iou = 0
             
             for spec, target in self.train_loader:
-                spec = spec.to(self.device)
-                target = target.to(self.device)
+                spec = spec.to(self.device, non_blocking=True)
+                target = target.to(self.device, non_blocking=True)
                 
                 optimizer.zero_grad()
-                output = model(spec)
                 
-                loss = criterion(output, target)
-                loss.backward()
-                optimizer.step()
+                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    output = model(spec)
+                    loss = criterion(output, target)
+                
+                if self.use_amp:
+                    self.scaler.scale(loss).backward()
+                    self.scaler.step(optimizer)
+                    self.scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
                 
                 train_loss += loss.item()
                 train_iou += self._compute_iou(output, target)
@@ -1383,11 +1439,12 @@ class PixelPredictionTrainer:
             
             with torch.no_grad():
                 for spec, target in self.val_loader:
-                    spec = spec.to(self.device)
-                    target = target.to(self.device)
+                    spec = spec.to(self.device, non_blocking=True)
+                    target = target.to(self.device, non_blocking=True)
                     
-                    output = model(spec)
-                    loss = criterion(output, target)
+                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        output = model(spec)
+                        loss = criterion(output, target)
                     
                     val_loss += loss.item()
                     val_iou += self._compute_iou(output, target)
