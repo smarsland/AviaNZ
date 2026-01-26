@@ -404,7 +404,7 @@ class ASTTrainer:
                     optimizer.zero_grad()
                     
                     # Forward with sparse patches
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
                         if self.use_reconstruction:
                             output, recon = model(patches, sparse_mode=True, positions=positions, mask=mask)
                         else:
@@ -416,13 +416,13 @@ class ASTTrainer:
                     
                     optimizer.zero_grad()
                     
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
                         if self.use_reconstruction:
                             output, recon = model(data)
                         else:
                             output = model(data)
                 
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                with torch.amp.autocast('cuda', enabled=self.use_amp):
                     if self.multilabel:
                         loss = criterion(output, target)
                     else:
@@ -498,7 +498,7 @@ class ASTTrainer:
                         mask = batch['mask'].to(self.device)
                         target = batch['label'].to(self.device)
                         
-                        with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
                             if self.use_reconstruction:
                                 output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
                             else:
@@ -507,7 +507,7 @@ class ASTTrainer:
                         data, target = batch
                         data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                         
-                        with torch.cuda.amp.autocast(enabled=self.use_amp):
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
                             if self.use_reconstruction:
                                 output, _ = model(data)
                             else:
@@ -666,14 +666,27 @@ class ASTTrainer:
             all_val_targets = []
             
             with torch.no_grad():
-                for data, target in self.val_loader:
-                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                    
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
-                        if self.use_reconstruction:
-                            output, _ = model(data)
-                        else:
-                            output = model(data)
+                for batch in self.val_loader:
+                    if self.use_sparse_patches:
+                        patches = batch['patches'].to(self.device)
+                        positions = batch['positions'].to(self.device)
+                        mask = batch['mask'].to(self.device)
+                        target = batch['label'].to(self.device)
+                        
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                            else:
+                                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                    else:
+                        data, target = batch
+                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                        
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, _ = model(data)
+                            else:
+                                output = model(data)
                     
                     if self.multilabel:
                         val_loss += criterion(output, target).item()
@@ -989,7 +1002,7 @@ class CNNTrainer:
                 
                 optimizer.zero_grad()
                 
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                with torch.amp.autocast('cuda', enabled=self.use_amp):
                     output = model(data)
                     
                     if self.multilabel:
@@ -1055,7 +1068,7 @@ class CNNTrainer:
                 for data, target in self.val_loader:
                     data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                     
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
                         output = model(data)
                     
                     if self.multilabel:
@@ -1415,7 +1428,7 @@ class PixelPredictionTrainer:
                 
                 optimizer.zero_grad()
                 
-                with torch.cuda.amp.autocast(enabled=self.use_amp):
+                with torch.amp.autocast('cuda', enabled=self.use_amp):
                     output = model(spec)
                     loss = criterion(output, target)
                 
@@ -1442,7 +1455,7 @@ class PixelPredictionTrainer:
                     spec = spec.to(self.device, non_blocking=True)
                     target = target.to(self.device, non_blocking=True)
                     
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
                         output = model(spec)
                         loss = criterion(output, target)
                     
