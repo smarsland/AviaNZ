@@ -227,18 +227,22 @@ class ASTTrainer:
         
         if self.use_confusion_sampling:
             from torch.utils.data import DataLoader as TorchDataLoader
-            from data_utils import SpectrogramDataset
+            from data_utils import SpectrogramDataset, sparse_collate_fn
             
             eval_dataset = SpectrogramDataset(
                 self.data['train_filenames'], self.data['train_labels'], 
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='center', noise_ratio=0.0, spec_transform=None,
-                width_downsizing=None
+                width_downsizing=None, normalize=self.normalize,
+                use_sparse_patches=self.use_sparse_patches,
+                num_sparse_patches=self.num_sparse_patches
             )
             num_workers = 4 if torch.cuda.is_available() else 2
+            eval_collate = sparse_collate_fn if self.use_sparse_patches else None
             self.eval_train_loader = TorchDataLoader(
                 eval_dataset, batch_size=batch_size, shuffle=False,
-                num_workers=num_workers, pin_memory=True
+                num_workers=num_workers, pin_memory=True,
+                collate_fn=eval_collate
             )
             self.current_sample_weights = None
         
@@ -584,6 +588,9 @@ class ASTTrainer:
                 )
                 
                 train_collate_fn = MixupCollate(self.mixup_alpha) if self.mixup_alpha > 0 else None
+                if self.use_sparse_patches:
+                    from data_utils import sparse_collate_fn
+                    train_collate_fn = sparse_collate_fn
                 
                 from torch.utils.data import DataLoader as TorchDataLoader
                 from data_utils import SpectrogramDataset
@@ -592,7 +599,9 @@ class ASTTrainer:
                     self.data['train_filenames'], self.data['train_labels'],
                     self.img_height, self.img_width, config.DEFAULT_CHANNELS,
                     cropping_mode='random', noise_ratio=self.noise_ratio,
-                    spec_transform=None, width_downsizing=None, normalize=self.normalize
+                    spec_transform=None, width_downsizing=None, normalize=self.normalize,
+                    use_sparse_patches=self.use_sparse_patches,
+                    num_sparse_patches=self.num_sparse_patches
                 )
                 
                 self.train_loader = TorchDataLoader(
