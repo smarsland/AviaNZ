@@ -209,7 +209,7 @@ Examples:
         import random
         seed = random.randint(0, 2**31 - 1)
         print(f"Using random seed: {seed}")
-    sampler = TPESampler(seed=seed, n_startup_trials=3)
+    sampler = TPESampler(seed=seed, n_startup_trials=12)
     pruner = None
     
     study = optuna.create_study(
