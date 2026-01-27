@@ -56,6 +56,26 @@ def analyze_study(storage_path, study_name='ast_sparse_search'):
     print(f"  Running: {len(running_trials)}")
     print(f"\nTrials with full results: {len(all_finished)}")
     
+    if running_trials:
+        print(f"\n{'='*80}")
+        print(f"RUNNING TRIALS ({len(running_trials)} trials currently in progress)")
+        print("="*80)
+        for trial in running_trials:
+            print(f"\nTrial {trial.number}:")
+            print(f"  Status: RUNNING")
+            print(f"  Parameters:")
+            for key, value in sorted(trial.params.items()):
+                print(f"    {key:25s}: {value}")
+            if hasattr(trial, 'intermediate_values') and trial.intermediate_values:
+                epochs = sorted(trial.intermediate_values.keys())
+                print(f"  Progress: {len(epochs)} epochs completed")
+                if len(epochs) > 0:
+                    latest = epochs[-1]
+                    print(f"    Latest (epoch {latest}): metric = {trial.intermediate_values[latest]:.6f}")
+                    if len(epochs) >= 5:
+                        print(f"    Last 5 epochs: {[f'{trial.intermediate_values[e]:.4f}' for e in epochs[-5:]]}")
+
+    
     if all_finished:
         # Get best metric from intermediate values for finished_pruned trials
         def get_final_metric(t):

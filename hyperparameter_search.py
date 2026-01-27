@@ -21,12 +21,12 @@ def objective(trial, data_folder, output_base, fixed_args):
     
     if fixed_args.get('search_advanced_options', False):
         use_class_balancing = trial.suggest_categorical('use_class_balancing', [True, False])
-        # Confusion sampling doesn't work reliably with sparse patches - disable it
+        use_confusion_sampling = trial.suggest_categorical('use_confusion_sampling', [True, False])
+        # Focal loss appears broken (produces 0 F1) - disable for sparse patches
         if fixed_args.get('num_sparse_patches', 0) > 0:
-            use_confusion_sampling = False
+            use_focal_loss = False
         else:
-            use_confusion_sampling = trial.suggest_categorical('use_confusion_sampling', [True, False])
-        use_focal_loss = trial.suggest_categorical('use_focal_loss', [True, False])
+            use_focal_loss = trial.suggest_categorical('use_focal_loss', [True, False])
         noise_ratio = trial.suggest_float('noise_ratio', 0.0, 0.3)
         bce_smoothing = trial.suggest_float('bce_smoothing', 0.0, 0.1)
         # MultiScaleAST doesn't support sparse patches, so disable it when using sparse mode
@@ -158,6 +158,7 @@ Examples:
     parser.add_argument('--reconstruct', action='store_true')
     parser.add_argument('--recon-weight', type=float, default=0.1)
     parser.add_argument('--num-sparse-patches', type=int, default=50, help="Number of sparse patches (fixed, not searched)")
+    parser.add_argument('--seed', type=int, default=None, help="Random seed for TPE sampler (use different seeds on each machine to avoid duplicate trials)")
     
     args = parser.parse_args()
     
@@ -201,7 +202,9 @@ Examples:
     
     load_if_exists = True
     
-    sampler = TPESampler(seed=42)
+    # Use different seeds on each machine to avoid duplicate initial trials
+    seed = args.seed if args.seed is not None else 42
+    sampler = TPESampler(seed=seed, n_startup_trials=10)
     pruner = None
     
     study = optuna.create_study(
