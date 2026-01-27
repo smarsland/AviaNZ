@@ -205,7 +205,10 @@ class MultiScaleAST(nn.Module):
         if use_reconstruction:
             self.decoder = SpectrogramDecoder(embed_dim=768, output_size=self.input_size)
     
-    def forward(self, x):
+    def forward(self, x, sparse_mode=False, positions=None, mask=None):
+        if sparse_mode:
+            raise NotImplementedError("MultiScaleAST does not support sparse patch mode. Use standard AST with use_multiscale=False.")
+        
         x = x.float()
         if x.dim() == 3:
             x = x.unsqueeze(1)

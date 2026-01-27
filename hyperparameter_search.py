@@ -25,7 +25,11 @@ def objective(trial, data_folder, output_base, fixed_args):
         use_focal_loss = trial.suggest_categorical('use_focal_loss', [True, False])
         noise_ratio = trial.suggest_float('noise_ratio', 0.0, 0.3)
         bce_smoothing = trial.suggest_float('bce_smoothing', 0.0, 0.1)
-        use_multiscale = trial.suggest_categorical('use_multiscale', [True, False])
+        # MultiScaleAST doesn't support sparse patches, so disable it when using sparse mode
+        if fixed_args.get('num_sparse_patches', 0) > 0:
+            use_multiscale = False
+        else:
+            use_multiscale = trial.suggest_categorical('use_multiscale', [True, False])
     else:
         use_class_balancing = fixed_args.get('balance', False)
         use_confusion_sampling = fixed_args.get('confusion_sampling', False)
