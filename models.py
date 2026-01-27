@@ -293,6 +293,9 @@ class AST(nn.Module):
         self.pool = AttentionPooling(embed_dim=768, hidden_dim=256)
         self.classifier = nn.Linear(768, num_classes)
         
+        # Sparse patch projection (16x16 patches to 768-dim embeddings)
+        self.patch_projection = nn.Linear(256, 768)  # 16*16 = 256
+        
         if use_reconstruction:
             self.decoder = SpectrogramDecoder(embed_dim=768, output_size=self.input_size)
 
@@ -363,17 +366,7 @@ class AST(nn.Module):
         patches_normalized = (patches_reshaped - config.AST_MEAN) / config.AST_STD
         patches_flat = patches_normalized.view(B * K, H * W)  # (B*K, 256)
         
-        # Project flattened patches to embedding dimension
-        # AST uses 768-dimensional embeddings
-        # We need to create a linear projection if it doesn't exist
-        if not hasattr(self, 'patch_projection'):
-            # Create a linear layer to project flattened patches to embedding dim
-            embed_dim = 768
-            self.patch_projection = nn.Linear(H * W, embed_dim).to(patches.device)
-            # Initialize with small weights
-            nn.init.xavier_uniform_(self.patch_projection.weight)
-            nn.init.zeros_(self.patch_projection.bias)
-        
+        # Project flattened patches to embedding dimension using the trained projection layer
         patch_embeddings = self.patch_projection(patches_flat)  # (B*K, 768)
         patch_embeddings = patch_embeddings.view(B, K, -1)  # (B, K, 768)
         

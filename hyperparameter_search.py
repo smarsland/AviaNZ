@@ -21,7 +21,11 @@ def objective(trial, data_folder, output_base, fixed_args):
     
     if fixed_args.get('search_advanced_options', False):
         use_class_balancing = trial.suggest_categorical('use_class_balancing', [True, False])
-        use_confusion_sampling = trial.suggest_categorical('use_confusion_sampling', [True, False])
+        # Confusion sampling doesn't work reliably with sparse patches - disable it
+        if fixed_args.get('num_sparse_patches', 0) > 0:
+            use_confusion_sampling = False
+        else:
+            use_confusion_sampling = trial.suggest_categorical('use_confusion_sampling', [True, False])
         use_focal_loss = trial.suggest_categorical('use_focal_loss', [True, False])
         noise_ratio = trial.suggest_float('noise_ratio', 0.0, 0.3)
         bce_smoothing = trial.suggest_float('bce_smoothing', 0.0, 0.1)
@@ -71,7 +75,7 @@ def objective(trial, data_folder, output_base, fixed_args):
             use_reconstruction=fixed_args.get('reconstruct', False),
             recon_weight=fixed_args.get('recon_weight', 0.1),
             normalize=normalize,
-            use_sparse_patches=True,
+            use_sparse_patches=(num_sparse_patches > 0),
             num_sparse_patches=num_sparse_patches,
             dropout=dropout,
             bce_smoothing=bce_smoothing,
