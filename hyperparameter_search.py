@@ -202,9 +202,14 @@ Examples:
     
     load_if_exists = True
     
-    # Use different seeds on each machine to avoid duplicate initial trials
-    seed = args.seed if args.seed is not None else 42
-    sampler = TPESampler(seed=seed, n_startup_trials=10)
+    # Use random seed by default so each machine explores different trials
+    if args.seed is not None:
+        seed = args.seed
+    else:
+        import random
+        seed = random.randint(0, 2**31 - 1)
+        print(f"Using random seed: {seed}")
+    sampler = TPESampler(seed=seed, n_startup_trials=3)
     pruner = None
     
     study = optuna.create_study(
