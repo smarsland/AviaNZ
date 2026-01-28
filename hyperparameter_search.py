@@ -10,12 +10,17 @@ from model_trainer import ASTTrainer
 import config
 
 def objective(trial, data_folder, output_base, fixed_args):
-    mixup_alpha = trial.suggest_float('mixup_alpha', 0.1, 0.5)
-    dropout = trial.suggest_float('dropout', 0.15, 0.35)
-    weight_decay = trial.suggest_float('weight_decay', 5e-6, 5e-5, log=True)
-    learning_rate = trial.suggest_float('learning_rate', 1e-5, 5e-5, log=True)
+    mixup_alpha = trial.suggest_float('mixup_alpha', 0.3, 0.8)
+    dropout = trial.suggest_float('dropout', 0.1, 0.3)
+    weight_decay = trial.suggest_float('weight_decay', 0.0, 1e-4, log=False)
+    learning_rate = trial.suggest_float('learning_rate', 2e-5, 1e-4, log=True)
     
-    normalize = trial.suggest_categorical('normalize', [True, False])
+    # Use normalize from fixed_args if provided, otherwise search it
+    if 'normalize' in fixed_args and fixed_args['normalize'] is not None:
+        normalize = fixed_args['normalize']
+    else:
+        normalize = trial.suggest_categorical('normalize', [True, False])
+    
     use_class_weights = trial.suggest_categorical('use_class_weights', [True, False])
     scheduler_type = trial.suggest_categorical('scheduler_type', ['lambda', 'cosine', 'cosine_warmup'])
     
@@ -157,7 +162,7 @@ Examples:
     parser.add_argument('--freeze-layers', type=int, default=None)
     parser.add_argument('--reconstruct', action='store_true')
     parser.add_argument('--recon-weight', type=float, default=0.1)
-    parser.add_argument('--num-sparse-patches', type=int, default=50, help="Number of sparse patches (fixed, not searched)")
+    parser.add_argument('--num-sparse-patches', type=int, default=20, help="Number of sparse patches (fixed, not searched)")
     parser.add_argument('--seed', type=int, default=None, help="Random seed for TPE sampler (use different seeds on each machine to avoid duplicate trials)")
     
     args = parser.parse_args()
