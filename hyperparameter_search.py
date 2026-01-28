@@ -10,10 +10,11 @@ from model_trainer import ASTTrainer
 import config
 
 def objective(trial, data_folder, output_base, fixed_args):
-    mixup_alpha = trial.suggest_float('mixup_alpha', 0.3, 0.8)
-    dropout = trial.suggest_float('dropout', 0.1, 0.3)
-    weight_decay = trial.suggest_float('weight_decay', 0.0, 1e-4, log=False)
-    learning_rate = trial.suggest_float('learning_rate', 2e-5, 1e-4, log=True)
+    # Use defaults from train_models.py as center of search ranges
+    mixup_alpha = trial.suggest_float('mixup_alpha', 0.3, 0.7)  # default 0.5
+    dropout = trial.suggest_float('dropout', 0.15, 0.25)  # default 0.2
+    weight_decay = trial.suggest_float('weight_decay', 0.0, 0.01)  # default 0.0
+    learning_rate = trial.suggest_float('learning_rate', 2e-5, 8e-5, log=True)  # default 5e-5
     
     # Use normalize from fixed_args if provided, otherwise search it
     if 'normalize' in fixed_args and fixed_args['normalize'] is not None:
