@@ -459,17 +459,31 @@ class ASTTrainer:
                 
                 # Check for NaN loss BEFORE backward pass
                 if torch.isnan(loss) or torch.isinf(loss):
-                    print(f"\n⚠️  WARNING: NaN/Inf loss detected at epoch {epoch+1}, batch {batch_idx}")
-                    print(f"  Loss value: {loss.item()}")
-                    print(f"  Skipping this batch and continuing...")
-                    continue
+                    print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
+                    print(f"   This indicates model weights have become corrupted.")
+                    print(f"   Stopping epoch early to prevent further corruption...")
+                    break  # Stop epoch, not just continue
                 
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                # Backward pass
+                optimizer.zero_grad()
+                if self.use_amp:
+                    self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(optimizer)
+                    # Check for NaN gradients
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   Stopping epoch early...")
+                        break
                     self.scaler.step(optimizer)
                     self.scaler.update()
                 else:
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   Stopping epoch early...")
+                        break
                     optimizer.step()
                 
                 train_loss += loss.item()
@@ -579,6 +593,11 @@ class ASTTrainer:
                 train_primary_accs.append(train_acc)
                 val_primary_accs.append(val_acc)
             
+            # ABORT if model weights contain NaN
+            if any(torch.isnan(p).any() for p in model.parameters()):
+                print(f"\n❌ FATAL: NaN in weights (epoch {epoch+1}). ABORTING.\n")
+                return
+
             scheduler.step()
             
             if self.use_confusion_sampling and (epoch + 1) % self.confusion_eval_freq == 0:
@@ -1056,14 +1075,29 @@ class CNNTrainer:
                             target_idx = target.argmax(dim=1)
                             loss = criterion(output, target_idx)
                 
+                # Check for NaN loss BEFORE backward pass
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
+                    print(f"   Model weights corrupted. Stopping epoch early...")
+                    break
+                
                 if self.use_amp:
                     self.scaler.scale(loss).backward()
                     self.scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   Stopping epoch early...")
+                        break
                     self.scaler.step(optimizer)
                     self.scaler.update()
                 else:
                     loss.backward()
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   Stopping epoch early...")
+                        break
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
                 
@@ -1168,6 +1202,11 @@ class CNNTrainer:
                 train_primary_accs.append(train_acc)
                 val_primary_accs.append(val_acc)
             
+            # ABORT if model weights contain NaN
+            if any(torch.isnan(p).any() for p in model.parameters()):
+                print(f"\n❌ FATAL: NaN in weights (epoch {epoch+1}). ABORTING.\n")
+                return
+
             scheduler.step()
             
             if self.use_confusion_sampling and (epoch + 1) % self.confusion_eval_freq == 0:
