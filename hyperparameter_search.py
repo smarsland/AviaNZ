@@ -16,11 +16,8 @@ def objective(trial, data_folder, output_base, fixed_args):
     weight_decay = trial.suggest_float('weight_decay', 0.0, 0.01)  # default 0.0
     learning_rate = trial.suggest_float('learning_rate', 2e-5, 8e-5, log=True)  # default 5e-5
     
-    # Use normalize from fixed_args if provided, otherwise search it
-    if 'normalize' in fixed_args and fixed_args['normalize'] is not None:
-        normalize = fixed_args['normalize']
-    else:
-        normalize = trial.suggest_categorical('normalize', [True, False])
+    # Always search normalize
+    normalize = trial.suggest_categorical('normalize', [True, False])
     
     # DISABLE class_weights - causes numerical instability (weights up to billions)
     use_class_weights = False
@@ -29,11 +26,8 @@ def objective(trial, data_folder, output_base, fixed_args):
     if fixed_args.get('search_advanced_options', False):
         use_class_balancing = trial.suggest_categorical('use_class_balancing', [True, False])
         use_confusion_sampling = trial.suggest_categorical('use_confusion_sampling', [True, False])
-        # Focal loss appears broken (produces 0 F1) - disable for sparse patches
-        if fixed_args.get('num_sparse_patches', 0) > 0:
-            use_focal_loss = False
-        else:
-            use_focal_loss = trial.suggest_categorical('use_focal_loss', [True, False])
+        # Focal loss disabled - causes issues
+        use_focal_loss = False
         noise_ratio = trial.suggest_float('noise_ratio', 0.0, 0.3)
         bce_smoothing = trial.suggest_float('bce_smoothing', 0.0, 0.1)
         # MultiScaleAST doesn't support sparse patches, so disable it when using sparse mode
@@ -89,11 +83,11 @@ def objective(trial, data_folder, output_base, fixed_args):
             trial=trial
         )
         
-        best_val_loss = trainer.train()
+        result = trainer.train()
         
-        trial.set_user_attr('best_val_loss', best_val_loss)
+        trial.set_user_attr('best_val_loss', result)
         
-        return best_val_loss
+        return result
         
     except optuna.TrialPruned:
         # Re-raise pruning exceptions from intermediate callbacks

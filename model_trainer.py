@@ -635,8 +635,8 @@ class ASTTrainer:
             
             if self.trial is not None:
                 import optuna
-                # Report negative accuracy (consistent metric regardless of loss function)
-                self.trial.report(-val_acc, epoch)
+                # Report validation loss for pruning
+                self.trial.report(val_loss, epoch)
                 # Only check for pruning if not the last epoch
                 if epoch < self.max_epochs - 1 and self.trial.should_prune():
                     print(f"Trial pruned at epoch {epoch+1}")
@@ -739,9 +739,8 @@ class ASTTrainer:
         best_val_loss = min(val_losses)
         
         if self.trial is not None:
-            # Return negative accuracy for Optuna (it minimizes, we want to maximize accuracy)
-            # Use best_val_acc which is the actual performance metric (F1 for multilabel, acc otherwise)
-            return -best_val_acc
+            # Return best validation loss for Optuna to minimize
+            return best_val_loss
         
         return {
             'model': model,
