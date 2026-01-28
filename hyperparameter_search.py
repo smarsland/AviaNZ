@@ -22,7 +22,8 @@ def objective(trial, data_folder, output_base, fixed_args):
     else:
         normalize = trial.suggest_categorical('normalize', [True, False])
     
-    use_class_weights = trial.suggest_categorical('use_class_weights', [True, False])
+    # DISABLE class_weights - causes numerical instability (weights up to billions)
+    use_class_weights = False
     scheduler_type = trial.suggest_categorical('scheduler_type', ['lambda', 'cosine', 'cosine_warmup'])
     
     if fixed_args.get('search_advanced_options', False):
