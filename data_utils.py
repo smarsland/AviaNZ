@@ -616,14 +616,23 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         total_classes = train_labels_array.shape[1] if train_labels_array.ndim == 2 else max(class_indices) + 1
         missing_classes = set(range(total_classes)) - set(unique_classes)
         if missing_classes:
-            print(f"WARNING: {len(missing_classes)} classes have no samples in training set!")
+            print(f"⚠️  WARNING: {len(missing_classes)} classes have no samples in training set!")
             print(f"  Missing class indices: {sorted(missing_classes)}")
             if 'class_names' in data:
                 missing_names = [data['class_names'][i] for i in sorted(missing_classes)]
                 print(f"  Missing class names: {missing_names[:5]}{'...' if len(missing_names) > 5 else ''}")
+            print(f"  These classes will be ignored during training.")
         
         # Calculate class weights (inverse frequency)
         class_weights = 1.0 / class_counts
+        
+        # Cap extreme weights to prevent NaN issues (max 10x the median)
+        median_weight = np.median(class_weights)
+        max_weight = 10.0 * median_weight
+        num_capped = (class_weights > max_weight).sum()
+        if num_capped > 0:
+            print(f"  ⚠️  Capping {num_capped} extreme class weights (>{max_weight:.2f}) to prevent instability")
+            class_weights = np.clip(class_weights, None, max_weight)
         
         # Normalize so the sum equals number of classes (keeps relative importance)
         class_weights = class_weights * len(unique_classes) / class_weights.sum()
@@ -642,9 +651,14 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         shuffle_train = False  # Can't use shuffle with sampler
         
         print(f"Class balancing enabled:")
-        print(f"  Classes found: {len(unique_classes)}")
+        print(f"  Classes found: {len(unique_classes)}/{total_classes} total")
         print(f"  Sample counts: min={class_counts.min()}, max={class_counts.max()}, mean={class_counts.mean():.1f}")
         print(f"  Class weights: min={class_weights.min():.3f}, max={class_weights.max():.3f}")
+        
+        # Extra warning for very imbalanced datasets
+        if class_counts.max() / class_counts.min() > 100:
+            print(f"  ⚠️  Highly imbalanced dataset! Max/min ratio: {class_counts.max() / class_counts.min():.1f}x")
+            print(f"      Consider using --confusion-sampling instead of --balance for better stability")
     
     # Create data loaders
     # Determine collate function based on mode
@@ -743,7 +757,7 @@ def get_dataset_info(folder):
 
 
 def compute_confusion_weights(model, data_loader, train_labels, num_classes, device, 
-                               boost_factor=2.0, top_k=None):
+                               boost_factor=2.0, top_k=None, max_samples=10000):
     """
     Evaluate model on training data to find confused classes and reweight samples.
     
@@ -755,6 +769,7 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
         device: torch device
         boost_factor: How much to upweight confused classes (2.0 = double)
         top_k: If set, only boost top-k most confused classes
+        max_samples: Maximum number of samples to evaluate (for speed)
         
     Returns:
         sample_weights: New sample weights based on confusion
@@ -764,8 +779,20 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
     all_preds = []
     all_targets = []
     
+    total_batches = len(data_loader)
+    max_batches = min(total_batches, max(1, max_samples // data_loader.batch_size))
+    
+    print(f"  Evaluating {max_batches}/{total_batches} batches (~{max_batches * data_loader.batch_size} samples)...")
+    
     with torch.no_grad():
-        for batch in data_loader:
+        for batch_idx, batch in enumerate(data_loader):
+            if batch_idx >= max_batches:
+                break
+                
+            # Progress indicator
+            if batch_idx % 100 == 0 and batch_idx > 0:
+                print(f"  Progress: {batch_idx}/{max_batches} batches", end='\r')
+            
             # Handle both sparse and standard formats
             if isinstance(batch, dict):
                 # Sparse patches mode
@@ -790,6 +817,7 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
             all_preds.append(pred.cpu().numpy())
             all_targets.append(target_idx.cpu().numpy())
     
+    print()  # Clear progress line
     all_preds = np.concatenate(all_preds)
     all_targets = np.concatenate(all_targets)
     
@@ -806,6 +834,7 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
     
     sample_weights = np.ones(len(class_indices))
     
+    # Apply confusion-based weighting
     if top_k is not None:
         confused_classes = np.argsort(class_error_rates)[-top_k:]
         for cls_idx in confused_classes:
@@ -818,7 +847,19 @@ def compute_confusion_weights(model, data_loader, train_labels, num_classes, dev
                 weight_multiplier = 1.0 + (boost_factor - 1.0) * class_error_rates[cls_idx]
                 sample_weights[mask] *= weight_multiplier
     
+    # Normalize weights and add safeguards to prevent weight explosion
     sample_weights = sample_weights / sample_weights.mean()
+    
+    # Clip extreme weights to prevent NaN losses (max 20x the mean)
+    max_weight = 20.0
+    num_clipped = (sample_weights > max_weight).sum()
+    if num_clipped > 0:
+        print(f"  Warning: Clipped {num_clipped} extreme weights (>{max_weight:.1f}x mean) to prevent instability")
+        sample_weights = np.clip(sample_weights, 0.1, max_weight)
+        # Re-normalize after clipping
+        sample_weights = sample_weights / sample_weights.mean()
+    
+    print(f"  Weight stats: min={sample_weights.min():.2f}, mean=1.00, max={sample_weights.max():.2f}")
     
     return sample_weights, class_error_rates
 

@@ -229,6 +229,17 @@ class ASTTrainer:
             from torch.utils.data import DataLoader as TorchDataLoader
             from data_utils import SpectrogramDataset, sparse_collate_fn
             
+            # Warning if both balancing strategies are enabled
+            if self.use_class_balancing:
+                print("\n⚠️  WARNING: Both --balance and --confusion-sampling are enabled!")
+                print("   These strategies can interact unpredictably and cause weight explosion.")
+                print("   Consider using only one, or reduce --confusion-boost (currently {:.1f})".format(self.confusion_boost_factor))
+                # Automatically reduce boost factor to be safer
+                if self.confusion_boost_factor > 2.0:
+                    original_boost = self.confusion_boost_factor
+                    self.confusion_boost_factor = min(2.0, self.confusion_boost_factor / 2.0)
+                    print(f"   Auto-reducing boost factor from {original_boost:.1f} to {self.confusion_boost_factor:.1f} for stability\n")
+            
             eval_dataset = SpectrogramDataset(
                 self.data['train_filenames'], self.data['train_labels'], 
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS,
@@ -446,9 +457,13 @@ class ASTTrainer:
                         recon_loss = F.mse_loss(recon, target_spec)
                         loss = loss + self.recon_weight * recon_loss
                 
-                if self.use_amp:
-                    self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(optimizer)
+                # Check for NaN loss BEFORE backward pass
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"\n⚠️  WARNING: NaN/Inf loss detected at epoch {epoch+1}, batch {batch_idx}")
+                    print(f"  Loss value: {loss.item()}")
+                    print(f"  Skipping this batch and continuing...")
+                    continue
+                
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     self.scaler.step(optimizer)
                     self.scaler.update()
@@ -479,7 +494,11 @@ class ASTTrainer:
                     train_total += target_hard.size(0)
                 
                 if batch_idx % 10 == 0:
-                    print(f'Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+                    avg_loss = train_loss / max(1, batch_idx)
+                    if avg_loss > 100.0:
+                        print(f'⚠️  Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f} (avg: {avg_loss:.4f} - HIGH!)')
+                    else:
+                        print(f'Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}')
             
             # Validate
             model.eval()
@@ -926,6 +945,17 @@ class CNNTrainer:
             from torch.utils.data import DataLoader as TorchDataLoader
             from data_utils import SpectrogramDataset
             
+            # Warning if both balancing strategies are enabled
+            if self.use_class_balancing:
+                print("\n⚠️  WARNING: Both --balance and --confusion-sampling are enabled!")
+                print("   These strategies can interact unpredictably and cause weight explosion.")
+                print("   Consider using only one, or reduce --confusion-boost (currently {:.1f})".format(self.confusion_boost_factor))
+                # Automatically reduce boost factor to be safer
+                if self.confusion_boost_factor > 2.0:
+                    original_boost = self.confusion_boost_factor
+                    self.confusion_boost_factor = min(2.0, self.confusion_boost_factor / 2.0)
+                    print(f"   Auto-reducing boost factor from {original_boost:.1f} to {self.confusion_boost_factor:.1f} for stability\n")
+            
             eval_dataset = SpectrogramDataset(
                 self.data['train_filenames'], self.data['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS,
@@ -1059,7 +1089,11 @@ class CNNTrainer:
                     train_total += target_hard.size(0)
                 
                 if batch_idx % 10 == 0:
-                    print(f'Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+                    avg_loss = train_loss / max(1, batch_idx)
+                    if avg_loss > 100.0:
+                        print(f'⚠️  Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f} (avg: {avg_loss:.4f} - HIGH!)')
+                    else:
+                        print(f'Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}')
             
             # Validate
             model.eval()
