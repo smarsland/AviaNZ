@@ -480,7 +480,6 @@ class ASTTrainer:
                     break  # Stop epoch, not just continue
                 
                 # Backward pass
-                optimizer.zero_grad()
                 if self.use_amp:
                     self.scaler.scale(loss).backward()
                     self.scaler.unscale_(optimizer)
@@ -489,7 +488,8 @@ class ASTTrainer:
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
-                        self.scaler.update()  # Must update scaler before breaking
+                        self.scaler.update()  # Update scaler to reset state
+                        optimizer.zero_grad()  # Clear bad gradients
                         break
                     self.scaler.step(optimizer)
                     self.scaler.update()
@@ -499,6 +499,7 @@ class ASTTrainer:
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
+                        optimizer.zero_grad()  # Clear bad gradients  
                         break
                     optimizer.step()
                 
@@ -1112,7 +1113,8 @@ class CNNTrainer:
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
-                        self.scaler.update()  # Must update scaler before breaking
+                        self.scaler.update()  # Update scaler to reset state
+                        optimizer.zero_grad()  # Clear bad gradients
                         break
                     self.scaler.step(optimizer)
                     self.scaler.update()
@@ -1122,6 +1124,7 @@ class CNNTrainer:
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
+                        optimizer.zero_grad()  # Clear bad gradients
                         break
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
