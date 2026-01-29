@@ -243,7 +243,7 @@ class ASTTrainer:
             eval_dataset = SpectrogramDataset(
                 self.data['train_filenames'], self.data['train_labels'], 
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-                cropping_mode='center', noise_ratio=0.0, spec_transform=None,
+                cropping_mode='center', noise_ratio=0.0, spec_transform=config.DEFAULT_SPEC_TRANSFORM,
                 width_downsizing=None, normalize=self.normalize,
                 use_sparse_patches=self.use_sparse_patches,
                 num_sparse_patches=self.num_sparse_patches
@@ -674,7 +674,7 @@ class ASTTrainer:
                         self.data['train_filenames'], self.data['train_labels'],
                         self.img_height, self.img_width, config.DEFAULT_CHANNELS,
                         cropping_mode='random', noise_ratio=self.noise_ratio,
-                        spec_transform=None, width_downsizing=None, normalize=self.normalize,
+                        spec_transform=config.DEFAULT_SPEC_TRANSFORM, width_downsizing=None, normalize=self.normalize,
                         use_sparse_patches=self.use_sparse_patches,
                         num_sparse_patches=self.num_sparse_patches
                     )
@@ -1238,8 +1238,14 @@ class CNNTrainer:
             val_accs.append(val_acc)
             
             if self.multilabel:
-                train_primary_acc = train_primary_correct / train_primary_total
-                val_primary_acc = val_primary_correct / val_primary_total
+                if train_primary_total > 0:
+                    train_primary_acc = train_primary_correct / train_primary_total
+                else:
+                    train_primary_acc = 0.0
+                if val_primary_total > 0:
+                    val_primary_acc = val_primary_correct / val_primary_total
+                else:
+                    val_primary_acc = 0.0
                 train_primary_accs.append(train_primary_acc)
                 val_primary_accs.append(val_primary_acc)
             else:
