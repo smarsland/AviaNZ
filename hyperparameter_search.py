@@ -80,7 +80,8 @@ def objective(trial, data_folder, output_base, fixed_args):
             num_sparse_patches=num_sparse_patches,
             dropout=dropout,
             bce_smoothing=bce_smoothing,
-            trial=trial
+            trial=trial,
+            use_amp=False
         )
         
         result = trainer.train()
