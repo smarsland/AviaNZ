@@ -274,6 +274,8 @@ class SpectrogramDataset(Dataset):
         # Load spectrogram data
         file_path = self.filenames[idx]
         data = np.load(file_path)
+        if not np.isfinite(data).all():
+            raise ValueError(f"NaN/Inf values in spectrogram file: {file_path}")
         
         # Ensure data is 2D (H, W)
         while data.ndim > 2:
@@ -424,6 +426,8 @@ class SpectrogramDataset(Dataset):
         
         noise_file = self.rng.choice(self.noise_filenames)
         noise_data = np.load(noise_file)
+        if not np.isfinite(noise_data).all():
+            raise ValueError(f"NaN/Inf values in noise spectrogram file: {noise_file}")
         
         # Process noise with zero-padding for height, tiling for width
         noise_processed = self.apply_padding_and_add_channels(noise_data, is_noise=True)

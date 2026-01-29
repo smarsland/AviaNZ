@@ -608,8 +608,14 @@ class ASTTrainer:
             val_accs.append(val_acc)
             
             if self.multilabel:
-                train_primary_acc = train_primary_correct / train_primary_total
-                val_primary_acc = val_primary_correct / val_primary_total
+                if train_primary_total > 0:
+                    train_primary_acc = train_primary_correct / train_primary_total
+                else:
+                    train_primary_acc = 0.0
+                if val_primary_total > 0:
+                    val_primary_acc = val_primary_correct / val_primary_total
+                else:
+                    val_primary_acc = 0.0
                 train_primary_accs.append(train_primary_acc)
                 val_primary_accs.append(val_primary_acc)
             else:
@@ -631,6 +637,7 @@ class ASTTrainer:
                 if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
                     print(f"\n❌ FATAL: Model has NaN/Inf BEFORE confusion evaluation at epoch {epoch+1}!")
                     print(f"   Skipping confusion sampling for this epoch.\n")
+                    model.train()
                 else:
                     sample_weights, class_error_rates = compute_confusion_weights(
                         model, self.eval_train_loader, 
@@ -639,12 +646,6 @@ class ASTTrainer:
                         boost_factor=self.confusion_boost_factor,
                         top_k=self.confusion_top_k
                     )
-                    
-                    # Check for NaN AFTER confusion evaluation
-                    if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
-                        print(f"\n❌ FATAL: Confusion evaluation CAUSED NaN/Inf in model weights!")
-                        print(f"   ABORTING TRAINING.\n")
-                        return
                     
                     top_confused = np.argsort(class_error_rates)[-5:][::-1]
                     print(f"Top 5 confused classes (error rates):")
@@ -686,9 +687,8 @@ class ASTTrainer:
                     )
                     
                     print(f"Updated training sampler with confusion-based weights\n")
-                
-                # Always set model back to train mode
-                model.train()
+                    # Restore train mode
+                    model.train()
             
             # Collect model state for weight averaging (after epoch 5 when LR starts decaying)
             if epoch >= averaging_start_epoch:

@@ -148,7 +148,8 @@ Examples:
             use_sparse_patches=args.sparse_patches,
             num_sparse_patches=args.num_sparse_patches,
             dropout=args.dropout,
-            bce_smoothing=args.bce_smoothing
+            bce_smoothing=args.bce_smoothing,
+            use_amp=False
         )
     elif args.model == 'cnn':
         print(f"Training Convolutional Neural Network (CNN) model...")
