@@ -44,34 +44,26 @@ Examples:
     parser.add_argument('--batch_size', type=int, default=config.DEFAULT_BATCH_SIZE, 
                        help=f"Batch size (default: {config.DEFAULT_BATCH_SIZE})")
     parser.add_argument('--multilabel', action='store_true', help="Use multi-label classification (classification mode only)")
-    parser.add_argument('--balance', action='store_true', 
-                       help="Enable class balancing using WeightedRandomSampler (recommended for imbalanced datasets, classification mode only)")
     parser.add_argument('--lr', type=float, default=config.DEFAULT_LEARNING_RATE, 
-                       help=f"Learning rate (default: {config.DEFAULT_LEARNING_RATE})")
-    parser.add_argument('--mixup', type=float, default=0.5,
-                       help="Mixup alpha parameter (0 = no mixup, 0.5 for ESC-50 per paper, default: 0.5, classification mode only)")
+                       help=f"Learning rate (default: {config.DEFAULT_LEARNING_RATE:.1e})")
+    parser.add_argument('--mixup', type=float, default=config.DEFAULT_MIXUP_ALPHA,
+                       help=f"Mixup alpha parameter (0 = no mixup, default: {config.DEFAULT_MIXUP_ALPHA}, classification mode only)")
     parser.add_argument('--pretrained', type=str, default=None,
                        help="Path to pretrained model weights (.pt file) for transfer learning")
-    parser.add_argument('--scheduler', type=str, default='lambda', choices=['lambda', 'cosine', 'cosine_warmup'],
-                       help="Learning rate scheduler: 'lambda' (ESC-50 style), 'cosine' (annealing), or 'cosine_warmup' (5-epoch warmup + cosine, classification mode only)")
-    parser.add_argument('--weight-decay', type=float, default=0.0,
-                       help="Weight decay (L2 regularization) for Adam optimizer (default: 0.0, try 0.01 or 0.001 for regularization, classification mode only)")
+    parser.add_argument('--weight-decay', type=float, default=config.DEFAULT_WEIGHT_DECAY,
+                       help=f"Weight decay (L2 regularization) for Adam optimizer (default: {config.DEFAULT_WEIGHT_DECAY:.1e}, classification mode only)")
     parser.add_argument('--noise', type=float, default=config.DEFAULT_NOISE_RATIO,
-                       help=f"Noise mixing ratio during training (default: {config.DEFAULT_NOISE_RATIO}, 0.0 = no noise, 0.5 = 50%% noise, classification mode only)")
+                       help=f"Noise mixing ratio for AUGMENTATION: mixes noise into bird spectrograms during training (default: {config.DEFAULT_NOISE_RATIO}, 0.0 = no mixing, 0.5 = 50%% noise mixed in, classification mode only)")
     parser.add_argument('--noise-folder', type=str, default=None,
-                       help="Path to noise data folder if different from data_folder (overrides default noise location, classification mode only)")
+                       help="Path to noise data folder. Used for BOTH: (1) augmentation mixing via --noise, and (2) zero-label training samples via --noise-as-class (default: same as data_folder, classification mode only)")
+    parser.add_argument('--noise-as-class', action='store_true',
+                       help="Include noise spectrograms as standalone training samples with all-zero labels. Fixes distribution mismatch when test data has many no-bird samples. Use with --noise-class-ratio to control amount (classification mode only)")
+    parser.add_argument('--noise-class-ratio', type=float, default=0.5,
+                       help="When using --noise-as-class, what fraction of training data should be noise samples (default: 0.5 = 50%%). Example: 0.3 = 30%% noise, 70%% birds. Only used if --noise-as-class is set (classification mode only)")
     parser.add_argument('--freq-bins', type=int, default=config.DEFAULT_FREQ_BINS,
                        help=f"Number of frequency bins in spectrograms (default: {config.DEFAULT_FREQ_BINS})")
     parser.add_argument('--time-bins', type=int, default=config.DEFAULT_TIME_BINS,
                        help=f"Number of time bins in spectrograms (default: {config.DEFAULT_TIME_BINS})")
-    parser.add_argument('--confusion-sampling', action='store_true',
-                       help="Enable confusion-based curriculum learning: dynamically upweight classes the model struggles with during training (recommended for imbalanced datasets with many classes, classification mode only)")
-    parser.add_argument('--confusion-eval-freq', type=int, default=config.DEFAULT_CONFUSION_EVAL_FREQUENCY,
-                       help=f"How often (in epochs) to re-evaluate confusion and update sample weights (default: {config.DEFAULT_CONFUSION_EVAL_FREQUENCY}, classification mode only)")
-    parser.add_argument('--confusion-boost', type=float, default=config.DEFAULT_CONFUSION_BOOST_FACTOR,
-                       help=f"How much to boost confused classes (default: {config.DEFAULT_CONFUSION_BOOST_FACTOR}, e.g., 3.0 = triple weight for worst performers, classification mode only)")
-    parser.add_argument('--confusion-top-k', type=int, default=config.DEFAULT_CONFUSION_TOP_K,
-                       help=f"Only boost top-k most confused classes (default: {config.DEFAULT_CONFUSION_TOP_K}, None = boost all proportionally to error rate, classification mode only)")
     parser.add_argument('--focal-loss', action='store_true',
                        help="Use Focal Loss instead of standard BCE/CrossEntropy loss (recommended for highly imbalanced datasets, classification mode only). Focal Loss down-weights easy examples to focus on hard negatives.")
     parser.add_argument('--multiscale', action='store_true',
@@ -84,16 +76,14 @@ Examples:
                        help="Enable auxiliary reconstruction loss: model also learns to reconstruct input spectrogram from patch embeddings. Acts as regularizer to preserve discriminative features.")
     parser.add_argument('--recon-weight', type=float, default=0.1,
                        help="Weight for reconstruction loss in combined objective (default: 0.1). Total loss = classification_loss + recon_weight * reconstruction_loss")
-    parser.add_argument('--normalize', action='store_true',
-                       help="Apply background normalization to spectrograms during training. This normalizes out background noise per frequency band to enhance bird call signals.")
     parser.add_argument('--sparse-patches', action='store_true',
                        help="⚡ Use sparse patch extraction: only process patches with signal content (much faster, AST only). Extracts top-K patches by signal density instead of processing all ~1000 patches.")
     parser.add_argument('--num-sparse-patches', type=int, default=20,
                        help="Number of patches to extract in sparse mode (default: 20). Standard AST uses ~1000 patches, sparse mode uses only K patches with highest signal content.")
-    parser.add_argument('--dropout', type=float, default=0.2,
-                       help="Dropout rate for AST (default: 0.2). Increase to 0.4-0.6 to reduce overfitting.")
-    parser.add_argument('--bce-smoothing', type=float, default=0.0,
-                       help="Target smoothing epsilon for multilabel BCE (default: 0.0). Try 0.05 to reduce overconfidence.")
+    parser.add_argument('--dropout', type=float, default=config.DEFAULT_DROPOUT,
+                       help=f"Dropout rate for AST (default: {config.DEFAULT_DROPOUT}). Increase to 0.4-0.6 to reduce overfitting.")
+    parser.add_argument('--bce-smoothing', type=float, default=config.DEFAULT_BCE_SMOOTHING,
+                       help=f"Target smoothing epsilon for multilabel BCE (default: {config.DEFAULT_BCE_SMOOTHING}). Reduces overconfidence.")
     
     args = parser.parse_args()
     
@@ -109,8 +99,7 @@ Examples:
             model_type=args.model,
             pretrained_path=args.pretrained,
             freq_bins=args.freq_bins,
-            time_bins=args.time_bins,
-            normalize=args.normalize
+            time_bins=args.time_bins
         )
     elif args.model == 'ast':
         print(f"Training Audio Spectrogram Transformer (AST) model...")
@@ -127,24 +116,19 @@ Examples:
             learning_rate=args.lr,
             mixup_alpha=args.mixup,
             pretrained_path=args.pretrained,
-            use_class_balancing=args.balance,
-            scheduler_type=args.scheduler,
             weight_decay=args.weight_decay,
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
+            noise_as_class=args.noise_as_class,
+            noise_class_ratio=args.noise_class_ratio,
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
-            use_confusion_sampling=args.confusion_sampling,
-            confusion_eval_freq=args.confusion_eval_freq,
-            confusion_boost_factor=args.confusion_boost,
-            confusion_top_k=args.confusion_top_k,
             use_focal_loss=args.focal_loss,
             use_multiscale=args.multiscale,
             use_class_weights=args.class_weights,
             freeze_layers=args.freeze_layers,
             use_reconstruction=args.reconstruct,
             recon_weight=args.recon_weight,
-            normalize=args.normalize,
             use_sparse_patches=args.sparse_patches,
             num_sparse_patches=args.num_sparse_patches,
             dropout=args.dropout,
@@ -162,18 +146,14 @@ Examples:
             learning_rate=args.lr,
             mixup_alpha=args.mixup,
             pretrained_path=args.pretrained,
-            use_class_balancing=args.balance,
             weight_decay=args.weight_decay,
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
+            noise_as_class=args.noise_as_class,
+            noise_class_ratio=args.noise_class_ratio,
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
-            use_confusion_sampling=args.confusion_sampling,
-            confusion_eval_freq=args.confusion_eval_freq,
-            confusion_boost_factor=args.confusion_boost,
-            confusion_top_k=args.confusion_top_k,
-            use_focal_loss=args.focal_loss,
-            normalize=args.normalize
+            use_focal_loss=args.focal_loss
         )
     else:
         raise ValueError(f"Unknown model type: {args.model}")

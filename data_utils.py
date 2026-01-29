@@ -19,16 +19,20 @@ from normalizer import normalize_spectrogram
 class DataLoader:
     """Handles loading and splitting of spectrogram data."""
     
-    def __init__(self, folder, noise_folder=None):
+    def __init__(self, folder, noise_folder=None, noise_as_class=False, noise_class_ratio=0.5):
         """
         Initialize DataLoader.
         
         Args:
             folder: Path to folder containing labels.json and data/
             noise_folder: Optional path to folder containing noise data (if different from folder)
+            noise_as_class: If True, include noise spectrograms as training samples with all-zero labels
+            noise_class_ratio: Fraction of training set that should be noise samples (default: 0.5)
         """
         self.folder = folder
         self.noise_folder = noise_folder if noise_folder else folder
+        self.noise_as_class = noise_as_class
+        self.noise_class_ratio = noise_class_ratio
         
     def load_data(self, use_multilabel=True, validation_share=0.2):
         """
@@ -90,6 +94,31 @@ class DataLoader:
         
         # Load noise data if available
         noise_filenames = self._load_noise_data()
+        
+        # Add noise samples as all-zero training examples if requested
+        if self.noise_as_class and len(noise_filenames) > 0:
+            # Calculate how many noise samples to add: noise_class_ratio * (bird_samples + noise_samples) = noise_samples
+            # Solving: noise_samples = noise_class_ratio * bird_samples / (1 - noise_class_ratio)
+            num_bird_samples = len(filenames)
+            target_noise_samples = int(self.noise_class_ratio * num_bird_samples / (1.0 - self.noise_class_ratio))
+            num_noise_samples = min(target_noise_samples, len(noise_filenames))
+            
+            if num_noise_samples < target_noise_samples:
+                print(f"⚠️  WARNING: Requested {target_noise_samples} noise samples (to achieve {self.noise_class_ratio:.0%} ratio),")
+                print(f"    but only {len(noise_filenames)} available. Using all {num_noise_samples} noise files.")
+            
+            # Randomly sample noise files
+            import random
+            selected_noise = random.sample(noise_filenames, num_noise_samples)
+            
+            final_ratio = num_noise_samples / (num_bird_samples + num_noise_samples)
+            print(f"Adding {num_noise_samples} noise samples as all-zero training examples ({final_ratio:.1%} of total training data)")
+            
+            filenames.extend(selected_noise)
+            zero_labels = [[0.0] * len(categories) for _ in range(num_noise_samples)]
+            labels.extend(zero_labels)
+            primary_species.extend(['noise'] * num_noise_samples)
+            source_files.extend(['noise'] * num_noise_samples)
         
         labels = np.array(labels, dtype=np.float32)
         mode_str = "multi-label" if use_multilabel else "single-label"
@@ -153,13 +182,14 @@ class DataLoader:
             )
             train_primary_species, test_primary_species = None, None
         
-        # Split noise data if available
+        # Split noise data if available (for augmentation, not as samples)
+        # If noise_as_class was used, noise files are already in the training set with zero labels
         train_noise_filenames, test_noise_filenames = None, None
         if noise_filenames and len(noise_filenames) > 0:
             train_noise_size = int(len(noise_filenames) * (1 - validation_share))
             train_noise_filenames = noise_filenames[:train_noise_size]
             test_noise_filenames = noise_filenames[train_noise_size:]
-            print(f"Split noise data: {len(train_noise_filenames)} training and {len(test_noise_filenames)} validation noise files")
+            print(f"Split noise data for augmentation: {len(train_noise_filenames)} training and {len(test_noise_filenames)} validation noise files")
         
         print(f"Split data: {len(train_filenames)} training and {len(test_filenames)} validation files")
         return train_filenames, train_labels, test_filenames, test_labels, train_primary_species, test_primary_species, train_noise_filenames, test_noise_filenames

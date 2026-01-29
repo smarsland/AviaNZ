@@ -10,38 +10,37 @@ from model_trainer import ASTTrainer
 import config
 
 def objective(trial, data_folder, output_base, fixed_args):
-    # Use defaults from train_models.py as center of search ranges
-    mixup_alpha = trial.suggest_float('mixup_alpha', 0.3, 0.7)  # default 0.5
-    dropout = trial.suggest_float('dropout', 0.15, 0.25)  # default 0.2
-    weight_decay = trial.suggest_float('weight_decay', 0.0, 0.01)  # default 0.0
-    learning_rate = trial.suggest_float('learning_rate', 2e-5, 8e-5, log=True)  # default 5e-5
+    # Optimized ranges based on Optuna analysis (113 trials):
+    # - Best trial: 92 with val_loss = 0.046197
+    # - normalize=False is much better (avg 0.073 vs 0.109)
+    # - use_class_balancing=False is better
+    # - use_confusion_sampling=False is much better (avg 0.073 vs 0.125)
+    # - scheduler_type=lambda is best
     
-    # Always search normalize
-    normalize = trial.suggest_categorical('normalize', [True, False])
+    # Core hyperparameters - narrowed to best-performing ranges
+    mixup_alpha = trial.suggest_float('mixup_alpha', 0.3, 0.7)  # top trials vary 0.33-0.62
+    dropout = trial.suggest_float('dropout', 0.15, 0.16)  # top 5 trials all 0.150-0.155
+    weight_decay = trial.suggest_float('weight_decay', 1e-5, 3e-4, log=True)  # top trials 1.4e-5 to 2.7e-4
+    learning_rate = trial.suggest_float('learning_rate', 2.9e-5, 3.4e-5)  # top 5 trials in this range
     
-    # DISABLE class_weights - causes numerical instability (weights up to billions)
-    use_class_weights = False
-    scheduler_type = trial.suggest_categorical('scheduler_type', ['lambda', 'cosine', 'cosine_warmup'])
+    # Fixed to best-performing values based on results
+    normalize = False  # False is much better (34 trials avg -0.073 vs 10 trials avg -0.109)
+    use_class_balancing = False  # False is better (39 trials avg -0.081 vs 5 trials avg -0.085)
+    use_confusion_sampling = False  # False is much better (37 trials avg -0.073 vs 7 trials avg -0.125)
+    use_class_weights = False  # disabled - causes numerical instability
+    use_focal_loss = False  # disabled - causes issues
+    use_multiscale = False  # disabled for sparse patches
+    
+    # Scheduler - lambda is best, but keep cosine_warmup as backup option
+    scheduler_type = trial.suggest_categorical('scheduler_type', ['lambda', 'cosine_warmup'])  # lambda avg -0.078, cosine_warmup -0.076
     
     if fixed_args.get('search_advanced_options', False):
-        use_class_balancing = trial.suggest_categorical('use_class_balancing', [True, False])
-        use_confusion_sampling = trial.suggest_categorical('use_confusion_sampling', [True, False])
-        # Focal loss disabled - causes issues
-        use_focal_loss = False
-        noise_ratio = trial.suggest_float('noise_ratio', 0.0, 0.3)
-        bce_smoothing = trial.suggest_float('bce_smoothing', 0.0, 0.1)
-        # MultiScaleAST doesn't support sparse patches, so disable it when using sparse mode
-        if fixed_args.get('num_sparse_patches', 0) > 0:
-            use_multiscale = False
-        else:
-            use_multiscale = trial.suggest_categorical('use_multiscale', [True, False])
+        # Advanced options with optimized ranges
+        noise_ratio = trial.suggest_float('noise_ratio', 0.06, 0.14)  # top 5 trials use 0.06-0.14 (positive correlation)
+        bce_smoothing = trial.suggest_float('bce_smoothing', 1e-4, 1e-3, log=True)  # top 5 trials use 0.0001-0.001 (strong negative correlation)
     else:
-        use_class_balancing = fixed_args.get('balance', False)
-        use_confusion_sampling = fixed_args.get('confusion_sampling', False)
-        use_focal_loss = fixed_args.get('focal_loss', False)
         noise_ratio = fixed_args.get('noise', config.DEFAULT_NOISE_RATIO)
         bce_smoothing = 0.0
-        use_multiscale = fixed_args.get('multiscale', False)
     
     num_sparse_patches = fixed_args.get('num_sparse_patches', 50)
     
@@ -137,7 +136,7 @@ Examples:
     parser.add_argument('--resume', action='store_true', help="Resume previous study with same name")
     parser.add_argument('--gpu', type=int, default=None, help="GPU device ID to use (overrides CUDA_VISIBLE_DEVICES)")
     
-    parser.add_argument('--search-advanced-options', action='store_true', help="Also search advanced/experimental options (class balancing, confusion sampling, focal loss, noise, bce smoothing, multiscale). Basic important options (normalize, class_weights, scheduler) are always searched.")
+    parser.add_argument('--search-advanced-options', action='store_true', help="Also search advanced options (noise_ratio, bce_smoothing). Note: normalize, class_balancing, confusion_sampling, focal_loss, multiscale, and class_weights are now fixed to best-performing values based on previous search results.")
     parser.add_argument('--epochs', type=int, default=25, help="Max epochs per trial (default: 25, use 20-30 for sparse models)")
     parser.add_argument('--batch-size', type=int, default=config.DEFAULT_BATCH_SIZE, help=f"Batch size (default: {config.DEFAULT_BATCH_SIZE})")
     parser.add_argument('--multilabel', action='store_true', help="Use multi-label classification")

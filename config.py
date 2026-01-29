@@ -33,25 +33,24 @@ AST_STD = 4.5689974
 # Training defaults
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
-DEFAULT_LEARNING_RATE = 5e-5
+DEFAULT_LEARNING_RATE = 3.3e-5  # Optuna optimal: 2.9e-5 to 3.4e-5
 DEFAULT_CHANNELS = 1
+DEFAULT_DROPOUT = 0.15  # Optuna optimal: 0.15-0.16 (was 0.2)
+DEFAULT_MIXUP_ALPHA = 0.5  # Optuna optimal: 0.33-0.62
+DEFAULT_WEIGHT_DECAY = 1e-4  # Optuna optimal: very low values
+DEFAULT_BCE_SMOOTHING = 0.0003  # Optuna optimal: 0.0001-0.001
 
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.3
+DEFAULT_NOISE_RATIO = 0.1  # Optuna optimal: 0.06-0.14 (was 0.3 - too high!)
 DEFAULT_NOISE_SAMPLES = 1000
 
 # File processing limits (in seconds)
 MAX_FILE_DURATION_SECONDS = 10000
 WARNING_FILE_DURATION_SECONDS = 60  # 1 minute - warn if exceeded
-
-# Confusion-based curriculum learning
-DEFAULT_CONFUSION_EVAL_FREQUENCY = 3
-DEFAULT_CONFUSION_BOOST_FACTOR = 1.5  # Reduced from 3.0 - too aggressive for imbalanced datasets
-DEFAULT_CONFUSION_TOP_K = 15
 
 
 def get_model_config():

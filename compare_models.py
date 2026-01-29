@@ -82,6 +82,16 @@ def load_ground_truth(labels_path):
     return ground_truth, data['categories']
 
 
+def split_validation_set(ground_truth, val_size=5000, seed=42):
+    """Split a validation set from ground truth for threshold optimization"""
+    np.random.seed(seed)
+    all_ids = list(ground_truth.keys())
+    np.random.shuffle(all_ids)
+    val_size = min(val_size, len(all_ids) // 5)
+    val_ids = set(all_ids[:val_size])
+    return val_ids
+
+
 def load_predictions(pred_path, threshold=0.5):
     """Load predictions and apply threshold"""
     print(f"Loading predictions from {os.path.basename(pred_path)}...")
@@ -106,6 +116,29 @@ def load_predictions(pred_path, threshold=0.5):
     
     print(f"  Loaded {len(predictions)} prediction samples")
     return predictions, species_cols
+
+
+def load_predictions_raw(pred_path):
+    """Load raw prediction probabilities without thresholding"""
+    df = pd.read_csv(pred_path)
+    row_id_col = 'row_id'
+    meta_cols = ['File_Path', 'row_id']
+    species_cols = [col for col in df.columns if col not in meta_cols]
+    predictions_probs = {}
+    for idx, row in df.iterrows():
+        row_id = normalize_row_id(row[row_id_col])
+        probs = {species: row[species] for species in species_cols if pd.notna(row[species])}
+        predictions_probs[row_id] = probs
+    return predictions_probs, species_cols
+
+
+def apply_threshold_to_probs(predictions_probs, threshold):
+    """Convert probability dictionary to thresholded set predictions"""
+    predictions = {}
+    for row_id, probs in predictions_probs.items():
+        pred_species = {species for species, prob in probs.items() if prob >= threshold}
+        predictions[row_id] = pred_species
+    return predictions
 
 
 def load_bird_naming_map(csv_path):
@@ -236,6 +269,52 @@ def create_binary_matrix(predictions, ground_truth, all_species, include_empty_c
     return y_true, y_pred, all_species_with_empty, common_ids
 
 
+def optimize_threshold(predictions_probs, ground_truth, name_mapping, val_ids, all_species, include_empty_class=False, metric='f1_micro'):
+    """Find optimal threshold using validation set"""
+    thresholds_to_test = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    best_threshold = 0.5
+    best_score = 0.0
+    print(f"  Optimizing threshold on {len(val_ids)} validation samples (metric: {metric})...")
+    print(f"  {'Threshold':<12} {'Accuracy':<10} {'F1-Micro':<10} {'F1-Macro':<10} {'F1-Weighted':<12}")
+    print(f"  {'-'*12} {'-'*10} {'-'*10} {'-'*10} {'-'*12}")
+    
+    for threshold in thresholds_to_test:
+        predictions = apply_threshold_to_probs(predictions_probs, threshold)
+        predictions_normalized = align_predictions_with_gt(predictions, ground_truth, name_mapping)
+        val_ground_truth = {k: v for k, v in ground_truth.items() if k in val_ids}
+        val_predictions = {k: v for k, v in predictions_normalized.items() if k in val_ids}
+        y_true, y_pred, species_list, common_ids = create_binary_matrix(
+            val_predictions, val_ground_truth, all_species, include_empty_class=include_empty_class
+        )
+        if len(common_ids) == 0:
+            continue
+        
+        acc = accuracy_score(y_true, y_pred)
+        f1_micro = f1_score(y_true, y_pred, average='micro', zero_division=0)
+        f1_macro = f1_score(y_true, y_pred, average='macro', zero_division=0)
+        f1_weighted = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+        
+        print(f"  {threshold:<12.1f} {acc:<10.4f} {f1_micro:<10.4f} {f1_macro:<10.4f} {f1_weighted:<12.4f}")
+        
+        if metric == 'accuracy':
+            score = acc
+        elif metric == 'f1_micro':
+            score = f1_micro
+        elif metric == 'f1_macro':
+            score = f1_macro
+        elif metric == 'f1_weighted':
+            score = f1_weighted
+        else:
+            score = f1_micro
+        
+        if score > best_score:
+            best_score = score
+            best_threshold = threshold
+    
+    print(f"  -> Optimal threshold: {best_threshold} ({metric}={best_score:.4f})")
+    return best_threshold
+
+
 def calculate_metrics(y_true, y_pred, species_list):
     """Calculate comprehensive metrics"""
     metrics = {}
@@ -350,9 +429,13 @@ def sample_level_analysis(predictions, ground_truth, common_ids):
     return sample_metrics
 
 
-def generate_confusion_matrices(y_true, y_pred, species_list, model_name, output_dir, gt_species):
+def generate_confusion_matrices(y_true, y_pred, species_list, model_name, output_dir, gt_species, threshold=None):
     """Generate and save confusion matrices for a single model"""
     print(f"\nGenerating confusion matrices for {model_name}...")
+    if threshold is not None:
+        model_name_with_threshold = f"{model_name}_t{threshold:.2f}"
+    else:
+        model_name_with_threshold = model_name
     
     confusion_data = []
     
@@ -376,7 +459,7 @@ def generate_confusion_matrices(y_true, y_pred, species_list, model_name, output
         })
     
     df = pd.DataFrame(confusion_data)
-    output_path = f"{output_dir}/{model_name.replace(' ', '_')}_confusion_matrices.csv"
+    output_path = f"{output_dir}/{model_name_with_threshold.replace(' ', '_')}_confusion_matrices.csv"
     df.to_csv(output_path, index=False)
     print(f"  Saved: {os.path.basename(output_path)}")
     
@@ -405,7 +488,7 @@ def generate_confusion_matrices(y_true, y_pred, species_list, model_name, output
                     if pred_sp in col_species:
                         species_confusion.loc[true_sp, pred_sp] += 1
     
-    output_path = f"{output_dir}/{model_name.replace(' ', '_')}_species_confusion.csv"
+    output_path = f"{output_dir}/{model_name_with_threshold.replace(' ', '_')}_species_confusion.csv"
     species_confusion.to_csv(output_path)
     print(f"  Saved: {os.path.basename(output_path)}")
     
@@ -428,7 +511,7 @@ def generate_confusion_matrices(y_true, y_pred, species_list, model_name, output
         plt.yticks(rotation=0, fontsize=9)
         plt.tight_layout()
         
-        img_path = f"{output_dir}/{model_name.replace(' ', '_')}_confusion_normalized.png"
+        img_path = f"{output_dir}/{model_name_with_threshold.replace(' ', '_')}_confusion_normalized.png"
         plt.savefig(img_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"  Saved: {os.path.basename(img_path)}")
@@ -482,7 +565,25 @@ def main():
         '--threshold',
         type=float,
         default=0.5,
-        help='Threshold for positive prediction (default: 0.5)'
+        help='Threshold for positive prediction (default: 0.5, ignored if --optimize-threshold is used)'
+    )
+    parser.add_argument(
+        '--optimize-threshold',
+        action='store_true',
+        help='Automatically find optimal threshold per model using validation set'
+    )
+    parser.add_argument(
+        '--val-size',
+        type=int,
+        default=5000,
+        help='Validation set size for threshold optimization (default: 5000)'
+    )
+    parser.add_argument(
+        '--optimization-metric',
+        type=str,
+        default='f1_micro',
+        choices=['accuracy', 'f1_micro', 'f1_macro', 'f1_weighted'],
+        help='Metric to optimize when finding threshold (default: f1_micro). Use accuracy for imbalanced datasets.'
     )
     
     args = parser.parse_args()
@@ -505,7 +606,10 @@ def main():
     print("="*80)
     print(f"\nResults folder: {args.folder}")
     print(f"Output directory: {output_dir}")
-    print(f"Threshold: {args.threshold}")
+    if args.optimize_threshold:
+        print(f"Threshold: AUTO-OPTIMIZE (validation size: {args.val_size}, metric: {args.optimization_metric})")
+    else:
+        print(f"Threshold: {args.threshold} (fixed)")
     print(f"Include 'No Birds' class: {args.include_empty_class}")
     
     print("\nLoading bird naming map...")
@@ -513,6 +617,11 @@ def main():
     print(f"  Loaded {len(name_mapping)} name mappings")
     
     ground_truth, gt_categories = load_ground_truth(labels_path)
+    
+    val_ids = None
+    if args.optimize_threshold:
+        val_ids = split_validation_set(ground_truth, val_size=args.val_size)
+        print(f"\nValidation set: {len(val_ids)} samples ({len(val_ids)/len(ground_truth)*100:.1f}%)")
     
     pred_files = discover_prediction_files(results_folder)
     
@@ -531,48 +640,62 @@ def main():
         model_name = get_model_name_from_filename(pred_file)
         pred_path = os.path.join(results_folder, pred_file)
         
-        # Check if this model has already been processed
-        clean_name = model_name.replace(' ', '_')
-        confusion_csv = os.path.join(output_dir, f"{clean_name}_confusion_matrices.csv")
-        species_csv = os.path.join(output_dir, f"{clean_name}_species_confusion.csv")
-        confusion_png = os.path.join(output_dir, f"{clean_name}_confusion_normalized.png")
-        
-        if os.path.exists(confusion_csv) and os.path.exists(species_csv) and os.path.exists(confusion_png):
-            print(f"\n{'='*80}")
-            print(f"Skipping: {model_name} (already processed)")
-            print(f"{'='*80}")
-            continue
-        
         print(f"\n{'='*80}")
         print(f"Processing: {model_name}")
         print(f"{'='*80}")
         
-        predictions, species_cols = load_predictions(pred_path, args.threshold)
-        
-        print(f"  Normalizing species names...")
-        predictions_normalized = align_predictions_with_gt(predictions, ground_truth, name_mapping)
+        if args.optimize_threshold:
+            predictions_probs, species_cols = load_predictions_raw(pred_path)
+            predictions = None
+        else:
+            predictions, species_cols = load_predictions(pred_path, args.threshold)
+            predictions_probs = None
         
         all_species_normalized = set()
         for species in species_cols:
             common = normalize_to_common_name(species, name_mapping)
             if common:
                 all_species_normalized.add(common)
-        
         print(f"  Model can predict {len(all_species_normalized)} species after normalization")
+        
+        if 'ground_truth_normalized' not in locals():
+            print("\nNormalizing ground truth...")
+            ground_truth_normalized = normalize_ground_truth(ground_truth, name_mapping)
+            all_species_in_gt = set()
+            for species_set in ground_truth_normalized.values():
+                all_species_in_gt.update(species_set)
+            print(f"  Total unique species in ground truth: {len(all_species_in_gt)}")
+        
+        all_species_for_model = all_species_normalized | all_species_in_gt
+        
+        if args.optimize_threshold:
+            optimal_threshold = optimize_threshold(
+                predictions_probs, ground_truth_normalized, name_mapping, 
+                val_ids, all_species_for_model, args.include_empty_class,
+                metric=args.optimization_metric
+            )
+            predictions = apply_threshold_to_probs(predictions_probs, optimal_threshold)
+        else:
+            optimal_threshold = args.threshold
+        
+        model_name_with_threshold = f"{model_name}_t{optimal_threshold:.2f}" if args.optimize_threshold else model_name
+        clean_name = model_name_with_threshold.replace(' ', '_')
+        confusion_csv = os.path.join(output_dir, f"{clean_name}_confusion_matrices.csv")
+        species_csv = os.path.join(output_dir, f"{clean_name}_species_confusion.csv")
+        confusion_png = os.path.join(output_dir, f"{clean_name}_confusion_normalized.png")
+        
+        if os.path.exists(confusion_csv) and os.path.exists(species_csv) and os.path.exists(confusion_png):
+            print(f"  Already processed with threshold {optimal_threshold:.2f}, skipping...")
+            continue
+        
+        print(f"  Normalizing species names...")
+        predictions_normalized = align_predictions_with_gt(predictions, ground_truth_normalized, name_mapping)
         
         all_models[model_name] = {
             'predictions': predictions_normalized,
-            'all_species': all_species_normalized
+            'all_species': all_species_for_model,
+            'threshold': optimal_threshold
         }
-    
-    print("\nNormalizing ground truth...")
-    ground_truth_normalized = normalize_ground_truth(ground_truth, name_mapping)
-    
-    all_species_in_gt = set()
-    for species_set in ground_truth_normalized.values():
-        all_species_in_gt.update(species_set)
-    
-    print(f"  Total unique species in ground truth: {len(all_species_in_gt)}")
     
     # Load existing metrics if available
     metrics_output = os.path.join(output_dir, 'all_models_metrics.csv')
@@ -591,7 +714,8 @@ def main():
         print(f"{'='*80}")
         
         predictions_normalized = model_data['predictions']
-        all_species_for_model = model_data['all_species'] | all_species_in_gt
+        all_species_for_model = model_data['all_species']
+        optimal_threshold = model_data['threshold']
         
         y_true, y_pred, species_list, common_ids = create_binary_matrix(
             predictions_normalized, ground_truth_normalized, all_species_for_model,
@@ -607,10 +731,12 @@ def main():
         print(f"  F1 (macro): {overall_metrics.get('f1_macro', 0):.4f}")
         print(f"  F1 (micro): {overall_metrics.get('f1_micro', 0):.4f}")
         
-        generate_confusion_matrices(y_true, y_pred, species_list, model_name, output_dir, all_species_in_gt)
+        generate_confusion_matrices(y_true, y_pred, species_list, model_name, output_dir, 
+                                   all_species_in_gt, threshold=optimal_threshold)
         
         metrics_row = {
             'model': model_name,
+            'threshold': optimal_threshold,
             'num_samples': len(common_ids),
             'num_species_evaluated': len(species_list),
             **overall_metrics,

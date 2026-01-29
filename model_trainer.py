@@ -152,16 +152,14 @@ class ASTTrainer:
     """Simple AST trainer."""
     
     def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
-                 multilabel, learning_rate, mixup_alpha=0.3, 
-                 pretrained_path=None, use_class_balancing=False, 
-                 scheduler_type='lambda', weight_decay=0.0, 
-                 noise_ratio=0.0, noise_folder=None, freq_bins=None, time_bins=None,
-                 use_confusion_sampling=False, confusion_eval_freq=None, 
-                 confusion_boost_factor=None, confusion_top_k=None, use_focal_loss=False,
+                 multilabel, learning_rate, mixup_alpha=None, 
+                 pretrained_path=None, weight_decay=None, 
+                 noise_ratio=None, noise_folder=None, noise_as_class=False, noise_class_ratio=0.5, freq_bins=None, time_bins=None,
+                 use_focal_loss=False,
                  use_multiscale=False, use_class_weights=False, freeze_layers=None,
-                 use_reconstruction=False, recon_weight=0.1, normalize=False,
-                 use_sparse_patches=False, num_sparse_patches=20, dropout=0.2,
-                 bce_smoothing=0.0, trial=None, use_amp=True):
+                 use_reconstruction=False, recon_weight=0.1,
+                 use_sparse_patches=False, num_sparse_patches=20, dropout=None,
+                 bce_smoothing=None, trial=None, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -169,28 +167,23 @@ class ASTTrainer:
         self.batch_size = batch_size
         self.multilabel = multilabel
         self.learning_rate = learning_rate
-        self.mixup_alpha = mixup_alpha
+        self.mixup_alpha = mixup_alpha if mixup_alpha is not None else config.DEFAULT_MIXUP_ALPHA
         self.pretrained_path = pretrained_path
-        self.use_class_balancing = use_class_balancing
-        self.scheduler_type = scheduler_type
-        self.weight_decay = weight_decay
-        self.noise_ratio = noise_ratio
+        self.weight_decay = weight_decay if weight_decay is not None else config.DEFAULT_WEIGHT_DECAY
+        self.noise_ratio = noise_ratio if noise_ratio is not None else config.DEFAULT_NOISE_RATIO
         self.noise_folder = noise_folder
-        self.use_confusion_sampling = use_confusion_sampling
-        self.confusion_eval_freq = confusion_eval_freq if confusion_eval_freq is not None else config.DEFAULT_CONFUSION_EVAL_FREQUENCY
-        self.confusion_boost_factor = confusion_boost_factor if confusion_boost_factor is not None else config.DEFAULT_CONFUSION_BOOST_FACTOR
-        self.confusion_top_k = confusion_top_k
+        self.noise_as_class = noise_as_class
+        self.noise_class_ratio = noise_class_ratio
         self.use_focal_loss = use_focal_loss
         self.use_multiscale = use_multiscale
         self.use_class_weights = use_class_weights
         self.freeze_layers = freeze_layers
         self.use_reconstruction = use_reconstruction
         self.recon_weight = recon_weight
-        self.normalize = normalize
         self.use_sparse_patches = use_sparse_patches
         self.num_sparse_patches = num_sparse_patches
-        self.dropout = dropout
-        self.bce_smoothing = bce_smoothing
+        self.dropout = dropout if dropout is not None else config.DEFAULT_DROPOUT
+        self.bce_smoothing = bce_smoothing if bce_smoothing is not None else config.DEFAULT_BCE_SMOOTHING
         self.trial = trial
         self.use_amp = use_amp and torch.cuda.is_available()
         
@@ -204,7 +197,7 @@ class ASTTrainer:
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         # Load data
-        data_loader = DataLoader(data_folder, noise_folder=noise_folder)
+        data_loader = DataLoader(data_folder, noise_folder=noise_folder, noise_as_class=noise_as_class, noise_class_ratio=noise_class_ratio)
         self.data = data_loader.load_data(multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
@@ -221,41 +214,9 @@ class ASTTrainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
             num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
-            use_class_balancing=self.use_class_balancing, normalize=self.normalize,
+            use_class_balancing=False, normalize=False,  # Optuna: both underperform
             use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches
         )
-        
-        if self.use_confusion_sampling:
-            from torch.utils.data import DataLoader as TorchDataLoader
-            from data_utils import SpectrogramDataset, sparse_collate_fn
-            
-            # Warning if both balancing strategies are enabled
-            if self.use_class_balancing:
-                print("\n⚠️  WARNING: Both --balance and --confusion-sampling are enabled!")
-                print("   These strategies can interact unpredictably and cause weight explosion.")
-                print("   Consider using only one, or reduce --confusion-boost (currently {:.1f})".format(self.confusion_boost_factor))
-                # Automatically reduce boost factor to be safer
-                if self.confusion_boost_factor > 2.0:
-                    original_boost = self.confusion_boost_factor
-                    self.confusion_boost_factor = min(2.0, self.confusion_boost_factor / 2.0)
-                    print(f"   Auto-reducing boost factor from {original_boost:.1f} to {self.confusion_boost_factor:.1f} for stability\n")
-            
-            eval_dataset = SpectrogramDataset(
-                self.data['train_filenames'], self.data['train_labels'], 
-                self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-                cropping_mode='center', noise_ratio=0.0, spec_transform=config.DEFAULT_SPEC_TRANSFORM,
-                width_downsizing=None, normalize=self.normalize,
-                use_sparse_patches=self.use_sparse_patches,
-                num_sparse_patches=self.num_sparse_patches
-            )
-            num_workers = 4 if torch.cuda.is_available() else 2
-            eval_collate = sparse_collate_fn if self.use_sparse_patches else None
-            self.eval_train_loader = TorchDataLoader(
-                eval_dataset, batch_size=batch_size, shuffle=False,
-                num_workers=num_workers, pin_memory=True,
-                collate_fn=eval_collate
-            )
-            self.current_sample_weights = None
         
         os.makedirs(output_folder, exist_ok=True)
     
@@ -313,29 +274,15 @@ class ASTTrainer:
             total_params = sum(p.numel() for p in model.parameters())
             print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
 
-        # Optimizer and LR schedule
+        # Optimizer and LR schedule (always use lambda - best from Optuna)
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         
-        if self.scheduler_type == 'cosine':
-            from torch.optim.lr_scheduler import CosineAnnealingLR
-            scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs, eta_min=1e-6)
-            print(f"Using Cosine Annealing LR scheduler")
-        elif self.scheduler_type == 'cosine_warmup':
-            def lr_lambda(epoch):
-                warmup_epochs = 5
-                if epoch < warmup_epochs:
-                    return (epoch + 1) / warmup_epochs
-                t = (epoch - warmup_epochs) / max(1, (self.max_epochs - warmup_epochs))
-                return 0.5 * (1 + math.cos(math.pi * t))
-            scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
-            print("Using Cosine with Warmup LR scheduler")
-        else:
-            def lr_lambda(epoch):
-                if epoch < 5:
-                    return 1.0
-                return 0.85 ** (epoch - 5)
-            scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
-            print(f"Using Lambda LR scheduler (ESC-50 style)")
+        def lr_lambda(epoch):
+            if epoch < 5:
+                return 1.0
+            return 0.85 ** (epoch - 5)
+        scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+        print(f"Using Lambda LR scheduler (optimal from Optuna search)")
         
         # Use logits from the model and appropriate losses
         # Stronger label smoothing for better generalization
@@ -942,11 +889,10 @@ class CNNTrainer:
     """Simple CNN trainer."""
     
     def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
-                 multilabel, learning_rate, mixup_alpha=0.3, 
-                 pretrained_path=None, use_class_balancing=False, weight_decay=0.0,
-                 noise_ratio=0.0, noise_folder=None, freq_bins=None, time_bins=None,
-                 use_confusion_sampling=False, confusion_eval_freq=None,
-                 confusion_boost_factor=None, confusion_top_k=None, use_focal_loss=False, normalize=False, use_amp=True):
+                 multilabel, learning_rate, mixup_alpha=None, 
+                 pretrained_path=None, weight_decay=None,
+                 noise_ratio=None, noise_folder=None, noise_as_class=False, noise_class_ratio=0.5, freq_bins=None, time_bins=None,
+                 use_focal_loss=False, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -954,20 +900,14 @@ class CNNTrainer:
         self.batch_size = batch_size
         self.multilabel = multilabel
         self.learning_rate = learning_rate
-        self.mixup_alpha = mixup_alpha
+        self.mixup_alpha = mixup_alpha if mixup_alpha is not None else config.DEFAULT_MIXUP_ALPHA
         self.pretrained_path = pretrained_path
-        self.use_class_balancing = use_class_balancing
-        self.weight_decay = weight_decay
-        self.noise_ratio = noise_ratio
+        self.weight_decay = weight_decay if weight_decay is not None else config.DEFAULT_WEIGHT_DECAY
+        self.noise_ratio = noise_ratio if noise_ratio is not None else config.DEFAULT_NOISE_RATIO
         self.noise_folder = noise_folder
-        self.use_confusion_sampling = use_confusion_sampling
-        self.confusion_eval_freq = confusion_eval_freq if confusion_eval_freq is not None else config.DEFAULT_CONFUSION_EVAL_FREQUENCY
-        self.confusion_boost_factor = confusion_boost_factor if confusion_boost_factor is not None else config.DEFAULT_CONFUSION_BOOST_FACTOR
-        self.confusion_top_k = confusion_top_k
+        self.noise_as_class = noise_as_class
+        self.noise_class_ratio = noise_class_ratio
         self.use_focal_loss = use_focal_loss
-        self.confusion_boost_factor = confusion_boost_factor if confusion_boost_factor is not None else config.DEFAULT_CONFUSION_BOOST_FACTOR
-        self.confusion_top_k = confusion_top_k
-        self.normalize = normalize
         self.use_amp = use_amp and torch.cuda.is_available()
         
         # Setup device
@@ -980,7 +920,7 @@ class CNNTrainer:
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         # Load data
-        data_loader = DataLoader(data_folder, noise_folder=noise_folder)
+        data_loader = DataLoader(data_folder, noise_folder=noise_folder, noise_as_class=noise_as_class, noise_class_ratio=noise_class_ratio)
         self.data = data_loader.load_data(multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
@@ -998,34 +938,6 @@ class CNNTrainer:
             use_class_balancing=self.use_class_balancing, normalize=self.normalize,
             use_sparse_patches=False, num_sparse_patches=20
         )
-        
-        if self.use_confusion_sampling:
-            from torch.utils.data import DataLoader as TorchDataLoader
-            from data_utils import SpectrogramDataset
-            
-            # Warning if both balancing strategies are enabled
-            if self.use_class_balancing:
-                print("\n⚠️  WARNING: Both --balance and --confusion-sampling are enabled!")
-                print("   These strategies can interact unpredictably and cause weight explosion.")
-                print("   Consider using only one, or reduce --confusion-boost (currently {:.1f})".format(self.confusion_boost_factor))
-                # Automatically reduce boost factor to be safer
-                if self.confusion_boost_factor > 2.0:
-                    original_boost = self.confusion_boost_factor
-                    self.confusion_boost_factor = min(2.0, self.confusion_boost_factor / 2.0)
-                    print(f"   Auto-reducing boost factor from {original_boost:.1f} to {self.confusion_boost_factor:.1f} for stability\n")
-            
-            eval_dataset = SpectrogramDataset(
-                self.data['train_filenames'], self.data['train_labels'],
-                self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-                cropping_mode='center', noise_ratio=0.0, spec_transform=None,
-                width_downsizing=None, normalize=self.normalize
-            )
-            num_workers = 4 if torch.cuda.is_available() else 2
-            self.eval_train_loader = TorchDataLoader(
-                eval_dataset, batch_size=batch_size, shuffle=False,
-                num_workers=num_workers, pin_memory=True
-            )
-            self.current_sample_weights = None
         
         os.makedirs(output_folder, exist_ok=True)
     
