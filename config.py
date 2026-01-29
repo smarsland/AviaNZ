@@ -50,7 +50,7 @@ WARNING_FILE_DURATION_SECONDS = 60  # 1 minute - warn if exceeded
 
 # Confusion-based curriculum learning
 DEFAULT_CONFUSION_EVAL_FREQUENCY = 3
-DEFAULT_CONFUSION_BOOST_FACTOR = 3.0
+DEFAULT_CONFUSION_BOOST_FACTOR = 1.5  # Reduced from 3.0 - too aggressive for imbalanced datasets
 DEFAULT_CONFUSION_TOP_K = 15
 
 

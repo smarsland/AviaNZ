@@ -380,6 +380,13 @@ class ASTTrainer:
         for epoch in range(self.max_epochs):
             start_time = time.time()
             
+            # Check model weights BEFORE starting epoch (confusion sampling might have corrupted them)
+            if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
+                print(f"\n❌ FATAL: Model weights are NaN/Inf at START of epoch {epoch+1}!")
+                print(f"   This happened AFTER confusion sampling updated weights at end of epoch {epoch}.")
+                print(f"   ABORTING TRAINING.\n")
+                return
+            
             # Train
             model.train()
             train_loss = 0.0
@@ -439,6 +446,9 @@ class ASTTrainer:
                 
                 with torch.amp.autocast('cuda', enabled=self.use_amp):
                     if self.multilabel:
+                        # Clamp logits to prevent numerical overflow in BCE loss
+                        # Logits beyond ±80 cause sigmoid(±80) ≈ 0/1 which creates log(0) = -inf
+                        output = torch.clamp(output, min=-80.0, max=80.0)
                         loss = criterion(output, target)
                     else:
                         # Detect soft (mixup) labels: if any row has fractional values (not strictly 0/1)
@@ -460,8 +470,13 @@ class ASTTrainer:
                 # Check for NaN loss BEFORE backward pass
                 if torch.isnan(loss) or torch.isinf(loss):
                     print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
-                    print(f"   This indicates model weights have become corrupted.")
-                    print(f"   Stopping epoch early to prevent further corruption...")
+                    print(f"   DEBUG - Output stats: min={output.min():.4f}, max={output.max():.4f}, mean={output.mean():.4f}")
+                    print(f"   DEBUG - Target stats: min={target.min():.4f}, max={target.max():.4f}, sum={target.sum():.4f}")
+                    if torch.isnan(output).any():
+                        print(f"   ⚠️  MODEL OUTPUT CONTAINS NaN! Model weights are corrupted.")
+                    if torch.isinf(output).any():
+                        print(f"   ⚠️  MODEL OUTPUT CONTAINS Inf! Model exploded.")
+                    print(f"   Stopping epoch early...")
                     break  # Stop epoch, not just continue
                 
                 # Backward pass
@@ -568,16 +583,22 @@ class ASTTrainer:
                         val_total += target.size(0)
             
             # Calculate averages
-            train_loss /= len(self.train_loader)
+            train_loss /= max(1, len(self.train_loader))  # Avoid divide by zero if epoch stopped early
             val_loss /= len(self.val_loader)
             
             if self.multilabel:
-                # Compute macro F1 for multi-label
-                train_acc = compute_multilabel_f1(all_train_preds, all_train_targets)
-                val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
+                # Compute macro F1 for multi-label (handle empty lists if epoch stopped early)
+                if len(all_train_preds) > 0:
+                    train_acc = compute_multilabel_f1(all_train_preds, all_train_targets)
+                else:
+                    train_acc = 0.0
+                if len(all_val_preds) > 0:
+                    val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
+                else:
+                    val_acc = 0.0
             else:
-                train_acc = train_correct / train_total
-                val_acc = val_correct / val_total
+                train_acc = train_correct / train_total if train_total > 0 else 0.0
+                val_acc = val_correct / val_total if val_total > 0 else 0.0
             
             train_losses.append(train_loss)
             val_losses.append(val_loss)
@@ -1063,6 +1084,8 @@ class CNNTrainer:
                     output = model(data)
                     
                     if self.multilabel:
+                        # Clamp logits to prevent numerical overflow in BCE loss
+                        output = torch.clamp(output, min=-80.0, max=80.0)
                         loss = criterion(output, target)
                     else:
                         # Detect soft (mixup) labels
