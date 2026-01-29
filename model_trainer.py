@@ -489,6 +489,7 @@ class ASTTrainer:
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
+                        self.scaler.update()  # Must update scaler before breaking
                         break
                     self.scaler.step(optimizer)
                     self.scaler.update()
@@ -1111,6 +1112,7 @@ class CNNTrainer:
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
+                        self.scaler.update()  # Must update scaler before breaking
                         break
                     self.scaler.step(optimizer)
                     self.scaler.update()
