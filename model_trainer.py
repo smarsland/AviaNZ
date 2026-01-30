@@ -192,7 +192,7 @@ class ASTTrainer:
             print(f"Using Automatic Mixed Precision (AMP) for faster training")
         
         # Initialize gradient scaler for AMP
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Load data
         data_loader = DataLoader(data_folder, noise_folder=noise_folder)
@@ -843,6 +843,8 @@ class CNNTrainer:
         self.noise_folder = noise_folder
         self.use_focal_loss = use_focal_loss
         self.use_amp = use_amp and torch.cuda.is_available()
+        self.use_class_balancing = False
+        self.normalize = False
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -851,7 +853,7 @@ class CNNTrainer:
             print(f"Using Automatic Mixed Precision (AMP) for faster training")
         
         # Initialize gradient scaler for AMP
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Load data
         data_loader = DataLoader(data_folder, noise_folder=noise_folder)
@@ -1253,7 +1255,7 @@ class PixelPredictionTrainer:
             print(f"Using Automatic Mixed Precision (AMP) for faster training")
         
         # Initialize gradient scaler for AMP
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         self.img_height = freq_bins if freq_bins is not None else config.DEFAULT_FREQ_BINS
         self.img_width = time_bins if time_bins is not None else config.DEFAULT_TIME_BINS
