@@ -101,15 +101,12 @@ class DataLoader:
             # Solving: noise_samples = noise_class_ratio * bird_samples / (1 - noise_class_ratio)
             num_bird_samples = len(filenames)
             target_noise_samples = int(self.noise_class_ratio * num_bird_samples / (1.0 - self.noise_class_ratio))
-            num_noise_samples = min(target_noise_samples, len(noise_filenames))
+            num_noise_samples = target_noise_samples
             
-            if num_noise_samples < target_noise_samples:
-                print(f"⚠️  WARNING: Requested {target_noise_samples} noise samples (to achieve {self.noise_class_ratio:.0%} ratio),")
-                print(f"    but only {len(noise_filenames)} available. Using all {num_noise_samples} noise files.")
-            
-            # Randomly sample noise files
+            # Randomly sample noise files WITH REPLACEMENT to achieve target ratio
+            # Each noise file can be reused multiple times
             import random
-            selected_noise = random.sample(noise_filenames, num_noise_samples)
+            selected_noise = random.choices(noise_filenames, k=num_noise_samples)
             
             final_ratio = num_noise_samples / (num_bird_samples + num_noise_samples)
             print(f"Adding {num_noise_samples} noise samples as all-zero training examples ({final_ratio:.1%} of total training data)")
