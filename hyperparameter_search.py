@@ -23,16 +23,12 @@ def objective(trial, data_folder, output_base, fixed_args):
     weight_decay = trial.suggest_float('weight_decay', 1e-5, 3e-4, log=True)  # top trials 1.4e-5 to 2.7e-4
     learning_rate = trial.suggest_float('learning_rate', 2.9e-5, 3.4e-5)  # top 5 trials in this range
     
-    # Fixed to best-performing values based on results
-    normalize = False  # False is much better (34 trials avg -0.073 vs 10 trials avg -0.109)
-    use_class_balancing = False  # False is better (39 trials avg -0.081 vs 5 trials avg -0.085)
-    use_confusion_sampling = False  # False is much better (37 trials avg -0.073 vs 7 trials avg -0.125)
+    # Fixed to best-performing values (hardcoded in ASTTrainer and create_data_loaders)
+    # normalize=False, use_class_balancing=False, use_confusion_sampling=False, scheduler_type='lambda'
+    # use_class_weights=False, use_focal_loss=False, use_multiscale=False
     use_class_weights = False  # disabled - causes numerical instability
     use_focal_loss = False  # disabled - causes issues
     use_multiscale = False  # disabled for sparse patches
-    
-    # Scheduler - lambda is best, but keep cosine_warmup as backup option
-    scheduler_type = trial.suggest_categorical('scheduler_type', ['lambda', 'cosine_warmup'])  # lambda avg -0.078, cosine_warmup -0.076
     
     if fixed_args.get('search_advanced_options', False):
         # Advanced options with optimized ranges
@@ -57,24 +53,17 @@ def objective(trial, data_folder, output_base, fixed_args):
             learning_rate=learning_rate,
             mixup_alpha=mixup_alpha,
             pretrained_path=fixed_args.get('pretrained'),
-            use_class_balancing=use_class_balancing,
-            scheduler_type=scheduler_type,
             weight_decay=weight_decay,
             noise_ratio=noise_ratio,
             noise_folder=fixed_args.get('noise_folder'),
             freq_bins=fixed_args.get('freq_bins', config.DEFAULT_FREQ_BINS),
             time_bins=fixed_args.get('time_bins', config.DEFAULT_TIME_BINS),
-            use_confusion_sampling=use_confusion_sampling,
-            confusion_eval_freq=fixed_args.get('confusion_eval_freq', config.DEFAULT_CONFUSION_EVAL_FREQUENCY),
-            confusion_boost_factor=fixed_args.get('confusion_boost', config.DEFAULT_CONFUSION_BOOST_FACTOR),
-            confusion_top_k=fixed_args.get('confusion_top_k', config.DEFAULT_CONFUSION_TOP_K),
             use_focal_loss=use_focal_loss,
             use_multiscale=use_multiscale,
             use_class_weights=use_class_weights,
             freeze_layers=fixed_args.get('freeze_layers'),
             use_reconstruction=fixed_args.get('reconstruct', False),
             recon_weight=fixed_args.get('recon_weight', 0.1),
-            normalize=normalize,
             use_sparse_patches=(num_sparse_patches > 0),
             num_sparse_patches=num_sparse_patches,
             dropout=dropout,
