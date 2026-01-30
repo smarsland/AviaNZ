@@ -152,11 +152,29 @@ class EvaluationManager:
         # Create species name to index mapping
         species_to_idx = {species: idx for idx, species in enumerate(data['categories'])}
         
+        # Filter out None values (noise samples with all-zero labels have no primary species)
+        valid_mask = np.array([species is not None for species in data['test_primary_species']])
+        
+        if not valid_mask.all():
+            num_noise = (~valid_mask).sum()
+            print(f"Note: Excluding {num_noise} noise/background samples from primary species evaluation (they have no primary species)")
+        
+        if not valid_mask.any():
+            print("Warning: No samples with primary species in test set (all noise/background), skipping primary species evaluation")
+            return
+        
+        # Filter to valid samples only
+        valid_species = [data['test_primary_species'][i] for i in range(len(data['test_primary_species'])) if valid_mask[i]]
+        valid_probs = y_pred_probs[valid_mask]
+        
         # Convert primary species to indices
-        y_true_primary = np.array([species_to_idx[species] for species in data['test_primary_species']])
+        y_true_primary = np.array([species_to_idx[species] for species in valid_species])
+        
+        # Convert primary species to indices
+        y_true_primary = np.array([species_to_idx[species] for species in valid_species])
         
         # For predictions, use the class with highest probability as primary prediction
-        y_pred_primary = np.argmax(y_pred_probs, axis=1)
+        y_pred_primary = np.argmax(valid_probs, axis=1)
         
         # Get unique classes that actually appear in the data
         unique_classes = np.unique(np.concatenate([y_true_primary, y_pred_primary]))

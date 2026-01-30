@@ -117,7 +117,8 @@ class DataLoader:
             filenames.extend(selected_noise)
             zero_labels = [[0.0] * len(categories) for _ in range(num_noise_samples)]
             labels.extend(zero_labels)
-            primary_species.extend(['noise'] * num_noise_samples)
+            primary_species.extend([None] * num_noise_samples)  # None = no primary species (all-zero labels)
+            source_files.extend(['noise'] * num_noise_samples)
             source_files.extend(['noise'] * num_noise_samples)
         
         labels = np.array(labels, dtype=np.float32)
@@ -172,7 +173,19 @@ class DataLoader:
     
     def split_data(self, filenames, labels, primary_species, noise_filenames, validation_share):
         """Split data into training and test sets using random stratified split."""
-        if primary_species is not None:
+        
+        # Filter out None values for stratification (noise samples have no primary species)
+        if primary_species is not None and None in primary_species:
+            # Can't use stratify with None values, do regular random split
+            print(f"Note: Using random split (not stratified) because dataset includes noise samples with no primary species")
+            train_filenames, test_filenames, train_labels, test_labels = train_test_split(
+                filenames, labels, test_size=validation_share, random_state=42
+            )
+            # Split primary_species the same way
+            train_primary_species, test_primary_species = train_test_split(
+                primary_species, test_size=validation_share, random_state=42
+            )
+        elif primary_species is not None:
             train_filenames, test_filenames, train_labels, test_labels, train_primary_species, test_primary_species = train_test_split(
                 filenames, labels, primary_species, test_size=validation_share, random_state=42, stratify=primary_species
             )
