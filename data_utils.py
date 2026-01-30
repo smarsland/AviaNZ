@@ -19,20 +19,16 @@ from normalizer import normalize_spectrogram
 class DataLoader:
     """Handles loading and splitting of spectrogram data."""
     
-    def __init__(self, folder, noise_folder=None, noise_as_class=False, noise_class_ratio=0.5):
+    def __init__(self, folder, noise_folder=None):
         """
         Initialize DataLoader.
         
         Args:
             folder: Path to folder containing labels.json and data/
             noise_folder: Optional path to folder containing noise data (if different from folder)
-            noise_as_class: If True, include noise spectrograms as training samples with all-zero labels
-            noise_class_ratio: Fraction of training set that should be noise samples (default: 0.5)
         """
         self.folder = folder
         self.noise_folder = noise_folder if noise_folder else folder
-        self.noise_as_class = noise_as_class
-        self.noise_class_ratio = noise_class_ratio
         
     def load_data(self, use_multilabel=True, validation_share=0.2):
         """
@@ -94,29 +90,6 @@ class DataLoader:
         
         # Load noise data if available
         noise_filenames = self._load_noise_data()
-        
-        # Add noise samples as all-zero training examples if requested
-        if self.noise_as_class and len(noise_filenames) > 0:
-            # Calculate how many noise samples to add: noise_class_ratio * (bird_samples + noise_samples) = noise_samples
-            # Solving: noise_samples = noise_class_ratio * bird_samples / (1 - noise_class_ratio)
-            num_bird_samples = len(filenames)
-            target_noise_samples = int(self.noise_class_ratio * num_bird_samples / (1.0 - self.noise_class_ratio))
-            num_noise_samples = target_noise_samples
-            
-            # Randomly sample noise files WITH REPLACEMENT to achieve target ratio
-            # Each noise file can be reused multiple times
-            import random
-            selected_noise = random.choices(noise_filenames, k=num_noise_samples)
-            
-            final_ratio = num_noise_samples / (num_bird_samples + num_noise_samples)
-            print(f"Adding {num_noise_samples} noise samples as all-zero training examples ({final_ratio:.1%} of total training data)")
-            
-            filenames.extend(selected_noise)
-            zero_labels = [[0.0] * len(categories) for _ in range(num_noise_samples)]
-            labels.extend(zero_labels)
-            primary_species.extend([None] * num_noise_samples)  # None = no primary species (all-zero labels)
-            source_files.extend(['noise'] * num_noise_samples)
-            source_files.extend(['noise'] * num_noise_samples)
         
         labels = np.array(labels, dtype=np.float32)
         mode_str = "multi-label" if use_multilabel else "single-label"

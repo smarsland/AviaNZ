@@ -585,6 +585,11 @@ def main():
         choices=['accuracy', 'f1_micro', 'f1_macro', 'f1_weighted'],
         help='Metric to optimize when finding threshold (default: f1_micro). Use accuracy for imbalanced datasets.'
     )
+    parser.add_argument(
+        '--birds-only',
+        action='store_true',
+        help='Exclude samples with no birds from evaluation (only evaluate bird detection performance)'
+    )
     
     args = parser.parse_args()
     
@@ -611,6 +616,7 @@ def main():
     else:
         print(f"Threshold: {args.threshold} (fixed)")
     print(f"Include 'No Birds' class: {args.include_empty_class}")
+    print(f"Birds only (exclude empty samples): {args.birds_only}")
     
     print("\nLoading bird naming map...")
     name_mapping = load_bird_naming_map(naming_map_path)
@@ -661,6 +667,14 @@ def main():
         if 'ground_truth_normalized' not in locals():
             print("\nNormalizing ground truth...")
             ground_truth_normalized = normalize_ground_truth(ground_truth, name_mapping)
+            
+            # Filter out empty samples if birds-only mode is enabled
+            if args.birds_only:
+                original_count = len(ground_truth_normalized)
+                ground_truth_normalized = {k: v for k, v in ground_truth_normalized.items() if len(v) > 0}
+                filtered_count = original_count - len(ground_truth_normalized)
+                print(f"  Filtered out {filtered_count} empty samples ({filtered_count/original_count*100:.1f}%)")
+            
             all_species_in_gt = set()
             for species_set in ground_truth_normalized.values():
                 all_species_in_gt.update(species_set)

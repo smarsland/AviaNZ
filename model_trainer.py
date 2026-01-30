@@ -154,7 +154,7 @@ class ASTTrainer:
     def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
                  multilabel, learning_rate, mixup_alpha=None, 
                  pretrained_path=None, weight_decay=None, 
-                 noise_ratio=None, noise_folder=None, noise_as_class=False, noise_class_ratio=0.5, freq_bins=None, time_bins=None,
+                 noise_ratio=None, noise_folder=None, freq_bins=None, time_bins=None,
                  use_focal_loss=False,
                  use_multiscale=False, use_class_weights=False, freeze_layers=None,
                  use_reconstruction=False, recon_weight=0.1,
@@ -172,8 +172,6 @@ class ASTTrainer:
         self.weight_decay = weight_decay if weight_decay is not None else config.DEFAULT_WEIGHT_DECAY
         self.noise_ratio = noise_ratio if noise_ratio is not None else config.DEFAULT_NOISE_RATIO
         self.noise_folder = noise_folder
-        self.noise_as_class = noise_as_class
-        self.noise_class_ratio = noise_class_ratio
         self.use_focal_loss = use_focal_loss
         self.use_multiscale = use_multiscale
         self.use_class_weights = use_class_weights
@@ -197,7 +195,7 @@ class ASTTrainer:
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         # Load data
-        data_loader = DataLoader(data_folder, noise_folder=noise_folder, noise_as_class=noise_as_class, noise_class_ratio=noise_class_ratio)
+        data_loader = DataLoader(data_folder, noise_folder=noise_folder)
         self.data = data_loader.load_data(multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
@@ -829,7 +827,7 @@ class CNNTrainer:
     def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
                  multilabel, learning_rate, mixup_alpha=None, 
                  pretrained_path=None, weight_decay=None,
-                 noise_ratio=None, noise_folder=None, noise_as_class=False, noise_class_ratio=0.5, freq_bins=None, time_bins=None,
+                 noise_ratio=None, noise_folder=None, freq_bins=None, time_bins=None,
                  use_focal_loss=False, use_amp=True):
         
         self.data_folder = data_folder
@@ -843,8 +841,6 @@ class CNNTrainer:
         self.weight_decay = weight_decay if weight_decay is not None else config.DEFAULT_WEIGHT_DECAY
         self.noise_ratio = noise_ratio if noise_ratio is not None else config.DEFAULT_NOISE_RATIO
         self.noise_folder = noise_folder
-        self.noise_as_class = noise_as_class
-        self.noise_class_ratio = noise_class_ratio
         self.use_focal_loss = use_focal_loss
         self.use_amp = use_amp and torch.cuda.is_available()
         
@@ -858,7 +854,7 @@ class CNNTrainer:
         self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
         
         # Load data
-        data_loader = DataLoader(data_folder, noise_folder=noise_folder, noise_as_class=noise_as_class, noise_class_ratio=noise_class_ratio)
+        data_loader = DataLoader(data_folder, noise_folder=noise_folder)
         self.data = data_loader.load_data(multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
