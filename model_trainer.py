@@ -11,7 +11,7 @@ import json
 import time
 import math
 from sklearn.metrics import precision_recall_fscore_support
-from data_utils import DataLoader, create_data_loaders, compute_confusion_weights
+from data_utils import DataLoader, create_data_loaders
 from models import AST, CNNModel
 from evaluation_utils import EvaluationManager
 import config
@@ -327,10 +327,9 @@ class ASTTrainer:
         for epoch in range(self.max_epochs):
             start_time = time.time()
             
-            # Check model weights BEFORE starting epoch (confusion sampling might have corrupted them)
+            # Check model weights BEFORE starting epoch
             if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
                 print(f"\n❌ FATAL: Model weights are NaN/Inf at START of epoch {epoch+1}!")
-                print(f"   This happened AFTER confusion sampling updated weights at end of epoch {epoch}.")
                 print(f"   ABORTING TRAINING.\n")
                 return
             
@@ -575,67 +574,6 @@ class ASTTrainer:
                 return
 
             scheduler.step()
-            
-            if self.use_confusion_sampling and (epoch + 1) % self.confusion_eval_freq == 0:
-                print(f"\nEvaluating confusion matrix to update sampling weights...")
-                
-                # Ensure model is in eval mode and check for NaN before evaluation
-                model.eval()
-                if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
-                    print(f"\n❌ FATAL: Model has NaN/Inf BEFORE confusion evaluation at epoch {epoch+1}!")
-                    print(f"   Skipping confusion sampling for this epoch.\n")
-                    model.train()
-                else:
-                    sample_weights, class_error_rates = compute_confusion_weights(
-                        model, self.eval_train_loader, 
-                        np.array(self.data['train_labels']),
-                        self.num_classes, self.device,
-                        boost_factor=self.confusion_boost_factor,
-                        top_k=self.confusion_top_k
-                    )
-                    
-                    top_confused = np.argsort(class_error_rates)[-5:][::-1]
-                    print(f"Top 5 confused classes (error rates):")
-                    for idx in top_confused:
-                        if idx < len(self.data['class_names']):
-                            print(f"  {self.data['class_names'][idx]}: {class_error_rates[idx]:.3f}")
-                    
-                    from torch.utils.data import WeightedRandomSampler
-                    from data_utils import MixupCollate
-                    
-                    new_sampler = WeightedRandomSampler(
-                        weights=sample_weights,
-                        num_samples=len(sample_weights),
-                        replacement=True
-                    )
-                    
-                    train_collate_fn = MixupCollate(self.mixup_alpha) if self.mixup_alpha > 0 else None
-                    if self.use_sparse_patches:
-                        from data_utils import sparse_collate_fn
-                        train_collate_fn = sparse_collate_fn
-                    
-                    from torch.utils.data import DataLoader as TorchDataLoader
-                    from data_utils import SpectrogramDataset
-                    
-                    train_dataset = SpectrogramDataset(
-                        self.data['train_filenames'], self.data['train_labels'],
-                        self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-                        cropping_mode='random', noise_ratio=self.noise_ratio,
-                        spec_transform=config.DEFAULT_SPEC_TRANSFORM, width_downsizing=None, normalize=self.normalize,
-                        use_sparse_patches=self.use_sparse_patches,
-                        num_sparse_patches=self.num_sparse_patches
-                    )
-                    
-                    self.train_loader = TorchDataLoader(
-                        train_dataset, batch_size=self.batch_size,
-                        shuffle=False, sampler=new_sampler,
-                        num_workers=2, pin_memory=True,
-                        collate_fn=train_collate_fn
-                    )
-                    
-                    print(f"Updated training sampler with confusion-based weights\n")
-                    # Restore train mode
-                    model.train()
             
             # Collect model state for weight averaging (after epoch 5 when LR starts decaying)
             if epoch >= averaging_start_epoch:
@@ -1170,69 +1108,6 @@ class CNNTrainer:
                 return
 
             scheduler.step()
-            
-            if self.use_confusion_sampling and (epoch + 1) % self.confusion_eval_freq == 0:
-                print(f"\nEvaluating confusion matrix to update sampling weights...")
-                
-                # Ensure model is in eval mode and check for NaN before evaluation
-                model.eval()
-                if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
-                    print(f"\n❌ FATAL: Model has NaN/Inf BEFORE confusion evaluation at epoch {epoch+1}!")
-                    print(f"   Skipping confusion sampling for this epoch.\n")
-                else:
-                    sample_weights, class_error_rates = compute_confusion_weights(
-                        model, self.eval_train_loader,
-                        np.array(self.data['train_labels']),
-                        self.num_classes, self.device,
-                        boost_factor=self.confusion_boost_factor,
-                        top_k=self.confusion_top_k
-                    )
-                    
-                    # Check for NaN AFTER confusion evaluation
-                    if any(torch.isnan(p).any() or torch.isinf(p).any() for p in model.parameters()):
-                        print(f"\n❌ FATAL: Confusion evaluation CAUSED NaN/Inf in model weights!")
-                        print(f"   ABORTING TRAINING.\n")
-                        return
-                    
-                    top_confused = np.argsort(class_error_rates)[-5:][::-1]
-                    print(f"Top 5 confused classes (error rates):")
-                    for idx in top_confused:
-                        if idx < len(self.data['class_names']):
-                            print(f"  {self.data['class_names'][idx]}: {class_error_rates[idx]:.3f}")
-                    
-                    from torch.utils.data import WeightedRandomSampler
-                    from data_utils import MixupCollate
-                    
-                    new_sampler = WeightedRandomSampler(
-                        weights=sample_weights,
-                        num_samples=len(sample_weights),
-                        replacement=True
-                    )
-                    
-                    train_collate_fn = MixupCollate(self.mixup_alpha) if self.mixup_alpha > 0 else None
-                    
-                    from torch.utils.data import DataLoader as TorchDataLoader
-                    from data_utils import SpectrogramDataset
-                    
-                    train_dataset = SpectrogramDataset(
-                        self.data['train_filenames'], self.data['train_labels'],
-                        self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-                        cropping_mode='random', noise_ratio=self.noise_ratio,
-                        spec_transform=None, width_downsizing=None, normalize=self.normalize
-                    )
-                    
-                    num_workers = 4 if torch.cuda.is_available() else 2
-                    self.train_loader = TorchDataLoader(
-                        train_dataset, batch_size=self.batch_size,
-                        shuffle=False, sampler=new_sampler,
-                        num_workers=num_workers, pin_memory=True,
-                        collate_fn=train_collate_fn
-                    )
-                    
-                    print(f"Updated training sampler with confusion-based weights\n")
-                
-                # Always set model back to train mode
-                model.train()
             
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
