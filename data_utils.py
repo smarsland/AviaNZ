@@ -782,9 +782,21 @@ class MixupCollate:
             batch_size = data.size(0)
             index = torch.randperm(batch_size)
             
-            # Mix inputs and labels
-            mixed_data = lam * data + (1 - lam) * data[index]
-            mixed_labels = lam * labels + (1 - lam) * labels[index]
+            # Identify which samples are all-zero (noise samples)
+            # Don't mixup noise samples - they need to stay exactly zero
+            zero_mask = (labels.sum(dim=1) == 0)  # Shape: (batch_size,)
+            zero_mask_permuted = zero_mask[index]
+            
+            # Only mix if BOTH samples are non-zero (both have birds)
+            can_mix = ~zero_mask & ~zero_mask_permuted  # Shape: (batch_size,)
+            
+            # Mix inputs and labels only where allowed
+            mixed_data = data.clone()
+            mixed_labels = labels.clone()
+            
+            if can_mix.any():
+                mixed_data[can_mix] = lam * data[can_mix] + (1 - lam) * data[index][can_mix]
+                mixed_labels[can_mix] = lam * labels[can_mix] + (1 - lam) * labels[index][can_mix]
             
             return mixed_data, mixed_labels
         else:
