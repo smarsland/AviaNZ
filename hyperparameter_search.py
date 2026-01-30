@@ -148,13 +148,9 @@ Examples:
     parser.add_argument('--noise-folder', type=str, default=None)
     parser.add_argument('--freq-bins', type=int, default=config.DEFAULT_FREQ_BINS)
     parser.add_argument('--time-bins', type=int, default=config.DEFAULT_TIME_BINS)
-    parser.add_argument('--confusion-sampling', action='store_true')
-    parser.add_argument('--confusion-eval-freq', type=int, default=config.DEFAULT_CONFUSION_EVAL_FREQUENCY)
-    parser.add_argument('--confusion-boost', type=float, default=config.DEFAULT_CONFUSION_BOOST_FACTOR)
-    parser.add_argument('--confusion-top-k', type=int, default=config.DEFAULT_CONFUSION_TOP_K)
-    parser.add_argument('--focal-loss', action='store_true')
-    parser.add_argument('--multiscale', action='store_true')
-    parser.add_argument('--class-weights', action='store_true')
+    # Note: The following options are fixed to False based on Optuna search results:
+    # confusion_sampling, focal_loss, multiscale, class_weights are all suboptimal
+    # and are hardcoded to False in the objective function
     parser.add_argument('--freeze-layers', type=int, default=None)
     parser.add_argument('--reconstruct', action='store_true')
     parser.add_argument('--recon-weight', type=float, default=0.1)
@@ -180,13 +176,6 @@ Examples:
         'noise_folder': args.noise_folder,
         'freq_bins': args.freq_bins,
         'time_bins': args.time_bins,
-        'confusion_sampling': args.confusion_sampling,
-        'confusion_eval_freq': args.confusion_eval_freq,
-        'confusion_boost': args.confusion_boost,
-        'confusion_top_k': args.confusion_top_k,
-        'focal_loss': args.focal_loss,
-        'multiscale': args.multiscale,
-        'class_weights': args.class_weights,
         'freeze_layers': args.freeze_layers,
         'reconstruct': args.reconstruct,
         'recon_weight': args.recon_weight,

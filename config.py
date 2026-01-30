@@ -48,6 +48,11 @@ DEFAULT_VALIDATION_SHARE = 0.2
 DEFAULT_NOISE_RATIO = 0.1  # Optuna optimal: 0.06-0.14 (was 0.3 - too high!)
 DEFAULT_NOISE_SAMPLES = 1000
 
+# Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)
+DEFAULT_CONFUSION_EVAL_FREQUENCY = 5
+DEFAULT_CONFUSION_BOOST_FACTOR = 1.5
+DEFAULT_CONFUSION_TOP_K = 10
+
 # File processing limits (in seconds)
 MAX_FILE_DURATION_SECONDS = 10000
 WARNING_FILE_DURATION_SECONDS = 60  # 1 minute - warn if exceeded
