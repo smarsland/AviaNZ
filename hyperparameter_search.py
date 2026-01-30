@@ -38,8 +38,6 @@ def objective(trial, data_folder, output_base, fixed_args):
         noise_ratio = fixed_args.get('noise', config.DEFAULT_NOISE_RATIO)
         bce_smoothing = 0.0
     
-    num_sparse_patches = fixed_args.get('num_sparse_patches', 50)
-    
     trial_output = os.path.join(output_base, f"trial_{trial.number}")
     os.makedirs(trial_output, exist_ok=True)
     
@@ -64,8 +62,8 @@ def objective(trial, data_folder, output_base, fixed_args):
             freeze_layers=fixed_args.get('freeze_layers'),
             use_reconstruction=fixed_args.get('reconstruct', False),
             recon_weight=fixed_args.get('recon_weight', 0.1),
-            use_sparse_patches=(num_sparse_patches > 0),
-            num_sparse_patches=num_sparse_patches,
+            use_sparse_patches=False,
+            num_sparse_patches=0,
             dropout=dropout,
             bce_smoothing=bce_smoothing,
             trial=trial,
@@ -143,7 +141,7 @@ Examples:
     parser.add_argument('--freeze-layers', type=int, default=None)
     parser.add_argument('--reconstruct', action='store_true')
     parser.add_argument('--recon-weight', type=float, default=0.1)
-    parser.add_argument('--num-sparse-patches', type=int, default=20, help="Number of sparse patches (fixed, not searched)")
+    parser.add_argument('--num-sparse-patches', type=int, default=0, help="Number of sparse patches (disabled - set to 0)")
     parser.add_argument('--seed', type=int, default=None, help="Random seed for TPE sampler (use different seeds on each machine to avoid duplicate trials)")
     
     args = parser.parse_args()
