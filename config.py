@@ -33,19 +33,19 @@ AST_STD = 4.5689974
 # Training defaults
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
-DEFAULT_LEARNING_RATE = 3.3e-5  # Optuna optimal: 2.9e-5 to 3.4e-5
+DEFAULT_LEARNING_RATE = 3.073e-5  # Best trial #18: 3.073038e-05
 DEFAULT_CHANNELS = 1
-DEFAULT_DROPOUT = 0.15  # Optuna optimal: 0.15-0.16 (was 0.2)
-DEFAULT_MIXUP_ALPHA = 0.5  # Optuna optimal: 0.33-0.62
-DEFAULT_WEIGHT_DECAY = 1e-4  # Optuna optimal: very low values
-DEFAULT_BCE_SMOOTHING = 0.0003  # Optuna optimal: 0.0001-0.001
+DEFAULT_DROPOUT = 0.16  # Best trial #18: 0.15991825 (rounded to 0.16)
+DEFAULT_MIXUP_ALPHA = 0.64  # Best trial #18: 0.6385832 (rounded to 0.64)
+DEFAULT_WEIGHT_DECAY = 1.41e-5  # Best trial #18: 1.4148e-05 (keep low!)
+DEFAULT_BCE_SMOOTHING = 0.00067  # Best trial #18: 0.00067044
 
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.1  # Optuna optimal: 0.06-0.14 (was 0.3 - too high!)
+DEFAULT_NOISE_RATIO = 0.109  # Best trial #18: 0.10902420
 DEFAULT_NOISE_SAMPLES = 1000
 
 # Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)
