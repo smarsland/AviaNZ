@@ -142,10 +142,17 @@ class SmoothBCEWithLogitsLoss(nn.Module):
 
     def forward(self, inputs, targets):
         if self.epsilon > 0:
-            targets = targets * (1 - self.epsilon) + 0.5 * self.epsilon
-        return F.binary_cross_entropy_with_logits(
-            inputs, targets, pos_weight=self.pos_weight, reduction=self.reduction
+            targets_smooth = targets * (1 - self.epsilon) + 0.5 * self.epsilon
+        else:
+            targets_smooth = targets
+        loss = F.binary_cross_entropy_with_logits(
+            inputs, targets_smooth, pos_weight=self.pos_weight, reduction='none'
         )
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        return loss
 
 
 class ASTTrainer:
@@ -230,7 +237,12 @@ class ASTTrainer:
         
         pos_weight = neg_counts / (pos_counts + 1e-5)
         
+        pos_weight = np.clip(pos_weight, 1.0, 20.0)
+        
         pos_weight = torch.from_numpy(pos_weight).float().to(self.device)
+        
+        print(f"  Class weights - min: {pos_weight.min().item():.2f}, max: {pos_weight.max().item():.2f}, mean: {pos_weight.mean().item():.2f}")
+        print(f"  Rare classes (weight=20): {(pos_weight == 20.0).sum().item()}/{len(pos_weight)}")
         
         return pos_weight
     
