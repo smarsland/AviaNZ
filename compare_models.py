@@ -161,8 +161,25 @@ def load_bird_naming_map(csv_path):
         
         name_to_common[common_name] = common_name
     
+    # Hardcoded fixes for common mismatches
     name_to_common['Ruru'] = 'Morepork'
     name_to_common['Bellbird/Tui'] = 'Bellbird'
+    name_to_common['Tomtit (Nth Is)'] = 'Tomtit'
+    name_to_common['Fantail (Nth Is)'] = 'Fantail'
+    name_to_common['Fantail (spp)'] = 'Fantail'
+    name_to_common['Kaka (Nth Is)'] = 'Kaka'
+    name_to_common['Kaka (spp)'] = 'Kaka'
+    name_to_common['Tui (spp)'] = 'Tui'
+    name_to_common['Robin (Nth Is)'] = 'New Zealand Robin'
+    name_to_common['Pigeon (NZ Kereru Kukupa)'] = 'Kereru'
+    name_to_common['Warbler (Grey)'] = 'Grey Warbler'
+    name_to_common['Magpie (Australian)'] = 'Australian Magpie'
+    name_to_common['Myna (Indian)'] = 'Common Myna'
+    name_to_common['Gull (Southern Black-backed)'] = 'Southern Black-backed Gull'
+    name_to_common['Plover (Spur-winged)'] = 'Spur-winged Plover'
+    name_to_common['Rosella (Eastern)'] = 'Eastern Rosella'
+    name_to_common['Cockatoo (Sulphur-crested)'] = 'Sulphur-crested Cockatoo'
+    name_to_common['Sparrow (House)'] = 'House Sparrow'
     
     return name_to_common
 
@@ -193,20 +210,34 @@ def align_predictions_with_gt(predictions, ground_truth, name_mapping):
     """Convert all predictions and ground truth to CommonName format"""
     aligned_predictions = {}
     unmapped_species = set()
+    mapped_count = 0
+    total_pred_species = set()
     
     for row_id, pred_species in predictions.items():
         # Map prediction species to CommonName
         common_species = set()
         for species in pred_species:
+            total_pred_species.add(species)
             common = normalize_to_common_name(species, name_mapping)
             if common:
                 common_species.add(common)
+                mapped_count += 1
             else:
                 unmapped_species.add(species)
         aligned_predictions[row_id] = common_species
     
     if unmapped_species:
-        print(f"  Warning: {len(unmapped_species)} unmapped species: {sorted(unmapped_species)[:10]}")
+        # Filter out known non-bird species that are intentionally excluded
+        real_unmapped = unmapped_species - {'Spy Bird', 'Tree Weta'}
+        if real_unmapped:
+            print(f"  ERROR: {len(real_unmapped)} unmapped prediction species (not in DOC_bird_naming_map.csv):")
+            for sp in sorted(real_unmapped)[:20]:
+                print(f"    - {sp}")
+            if len(real_unmapped) > 20:
+                print(f"    ... and {len(real_unmapped) - 20} more")
+            raise ValueError(f"Cannot evaluate model with {len(real_unmapped)} unmapped species!")
+        else:
+            print(f"  Info: Ignoring {len(unmapped_species)} non-bird species: {sorted(unmapped_species)}")
     
     return aligned_predictions
 
@@ -624,11 +655,6 @@ def main():
     
     ground_truth, gt_categories = load_ground_truth(labels_path)
     
-    val_ids = None
-    if args.optimize_threshold:
-        val_ids = split_validation_set(ground_truth, val_size=args.val_size)
-        print(f"\nValidation set: {len(val_ids)} samples ({len(val_ids)/len(ground_truth)*100:.1f}%)")
-    
     pred_files = discover_prediction_files(results_folder)
     
     if not pred_files:
@@ -641,6 +667,7 @@ def main():
         print(f"  - {pf}")
     
     all_models = {}
+    val_ids = None  # Will be set after filtering
     
     for pred_file in pred_files:
         model_name = get_model_name_from_filename(pred_file)
@@ -674,6 +701,11 @@ def main():
                 ground_truth_normalized = {k: v for k, v in ground_truth_normalized.items() if len(v) > 0}
                 filtered_count = original_count - len(ground_truth_normalized)
                 print(f"  Filtered out {filtered_count} empty samples ({filtered_count/original_count*100:.1f}%)")
+            
+            # Split validation set AFTER filtering for birds-only
+            if args.optimize_threshold:
+                val_ids = split_validation_set(ground_truth_normalized, val_size=args.val_size)
+                print(f"\nValidation set: {len(val_ids)} samples ({len(val_ids)/len(ground_truth_normalized)*100:.1f}%)")
             
             all_species_in_gt = set()
             for species_set in ground_truth_normalized.values():

@@ -131,13 +131,17 @@ Examples:
         )
     elif args.model == 'cnn':
         print(f"Training Convolutional Neural Network (CNN) model...")
+        # Use CNN-specific LR if user didn't override
+        cnn_lr = args.lr if args.lr != config.DEFAULT_LEARNING_RATE else config.DEFAULT_CNN_LEARNING_RATE
+        if cnn_lr != args.lr:
+            print(f"Using CNN-optimized learning rate: {cnn_lr:.1e} (override with --lr if needed)")
         trainer = CNNTrainer(
             data_folder=args.data_folder,
             output_folder=args.output_folder,
             max_epochs=args.epochs,
             batch_size=args.batch_size,
             multilabel=args.multilabel,
-            learning_rate=args.lr,
+            learning_rate=cnn_lr,
             mixup_alpha=args.mixup,
             pretrained_path=args.pretrained,
             weight_decay=args.weight_decay,

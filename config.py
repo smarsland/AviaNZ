@@ -33,19 +33,20 @@ AST_STD = 4.5689974
 # Training defaults
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
-DEFAULT_LEARNING_RATE = 3.073e-5  # Best trial #18: 3.073038e-05
+DEFAULT_LEARNING_RATE = 3.073e-5  # Best trial #18: 3.073038e-05 (for AST)
+DEFAULT_CNN_LEARNING_RATE = 1e-3  # CNN models need higher learning rates
 DEFAULT_CHANNELS = 1
-DEFAULT_DROPOUT = 0.16  # Best trial #18: 0.15991825 (rounded to 0.16)
-DEFAULT_MIXUP_ALPHA = 0.64  # Best trial #18: 0.6385832 (rounded to 0.64)
-DEFAULT_WEIGHT_DECAY = 1.41e-5  # Best trial #18: 1.4148e-05 (keep low!)
-DEFAULT_BCE_SMOOTHING = 0.00067  # Best trial #18: 0.00067044
+DEFAULT_DROPOUT = 0.4  # Increased from 0.16 for better generalization across datasets
+DEFAULT_MIXUP_ALPHA = 0.8  # Increased from 0.64 for more aggressive data augmentation
+DEFAULT_WEIGHT_DECAY = 1e-4  # Increased from 1.41e-5 for stronger L2 regularization
+DEFAULT_BCE_SMOOTHING = 0.05  # Increased from 0.00067 to reduce overconfidence
 
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.109  # Best trial #18: 0.10902420
+DEFAULT_NOISE_RATIO = 0.3  # Increased from 0.109 for more robust feature learning
 DEFAULT_NOISE_SAMPLES = 1000
 
 # Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)

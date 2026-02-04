@@ -286,9 +286,20 @@ class SpectrogramDataset(Dataset):
     def __getitem__(self, idx):
         # Load spectrogram data
         file_path = self.filenames[idx]
-        data = np.load(file_path)
+        try:
+            data = np.load(file_path)
+        except Exception as e:
+            raise ValueError(f"Failed to load spectrogram file {file_path}: {e}")
+        
+        # Robust NaN/Inf checking
         if not np.isfinite(data).all():
-            raise ValueError(f"NaN/Inf values in spectrogram file: {file_path}")
+            nan_count = np.isnan(data).sum()
+            inf_count = np.isinf(data).sum()
+            raise ValueError(f"Invalid values in {file_path}: {nan_count} NaNs, {inf_count} Infs")
+        
+        # Check for extreme values that could cause numerical issues
+        if np.abs(data).max() > 1e10:
+            print(f"⚠️  WARNING: Extremely large values in {file_path} (max: {np.abs(data).max():.2e})")
         
         # Ensure data is 2D (H, W)
         while data.ndim > 2:

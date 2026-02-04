@@ -956,14 +956,28 @@ class CNNTrainer:
             for batch_idx, (data, target) in enumerate(self.train_loader):
                 data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                 
+                # Validate input data
+                if not torch.isfinite(data).all():
+                    print(f"\n⚠️  WARNING: NaN/Inf in input data at batch {batch_idx}, skipping...")
+                    continue
+                if not torch.isfinite(target).all():
+                    print(f"\n⚠️  WARNING: NaN/Inf in target data at batch {batch_idx}, skipping...")
+                    continue
+                
                 optimizer.zero_grad()
                 
                 with torch.amp.autocast('cuda', enabled=self.use_amp):
                     output = model(data)
                     
+                    # Check model output for NaN/Inf
+                    if not torch.isfinite(output).all():
+                        print(f"\n❌ CRITICAL: NaN/Inf in model output at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   This indicates model instability. Stopping epoch early...")
+                        break
+                    
                     if self.multilabel:
                         # Clamp logits to prevent numerical overflow in BCE loss
-                        output = torch.clamp(output, min=-80.0, max=80.0)
+                        output = torch.clamp(output, min=-50.0, max=50.0)
                         loss = criterion(output, target)
                     else:
                         # Detect soft (mixup) labels
@@ -979,7 +993,7 @@ class CNNTrainer:
                 # Check for NaN loss BEFORE backward pass
                 if torch.isnan(loss) or torch.isinf(loss):
                     print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
-                    print(f"   Model weights corrupted. Stopping epoch early...")
+                    print(f"   Loss computation failed. Stopping epoch early...")
                     break
                 
                 if self.use_amp:
@@ -1002,7 +1016,6 @@ class CNNTrainer:
                         print(f"   Stopping epoch early...")
                         optimizer.zero_grad()  # Clear bad gradients
                         break
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
                 
                 train_loss += loss.item()

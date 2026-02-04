@@ -139,6 +139,20 @@ class CNNModel(nn.Module):
         
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=1)
+        
+        # Initialize weights with proper scaling to prevent gradient explosion
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        """Initialize weights using He initialization for ReLU networks."""
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.constant_(m.bias, 0)
     
     def get_flatten_size(self, height, width):
         x = torch.zeros(1, 1, height, width)
