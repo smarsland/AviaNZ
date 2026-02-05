@@ -45,9 +45,9 @@ Examples:
                        help=f"Batch size (default: {config.DEFAULT_BATCH_SIZE})")
     parser.add_argument('--multilabel', action='store_true', help="Use multi-label classification (classification mode only)")
     parser.add_argument('--lr', type=float, default=config.DEFAULT_LEARNING_RATE, 
-                       help=f"Learning rate (default: {config.DEFAULT_LEARNING_RATE:.1e})")
+                       help=f"Learning rate (default: {config.DEFAULT_LEARNING_RATE:.1e}). Increased from AudioSet fine-tuning rate for bird dataset convergence")
     parser.add_argument('--mixup', type=float, default=config.DEFAULT_MIXUP_ALPHA,
-                       help=f"Mixup alpha parameter (0 = no mixup, default: {config.DEFAULT_MIXUP_ALPHA}, classification mode only)")
+                       help=f"Mixup alpha parameter (0 = no mixup, default: {config.DEFAULT_MIXUP_ALPHA}). Applied at spectrogram level for efficiency, classification mode only)")
     parser.add_argument('--pretrained', type=str, default=None,
                        help="Path to pretrained model weights (.pt file) for transfer learning")
     parser.add_argument('--weight-decay', type=float, default=config.DEFAULT_WEIGHT_DECAY,
@@ -59,7 +59,7 @@ Examples:
     parser.add_argument('--freq-bins', type=int, default=config.DEFAULT_FREQ_BINS,
                        help=f"Number of frequency bins in spectrograms (default: {config.DEFAULT_FREQ_BINS})")
     parser.add_argument('--time-bins', type=int, default=config.DEFAULT_TIME_BINS,
-                       help=f"Number of time bins in spectrograms (default: {config.DEFAULT_TIME_BINS})")
+                       help=f"Number of time bins in spectrograms (default: {config.DEFAULT_TIME_BINS} = ~10 seconds at 10ms hop, matches AudioSet pretraining)")
     parser.add_argument('--focal-loss', action='store_true',
                        help="Use Focal Loss instead of standard BCE/CrossEntropy loss (recommended for highly imbalanced datasets, classification mode only). Focal Loss down-weights easy examples to focus on hard negatives.")
     parser.add_argument('--multiscale', action='store_true',

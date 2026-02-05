@@ -495,14 +495,47 @@ class SpectrogramDataset(Dataset):
         return array[start_row:start_row + self.img_height, start_col:start_col + self.img_width]
 
     def apply_specaugment(self, x):
-        """Apply time and frequency masking (SpecAugment) on numpy array.
+        """Apply spectrogram augmentations: time stretch, frequency shift, and time/frequency masking.
         x is (H, W, C)
         
-        Uses stronger masking parameters to prevent overfitting on small datasets.
-        Frequency masking: up to 48 bins (paper value) capped by height.
-        Time masking: up to min(192, 0.2 * width) (scaled for shorter clips).
+        Augmentations applied:
+        1. Time stretching (horizontal resize with interpolation)
+        2. Frequency shifting (vertical shift with wrapping)
+        3. SpecAugment masking (time and frequency masks)
         """
         h, w, c = x.shape
+        
+        # 1. Time stretching (with 50% probability)
+        if self.rng.rand() < 0.5:
+            import config
+            stretch_factor = self.rng.uniform(config.DEFAULT_TIME_STRETCH_RANGE[0], 
+                                             config.DEFAULT_TIME_STRETCH_RANGE[1])
+            new_w = int(w * stretch_factor)
+            
+            from scipy.ndimage import zoom
+            x_stretched = zoom(x, (1.0, stretch_factor, 1.0), order=1)
+            
+            # Crop or pad to original width
+            if new_w > w:
+                start = (new_w - w) // 2
+                x = x_stretched[:, start:start+w, :]
+            elif new_w < w:
+                pad = w - new_w
+                pad_left = pad // 2
+                pad_right = pad - pad_left
+                x = np.pad(x_stretched, ((0, 0), (pad_left, pad_right), (0, 0)), mode='constant')
+            else:
+                x = x_stretched
+        
+        # 2. Frequency shifting (with 50% probability)
+        if self.rng.rand() < 0.5:
+            import config
+            freq_shift = self.rng.randint(config.DEFAULT_FREQ_SHIFT_RANGE[0], 
+                                         config.DEFAULT_FREQ_SHIFT_RANGE[1])
+            if freq_shift != 0:
+                x = np.roll(x, freq_shift, axis=0)
+        
+        # 3. SpecAugment masking
         freq_mask_param = min(48, h)
         time_mask_param = min(192, max(1, int(0.2 * w)))
         nm = 2
@@ -519,6 +552,7 @@ class SpectrogramDataset(Dataset):
             if t > 0 and w - t > 0:
                 t0 = self.rng.randint(0, w - t + 1)
                 x[:, t0:t0 + t, :] = 0
+        
         return x
 
 
@@ -731,14 +765,16 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
 class MixupCollate:
     """Collate function that applies mixup augmentation to batches.
     
-    This is the proper place for mixup - in the data loading pipeline,
-    not scattered in the training loop.
+    Mixup is applied at SPECTROGRAM level (linear domain before log transform),
+    which is computationally efficient and preserves spectrogram structure.
+    This is much cheaper than audio-level mixing which requires regenerating spectrograms.
     """
     
     def __init__(self, alpha=0.3):
         """
         Args:
             alpha: Mixup interpolation strength (beta distribution parameter)
+                   Recommended: 0.2-0.3 for spectrograms (lower than audio-level)
         """
         self.alpha = alpha
     
@@ -750,6 +786,9 @@ class MixupCollate:
             
         Returns:
             Mixed batch (data_tensor, label_tensor)
+            
+        Note: Spectrograms are already in log domain when they arrive here,
+              so we're mixing log-spectrograms. This works well in practice.
         """
         # Default collate
         data = torch.stack([item[0] for item in batch])

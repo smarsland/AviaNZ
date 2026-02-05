@@ -9,7 +9,7 @@ DEFAULT_SAMPLE_RATE = 32000
 DEFAULT_WINDOW_SECONDS = 0.025      # 25ms window
 DEFAULT_HOP_SECONDS = 0.010         # 10ms hop
 DEFAULT_FREQ_BINS = 224             # Final number of frequency bins (height)
-DEFAULT_TIME_BINS = 512            # Number of time bins (width), AudioSet uses 1024.
+DEFAULT_TIME_BINS = 1024            # Number of time bins (width) - 1024 bins = 10.24 seconds at 10ms hop (matches AudioSet pretraining)
 
 SPECTROGRAM_PARAMS = {
     'windowType': 'Hann',
@@ -33,21 +33,26 @@ AST_STD = 4.5689974
 # Training defaults
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
-DEFAULT_LEARNING_RATE = 3.073e-5  # Best trial #18: 3.073038e-05 (for AST)
+DEFAULT_LEARNING_RATE = 1e-4  # Increased from 3e-5 for better convergence on bird data (AudioSet fine-tuning used lower LR)
 DEFAULT_CNN_LEARNING_RATE = 1e-3  # CNN models need higher learning rates
 DEFAULT_CHANNELS = 1
-DEFAULT_DROPOUT = 0.20  # Slight increase from 0.16 (trial #18)
-DEFAULT_MIXUP_ALPHA = 0.65  # Minimal increase from 0.64 (trial #18)
-DEFAULT_WEIGHT_DECAY = 2e-5  # Slight increase from 1.41e-5 (trial #18)
-DEFAULT_BCE_SMOOTHING = 0.001  # Minimal increase from 0.00067 (trial #18)
+DEFAULT_DROPOUT = 0.30  # Increased for better regularization with longer clips
+DEFAULT_MIXUP_ALPHA = 0.25  # Reduced to match best practices (Kaytoo uses 0.25, spectrogram-level mixing)
+DEFAULT_WEIGHT_DECAY = 1e-5  # Reduced slightly for AdamW
+DEFAULT_BCE_SMOOTHING = 0.001  # Minimal smoothing to prevent overconfidence
 
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.15  # Slight increase from 0.109 (trial #18)
+DEFAULT_NOISE_RATIO = 0.15  # Spectrogram-level mixing (not audio-level)
 DEFAULT_NOISE_SAMPLES = 1000
+
+# Spectrogram augmentation (applied during training)
+DEFAULT_TIME_STRETCH_RANGE = (0.9, 1.1)  # ±10% time stretching
+DEFAULT_PITCH_SHIFT_RANGE = (-2, 2)  # ±2 semitones pitch shifting
+DEFAULT_FREQ_SHIFT_RANGE = (-10, 10)  # ±10 bins frequency shifting
 
 # Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)
 DEFAULT_CONFUSION_EVAL_FREQUENCY = 5

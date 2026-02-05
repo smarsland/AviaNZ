@@ -284,15 +284,16 @@ class ASTTrainer:
             total_params = sum(p.numel() for p in model.parameters())
             print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
 
-        # Optimizer and LR schedule (always use lambda - best from Optuna)
-        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        # Optimizer and LR schedule
+        # Use AdamW (Adam with decoupled weight decay) for better regularization
+        optimizer = optim.AdamW(model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         
         def lr_lambda(epoch):
             if epoch < 5:
                 return 1.0
             return 0.85 ** (epoch - 5)
         scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
-        print(f"Using Lambda LR scheduler (optimal from Optuna search)")
+        print(f"Using AdamW optimizer with Lambda LR scheduler")
         
         # Use logits from the model and appropriate losses
         # Stronger label smoothing for better generalization
