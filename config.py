@@ -36,17 +36,17 @@ DEFAULT_EPOCHS = 50
 DEFAULT_LEARNING_RATE = 3.073e-5  # Best trial #18: 3.073038e-05 (for AST)
 DEFAULT_CNN_LEARNING_RATE = 1e-3  # CNN models need higher learning rates
 DEFAULT_CHANNELS = 1
-DEFAULT_DROPOUT = 0.25  # Moderate increase for better generalization
-DEFAULT_MIXUP_ALPHA = 0.7  # Moderate data augmentation
-DEFAULT_WEIGHT_DECAY = 5e-5  # Moderate L2 regularization
-DEFAULT_BCE_SMOOTHING = 0.01  # Moderate label smoothing
+DEFAULT_DROPOUT = 0.20  # Slight increase from 0.16 (trial #18)
+DEFAULT_MIXUP_ALPHA = 0.65  # Minimal increase from 0.64 (trial #18)
+DEFAULT_WEIGHT_DECAY = 2e-5  # Slight increase from 1.41e-5 (trial #18)
+DEFAULT_BCE_SMOOTHING = 0.001  # Minimal increase from 0.00067 (trial #18)
 
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.2  # Moderate noise mixing for robustness
+DEFAULT_NOISE_RATIO = 0.15  # Slight increase from 0.109 (trial #18)
 DEFAULT_NOISE_SAMPLES = 1000
 
 # Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)
