@@ -33,7 +33,7 @@ AST_STD = 4.5689974
 # Training defaults
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
-DEFAULT_LEARNING_RATE = 1e-4  # Increased from 3e-5 for better convergence on bird data (AudioSet fine-tuning used lower LR)
+DEFAULT_LEARNING_RATE = 5e-5  # Conservative increase from 3e-5 - higher values may cause divergence on some datasets
 DEFAULT_CNN_LEARNING_RATE = 1e-3  # CNN models need higher learning rates
 DEFAULT_CHANNELS = 1
 DEFAULT_DROPOUT = 0.30  # Increased for better regularization with longer clips

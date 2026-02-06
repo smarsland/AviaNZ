@@ -545,6 +545,16 @@ class ASTTrainer:
             train_loss /= max(1, len(self.train_loader))  # Avoid divide by zero if epoch stopped early
             val_loss /= len(self.val_loader)
             
+            # Divergence detection
+            if initial_loss is None:
+                initial_loss = train_loss
+            elif train_loss > initial_loss * divergence_threshold:
+                print(f"\n❌ TRAINING DIVERGED: Loss increased from {initial_loss:.4f} to {train_loss:.4f}")
+                print(f"   This usually means the learning rate is too high.")
+                print(f"   Try reducing --lr (current: {self.learning_rate:.2e})")
+                print(f"   Recommended: --lr {self.learning_rate/2:.2e} or --lr {self.learning_rate/5:.2e}")
+                return
+            
             if self.multilabel:
                 # Compute macro F1 for multi-label (handle empty lists if epoch stopped early)
                 if len(all_train_preds) > 0:
