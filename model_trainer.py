@@ -331,6 +331,10 @@ class ASTTrainer:
         best_val_acc = 0.0
         best_epoch = -1
         
+        # Divergence detection
+        initial_loss = None
+        divergence_threshold = 10.0  # Stop if loss > initial_loss * threshold
+        
         # Weight averaging: collect model states from later epochs
         model_states_for_averaging = []
         averaging_start_epoch = max(0, self.max_epochs - 20)  # Average last 20 epochs
