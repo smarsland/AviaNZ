@@ -53,6 +53,7 @@ DEFAULT_NOISE_SAMPLES = 1000
 DEFAULT_TIME_STRETCH_RANGE = (0.9, 1.1)  # ±10% time stretching
 DEFAULT_PITCH_SHIFT_RANGE = (-2, 2)  # ±2 semitones pitch shifting
 DEFAULT_FREQ_SHIFT_RANGE = (-10, 10)  # ±10 bins frequency shifting
+DEFAULT_TEMPORAL_ROLL = True  # Enable temporal rolling augmentation (randomizes start position in tiled/repeated signals)
 
 # Confusion sampling defaults (deprecated - confusion_sampling=False is optimal)
 DEFAULT_CONFUSION_EVAL_FREQUENCY = 5

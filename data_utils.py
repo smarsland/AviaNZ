@@ -220,7 +220,7 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1, 
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
-                 use_sparse_patches=False, num_sparse_patches=20):
+                 use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True):
         """
         Initialize SpectrogramDataset.
         
@@ -239,6 +239,10 @@ class SpectrogramDataset(Dataset):
             normalize: Whether to apply background normalization
             use_sparse_patches: If True, only extract patches with signal (sparse attention)
             num_sparse_patches: Number of patches to extract in sparse mode (K)
+            use_temporal_roll: If True, randomly roll start position in tiled/repeated signals (training only)
+        
+        Note: For time axis, uses TILING (repeating the signal) instead of zero-padding
+        to avoid train-test mismatch and artificial silence patterns.
         """
         self.filenames = filenames
         self.labels = torch.FloatTensor(labels)
@@ -255,6 +259,7 @@ class SpectrogramDataset(Dataset):
         self.normalize = normalize
         self.use_sparse_patches = use_sparse_patches
         self.num_sparse_patches = num_sparse_patches
+        self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.rng = np.random.RandomState(21390)
         
         # Calculate final dimensions after downsampling
@@ -273,6 +278,9 @@ class SpectrogramDataset(Dataset):
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:
             print(f"Background normalization: enabled")
+        if self.use_temporal_roll:
+            print(f"Temporal rolling: enabled (randomizes start position in repeated signals)")
+        print(f"Time-axis padding: TILING (repeats signal instead of zero-padding to avoid train-test mismatch)")
         if use_sparse_patches:
             print(f"⚡ Sparse patch mode: extracting top {num_sparse_patches} patches by signal density")
             print(f"   Standard mode would use {total_patches} patches, sparse uses {num_sparse_patches} ({100*num_sparse_patches/total_patches:.1f}%)")
@@ -412,29 +420,47 @@ class SpectrogramDataset(Dataset):
                 return sg
 
     def apply_padding_and_add_channels(self, array, is_noise=False):
-        """Apply padding and ensure correct number of channels. For noise, tile horizontally but pad vertically."""
+        """Apply padding and ensure correct number of channels.
+        
+        IMPORTANT: Uses tiling/repetition instead of zero-padding for time axis to avoid
+        train-test mismatch. Zero-padding creates artificial silence patterns that:
+        - Model learns during training ("bird call + zeros = bird present")
+        - Don't appear during inference (5-sec test chunks vs 10-sec training windows)
+        - Especially problematic for short-duration bird calls
+        
+        Instead, we tile/repeat the signal to fill the target duration, ensuring:
+        - No artificial silence patterns
+        - Better train-test consistency
+        - Model focuses on actual signal content, not padding artifacts
+        
+        For frequency axis: zero-padding is appropriate (spectrograms may have different freq ranges).
+        """
         if len(array.shape) == 2:
             array = np.expand_dims(array, axis=-1)
 
         h, w, c = array.shape
         
-        if is_noise:
-            # For noise files, zero-pad height (frequencies) but tile width (time)
-            if h < self.img_height:
-                pad_h = self.img_height - h
-                array = np.concatenate([array, np.zeros((pad_h, w, c))], axis=0)
-            if w < self.img_width:
-                tiles_w = int(np.ceil(self.img_width / w))
-                array = np.tile(array, (1, tiles_w, 1))
-        else:
-            # For bird spectrograms, use zero-padding as before
-            if h < self.img_height:
-                pad_h = self.img_height - h
-                array = np.concatenate([array, np.zeros((pad_h, w, c))], axis=0)
-            if w < self.img_width:
-                pad_w = self.img_width - w
-                array = np.concatenate([array, np.zeros((array.shape[0], pad_w, c))], axis=1)
+        # Frequency axis (height): zero-pad if needed (different recordings may have different freq ranges)
+        if h < self.img_height:
+            pad_h = self.img_height - h
+            array = np.concatenate([array, np.zeros((pad_h, w, c))], axis=0)
+        
+        # Time axis (width): TILE/REPEAT instead of zero-padding
+        # This avoids train-test mismatch and artificial silence patterns
+        if w < self.img_width:
+            # Calculate how many tiles we need
+            tiles_w = int(np.ceil(self.img_width / w))
+            array = np.tile(array, (1, tiles_w, 1))
+            
+            # Apply temporal rolling if enabled (training only)
+            # This randomizes the start position within the repeated signal
+            if self.use_temporal_roll:
+                # Roll by a random amount up to the original signal width
+                # This way different parts of the repeated pattern appear at different positions
+                roll_amount = self.rng.randint(0, w)
+                array = np.roll(array, roll_amount, axis=1)
 
+        # Channel axis: pad with zeros if needed
         if c < self.channels:
             pad_c = self.channels - c
             array = np.concatenate([array, np.zeros((*array.shape[:2], pad_c))], axis=-1)
@@ -605,7 +631,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None, 
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False,
-                       use_sparse_patches=False, num_sparse_patches=20):
+                       use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -625,6 +651,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         normalize: If True, apply background normalization to spectrograms
         use_sparse_patches: If True, only extract patches with signal (sparse attention)
         num_sparse_patches: Number of patches to extract in sparse mode (K)
+        use_temporal_roll: If True, randomly roll start position in tiled/repeated signals (training only)
     
     Returns:
         tuple: (train_loader, val_loader)
@@ -646,7 +673,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         width_downsizing=width_downsizing,
         normalize=normalize,
         use_sparse_patches=use_sparse_patches,
-        num_sparse_patches=num_sparse_patches
+        num_sparse_patches=num_sparse_patches,
+        use_temporal_roll=use_temporal_roll
     )
     
     val_dataset = SpectrogramDataset(
@@ -659,7 +687,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         width_downsizing=width_downsizing,
         normalize=normalize,
         use_sparse_patches=use_sparse_patches,
-        num_sparse_patches=num_sparse_patches
+        num_sparse_patches=num_sparse_patches,
+        use_temporal_roll=False  # Never roll validation data
     )
     
     # Class balancing setup

@@ -166,7 +166,7 @@ class ASTTrainer:
                  use_multiscale=False, use_class_weights=False, freeze_layers=None,
                  use_reconstruction=False, recon_weight=0.1,
                  use_sparse_patches=False, num_sparse_patches=20, dropout=None,
-                 bce_smoothing=None, trial=None, use_amp=True):
+                 bce_smoothing=None, use_temporal_roll=None, trial=None, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -189,6 +189,7 @@ class ASTTrainer:
         self.num_sparse_patches = num_sparse_patches
         self.dropout = dropout if dropout is not None else config.DEFAULT_DROPOUT
         self.bce_smoothing = bce_smoothing if bce_smoothing is not None else config.DEFAULT_BCE_SMOOTHING
+        self.use_temporal_roll = use_temporal_roll if use_temporal_roll is not None else config.DEFAULT_TEMPORAL_ROLL
         self.trial = trial
         self.use_amp = use_amp and torch.cuda.is_available()
         
@@ -220,7 +221,8 @@ class ASTTrainer:
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
             num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
             use_class_balancing=False, normalize=False,  # Optuna: both underperform
-            use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches
+            use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
+            use_temporal_roll=self.use_temporal_roll
         )
         
         os.makedirs(output_folder, exist_ok=True)
@@ -855,7 +857,7 @@ class CNNTrainer:
                  multilabel, learning_rate, mixup_alpha=None, 
                  pretrained_path=None, weight_decay=None,
                  noise_ratio=None, noise_folder=None, freq_bins=None, time_bins=None,
-                 use_focal_loss=False, use_amp=True):
+                 use_focal_loss=False, use_temporal_roll=None, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -869,6 +871,7 @@ class CNNTrainer:
         self.noise_ratio = noise_ratio if noise_ratio is not None else config.DEFAULT_NOISE_RATIO
         self.noise_folder = noise_folder
         self.use_focal_loss = use_focal_loss
+        self.use_temporal_roll = use_temporal_roll if use_temporal_roll is not None else config.DEFAULT_TEMPORAL_ROLL
         self.use_amp = use_amp and torch.cuda.is_available()
         self.use_class_balancing = False
         self.normalize = False
@@ -899,7 +902,8 @@ class CNNTrainer:
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
             num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
             use_class_balancing=self.use_class_balancing, normalize=self.normalize,
-            use_sparse_patches=False, num_sparse_patches=20
+            use_sparse_patches=False, num_sparse_patches=20,
+            use_temporal_roll=self.use_temporal_roll
         )
         
         os.makedirs(output_folder, exist_ok=True)
@@ -1277,7 +1281,7 @@ class PixelPredictionTrainer:
     
     def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
                  learning_rate, model_type='cnn', pretrained_path=None,
-                 freq_bins=None, time_bins=None, normalize=False, use_amp=True):
+                 freq_bins=None, time_bins=None, normalize=False, use_temporal_roll=None, use_amp=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -1287,6 +1291,7 @@ class PixelPredictionTrainer:
         self.model_type = model_type
         self.pretrained_path = pretrained_path
         self.normalize = normalize
+        self.use_temporal_roll = use_temporal_roll if use_temporal_roll is not None else config.DEFAULT_TEMPORAL_ROLL
         self.use_amp = use_amp and torch.cuda.is_available()
         
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

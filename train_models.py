@@ -80,6 +80,10 @@ Examples:
                        help=f"Dropout rate for AST (default: {config.DEFAULT_DROPOUT}). Increase to 0.4-0.6 to reduce overfitting.")
     parser.add_argument('--bce-smoothing', type=float, default=config.DEFAULT_BCE_SMOOTHING,
                        help=f"Target smoothing epsilon for multilabel BCE (default: {config.DEFAULT_BCE_SMOOTHING}). Reduces overconfidence.")
+    parser.add_argument('--temporal-roll', action='store_true', default=True,
+                       help="Enable temporal rolling augmentation: randomly shifts start position in tiled/repeated signals (default: True, prevents position bias). Note: Time axis uses tiling not zero-padding.")
+    parser.add_argument('--no-temporal-roll', action='store_false', dest='temporal_roll',
+                       help="Disable temporal rolling augmentation")
     
     args = parser.parse_args()
     
@@ -95,7 +99,8 @@ Examples:
             model_type=args.model,
             pretrained_path=args.pretrained,
             freq_bins=args.freq_bins,
-            time_bins=args.time_bins
+            time_bins=args.time_bins,
+            use_temporal_roll=args.temporal_roll
         )
     elif args.model == 'ast':
         print(f"Training Audio Spectrogram Transformer (AST) model...")
@@ -127,6 +132,7 @@ Examples:
             num_sparse_patches=args.num_sparse_patches,
             dropout=args.dropout,
             bce_smoothing=args.bce_smoothing,
+            use_temporal_roll=args.temporal_roll,
             use_amp=False
         )
     elif args.model == 'cnn':
@@ -149,7 +155,8 @@ Examples:
             noise_folder=args.noise_folder,
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
-            use_focal_loss=args.focal_loss
+            use_focal_loss=args.focal_loss,
+            use_temporal_roll=args.temporal_roll
         )
     else:
         raise ValueError(f"Unknown model type: {args.model}")
