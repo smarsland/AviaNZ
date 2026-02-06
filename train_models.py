@@ -45,7 +45,7 @@ Examples:
                        help=f"Batch size (default: {config.DEFAULT_BATCH_SIZE})")
     parser.add_argument('--multilabel', action='store_true', help="Use multi-label classification (classification mode only)")
     parser.add_argument('--lr', type=float, default=config.DEFAULT_LEARNING_RATE, 
-                       help=f"Learning rate (default: {config.DEFAULT_LEARNING_RATE:.1e}). If training diverges, try 2e-5 or 3e-5")
+                       help=f"Learning rate (default: {config.DEFAULT_LEARNING_RATE:.2e} from Optuna tuning)")
     parser.add_argument('--mixup', type=float, default=config.DEFAULT_MIXUP_ALPHA,
                        help=f"Mixup alpha parameter (0 = no mixup, default: {config.DEFAULT_MIXUP_ALPHA}). Applied at spectrogram level for efficiency, classification mode only)")
     parser.add_argument('--pretrained', type=str, default=None,
