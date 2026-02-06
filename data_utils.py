@@ -508,30 +508,36 @@ class SpectrogramDataset(Dataset):
         # 1. Time stretching (with 50% probability)
         if self.rng.rand() < 0.5:
             import config
+            from scipy.ndimage import zoom
+            
             stretch_factor = self.rng.uniform(config.DEFAULT_TIME_STRETCH_RANGE[0], 
                                              config.DEFAULT_TIME_STRETCH_RANGE[1])
-            new_w = int(w * stretch_factor)
             
-            from scipy.ndimage import zoom
+            # Stretch along time axis
             x_stretched = zoom(x, (1.0, stretch_factor, 1.0), order=1)
             
-            # Crop or pad to original width
-            if new_w > w:
-                start = (new_w - w) // 2
+            # Ensure exact output width by cropping or padding
+            stretched_w = x_stretched.shape[1]
+            if stretched_w > w:
+                start = (stretched_w - w) // 2
                 x = x_stretched[:, start:start+w, :]
-            elif new_w < w:
-                pad = w - new_w
+            elif stretched_w < w:
+                pad = w - stretched_w
                 pad_left = pad // 2
                 pad_right = pad - pad_left
                 x = np.pad(x_stretched, ((0, 0), (pad_left, pad_right), (0, 0)), mode='constant')
             else:
                 x = x_stretched
+            
+            # Final safety check: ensure exact dimensions
+            if x.shape[1] != w:
+                x = x[:, :w, :]
         
         # 2. Frequency shifting (with 50% probability)
         if self.rng.rand() < 0.5:
             import config
             freq_shift = self.rng.randint(config.DEFAULT_FREQ_SHIFT_RANGE[0], 
-                                         config.DEFAULT_FREQ_SHIFT_RANGE[1])
+                                         config.DEFAULT_FREQ_SHIFT_RANGE[1] + 1)
             if freq_shift != 0:
                 x = np.roll(x, freq_shift, axis=0)
         
