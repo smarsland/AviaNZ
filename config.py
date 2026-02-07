@@ -46,7 +46,7 @@ DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000
 DEFAULT_MAX_SAMPLES = 1000
 DEFAULT_VALIDATION_SHARE = 0.2
-DEFAULT_NOISE_RATIO = 0.15  # Spectrogram-level mixing (not audio-level)
+DEFAULT_NOISE_RATIO = 0.0  # Disabled by default to avoid accidental label corruption; enable explicitly when using a true noise-only folder
 DEFAULT_NOISE_SAMPLES = 1000
 
 # Spectrogram augmentation (applied during training)

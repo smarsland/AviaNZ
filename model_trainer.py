@@ -100,20 +100,21 @@ class MultilabelFocalLoss(nn.Module):
             inputs: Logits from model (N, C)
             targets: Binary labels (N, C)
         """
-        # BCE loss
+        # Support soft targets (e.g., mixup) by using the continuous formulation:
+        # p_t = p*target + (1-p)*(1-target)
+        # alpha_t = alpha*target + (1-alpha)*(1-target)
+        targets = targets.to(dtype=inputs.dtype)
+
         bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        
-        # Get probabilities
-        p_t = torch.sigmoid(inputs)
-        p_t = torch.where(targets == 1, p_t, 1 - p_t)
-        
-        # Focal term
-        focal_term = (1 - p_t) ** self.gamma
-        
-        # Class-balancing alpha per element: alpha for positives, (1-alpha) for negatives
-        alpha_t = torch.where(targets == 1, torch.as_tensor(self.alpha, device=inputs.device), torch.as_tensor(1.0 - self.alpha, device=inputs.device))
-        
-        # Focal loss
+
+        p = torch.sigmoid(inputs)
+        p_t = p * targets + (1.0 - p) * (1.0 - targets)
+
+        focal_term = (1.0 - p_t) ** self.gamma
+
+        alpha = torch.as_tensor(self.alpha, device=inputs.device, dtype=inputs.dtype)
+        alpha_t = alpha * targets + (1.0 - alpha) * (1.0 - targets)
+
         loss = alpha_t * focal_term * bce_loss
         
         if self.reduction == 'mean':
