@@ -110,14 +110,31 @@ class ModelPredictor:
                 self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
         
         # Load checkpoint weights with training dimensions
+        # BUT: handle position embeddings separately to allow resizing
+        pos_embed_key = 'ast.embeddings.position_embeddings'
+        
+        # Save and remove position embeddings from state dict if they exist
+        pos_embed_checkpoint = None
+        if pos_embed_key in state_dict:
+            pos_embed_checkpoint = state_dict.pop(pos_embed_key)
+        
+        # Load the rest of the state dict (without position embeddings)
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
         
-        # NOW resize position embeddings if inference size differs from training size
-        if inference_time_bins != training_time_bins:
+        # Now handle position embeddings:
+        # If resizing, interpolate from training size to inference size
+        # Otherwise, use the checkpoint embeddings as-is
+        if inference_time_bins != training_time_bins and pos_embed_checkpoint is not None:
+            # Need to interpolate: load training embeddings first, then interpolate
+            self.model.ast.embeddings.position_embeddings.data = pos_embed_checkpoint
+            # Now interpolate to inference size
             inference_input_size = (self.expected_freq_bins, inference_time_bins)
             self.model.interpolate_pos_embed(inference_input_size)
+        elif pos_embed_checkpoint is not None:
+            # Same size, just load the checkpoint embeddings
+            self.model.ast.embeddings.position_embeddings.data = pos_embed_checkpoint
         else:
-            # Still interpolate for training size to ensure proper initialization
+            # No checkpoint embeddings, use default initialization via interpolate
             self.model.interpolate_pos_embed(training_input_size)
         
         # Store the final inference time bins
