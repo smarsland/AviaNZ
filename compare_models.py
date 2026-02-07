@@ -729,10 +729,10 @@ def main():
         confusion_csv = os.path.join(output_dir, f"{clean_name}_confusion_matrices.csv")
         species_csv = os.path.join(output_dir, f"{clean_name}_species_confusion.csv")
         confusion_png = os.path.join(output_dir, f"{clean_name}_confusion_normalized.png")
-        
-        if os.path.exists(confusion_csv) and os.path.exists(species_csv) and os.path.exists(confusion_png):
-            print(f"  Already processed with threshold {optimal_threshold:.2f}, skipping...")
-            continue
+
+        already_processed = os.path.exists(confusion_csv) and os.path.exists(species_csv) and os.path.exists(confusion_png)
+        if already_processed:
+            print(f"  Found existing confusion outputs for threshold {optimal_threshold:.2f} (will reuse plots, still recomputing metrics)")
         
         print(f"  Normalizing species names...")
         predictions_normalized = align_predictions_with_gt(predictions, ground_truth_normalized, name_mapping)
@@ -742,15 +742,10 @@ def main():
             'all_species': all_species_for_model,
             'threshold': optimal_threshold
         }
-    
-    # Load existing metrics if available
-    metrics_output = os.path.join(output_dir, 'all_models_metrics.csv')
+
+    # NOTE: Do not merge metrics across runs.
+    # Results depend on labels.json contents and CLI flags; reusing old rows can silently produce stale comparisons.
     existing_metrics = {}
-    if os.path.exists(metrics_output):
-        existing_df = pd.read_csv(metrics_output)
-        for _, row in existing_df.iterrows():
-            existing_metrics[row['model']] = row.to_dict()
-        print(f"\nLoaded {len(existing_metrics)} existing model metrics")
     
     all_metrics = []
     
@@ -776,9 +771,20 @@ def main():
         print(f"  Accuracy: {overall_metrics.get('accuracy', 0):.4f}")
         print(f"  F1 (macro): {overall_metrics.get('f1_macro', 0):.4f}")
         print(f"  F1 (micro): {overall_metrics.get('f1_micro', 0):.4f}")
-        
-        generate_confusion_matrices(y_true, y_pred, species_list, model_name, output_dir, 
-                                   all_species_in_gt, threshold=optimal_threshold)
+
+        # Only regenerate confusion plots if they don't already exist for this threshold.
+        model_name_with_threshold = f"{model_name}_t{optimal_threshold:.2f}" if args.optimize_threshold else model_name
+        clean_name = model_name_with_threshold.replace(' ', '_')
+        confusion_csv = os.path.join(output_dir, f"{clean_name}_confusion_matrices.csv")
+        species_csv = os.path.join(output_dir, f"{clean_name}_species_confusion.csv")
+        confusion_png = os.path.join(output_dir, f"{clean_name}_confusion_normalized.png")
+        if os.path.exists(confusion_csv) and os.path.exists(species_csv) and os.path.exists(confusion_png):
+            print(f"  Confusion outputs already exist for threshold {optimal_threshold:.2f}, skipping plot generation")
+        else:
+            generate_confusion_matrices(
+                y_true, y_pred, species_list, model_name, output_dir,
+                all_species_in_gt, threshold=optimal_threshold
+            )
         
         metrics_row = {
             'model': model_name,
@@ -798,12 +804,6 @@ def main():
     print(f"\n{'='*80}")
     print("SAVING COMPARISON RESULTS")
     print(f"{'='*80}")
-    
-    # Merge new metrics with existing ones
-    new_model_names = {m['model'] for m in all_metrics}
-    for model_name, metrics_dict in existing_metrics.items():
-        if model_name not in new_model_names:
-            all_metrics.append(metrics_dict)
     
     metrics_df = pd.DataFrame(all_metrics)
     metrics_output = os.path.join(output_dir, 'all_models_metrics.csv')

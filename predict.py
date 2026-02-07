@@ -78,20 +78,24 @@ class ModelPredictor:
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
         
         # Create model at INFERENCE size
-        inference_input_size = (self.expected_freq_bins, inference_time_bins)
+        # NOTE: We instantiate at TRAINING size and then (optionally) interpolate
+        # position embeddings to the inference time dimension. This keeps the
+        # interpolation logic consistent with models.AST.interpolate_pos_embed().
+        training_input_size = (self.expected_freq_bins, training_time_bins)
         
         print(f"Model type: {model_type}")
         print(f"Number of classes: {num_classes}")
         print(f"Multi-label: {multilabel}")
-        print(f"Inference input size: {inference_input_size}")
+        print(f"Training input size: {training_input_size}")
+        print(f"Inference input size: ({self.expected_freq_bins}, {inference_time_bins})")
         
         use_reconstruction = model_config.get('use_reconstruction', False)
         
         if model_type == 'ast':
-            self.model = AST(num_classes, multilabel, input_size=inference_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+            self.model = AST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'multiscaleast':
             from models import MultiScaleAST
-            self.model = MultiScaleAST(num_classes, multilabel, input_size=inference_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+            self.model = MultiScaleAST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
             self.model = CNNModel(num_classes, multilabel, dropout=0.0)
         else:
@@ -105,60 +109,15 @@ class ModelPredictor:
                 patch_size = 16
                 self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
         
-        # Handle position embeddings separately if resizing
-        pos_embed_key = 'ast.embeddings.position_embeddings'
-        pos_embed_checkpoint = None
-        
-        if inference_time_bins != training_time_bins and pos_embed_key in state_dict:
-            # Extract checkpoint position embeddings (at training size)
-            pos_embed_checkpoint = state_dict.pop(pos_embed_key)
-            
-            # Interpolate from training size to inference size
-            device = self.device
-            dtype = pos_embed_checkpoint.dtype
-            B, N_old, C = pos_embed_checkpoint.shape
-            
-            # Infer old grid from checkpoint size
-            n_special = 2
-            num_old_patches = N_old - n_special
-            
-            # Calculate grid dimensions
-            projection = self.model.ast.embeddings.patch_embeddings.projection
-            patch_size = projection.kernel_size
-            stride = projection.stride
-            
-            h_old = (training_time_bins - patch_size[1]) // stride[1] + 1 if hasattr(self.model.ast, 'embeddings') else None
-            w_old = (self.expected_freq_bins - patch_size[0]) // stride[0] + 1 if hasattr(self.model.ast, 'embeddings') else None
-            
-            # If can't compute from config, factor from num_patches
-            if h_old is None:
-                for h in range(16, 7, -1):
-                    if num_old_patches % h == 0:
-                        w = num_old_patches // h
-                        if 50 <= w <= 200:
-                            h_old, w_old = h, w
-                            break
-            
-            h_new = (inference_time_bins - patch_size[1]) // stride[1] + 1
-            w_new = (self.expected_freq_bins - patch_size[0]) // stride[0] + 1
-            
-            print(f"Interpolating position embeddings from {h_old}x{w_old} to {h_new}x{w_new}")
-            
-            # Split and interpolate
-            special_tokens = pos_embed_checkpoint[:, :n_special, :]
-            pos_tokens = pos_embed_checkpoint[:, n_special:, :]
-            pos_tokens = pos_tokens.reshape(1, h_old, w_old, C).permute(0, 3, 1, 2)
-            pos_tokens = F.interpolate(pos_tokens, size=(h_new, w_new), mode='bicubic', align_corners=False)
-            pos_tokens = pos_tokens.permute(0, 2, 3, 1).reshape(1, h_new * w_new, C)
-            
-            pos_embed_checkpoint = torch.cat([special_tokens, pos_tokens], dim=1)
-        
-        # Load checkpoint weights (position embeddings may have been removed/modified above)
+        # Load checkpoint weights
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
-        
-        # If we interpolated position embeddings, load them now
-        if pos_embed_checkpoint is not None:
-            self.model.ast.embeddings.position_embeddings.data = pos_embed_checkpoint
+
+        # If time dimension differs at inference, interpolate position embeddings
+        # using the same implementation as training.
+        if inference_time_bins != training_time_bins and hasattr(self.model, 'interpolate_pos_embed'):
+            # MultiScaleAST handles positional embeddings internally; standard AST uses interpolate_pos_embed.
+            if model_type == 'ast':
+                self.model.interpolate_pos_embed((self.expected_freq_bins, inference_time_bins))
         
         # Store the final inference time bins
         self.expected_time_bins = inference_time_bins

@@ -166,7 +166,9 @@ class ASTTrainer:
                  use_multiscale=False, use_class_weights=False, freeze_layers=None,
                  use_reconstruction=False, recon_weight=0.1,
                  use_sparse_patches=False, num_sparse_patches=20, dropout=None,
-                 bce_smoothing=None, use_temporal_roll=None, trial=None, use_amp=True):
+                 bce_smoothing=None, use_temporal_roll=None, trial=None, use_amp=True,
+                 normalize=False, noise_as_samples=False, max_noise_samples=None,
+                 pos_weight_cap=20.0):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -192,6 +194,10 @@ class ASTTrainer:
         self.use_temporal_roll = use_temporal_roll if use_temporal_roll is not None else config.DEFAULT_TEMPORAL_ROLL
         self.trial = trial
         self.use_amp = use_amp and torch.cuda.is_available()
+        self.normalize = normalize
+        self.noise_as_samples = noise_as_samples
+        self.max_noise_samples = max_noise_samples
+        self.pos_weight_cap = pos_weight_cap
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -207,6 +213,21 @@ class ASTTrainer:
         self.data = data_loader.load_data(multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
+        # Optionally include noise spectrograms as explicit all-zero training samples.
+        # This is useful for soundscape-style inference even if you evaluate with --birds-only,
+        # because it improves calibration and reduces false positives on weak/ambiguous bird activity.
+        if self.noise_as_samples and self.data.get('train_noise_filenames'):
+            noise_files = list(self.data['train_noise_filenames'])
+            if self.max_noise_samples is not None:
+                noise_files = noise_files[:int(self.max_noise_samples)]
+            if noise_files:
+                zeros = np.zeros((len(noise_files), self.num_classes), dtype=np.float32)
+                self.data['train_filenames'] = list(self.data['train_filenames']) + noise_files
+                self.data['train_labels'] = np.vstack([np.array(self.data['train_labels'], dtype=np.float32), zeros])
+                if self.data.get('train_primary_species') is not None:
+                    self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
+                print(f"Added {len(noise_files)} noise samples as all-zero training examples")
+
         # Use dimensions from spectrogram params (single source of truth)
         # Avoid duplicating DEFAULT_FREQ_BINS vs SPECTROGRAM_PARAMS['nfilters']
         self.img_height = freq_bins if freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']  # Frequency bins (height)
@@ -220,7 +241,7 @@ class ASTTrainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
             num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
-            use_class_balancing=False, normalize=False,  # Optuna: both underperform
+            use_class_balancing=False, normalize=self.normalize,
             use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
             use_temporal_roll=self.use_temporal_roll
         )
@@ -239,12 +260,12 @@ class ASTTrainer:
         
         pos_weight = neg_counts / (pos_counts + 1e-5)
         
-        pos_weight = np.clip(pos_weight, 1.0, 20.0)
+        pos_weight = np.clip(pos_weight, 1.0, float(self.pos_weight_cap))
         
         pos_weight = torch.from_numpy(pos_weight).float().to(self.device)
         
         print(f"  Class weights - min: {pos_weight.min().item():.2f}, max: {pos_weight.max().item():.2f}, mean: {pos_weight.mean().item():.2f}")
-        print(f"  Rare classes (weight=20): {(pos_weight == 20.0).sum().item()}/{len(pos_weight)}")
+        print(f"  Rare classes (weight={float(self.pos_weight_cap):.0f}): {(pos_weight == float(self.pos_weight_cap)).sum().item()}/{len(pos_weight)}")
         
         return pos_weight
     
@@ -857,7 +878,8 @@ class CNNTrainer:
                  multilabel, learning_rate, mixup_alpha=None, 
                  pretrained_path=None, weight_decay=None,
                  noise_ratio=None, noise_folder=None, freq_bins=None, time_bins=None,
-                 use_focal_loss=False, use_temporal_roll=None, use_amp=True):
+                 use_focal_loss=False, use_temporal_roll=None, use_amp=True,
+                 normalize=False, noise_as_samples=False, max_noise_samples=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -874,7 +896,9 @@ class CNNTrainer:
         self.use_temporal_roll = use_temporal_roll if use_temporal_roll is not None else config.DEFAULT_TEMPORAL_ROLL
         self.use_amp = use_amp and torch.cuda.is_available()
         self.use_class_balancing = False
-        self.normalize = False
+        self.normalize = normalize
+        self.noise_as_samples = noise_as_samples
+        self.max_noise_samples = max_noise_samples
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -889,6 +913,18 @@ class CNNTrainer:
         data_loader = DataLoader(data_folder, noise_folder=noise_folder)
         self.data = data_loader.load_data(multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
+
+        if self.noise_as_samples and self.data.get('train_noise_filenames'):
+            noise_files = list(self.data['train_noise_filenames'])
+            if self.max_noise_samples is not None:
+                noise_files = noise_files[:int(self.max_noise_samples)]
+            if noise_files:
+                zeros = np.zeros((len(noise_files), self.num_classes), dtype=np.float32)
+                self.data['train_filenames'] = list(self.data['train_filenames']) + noise_files
+                self.data['train_labels'] = np.vstack([np.array(self.data['train_labels'], dtype=np.float32), zeros])
+                if self.data.get('train_primary_species') is not None:
+                    self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
+                print(f"Added {len(noise_files)} noise samples as all-zero training examples")
 
         # Use dimensions from spectrogram params (single source of truth)
         self.img_height = freq_bins if freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']  # Frequency bins (height)

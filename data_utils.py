@@ -370,7 +370,10 @@ class SpectrogramDataset(Dataset):
             assert x.ndim == 3, f"After downsampling should be 3D (H,W,C), got {x.shape}"
         
         # Apply noise mixing if training
-        if self.training and len(self.noise_filenames) > 0 and self.noise_ratio > 0:
+        # Do not noise-mix explicit background/noise samples (all-zero labels)
+        # They should remain pure negatives to teach rejection.
+        is_all_zero_label = bool((self.labels[idx].sum() == 0).item())
+        if self.training and (not is_all_zero_label) and len(self.noise_filenames) > 0 and self.noise_ratio > 0:
             x = self.mix_with_noise(x)
             assert x.ndim == 3, f"After noise mix should be 3D (H,W,C), got {x.shape}"
         

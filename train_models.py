@@ -56,6 +56,16 @@ Examples:
                        help=f"Noise mixing ratio for AUGMENTATION: mixes noise into bird spectrograms during training (default: {config.DEFAULT_NOISE_RATIO}, 0.0 = no mixing, 0.5 = 50%% noise mixed in, classification mode only)")
     parser.add_argument('--noise-folder', type=str, default=None,
                        help="Path to noise data folder. Used for augmentation mixing via --noise (default: same as data_folder, classification mode only)")
+
+    parser.add_argument('--normalize', action='store_true',
+                       help="Apply background normalization to spectrograms during training/validation (recommended for soundscapes; must match inference)")
+
+    parser.add_argument('--noise-as-samples', action='store_true',
+                       help="Include noise spectrograms as additional all-zero-label training samples (improves empty/background rejection)")
+    parser.add_argument('--max-noise-samples', type=int, default=None,
+                       help="Maximum number of noise spectrograms to add as all-zero samples (default: use all available)")
+    parser.add_argument('--pos-weight-cap', type=float, default=20.0,
+                       help="Cap for multilabel BCE pos_weight when using --class-weights (default: 20.0). Increase if dataset has many empty/background samples")
     parser.add_argument('--freq-bins', type=int, default=config.DEFAULT_FREQ_BINS,
                        help=f"Number of frequency bins in spectrograms (default: {config.DEFAULT_FREQ_BINS})")
     parser.add_argument('--time-bins', type=int, default=config.DEFAULT_TIME_BINS,
@@ -120,6 +130,10 @@ Examples:
             weight_decay=args.weight_decay,
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
+            normalize=args.normalize,
+            noise_as_samples=args.noise_as_samples,
+            max_noise_samples=args.max_noise_samples,
+            pos_weight_cap=args.pos_weight_cap,
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
             use_focal_loss=args.focal_loss,
@@ -153,6 +167,9 @@ Examples:
             weight_decay=args.weight_decay,
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
+            normalize=args.normalize,
+            noise_as_samples=args.noise_as_samples,
+            max_noise_samples=args.max_noise_samples,
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
             use_focal_loss=args.focal_loss,
