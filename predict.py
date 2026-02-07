@@ -21,13 +21,14 @@ import config
 
 
 class ModelPredictor:
-    def __init__(self, model_path, model_config, data_folder, output_file, batch_size=32, device=None, normalize=False):
+    def __init__(self, model_path, model_config, data_folder, output_file, batch_size=32, device=None, normalize=False, inference_time_bins=None):
         self.model_path = model_path
         self.model_config = model_config
         self.data_folder = data_folder
         self.output_file = output_file
         self.batch_size = batch_size
         self.normalize = normalize
+        self.inference_time_bins = inference_time_bins  # For resizing model to different input size
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -64,6 +65,13 @@ class ModelPredictor:
         # Get input dimensions from config
         self.expected_freq_bins = model_config.get('freq_bins', config.DEFAULT_FREQ_BINS)
         self.expected_time_bins = model_config.get('time_bins', config.DEFAULT_TIME_BINS)
+        
+        # OVERRIDE time_bins if inference_time_bins specified (for fast 5-sec inference, etc)
+        if self.inference_time_bins is not None:
+            original_time_bins = self.expected_time_bins
+            self.expected_time_bins = self.inference_time_bins
+            print(f"⚡ Resizing model input: {original_time_bins} → {self.inference_time_bins} time bins")
+        
         self.use_sparse_patches = model_config.get('use_sparse_patches', False)
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
         input_size = (self.expected_freq_bins, self.expected_time_bins)
@@ -283,6 +291,9 @@ Examples:
   
   # With normalization (if model was trained with --normalize)
   python predict.py model.pt ast_model_config.json data/ output.csv --normalize
+  
+  # Fast 5-second inference (train on 10-sec, run on 5-sec, model resizes automatically)
+  python predict.py model.pt ast_model_config.json data_5sec/ output_5sec.csv --time-bins 512
         """
     )
     
@@ -296,6 +307,8 @@ Examples:
                        help="Path to output CSV file for predictions")
     parser.add_argument('--batch-size', type=int, default=32,
                        help="Batch size for inference (default: 32)")
+    parser.add_argument('--time-bins', type=int, default=None,
+                       help="Override model input time bins (e.g., 512 for 5-sec inference on 10-sec trained model). Model resizes automatically via positional embedding interpolation. Default: uses trained size.")
     parser.add_argument('--device', type=str, default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     parser.add_argument('--normalize', action='store_true',
@@ -310,7 +323,8 @@ Examples:
         output_file=args.output_file,
         batch_size=args.batch_size,
         device=torch.device(args.device) if args.device else None,
-        normalize=args.normalize
+        normalize=args.normalize,
+        inference_time_bins=args.time_bins
     )
     
     predictor.run()
