@@ -217,9 +217,12 @@ class ModelPredictor:
                     raise ValueError(f"Unexpected spectrogram shape: {spec.shape}")
                 
                 # Pad or crop to expected dimensions from model config
+                # Use TILING for padding (matches training: data_utils.py uses np.tile, not np.pad)
                 if time_bins < self.expected_time_bins:
-                    pad_width = self.expected_time_bins - time_bins
-                    spec = np.pad(spec, ((0, 0), (0, pad_width)), mode='constant')
+                    # Tile/repeat the signal instead of zero-padding
+                    tiles_needed = int(np.ceil(self.expected_time_bins / time_bins))
+                    spec = np.tile(spec, (1, tiles_needed))
+                    spec = spec[:, :self.expected_time_bins]  # Crop to exact size
                 elif time_bins > self.expected_time_bins:
                     spec = spec[:, :self.expected_time_bins]
                 
