@@ -64,31 +64,36 @@ class ModelPredictor:
         
         # Get input dimensions from config
         self.expected_freq_bins = model_config.get('freq_bins', config.DEFAULT_FREQ_BINS)
-        self.expected_time_bins = model_config.get('time_bins', config.DEFAULT_TIME_BINS)
+        training_time_bins = model_config.get('time_bins', config.DEFAULT_TIME_BINS)
         
-        # OVERRIDE time_bins if inference_time_bins specified (for fast 5-sec inference, etc)
-        if self.inference_time_bins is not None:
-            original_time_bins = self.expected_time_bins
-            self.expected_time_bins = self.inference_time_bins
-            print(f"⚡ Resizing model input: {original_time_bins} → {self.inference_time_bins} time bins")
+        # Determine inference time_bins (use training size by default, override with --time-bins if specified)
+        inference_time_bins = self.inference_time_bins if self.inference_time_bins is not None else training_time_bins
+        
+        # Show resize info if different from training
+        if inference_time_bins != training_time_bins:
+            print(f"⚡ Resizing model input: {training_time_bins} → {inference_time_bins} time bins")
         
         self.use_sparse_patches = model_config.get('use_sparse_patches', False)
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
-        input_size = (self.expected_freq_bins, self.expected_time_bins)
+        
+        # Create model with TRAINING size (to match checkpoint weights)
+        training_input_size = (self.expected_freq_bins, training_time_bins)
         
         print(f"Model type: {model_type}")
         print(f"Number of classes: {num_classes}")
         print(f"Multi-label: {multilabel}")
-        print(f"Input size: {input_size}")
+        print(f"Training input size: {training_input_size}")
+        if inference_time_bins != training_time_bins:
+            print(f"Inference input size: ({self.expected_freq_bins}, {inference_time_bins})")
         
         use_reconstruction = model_config.get('use_reconstruction', False)
         
         if model_type == 'ast':
-            self.model = AST(num_classes, multilabel, input_size=input_size, dropout=0.0, use_reconstruction=use_reconstruction)
-            self.model.interpolate_pos_embed(input_size)
+            # Create with training size, then resize after loading weights
+            self.model = AST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'multiscaleast':
             from models import MultiScaleAST
-            self.model = MultiScaleAST(num_classes, multilabel, input_size=input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+            self.model = MultiScaleAST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
             self.model = CNNModel(num_classes, multilabel, dropout=0.0)
         else:
@@ -104,7 +109,19 @@ class ModelPredictor:
                 patch_size = 16
                 self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
         
+        # Load checkpoint weights with training dimensions
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
+        
+        # NOW resize position embeddings if inference size differs from training size
+        if inference_time_bins != training_time_bins:
+            inference_input_size = (self.expected_freq_bins, inference_time_bins)
+            self.model.interpolate_pos_embed(inference_input_size)
+        else:
+            # Still interpolate for training size to ensure proper initialization
+            self.model.interpolate_pos_embed(training_input_size)
+        
+        # Store the final inference time bins
+        self.expected_time_bins = inference_time_bins
         
         self.model.to(self.device)
         self.model.eval()
