@@ -10,6 +10,7 @@ import os
 import json
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -122,12 +123,12 @@ class ModelPredictor:
             num_old_patches = N_old - n_special
             
             # Calculate grid dimensions
-            projection = self.ast.embeddings.patch_embeddings.projection
+            projection = self.model.ast.embeddings.patch_embeddings.projection
             patch_size = projection.kernel_size
             stride = projection.stride
             
-            h_old = (training_time_bins - patch_size[1]) // stride[1] + 1 if hasattr(self.ast, 'embeddings') else None
-            w_old = (self.expected_freq_bins - patch_size[0]) // stride[0] + 1 if hasattr(self.ast, 'embeddings') else None
+            h_old = (training_time_bins - patch_size[1]) // stride[1] + 1 if hasattr(self.model.ast, 'embeddings') else None
+            w_old = (self.expected_freq_bins - patch_size[0]) // stride[0] + 1 if hasattr(self.model.ast, 'embeddings') else None
             
             # If can't compute from config, factor from num_patches
             if h_old is None:
@@ -147,7 +148,7 @@ class ModelPredictor:
             special_tokens = pos_embed_checkpoint[:, :n_special, :]
             pos_tokens = pos_embed_checkpoint[:, n_special:, :]
             pos_tokens = pos_tokens.reshape(1, h_old, w_old, C).permute(0, 3, 1, 2)
-            pos_tokens = torch.nn.functional.interpolate(pos_tokens, size=(h_new, w_new), mode='bicubic', align_corners=False)
+            pos_tokens = F.interpolate(pos_tokens, size=(h_new, w_new), mode='bicubic', align_corners=False)
             pos_tokens = pos_tokens.permute(0, 2, 3, 1).reshape(1, h_new * w_new, C)
             
             pos_embed_checkpoint = torch.cat([special_tokens, pos_tokens], dim=1)
