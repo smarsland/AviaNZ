@@ -503,40 +503,6 @@ class AST(nn.Module):
         
         num_old_patches = N - n_special
         
-        # Infer original grid dimensions from known AST configurations
-        # Standard AST: 128 mel bins, 1024 time steps -> 12x101 patches (with 16x16 patches, stride 10)
-        # We need to infer h_old, w_old from num_old_patches
-        # Common configurations: 12x101=1212 (standard), 8x100=800, etc.
-        h_old, w_old = None, None
-        
-        # Try to get from model config if available
-        if hasattr(self.ast.config, 'num_mel_bins') and hasattr(self.ast.config, 'max_length'):
-            projection = self.ast.embeddings.patch_embeddings.projection
-            patch_size = projection.kernel_size
-            stride = projection.stride
-            h_old = (self.ast.config.num_mel_bins - patch_size[0]) // stride[0] + 1
-            w_old = (self.ast.config.max_length - patch_size[1]) // stride[1] + 1
-        else:
-            # Fallback: infer from common AST grid sizes
-            if num_old_patches == 1212:  # 12 x 101
-                h_old, w_old = 12, 101
-            elif num_old_patches == 800:  # 8 x 100
-                h_old, w_old = 8, 100
-            elif num_old_patches == 980:  # 10 x 98
-                h_old, w_old = 10, 98
-            else:
-                # Try to factor assuming roughly 12:100 aspect ratio (height:width for audio)
-                # This is approximate for mel bins (freq) vs time
-                for h in range(1, int(num_old_patches**0.5) + 1):
-                    if num_old_patches % h == 0:
-                        w = num_old_patches // h
-                        if 8 <= h <= 16 and 80 <= w <= 120:  # reasonable audio grid
-                            h_old, w_old = h, w
-                            break
-        
-        if h_old is None or w_old is None:
-            raise ValueError(f"Cannot infer original patch grid from {num_old_patches} patches")
-        
         # Calculate new grid dimensions
         projection = self.ast.embeddings.patch_embeddings.projection
         patch_size = projection.kernel_size
@@ -544,6 +510,48 @@ class AST(nn.Module):
         
         h_new = (target_size[0] - patch_size[0]) // stride[0] + 1
         w_new = (target_size[1] - patch_size[1]) // stride[1] + 1
+        
+        # Infer original grid dimensions from checkpoint
+        # Try to get from model config if available
+        h_old, w_old = None, None
+        
+        if hasattr(self.ast.config, 'num_mel_bins') and hasattr(self.ast.config, 'max_length'):
+            h_old = (self.ast.config.num_mel_bins - patch_size[0]) // stride[0] + 1
+            w_old = (self.ast.config.max_length - patch_size[1]) // stride[1] + 1
+        else:
+            # Fallback: infer from common AST grid sizes and number of patches
+            if num_old_patches == 1212:  # 12 x 101 - standard
+                h_old, w_old = 12, 101
+            elif num_old_patches == 2122:  # 46 x 46 or similar for larger models
+                for h in range(1, int(num_old_patches**0.5) + 2):
+                    if num_old_patches % h == 0:
+                        w = num_old_patches // h
+                        # Check if this is a reasonable aspect ratio for audio spectrograms
+                        h_old, w_old = h, w
+                        break
+            else:
+                # Try to factor: prefer height in range [8-16] (freq bins), width in [80-150] (time)
+                found = False
+                for h in range(16, 7, -1):  # Try from 16 down to 8
+                    if num_old_patches % h == 0:
+                        w = num_old_patches // h
+                        if 50 <= w <= 200:  # reasonable time dimension
+                            h_old, w_old = h, w
+                            found = True
+                            break
+                
+                if not found:
+                    # Last resort: simple factorization
+                    for h in range(1, int(num_old_patches**0.5) + 1):
+                        if num_old_patches % h == 0:
+                            w = num_old_patches // h
+                            h_old, w_old = h, w
+                            break
+        
+        if h_old is None or w_old is None:
+            raise ValueError(f"Cannot infer original patch grid from {num_old_patches} patches. "
+                           f"Position embeddings shape: {pos_embed.shape}. "
+                           f"Try specifying freq_bins and time_bins in config.")
         
         if h_old == h_new and w_old == w_new:
             print(f"Position embeddings already match target size: {h_old}x{w_old}")
@@ -558,21 +566,13 @@ class AST(nn.Module):
         # Reshape to 2D grid: (1, num_patches, C) -> (1, C, h_old, w_old)
         pos_tokens = pos_tokens.reshape(1, h_old, w_old, C).permute(0, 3, 1, 2)
         
-        # Interpolate only time dimension if height unchanged
-        if h_old == h_new and w_old != w_new:
-            pos_tokens = F.interpolate(
-                pos_tokens,
-                size=(h_new, w_new),
-                mode='bicubic',
-                align_corners=False
-            )
-        elif h_old != h_new or w_old != w_new:
-            pos_tokens = F.interpolate(
-                pos_tokens,
-                size=(h_new, w_new),
-                mode='bicubic',
-                align_corners=False
-            )
+        # Interpolate
+        pos_tokens = F.interpolate(
+            pos_tokens,
+            size=(h_new, w_new),
+            mode='bicubic',
+            align_corners=False
+        )
         
         # Reshape back to sequence: (1, C, h_new, w_new) -> (1, num_new_patches, C)
         pos_tokens = pos_tokens.permute(0, 2, 3, 1).reshape(1, h_new * w_new, C)

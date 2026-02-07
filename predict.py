@@ -76,22 +76,17 @@ class ModelPredictor:
         self.use_sparse_patches = model_config.get('use_sparse_patches', False)
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
         
-        # **KEY**: Always create model with INFERENCE size, not training size
-        # This way position embeddings will be created for inference size
-        # And we can load weights without size conflicts
+        # Create model at INFERENCE size
         inference_input_size = (self.expected_freq_bins, inference_time_bins)
         
         print(f"Model type: {model_type}")
         print(f"Number of classes: {num_classes}")
         print(f"Multi-label: {multilabel}")
-        if inference_time_bins != training_time_bins:
-            print(f"Training size was: ({self.expected_freq_bins}, {training_time_bins})")
         print(f"Inference input size: {inference_input_size}")
         
         use_reconstruction = model_config.get('use_reconstruction', False)
         
         if model_type == 'ast':
-            # Create with inference size
             self.model = AST(num_classes, multilabel, input_size=inference_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'multiscaleast':
             from models import MultiScaleAST
@@ -102,21 +97,67 @@ class ModelPredictor:
             raise ValueError(f"Unknown model type: {model_type}")
         
         # For sparse models, the patch_projection layer is created dynamically
-        # Check if it exists in state_dict and create it if needed
         if 'patch_projection.weight' in state_dict:
-            # This was a sparse model - create the projection layer
             if not hasattr(self.model, 'patch_projection'):
                 import torch.nn as nn
                 embed_dim = 768
                 patch_size = 16
                 self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
         
-        # Load checkpoint weights - skip position_embeddings since we created model at inference size
+        # Handle position embeddings separately if resizing
         pos_embed_key = 'ast.embeddings.position_embeddings'
-        if pos_embed_key in state_dict:
-            state_dict.pop(pos_embed_key)  # Remove it - different size
+        pos_embed_checkpoint = None
         
+        if inference_time_bins != training_time_bins and pos_embed_key in state_dict:
+            # Extract checkpoint position embeddings (at training size)
+            pos_embed_checkpoint = state_dict.pop(pos_embed_key)
+            
+            # Interpolate from training size to inference size
+            device = self.device
+            dtype = pos_embed_checkpoint.dtype
+            B, N_old, C = pos_embed_checkpoint.shape
+            
+            # Infer old grid from checkpoint size
+            n_special = 2
+            num_old_patches = N_old - n_special
+            
+            # Calculate grid dimensions
+            projection = self.ast.embeddings.patch_embeddings.projection
+            patch_size = projection.kernel_size
+            stride = projection.stride
+            
+            h_old = (training_time_bins - patch_size[1]) // stride[1] + 1 if hasattr(self.ast, 'embeddings') else None
+            w_old = (self.expected_freq_bins - patch_size[0]) // stride[0] + 1 if hasattr(self.ast, 'embeddings') else None
+            
+            # If can't compute from config, factor from num_patches
+            if h_old is None:
+                for h in range(16, 7, -1):
+                    if num_old_patches % h == 0:
+                        w = num_old_patches // h
+                        if 50 <= w <= 200:
+                            h_old, w_old = h, w
+                            break
+            
+            h_new = (inference_time_bins - patch_size[1]) // stride[1] + 1
+            w_new = (self.expected_freq_bins - patch_size[0]) // stride[0] + 1
+            
+            print(f"Interpolating position embeddings from {h_old}x{w_old} to {h_new}x{w_new}")
+            
+            # Split and interpolate
+            special_tokens = pos_embed_checkpoint[:, :n_special, :]
+            pos_tokens = pos_embed_checkpoint[:, n_special:, :]
+            pos_tokens = pos_tokens.reshape(1, h_old, w_old, C).permute(0, 3, 1, 2)
+            pos_tokens = torch.nn.functional.interpolate(pos_tokens, size=(h_new, w_new), mode='bicubic', align_corners=False)
+            pos_tokens = pos_tokens.permute(0, 2, 3, 1).reshape(1, h_new * w_new, C)
+            
+            pos_embed_checkpoint = torch.cat([special_tokens, pos_tokens], dim=1)
+        
+        # Load checkpoint weights (position embeddings may have been removed/modified above)
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
+        
+        # If we interpolated position embeddings, load them now
+        if pos_embed_checkpoint is not None:
+            self.model.ast.embeddings.position_embeddings.data = pos_embed_checkpoint
         
         # Store the final inference time bins
         self.expected_time_bins = inference_time_bins
