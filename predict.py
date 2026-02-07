@@ -76,24 +76,26 @@ class ModelPredictor:
         self.use_sparse_patches = model_config.get('use_sparse_patches', False)
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
         
-        # Create model with TRAINING size (to match checkpoint weights)
-        training_input_size = (self.expected_freq_bins, training_time_bins)
+        # **KEY**: Always create model with INFERENCE size, not training size
+        # This way position embeddings will be created for inference size
+        # And we can load weights without size conflicts
+        inference_input_size = (self.expected_freq_bins, inference_time_bins)
         
         print(f"Model type: {model_type}")
         print(f"Number of classes: {num_classes}")
         print(f"Multi-label: {multilabel}")
-        print(f"Training input size: {training_input_size}")
         if inference_time_bins != training_time_bins:
-            print(f"Inference input size: ({self.expected_freq_bins}, {inference_time_bins})")
+            print(f"Training size was: ({self.expected_freq_bins}, {training_time_bins})")
+        print(f"Inference input size: {inference_input_size}")
         
         use_reconstruction = model_config.get('use_reconstruction', False)
         
         if model_type == 'ast':
-            # Create with training size, then resize after loading weights
-            self.model = AST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+            # Create with inference size
+            self.model = AST(num_classes, multilabel, input_size=inference_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'multiscaleast':
             from models import MultiScaleAST
-            self.model = MultiScaleAST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+            self.model = MultiScaleAST(num_classes, multilabel, input_size=inference_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
             self.model = CNNModel(num_classes, multilabel, dropout=0.0)
         else:
@@ -109,33 +111,12 @@ class ModelPredictor:
                 patch_size = 16
                 self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
         
-        # Load checkpoint weights with training dimensions
-        # BUT: handle position embeddings separately to allow resizing
+        # Load checkpoint weights - skip position_embeddings since we created model at inference size
         pos_embed_key = 'ast.embeddings.position_embeddings'
-        
-        # Save and remove position embeddings from state dict if they exist
-        pos_embed_checkpoint = None
         if pos_embed_key in state_dict:
-            pos_embed_checkpoint = state_dict.pop(pos_embed_key)
+            state_dict.pop(pos_embed_key)  # Remove it - different size
         
-        # Load the rest of the state dict (without position embeddings)
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
-        
-        # Now handle position embeddings:
-        # If resizing, interpolate from training size to inference size
-        # Otherwise, use the checkpoint embeddings as-is
-        if inference_time_bins != training_time_bins and pos_embed_checkpoint is not None:
-            # Need to interpolate: load training embeddings first, then interpolate
-            self.model.ast.embeddings.position_embeddings.data = pos_embed_checkpoint
-            # Now interpolate to inference size
-            inference_input_size = (self.expected_freq_bins, inference_time_bins)
-            self.model.interpolate_pos_embed(inference_input_size)
-        elif pos_embed_checkpoint is not None:
-            # Same size, just load the checkpoint embeddings
-            self.model.ast.embeddings.position_embeddings.data = pos_embed_checkpoint
-        else:
-            # No checkpoint embeddings, use default initialization via interpolate
-            self.model.interpolate_pos_embed(training_input_size)
         
         # Store the final inference time bins
         self.expected_time_bins = inference_time_bins
