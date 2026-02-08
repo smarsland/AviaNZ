@@ -1,8 +1,37 @@
 
 import argparse
 import os
+import json
 from model_trainer import ASTTrainer, CNNTrainer, PixelPredictionTrainer
 import config
+
+
+def warn_if_multilabel_dataset(data_folder, multilabel_flag, mode):
+    if mode != 'classification' or multilabel_flag:
+        return
+
+    labels_path = os.path.join(data_folder, 'labels.json')
+    if not os.path.exists(labels_path):
+        return
+
+    with open(labels_path, 'r') as f:
+        labels = json.load(f)
+
+    max_labels = 0
+    multi_label_samples = 0
+    for file_info in labels.get('files', []):
+        class_names = file_info.get('class_names', [])
+        class_names = [c for c in class_names if c and c != 'Empty Sample']
+        if len(class_names) > 1:
+            multi_label_samples += 1
+        if len(class_names) > max_labels:
+            max_labels = len(class_names)
+
+    if multi_label_samples > 0:
+        print("\n⚠️  WARNING: Dataset appears to be multi-label, but --multilabel was NOT set.")
+        print(f"   Found {multi_label_samples} samples with >1 label (max labels in a sample: {max_labels}).")
+        print("   This will train a single-label (softmax) classifier and can score ~0 in compare_models.py")
+        print("   if you evaluate with per-class thresholding. Consider adding --multilabel.\n")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -96,6 +125,8 @@ Examples:
                        help="Disable temporal rolling augmentation")
     
     args = parser.parse_args()
+
+    warn_if_multilabel_dataset(args.data_folder, args.multilabel, args.mode)
     
     if args.mode == 'pixel':
         print(f"Training model for interesting pixel prediction (pre-training mode)...")

@@ -263,46 +263,36 @@ def normalize_ground_truth(ground_truth, name_mapping):
     return normalized_gt
 
 
-def create_binary_matrix(predictions, ground_truth, all_species, include_empty_class=False):
+def create_binary_matrix(predictions, ground_truth, all_species):
     """Create binary matrices for predictions and ground truth"""
     common_ids = sorted(set(predictions.keys()) & set(ground_truth.keys()))
     
     n_samples = len(common_ids)
-    
-    if include_empty_class:
-        all_species_with_empty = sorted(all_species) + ['No Birds']
-    else:
-        all_species_with_empty = sorted(all_species)
-    
-    n_species = len(all_species_with_empty)
-    species_to_idx = {species: idx for idx, species in enumerate(all_species_with_empty)}
+
+    all_species_sorted = sorted(all_species)
+    n_species = len(all_species_sorted)
+    species_to_idx = {species: idx for idx, species in enumerate(all_species_sorted)}
     
     y_true = np.zeros((n_samples, n_species), dtype=int)
     y_pred = np.zeros((n_samples, n_species), dtype=int)
     
     for sample_idx, row_id in enumerate(common_ids):
         gt_species = ground_truth[row_id]
-        if include_empty_class and len(gt_species) == 0:
-            y_true[sample_idx, species_to_idx['No Birds']] = 1
-        else:
-            for species in gt_species:
-                if species in species_to_idx:
-                    y_true[sample_idx, species_to_idx[species]] = 1
+        for species in gt_species:
+            if species in species_to_idx:
+                y_true[sample_idx, species_to_idx[species]] = 1
         
         pred_species = predictions[row_id]
-        if include_empty_class and len(pred_species) == 0:
-            y_pred[sample_idx, species_to_idx['No Birds']] = 1
-        else:
-            for species in pred_species:
-                if species in species_to_idx:
-                    y_pred[sample_idx, species_to_idx[species]] = 1
+        for species in pred_species:
+            if species in species_to_idx:
+                y_pred[sample_idx, species_to_idx[species]] = 1
     
-    return y_true, y_pred, all_species_with_empty, common_ids
+    return y_true, y_pred, all_species_sorted, common_ids
 
 
-def optimize_threshold(predictions_probs, ground_truth, name_mapping, val_ids, all_species, include_empty_class=False, metric='f1_micro'):
+def optimize_threshold(predictions_probs, ground_truth, name_mapping, val_ids, all_species, metric='f1_micro'):
     """Find optimal threshold using validation set"""
-    thresholds_to_test = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    thresholds_to_test = np.linspace(0, 1.0, 21)
     best_threshold = 0.5
     best_score = 0.0
     print(f"  Optimizing threshold on {len(val_ids)} validation samples (metric: {metric})...")
@@ -315,7 +305,7 @@ def optimize_threshold(predictions_probs, ground_truth, name_mapping, val_ids, a
         val_ground_truth = {k: v for k, v in ground_truth.items() if k in val_ids}
         val_predictions = {k: v for k, v in predictions_normalized.items() if k in val_ids}
         y_true, y_pred, species_list, common_ids = create_binary_matrix(
-            val_predictions, val_ground_truth, all_species, include_empty_class=include_empty_class
+            val_predictions, val_ground_truth, all_species
         )
         if len(common_ids) == 0:
             continue
@@ -579,8 +569,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='Examples:\n'
                '  python compare_models.py MoreporkResults\n'
-               '  python compare_models.py Joe_MO_Results --threshold 0.3\n'
-               '  python compare_models.py MoreporkResults --include-empty-class'
+               '  python compare_models.py Joe_MO_Results --threshold 0.3'
     )
     parser.add_argument(
         'folder',
@@ -588,9 +577,9 @@ def main():
         help='Folder containing labels.json and prediction CSV files'
     )
     parser.add_argument(
-        '--include-empty-class',
+        '--ignore-non-gt-preds',
         action='store_true',
-        help='Treat samples with no birds as a separate "No Birds" class'
+        help='Ignore predictions for species not present in the ground truth label set (restricts evaluation and threshold optimization to GT species only)'
     )
     parser.add_argument(
         '--threshold',
@@ -646,7 +635,7 @@ def main():
         print(f"Threshold: AUTO-OPTIMIZE (validation size: {args.val_size}, metric: {args.optimization_metric})")
     else:
         print(f"Threshold: {args.threshold} (fixed)")
-    print(f"Include 'No Birds' class: {args.include_empty_class}")
+    print(f"Ignore non-GT predictions: {args.ignore_non_gt_preds}")
     print(f"Birds only (exclude empty samples): {args.birds_only}")
     
     print("\nLoading bird naming map...")
@@ -713,11 +702,14 @@ def main():
             print(f"  Total unique species in ground truth: {len(all_species_in_gt)}")
         
         all_species_for_model = all_species_normalized | all_species_in_gt
+
+        if args.ignore_non_gt_preds:
+            all_species_for_model = all_species_in_gt
         
         if args.optimize_threshold:
             optimal_threshold = optimize_threshold(
                 predictions_probs, ground_truth_normalized, name_mapping, 
-                val_ids, all_species_for_model, args.include_empty_class,
+                val_ids, all_species_for_model,
                 metric=args.optimization_metric
             )
             predictions = apply_threshold_to_probs(predictions_probs, optimal_threshold)
@@ -736,6 +728,9 @@ def main():
         
         print(f"  Normalizing species names...")
         predictions_normalized = align_predictions_with_gt(predictions, ground_truth_normalized, name_mapping)
+
+        if args.ignore_non_gt_preds:
+            predictions_normalized = {k: (v & all_species_in_gt) for k, v in predictions_normalized.items()}
         
         all_models[model_name] = {
             'predictions': predictions_normalized,
@@ -759,15 +754,14 @@ def main():
         optimal_threshold = model_data['threshold']
         
         y_true, y_pred, species_list, common_ids = create_binary_matrix(
-            predictions_normalized, ground_truth_normalized, all_species_for_model,
-            include_empty_class=args.include_empty_class
+            predictions_normalized, ground_truth_normalized, all_species_for_model
         )
         
         overall_metrics, per_class_metrics = calculate_metrics(y_true, y_pred, species_list)
         sample_metrics = sample_level_analysis(predictions_normalized, ground_truth_normalized, common_ids)
         
         print(f"  Evaluated on {len(common_ids)} samples")
-        print(f"  Species evaluated: {len(species_list)} (GT: {len(all_species_in_gt)}, Predicted: {len(all_species_for_model)})")
+        print(f"  Species evaluated: {len(species_list)} (GT: {len(all_species_in_gt)}, Considered: {len(all_species_for_model)})")
         print(f"  Accuracy: {overall_metrics.get('accuracy', 0):.4f}")
         print(f"  F1 (macro): {overall_metrics.get('f1_macro', 0):.4f}")
         print(f"  F1 (micro): {overall_metrics.get('f1_micro', 0):.4f}")

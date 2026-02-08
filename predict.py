@@ -41,6 +41,7 @@ class ModelPredictor:
         self.model = None
         self.categories = None
         self.dataset = None
+        self.multilabel = False
     
     def load_model(self):
         """Load trained model from checkpoint."""
@@ -59,6 +60,8 @@ class ModelPredictor:
         num_classes = model_config['num_classes']
         multilabel = model_config.get('multilabel', False)
         model_type = model_config.get('model_type', 'AST').lower()
+
+        self.multilabel = multilabel
         
         # Get class names from model config (these are the training classes)
         self.categories = model_config['class_names']
@@ -244,7 +247,10 @@ class ModelPredictor:
                 if isinstance(outputs, tuple):
                     outputs = outputs[0]
                 
-                probs = torch.sigmoid(outputs)
+                if self.multilabel:
+                    probs = torch.sigmoid(outputs)
+                else:
+                    probs = torch.softmax(outputs, dim=1)
                 
                 all_predictions.append(probs.cpu().numpy()[0])
                 
