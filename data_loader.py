@@ -11,7 +11,7 @@ import tempfile
 import shutil
 import config
 import wavio
-from spectrogram_utils import SpectrogramProcessor, smart_overwrite_folder
+from spectrogram_utils import SpectrogramProcessor, AudioSetFbankProcessor, smart_overwrite_folder
 from data_pipeline import Segment
 import soundfile as sf
 
@@ -1096,7 +1096,7 @@ class LongAudioInferenceProcessor(BaseDataProcessor):
 
 def load_data(source_type, input_folder, output_folder, window_seconds=None, hop_seconds=None,
               freq_bins=None, fs=None, overwrite=False, output_format='spectrogram', 
-              ignore_multilabel=False, with_audio=False, **kwargs):
+              ignore_multilabel=False, with_audio=False, audioset_fbank=False, **kwargs):
     if window_seconds is None:
         window_seconds = config.DEFAULT_WINDOW_SECONDS
     if hop_seconds is None:
@@ -1113,8 +1113,16 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
     segment_extractor = None
     
     if output_format == 'spectrogram':
-        spec_processor = SpectrogramProcessor(window_seconds, hop_seconds, freq_bins, 
-                                             fs, config.SPECTROGRAM_PARAMS)
+        if audioset_fbank:
+            spec_processor = AudioSetFbankProcessor(
+                target_sample_rate=16000,
+                frame_length_ms=25.0,
+                frame_shift_ms=10.0,
+                num_mel_bins=128,
+            )
+        else:
+            spec_processor = SpectrogramProcessor(window_seconds, hop_seconds, freq_bins, 
+                                                 fs, config.SPECTROGRAM_PARAMS)
     elif output_format == 'wav':
         segment_extractor = SegmentExtractor(target_sr=fs)
     else:
@@ -1124,7 +1132,10 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
     print(f"Processing {source_type.upper()} data...")
     print(f"Output format: {output_format.upper()}")
     if output_format == 'spectrogram':
-        print(f"Window: {window_seconds*1000:.1f}ms, Hop: {hop_seconds*1000:.1f}ms, Freq bins: {freq_bins}")
+        if audioset_fbank:
+            print("Feature mode: AUDIOSET_FBANK (Kaldi fbank @ 16kHz, 25ms window, 10ms hop, 128 mel bins)")
+        else:
+            print(f"Window: {window_seconds*1000:.1f}ms, Hop: {hop_seconds*1000:.1f}ms, Freq bins: {freq_bins}")
     else:
         print(f"Sample rate: {fs} Hz")
     print(f"{'='*50}")
@@ -1289,6 +1300,9 @@ Examples:
                        help="[DOC] Skip samples with multiple labels - only use single-label samples for training")
     parser.add_argument('--with-audio', action='store_true',
                        help="[Spectrogram mode] Also save audio segments to audio/ folder for listening")
+
+    parser.add_argument('--audioset-fbank', action='store_true',
+                       help="[Spectrogram] Generate AudioSet-style Kaldi fbank features for AST (forces 16kHz, 25ms window, 10ms hop, 128 mel bins). Saves linear fbank energies; training will still apply log transform as usual.")
     
     args = parser.parse_args()
     
@@ -1338,6 +1352,7 @@ Examples:
         output_format=args.format,
         ignore_multilabel=args.ignore_multilabel,
         with_audio=args.with_audio,
+        audioset_fbank=args.audioset_fbank,
         **kwargs
     )
     

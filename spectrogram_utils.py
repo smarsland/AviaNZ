@@ -15,6 +15,9 @@ import warnings
 from PIL import Image
 import config
 import spectrogram
+import torch
+import torchaudio
+import torchaudio.compliance.kaldi
 
 
 def smart_overwrite_folder(folder_path, preserve_noise=True):
@@ -148,6 +151,84 @@ class SpectrogramProcessor:
         except Exception as e:
             print(f"Error processing segment [{start_time:.2f}-{end_time:.2f}] from {sound_file}: {e}")
             return None
+
+    def save_spectrogram(self, sg_raw, output_folder, filename):
+        np.save(os.path.join(output_folder, f"{filename}.npy"), sg_raw)
+
+    def save_example_image(self, sg_raw, output_folder, filename, cmap_name='gray'):
+        examples_folder = os.path.join(output_folder, "examples")
+        os.makedirs(examples_folder, exist_ok=True)
+        cmap = plt.get_cmap(cmap_name)
+        norm = plt.Normalize(vmin=np.nanmin(sg_raw), vmax=np.nanmax(sg_raw))
+        colored = cmap(norm(sg_raw))
+        img = Image.fromarray((colored[..., :3] * 255).astype(np.uint8))
+        img.save(os.path.join(examples_folder, f"{filename}.png"))
+
+
+class AudioSetFbankProcessor:
+    def __init__(self, target_sample_rate, frame_length_ms, frame_shift_ms, num_mel_bins):
+        self.target_sample_rate = int(target_sample_rate)
+        self.frame_length_ms = float(frame_length_ms)
+        self.frame_shift_ms = float(frame_shift_ms)
+        self.num_mel_bins = int(num_mel_bins)
+
+    def process_audio_file(self, sound_file):
+        return self._process(sound_file, start_time=None, end_time=None)
+
+    def process_audio_segment(self, sound_file, start_time, end_time):
+        return self._process(sound_file, start_time=float(start_time), end_time=float(end_time))
+
+    def _process(self, sound_file, start_time, end_time):
+        file_info = sf.info(sound_file)
+        duration = file_info.frames / file_info.samplerate
+
+        if duration > config.MAX_FILE_DURATION_SECONDS:
+            raise ValueError(
+                f"File {sound_file} is {duration:.1f} seconds ({duration/60:.1f} minutes) - longer than {config.MAX_FILE_DURATION_SECONDS/60:.0f} minutes"
+            )
+        elif duration > config.WARNING_FILE_DURATION_SECONDS:
+            warnings.warn(
+                f"File {sound_file} is {duration:.1f} seconds ({duration/60:.1f} minutes) - longer than {config.WARNING_FILE_DURATION_SECONDS/60:.0f} minute"
+            )
+
+        if start_time is None and end_time is None:
+            audio, sr = sf.read(sound_file, dtype='float32', always_2d=True)
+        else:
+            sr = int(file_info.samplerate)
+            start_sample = int(max(0.0, start_time) * sr)
+            end_time = float(end_time)
+            end_sample = int(min(end_time, duration) * sr)
+            frames = max(0, end_sample - start_sample)
+            audio, sr = sf.read(sound_file, start=start_sample, frames=frames, dtype='float32', always_2d=True)
+
+        if audio.shape[1] > 1:
+            audio = audio.mean(axis=1)
+        else:
+            audio = audio[:, 0]
+
+        waveform = torch.from_numpy(audio).float().unsqueeze(0)
+
+        if int(sr) != self.target_sample_rate:
+            waveform = torchaudio.functional.resample(waveform, int(sr), self.target_sample_rate)
+
+        feats = torchaudio.compliance.kaldi.fbank(
+            waveform,
+            htk_compat=True,
+            sample_frequency=self.target_sample_rate,
+            use_energy=False,
+            window_type='hanning',
+            num_mel_bins=self.num_mel_bins,
+            frame_length=self.frame_length_ms,
+            frame_shift=self.frame_shift_ms,
+            dither=0.0,
+            use_log_fbank=False,
+        )
+
+        feats = feats.transpose(0, 1).contiguous().cpu().numpy().astype(np.float32)
+
+        if np.isnan(feats).any() or np.isinf(feats).any():
+            return None
+        return feats
 
     def save_spectrogram(self, sg_raw, output_folder, filename):
         np.save(os.path.join(output_folder, f"{filename}.npy"), sg_raw)
