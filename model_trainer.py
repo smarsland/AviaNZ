@@ -1509,8 +1509,8 @@ class KaytooTrainer:
                 
                 if self.multilabel:
                     pred_binary = (torch.sigmoid(output) > 0.5).float()
-                    all_train_preds.append(pred_binary.detach().cpu().numpy())
-                    all_train_targets.append(target.detach().cpu().numpy())
+                    all_train_preds.append(pred_binary.detach().cpu().numpy().astype(np.int32))
+                    all_train_targets.append(target.detach().cpu().numpy().astype(np.int32))
                     
                     matched = (pred_binary == target).all(dim=1)
                     train_correct += matched.sum().item()
@@ -1564,8 +1564,8 @@ class KaytooTrainer:
                     
                     if self.multilabel:
                         pred_binary = (torch.sigmoid(output) > 0.5).float()
-                        all_val_preds.append(pred_binary.cpu().numpy())
-                        all_val_targets.append(target.cpu().numpy())
+                        all_val_preds.append(pred_binary.cpu().numpy().astype(np.int32))
+                        all_val_targets.append(target.cpu().numpy().astype(np.int32))
                         
                         matched = (pred_binary == target).all(dim=1)
                         val_correct += matched.sum().item()
