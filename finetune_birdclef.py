@@ -34,8 +34,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 import config
-from data_utils import create_data_loaders
-from data_loader import DataLoader
+from data_utils import DataLoader, create_data_loaders
 from evaluation_utils import EvaluationManager
 
 
