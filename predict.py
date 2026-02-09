@@ -101,6 +101,15 @@ class ModelPredictor:
             self.model = MultiScaleAST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
             self.model = CNNModel(num_classes, multilabel, dropout=0.0)
+        elif model_type == 'birdclef_finetuned':
+            # Load fine-tuned BirdClef model
+            print("Loading fine-tuned BirdClef model...")
+            from finetune_birdclef import BirdClefFineTuneModel
+            self.model = BirdClefFineTuneModel(
+                num_classes=num_classes,
+                pretrained_path=None,  # Don't load BirdClef weights, we have fine-tuned weights
+                freeze_backbone=False
+            )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
