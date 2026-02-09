@@ -233,7 +233,8 @@ Examples:
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
             use_focal_loss=args.focal_loss,
-            use_temporal_roll=args.temporal_roll
+            use_temporal_roll=args.temporal_roll,
+            use_amp=False
         )
     else:
         raise ValueError(f"Unknown model type: {args.model}")

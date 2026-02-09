@@ -771,11 +771,13 @@ class KaytooAttentionBlock(nn.Module):
         x = torch.cat(x, dim=0)
         
         attn = self.attention(x)
+        attn = torch.clamp(attn, min=-50.0, max=50.0)  # Prevent overflow in softmax
         norm_att = torch.softmax(torch.tanh(attn), dim=-1) / self.num_chunks
         split_attn = torch.split(norm_att, batch_size, dim=0)
         norm_att = torch.cat(split_attn, dim=2)
 
         seg_logits = self.classify(x)
+        seg_logits = torch.clamp(seg_logits, min=-50.0, max=50.0)  # Prevent overflow in sigmoid
         seg_logits = F.dropout(seg_logits, p=0.3, training=self.training)
         classify = torch.sigmoid(seg_logits)
 
@@ -860,6 +862,9 @@ class KaytooModel(nn.Module):
 
         x = self.bn0(x)
         x = self.encoder(x)
+        
+        # Clamp encoder output to prevent NaN propagation under AMP
+        x = torch.clamp(x, min=-50.0, max=50.0)
         
         if self.image_shape == (2,2):
             half = x.shape[2] // 2
