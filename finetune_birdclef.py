@@ -77,7 +77,27 @@ class BirdClefFineTuneModel(nn.Module):
         # Load BirdClef pretrained weights if provided (for training)
         if pretrained_path:
             print(f"Loading BirdClef pretrained weights from {pretrained_path}")
-            checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
+            
+            # Define dummy classes that might be in checkpoint to avoid unpickling errors
+            import sys
+            if '__main__' not in sys.modules:
+                sys.modules['__main__'] = sys.modules[__name__]
+            
+            # Create dummy CFG class if needed by checkpoint
+            class CFG:
+                pass
+            
+            # Add to current module so unpickler can find it
+            sys.modules[__name__].CFG = CFG
+            globals()['CFG'] = CFG
+            
+            try:
+                checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
+            except Exception as e:
+                print(f"Warning: Could not load full checkpoint: {e}")
+                print("Attempting to load state_dict only...")
+                # Fallback: try loading with torch.load and extracting just state_dict
+                checkpoint = {'model_state_dict': torch.load(pretrained_path, map_location='cpu', weights_only=False)}
             
             # Get original number of classes from checkpoint
             orig_num_classes = checkpoint['model_state_dict']['classifier.weight'].shape[0]
