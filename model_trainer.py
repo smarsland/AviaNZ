@@ -27,6 +27,19 @@ def compute_multilabel_f1(all_preds, all_targets):
     return f1
 
 
+def compute_multilabel_f1_scores(all_preds, all_targets):
+    """Compute macro and micro F1 scores for multi-label predictions."""
+    all_preds = np.vstack(all_preds)
+    all_targets = np.vstack(all_targets)
+    _, _, f1_macro, _ = precision_recall_fscore_support(
+        all_targets, all_preds, average='macro', zero_division=0
+    )
+    _, _, f1_micro, _ = precision_recall_fscore_support(
+        all_targets, all_preds, average='micro', zero_division=0
+    )
+    return f1_macro, f1_micro
+
+
 class FocalLoss(nn.Module):
     """
     Focal Loss for multi-class classification.
@@ -1443,7 +1456,7 @@ class KaytooTrainer:
         
         print(f"Starting training for {self.max_epochs} epochs...")
         
-        best_val_acc = 0.0
+        best_val_metric = -1.0
         best_epoch = -1
         
         for epoch in range(self.max_epochs):
@@ -1455,6 +1468,8 @@ class KaytooTrainer:
             train_total = 0
             train_primary_correct = 0
             train_primary_total = 0
+            train_bit_correct = 0
+            train_bit_total = 0
             
             all_train_preds = []
             all_train_targets = []
@@ -1508,19 +1523,28 @@ class KaytooTrainer:
                 train_loss += loss.item()
                 
                 if self.multilabel:
-                    pred_binary = (torch.sigmoid(output) > 0.5).float()
+                    probs = torch.sigmoid(output)
+                    pred_binary = (probs > 0.5).float()
+
+                    # Mixup can produce soft targets; binarize only for metrics.
+                    target_hard = (target >= 0.5).float()
+
                     all_train_preds.append(pred_binary.detach().cpu().numpy().astype(np.int32))
-                    all_train_targets.append(target.detach().cpu().numpy().astype(np.int32))
-                    
-                    matched = (pred_binary == target).all(dim=1)
+                    all_train_targets.append(target_hard.detach().cpu().numpy().astype(np.int32))
+
+                    matched = (pred_binary == target_hard).all(dim=1)
                     train_correct += matched.sum().item()
-                    train_total += target.size(0)
-                    
-                    if target.sum(dim=1).max() > 0:
-                        primary_pred = pred_binary.argmax(dim=1)
-                        primary_true = target.argmax(dim=1)
-                        train_primary_correct += (primary_pred == primary_true).sum().item()
-                        train_primary_total += target.size(0)
+                    train_total += target_hard.size(0)
+
+                    train_bit_correct += (pred_binary == target_hard).sum().item()
+                    train_bit_total += target_hard.numel()
+
+                    has_label = target_hard.sum(dim=1) > 0
+                    if has_label.any():
+                        primary_pred = probs.argmax(dim=1)
+                        primary_true = target_hard.argmax(dim=1)
+                        train_primary_correct += (primary_pred[has_label] == primary_true[has_label]).sum().item()
+                        train_primary_total += has_label.sum().item()
                 else:
                     _, predicted = torch.max(output, 1)
                     _, target_labels = torch.max(target, 1)
@@ -1528,13 +1552,14 @@ class KaytooTrainer:
                     train_correct += (predicted == target_labels).sum().item()
             
             train_loss /= len(self.train_loader)
-            train_acc = 100.0 * train_correct / train_total if train_total > 0 else 0.0
+            train_exact_match = 100.0 * train_correct / train_total if train_total > 0 else 0.0
             train_primary_acc = 100.0 * train_primary_correct / train_primary_total if train_primary_total > 0 else 0.0
+            train_bit_acc = train_bit_correct / train_bit_total if train_bit_total > 0 else 0.0
             
+            train_f1_macro = 0.0
+            train_f1_micro = 0.0
             if self.multilabel and len(all_train_preds) > 0:
-                train_f1 = compute_multilabel_f1(all_train_preds, all_train_targets)
-            else:
-                train_f1 = 0.0
+                train_f1_macro, train_f1_micro = compute_multilabel_f1_scores(all_train_preds, all_train_targets)
             
             model.eval()
             val_loss = 0.0
@@ -1542,6 +1567,8 @@ class KaytooTrainer:
             val_total = 0
             val_primary_correct = 0
             val_primary_total = 0
+            val_bit_correct = 0
+            val_bit_total = 0
             
             all_val_preds = []
             all_val_targets = []
@@ -1578,19 +1605,27 @@ class KaytooTrainer:
                     val_loss += loss.item()
                     
                     if self.multilabel:
-                        pred_binary = (torch.sigmoid(output) > 0.5).float()
-                        all_val_preds.append(pred_binary.cpu().numpy().astype(np.int32))
-                        all_val_targets.append(target.cpu().numpy().astype(np.int32))
-                        
-                        matched = (pred_binary == target).all(dim=1)
+                        probs = torch.sigmoid(output)
+                        pred_binary = (probs > 0.5).float()
+
+                        target_hard = (target >= 0.5).float()
+
+                        all_val_preds.append(pred_binary.detach().cpu().numpy().astype(np.int32))
+                        all_val_targets.append(target_hard.detach().cpu().numpy().astype(np.int32))
+
+                        matched = (pred_binary == target_hard).all(dim=1)
                         val_correct += matched.sum().item()
-                        val_total += target.size(0)
-                        
-                        if target.sum(dim=1).max() > 0:
-                            primary_pred = pred_binary.argmax(dim=1)
-                            primary_true = target.argmax(dim=1)
-                            val_primary_correct += (primary_pred == primary_true).sum().item()
-                            val_primary_total += target.size(0)
+                        val_total += target_hard.size(0)
+
+                        val_bit_correct += (pred_binary == target_hard).sum().item()
+                        val_bit_total += target_hard.numel()
+
+                        has_label = target_hard.sum(dim=1) > 0
+                        if has_label.any():
+                            primary_pred = probs.argmax(dim=1)
+                            primary_true = target_hard.argmax(dim=1)
+                            val_primary_correct += (primary_pred[has_label] == primary_true[has_label]).sum().item()
+                            val_primary_total += has_label.sum().item()
                     else:
                         _, predicted = torch.max(output, 1)
                         _, target_labels = torch.max(target, 1)
@@ -1598,45 +1633,59 @@ class KaytooTrainer:
                         val_correct += (predicted == target_labels).sum().item()
             
             val_loss /= len(self.val_loader)
-            val_acc = 100.0 * val_correct / val_total if val_total > 0 else 0.0
+            val_exact_match = 100.0 * val_correct / val_total if val_total > 0 else 0.0
             val_primary_acc = 100.0 * val_primary_correct / val_primary_total if val_primary_total > 0 else 0.0
+
+            val_bit_acc = val_bit_correct / val_bit_total if val_bit_total > 0 else 0.0
             
+            val_f1_macro = 0.0
+            val_f1_micro = 0.0
             if self.multilabel and len(all_val_preds) > 0:
-                val_f1 = compute_multilabel_f1(all_val_preds, all_val_targets)
-            else:
-                val_f1 = 0.0
+                val_f1_macro, val_f1_micro = compute_multilabel_f1_scores(all_val_preds, all_val_targets)
             
             scheduler.step()
             
             train_losses.append(train_loss)
             val_losses.append(val_loss)
-            train_accs.append(train_acc)
-            val_accs.append(val_acc)
+            # For multilabel, track Macro-F1 as the main learning curve metric.
+            train_accs.append(train_f1_macro if self.multilabel else (100.0 * train_correct / train_total if train_total > 0 else 0.0))
+            val_accs.append(val_f1_macro if self.multilabel else (100.0 * val_correct / val_total if val_total > 0 else 0.0))
             train_primary_accs.append(train_primary_acc)
             val_primary_accs.append(val_primary_acc)
             
             epoch_time = time.time() - start_time
             
             print(f"Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)")
-            print(f"Train Loss: {train_loss:.4f}, Train Macro-F1: {train_f1:.4f}")
-            print(f"Val Loss: {val_loss:.4f}, Val Macro-F1: {val_f1:.4f}")
+            if self.multilabel:
+                print(f"Train Loss: {train_loss:.4f}, Macro F1: {train_f1_macro:.4f}, Micro F1: {train_f1_micro:.4f}, Bit Acc: {train_bit_acc:.4f}, Exact: {train_exact_match/100.0:.4f}")
+                print(f"Val Loss: {val_loss:.4f}, Macro F1: {val_f1_macro:.4f}, Micro F1: {val_f1_micro:.4f}, Bit Acc: {val_bit_acc:.4f}, Exact: {val_exact_match/100.0:.4f}")
+            else:
+                print(f"Train Loss: {train_loss:.4f}")
+                print(f"Val Loss: {val_loss:.4f}")
             if self.multilabel:
                 print(f"Val Primary-Class Acc: {val_primary_acc:.4f}")
             else:
-                print(f"Val Acc: {val_acc:.2f}%")
-            
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
+                print(f"Val Acc: {100.0 * val_correct / val_total if val_total > 0 else 0.0:.2f}%")
+
+            current_metric = val_f1_macro if self.multilabel else (100.0 * val_correct / val_total if val_total > 0 else 0.0)
+            if current_metric > best_val_metric:
+                best_val_metric = current_metric
                 best_epoch = epoch + 1
                 torch.save(model.state_dict(), os.path.join(self.output_folder, 'kaytoo_model_best.pt'))
-                print(f"  → Saved new best model (Val Acc: {val_acc:.2f}%)")
+                if self.multilabel:
+                    print(f"  → Saved new best model (val_macro_f1: {val_f1_macro:.4f})")
+                else:
+                    print(f"  → Saved new best model (Val Acc: {current_metric:.2f}%)")
             
             if self.trial is not None:
                 self.trial.report(val_f1 if self.multilabel else val_acc, epoch)
                 if self.trial.should_prune():
                     raise optuna.exceptions.TrialPruned()
         
-        print(f"\nTraining complete! Best Val Acc: {best_val_acc:.2f}% at epoch {best_epoch}")
+        if self.multilabel:
+            print(f"\nTraining complete! Best Val Macro-F1: {best_val_metric:.4f} at epoch {best_epoch}")
+        else:
+            print(f"\nTraining complete! Best Val Acc: {best_val_metric:.2f}% at epoch {best_epoch}")
         
         torch.save(model.state_dict(), os.path.join(self.output_folder, 'kaytoo_model_final.pt'))
         

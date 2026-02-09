@@ -25,8 +25,11 @@ import glob
 def normalize_row_id(row_id):
     """Normalize row IDs to handle different formats"""
     import re
-    
-    row_id = row_id.strip()
+
+    if row_id is None or (isinstance(row_id, float) and np.isnan(row_id)):
+        return ''
+
+    row_id = str(row_id).strip()
     row_id = row_id.replace('\uf025', '/')
     row_id = row_id.replace('\\', '/')
     
@@ -58,6 +61,11 @@ def normalize_row_id(row_id):
     row_id = row_id.replace('.WAV_', '_')
     row_id = row_id.replace('.FLAC_', '_')
     row_id = re.sub(r'\.(wav|flac|WAV|FLAC)$', '', row_id)
+
+    basename = row_id.split('/')[-1]
+    match = re.match(r'^(file_\d+)(?:_\d+)?$', basename)
+    if match:
+        return f"{match.group(1)}.npy"
     
     return row_id
 
@@ -302,7 +310,7 @@ def create_binary_matrix(predictions, ground_truth, all_species):
 
 def optimize_threshold(predictions_probs, ground_truth, name_mapping, val_ids, all_species, metric='f1_micro'):
     """Find optimal threshold using validation set"""
-    thresholds_to_test = np.linspace(0, 1.0, 101)
+    thresholds_to_test = np.linspace(0, 1.0, 21)
     best_threshold = 0.5
     best_score = 0.0
     print(f"  Optimizing threshold on {len(val_ids)} validation samples (metric: {metric})...")

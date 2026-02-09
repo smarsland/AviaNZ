@@ -240,6 +240,9 @@ class AviaNZDataProcessor(BaseDataProcessor):
         data_folder = os.path.join(output_folder, "data")
         os.makedirs(data_folder, exist_ok=True)
         
+        # Setup audio directory if needed
+        self.setup_audio_dir(output_folder)
+        
         labels = []
         file_count = 0
         segment_count = 0
@@ -286,10 +289,15 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             filename = f"file_{file_count:08d}"
                             self.spec_processor.save_spectrogram(sg_raw, data_folder, filename)
                             
+                            # Save audio chunk if requested
+                            audio_filename = None
+                            if self.audio_output_dir:
+                                audio_filename = self.save_audio_segment(wav_file, start_time, end_time, f"{filename}.wav")
+                            
                             row_id_time = int((chunk_idx + 1) * chunk_duration)
                             chunk_labels_list = sorted(list(chunk_labels))
                             
-                            labels.append({
+                            label_entry = {
                                 'filename': f"{filename}.npy",
                                 'source_file': relative_path,
                                 'row_id': f"{relative_path}_{row_id_time}",
@@ -297,7 +305,11 @@ class AviaNZDataProcessor(BaseDataProcessor):
                                 'end_time': end_time,
                                 'chunk_index': chunk_idx,
                                 'class_names': chunk_labels_list
-                            })
+                            }
+                            if audio_filename:
+                                label_entry['audio_file'] = audio_filename
+                            
+                            labels.append(label_entry)
                             
                             for species in chunk_labels_list:
                                 species_counts[species] = species_counts.get(species, 0) + 1
@@ -377,9 +389,14 @@ class AviaNZDataProcessor(BaseDataProcessor):
                         file_basename = f"file_{file_count:08d}"
                         self.spec_processor.save_spectrogram(sg_raw, data_folder, file_basename)
                         
+                        # Save audio segment if requested
+                        audio_filename = None
+                        if self.audio_output_dir:
+                            audio_filename = self.save_audio_segment(wav_file, seg.start_time, seg.end_time, f"{file_basename}.wav")
+                        
                         primary_species = valid_labels[0]
                         
-                        labels.append({
+                        label_entry = {
                             'filename': f"{file_basename}.npy",
                             'primary_class': primary_species,
                             'class_names': valid_labels,
@@ -388,7 +405,11 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             'end_time': seg.end_time,
                             'freq_low': seg.freq_low,
                             'freq_high': seg.freq_high
-                        })
+                        }
+                        if audio_filename:
+                            label_entry['audio_file'] = audio_filename
+                        
+                        labels.append(label_entry)
                         
                         file_count += 1
                         
@@ -825,6 +846,9 @@ class NoiseDataProcessor(BaseDataProcessor):
         print(f"Loading noise files from {input_folder}")
         data_folder = os.path.join(output_folder, "data")
         os.makedirs(data_folder, exist_ok=True)
+        
+        # Setup audio directory if needed
+        self.setup_audio_dir(output_folder)
 
         # Check for zip files and extract if needed
         import zipfile
@@ -873,7 +897,16 @@ class NoiseDataProcessor(BaseDataProcessor):
                 if sg is not None:
                     fname = f"noise_{count:08d}"
                     self.spec_processor.save_spectrogram(sg, data_folder, fname)
-                    files_info.append({'filename': f"{fname}.npy", 'source_file': f})
+                    
+                    # Save audio if requested
+                    audio_filename = None
+                    if self.audio_output_dir:
+                        audio_filename = self.save_audio_segment(f, 0, None, f"{fname}.wav")
+                    
+                    file_entry = {'filename': f"{fname}.npy", 'source_file': f}
+                    if audio_filename:
+                        file_entry['audio_file'] = audio_filename
+                    files_info.append(file_entry)
                     
                     if count < 3:
                         self.spec_processor.save_example_image(sg, output_folder, f"example_noise_{count}")
