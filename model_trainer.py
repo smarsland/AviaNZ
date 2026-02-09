@@ -1547,11 +1547,22 @@ class KaytooTrainer:
             all_val_targets = []
             
             with torch.no_grad():
-                for data, target in self.val_loader:
+                for batch_idx, (data, target) in enumerate(self.val_loader):
                     data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                    
+                    if not torch.isfinite(data).all():
+                        print(f"\n⚠️  WARNING: NaN/Inf in validation input data at batch {batch_idx}, skipping...")
+                        continue
+                    if not torch.isfinite(target).all():
+                        print(f"\n⚠️  WARNING: NaN/Inf in validation target data at batch {batch_idx}, skipping...")
+                        continue
                     
                     with torch.amp.autocast('cuda', enabled=self.use_amp):
                         output = model(data)
+                        
+                        if not torch.isfinite(output).all():
+                            print(f"\n⚠️  WARNING: NaN/Inf in validation model output at batch {batch_idx}, skipping...")
+                            continue
                         
                         if self.multilabel:
                             output = torch.clamp(output, min=-50.0, max=50.0)
@@ -1559,6 +1570,10 @@ class KaytooTrainer:
                         else:
                             target_idx = target.argmax(dim=1)
                             loss = criterion(output, target_idx)
+                    
+                    if torch.isnan(loss) or torch.isinf(loss):
+                        print(f"\n⚠️  WARNING: NaN/Inf validation loss at batch {batch_idx}, skipping...")
+                        continue
                     
                     val_loss += loss.item()
                     
