@@ -363,8 +363,8 @@ class AST(nn.Module):
                 start = i * chunk_width
                 end = start + chunk_width if i < self.num_chunks - 1 else W
                 chunk = x[:, :, start:end]
-                chunk_min = chunk.view(B, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
-                chunk_max = chunk.view(B, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_min = chunk.reshape(B, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_max = chunk.reshape(B, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
                 chunk_normalized = (chunk - chunk_min) / (chunk_max - chunk_min + 1e-6)
                 chunks.append(chunk_normalized)
             x = torch.cat(chunks, dim=2)
