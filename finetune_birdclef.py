@@ -176,7 +176,8 @@ class BirdClefFineTuner:
     
     def __init__(self, data_folder, output_folder, pretrained_path, 
                  epochs=10, batch_size=32, lr=1e-4, freeze_backbone=False, 
-                 freeze_stages=0, multilabel=False, device=None):
+                 freeze_stages=0, multilabel=False, device=None,
+                 use_class_weights=False, pos_weight_cap=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -187,6 +188,8 @@ class BirdClefFineTuner:
         self.freeze_backbone = freeze_backbone
         self.freeze_stages = freeze_stages
         self.multilabel = multilabel
+        self.use_class_weights = use_class_weights
+        self.pos_weight_cap = pos_weight_cap
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -203,6 +206,8 @@ class BirdClefFineTuner:
         print(f"  Batch size: {batch_size}")
         print(f"  Learning rate: {lr}")
         print(f"  Multi-label: {multilabel}")
+        if self.multilabel and self.use_class_weights:
+            print(f"  Class-weighted BCE: enabled")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -258,10 +263,13 @@ class BirdClefFineTuner:
         )
         
         self.model.to(self.device)
-        
+
         # Loss function
         if self.multilabel:
-            self.criterion = nn.BCEWithLogitsLoss()
+            pos_weight = None
+            if self.use_class_weights:
+                pos_weight = self._compute_pos_weight()
+            self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         else:
             self.criterion = nn.CrossEntropyLoss()
         
@@ -282,6 +290,60 @@ class BirdClefFineTuner:
         print(f"  Optimizer: AdamW")
         print(f"    Backbone LR: {self.lr:.1e}")
         print(f"    Classifier LR: {self.lr * 10:.1e}")
+
+    def _compute_pos_weight(self):
+        train_labels = np.array(self.data['train_labels'], dtype=np.float32)
+        class_counts = train_labels.sum(axis=0)
+        total_samples = len(train_labels)
+
+        pos_counts = class_counts
+        neg_counts = total_samples - class_counts
+        pos_weight = neg_counts / (pos_counts + 1e-5)
+
+        if self.pos_weight_cap is not None:
+            pos_weight = np.clip(pos_weight, 1.0, float(self.pos_weight_cap))
+
+        pos_weight = torch.from_numpy(pos_weight).float().to(self.device)
+        print(
+            f"  Class weights (pos_weight) - min: {pos_weight.min().item():.2f}, "
+            f"max: {pos_weight.max().item():.2f}, mean: {pos_weight.mean().item():.2f}"
+        )
+        if self.pos_weight_cap is not None:
+            capped = (pos_weight == float(self.pos_weight_cap)).sum().item()
+            print(f"  Rare classes (capped at {float(self.pos_weight_cap):.0f}): {capped}/{len(pos_weight)}")
+        return pos_weight
+
+    def _compute_multilabel_metrics(self, logits, targets, threshold=0.5):
+        probs = torch.sigmoid(logits)
+        preds = (probs >= threshold)
+        targets = targets.to(dtype=torch.bool)
+
+        tp = (preds & targets).sum(dim=0).to(dtype=torch.float32)
+        fp = (preds & (~targets)).sum(dim=0).to(dtype=torch.float32)
+        fn = ((~preds) & targets).sum(dim=0).to(dtype=torch.float32)
+
+        denom = (2.0 * tp + fp + fn).clamp_min(1e-8)
+        f1_per_class = (2.0 * tp) / denom
+
+        support = targets.sum(dim=0)
+        valid = support > 0
+        macro_f1 = f1_per_class[valid].mean().item() if valid.any() else 0.0
+
+        tp_micro = tp.sum()
+        fp_micro = fp.sum()
+        fn_micro = fn.sum()
+        micro_denom = (2.0 * tp_micro + fp_micro + fn_micro).clamp_min(1e-8)
+        micro_f1 = (2.0 * tp_micro / micro_denom).item()
+
+        bit_acc = (preds == targets).to(dtype=torch.float32).mean().item()
+        exact_match = (preds == targets).all(dim=1).to(dtype=torch.float32).mean().item()
+
+        return {
+            'bit_acc': bit_acc,
+            'exact_match': exact_match,
+            'macro_f1': macro_f1,
+            'micro_f1': micro_f1,
+        }
     
     def train_epoch(self, epoch):
         """Train for one epoch."""
@@ -289,6 +351,8 @@ class BirdClefFineTuner:
         total_loss = 0
         correct = 0
         total = 0
+
+        metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
         pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.epochs}")
         
@@ -316,8 +380,9 @@ class BirdClefFineTuner:
             
             # Compute accuracy
             if self.multilabel:
-                pred = (torch.sigmoid(output) > 0.5).float()
-                correct += (pred == target).float().mean().item() * target.size(0)
+                batch_metrics = self._compute_multilabel_metrics(output, target)
+                for k in metrics_sum:
+                    metrics_sum[k] += batch_metrics[k] * target.size(0)
             else:
                 pred = output.argmax(dim=1)
                 if target.dim() == 2:
@@ -328,11 +393,21 @@ class BirdClefFineTuner:
             
             total += target.size(0)
             
-            pbar.set_postfix({
-                'loss': total_loss / (batch_idx + 1),
-                'acc': 100. * correct / total
-            })
+            if self.multilabel:
+                pbar.set_postfix({
+                    'loss': total_loss / (batch_idx + 1),
+                    'macro_f1': metrics_sum['macro_f1'] / max(total, 1),
+                    'bit_acc': metrics_sum['bit_acc'] / max(total, 1)
+                })
+            else:
+                pbar.set_postfix({
+                    'loss': total_loss / (batch_idx + 1),
+                    'acc': 100. * correct / total
+                })
         
+        if self.multilabel:
+            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            return total_loss / len(self.train_loader), avg_metrics
         return total_loss / len(self.train_loader), 100. * correct / total
     
     def validate(self):
@@ -341,6 +416,8 @@ class BirdClefFineTuner:
         total_loss = 0
         correct = 0
         total = 0
+
+        metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
         with torch.no_grad():
             for data, target in self.val_loader:
@@ -360,8 +437,9 @@ class BirdClefFineTuner:
                 total_loss += loss.item()
                 
                 if self.multilabel:
-                    pred = (torch.sigmoid(output) > 0.5).float()
-                    correct += (pred == target).float().mean().item() * target.size(0)
+                    batch_metrics = self._compute_multilabel_metrics(output, target)
+                    for k in metrics_sum:
+                        metrics_sum[k] += batch_metrics[k] * target.size(0)
                 else:
                     pred = output.argmax(dim=1)
                     if target.dim() == 2:
@@ -371,36 +449,88 @@ class BirdClefFineTuner:
                     correct += pred.eq(target_labels).sum().item()
                 
                 total += target.size(0)
-        
+
+        if self.multilabel:
+            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            return total_loss / len(self.val_loader), avg_metrics
         return total_loss / len(self.val_loader), 100. * correct / total
     
     def train(self):
         """Main training loop."""
         print("\nStarting fine-tuning...")
-        
-        best_val_acc = 0
-        history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
+
+        best_val_metric = -1.0
+        history = {
+            'train_loss': [],
+            'val_loss': [],
+            'train_acc': [],
+            'val_acc': [],
+            'train_macro_f1': [],
+            'val_macro_f1': [],
+            'train_micro_f1': [],
+            'val_micro_f1': [],
+            'train_exact_match': [],
+            'val_exact_match': [],
+            'train_bit_acc': [],
+            'val_bit_acc': [],
+        }
         
         for epoch in range(self.epochs):
-            train_loss, train_acc = self.train_epoch(epoch)
-            val_loss, val_acc = self.validate()
+            train_loss, train_metrics = self.train_epoch(epoch)
+            val_loss, val_metrics = self.validate()
             
             self.scheduler.step()
             
             history['train_loss'].append(train_loss)
-            history['train_acc'].append(train_acc)
             history['val_loss'].append(val_loss)
-            history['val_acc'].append(val_acc)
+
+            if self.multilabel:
+                history['train_macro_f1'].append(train_metrics['macro_f1'])
+                history['val_macro_f1'].append(val_metrics['macro_f1'])
+                history['train_micro_f1'].append(train_metrics['micro_f1'])
+                history['val_micro_f1'].append(val_metrics['micro_f1'])
+                history['train_exact_match'].append(train_metrics['exact_match'])
+                history['val_exact_match'].append(val_metrics['exact_match'])
+                history['train_bit_acc'].append(train_metrics['bit_acc'])
+                history['val_bit_acc'].append(val_metrics['bit_acc'])
+                history['train_acc'].append(train_metrics['macro_f1'])
+                history['val_acc'].append(val_metrics['macro_f1'])
+            else:
+                history['train_acc'].append(train_metrics)
+                history['val_acc'].append(val_metrics)
             
             print(f"Epoch {epoch+1}/{self.epochs}:")
-            print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
-            print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
+            if self.multilabel:
+                print(
+                    f"  Train Loss: {train_loss:.4f}, "
+                    f"Macro F1: {train_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {train_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
+                    f"Exact: {train_metrics['exact_match']:.4f}"
+                )
+                print(
+                    f"  Val Loss: {val_loss:.4f}, "
+                    f"Macro F1: {val_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {val_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
+                    f"Exact: {val_metrics['exact_match']:.4f}"
+                )
+            else:
+                print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_metrics:.2f}%")
+                print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_metrics:.2f}%")
             
+            if self.multilabel:
+                current_metric = val_metrics['macro_f1']
+                metric_name = 'val_macro_f1'
+            else:
+                current_metric = val_metrics
+                metric_name = 'val_acc'
+
             # Save best model
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
+            if current_metric > best_val_metric:
+                best_val_metric = current_metric
                 self.save_model('birdclef_finetuned_best.pt')
-                print(f"  ✓ Saved best model (val_acc: {val_acc:.2f}%)")
+                print(f"  ✓ Saved best model ({metric_name}: {current_metric:.4f})")
         
         # Save final model
         self.save_model('birdclef_finetuned_final.pt')
@@ -411,7 +541,10 @@ class BirdClefFineTuner:
             json.dump(history, f, indent=2)
         
         print(f"\n✓ Fine-tuning complete!")
-        print(f"  Best val accuracy: {best_val_acc:.2f}%")
+        if self.multilabel:
+            print(f"  Best val macro F1: {best_val_metric:.4f}")
+        else:
+            print(f"  Best val accuracy: {best_val_metric:.2f}%")
         print(f"  Models saved to: {self.output_folder}")
     
     def save_model(self, filename):
@@ -488,6 +621,10 @@ Examples:
                        help="Freeze first N stages of backbone (0-4, default: 0 = all trainable)")
     parser.add_argument('--multilabel', action='store_true',
                        help="Use multi-label classification")
+    parser.add_argument('--class-weights', action='store_true',
+                       help="Use class-weighted BCE (pos_weight) in multilabel mode")
+    parser.add_argument('--pos-weight-cap', type=float, default=None,
+                       help="Optional cap for multilabel BCE pos_weight (e.g., 20). Only used with --class-weights")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     
@@ -515,7 +652,9 @@ Examples:
         freeze_backbone=args.freeze_backbone,
         freeze_stages=args.freeze_stages,
         multilabel=args.multilabel,
-        device=torch.device(args.device) if args.device else None
+        device=torch.device(args.device) if args.device else None,
+        use_class_weights=args.class_weights,
+        pos_weight_cap=args.pos_weight_cap
     )
     
     # Load data and create model

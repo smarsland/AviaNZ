@@ -70,7 +70,17 @@ def load_ground_truth(labels_path):
     
     ground_truth = {}
     for file_info in data['files']:
-        row_id = normalize_row_id(file_info['row_id'])
+        # Handle both 'row_id' and 'filename' formats
+        if 'row_id' in file_info:
+            row_id = normalize_row_id(file_info['row_id'])
+        elif 'filename' in file_info:
+            row_id = normalize_row_id(file_info['filename'])
+        elif 'source_file' in file_info:
+            row_id = normalize_row_id(file_info['source_file'])
+        else:
+            print(f"Warning: Skipping entry without row_id/filename: {file_info}")
+            continue
+            
         class_names = file_info.get('class_names', [])
         
         if class_names and class_names != ['Empty Sample']:
@@ -292,7 +302,7 @@ def create_binary_matrix(predictions, ground_truth, all_species):
 
 def optimize_threshold(predictions_probs, ground_truth, name_mapping, val_ids, all_species, metric='f1_micro'):
     """Find optimal threshold using validation set"""
-    thresholds_to_test = np.linspace(0, 1.0, 21)
+    thresholds_to_test = np.linspace(0, 1.0, 101)
     best_threshold = 0.5
     best_score = 0.0
     print(f"  Optimizing threshold on {len(val_ids)} validation samples (metric: {metric})...")
