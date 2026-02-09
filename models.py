@@ -801,6 +801,8 @@ class KaytooModel(nn.Module):
     
     This is Olly Powell's bird classifier architecture, using:
     - timm EfficientNet backbone (ImageNet pretrained)
+    - Per-chunk min-max normalization
+    - ImageNet normalization (mean/std)
     - Custom attention pooling over time chunks
     - Sigmoid multilabel output
     """
@@ -813,6 +815,10 @@ class KaytooModel(nn.Module):
         self.multilabel = multilabel
         self.input_size = input_size
         self.image_shape = image_shape
+        
+        # ImageNet normalization constants (for EfficientNet backbone)
+        self.register_buffer('imagenet_mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('imagenet_std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
         
         self.bn0 = nn.BatchNorm2d(3)
         
@@ -860,6 +866,24 @@ class KaytooModel(nn.Module):
         if x.ndim != 4 or x.shape[1] != 3:
             raise ValueError(f"Expected (B,3,H,W) or (B,1,H,W) spectrograms, got {x.shape}")
 
+        # Apply per-chunk min-max normalization (Kaytoo's key preprocessing)
+        B, C, H, W = x.shape
+        num_chunks = int(self.image_shape[0] * self.image_shape[1])
+        chunk_width = W // num_chunks
+        chunks = []
+        for i in range(num_chunks):
+            start = i * chunk_width
+            end = start + chunk_width if i < num_chunks - 1 else W
+            chunk = x[:, :, :, start:end]
+            chunk_min = chunk.reshape(B, C, -1).min(dim=2, keepdim=True)[0].unsqueeze(3)
+            chunk_max = chunk.reshape(B, C, -1).max(dim=2, keepdim=True)[0].unsqueeze(3)
+            chunk_normalized = (chunk - chunk_min) / (chunk_max - chunk_min + 1e-6)
+            chunks.append(chunk_normalized)
+        x = torch.cat(chunks, dim=3)
+        
+        # Apply ImageNet normalization (for EfficientNet backbone)
+        x = (x - self.imagenet_mean) / self.imagenet_std
+        
         x = self.bn0(x)
         x = self.encoder(x)
         
