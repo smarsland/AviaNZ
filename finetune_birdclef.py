@@ -58,9 +58,13 @@ class BirdClefFineTuneModel(nn.Module):
         if 'efficientnet' in model_name:
             backbone_out = self.backbone.classifier.in_features
             self.backbone.classifier = nn.Identity()
-        elif 'resnet' in model_name or 'regnet' in model_name:
+        elif 'resnet' in model_name:
             backbone_out = self.backbone.fc.in_features
             self.backbone.fc = nn.Identity()
+        elif 'regnet' in model_name:
+            # RegNetY uses head.fc
+            backbone_out = self.backbone.head.fc.in_features
+            self.backbone.head.fc = nn.Identity()
         else:
             backbone_out = self.backbone.get_classifier().in_features
             self.backbone.reset_classifier(0, '')
