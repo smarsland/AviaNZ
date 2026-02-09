@@ -284,11 +284,12 @@ class ASTTrainer:
         
         if self.use_multiscale:
             from models import MultiScaleAST
-            model = MultiScaleAST(self.num_classes, self.multilabel, input_size=input_size, dropout=self
-                       use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
-                       per_chunk_norm=self.per_chunk_normnstruction).to(self.device)
+            model = MultiScaleAST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, 
+                                 use_reconstruction=self.use_reconstruction).to(self.device)
         else:
-            model = AST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, use_reconstruction=self.use_reconstruction).to(self.device)
+            model = AST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, 
+                       use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
+                       per_chunk_norm=self.per_chunk_norm).to(self.device)
         
         # Interpolate positional embeddings to match input size
         # AudioSet pretrained uses 128x1024, we may use different dimensions (e.g., 128x512 for ESC-50)

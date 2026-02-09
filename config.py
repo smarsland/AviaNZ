@@ -8,7 +8,7 @@ DEFAULT_SAMPLE_RATE = 32000
 # AST paper: 25ms window, 10ms hop -> 100 frames/second
 DEFAULT_WINDOW_SECONDS = 0.025      # 25ms window
 DEFAULT_HOP_SECONDS = 0.010         # 10ms hop
-DEFAULT_FREQ_BINS = 128           # Final number of frequency bins (height)
+DEFAULT_FREQ_BINS = 224           # Final number of frequency bins (height)
 DEFAULT_TIME_BINS = 1024            # Number of time bins (width) - 1024 bins = 10.24 seconds at 10ms hop (matches AudioSet pretraining)
 
 SPECTROGRAM_PARAMS = {
