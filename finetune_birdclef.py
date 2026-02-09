@@ -311,7 +311,20 @@ class BirdClefFineTuner:
             })
         
         return total_loss / len(self.train_loader), 100. * correct / total
-    # Handle target format for loss computation
+    
+    def validate(self):
+        """Validate on validation set."""
+        self.model.eval()
+        total_loss = 0
+        correct = 0
+        total = 0
+        
+        with torch.no_grad():
+            for data, target in self.val_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                output = self.model(data)
+                
+                # Handle target format for loss computation
                 if self.multilabel:
                     loss = self.criterion(output, target.float())
                 else:
@@ -331,20 +344,7 @@ class BirdClefFineTuner:
                     if target.dim() == 2:
                         target_labels = target.argmax(dim=1)
                     else:
-                        target_labels =
-            for data, target in self.val_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                output = self.model(data)
-                
-                loss = self.criterion(output, target)
-                total_loss += loss.item()
-                
-                if self.multilabel:
-                    pred = (torch.sigmoid(output) > 0.5).float()
-                    correct += (pred == target).float().mean().item() * target.size(0)
-                else:
-                    pred = output.argmax(dim=1)
-                    target_labels = target.argmax(dim=1) if target.dim() == 2 else target
+                        target_labels = target
                     correct += pred.eq(target_labels).sum().item()
                 
                 total += target.size(0)
