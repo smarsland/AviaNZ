@@ -35,6 +35,7 @@ from pathlib import Path
 
 import config
 from data_utils import create_data_loaders
+from data_loader import DataLoader
 from evaluation_utils import EvaluationManager
 
 
@@ -184,35 +185,43 @@ class BirdClefFineTuner:
         """Load data using existing AviaNZ data pipeline."""
         print("\nLoading dataset...")
         
-        labels_file = os.path.join(self.data_folder, 'labels.json')
-        with open(labels_file, 'r') as f:
-            labels_data = json.load(f)
+        # Use DataLoader to load and parse the data
+        data_loader = DataLoader(self.data_folder, noise_folder=None)
+        self.data = data_loader.load_data(self.multilabel, validation_share=0.2)
         
-        self.categories = labels_data['categories']
-        self.num_classes = len(self.categories)
+        self.num_classes = self.data['nclasses']
+        self.categories = self.data['categories']
         
         print(f"  Classes: {self.num_classes}")
         print(f"  Examples: {self.categories[:5]}...")
         
+        # Get dimensions from config
+        img_height = config.DEFAULT_FREQ_BINS
+        img_width = config.DEFAULT_TIME_BINS
+        
         # Create data loaders
-        train_loader, val_loader, test_loader, data = create_data_loaders(
-            self.data_folder,
-            batch_size=self.batch_size,
-            multilabel=self.multilabel,
+        num_workers = 4 if torch.cuda.is_available() else 2
+        self.train_loader, self.val_loader = create_data_loaders(
+            self.data, 
+            self.batch_size, 
+            img_height, 
+            img_width, 
+            config.DEFAULT_CHANNELS,
+            cropping_mode='random',
+            noise_ratio=0.0,  # No noise augmentation for fine-tuning
+            spec_transform=None,
+            num_workers=num_workers,
+            width_downsizing=None,
+            mixup_alpha=0.0,  # No mixup for fine-tuning
+            use_class_balancing=False,
+            normalize=False,
             use_sparse_patches=False,
             num_sparse_patches=0,
-            expected_freq_bins=config.DEFAULT_FREQ_BINS,
-            expected_time_bins=config.DEFAULT_TIME_BINS
+            use_temporal_roll=True
         )
         
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.test_loader = test_loader
-        self.data = data
-        
-        print(f"  Train samples: {len(train_loader.dataset)}")
-        print(f"  Val samples: {len(val_loader.dataset)}")
-        print(f"  Test samples: {len(test_loader.dataset)}")
+        print(f"  Train samples: {len(self.train_loader.dataset)}")
+        print(f"  Val samples: {len(self.val_loader.dataset)}")
     
     def create_model(self):
         """Create model with pretrained BirdClef weights."""
@@ -266,7 +275,17 @@ class BirdClefFineTuner:
             self.optimizer.zero_grad()
             output = self.model(data)
             
-            loss = self.criterion(output, target)
+            # Handle target format for loss computation
+            if self.multilabel:
+                loss = self.criterion(output, target.float())
+            else:
+                # For single-label, target might be one-hot encoded
+                if target.dim() == 2 and target.shape[1] > 1:
+                    target_labels = target.argmax(dim=1)
+                else:
+                    target_labels = target.long()
+                loss = self.criterion(output, target_labels)
+            
             loss.backward()
             self.optimizer.step()
             
@@ -278,7 +297,10 @@ class BirdClefFineTuner:
                 correct += (pred == target).float().mean().item() * target.size(0)
             else:
                 pred = output.argmax(dim=1)
-                target_labels = target.argmax(dim=1) if target.dim() == 2 else target
+                if target.dim() == 2:
+                    target_labels = target.argmax(dim=1)
+                else:
+                    target_labels = target
                 correct += pred.eq(target_labels).sum().item()
             
             total += target.size(0)
@@ -289,15 +311,27 @@ class BirdClefFineTuner:
             })
         
         return total_loss / len(self.train_loader), 100. * correct / total
-    
-    def validate(self):
-        """Validate on validation set."""
-        self.model.eval()
-        total_loss = 0
-        correct = 0
-        total = 0
-        
-        with torch.no_grad():
+    # Handle target format for loss computation
+                if self.multilabel:
+                    loss = self.criterion(output, target.float())
+                else:
+                    if target.dim() == 2 and target.shape[1] > 1:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target.long()
+                    loss = self.criterion(output, target_labels)
+                
+                total_loss += loss.item()
+                
+                if self.multilabel:
+                    pred = (torch.sigmoid(output) > 0.5).float()
+                    correct += (pred == target).float().mean().item() * target.size(0)
+                else:
+                    pred = output.argmax(dim=1)
+                    if target.dim() == 2:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels =
             for data, target in self.val_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
