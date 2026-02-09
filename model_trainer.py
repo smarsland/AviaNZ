@@ -12,7 +12,7 @@ import time
 import math
 from sklearn.metrics import precision_recall_fscore_support
 from data_utils import DataLoader, create_data_loaders
-from models import AST, CNNModel
+from models import AST, CNNModel, KaytooModel
 from evaluation_utils import EvaluationManager
 import config
 
@@ -169,7 +169,7 @@ class ASTTrainer:
                  use_sparse_patches=False, num_sparse_patches=20, dropout=None,
                  bce_smoothing=None, use_temporal_roll=None, trial=None, use_amp=True,
                  normalize=False, noise_as_samples=False, max_noise_samples=None,
-                 pos_weight_cap=20.0):
+                 pos_weight_cap=20.0, use_adapters=False, per_chunk_norm=False):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -199,6 +199,8 @@ class ASTTrainer:
         self.noise_as_samples = noise_as_samples
         self.max_noise_samples = max_noise_samples
         self.pos_weight_cap = pos_weight_cap
+        self.use_adapters = use_adapters
+        self.per_chunk_norm = per_chunk_norm
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -282,7 +284,9 @@ class ASTTrainer:
         
         if self.use_multiscale:
             from models import MultiScaleAST
-            model = MultiScaleAST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, use_reconstruction=self.use_reconstruction).to(self.device)
+            model = MultiScaleAST(self.num_classes, self.multilabel, input_size=input_size, dropout=self
+                       use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
+                       per_chunk_norm=self.per_chunk_normnstruction).to(self.device)
         else:
             model = AST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, use_reconstruction=self.use_reconstruction).to(self.device)
         
@@ -1312,6 +1316,349 @@ class CNNTrainer:
         
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
+
+
+class KaytooTrainer:
+    """Kaytoo model trainer - timm EfficientNet + attention pooling."""
+    
+    def __init__(self, data_folder, output_folder, max_epochs, batch_size, 
+                 multilabel, learning_rate, mixup_alpha=None, 
+                 pretrained_path=None, weight_decay=None, 
+                 noise_ratio=None, noise_folder=None, freq_bins=None, time_bins=None,
+                 use_focal_loss=False, use_temporal_roll=None, trial=None, use_amp=True,
+                 normalize=False, noise_as_samples=False, max_noise_samples=None,
+                 image_shape=(2,1), backbone_name='tf_efficientnet_b2.ns_jft_in1k'):
+        
+        self.data_folder = data_folder
+        self.output_folder = output_folder
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+        self.multilabel = multilabel
+        self.learning_rate = learning_rate
+        self.mixup_alpha = mixup_alpha if mixup_alpha is not None else config.DEFAULT_MIXUP_ALPHA
+        self.pretrained_path = pretrained_path
+        self.weight_decay = weight_decay if weight_decay is not None else config.DEFAULT_WEIGHT_DECAY
+        self.noise_ratio = noise_ratio if noise_ratio is not None else config.DEFAULT_NOISE_RATIO
+        self.noise_folder = noise_folder
+        self.use_focal_loss = use_focal_loss
+        self.use_temporal_roll = use_temporal_roll if use_temporal_roll is not None else config.DEFAULT_TEMPORAL_ROLL
+        self.trial = trial
+        self.use_amp = use_amp and torch.cuda.is_available()
+        self.normalize = normalize
+        self.noise_as_samples = noise_as_samples
+        self.max_noise_samples = max_noise_samples
+        self.image_shape = image_shape
+        self.backbone_name = backbone_name
+        
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Using device: {self.device}")
+        if self.use_amp:
+            print(f"Using Automatic Mixed Precision (AMP) for faster training")
+        
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
+        
+        data_loader = DataLoader(data_folder, noise_folder=noise_folder)
+        self.data = data_loader.load_data(multilabel, validation_share=0.2)
+        self.num_classes = self.data['nclasses']
+
+        if self.noise_as_samples and self.data.get('train_noise_filenames'):
+            noise_files = list(self.data['train_noise_filenames'])
+            if self.max_noise_samples is not None:
+                noise_files = noise_files[:int(self.max_noise_samples)]
+            if noise_files:
+                zeros = np.zeros((len(noise_files), self.num_classes), dtype=np.float32)
+                self.data['train_filenames'] = list(self.data['train_filenames']) + noise_files
+                self.data['train_labels'] = np.vstack([np.array(self.data['train_labels'], dtype=np.float32), zeros])
+                if self.data.get('train_primary_species') is not None:
+                    self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
+                print(f"Added {len(noise_files)} noise samples as all-zero training examples")
+
+        self.img_height = freq_bins if freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']
+        self.img_width = time_bins if time_bins is not None else config.DEFAULT_TIME_BINS
+        
+        num_workers = 4 if torch.cuda.is_available() else 2
+        self.train_loader, self.val_loader = create_data_loaders(
+            self.data, batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
+            cropping_mode='random', noise_ratio=self.noise_ratio, 
+            spec_transform=None,
+            num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
+            use_class_balancing=False, normalize=self.normalize,
+            use_sparse_patches=False, num_sparse_patches=20,
+            use_temporal_roll=self.use_temporal_roll
+        )
+        
+        os.makedirs(output_folder, exist_ok=True)
+    
+    def train(self):
+        """Train Kaytoo model."""
+        print("Creating Kaytoo model (EfficientNet + attention pooling)...")
+        print(f"Model input size: ({self.img_height}, {self.img_width})")
+        print(f"Image shape (time chunks): {self.image_shape}")
+        print(f"Backbone: {self.backbone_name}")
+        
+        input_size = (self.img_height, self.img_width)
+        
+        model = KaytooModel(
+            self.num_classes, 
+            self.multilabel, 
+            input_size=input_size,
+            backbone_name=self.backbone_name,
+            image_shape=self.image_shape
+        ).to(self.device)
+        
+        if self.pretrained_path:
+            print(f"Loading pretrained weights from {self.pretrained_path}")
+            self._load_pretrained_weights(model, self.pretrained_path)
+
+        optimizer = optim.AdamW(model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        
+        def lr_lambda(epoch):
+            if epoch < 5:
+                return 1.0
+            return 0.85 ** (epoch - 5)
+        scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+        print(f"Using AdamW optimizer with Lambda LR scheduler")
+        
+        if self.use_focal_loss:
+            if self.multilabel:
+                criterion = MultilabelFocalLoss(alpha=0.25, gamma=2.0)
+                print("Using Multilabel Focal Loss (alpha=0.25, gamma=2.0)")
+            else:
+                criterion = FocalLoss(alpha=0.25, gamma=2.0)
+                print("Using Focal Loss (alpha=0.25, gamma=2.0)")
+        elif self.multilabel:
+            criterion = nn.BCEWithLogitsLoss()
+            print("Using BCEWithLogitsLoss for multilabel classification")
+        else:
+            criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+            print("Using CrossEntropyLoss with label smoothing")
+        
+        train_losses = []
+        val_losses = []
+        train_accs = []
+        val_accs = []
+        train_primary_accs = []
+        val_primary_accs = []
+        
+        print(f"Starting training for {self.max_epochs} epochs...")
+        
+        best_val_acc = 0.0
+        best_epoch = -1
+        
+        for epoch in range(self.max_epochs):
+            start_time = time.time()
+            
+            model.train()
+            train_loss = 0.0
+            train_correct = 0
+            train_total = 0
+            train_primary_correct = 0
+            train_primary_total = 0
+            
+            all_train_preds = []
+            all_train_targets = []
+            
+            for batch_idx, (data, target) in enumerate(self.train_loader):
+                data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                
+                if not torch.isfinite(data).all():
+                    print(f"\n⚠️  WARNING: NaN/Inf in input data at batch {batch_idx}, skipping...")
+                    continue
+                if not torch.isfinite(target).all():
+                    print(f"\n⚠️  WARNING: NaN/Inf in target data at batch {batch_idx}, skipping...")
+                    continue
+                
+                optimizer.zero_grad()
+                
+                with torch.amp.autocast('cuda', enabled=self.use_amp):
+                    output = model(data)
+                    
+                    if not torch.isfinite(output).all():
+                        print(f"\n❌ CRITICAL: NaN/Inf in model output at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   This indicates model instability. Stopping epoch early...")
+                        break
+                    
+                    if self.multilabel:
+                        output = torch.clamp(output, min=-50.0, max=50.0)
+                        loss = criterion(output, target)
+                    else:
+                        if target.dim() == 2 and not torch.equal(target, target.round()):
+                            log_probs = F.log_softmax(output, dim=1)
+                            loss = -(target * log_probs).sum(dim=1).mean()
+                        else:
+                            target_idx = target.argmax(dim=1)
+                            loss = criterion(output, target_idx)
+                
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
+                    print(f"   Skipping this batch...")
+                    continue
+                
+                if self.use_amp:
+                    self.scaler.scale(loss).backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    self.scaler.step(optimizer)
+                    self.scaler.update()
+                else:
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
+                
+                train_loss += loss.item()
+                
+                if self.multilabel:
+                    pred_binary = (torch.sigmoid(output) > 0.5).float()
+                    all_train_preds.append(pred_binary.detach().cpu().numpy())
+                    all_train_targets.append(target.detach().cpu().numpy())
+                    
+                    matched = (pred_binary == target).all(dim=1)
+                    train_correct += matched.sum().item()
+                    train_total += target.size(0)
+                    
+                    if target.sum(dim=1).max() > 0:
+                        primary_pred = pred_binary.argmax(dim=1)
+                        primary_true = target.argmax(dim=1)
+                        train_primary_correct += (primary_pred == primary_true).sum().item()
+                        train_primary_total += target.size(0)
+                else:
+                    _, predicted = torch.max(output, 1)
+                    _, target_labels = torch.max(target, 1)
+                    train_total += target.size(0)
+                    train_correct += (predicted == target_labels).sum().item()
+            
+            train_loss /= len(self.train_loader)
+            train_acc = 100.0 * train_correct / train_total if train_total > 0 else 0.0
+            train_primary_acc = 100.0 * train_primary_correct / train_primary_total if train_primary_total > 0 else 0.0
+            
+            if self.multilabel and len(all_train_preds) > 0:
+                train_f1 = compute_multilabel_f1(all_train_preds, all_train_targets)
+            else:
+                train_f1 = 0.0
+            
+            model.eval()
+            val_loss = 0.0
+            val_correct = 0
+            val_total = 0
+            val_primary_correct = 0
+            val_primary_total = 0
+            
+            all_val_preds = []
+            all_val_targets = []
+            
+            with torch.no_grad():
+                for data, target in self.val_loader:
+                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                    
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
+                        output = model(data)
+                        
+                        if self.multilabel:
+                            output = torch.clamp(output, min=-50.0, max=50.0)
+                            loss = criterion(output, target)
+                        else:
+                            target_idx = target.argmax(dim=1)
+                            loss = criterion(output, target_idx)
+                    
+                    val_loss += loss.item()
+                    
+                    if self.multilabel:
+                        pred_binary = (torch.sigmoid(output) > 0.5).float()
+                        all_val_preds.append(pred_binary.cpu().numpy())
+                        all_val_targets.append(target.cpu().numpy())
+                        
+                        matched = (pred_binary == target).all(dim=1)
+                        val_correct += matched.sum().item()
+                        val_total += target.size(0)
+                        
+                        if target.sum(dim=1).max() > 0:
+                            primary_pred = pred_binary.argmax(dim=1)
+                            primary_true = target.argmax(dim=1)
+                            val_primary_correct += (primary_pred == primary_true).sum().item()
+                            val_primary_total += target.size(0)
+                    else:
+                        _, predicted = torch.max(output, 1)
+                        _, target_labels = torch.max(target, 1)
+                        val_total += target.size(0)
+                        val_correct += (predicted == target_labels).sum().item()
+            
+            val_loss /= len(self.val_loader)
+            val_acc = 100.0 * val_correct / val_total if val_total > 0 else 0.0
+            val_primary_acc = 100.0 * val_primary_correct / val_primary_total if val_primary_total > 0 else 0.0
+            
+            if self.multilabel and len(all_val_preds) > 0:
+                val_f1 = compute_multilabel_f1(all_val_preds, all_val_targets)
+            else:
+                val_f1 = 0.0
+            
+            scheduler.step()
+            
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+            train_accs.append(train_acc)
+            val_accs.append(val_acc)
+            train_primary_accs.append(train_primary_acc)
+            val_primary_accs.append(val_primary_acc)
+            
+            epoch_time = time.time() - start_time
+            
+            print(f"Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)")
+            print(f"Train Loss: {train_loss:.4f}, Train Macro-F1: {train_f1:.4f}")
+            print(f"Val Loss: {val_loss:.4f}, Val Macro-F1: {val_f1:.4f}")
+            if self.multilabel:
+                print(f"Val Primary-Class Acc: {val_primary_acc:.4f}")
+            else:
+                print(f"Val Acc: {val_acc:.2f}%")
+            
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                best_epoch = epoch + 1
+                torch.save(model.state_dict(), os.path.join(self.output_folder, 'kaytoo_model_best.pt'))
+                print(f"  → Saved new best model (Val Acc: {val_acc:.2f}%)")
+            
+            if self.trial is not None:
+                self.trial.report(val_f1 if self.multilabel else val_acc, epoch)
+                if self.trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+        
+        print(f"\nTraining complete! Best Val Acc: {best_val_acc:.2f}% at epoch {best_epoch}")
+        
+        torch.save(model.state_dict(), os.path.join(self.output_folder, 'kaytoo_model_final.pt'))
+        
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+        
+        ax1.plot(train_losses, label='Train Loss')
+        ax1.plot(val_losses, label='Val Loss')
+        ax1.set_title('Loss')
+        ax1.legend()
+        
+        ax2.plot(train_accs, label='Train Acc')
+        ax2.plot(val_accs, label='Val Acc') 
+        ax2.set_title('Multi-Label Accuracy' if self.multilabel else 'Accuracy')
+        ax2.legend()
+        
+        if self.multilabel:
+            ax3.plot(train_primary_accs, label='Train Primary Acc')
+            ax3.plot(val_primary_accs, label='Val Primary Acc')
+            ax3.set_title('Primary-Class Accuracy')
+            ax3.legend()
+        
+        plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
+        plt.close()
+    
+    def _load_pretrained_weights(self, model, pretrained_path):
+        checkpoint = torch.load(pretrained_path, map_location=self.device)
+        
+        if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+            state_dict = checkpoint['state_dict']
+        else:
+            state_dict = checkpoint
+        
+        missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+        if missing_keys:
+            print(f"  Missing keys: {len(missing_keys)}")
+        if unexpected_keys:
+            print(f"  Unexpected keys: {len(unexpected_keys)}")
+        print("  Pretrained weights loaded successfully")
 
 
 class PixelPredictionTrainer:

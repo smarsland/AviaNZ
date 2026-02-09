@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import ASTModel
+import timm
 
 
 class AttentionPooling(nn.Module):
@@ -294,21 +295,36 @@ class MultiScaleAST(nn.Module):
 
 class AST(nn.Module):
     
-    def __init__(self, num_classes, multilabel=False, input_size=None, dropout=0.1, use_reconstruction=False):
+    def __init__(self, num_classes, multilabel=False, input_size=None, dropout=0.1, use_reconstruction=False,
+                 use_adapters=False, adapter_dim=64, per_chunk_norm=False, num_chunks=2):
         super().__init__()
         self.num_classes = num_classes
         self.multilabel = multilabel
         self.use_reconstruction = use_reconstruction
+        self.use_adapters = use_adapters
+        self.per_chunk_norm = per_chunk_norm
+        self.num_chunks = num_chunks
         self.input_size = input_size if input_size else (128, 512)
         
         self.ast = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+        
+        if use_adapters:
+            self.adapters = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(768, adapter_dim),
+                    nn.ReLU(),
+                    nn.Linear(adapter_dim, 768)
+                ) for _ in range(12)
+            ])
+            for adapter in self.adapters:
+                nn.init.zeros_(adapter[2].weight)
+                nn.init.zeros_(adapter[2].bias)
         
         self.dropout = nn.Dropout(dropout)
         self.pool = AttentionPooling(embed_dim=768, hidden_dim=256)
         self.classifier = nn.Linear(768, num_classes)
         
-        # Sparse patch projection (16x16 patches to 768-dim embeddings)
-        self.patch_projection = nn.Linear(256, 768)  # 16*16 = 256
+        self.patch_projection = nn.Linear(256, 768)
         
         if use_reconstruction:
             self.decoder = SpectrogramDecoder(embed_dim=768, output_size=self.input_size)
@@ -338,9 +354,30 @@ class AST(nn.Module):
             x = x.squeeze(1)
         
         import config
-        x = (x - config.AST_MEAN) / config.AST_STD
+        
+        if self.per_chunk_norm:
+            B, H, W = x.shape
+            chunk_width = W // self.num_chunks
+            chunks = []
+            for i in range(self.num_chunks):
+                start = i * chunk_width
+                end = start + chunk_width if i < self.num_chunks - 1 else W
+                chunk = x[:, :, start:end]
+                chunk_min = chunk.view(B, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_max = chunk.view(B, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_normalized = (chunk - chunk_min) / (chunk_max - chunk_min + 1e-6)
+                chunks.append(chunk_normalized)
+            x = torch.cat(chunks, dim=2)
+        else:
+            x = (x - config.AST_MEAN) / config.AST_STD
         
         hidden_states = self.ast(x).last_hidden_state
+        
+        if self.use_adapters:
+            for i in range(12):
+                adapter_output = self.adapters[i](hidden_states)
+                hidden_states = hidden_states + adapter_output
+        
         # Exclude special tokens (cls + dist) for pooling
         patch_tokens = hidden_states[:, 2:, :]
         features = self.pool(patch_tokens)
@@ -683,3 +720,183 @@ class ASTPixelPredictor(nn.Module):
         output = F.interpolate(output, size=self.input_size, mode='bilinear', align_corners=False)
         
         return output
+
+
+class KaytooClassifierHead(nn.Module):
+    """Kaytoo's per-timestep classifier head."""
+    def __init__(self, in_channels, num_classes, dropout_rate=0.2):
+        super().__init__()
+        self.linear = nn.Linear(in_channels, in_channels // 2)
+        self.relu = nn.ReLU(inplace=True)
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.output = nn.Linear(in_channels // 2, num_classes)
+
+    def forward(self, x):
+        x = x.permute(0, 2, 1)
+        x = self.linear(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.output(x)
+        x = x.permute(0, 2, 1)
+        return x
+
+
+class KaytooAttentionBlock(nn.Module):
+    """Kaytoo's attention-weighted aggregation over time chunks."""
+    def __init__(self, in_features, out_features, image_shape=(1,1)):
+        super().__init__()
+        
+        self.attention = nn.Conv1d(
+            in_channels=in_features,
+            out_channels=out_features,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=True
+        )
+        
+        with torch.no_grad():
+            self.attention.weight.fill_(1.0 / (self.attention.kernel_size[0] * in_features))
+            self.attention.bias.zero_()
+        
+        self.classify = KaytooClassifierHead(in_channels=in_features, num_classes=out_features)
+        self.image_shape = image_shape
+        self.num_chunks = int(self.image_shape[0] * self.image_shape[1])
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        split_length = x.shape[2] // self.num_chunks
+        
+        x = torch.split(x, split_length, dim=2)
+        x = torch.cat(x, dim=0)
+        
+        attn = self.attention(x)
+        norm_att = torch.softmax(torch.tanh(attn), dim=-1) / self.num_chunks
+        split_attn = torch.split(norm_att, batch_size, dim=0)
+        norm_att = torch.cat(split_attn, dim=2)
+
+        seg_logits = self.classify(x)
+        seg_logits = F.dropout(seg_logits, p=0.3, training=self.training)
+        classify = torch.sigmoid(seg_logits)
+
+        split_logits = torch.split(seg_logits, batch_size, dim=0)
+        seg_logits = torch.cat(split_logits, dim=2)
+
+        split_classify = torch.split(classify, batch_size, dim=0)
+        classify = torch.cat(split_classify, dim=2)
+        
+        weighted_preds = norm_att * classify
+        weighted_seg_logits = norm_att * seg_logits
+        preds = weighted_preds.sum(dim=-1)
+        logit = weighted_seg_logits.sum(dim=-1)
+        seg_logits = seg_logits.transpose(1, 2)
+
+        return logit, seg_logits, preds
+
+
+class KaytooModel(nn.Module):
+    """Kaytoo architecture: timm EfficientNet backbone + attention pooling.
+    
+    This is Olly Powell's bird classifier architecture, using:
+    - timm EfficientNet backbone (ImageNet pretrained)
+    - Custom attention pooling over time chunks
+    - Sigmoid multilabel output
+    """
+    def __init__(self, num_classes, multilabel=True, input_size=(128, 1024), 
+                 backbone_name='tf_efficientnet_b2.ns_jft_in1k', image_shape=(2,1),
+                 dropout=0.2):
+        super().__init__()
+        
+        self.num_classes = num_classes
+        self.multilabel = multilabel
+        self.input_size = input_size
+        self.image_shape = image_shape
+        
+        self.bn0 = nn.BatchNorm2d(3)
+        
+        self.base_model = timm.create_model(
+            backbone_name,
+            pretrained=True,
+            in_chans=3
+        )
+        
+        layers = list(self.base_model.children())[:-2]
+        self.encoder = nn.Sequential(*layers)
+        
+        try:
+            classifier = self.base_model.get_classifier()
+            if isinstance(classifier, nn.Identity):
+                in_features = self.base_model.num_features
+            else:
+                in_features = classifier.in_features
+        except AttributeError:
+            if hasattr(self.base_model, "fc") and hasattr(self.base_model.fc, "in_features"):
+                in_features = self.base_model.fc.in_features
+            elif hasattr(self.base_model, "head") and hasattr(self.base_model.head, "fc"):
+                in_features = self.base_model.head.fc.in_features
+            elif hasattr(self.base_model, "classifier") and hasattr(self.base_model.classifier, "in_features"):
+                in_features = self.base_model.classifier.in_features
+            else:
+                in_features = 1408
+        
+        self.fc1 = nn.Linear(in_features, in_features, bias=True)
+        self.att_block = KaytooAttentionBlock(in_features, self.num_classes, image_shape=self.image_shape)
+        
+        nn.init.xavier_uniform_(self.fc1.weight)
+        if self.fc1.bias is not None:
+            self.fc1.bias.data.fill_(0.)
+        self.bn0.bias.data.fill_(0.)
+        self.bn0.weight.data.fill_(1.0)
+
+    def forward(self, x):
+        if x.ndim == 3:
+            x = x.unsqueeze(1)
+        
+        if x.shape[1] == 1:
+            x = x.expand(-1, 3, -1, -1)
+        
+        if x.ndim != 4 or x.shape[1] != 3:
+            raise ValueError(f"Expected (B,3,H,W) or (B,1,H,W) spectrograms, got {x.shape}")
+
+        x = self.bn0(x)
+        x = self.encoder(x)
+        
+        if self.image_shape == (2,2):
+            half = x.shape[2] // 2
+            x0 = x[:,:,:half,:half]
+            x1 = x[:,:,:half,half:]
+            x2 = x[:,:,half:,:half]
+            x3 = x[:,:,half:,half:]
+            x = torch.cat((x0,x1,x2,x3), dim=2)
+        elif self.image_shape == (1,4):
+            quarter = x.shape[3] // 4
+            x0 = x[:,:,:,:quarter]
+            x1 = x[:,:,:,quarter:2*quarter]
+            x2 = x[:,:,:,2*quarter:3*quarter]
+            x3 = x[:,:,:,3*quarter:]
+            x = torch.cat((x0,x1,x2,x3), dim=2)
+        elif self.image_shape == (1,2):
+            half = x.shape[3] // 2
+            x0 = x[:,:,:,:half]
+            x1 = x[:,:,:,half:]
+            x = torch.cat((x0,x1), dim=2)
+        elif self.image_shape == (2, 0.5):
+            half = x.shape[2] // 2
+            x0 = x[:,:,:half,:]
+            x1 = x[:,:,half:,:]
+            x = torch.cat((x0,x1), dim=3)
+
+        dimension = 2 if self.image_shape == (2, 0.5) else 3
+        x = torch.mean(x, dim=dimension)
+        x = F.dropout(x, p=0.2, training=self.training)
+        x = x.transpose(1, 2)
+        x = F.relu_(self.fc1(x))
+        x = x.transpose(1, 2)
+        x = F.dropout(x, p=0.3, training=self.training)
+
+        logit, segment_logits, preds = self.att_block(x)
+        
+        if self.multilabel:
+            return logit
+        else:
+            return logit

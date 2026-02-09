@@ -2,7 +2,7 @@
 import argparse
 import os
 import json
-from model_trainer import ASTTrainer, CNNTrainer, PixelPredictionTrainer
+from model_trainer import ASTTrainer, CNNTrainer, PixelPredictionTrainer, KaytooTrainer
 import config
 
 
@@ -66,8 +66,8 @@ Examples:
     parser.add_argument('output_folder', type=str, help="Path to outputs folder (OUTPUT)")
     parser.add_argument('--mode', type=str, default='classification', choices=['classification', 'pixel'],
                        help="Training mode: 'classification' for standard class prediction, 'pixel' for interesting pixel prediction (pre-training). Default: classification")
-    parser.add_argument('--model', type=str, default='ast', choices=['ast', 'cnn'],
-                       help="Model architecture to use: 'ast' (Audio Spectrogram Transformer) or 'cnn' (Convolutional Neural Network). Default: ast")
+    parser.add_argument('--model', type=str, default='ast', choices=['ast', 'cnn', 'kaytoo'],
+                       help="Model architecture to use: 'ast' (Audio Spectrogram Transformer), 'cnn' (Convolutional Neural Network), or 'kaytoo' (EfficientNet + attention pooling). Default: ast")
     parser.add_argument('--epochs', type=int, default=config.DEFAULT_EPOCHS, 
                        help=f"Number of epochs (default: {config.DEFAULT_EPOCHS})")
     parser.add_argument('--batch_size', type=int, default=config.DEFAULT_BATCH_SIZE, 
@@ -124,6 +124,11 @@ Examples:
     parser.add_argument('--no-temporal-roll', action='store_false', dest='temporal_roll',
                        help="Disable temporal rolling augmentation")
     
+    parser.add_argument('--adapters', action='store_true',
+                       help="[AST] Use lightweight adapter layers for fine-tuning without forgetting AudioSet features (like LoRA). Adds trainable bottleneck layers while keeping backbone frozen.")
+    parser.add_argument('--per-chunk-norm', action='store_true',
+                       help="[AST] Use per-chunk min-max normalization (like Kaytoo) instead of global AudioSet mean/std. Handles varying recording levels better. Splits spectrogram into chunks and normalizes each independently.")
+    
     args = parser.parse_args()
 
     warn_if_multilabel_dataset(args.data_folder, args.multilabel, args.mode)
@@ -178,6 +183,8 @@ Examples:
             dropout=args.dropout,
             bce_smoothing=args.bce_smoothing,
             use_temporal_roll=args.temporal_roll,
+            use_adapters=args.adapters,
+            per_chunk_norm=args.per_chunk_norm,
             use_amp=False
         )
     elif args.model == 'cnn':
@@ -193,6 +200,28 @@ Examples:
             batch_size=args.batch_size,
             multilabel=args.multilabel,
             learning_rate=cnn_lr,
+            mixup_alpha=args.mixup,
+            pretrained_path=args.pretrained,
+            weight_decay=args.weight_decay,
+            noise_ratio=args.noise,
+            noise_folder=args.noise_folder,
+            normalize=args.normalize,
+            noise_as_samples=args.noise_as_samples,
+            max_noise_samples=args.max_noise_samples,
+            freq_bins=args.freq_bins,
+            time_bins=args.time_bins,
+            use_focal_loss=args.focal_loss,
+            use_temporal_roll=args.temporal_roll
+        )
+    elif args.model == 'kaytoo':
+        print(f"Training Kaytoo model (EfficientNet + attention pooling)...")
+        trainer = KaytooTrainer(
+            data_folder=args.data_folder,
+            output_folder=args.output_folder,
+            max_epochs=args.epochs,
+            batch_size=args.batch_size,
+            multilabel=args.multilabel,
+            learning_rate=args.lr,
             mixup_alpha=args.mixup,
             pretrained_path=args.pretrained,
             weight_decay=args.weight_decay,
