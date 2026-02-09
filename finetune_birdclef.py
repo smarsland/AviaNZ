@@ -77,7 +77,7 @@ class BirdClefFineTuneModel(nn.Module):
         # Load BirdClef pretrained weights if provided (for training)
         if pretrained_path:
             print(f"Loading BirdClef pretrained weights from {pretrained_path}")
-            checkpoint = torch.load(pretrained_path, map_location='cpu')
+            checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
             
             # Get original number of classes from checkpoint
             orig_num_classes = checkpoint['model_state_dict']['classifier.weight'].shape[0]
