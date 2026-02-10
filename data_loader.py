@@ -177,6 +177,37 @@ class BaseDataProcessor:
 
 
 class AviaNZDataProcessor(BaseDataProcessor):
+    def __init__(self, spec_processor=None, segment_extractor=None, output_format='spectrogram', with_audio=False, name_mapping=None):
+        super().__init__(spec_processor, segment_extractor, output_format, with_audio)
+        self.name_mapping = name_mapping
+    
+    def normalize_to_ebird(self, species_name):
+        """Normalize species name to eBird code if mapping is available"""
+        if not self.name_mapping:
+            return species_name
+        
+        if species_name in ['Empty Sample', 'Tree Weta', 'Spy Bird', "Don't Know", None, '']:
+            return species_name
+        
+        # Try direct match
+        if species_name in self.name_mapping:
+            return self.name_mapping[species_name]
+        
+        # Try case-insensitive match
+        name_lower = species_name.lower()
+        for key, value in self.name_mapping.items():
+            if key.lower() == name_lower:
+                return value
+        
+        # Try base name without parentheses
+        if '(' in species_name:
+            base_name = species_name.split('(')[0].strip()
+            if base_name in self.name_mapping:
+                return self.name_mapping[base_name]
+        
+        # Return original if no mapping found
+        return species_name
+    
     def load_annotation_file(self, data_file):
         try:
             with open(data_file, 'r') as f:
@@ -211,7 +242,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     wav_files.append(os.path.join(root, file))
         return wav_files
 
-    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None):
+    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, specific_species=None):
         print(f"Loading AviaNZ data from {input_folder}")
         
         if chunk_duration:
@@ -219,6 +250,9 @@ class AviaNZDataProcessor(BaseDataProcessor):
         
         if max_segments:
             print(f"Max segments limit: {max_segments}")
+        
+        if specific_species:
+            print(f"Filtering for specific species: {specific_species}")
         
         if os.path.exists(output_folder):
             if overwrite:
@@ -232,6 +266,13 @@ class AviaNZDataProcessor(BaseDataProcessor):
         skip_species = skip_species or []
         if "Don't Know" not in skip_species:
             skip_species.append("Don't Know")
+        
+        # Convert specific_species to a set for faster lookup
+        # These should be eBird codes if name_mapping is provided
+        specific_species_set = set(specific_species) if specific_species else None
+        
+        if specific_species_set and self.name_mapping:
+            print(f"  Filtering for eBird codes: {sorted(specific_species_set)}")
         
         wav_files = self.find_wav_files(input_folder)
         print(f"Found {len(wav_files)} .wav files")
@@ -286,8 +327,18 @@ class AviaNZDataProcessor(BaseDataProcessor):
                                     species = lab['species']
                                     certainty = lab['certainty']
                                     
-                                    if certainty >= min_certainty and species not in skip_species:
-                                        chunk_labels.add(species)
+                                    # Skip if doesn't meet certainty or is in skip list
+                                    if certainty < min_certainty or species in skip_species:
+                                        continue
+                                    
+                                    # Normalize to eBird code if mapping available
+                                    species_normalized = self.normalize_to_ebird(species)
+                                    
+                                    # If specific_species is set, only include those species (compare normalized)
+                                    if specific_species_set and species_normalized not in specific_species_set:
+                                        continue
+                                    
+                                    chunk_labels.add(species)
                         
                         sg_raw = self.spec_processor.process_audio_segment(wav_file, start_time, end_time)
                         
@@ -355,6 +406,13 @@ class AviaNZDataProcessor(BaseDataProcessor):
                         if certainty < min_certainty:
                             continue
                         if species in skip_species:
+                            continue
+                        
+                        # Normalize to eBird code if mapping available
+                        species_normalized = self.normalize_to_ebird(species)
+                        
+                        # If specific_species is set, only include those species (compare normalized)
+                        if specific_species_set and species_normalized not in specific_species_set:
                             continue
                         
                         valid_labels.append(species)
@@ -1191,7 +1249,55 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
     print(f"{'='*50}")
     
     if source_type == 'avianz':
-        processor = AviaNZDataProcessor(spec_processor, segment_extractor, output_format, with_audio)
+        # Load name mapping for eBird code filtering if --species is used
+        name_mapping = None
+        if kwargs.get('specific_species'):
+            mapping_file = kwargs.get('name_mapping')
+            if mapping_file is None:
+                default_mapping = "DOC_bird_naming_map.csv"
+                if os.path.exists(default_mapping):
+                    mapping_file = default_mapping
+            
+            if mapping_file and os.path.exists(mapping_file):
+                print(f"Loading bird name mapping from {mapping_file}...")
+                import csv
+                import pandas as pd
+                df = pd.read_csv(mapping_file)
+                name_mapping = {}
+                for _, row in df.iterrows():
+                    ebird_code = row['eBird']
+                    if pd.isna(ebird_code):
+                        continue
+                    if pd.notna(row['CommonName']):
+                        name_mapping[row['CommonName']] = ebird_code
+                    if pd.notna(row['ExtraName']):
+                        name_mapping[row['ExtraName']] = ebird_code
+                    if pd.notna(row['ListDOCBirds']):
+                        name_mapping[row['ListDOCBirds']] = ebird_code
+                    name_mapping[ebird_code] = ebird_code
+                # Add hardcoded fixes for common mismatches
+                name_mapping['Ruru'] = 'morepo2'
+                name_mapping['Morepork'] = 'morepo2'
+                name_mapping['Bellbird/Tui'] = 'nezbel1'
+                name_mapping['Tomtit (Nth Is)'] = 'tomtit1'
+                name_mapping['Fantail (Nth Is)'] = 'nezfan1'
+                name_mapping['Fantail (spp)'] = 'nezfan1'
+                name_mapping['Kaka (Nth Is)'] = 'nezkak1'
+                name_mapping['Kaka (spp)'] = 'nezkak1'
+                name_mapping['Tui (spp)'] = 'tui1'
+                name_mapping['Robin (Nth Is)'] = 'nezrob2'
+                name_mapping['Pigeon (NZ Kereru Kukupa)'] = 'nezpig2'
+                name_mapping['Warbler (Grey)'] = 'gryger1'
+                name_mapping['Magpie (Australian)'] = 'ausmag2'
+                name_mapping['Myna (Indian)'] = 'commyn'
+                name_mapping['Gull (Southern Black-backed)'] = 'kelgul'
+                name_mapping['Plover (Spur-winged)'] = 'maslap1'
+                name_mapping['Rosella (Eastern)'] = 'easros1'
+                name_mapping['Cockatoo (Sulphur-crested)'] = 'succoc'
+                name_mapping['Sparrow (House)'] = 'houspa'
+                print(f"  Loaded {len(name_mapping)} name mappings")
+        
+        processor = AviaNZDataProcessor(spec_processor, segment_extractor, output_format, with_audio, name_mapping)
         file_count = processor.process(
             input_folder=input_folder,
             output_folder=output_folder,
@@ -1277,6 +1383,9 @@ Examples:
   # Process only first 1000 segments from AviaNZ data
   python data_loader.py avianz "Sound Files/GSK" "Sound Files/GSK_spec" --max-segments 1000
   
+  # Process only specific species from AviaNZ data using eBird codes
+  python data_loader.py avianz "Sound Files/GSK" "Sound Files/GSK_spec" --species "morepo2,tui1"
+  
   # Extract AviaNZ annotated segments as WAV files
   python data_loader.py avianz "Sound Files/GSK" "Sound Files/GSK_wav" --format wav
   
@@ -1343,7 +1452,7 @@ Examples:
     parser.add_argument('--max-samples', type=int, default=config.DEFAULT_MAX_SAMPLES,
                        help=f"[DOC] Maximum samples per species (default: {config.DEFAULT_MAX_SAMPLES})")
     parser.add_argument('--species', type=str,
-                       help="[DOC] Comma-separated list of specific species codes")
+                       help="[AviaNZ/DOC] Comma-separated list of specific species eBird codes to include (e.g., 'morepo2,tui1')")
     parser.add_argument('--mapping', type=str,
                        help="[DOC] Path to bird name mapping CSV file")
     
@@ -1367,6 +1476,8 @@ Examples:
     if args.source_type == 'avianz':
         if args.skip_species:
             kwargs['skip_species'] = [s.strip() for s in args.skip_species.split(',')]
+        if args.species:
+            kwargs['specific_species'] = [s.strip() for s in args.species.split(',')]
         kwargs['min_certainty'] = args.min_certainty
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
