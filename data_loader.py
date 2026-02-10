@@ -238,7 +238,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
         wav_files = []
         for root, dirs, files in os.walk(folder):
             for file in files:
-                if file.endswith('.wav') and not file.endswith('.backup'):
+                if file.lower().endswith('.wav') and not file.endswith('.backup'):
                     wav_files.append(os.path.join(root, file))
         return wav_files
 
@@ -563,8 +563,11 @@ class DOCDataProcessor(BaseDataProcessor):
 
     def process(self, input_folder, output_folder, max_species=None, min_examples=None, 
                 max_samples=None, specific_species=None, name_mapping=None, overwrite=False,
-                ignore_multilabel=False):
+                ignore_multilabel=False, max_segments=None):
         print(f"Loading bird data from {input_folder}")
+        
+        if max_segments:
+            print(f"Max segments limit: {max_segments}")
         
         if os.path.exists(output_folder):
             if overwrite:
@@ -692,6 +695,9 @@ class DOCDataProcessor(BaseDataProcessor):
         for species, files in species_to_files.items():
             species_count = 0
             for i, sound_file in enumerate(files[:max_samples]):
+                if max_segments and file_count >= max_segments:
+                    break
+                
                 processed_files += 1
                 
                 if not sound_file.lower().endswith((".wav", ".flac")):
@@ -785,6 +791,10 @@ class DOCDataProcessor(BaseDataProcessor):
             
             if species_count > 0:
                 print(f"  {species}: processed {species_count} files")
+            
+            if max_segments and file_count >= max_segments:
+                print(f"Reached max_segments limit of {max_segments}")
+                break
         
         self.save_labels(output_folder, file_labels, valid_species, 'DOC')
             
@@ -817,8 +827,11 @@ class ESCDataProcessor(BaseDataProcessor):
         print(f"Found {len(categories)} unique categories")
         return metadata, sorted(categories)
 
-    def process(self, input_folder, output_folder, overwrite=False):
+    def process(self, input_folder, output_folder, overwrite=False, max_segments=None):
         print(f"Loading ESC-50 data from {input_folder}")
+        
+        if max_segments:
+            print(f"Max segments limit: {max_segments}")
         
         audio_folder = os.path.join(input_folder, "audio")
         metadata_path = os.path.join(input_folder, "meta", "esc50.csv")
@@ -872,6 +885,9 @@ class ESCDataProcessor(BaseDataProcessor):
             category_count = 0
             
             for file_info in files:
+                if max_segments and file_count >= max_segments:
+                    break
+                
                 processed_files += 1
                 audio_path = file_info['path']
                 
@@ -909,6 +925,10 @@ class ESCDataProcessor(BaseDataProcessor):
             
             if category_count > 0:
                 print(f"  {category}: {category_count} files")
+            
+            if max_segments and file_count >= max_segments:
+                print(f"Reached max_segments limit of {max_segments}")
+                break
         
         self.save_labels(output_folder, labels, all_categories, 'ESC-50')
             
@@ -917,8 +937,13 @@ class ESCDataProcessor(BaseDataProcessor):
 
 
 class NoiseDataProcessor(BaseDataProcessor):
-    def process(self, input_folder, output_folder, num_samples):
+    def process(self, input_folder, output_folder, num_samples, max_segments=None):
         print(f"Loading noise files from {input_folder}")
+        
+        if max_segments:
+            print(f"Max segments limit: {max_segments}")
+            num_samples = min(num_samples, max_segments)
+        
         data_folder = os.path.join(output_folder, "data")
         os.makedirs(data_folder, exist_ok=True)
         
@@ -1005,11 +1030,14 @@ class NoiseDataProcessor(BaseDataProcessor):
 
 
 class InferenceDataProcessor(BaseDataProcessor):
-    def process(self, input_folder, output_folder, overwrite=False, chunk_duration=None):
+    def process(self, input_folder, output_folder, overwrite=False, chunk_duration=None, max_segments=None):
         print(f"Loading audio files for inference from {input_folder}")
         
         if chunk_duration:
             print(f"Splitting into {chunk_duration}s chunks")
+        
+        if max_segments:
+            print(f"Max segments limit: {max_segments}")
         
         if os.path.exists(output_folder):
             if overwrite:
@@ -1052,6 +1080,9 @@ class InferenceDataProcessor(BaseDataProcessor):
                     print(f"Processing {relative_path} ({duration:.1f}s -> {num_chunks} chunks)")
                     
                     for chunk_idx in range(num_chunks):
+                        if max_segments and file_count >= max_segments:
+                            break
+                        
                         start_time = chunk_idx * chunk_duration
                         end_time = min(start_time + chunk_duration, duration)
                         
@@ -1086,8 +1117,16 @@ class InferenceDataProcessor(BaseDataProcessor):
                 except Exception as e:
                     print(f"Error processing {audio_file}: {e}")
                     continue
+                
+                if max_segments and file_count >= max_segments:
+                    print(f"Reached max_segments limit of {max_segments}")
+                    break
         else:
             for audio_file in audio_files:
+                if max_segments and file_count >= max_segments:
+                    print(f"Reached max_segments limit of {max_segments}")
+                    break
+                
                 sg_raw = self.spec_processor.process_audio_file(audio_file)
                 
                 if sg_raw is not None:
@@ -1318,7 +1357,8 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
             specific_species=kwargs.get('specific_species'),
             name_mapping=kwargs.get('name_mapping'),
             overwrite=overwrite,
-            ignore_multilabel=ignore_multilabel
+            ignore_multilabel=ignore_multilabel,
+            max_segments=kwargs.get('max_segments')
         )
     elif source_type == 'esc':
         if output_format == 'wav':
@@ -1327,7 +1367,8 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
         file_count = processor.process(
             input_folder=input_folder,
             output_folder=output_folder,
-            overwrite=overwrite
+            overwrite=overwrite,
+            max_segments=kwargs.get('max_segments')
         )
     elif source_type == 'noise':
         if output_format == 'wav':
@@ -1336,7 +1377,8 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
         file_count = processor.process(
             input_folder=input_folder,
             output_folder=output_folder,
-            num_samples=kwargs.get('num_samples', config.DEFAULT_NOISE_SAMPLES)
+            num_samples=kwargs.get('num_samples', config.DEFAULT_NOISE_SAMPLES),
+            max_segments=kwargs.get('max_segments')
         )
     elif source_type == 'inference':
         if output_format == 'wav':
@@ -1346,7 +1388,8 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
             input_folder=input_folder,
             output_folder=output_folder,
             overwrite=overwrite,
-            chunk_duration=kwargs.get('chunk_duration')
+            chunk_duration=kwargs.get('chunk_duration'),
+            max_segments=kwargs.get('max_segments')
         )
     else:
         raise ValueError(f"Unknown source type: {source_type}")
@@ -1443,7 +1486,7 @@ Examples:
     parser.add_argument('--skip-species', type=str,
                        help="[AviaNZ] Comma-separated list of species to skip")
     parser.add_argument('--max-segments', type=int,
-                       help="[AviaNZ] Maximum number of segments to process (default: no limit)")
+                       help="[All sources] Maximum number of output files/segments to process (default: no limit)")
     
     parser.add_argument('--max-species', type=int, default=config.DEFAULT_MAX_SPECIES,
                        help=f"[DOC] Maximum number of species to process (default: {config.DEFAULT_MAX_SPECIES})")
@@ -1490,6 +1533,8 @@ Examples:
         kwargs['max_species'] = args.max_species
         kwargs['min_examples'] = args.min_examples
         kwargs['max_samples'] = args.max_samples
+        if args.max_segments:
+            kwargs['max_segments'] = args.max_segments
         
         mapping_file = args.mapping
         if mapping_file is None:
@@ -1504,10 +1549,18 @@ Examples:
     
     elif args.source_type == 'noise':
         kwargs['num_samples'] = args.samples
+        if args.max_segments:
+            kwargs['max_segments'] = args.max_segments
     
     elif args.source_type == 'inference':
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
+        if args.max_segments:
+            kwargs['max_segments'] = args.max_segments
+    
+    elif args.source_type == 'esc':
+        if args.max_segments:
+            kwargs['max_segments'] = args.max_segments
     
     file_count = load_data(
         source_type=args.source_type,
