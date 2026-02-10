@@ -240,14 +240,17 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     wav_files.append(os.path.join(root, file))
         return wav_files
 
-    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, specific_species=None):
+    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, max_samples=None, specific_species=None):
         print(f"Loading AviaNZ data from {input_folder}")
         
         if chunk_duration:
             print(f"Chunking mode: splitting into {chunk_duration}s chunks with annotation mapping")
         
         if max_segments:
-            print(f"Max segments limit: {max_segments}")
+            print(f"Max segments limit (total): {max_segments}")
+        
+        if max_samples:
+            print(f"Max samples limit (per species): {max_samples}")
         
         if specific_species:
             print(f"Filtering for specific species: {specific_species}")
@@ -271,6 +274,12 @@ class AviaNZDataProcessor(BaseDataProcessor):
         
         if specific_species_set and self.name_mapping:
             print(f"  Filtering for eBird codes: {sorted(specific_species_set)}")
+            print(f"  Name mapping loaded: {len(self.name_mapping)} mappings")
+        elif specific_species_set and not self.name_mapping:
+            print(f"  WARNING: Species filter requested but NO NAME MAPPING LOADED!")
+            print(f"  Filtering will NOT work correctly!")
+        elif specific_species_set:
+            print(f"  Filtering for species: {sorted(specific_species_set)}")
         
         wav_files = self.find_wav_files(input_folder)
         print(f"Found {len(wav_files)} .wav files")
@@ -289,6 +298,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
         file_count = 0
         segment_count = 0
         species_counts = {}
+        species_file_counts = {}  # Track files saved per species for max_samples limit
         species_example_saved = set()
         
         if chunk_duration:
@@ -417,6 +427,14 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     
                     if len(valid_labels) == 0:
                         continue
+                    
+                    # Check max_samples AFTER collecting valid labels (check primary species)
+                    primary_species = valid_labels[0]
+                    if max_samples:
+                        primary_normalized = self.normalize_to_ebird(primary_species)
+                        species_count = species_file_counts.get(primary_normalized, 0)
+                        if species_count >= max_samples:
+                            continue
                 
                     if self.output_format == 'wav':
                         file_basename = f"file_{file_count:08d}"
@@ -430,8 +448,6 @@ class AviaNZDataProcessor(BaseDataProcessor):
                         )
                         
                         if success:
-                            primary_species = valid_labels[0]
-                            
                             labels.append({
                                 'filename': f"{file_basename}.wav",
                                 'primary_class': primary_species,
@@ -447,6 +463,11 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             
                             for species in valid_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
+                            
+                            # Track count for the primary species (for max_samples limit)
+                            if max_samples:
+                                primary_normalized = self.normalize_to_ebird(primary_species)
+                                species_file_counts[primary_normalized] = species_file_counts.get(primary_normalized, 0) + 1
                     else:
                         sg_raw = self.spec_processor.process_audio_segment(
                             wav_file, 
@@ -462,8 +483,6 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             audio_filename = None
                             if self.audio_output_dir:
                                 audio_filename = self.save_audio_segment(wav_file, seg.start_time, seg.end_time, f"{file_basename}.wav")
-                            
-                            primary_species = valid_labels[0]
                             
                             label_entry = {
                                 'filename': f"{file_basename}.npy",
@@ -484,6 +503,11 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             
                             for species in valid_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
+                            
+                            # Track count for the primary species (for max_samples limit)
+                            if max_samples:
+                                primary_normalized = self.normalize_to_ebird(primary_species)
+                                species_file_counts[primary_normalized] = species_file_counts.get(primary_normalized, 0) + 1
                             
                             if primary_species not in species_example_saved:
                                 safe_name = primary_species.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_').replace('\\', '_').replace(':', '_')
@@ -1291,7 +1315,9 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
         if kwargs.get('specific_species'):
             mapping_file = kwargs.get('name_mapping')
             if mapping_file is None:
-                default_mapping = "DOC_bird_naming_map.csv"
+                # Look for mapping file in script directory
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                default_mapping = os.path.join(script_dir, "DOC_bird_naming_map.csv")
                 if os.path.exists(default_mapping):
                     mapping_file = default_mapping
             
@@ -1342,7 +1368,9 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
             min_certainty=kwargs.get('min_certainty', 50),
             skip_species=kwargs.get('skip_species'),
             chunk_duration=kwargs.get('chunk_duration'),
-            max_segments=kwargs.get('max_segments')
+            max_segments=kwargs.get('max_segments'),
+            max_samples=kwargs.get('max_samples'),
+            specific_species=kwargs.get('specific_species')
         )
     elif source_type == 'doc':
         processor = DOCDataProcessor(spec_processor, segment_extractor, output_format, with_audio)
@@ -1499,7 +1527,7 @@ Examples:
     parser.add_argument('--min-examples', type=int, default=config.DEFAULT_MIN_EXAMPLES,
                        help=f"Minimum examples per species/category to include it (default: {config.DEFAULT_MIN_EXAMPLES})")
     parser.add_argument('--max-samples', type=int, default=config.DEFAULT_MAX_SAMPLES,
-                       help=f"Maximum samples per species/category (DOC only), OR total limit across all (other sources) (default: {config.DEFAULT_MAX_SAMPLES})")
+                       help=f"Maximum samples per species/category (AviaNZ/DOC), OR total limit (ESC/Noise/Inference) (default: {config.DEFAULT_MAX_SAMPLES})")
     parser.add_argument('--species', type=str,
                        help="Comma-separated list of specific species/categories to include (e.g., 'morepo2,tui1' for birds, 'dog,cat' for ESC)")
     parser.add_argument('--mapping', type=str,
@@ -1530,11 +1558,11 @@ Examples:
         kwargs['min_certainty'] = args.min_certainty
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
-        # For AviaNZ, both --max-segments and --max-samples mean the same thing
+        # For AviaNZ: max_segments = total limit, max_samples = per-species limit
         if args.max_segments:
             kwargs['max_segments'] = args.max_segments
-        elif args.max_samples:
-            kwargs['max_segments'] = args.max_samples
+        if args.max_samples:
+            kwargs['max_samples'] = args.max_samples
     
     elif args.source_type == 'doc':
         if args.species:
