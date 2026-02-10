@@ -1649,7 +1649,6 @@ Examples:
         if args.species:
             kwargs['specific_species'] = [s.strip() for s in args.species.split(',')]
         kwargs['min_certainty'] = args.min_certainty
-        kwargs['ignore_multilabel'] = args.ignore_multilabel
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
         # For AviaNZ: max_segments = total limit, max_samples = per-species limit
