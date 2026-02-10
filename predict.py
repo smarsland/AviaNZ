@@ -47,10 +47,8 @@ class ModelPredictor:
         """Load trained model from checkpoint."""
         print(f"Loading model from {self.model_path}")
         
-        # The .pt file contains only state_dict, need to load config separately
         state_dict = torch.load(self.model_path, map_location=self.device)
         
-        # Load model configuration from provided JSON file
         if not os.path.exists(self.model_config):
             raise FileNotFoundError(f"Model config file not found: {self.model_config}")
         
@@ -62,28 +60,19 @@ class ModelPredictor:
         model_type = model_config.get('model_type', 'AST').lower()
 
         self.multilabel = multilabel
-        
-        # Get class names from model config (these are the training classes)
         self.categories = model_config['class_names']
         
-        # Get input dimensions from config
         self.expected_freq_bins = model_config.get('freq_bins', config.DEFAULT_FREQ_BINS)
         training_time_bins = model_config.get('time_bins', config.DEFAULT_TIME_BINS)
         
-        # Determine inference time_bins (use training size by default, override with --time-bins if specified)
         inference_time_bins = self.inference_time_bins if self.inference_time_bins is not None else training_time_bins
         
-        # Show resize info if different from training
         if inference_time_bins != training_time_bins:
             print(f"⚡ Resizing model input: {training_time_bins} → {inference_time_bins} time bins")
         
         self.use_sparse_patches = model_config.get('use_sparse_patches', False)
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
         
-        # Create model at INFERENCE size
-        # NOTE: We instantiate at TRAINING size and then (optionally) interpolate
-        # position embeddings to the inference time dimension. This keeps the
-        # interpolation logic consistent with models.AST.interpolate_pos_embed().
         training_input_size = (self.expected_freq_bins, training_time_bins)
         
         print(f"Model type: {model_type}")
@@ -102,18 +91,16 @@ class ModelPredictor:
         elif model_type == 'cnn':
             self.model = CNNModel(num_classes, multilabel, dropout=0.0)
         elif model_type == 'birdclef_finetuned':
-            # Load fine-tuned BirdClef model
             print("Loading fine-tuned BirdClef model...")
             from finetune_birdclef import BirdClefFineTuneModel
             self.model = BirdClefFineTuneModel(
                 num_classes=num_classes,
-                pretrained_path=None,  # Don't load BirdClef weights, we have fine-tuned weights
+                pretrained_path=None,
                 freeze_backbone=False
             )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
-        # For sparse models, the patch_projection layer is created dynamically
         if 'patch_projection.weight' in state_dict:
             if not hasattr(self.model, 'patch_projection'):
                 import torch.nn as nn
@@ -121,17 +108,24 @@ class ModelPredictor:
                 patch_size = 16
                 self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
         
-        # Load checkpoint weights
+        if model_type == 'ast':
+            pos_embed_key = 'ast.embeddings.position_embeddings'
+            if pos_embed_key in state_dict:
+                saved_pos_embed = state_dict[pos_embed_key]
+                current_pos_embed = self.model.ast.embeddings.position_embeddings
+                
+                if saved_pos_embed.shape != current_pos_embed.shape:
+                    print(f"Position embedding mismatch: checkpoint {saved_pos_embed.shape} vs model {current_pos_embed.shape}")
+                    print(f"Using position embeddings from checkpoint (already interpolated during training)")
+                    self.model.ast.embeddings.position_embeddings = nn.Parameter(saved_pos_embed)
+                    state_dict.pop(pos_embed_key)
+        
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
 
-        # If time dimension differs at inference, interpolate position embeddings
-        # using the same implementation as training.
         if inference_time_bins != training_time_bins and hasattr(self.model, 'interpolate_pos_embed'):
-            # MultiScaleAST handles positional embeddings internally; standard AST uses interpolate_pos_embed.
             if model_type == 'ast':
                 self.model.interpolate_pos_embed((self.expected_freq_bins, inference_time_bins))
         
-        # Store the final inference time bins
         self.expected_time_bins = inference_time_bins
         
         self.model.to(self.device)
