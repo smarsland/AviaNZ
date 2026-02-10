@@ -1411,11 +1411,19 @@ Source Types:
   doc        - DOC bird sound data with metadata
   esc        - ESC-50 environmental sound dataset
   noise      - Background noise audio files
-  inference  - Audio files for inference (use --chunk-duration to split into chunks)
+  inference  - Audio files for inference
 
 Output Formats:
   spectrogram - Convert to spectrograms (.npy files) [default]
   wav         - Extract as WAV files (avianz and doc only)
+
+Common Arguments Work Across All Sources:
+  --max-segments N    Limit to N total output files
+  --max-samples N     Same as --max-segments (or per-species for DOC)
+  --species "a,b,c"   Filter to specific species/categories
+  --with-audio        Save audio files alongside spectrograms
+  --chunk-duration X  Split into X-second chunks
+  --overwrite         Overwrite existing output
 
 Examples:
   # Process AviaNZ annotated data as spectrograms
@@ -1480,35 +1488,35 @@ Examples:
                        help="Overwrite existing output folder")
     
     parser.add_argument('--min-certainty', type=int, default=50,
-                       help="[AviaNZ] Minimum certainty threshold for labels (default: 50)")
+                       help="Minimum certainty threshold for labels (default: 50)")
     parser.add_argument('--skip-species', type=str,
-                       help="[AviaNZ] Comma-separated list of species to skip")
+                       help="Comma-separated list of species/categories to skip")
     parser.add_argument('--max-segments', type=int,
-                       help="[All sources] Maximum number of output files/segments to process (default: no limit)")
+                       help="Maximum total output files/segments to process across all sources (default: no limit)")
     
     parser.add_argument('--max-species', type=int, default=config.DEFAULT_MAX_SPECIES,
-                       help=f"[DOC] Maximum number of species to process (default: {config.DEFAULT_MAX_SPECIES})")
+                       help=f"Maximum number of species/categories to process (default: {config.DEFAULT_MAX_SPECIES})")
     parser.add_argument('--min-examples', type=int, default=config.DEFAULT_MIN_EXAMPLES,
-                       help=f"[DOC] Minimum examples per species (default: {config.DEFAULT_MIN_EXAMPLES})")
+                       help=f"Minimum examples per species/category to include it (default: {config.DEFAULT_MIN_EXAMPLES})")
     parser.add_argument('--max-samples', type=int, default=config.DEFAULT_MAX_SAMPLES,
-                       help=f"[DOC] Maximum samples per species (default: {config.DEFAULT_MAX_SAMPLES})")
+                       help=f"Maximum samples per species/category (DOC only), OR total limit across all (other sources) (default: {config.DEFAULT_MAX_SAMPLES})")
     parser.add_argument('--species', type=str,
-                       help="[AviaNZ/DOC] Comma-separated list of specific species eBird codes to include (e.g., 'morepo2,tui1')")
+                       help="Comma-separated list of specific species/categories to include (e.g., 'morepo2,tui1' for birds, 'dog,cat' for ESC)")
     parser.add_argument('--mapping', type=str,
-                       help="[DOC] Path to bird name mapping CSV file")
+                       help="Path to bird name mapping CSV file (default: DOC_bird_naming_map.csv)")
     
     parser.add_argument('--samples', type=int, default=config.DEFAULT_NOISE_SAMPLES,
-                       help=f"[Noise] Maximum number of noise samples to process (default: {config.DEFAULT_NOISE_SAMPLES})")
+                       help=f"Maximum number of samples to process (default: {config.DEFAULT_NOISE_SAMPLES})")
     
     parser.add_argument('--chunk-duration', type=float, default=None,
-                       help="[AviaNZ/Inference] Split audio into chunks of this duration in seconds (e.g., 5.0 for kaytoo comparison)")
+                       help="Split audio into chunks of this duration in seconds (e.g., 5.0)")
     parser.add_argument('--ignore-multilabel', action='store_true',
-                       help="[DOC] Skip samples with multiple labels - only use single-label samples for training")
+                       help="Skip samples with multiple labels - only use single-label samples")
     parser.add_argument('--with-audio', action='store_true',
-                       help="[Spectrogram mode] Also save audio segments to audio/ folder for listening")
+                       help="Also save audio segments to audio/ folder for listening")
 
     parser.add_argument('--audioset-fbank', action='store_true',
-                       help="[Spectrogram] Generate AudioSet-style Kaldi fbank features for AST (forces 16kHz, 25ms window, 10ms hop, 128 mel bins). Saves linear fbank energies; training will still apply log transform as usual.")
+                       help="Generate AudioSet-style Kaldi fbank features for AST (forces 16kHz, 25ms window, 10ms hop, 128 mel bins). Saves linear fbank energies; training will still apply log transform as usual.")
     
     args = parser.parse_args()
     
@@ -1522,8 +1530,11 @@ Examples:
         kwargs['min_certainty'] = args.min_certainty
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
+        # For AviaNZ, both --max-segments and --max-samples mean the same thing
         if args.max_segments:
             kwargs['max_segments'] = args.max_segments
+        elif args.max_samples:
+            kwargs['max_segments'] = args.max_samples
     
     elif args.source_type == 'doc':
         if args.species:
@@ -1547,18 +1558,27 @@ Examples:
     
     elif args.source_type == 'noise':
         kwargs['num_samples'] = args.samples
+        # For Noise, both --max-segments and --max-samples mean the same thing
         if args.max_segments:
             kwargs['max_segments'] = args.max_segments
+        elif args.max_samples:
+            kwargs['max_segments'] = args.max_samples
     
     elif args.source_type == 'inference':
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
+        # For Inference, both --max-segments and --max-samples mean the same thing
         if args.max_segments:
             kwargs['max_segments'] = args.max_segments
+        elif args.max_samples:
+            kwargs['max_segments'] = args.max_samples
     
     elif args.source_type == 'esc':
+        # For ESC, both --max-segments and --max-samples mean the same thing
         if args.max_segments:
             kwargs['max_segments'] = args.max_segments
+        elif args.max_samples:
+            kwargs['max_segments'] = args.max_samples
     
     file_count = load_data(
         source_type=args.source_type,
