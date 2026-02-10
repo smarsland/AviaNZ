@@ -98,10 +98,9 @@ def count_species_from_labels(labels_file, name_mapping=None):
     species_counts = Counter()
     unmapped_species = set()
     
-    # Stats about multi-label files
-    total_files = 0
-    single_label_files = 0
-    multi_label_files = 0
+    # Per-species stats about single vs multi-label
+    species_single_label = Counter()
+    species_multi_label = Counter()
     
     # Check if this is a processed dataset with 'files' key
     if 'files' in data:
@@ -123,11 +122,7 @@ def count_species_from_labels(labels_file, name_mapping=None):
                 elif 'primary_class' in file_info:
                     species_list = [file_info['primary_class']]
                 
-                total_files += 1
-                if len(species_list) == 1:
-                    single_label_files += 1
-                elif len(species_list) > 1:
-                    multi_label_files += 1
+                is_single_label = (len(species_list) == 1)
                 
                 # Map species names if mapping provided
                 for species in species_list:
@@ -135,19 +130,21 @@ def count_species_from_labels(labels_file, name_mapping=None):
                         mapped_species = normalize_to_ebird(species, name_mapping)
                         if mapped_species:
                             species_counts[mapped_species] += 1
+                            if is_single_label:
+                                species_single_label[mapped_species] += 1
+                            else:
+                                species_multi_label[mapped_species] += 1
                         else:
                             unmapped_species.add(species)
                     else:
                         species_counts[species] += 1
-        
-        # Print multi-label statistics
-        if total_files > 0:
-            print(f"\nLabel Statistics:")
-            print(f"  Single-label files: {single_label_files} ({100*single_label_files/total_files:.1f}%)")
-            print(f"  Multi-label files:  {multi_label_files} ({100*multi_label_files/total_files:.1f}%)")
+                        if is_single_label:
+                            species_single_label[species] += 1
+                        else:
+                            species_multi_label[species] += 1
     else:
         print("Warning: Unexpected labels.json format")
-        return species_counts
+        return species_counts, species_single_label, species_multi_label
     
     if name_mapping and unmapped_species:
         real_unmapped = unmapped_species - {'Empty Sample', 'Tree Weta', 'Spy Bird'}
@@ -156,7 +153,7 @@ def count_species_from_labels(labels_file, name_mapping=None):
             for species in sorted(real_unmapped):
                 print(f"  - {species}")
     
-    return species_counts
+    return species_counts, species_single_label, species_multi_label
 
 
 def main():
@@ -217,6 +214,13 @@ Examples:
         print("\nNo species found in dataset!")
         return 1
     
+    # Unpack the results
+    if isinstance(species_counts, tuple):
+        species_counts, species_single_label, species_multi_label = species_counts
+    else:
+        species_single_label = {}
+        species_multi_label = {}
+    
     label_type = "eBird codes" if args.ebird else "species"
     print(f"\nFound {len(species_counts)} unique {label_type}:")
     print("="*60)
@@ -225,7 +229,13 @@ Examples:
     sorted_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=args.reverse)
     
     for species, count in sorted_species:
-        print(f"  {species:40s}: {count:5d}")
+        single = species_single_label.get(species, 0)
+        multi = species_multi_label.get(species, 0)
+        if single + multi > 0:
+            single_pct = 100 * single / (single + multi)
+            print(f"  {species:30s}: {count:5d}  ({single:4d} single-label {single_pct:5.1f}%, {multi:4d} multi-label)")
+        else:
+            print(f"  {species:30s}: {count:5d}")
     
     print("="*60)
     print(f"Total: {sum(species_counts.values())} occurrences across {len(species_counts)} {label_type}")
