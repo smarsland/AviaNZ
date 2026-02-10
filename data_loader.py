@@ -346,7 +346,8 @@ class AviaNZDataProcessor(BaseDataProcessor):
                                     if specific_species_set and species_normalized not in specific_species_set:
                                         continue
                                     
-                                    chunk_labels.add(species)
+                                    # Add normalized species to chunk labels
+                                    chunk_labels.add(species_normalized)
                         
                         sg_raw = self.spec_processor.process_audio_segment(wav_file, start_time, end_time)
                         
@@ -428,11 +429,20 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     if len(valid_labels) == 0:
                         continue
                     
+                    # Normalize all labels to eBird codes if mapping available
+                    if self.name_mapping:
+                        normalized_labels = [self.normalize_to_ebird(sp) for sp in valid_labels]
+                        # Remove duplicates while preserving order
+                        seen = set()
+                        normalized_labels = [x for x in normalized_labels if not (x in seen or seen.add(x))]
+                    else:
+                        normalized_labels = valid_labels
+                    
+                    primary_species = normalized_labels[0]
+                    
                     # Check max_samples AFTER collecting valid labels (check primary species)
-                    primary_species = valid_labels[0]
                     if max_samples:
-                        primary_normalized = self.normalize_to_ebird(primary_species)
-                        species_count = species_file_counts.get(primary_normalized, 0)
+                        species_count = species_file_counts.get(primary_species, 0)
                         if species_count >= max_samples:
                             continue
                 
@@ -451,7 +461,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             labels.append({
                                 'filename': f"{file_basename}.wav",
                                 'primary_class': primary_species,
-                                'class_names': valid_labels,
+                                'class_names': normalized_labels,
                                 'source_file': wav_file,
                                 'start_time': seg.start_time,
                                 'end_time': seg.end_time,
@@ -461,13 +471,12 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             
                             file_count += 1
                             
-                            for species in valid_labels:
+                            for species in normalized_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
                             
                             # Track count for the primary species (for max_samples limit)
                             if max_samples:
-                                primary_normalized = self.normalize_to_ebird(primary_species)
-                                species_file_counts[primary_normalized] = species_file_counts.get(primary_normalized, 0) + 1
+                                species_file_counts[primary_species] = species_file_counts.get(primary_species, 0) + 1
                     else:
                         sg_raw = self.spec_processor.process_audio_segment(
                             wav_file, 
@@ -487,7 +496,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             label_entry = {
                                 'filename': f"{file_basename}.npy",
                                 'primary_class': primary_species,
-                                'class_names': valid_labels,
+                                'class_names': normalized_labels,
                                 'source_file': wav_file,
                                 'start_time': seg.start_time,
                                 'end_time': seg.end_time,
@@ -501,13 +510,12 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             
                             file_count += 1
                             
-                            for species in valid_labels:
+                            for species in normalized_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
                             
                             # Track count for the primary species (for max_samples limit)
                             if max_samples:
-                                primary_normalized = self.normalize_to_ebird(primary_species)
-                                species_file_counts[primary_normalized] = species_file_counts.get(primary_normalized, 0) + 1
+                                species_file_counts[primary_species] = species_file_counts.get(primary_species, 0) + 1
                             
                             if primary_species not in species_example_saved:
                                 safe_name = primary_species.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_').replace('\\', '_').replace(':', '_')
@@ -1310,55 +1318,54 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
     print(f"{'='*50}")
     
     if source_type == 'avianz':
-        # Load name mapping for eBird code filtering if --species is used
+        # Always load name mapping for consistent eBird code labels
         name_mapping = None
-        if kwargs.get('specific_species'):
-            mapping_file = kwargs.get('name_mapping')
-            if mapping_file is None:
-                # Look for mapping file in script directory
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                default_mapping = os.path.join(script_dir, "DOC_bird_naming_map.csv")
-                if os.path.exists(default_mapping):
-                    mapping_file = default_mapping
-            
-            if mapping_file and os.path.exists(mapping_file):
-                print(f"Loading bird name mapping from {mapping_file}...")
-                import csv
-                import pandas as pd
-                df = pd.read_csv(mapping_file)
-                name_mapping = {}
-                for _, row in df.iterrows():
-                    ebird_code = row['eBird']
-                    if pd.isna(ebird_code):
-                        continue
-                    if pd.notna(row['CommonName']):
-                        name_mapping[row['CommonName']] = ebird_code
-                    if pd.notna(row['ExtraName']):
-                        name_mapping[row['ExtraName']] = ebird_code
-                    if pd.notna(row['ListDOCBirds']):
-                        name_mapping[row['ListDOCBirds']] = ebird_code
-                    name_mapping[ebird_code] = ebird_code
-                # Add hardcoded fixes for common mismatches
-                name_mapping['Ruru'] = 'morepo2'
-                name_mapping['Morepork'] = 'morepo2'
-                name_mapping['Bellbird/Tui'] = 'nezbel1'
-                name_mapping['Tomtit (Nth Is)'] = 'tomtit1'
-                name_mapping['Fantail (Nth Is)'] = 'nezfan1'
-                name_mapping['Fantail (spp)'] = 'nezfan1'
-                name_mapping['Kaka (Nth Is)'] = 'nezkak1'
-                name_mapping['Kaka (spp)'] = 'nezkak1'
-                name_mapping['Tui (spp)'] = 'tui1'
-                name_mapping['Robin (Nth Is)'] = 'nezrob2'
-                name_mapping['Pigeon (NZ Kereru Kukupa)'] = 'nezpig2'
-                name_mapping['Warbler (Grey)'] = 'gryger1'
-                name_mapping['Magpie (Australian)'] = 'ausmag2'
-                name_mapping['Myna (Indian)'] = 'commyn'
-                name_mapping['Gull (Southern Black-backed)'] = 'kelgul'
-                name_mapping['Plover (Spur-winged)'] = 'maslap1'
-                name_mapping['Rosella (Eastern)'] = 'easros1'
-                name_mapping['Cockatoo (Sulphur-crested)'] = 'succoc'
-                name_mapping['Sparrow (House)'] = 'houspa'
-                print(f"  Loaded {len(name_mapping)} name mappings")
+        mapping_file = kwargs.get('name_mapping')
+        if mapping_file is None:
+            # Look for mapping file in script directory
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            default_mapping = os.path.join(script_dir, "DOC_bird_naming_map.csv")
+            if os.path.exists(default_mapping):
+                mapping_file = default_mapping
+        
+        if mapping_file and os.path.exists(mapping_file):
+            print(f"Loading bird name mapping from {mapping_file}...")
+            import csv
+            import pandas as pd
+            df = pd.read_csv(mapping_file)
+            name_mapping = {}
+            for _, row in df.iterrows():
+                ebird_code = row['eBird']
+                if pd.isna(ebird_code):
+                    continue
+                if pd.notna(row['CommonName']):
+                    name_mapping[row['CommonName']] = ebird_code
+                if pd.notna(row['ExtraName']):
+                    name_mapping[row['ExtraName']] = ebird_code
+                if pd.notna(row['ListDOCBirds']):
+                    name_mapping[row['ListDOCBirds']] = ebird_code
+                name_mapping[ebird_code] = ebird_code
+            # Add hardcoded fixes for common mismatches
+            name_mapping['Ruru'] = 'morepo2'
+            name_mapping['Morepork'] = 'morepo2'
+            name_mapping['Bellbird/Tui'] = 'nezbel1'
+            name_mapping['Tomtit (Nth Is)'] = 'tomtit1'
+            name_mapping['Fantail (Nth Is)'] = 'nezfan1'
+            name_mapping['Fantail (spp)'] = 'nezfan1'
+            name_mapping['Kaka (Nth Is)'] = 'nezkak1'
+            name_mapping['Kaka (spp)'] = 'nezkak1'
+            name_mapping['Tui (spp)'] = 'tui1'
+            name_mapping['Robin (Nth Is)'] = 'nezrob2'
+            name_mapping['Pigeon (NZ Kereru Kukupa)'] = 'nezpig2'
+            name_mapping['Warbler (Grey)'] = 'gryger1'
+            name_mapping['Magpie (Australian)'] = 'ausmag2'
+            name_mapping['Myna (Indian)'] = 'commyn'
+            name_mapping['Gull (Southern Black-backed)'] = 'kelgul'
+            name_mapping['Plover (Spur-winged)'] = 'maslap1'
+            name_mapping['Rosella (Eastern)'] = 'easros1'
+            name_mapping['Cockatoo (Sulphur-crested)'] = 'succoc'
+            name_mapping['Sparrow (House)'] = 'houspa'
+            print(f"  Loaded {len(name_mapping)} name mappings")
         
         processor = AviaNZDataProcessor(spec_processor, segment_extractor, output_format, with_audio, name_mapping)
         file_count = processor.process(
