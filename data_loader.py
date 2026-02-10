@@ -141,21 +141,19 @@ class BaseDataProcessor:
                     sf.write(output_path, data, sr)
                 return output_filename
             
-            # Use soundfile to read and write audio segment
-            data, sr = sf.read(audio_file)
+            # Get file info to calculate sample positions
+            info = sf.info(audio_file)
+            sr = info.samplerate
             
-            # Convert times to sample indices
+            # Calculate sample positions
             start_sample = int(start_time * sr)
-            end_sample = int(end_time * sr)
+            num_samples = int((end_time - start_time) * sr)
             
-            # Extract segment
-            if len(data.shape) == 1:
-                segment = data[start_sample:end_sample]
-            else:
-                segment = data[start_sample:end_sample, :]
+            # Read ONLY the segment we need (efficient!)
+            data = sf.read(audio_file, start=start_sample, frames=num_samples)[0]
             
             # Write segment
-            sf.write(output_path, segment, sr)
+            sf.write(output_path, data, sr)
             return output_filename
         except Exception as e:
             print(f"Warning: Could not save audio segment: {e}")
