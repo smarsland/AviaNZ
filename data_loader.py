@@ -240,7 +240,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     wav_files.append(os.path.join(root, file))
         return wav_files
 
-    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, max_samples=None, specific_species=None, ignore_multilabel=False):
+    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, max_samples=None, specific_species=None, ignore_multilabel=False, max_species=None, min_examples=None):
         print(f"Loading AviaNZ data from {input_folder}")
         
         if chunk_duration:
@@ -280,6 +280,45 @@ class AviaNZDataProcessor(BaseDataProcessor):
             print(f"  Filtering will NOT work correctly!")
         elif specific_species_set:
             print(f"  Filtering for species: {sorted(specific_species_set)}")
+        
+        # If no specific_species but max_species or min_examples specified, do first pass to count
+        if not specific_species_set and (max_species or min_examples):
+            print("\nFirst pass: counting species occurrences...")
+            wav_files_temp = self.find_wav_files(input_folder)
+            species_segment_counts = {}
+            
+            for wav_file in wav_files_temp:
+                data_file = wav_file + ".data"
+                if not os.path.exists(data_file):
+                    continue
+                segments = self.load_annotation_file(data_file)
+                
+                for seg in segments:
+                    for lab in seg.labels:
+                        species = lab['species']
+                        certainty = lab['certainty']
+                        if certainty < min_certainty or species in skip_species:
+                            continue
+                        species_normalized = self.normalize_to_ebird(species)
+                        species_segment_counts[species_normalized] = species_segment_counts.get(species_normalized, 0) + 1
+            
+            # Filter by min_examples
+            if min_examples:
+                species_segment_counts = {sp: ct for sp, ct in species_segment_counts.items() if ct >= min_examples}
+                print(f"Species with >= {min_examples} examples: {len(species_segment_counts)}")
+            
+            # Sort by count and take top max_species
+            sorted_species = sorted(species_segment_counts.items(), key=lambda x: x[1], reverse=True)
+            if max_species:
+                sorted_species = sorted_species[:max_species]
+                print(f"Selected top {max_species} species by count")
+            
+            # Use these as the specific species filter
+            specific_species = [sp for sp, _ in sorted_species]
+            specific_species_set = set(specific_species)
+            print(f"Selected species: {specific_species}")
+            for sp, ct in sorted_species:
+                print(f"  {sp}: {ct} segments")
         
         wav_files = self.find_wav_files(input_folder)
         print(f"Found {len(wav_files)} .wav files")
@@ -766,8 +805,12 @@ class DOCDataProcessor(BaseDataProcessor):
                 if np.sum(file_labels_binary) == 0:
                     continue
                 
-                if ignore_multilabel and np.sum(file_labels_binary) > 1:
-                    continue
+                # Check if we should skip multi-label samples (based on ORIGINAL metadata, not filtered)
+                if ignore_multilabel:
+                    if file_metadata and len(file_metadata['all_labels']) > 1:
+                        continue
+                    elif not file_metadata and len([species]) > 1:
+                        continue
                 
                 if self.output_format == 'wav':
                     file_basename = f"file_{file_count:08d}"
@@ -861,7 +904,7 @@ class ESCDataProcessor(BaseDataProcessor):
         print(f"Found {len(categories)} unique categories")
         return metadata, sorted(categories)
 
-    def process(self, input_folder, output_folder, overwrite=False, max_segments=None):
+    def process(self, input_folder, output_folder, overwrite=False, max_segments=None, max_species=None, min_examples=None, specific_species=None, max_samples=None):
         print(f"Loading ESC-50 data from {input_folder}")
         
         if max_segments:
@@ -886,19 +929,43 @@ class ESCDataProcessor(BaseDataProcessor):
         
         metadata, all_categories = self.load_esc_metadata(metadata_path)
         
-        print(f"Processing all {len(all_categories)} categories: {all_categories}")
-        
-        category_to_idx = {category: idx for idx, category in enumerate(all_categories)}
-        
-        category_to_files = {category: [] for category in all_categories}
-        
+        # Count files per category
+        category_counts = {}
+        category_to_files_temp = {}
         for filename, file_metadata in metadata.items():
             category = file_metadata['category']
             audio_path = os.path.join(audio_folder, filename)
             if os.path.exists(audio_path):
-                category_to_files[category].append({
-                    'path': audio_path
-                })
+                category_counts[category] = category_counts.get(category, 0) + 1
+                if category not in category_to_files_temp:
+                    category_to_files_temp[category] = []
+                category_to_files_temp[category].append({'path': audio_path})
+        
+        # Filter by specific_species if provided
+        if specific_species:
+            selected_categories = [c for c in specific_species if c in category_counts]
+            print(f"Using specific categories: {selected_categories}")
+        else:
+            # Filter by min_examples
+            if min_examples:
+                selected_categories = [c for c, ct in category_counts.items() if ct >= min_examples]
+                print(f"Categories with >= {min_examples} examples: {len(selected_categories)}")
+            else:
+                selected_categories = list(category_counts.keys())
+            
+            # Sort by count and take top max_species
+            selected_categories = sorted(selected_categories, key=lambda x: category_counts[x], reverse=True)
+            if max_species:
+                selected_categories = selected_categories[:max_species]
+                print(f"Selected top {max_species} categories by count")
+        
+        print(f"Processing {len(selected_categories)} categories: {selected_categories}")
+        for cat in selected_categories:
+            print(f"  {cat}: {category_counts.get(cat, 0)} files")
+        
+        category_to_idx = {category: idx for idx, category in enumerate(selected_categories)}
+        
+        category_to_files = {category: category_to_files_temp.get(category, []) for category in selected_categories}
         
         data_folder = os.path.join(output_folder, "data")
         os.makedirs(data_folder, exist_ok=True)
@@ -914,9 +981,13 @@ class ESCDataProcessor(BaseDataProcessor):
         total_files = sum(len(files) for files in category_to_files.values())
         processed_files = 0
         
-        for category in all_categories:
+        for category in selected_categories:
             files = category_to_files[category]
             category_count = 0
+            
+            # Limit files per category if max_samples specified
+            if max_samples:
+                files = files[:max_samples]
             
             for file_info in files:
                 if max_segments and file_count >= max_segments:
@@ -964,7 +1035,7 @@ class ESCDataProcessor(BaseDataProcessor):
                 print(f"Reached max_segments limit of {max_segments}")
                 break
         
-        self.save_labels(output_folder, labels, all_categories, 'ESC-50')
+        self.save_labels(output_folder, labels, selected_categories, 'ESC-50')
             
         print(f"Saved {file_count} ESC spectrograms to {output_folder}")
         return file_count
@@ -1381,7 +1452,10 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
             chunk_duration=kwargs.get('chunk_duration'),
             max_segments=kwargs.get('max_segments'),
             max_samples=kwargs.get('max_samples'),
-            specific_species=kwargs.get('specific_species')
+            specific_species=kwargs.get('specific_species'),
+            ignore_multilabel=ignore_multilabel,
+            max_species=kwargs.get('max_species'),
+            min_examples=kwargs.get('min_examples')
         )
     elif source_type == 'doc':
         processor = DOCDataProcessor(spec_processor, segment_extractor, output_format, with_audio)
@@ -1405,7 +1479,11 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
             input_folder=input_folder,
             output_folder=output_folder,
             overwrite=overwrite,
-            max_segments=kwargs.get('max_segments')
+            max_segments=kwargs.get('max_segments'),
+            max_species=kwargs.get('max_species'),
+            min_examples=kwargs.get('min_examples'),
+            specific_species=kwargs.get('specific_species'),
+            max_samples=kwargs.get('max_samples')
         )
     elif source_type == 'noise':
         if output_format == 'wav':
@@ -1575,6 +1653,8 @@ Examples:
             kwargs['max_segments'] = args.max_segments
         if args.max_samples:
             kwargs['max_samples'] = args.max_samples
+        kwargs['max_species'] = args.max_species
+        kwargs['min_examples'] = args.min_examples
     
     elif args.source_type == 'doc':
         if args.species:
@@ -1614,11 +1694,16 @@ Examples:
             kwargs['max_segments'] = args.max_samples
     
     elif args.source_type == 'esc':
-        # For ESC, both --max-segments and --max-samples mean the same thing
+        # For ESC: support filtering by category/species
+        if args.species:
+            kwargs['specific_species'] = [s.strip() for s in args.species.split(',')]
+        kwargs['max_species'] = args.max_species
+        kwargs['min_examples'] = args.min_examples
+        # max_segments = total limit, max_samples = per-category limit
         if args.max_segments:
             kwargs['max_segments'] = args.max_segments
-        elif args.max_samples:
-            kwargs['max_segments'] = args.max_samples
+        if args.max_samples:
+            kwargs['max_samples'] = args.max_samples
     
     file_count = load_data(
         source_type=args.source_type,
