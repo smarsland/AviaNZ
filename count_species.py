@@ -98,6 +98,11 @@ def count_species_from_labels(labels_file, name_mapping=None):
     species_counts = Counter()
     unmapped_species = set()
     
+    # Stats about multi-label files
+    total_files = 0
+    single_label_files = 0
+    multi_label_files = 0
+    
     # Check if this is a processed dataset with 'files' key
     if 'files' in data:
         files = data['files']
@@ -118,6 +123,12 @@ def count_species_from_labels(labels_file, name_mapping=None):
                 elif 'primary_class' in file_info:
                     species_list = [file_info['primary_class']]
                 
+                total_files += 1
+                if len(species_list) == 1:
+                    single_label_files += 1
+                elif len(species_list) > 1:
+                    multi_label_files += 1
+                
                 # Map species names if mapping provided
                 for species in species_list:
                     if name_mapping:
@@ -128,6 +139,12 @@ def count_species_from_labels(labels_file, name_mapping=None):
                             unmapped_species.add(species)
                     else:
                         species_counts[species] += 1
+        
+        # Print multi-label statistics
+        if total_files > 0:
+            print(f"\nLabel Statistics:")
+            print(f"  Single-label files: {single_label_files} ({100*single_label_files/total_files:.1f}%)")
+            print(f"  Multi-label files:  {multi_label_files} ({100*multi_label_files/total_files:.1f}%)")
     else:
         print("Warning: Unexpected labels.json format")
         return species_counts
