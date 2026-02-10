@@ -110,38 +110,34 @@ def count_species_from_labels(labels_file, name_mapping=None):
         print(f"Dataset: {dataset_name}")
         print(f"Total files: {len(files)}")
         
-        if 'species_counts' in data and not name_mapping:
-            # Use pre-computed species counts if available and no mapping requested
-            species_counts = Counter(data['species_counts'])
-        else:
-            # Count from individual file labels
-            for file_info in files:
-                species_list = []
-                if 'class_names' in file_info and file_info['class_names']:
-                    species_list = file_info['class_names']
-                elif 'primary_class' in file_info:
-                    species_list = [file_info['primary_class']]
-                
-                is_single_label = (len(species_list) == 1)
-                
-                # Map species names if mapping provided
-                for species in species_list:
-                    if name_mapping:
-                        mapped_species = normalize_to_ebird(species, name_mapping)
-                        if mapped_species:
-                            species_counts[mapped_species] += 1
-                            if is_single_label:
-                                species_single_label[mapped_species] += 1
-                            else:
-                                species_multi_label[mapped_species] += 1
-                        else:
-                            unmapped_species.add(species)
-                    else:
-                        species_counts[species] += 1
+        # Always count from individual file labels to get single/multi-label stats
+        for file_info in files:
+            species_list = []
+            if 'class_names' in file_info and file_info['class_names']:
+                species_list = file_info['class_names']
+            elif 'primary_class' in file_info:
+                species_list = [file_info['primary_class']]
+            
+            is_single_label = (len(species_list) == 1)
+            
+            # Map species names if mapping provided
+            for species in species_list:
+                if name_mapping:
+                    mapped_species = normalize_to_ebird(species, name_mapping)
+                    if mapped_species:
+                        species_counts[mapped_species] += 1
                         if is_single_label:
-                            species_single_label[species] += 1
+                            species_single_label[mapped_species] += 1
                         else:
-                            species_multi_label[species] += 1
+                            species_multi_label[mapped_species] += 1
+                    else:
+                        unmapped_species.add(species)
+                else:
+                    species_counts[species] += 1
+                    if is_single_label:
+                        species_single_label[species] += 1
+                    else:
+                        species_multi_label[species] += 1
     else:
         print("Warning: Unexpected labels.json format")
         return species_counts, species_single_label, species_multi_label
