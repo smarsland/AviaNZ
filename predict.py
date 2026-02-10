@@ -117,7 +117,7 @@ class ModelPredictor:
                 if saved_pos_embed.shape != current_pos_embed.shape:
                     print(f"Position embedding mismatch: checkpoint {saved_pos_embed.shape} vs model {current_pos_embed.shape}")
                     print(f"Using position embeddings from checkpoint (already interpolated during training)")
-                    self.model.ast.embeddings.position_embeddings = nn.Parameter(saved_pos_embed)
+                    self.model.ast.embeddings.position_embeddings = torch.nn.Parameter(saved_pos_embed)
                     state_dict.pop(pos_embed_key)
         
         missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
