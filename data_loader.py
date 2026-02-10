@@ -391,7 +391,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             
                             for species in valid_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
-                        else:
+                    else:
                         sg_raw = self.spec_processor.process_audio_segment(
                             wav_file, 
                             seg.start_time, 
