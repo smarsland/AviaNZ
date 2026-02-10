@@ -177,7 +177,9 @@ class BirdClefFineTuner:
     def __init__(self, data_folder, output_folder, pretrained_path, 
                  epochs=10, batch_size=32, lr=1e-4, freeze_backbone=False, 
                  freeze_stages=0, multilabel=False, device=None,
-                 use_class_weights=False, pos_weight_cap=None):
+                 use_class_weights=False, pos_weight_cap=None,
+                 normalize=False, mixup_alpha=0.0, noise_ratio=0.0, 
+                 noise_folder=None, use_temporal_roll=True):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -190,6 +192,11 @@ class BirdClefFineTuner:
         self.multilabel = multilabel
         self.use_class_weights = use_class_weights
         self.pos_weight_cap = pos_weight_cap
+        self.normalize = normalize
+        self.mixup_alpha = mixup_alpha
+        self.noise_ratio = noise_ratio
+        self.noise_folder = noise_folder
+        self.use_temporal_roll = use_temporal_roll
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -208,13 +215,18 @@ class BirdClefFineTuner:
         print(f"  Multi-label: {multilabel}")
         if self.multilabel and self.use_class_weights:
             print(f"  Class-weighted BCE: enabled")
+        if self.normalize:
+            print(f"  Background normalization: enabled")
+        if self.mixup_alpha > 0:
+            print(f"  Mixup alpha: {self.mixup_alpha}")
+        if self.noise_ratio > 0:
+            print(f"  Noise augmentation: {self.noise_ratio}")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
         print("\nLoading dataset...")
         
-        # Use DataLoader to load and parse the data
-        data_loader = DataLoader(self.data_folder, noise_folder=None)
+        data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
         self.data = data_loader.load_data(self.multilabel, validation_share=0.2)
         
         self.num_classes = self.data['nclasses']
@@ -236,16 +248,16 @@ class BirdClefFineTuner:
             img_width, 
             config.DEFAULT_CHANNELS,
             cropping_mode='random',
-            noise_ratio=0.0,  # No noise augmentation for fine-tuning
+            noise_ratio=self.noise_ratio,
             spec_transform=None,
             num_workers=num_workers,
             width_downsizing=None,
-            mixup_alpha=0.0,  # No mixup for fine-tuning
+            mixup_alpha=self.mixup_alpha,
             use_class_balancing=False,
-            normalize=False,
+            normalize=self.normalize,
             use_sparse_patches=False,
             num_sparse_patches=0,
-            use_temporal_roll=True
+            use_temporal_roll=self.use_temporal_roll
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
@@ -566,7 +578,8 @@ class BirdClefFineTuner:
             'freeze_backbone': self.freeze_backbone,
             'freeze_stages': self.freeze_stages,
             'freq_bins': config.DEFAULT_FREQ_BINS,
-            'time_bins': config.DEFAULT_TIME_BINS
+            'time_bins': config.DEFAULT_TIME_BINS,
+            'normalize': self.normalize
         }
         
         with open(config_path, 'w') as f:
@@ -588,8 +601,11 @@ Examples:
   # Partial freeze: train last 2 stages + classifier
   python finetune_birdclef.py data/train outputs/birdclef_ft --freeze-stages 3 --epochs 10
   
-  # Multi-label classification
-  python finetune_birdclef.py data/train outputs/birdclef_ft --multilabel --epochs 15
+  # Multi-label with augmentation
+  python finetune_birdclef.py data/train outputs/birdclef_ft --multilabel --mixup 0.3 --epochs 15
+  
+  # For soundscapes: use normalization + noise augmentation
+  python finetune_birdclef.py data/train outputs/birdclef_ft --normalize --noise 0.3 --noise-folder noise_data
   
   # Then generate predictions:
   python predict.py outputs/birdclef_ft/birdclef_finetuned_best.pt \\
@@ -625,6 +641,16 @@ Examples:
                        help="Use class-weighted BCE (pos_weight) in multilabel mode")
     parser.add_argument('--pos-weight-cap', type=float, default=None,
                        help="Optional cap for multilabel BCE pos_weight (e.g., 20). Only used with --class-weights")
+    parser.add_argument('--normalize', action='store_true',
+                       help="Apply background normalization to spectrograms (recommended for soundscapes)")
+    parser.add_argument('--mixup', type=float, default=0.0,
+                       help="Mixup alpha for data augmentation (default: 0.0 = disabled, try 0.2-0.4)")
+    parser.add_argument('--noise', type=float, default=0.0,
+                       help="Noise mixing ratio for augmentation (default: 0.0 = disabled, try 0.2-0.5)")
+    parser.add_argument('--noise-folder', type=str, default=None,
+                       help="Path to noise data folder for augmentation (default: same as data_folder)")
+    parser.add_argument('--no-temporal-roll', action='store_true',
+                       help="Disable temporal rolling augmentation")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     
@@ -641,7 +667,6 @@ Examples:
         print("Data folder must contain labels.json and .npy spectrogram files")
         return
     
-    # Create fine-tuner
     finetuner = BirdClefFineTuner(
         data_folder=args.data_folder,
         output_folder=args.output_folder,
@@ -654,7 +679,12 @@ Examples:
         multilabel=args.multilabel,
         device=torch.device(args.device) if args.device else None,
         use_class_weights=args.class_weights,
-        pos_weight_cap=args.pos_weight_cap
+        pos_weight_cap=args.pos_weight_cap,
+        normalize=args.normalize,
+        mixup_alpha=args.mixup,
+        noise_ratio=args.noise,
+        noise_folder=args.noise_folder,
+        use_temporal_roll=not args.no_temporal_roll
     )
     
     # Load data and create model

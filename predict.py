@@ -73,6 +73,11 @@ class ModelPredictor:
         self.use_sparse_patches = model_config.get('use_sparse_patches', False)
         self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
         
+        if model_config.get('normalize', False) and not self.normalize:
+            print(f"⚠️  Model was trained with normalization but --normalize flag not set")
+            print(f"   Auto-enabling normalization for consistency")
+            self.normalize = True
+        
         training_input_size = (self.expected_freq_bins, training_time_bins)
         
         print(f"Model type: {model_type}")
@@ -340,7 +345,7 @@ Examples:
     parser.add_argument('--device', type=str, default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     parser.add_argument('--normalize', action='store_true',
-                       help="Apply background normalization to spectrograms (use if model was trained with --normalize)")
+                       help="Apply background normalization to spectrograms (auto-detected from config, but can override)")
     
     args = parser.parse_args()
     
