@@ -240,7 +240,7 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     wav_files.append(os.path.join(root, file))
         return wav_files
 
-    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, max_samples=None, specific_species=None):
+    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None, max_samples=None, specific_species=None, ignore_multilabel=False):
         print(f"Loading AviaNZ data from {input_folder}")
         
         if chunk_duration:
@@ -437,6 +437,10 @@ class AviaNZDataProcessor(BaseDataProcessor):
                         normalized_labels = [x for x in normalized_labels if not (x in seen or seen.add(x))]
                     else:
                         normalized_labels = valid_labels
+                    
+                    # Skip multi-label samples if flag is set
+                    if ignore_multilabel and len(normalized_labels) > 1:
+                        continue
                     
                     primary_species = normalized_labels[0]
                     
@@ -1563,6 +1567,7 @@ Examples:
         if args.species:
             kwargs['specific_species'] = [s.strip() for s in args.species.split(',')]
         kwargs['min_certainty'] = args.min_certainty
+        kwargs['ignore_multilabel'] = args.ignore_multilabel
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
         # For AviaNZ: max_segments = total limit, max_samples = per-species limit
