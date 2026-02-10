@@ -211,11 +211,14 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     wav_files.append(os.path.join(root, file))
         return wav_files
 
-    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None):
+    def process(self, input_folder, output_folder, overwrite=False, min_certainty=50, skip_species=None, chunk_duration=None, max_segments=None):
         print(f"Loading AviaNZ data from {input_folder}")
         
         if chunk_duration:
             print(f"Chunking mode: splitting into {chunk_duration}s chunks with annotation mapping")
+        
+        if max_segments:
+            print(f"Max segments limit: {max_segments}")
         
         if os.path.exists(output_folder):
             if overwrite:
@@ -270,6 +273,9 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     print(f"Processing {relative_path} ({duration:.1f}s -> {num_chunks} chunks)")
                     
                     for chunk_idx in range(num_chunks):
+                        if max_segments and file_count >= max_segments:
+                            break
+                        
                         start_time = chunk_idx * chunk_duration
                         end_time = min(start_time + chunk_duration, duration)
                         
@@ -319,6 +325,10 @@ class AviaNZDataProcessor(BaseDataProcessor):
                 except Exception as e:
                     print(f"Error processing {wav_file}: {e}")
                     continue
+                
+                if max_segments and file_count >= max_segments:
+                    print(f"Reached max_segments limit of {max_segments}")
+                    break
         else:
             for wav_idx, wav_file in enumerate(wav_files):
                 data_file = wav_file + ".data"
@@ -332,95 +342,98 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     continue
                 
                 for seg in segments:
+                    if max_segments and file_count >= max_segments:
+                        break
+                    
                     segment_count += 1
-                
-                valid_labels = []
-                for lab in seg.labels:
-                    species = lab['species']
-                    certainty = lab['certainty']
                     
-                    if certainty < min_certainty:
+                    valid_labels = []
+                    for lab in seg.labels:
+                        species = lab['species']
+                        certainty = lab['certainty']
+                        
+                        if certainty < min_certainty:
+                            continue
+                        if species in skip_species:
+                            continue
+                        
+                        valid_labels.append(species)
+                    
+                    if len(valid_labels) == 0:
                         continue
-                    if species in skip_species:
-                        continue
-                    
-                    valid_labels.append(species)
                 
-                if len(valid_labels) == 0:
-                    continue
-                
-                if self.output_format == 'wav':
-                    file_basename = f"file_{file_count:08d}"
-                    output_path = os.path.join(data_folder, f"{file_basename}.wav")
-                    
-                    success = self.segment_extractor.extract_audio_segment(
-                        wav_file, 
-                        seg.start_time, 
-                        seg.end_time,
-                        output_path
-                    )
-                    
-                    if success:
-                        primary_species = valid_labels[0]
-                        
-                        labels.append({
-                            'filename': f"{file_basename}.wav",
-                            'primary_class': primary_species,
-                            'class_names': valid_labels,
-                            'source_file': wav_file,
-                            'start_time': seg.start_time,
-                            'end_time': seg.end_time,
-                            'freq_low': seg.freq_low,
-                            'freq_high': seg.freq_high
-                        })
-                        
-                        file_count += 1
-                        
-                        for species in valid_labels:
-                            species_counts[species] = species_counts.get(species, 0) + 1
-                else:
-                    sg_raw = self.spec_processor.process_audio_segment(
-                        wav_file, 
-                        seg.start_time, 
-                        seg.end_time
-                    )
-                    
-                    if sg_raw is not None:
+                    if self.output_format == 'wav':
                         file_basename = f"file_{file_count:08d}"
-                        self.spec_processor.save_spectrogram(sg_raw, data_folder, file_basename)
+                        output_path = os.path.join(data_folder, f"{file_basename}.wav")
                         
-                        # Save audio segment if requested
-                        audio_filename = None
-                        if self.audio_output_dir:
-                            audio_filename = self.save_audio_segment(wav_file, seg.start_time, seg.end_time, f"{file_basename}.wav")
+                        success = self.segment_extractor.extract_audio_segment(
+                            wav_file, 
+                            seg.start_time, 
+                            seg.end_time,
+                            output_path
+                        )
                         
-                        primary_species = valid_labels[0]
+                        if success:
+                            primary_species = valid_labels[0]
+                            
+                            labels.append({
+                                'filename': f"{file_basename}.wav",
+                                'primary_class': primary_species,
+                                'class_names': valid_labels,
+                                'source_file': wav_file,
+                                'start_time': seg.start_time,
+                                'end_time': seg.end_time,
+                                'freq_low': seg.freq_low,
+                                'freq_high': seg.freq_high
+                            })
+                            
+                            file_count += 1
+                            
+                            for species in valid_labels:
+                                species_counts[species] = species_counts.get(species, 0) + 1
+                        else:
+                        sg_raw = self.spec_processor.process_audio_segment(
+                            wav_file, 
+                            seg.start_time, 
+                            seg.end_time
+                        )
                         
-                        label_entry = {
-                            'filename': f"{file_basename}.npy",
-                            'primary_class': primary_species,
-                            'class_names': valid_labels,
-                            'source_file': wav_file,
-                            'start_time': seg.start_time,
-                            'end_time': seg.end_time,
-                            'freq_low': seg.freq_low,
-                            'freq_high': seg.freq_high
-                        }
-                        if audio_filename:
-                            label_entry['audio_file'] = audio_filename
-                        
-                        labels.append(label_entry)
-                        
-                        file_count += 1
-                        
-                        for species in valid_labels:
-                            species_counts[species] = species_counts.get(species, 0) + 1
-                        
-                        if primary_species not in species_example_saved:
-                            safe_name = primary_species.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_').replace('\\', '_').replace(':', '_')
-                            example_name = f"example_{safe_name}"
-                            self.spec_processor.save_example_image(sg_raw, output_folder, example_name)
-                            species_example_saved.add(primary_species)
+                        if sg_raw is not None:
+                            file_basename = f"file_{file_count:08d}"
+                            self.spec_processor.save_spectrogram(sg_raw, data_folder, file_basename)
+                            
+                            # Save audio segment if requested
+                            audio_filename = None
+                            if self.audio_output_dir:
+                                audio_filename = self.save_audio_segment(wav_file, seg.start_time, seg.end_time, f"{file_basename}.wav")
+                            
+                            primary_species = valid_labels[0]
+                            
+                            label_entry = {
+                                'filename': f"{file_basename}.npy",
+                                'primary_class': primary_species,
+                                'class_names': valid_labels,
+                                'source_file': wav_file,
+                                'start_time': seg.start_time,
+                                'end_time': seg.end_time,
+                                'freq_low': seg.freq_low,
+                                'freq_high': seg.freq_high
+                            }
+                            if audio_filename:
+                                label_entry['audio_file'] = audio_filename
+                            
+                            labels.append(label_entry)
+                            
+                            file_count += 1
+                            
+                            for species in valid_labels:
+                                species_counts[species] = species_counts.get(species, 0) + 1
+                            
+                            if primary_species not in species_example_saved:
+                                safe_name = primary_species.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_').replace('\\', '_').replace(':', '_')
+                                example_name = f"example_{safe_name}"
+                                self.spec_processor.save_example_image(sg_raw, output_folder, example_name)
+                                species_example_saved.add(primary_species)
                 
                 if segment_count % 50 == 0 or segment_count in [1, 10]:
                     output_type = "WAV files" if self.output_format == 'wav' else "spectrograms"
@@ -429,6 +442,10 @@ class AviaNZDataProcessor(BaseDataProcessor):
             
                 if (wav_idx + 1) % 10 == 0:
                     print(f"Processed {wav_idx+1}/{len(wav_files)} files...")
+                
+                if max_segments and file_count >= max_segments:
+                    print(f"Reached max_segments limit of {max_segments}")
+                    break
         
         all_species = sorted(species_counts.keys())
         
@@ -1181,7 +1198,8 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
             overwrite=overwrite,
             min_certainty=kwargs.get('min_certainty', 50),
             skip_species=kwargs.get('skip_species'),
-            chunk_duration=kwargs.get('chunk_duration')
+            chunk_duration=kwargs.get('chunk_duration'),
+            max_segments=kwargs.get('max_segments')
         )
     elif source_type == 'doc':
         processor = DOCDataProcessor(spec_processor, segment_extractor, output_format, with_audio)
@@ -1256,6 +1274,9 @@ Examples:
   # Process AviaNZ annotated data as spectrograms
   python data_loader.py avianz "Sound Files/GSK" "Sound Files/GSK_spec"
   
+  # Process only first 1000 segments from AviaNZ data
+  python data_loader.py avianz "Sound Files/GSK" "Sound Files/GSK_spec" --max-segments 1000
+  
   # Extract AviaNZ annotated segments as WAV files
   python data_loader.py avianz "Sound Files/GSK" "Sound Files/GSK_wav" --format wav
   
@@ -1312,6 +1333,8 @@ Examples:
                        help="[AviaNZ] Minimum certainty threshold for labels (default: 50)")
     parser.add_argument('--skip-species', type=str,
                        help="[AviaNZ] Comma-separated list of species to skip")
+    parser.add_argument('--max-segments', type=int,
+                       help="[AviaNZ] Maximum number of segments to process (default: no limit)")
     
     parser.add_argument('--max-species', type=int, default=config.DEFAULT_MAX_SPECIES,
                        help=f"[DOC] Maximum number of species to process (default: {config.DEFAULT_MAX_SPECIES})")
@@ -1347,6 +1370,8 @@ Examples:
         kwargs['min_certainty'] = args.min_certainty
         if args.chunk_duration:
             kwargs['chunk_duration'] = args.chunk_duration
+        if args.max_segments:
+            kwargs['max_segments'] = args.max_segments
     
     elif args.source_type == 'doc':
         if args.species:
