@@ -762,12 +762,16 @@ class DOCDataProcessor(BaseDataProcessor):
         file_labels = []
         file_count = 0
         species_example_saved = set()
-        total_files = sum(len(files[:max_samples]) for files in species_to_files.values())
+        # Don't pre-slice - we need to filter first, then limit
         processed_files = 0
         
         for species, files in species_to_files.items():
             species_count = 0
-            for i, sound_file in enumerate(files[:max_samples]):
+            for sound_file in files:
+                # Check if we've saved enough for this species
+                if max_samples and species_count >= max_samples:
+                    break
+                
                 if max_segments and file_count >= max_segments:
                     break
                 
@@ -864,10 +868,10 @@ class DOCDataProcessor(BaseDataProcessor):
                 
                 if processed_files % 50 == 0 or processed_files in [1, 10]:
                     output_type = "WAV files" if self.output_format == 'wav' else "spectrograms"
-                    print(f"Processed {processed_files}/{total_files} files ({100*processed_files/total_files:.1f}%), saved {file_count} {output_type}")
+                    print(f"Checked {processed_files} files, saved {file_count} {output_type}")
             
             if species_count > 0:
-                print(f"  {species}: processed {species_count} files")
+                print(f"  {species}: saved {species_count} files")
             
             if max_segments and file_count >= max_segments:
                 print(f"Reached max_segments limit of {max_segments}")
