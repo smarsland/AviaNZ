@@ -40,6 +40,42 @@ def compute_multilabel_f1_scores(all_preds, all_targets):
     return f1_macro, f1_micro
 
 
+def compute_multilabel_epoch_metrics(all_preds, all_targets):
+    """Compute macro/micro F1, bit accuracy, and exact match for multilabel outputs."""
+    if len(all_preds) == 0:
+        return {
+            'macro_f1': 0.0,
+            'micro_f1': 0.0,
+            'bit_acc': 0.0,
+            'exact_match': 0.0,
+        }
+
+    preds = np.vstack(all_preds)
+    targets = np.vstack(all_targets)
+
+    preds = (preds >= 0.5).astype(np.int32)
+    targets = (targets >= 0.5).astype(np.int32)
+
+    _, _, f1_macro, _ = precision_recall_fscore_support(
+        targets, preds, average='macro', zero_division=0
+    )
+    _, _, f1_micro, _ = precision_recall_fscore_support(
+        targets, preds, average='micro', zero_division=0
+    )
+
+    preds_bool = preds.astype(bool)
+    targets_bool = targets.astype(bool)
+    bit_acc = (preds_bool == targets_bool).mean().item() if hasattr((preds_bool == targets_bool).mean(), 'item') else float((preds_bool == targets_bool).mean())
+    exact_match = (preds_bool == targets_bool).all(axis=1).mean().item() if hasattr((preds_bool == targets_bool).all(axis=1).mean(), 'item') else float((preds_bool == targets_bool).all(axis=1).mean())
+
+    return {
+        'macro_f1': float(f1_macro),
+        'micro_f1': float(f1_micro),
+        'bit_acc': float(bit_acc),
+        'exact_match': float(exact_match),
+    }
+
+
 class FocalLoss(nn.Module):
     """
     Focal Loss for multi-class classification.
@@ -602,15 +638,10 @@ class ASTTrainer:
                 return
             
             if self.multilabel:
-                # Compute macro F1 for multi-label (handle empty lists if epoch stopped early)
-                if len(all_train_preds) > 0:
-                    train_acc = compute_multilabel_f1(all_train_preds, all_train_targets)
-                else:
-                    train_acc = 0.0
-                if len(all_val_preds) > 0:
-                    val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
-                else:
-                    val_acc = 0.0
+                train_metrics = compute_multilabel_epoch_metrics(all_train_preds, all_train_targets)
+                val_metrics = compute_multilabel_epoch_metrics(all_val_preds, all_val_targets)
+                train_acc = train_metrics['macro_f1']
+                val_acc = val_metrics['macro_f1']
             else:
                 train_acc = train_correct / train_total if train_total > 0 else 0.0
                 val_acc = val_correct / val_total if val_total > 0 else 0.0
@@ -654,9 +685,21 @@ class ASTTrainer:
             epoch_time = time.time() - start_time
             print(f'Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)')
             if self.multilabel:
-                print(f'Train Loss: {train_loss:.4f}, Train Macro-F1: {train_acc:.4f}')
-                print(f'Val Loss: {val_loss:.4f}, Val Macro-F1: {val_acc:.4f}')
-                print(f'Val Primary-Class Acc: {val_primary_acc:.4f}')
+                print(
+                    f"Train Loss: {train_loss:.4f}, "
+                    f"Macro F1: {train_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {train_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
+                    f"Exact: {train_metrics['exact_match']:.4f}"
+                )
+                print(
+                    f"  Val Loss: {val_loss:.4f}, "
+                    f"Macro F1: {val_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {val_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
+                    f"Exact: {val_metrics['exact_match']:.4f}"
+                )
+                print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
             else:
                 print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
                 print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
@@ -1161,20 +1204,10 @@ class CNNTrainer:
             val_loss /= len(self.val_loader)
             
             if self.multilabel:
-                # Compute macro F1 for multi-label
-                all_train_preds = np.vstack(all_train_preds)
-                all_train_targets = np.vstack(all_train_targets)
-                _, _, train_f1, _ = precision_recall_fscore_support(
-                    all_train_targets, all_train_preds, average='macro', zero_division=0
-                )
-                train_acc = train_f1
-                
-                all_val_preds = np.vstack(all_val_preds)
-                all_val_targets = np.vstack(all_val_targets)
-                _, _, val_f1, _ = precision_recall_fscore_support(
-                    all_val_targets, all_val_preds, average='macro', zero_division=0
-                )
-                val_acc = val_f1
+                train_metrics = compute_multilabel_epoch_metrics(all_train_preds, all_train_targets)
+                val_metrics = compute_multilabel_epoch_metrics(all_val_preds, all_val_targets)
+                train_acc = train_metrics['macro_f1']
+                val_acc = val_metrics['macro_f1']
             else:
                 train_acc = train_correct / train_total
                 val_acc = val_correct / val_total
@@ -1214,9 +1247,21 @@ class CNNTrainer:
             epoch_time = time.time() - start_time
             print(f'Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)')
             if self.multilabel:
-                print(f'Train Loss: {train_loss:.4f}, Train Macro-F1: {train_acc:.4f}')
-                print(f'Val Loss: {val_loss:.4f}, Val Macro-F1: {val_acc:.4f}')
-                print(f'Val Primary-Class Acc: {val_primary_acc:.4f}')
+                print(
+                    f"Train Loss: {train_loss:.4f}, "
+                    f"Macro F1: {train_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {train_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
+                    f"Exact: {train_metrics['exact_match']:.4f}"
+                )
+                print(
+                    f"  Val Loss: {val_loss:.4f}, "
+                    f"Macro F1: {val_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {val_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
+                    f"Exact: {val_metrics['exact_match']:.4f}"
+                )
+                print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
             else:
                 print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
                 print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
