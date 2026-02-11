@@ -144,6 +144,12 @@ class DataLoader:
     def split_data(self, filenames, labels, primary_species, noise_filenames, validation_share):
         """Split data into training and test sets using random stratified split."""
         
+        # Handle case where validation is disabled (validation_share == 0)
+        if validation_share == 0.0 or validation_share is None:
+            print(f"Validation disabled: using all {len(filenames)} files for training")
+            return (filenames, labels, [], np.array([]), primary_species, [], 
+                    noise_filenames, [])
+        
         # Filter out None values for stratification (noise samples have no primary species)
         if primary_species is not None and None in primary_species:
             # Can't use stratify with None values, do regular random split
@@ -680,19 +686,23 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_temporal_roll=use_temporal_roll
     )
     
-    val_dataset = SpectrogramDataset(
-        data['test_filenames'], data['test_labels'], 
-        img_height, img_width, channels, 'center',  # Always use center crop for validation
-        noise_filenames=None,  # No noise for validation
-        noise_ratio=0.0,
-        spec_transform=spec_transform,
-        training=False,
-        width_downsizing=width_downsizing,
-        normalize=normalize,
-        use_sparse_patches=use_sparse_patches,
-        num_sparse_patches=num_sparse_patches,
-        use_temporal_roll=False  # Never roll validation data
-    )
+    # Only create validation dataset if validation data exists
+    if len(data['test_filenames']) > 0:
+        val_dataset = SpectrogramDataset(
+            data['test_filenames'], data['test_labels'], 
+            img_height, img_width, channels, 'center',  # Always use center crop for validation
+            noise_filenames=None,  # No noise for validation
+            noise_ratio=0.0,
+            spec_transform=spec_transform,
+            training=False,
+            width_downsizing=width_downsizing,
+            normalize=normalize,
+            use_sparse_patches=use_sparse_patches,
+            num_sparse_patches=num_sparse_patches,
+            use_temporal_roll=False  # Never roll validation data
+        )
+    else:
+        val_dataset = None
     
     # Class balancing setup
     sampler = None
@@ -788,14 +798,18 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         collate_fn=train_collate_fn
     )
     
-    val_loader = TorchDataLoader(
-        val_dataset, 
-        batch_size=batch_size, 
-        shuffle=False, 
-        num_workers=num_workers,
-        pin_memory=True,
-        collate_fn=val_collate_fn
-    )
+    # Only create validation loader if validation dataset exists
+    if val_dataset is not None:
+        val_loader = TorchDataLoader(
+            val_dataset, 
+            batch_size=batch_size, 
+            shuffle=False, 
+            num_workers=num_workers,
+            pin_memory=True,
+            collate_fn=val_collate_fn
+        )
+    else:
+        val_loader = None
     
     return train_loader, val_loader
 
