@@ -552,11 +552,12 @@ class ASTTrainer:
                     pred = (torch.sigmoid(output) > 0.5).float()
                     all_train_preds.append(pred.cpu().numpy())
                     all_train_targets.append(target_hard.cpu().numpy())
-                    # Primary-class accuracy: highest prob class vs primary label
-                    primary_pred = output.argmax(dim=1)
-                    primary_target = target_hard.argmax(dim=1)
-                    train_primary_correct += (primary_pred == primary_target).sum().item()
-                    train_primary_total += target_hard.size(0)
+                    # Primary-class accuracy: only meaningful when there are 2+ classes.
+                    if output.size(1) > 1:
+                        primary_pred = output.argmax(dim=1)
+                        primary_target = target_hard.argmax(dim=1)
+                        train_primary_correct += (primary_pred == primary_target).sum().item()
+                        train_primary_total += target_hard.size(0)
                 else:
                     pred = output.argmax(dim=1)
                     target_labels = target_hard.argmax(dim=1)
@@ -610,11 +611,12 @@ class ASTTrainer:
                         pred = (torch.sigmoid(output) > 0.5).float()
                         all_val_preds.append(pred.cpu().numpy())
                         all_val_targets.append(target.cpu().numpy())
-                        # Primary-class accuracy
-                        primary_pred = output.argmax(dim=1)
-                        primary_target = target.argmax(dim=1)
-                        val_primary_correct += (primary_pred == primary_target).sum().item()
-                        val_primary_total += target.size(0)
+                        # Primary-class accuracy (only meaningful when there are 2+ classes)
+                        if output.size(1) > 1:
+                            primary_pred = output.argmax(dim=1)
+                            primary_target = target.argmax(dim=1)
+                            val_primary_correct += (primary_pred == primary_target).sum().item()
+                            val_primary_total += target.size(0)
                     else:
                         target_idx = target.argmax(dim=1)
                         val_loss += criterion(output, target_idx).item()
@@ -699,7 +701,8 @@ class ASTTrainer:
                     f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
                     f"Exact: {val_metrics['exact_match']:.4f}"
                 )
-                print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
+                if self.num_classes > 1:
+                    print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
             else:
                 print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
                 print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
@@ -1145,11 +1148,12 @@ class CNNTrainer:
                     pred = (torch.sigmoid(output) > 0.5).float()
                     all_train_preds.append(pred.cpu().numpy())
                     all_train_targets.append(target_hard.cpu().numpy())
-                    # Primary-class accuracy: highest prob class vs primary label
-                    primary_pred = output.argmax(dim=1)
-                    primary_target = target_hard.argmax(dim=1)
-                    train_primary_correct += (primary_pred == primary_target).sum().item()
-                    train_primary_total += target_hard.size(0)
+                    # Primary-class accuracy: only meaningful when there are 2+ classes.
+                    if output.size(1) > 1:
+                        primary_pred = output.argmax(dim=1)
+                        primary_target = target_hard.argmax(dim=1)
+                        train_primary_correct += (primary_pred == primary_target).sum().item()
+                        train_primary_total += target_hard.size(0)
                 else:
                     pred = output.argmax(dim=1)
                     target_labels = target_hard.argmax(dim=1)
@@ -1186,11 +1190,12 @@ class CNNTrainer:
                         pred = (torch.sigmoid(output) > 0.5).float()
                         all_val_preds.append(pred.cpu().numpy())
                         all_val_targets.append(target.cpu().numpy())
-                        # Primary-class accuracy
-                        primary_pred = output.argmax(dim=1)
-                        primary_target = target.argmax(dim=1)
-                        val_primary_correct += (primary_pred == primary_target).sum().item()
-                        val_primary_total += target.size(0)
+                        # Primary-class accuracy (only meaningful when there are 2+ classes)
+                        if output.size(1) > 1:
+                            primary_pred = output.argmax(dim=1)
+                            primary_target = target.argmax(dim=1)
+                            val_primary_correct += (primary_pred == primary_target).sum().item()
+                            val_primary_total += target.size(0)
                     else:
                         target_idx = target.argmax(dim=1)
                         val_loss += criterion(output, target_idx).item()
@@ -1261,7 +1266,8 @@ class CNNTrainer:
                     f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
                     f"Exact: {val_metrics['exact_match']:.4f}"
                 )
-                print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
+                if self.num_classes > 1:
+                    print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
             else:
                 print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
                 print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
