@@ -179,7 +179,7 @@ class BirdClefFineTuner:
                  freeze_stages=0, multilabel=False, device=None,
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, noise_ratio=0.0, 
-                 noise_folder=None, use_temporal_roll=True):
+                 noise_folder=None, use_temporal_roll=True, validation_split=0.2):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -197,6 +197,7 @@ class BirdClefFineTuner:
         self.noise_ratio = noise_ratio
         self.noise_folder = noise_folder
         self.use_temporal_roll = use_temporal_roll
+        self.validation_split = validation_split
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -227,7 +228,7 @@ class BirdClefFineTuner:
         print("\nLoading dataset...")
         
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-        self.data = data_loader.load_data(self.multilabel, validation_share=0.2)
+        self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
         
         self.num_classes = self.data['nclasses']
         self.categories = self.data['categories']
@@ -261,7 +262,10 @@ class BirdClefFineTuner:
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
-        print(f"  Val samples: {len(self.val_loader.dataset)}")
+        if self.val_loader is not None:
+            print(f"  Val samples: {len(self.val_loader.dataset)}")
+        else:
+            print(f"  Val samples: 0 (validation disabled)")
     
     def create_model(self):
         """Create model with pretrained BirdClef weights."""
@@ -489,27 +493,32 @@ class BirdClefFineTuner:
         
         for epoch in range(self.epochs):
             train_loss, train_metrics = self.train_epoch(epoch)
-            val_loss, val_metrics = self.validate()
+            
+            # Only validate if validation set exists
+            if self.val_loader is not None:
+                val_loss, val_metrics = self.validate()
+            else:
+                val_loss, val_metrics = None, None
             
             self.scheduler.step()
             
             history['train_loss'].append(train_loss)
-            history['val_loss'].append(val_loss)
+            history['val_loss'].append(val_loss if val_loss is not None else None)
 
             if self.multilabel:
                 history['train_macro_f1'].append(train_metrics['macro_f1'])
-                history['val_macro_f1'].append(val_metrics['macro_f1'])
+                history['val_macro_f1'].append(val_metrics['macro_f1'] if val_metrics else None)
                 history['train_micro_f1'].append(train_metrics['micro_f1'])
-                history['val_micro_f1'].append(val_metrics['micro_f1'])
+                history['val_micro_f1'].append(val_metrics['micro_f1'] if val_metrics else None)
                 history['train_exact_match'].append(train_metrics['exact_match'])
-                history['val_exact_match'].append(val_metrics['exact_match'])
+                history['val_exact_match'].append(val_metrics['exact_match'] if val_metrics else None)
                 history['train_bit_acc'].append(train_metrics['bit_acc'])
-                history['val_bit_acc'].append(val_metrics['bit_acc'])
+                history['val_bit_acc'].append(val_metrics['bit_acc'] if val_metrics else None)
                 history['train_acc'].append(train_metrics['macro_f1'])
-                history['val_acc'].append(val_metrics['macro_f1'])
+                history['val_acc'].append(val_metrics['macro_f1'] if val_metrics else None)
             else:
                 history['train_acc'].append(train_metrics)
-                history['val_acc'].append(val_metrics)
+                history['val_acc'].append(val_metrics if val_metrics is not None else None)
             
             print(f"Epoch {epoch+1}/{self.epochs}:")
             if self.multilabel:
@@ -520,29 +529,37 @@ class BirdClefFineTuner:
                     f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
                     f"Exact: {train_metrics['exact_match']:.4f}"
                 )
-                print(
-                    f"  Val Loss: {val_loss:.4f}, "
-                    f"Macro F1: {val_metrics['macro_f1']:.4f}, "
-                    f"Micro F1: {val_metrics['micro_f1']:.4f}, "
-                    f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
-                    f"Exact: {val_metrics['exact_match']:.4f}"
-                )
+                if val_metrics:
+                    print(
+                        f"  Val Loss: {val_loss:.4f}, "
+                        f"Macro F1: {val_metrics['macro_f1']:.4f}, "
+                        f"Micro F1: {val_metrics['micro_f1']:.4f}, "
+                        f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
+                        f"Exact: {val_metrics['exact_match']:.4f}"
+                    )
             else:
                 print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_metrics:.2f}%")
-                print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_metrics:.2f}%")
+                if val_metrics is not None:
+                    print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_metrics:.2f}%")
             
-            if self.multilabel:
-                current_metric = val_metrics['macro_f1']
-                metric_name = 'val_macro_f1'
-            else:
-                current_metric = val_metrics
-                metric_name = 'val_acc'
+            # Determine current metric for model saving
+            if val_metrics is not None:
+                if self.multilabel:
+                    current_metric = val_metrics['macro_f1']
+                    metric_name = 'val_macro_f1'
+                else:
+                    current_metric = val_metrics
+                    metric_name = 'val_acc'
 
-            # Save best model
-            if current_metric > best_val_metric:
-                best_val_metric = current_metric
+                # Save best model based on validation
+                if current_metric > best_val_metric:
+                    best_val_metric = current_metric
+                    self.save_model('birdclef_finetuned_best.pt')
+                    print(f"  ✓ Saved best model ({metric_name}: {current_metric:.4f})")
+            else:
+                # No validation - save every epoch as "best"
                 self.save_model('birdclef_finetuned_best.pt')
-                print(f"  ✓ Saved best model ({metric_name}: {current_metric:.4f})")
+                print(f"  ✓ Saved model (no validation)")
         
         # Save final model
         self.save_model('birdclef_finetuned_final.pt')
@@ -553,10 +570,11 @@ class BirdClefFineTuner:
             json.dump(history, f, indent=2)
         
         print(f"\n✓ Fine-tuning complete!")
-        if self.multilabel:
-            print(f"  Best val macro F1: {best_val_metric:.4f}")
-        else:
-            print(f"  Best val accuracy: {best_val_metric:.2f}%")
+        if self.val_loader is not None:
+            if self.multilabel:
+                print(f"  Best val macro F1: {best_val_metric:.4f}")
+            else:
+                print(f"  Best val accuracy: {best_val_metric:.2f}%")
         print(f"  Models saved to: {self.output_folder}")
     
     def save_model(self, filename):
@@ -651,6 +669,8 @@ Examples:
                        help="Path to noise data folder for augmentation (default: same as data_folder)")
     parser.add_argument('--no-temporal-roll', action='store_true',
                        help="Disable temporal rolling augmentation")
+    parser.add_argument('--validation-split', type=float, default=0.2,
+                       help="Validation split ratio (default: 0.2 = 20%%, use 0 to disable validation)")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     
@@ -684,7 +704,8 @@ Examples:
         mixup_alpha=args.mixup,
         noise_ratio=args.noise,
         noise_folder=args.noise_folder,
-        use_temporal_roll=not args.no_temporal_roll
+        use_temporal_roll=not args.no_temporal_roll,
+        validation_split=args.validation_split
     )
     
     # Load data and create model
