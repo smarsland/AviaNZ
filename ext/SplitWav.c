@@ -14,7 +14,9 @@
 // USAGE: ./SplitWav infile.wav outfile.wav maxSeconds
 
 // to deal with windows requirements for .pyds
+#ifdef _WIN32
 void PyInit_SplitWav() {}
+#endif
 
 // I HATE WINDOWS
 // this is handwritten strptime(s, "%Y%m%d_%H%M%S", &timestruc)
@@ -59,7 +61,7 @@ int strptime2(char *s, char *format, struct tm *temp){
 }
 
 
-int split(char *infilearg, char *outfilearg, int t, int hasDt){
+int split_wav(char *infilearg, char *outfilearg, int t, int hasDt){
         // parse arguments
         FILE *infile, *outfile;
 		
