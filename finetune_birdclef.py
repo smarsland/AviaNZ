@@ -179,7 +179,8 @@ class BirdClefFineTuner:
                  freeze_stages=0, multilabel=False, device=None,
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, noise_ratio=0.0, 
-                 noise_folder=None, use_temporal_roll=True, validation_split=0.2):
+                 noise_folder=None, use_temporal_roll=True, validation_split=0.2,
+                 normalize_snr=False):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -198,6 +199,7 @@ class BirdClefFineTuner:
         self.noise_folder = noise_folder
         self.use_temporal_roll = use_temporal_roll
         self.validation_split = validation_split
+        self.normalize_snr = normalize_snr
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -258,7 +260,8 @@ class BirdClefFineTuner:
             normalize=self.normalize,
             use_sparse_patches=False,
             num_sparse_patches=0,
-            use_temporal_roll=self.use_temporal_roll
+            use_temporal_roll=self.use_temporal_roll,
+            normalize_snr=self.normalize_snr
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
@@ -661,6 +664,8 @@ Examples:
                        help="Optional cap for multilabel BCE pos_weight (e.g., 20). Only used with --class-weights")
     parser.add_argument('--normalize', action='store_true',
                        help="Apply background normalization to spectrograms (recommended for soundscapes)")
+    parser.add_argument('--normalize-snr', action='store_true',
+                       help="Normalize each sample by 95th percentile to equalize SNR levels (fixes domain shift due to SNR mismatch)")
     parser.add_argument('--mixup', type=float, default=0.0,
                        help="Mixup alpha for data augmentation (default: 0.0 = disabled, try 0.2-0.4)")
     parser.add_argument('--noise', type=float, default=0.0,
@@ -705,7 +710,8 @@ Examples:
         noise_ratio=args.noise,
         noise_folder=args.noise_folder,
         use_temporal_roll=not args.no_temporal_roll,
-        validation_split=args.validation_split
+        validation_split=args.validation_split,
+        normalize_snr=args.normalize_snr
     )
     
     # Load data and create model
