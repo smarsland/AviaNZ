@@ -245,10 +245,10 @@ class SpectrogramDataset(Dataset):
             normalize: Whether to apply background normalization
             use_sparse_patches: If True, only extract patches with signal (sparse attention)
             num_sparse_patches: Number of patches to extract in sparse mode (K)
-            use_temporal_roll: If True, randomly roll start position in tiled/repeated signals (training only)
+            use_temporal_roll: (Deprecated - no longer used with random sampling padding)
         
-        Note: For time axis, uses TILING (repeating the signal) instead of zero-padding
-        to avoid train-test mismatch and artificial silence patterns.
+        Note: For time axis, uses RANDOM SAMPLING (samples from per-frequency distribution)
+        instead of zero-padding or tiling to avoid creating distinguishable artifacts.
         """
         self.filenames = filenames
         self.labels = torch.FloatTensor(labels)
@@ -284,9 +284,7 @@ class SpectrogramDataset(Dataset):
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:
             print(f"Background normalization: enabled")
-        if self.use_temporal_roll:
-            print(f"Temporal rolling: enabled (randomizes start position in repeated signals)")
-        print(f"Time-axis padding: TILING (repeats signal instead of zero-padding to avoid train-test mismatch)")
+        print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
         if use_sparse_patches:
             print(f"⚡ Sparse patch mode: extracting top {num_sparse_patches} patches by signal density")
             print(f"   Standard mode would use {total_patches} patches, sparse uses {num_sparse_patches} ({100*num_sparse_patches/total_patches:.1f}%)")
@@ -431,43 +429,37 @@ class SpectrogramDataset(Dataset):
     def apply_padding_and_add_channels(self, array, is_noise=False):
         """Apply padding and ensure correct number of channels.
         
-        IMPORTANT: Uses tiling/repetition instead of zero-padding for time axis to avoid
-        train-test mismatch. Zero-padding creates artificial silence patterns that:
-        - Model learns during training ("bird call + zeros = bird present")
-        - Don't appear during inference (5-sec test chunks vs 10-sec training windows)
-        - Especially problematic for short-duration bird calls
+        Time axis padding: Sample from per-frequency-band distribution
+        - For each frequency row, randomly sample from existing values to fill padding
+        - Preserves per-frequency statistics without creating repetition or silence artifacts
+        - Creates statistically-similar but temporally-incoherent padding
         
-        Instead, we tile/repeat the signal to fill the target duration, ensuring:
-        - No artificial silence patterns
-        - Better train-test consistency
-        - Model focuses on actual signal content, not padding artifacts
-        
-        For frequency axis: zero-padding is appropriate (spectrograms may have different freq ranges).
+        Frequency axis: zero-padding (different recordings may have different freq ranges)
         """
         if len(array.shape) == 2:
             array = np.expand_dims(array, axis=-1)
 
         h, w, c = array.shape
         
-        # Frequency axis (height): zero-pad if needed (different recordings may have different freq ranges)
+        # Frequency axis (height): zero-pad if needed
         if h < self.img_height:
             pad_h = self.img_height - h
             array = np.concatenate([array, np.zeros((pad_h, w, c))], axis=0)
         
-        # Time axis (width): TILE/REPEAT instead of zero-padding
-        # This avoids train-test mismatch and artificial silence patterns
+        # Time axis (width): PAD WITH RANDOM SAMPLES FROM PER-FREQUENCY DISTRIBUTION
         if w < self.img_width:
-            # Calculate how many tiles we need
-            tiles_w = int(np.ceil(self.img_width / w))
-            array = np.tile(array, (1, tiles_w, 1))
-            
-            # Apply temporal rolling if enabled (training only)
-            # This randomizes the start position within the repeated signal
-            if self.use_temporal_roll:
-                # Roll by a random amount up to the original signal width
-                # This way different parts of the repeated pattern appear at different positions
-                roll_amount = self.rng.randint(0, w)
-                array = np.roll(array, roll_amount, axis=1)
+            pad_w = self.img_width - w
+            # For each frequency band, sample from existing values
+            padded_section = np.zeros((array.shape[0], pad_w, c))
+            for row in range(array.shape[0]):
+                for ch in range(c):
+                    # Sample from this frequency band's existing values
+                    padded_section[row, :, ch] = self.rng.choice(
+                        array[row, :, ch], 
+                        size=pad_w, 
+                        replace=True
+                    )
+            array = np.concatenate([array, padded_section], axis=1)
 
         # Channel axis: pad with zeros if needed
         if c < self.channels:
