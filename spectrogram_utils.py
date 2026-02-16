@@ -91,6 +91,11 @@ class SpectrogramProcessor:
                 warnings.warn(f"File {sound_file} has sample rate {self.sp.audio_data.sample_rate} Hz, resampling to {self.fs} Hz")
                 self.sp.resample(self.fs)
 
+            audio = self.sp.audio_data.data
+            rms = np.sqrt(np.mean(audio**2))
+            if rms > 1e-8:
+                self.sp.audio_data.data = audio / rms * 0.1
+
             _ = self.sp.spectrogram(
                 window_width=self.window_width,
                 incr=self.window_inc,
@@ -133,6 +138,11 @@ class SpectrogramProcessor:
             if self.sp.audio_data.sample_rate != self.fs:
                 warnings.warn(f"File {sound_file} has sample rate {self.sp.audio_data.sample_rate} Hz, resampling to {self.fs} Hz")
                 self.sp.resample(self.fs)
+
+            audio = self.sp.audio_data.data
+            rms = np.sqrt(np.mean(audio**2))
+            if rms > 1e-8:
+                self.sp.audio_data.data = audio / rms * 0.1
 
             _ = self.sp.spectrogram(
                 window_width=self.window_width,
@@ -205,6 +215,10 @@ class AudioSetFbankProcessor:
             audio = audio.mean(axis=1)
         else:
             audio = audio[:, 0]
+
+        rms = np.sqrt(np.mean(audio**2))
+        if rms > 1e-8:
+            audio = audio / rms * 0.1
 
         waveform = torch.from_numpy(audio).float().unsqueeze(0)
 
