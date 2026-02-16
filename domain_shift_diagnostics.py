@@ -1,3 +1,4 @@
+import argparse
 import csv
 import json
 from collections import Counter
@@ -454,13 +455,58 @@ def write_recommendations(output_path, doc_stats, joe_stats):
 
 
 def main():
-    base_dir = Path(__file__).resolve().parent / "test" / "test"
+    parser = argparse.ArgumentParser(
+        description="Analyze domain shift between two datasets by comparing spectrogram statistics and model performance",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Expected folder structure:
+  base_dir/
+    doc_split/
+      train/data/  (spectrograms)
+      test/data/   (spectrograms)
+      test/labels.json
+      test/*.csv   (predictions)
+    joe_mo_split/
+      train/data/  (spectrograms)
+      test/data/   (spectrograms)
+      test/labels.json
+      test/*.csv   (predictions)
+
+Example:
+  python domain_shift_diagnostics.py test/test
+  python domain_shift_diagnostics.py /path/to/experiments
+        """
+    )
+    parser.add_argument('base_dir', type=str, nargs='?', 
+                       default='test/test',
+                       help='Base directory containing doc_split and joe_mo_split folders (default: test/test)')
+    
+    args = parser.parse_args()
+    base_dir = Path(args.base_dir).resolve()
+    
+    if not base_dir.exists():
+        print(f"Error: Base directory does not exist: {base_dir}")
+        sys.exit(1)
+    
+    # Check for required subdirectories
+    doc_split = base_dir / "doc_split"
+    joe_split = base_dir / "joe_mo_split"
+    
+    if not doc_split.exists():
+        print(f"Error: doc_split directory not found in {base_dir}")
+        sys.exit(1)
+    
+    if not joe_split.exists():
+        print(f"Error: joe_mo_split directory not found in {base_dir}")
+        sys.exit(1)
+    
     output_dir = base_dir / "diagnostics"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     print("="*60)
     print("DOMAIN SHIFT DIAGNOSTIC ANALYSIS")
     print("="*60)
+    print(f"Base directory: {base_dir}")
     print()
 
     # 1. Magnitude analysis
