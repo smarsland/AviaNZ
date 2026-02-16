@@ -227,7 +227,7 @@ class SpectrogramDataset(Dataset):
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
                  use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                 normalize_snr=False):
+                 remove_baseline=True):
         """
         Initialize SpectrogramDataset.
         
@@ -247,7 +247,7 @@ class SpectrogramDataset(Dataset):
             use_sparse_patches: If True, only extract patches with signal (sparse attention)
             num_sparse_patches: Number of patches to extract in sparse mode (K)
             use_temporal_roll: (Deprecated - no longer used with random sampling padding)
-            normalize_snr: If True, normalize per-sample by 95th percentile to equalize SNR
+            remove_baseline: If True, subtract 10th percentile to remove DC offset/noise floor differences
         
         Note: For time axis, uses RANDOM SAMPLING (samples from per-frequency distribution)
         instead of zero-padding or tiling to avoid creating distinguishable artifacts.
@@ -268,7 +268,7 @@ class SpectrogramDataset(Dataset):
         self.use_sparse_patches = use_sparse_patches
         self.num_sparse_patches = num_sparse_patches
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
-        self.normalize_snr = normalize_snr
+        self.remove_baseline = remove_baseline
         self.rng = np.random.RandomState(21390)
         
         # Calculate final dimensions after downsampling
@@ -287,8 +287,8 @@ class SpectrogramDataset(Dataset):
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:
             print(f"Background normalization: enabled")
-        if normalize_snr:
-            print(f"⚡ Per-sample SNR normalization: enabled (divides by 95th percentile to equalize peak levels)")
+        if remove_baseline:
+            print(f"⚡ Baseline removal: enabled (subtracts 10th percentile to remove DC offset/noise floor)")
         print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
         if use_sparse_patches:
             print(f"⚡ Sparse patch mode: extracting top {num_sparse_patches} patches by signal density")
@@ -378,13 +378,13 @@ class SpectrogramDataset(Dataset):
             x = x[:, ::self.width_downsizing, :]
             assert x.ndim == 3, f"After downsampling should be 3D (H,W,C), got {x.shape}"
         
-        # Apply per-sample SNR normalization (before log transform)
-        # Normalize by 95th percentile to equalize peak levels across datasets
-        # Fixes: DOC (77x SNR) vs Joe_Mo (36x SNR) causing cross-domain failure
-        if self.normalize_snr:
-            percentile_95 = np.percentile(x, 95)
-            if percentile_95 > 1e-7:  # Avoid division by zero
-                x = x / percentile_95
+        # Remove baseline offset (DC bias / noise floor difference)
+        # DOC has 2-3x higher baseline (p10=0.10) vs Joe_Mo (p10=0.05)
+        # This causes log(signal+high_baseline) vs log(signal+low_baseline) → different features
+        # Subtract per-sample 10th percentile to equalize baseline before log transform
+        if self.remove_baseline:
+            baseline = np.percentile(x, 10)
+            x = np.maximum(x - baseline, 0)  # Remove baseline, clip to zero
         
         # Apply noise mixing if training
         # Do not noise-mix explicit background/noise samples (all-zero labels)
@@ -646,7 +646,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False,
                        use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                       normalize_snr=False):
+                       remove_baseline=True):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -667,7 +667,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_sparse_patches: If True, only extract patches with signal (sparse attention)
         num_sparse_patches: Number of patches to extract in sparse mode (K)
         use_temporal_roll: If True, randomly roll start position in tiled/repeated signals (training only)
-        normalize_snr: If True, normalize each sample by 95th percentile to equalize SNR levels
+        remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
     
     Returns:
         tuple: (train_loader, val_loader)
@@ -691,7 +691,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_sparse_patches=use_sparse_patches,
         num_sparse_patches=num_sparse_patches,
         use_temporal_roll=use_temporal_roll,
-        normalize_snr=normalize_snr
+        remove_baseline=remove_baseline
     )
     
     # Only create validation dataset if validation data exists
@@ -708,7 +708,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             use_sparse_patches=use_sparse_patches,
             num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
-            normalize_snr=normalize_snr
+            remove_baseline=remove_baseline
         )
     else:
         val_dataset = None

@@ -22,13 +22,14 @@ import config
 
 
 class ModelPredictor:
-    def __init__(self, model_path, model_config, data_folder, output_file, batch_size=32, device=None, normalize=False, inference_time_bins=None):
+    def __init__(self, model_path, model_config, data_folder, output_file, batch_size=32, device=None, normalize=False, remove_baseline=None, inference_time_bins=None):
         self.model_path = model_path
         self.model_config = model_config
         self.data_folder = data_folder
         self.output_file = output_file
         self.batch_size = batch_size
         self.normalize = normalize
+        self.remove_baseline = remove_baseline  # None = auto-detect from model config
         self.inference_time_bins = inference_time_bins  # For resizing model to different input size
         
         if device is None:
@@ -77,6 +78,14 @@ class ModelPredictor:
             print(f"⚠️  Model was trained with normalization but --normalize flag not set")
             print(f"   Auto-enabling normalization for consistency")
             self.normalize = True
+        
+        # Auto-detect baseline removal from model config if not explicitly set
+        if self.remove_baseline is None:
+            self.remove_baseline = model_config.get('remove_baseline', False)  # Default False (backwards compat)
+            if self.remove_baseline:
+                print(f"⚡ Baseline removal: enabled (from model config)")
+            else:
+                print(f"Baseline removal: disabled (not in model config / old model)")
         
         training_input_size = (self.expected_freq_bins, training_time_bins)
         
@@ -201,6 +210,11 @@ class ModelPredictor:
                     spec = np.pad(spec, ((0, pad_height), (0, 0)), mode='constant')
                 elif freq_bins > self.expected_freq_bins:
                     spec = spec[:self.expected_freq_bins, :]
+                
+                # Remove baseline offset before log transform (CRITICAL for cross-dataset consistency)
+                if self.remove_baseline:
+                    baseline = np.percentile(spec, 10)
+                    spec = np.maximum(spec - baseline, 0)
                 
                 LOG_OFFSET = 1e-7
                 spec = np.log(spec + LOG_OFFSET)
@@ -346,6 +360,8 @@ Examples:
                        help="Device to use (cuda/cpu, default: auto-detect)")
     parser.add_argument('--normalize', action='store_true',
                        help="Apply background normalization to spectrograms (auto-detected from config, but can override)")
+    parser.add_argument('--no-baseline-removal', action='store_true',
+                       help="Disable baseline removal (default: auto-detect from model config)")
     
     args = parser.parse_args()
     
@@ -357,6 +373,7 @@ Examples:
         batch_size=args.batch_size,
         device=torch.device(args.device) if args.device else None,
         normalize=args.normalize,
+        remove_baseline=False if args.no_baseline_removal else None,  # None = auto-detect
         inference_time_bins=args.time_bins
     )
     
