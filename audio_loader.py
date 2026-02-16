@@ -23,6 +23,7 @@
 import os
 import tempfile
 import shutil
+import numpy as np
 import soundfile as sf
 import pyflac
 import wavio
@@ -70,9 +71,9 @@ class AudioLoader:
         wavobj = wavio.read(filepath, duration, offset)
         data = wavobj.data
         
-        # Take only left channel
+        # Convert stereo to mono using max (preserves full amplitude)
         if len(data.shape) > 1:
-            data = data[:, 0]
+            data = np.max(data, axis=1)
         
         # Force float type
         if data.dtype != 'float':

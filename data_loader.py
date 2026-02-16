@@ -73,7 +73,8 @@ class SegmentExtractor:
             wav_data = wavio.read(file_to_read, nseconds=segment_duration, offset=start_time)
             
             if wav_data.data.shape[1] > 1:
-                audio_data = wav_data.data.mean(axis=1).astype(wav_data.data.dtype)
+                # Use max to preserve full amplitude for spectrograms
+                audio_data = np.max(wav_data.data, axis=1).astype(wav_data.data.dtype)
             else:
                 audio_data = wav_data.data[:, 0]
             

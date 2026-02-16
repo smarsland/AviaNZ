@@ -12,18 +12,7 @@ from scipy.ndimage import gaussian_filter1d
 def normalize_spectrogram(img, gaussian_sigma=3.0, eps=1e-6):
     """
     Apply background normalization to a spectrogram.
-    
-    This method estimates background noise from the bottom half of pixels in each
-    frequency band and normalizes the spectrogram accordingly. This enhances the
-    contrast of bird calls against background noise.
-    
-    Args:
-        img: Input spectrogram (2D numpy array, shape: [freq_bins, time_bins])
-        gaussian_sigma: Sigma for Gaussian smoothing of background estimates (default: 3.0)
-        eps: Small epsilon to prevent division by zero (default: 1e-6)
-    
-    Returns:
-        Normalized spectrogram (same shape as input)
+   
     """
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
@@ -37,16 +26,12 @@ def normalize_spectrogram(img, gaussian_sigma=3.0, eps=1e-6):
     # Calculate mean and variance of background pixels per frequency band
     mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
     var0 = np.var(bg_pixels, axis=1, keepdims=True)
-    
-    # Smooth background estimates across frequency bands
-    mu0 = gaussian_filter1d(mu0.flatten(), sigma=gaussian_sigma).reshape(H, 1)
-    var0 = gaussian_filter1d(var0.flatten(), sigma=gaussian_sigma).reshape(H, 1)
-    
+        
     # Normalize: z-score normalization per frequency band
     sg_normalized = (img - mu0) / (np.sqrt(var0) + eps)
-    
-    return sg_normalized
 
+    return sg_normalized
+-
 
 def visualize_normalization(img, gaussian_sigma=3.0, eps=1e-6):
     """
