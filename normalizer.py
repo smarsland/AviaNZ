@@ -31,7 +31,6 @@ def normalize_spectrogram(img, gaussian_sigma=3.0, eps=1e-6):
     sg_normalized = (img - mu0) / (np.sqrt(var0) + eps)
 
     return sg_normalized
--
 
 def visualize_normalization(img, gaussian_sigma=3.0, eps=1e-6):
     """
