@@ -223,7 +223,7 @@ class BirdClefFineTuner:
         if self.mixup_alpha > 0:
             print(f"  Mixup alpha: {self.mixup_alpha}")
         if self.noise_ratio > 0:
-            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}])"))
+            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}])")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
