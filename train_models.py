@@ -82,7 +82,7 @@ Examples:
     parser.add_argument('--weight-decay', type=float, default=config.DEFAULT_WEIGHT_DECAY,
                        help=f"Weight decay (L2 regularization) for Adam optimizer (default: {config.DEFAULT_WEIGHT_DECAY:.1e}, classification mode only)")
     parser.add_argument('--noise', type=float, default=config.DEFAULT_NOISE_RATIO,
-                       help=f"Noise mixing ratio for AUGMENTATION: mixes noise into bird spectrograms during training (default: {config.DEFAULT_NOISE_RATIO}, 0.0 = no mixing, 0.5 = 50%% noise mixed in, classification mode only)")
+                       help=f"Expected noise mixing ratio for AUGMENTATION: uniformly samples from [0, 2\u00d7ratio] so E[noise]=ratio. Creates variable SNR conditions during training (default: {config.DEFAULT_NOISE_RATIO}, 0.0=no mixing, 0.3=30%% expected noise, classification mode only)")
     parser.add_argument('--noise-folder', type=str, default=None,
                        help="Path to noise data folder. Used for augmentation mixing via --noise (default: same as data_folder, classification mode only)")
 

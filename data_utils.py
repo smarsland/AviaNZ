@@ -239,7 +239,7 @@ class SpectrogramDataset(Dataset):
             channels: Number of channels
             cropping_mode: How to crop images ('center' or 'random')
             noise_filenames: List of noise file paths for augmentation
-            noise_ratio: Ratio for mixing noise
+            noise_ratio: Expected noise mixing ratio (samples uniformly from [0, 2×noise_ratio] so E[noise]=noise_ratio)
             spec_transform: Transform to apply ("Log", "PCEN", "Box-Cox", "Sigmoid", None)
             training: Whether this is training data (affects augmentation)
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
@@ -260,7 +260,7 @@ class SpectrogramDataset(Dataset):
         self.channels = channels
         self.cropping_mode = cropping_mode
         self.noise_filenames = noise_filenames if noise_filenames else []
-        self.noise_ratio = noise_ratio if training else 0.0  # No noise during validation
+        self.noise_ratio = noise_ratio if training else 0.0  # Expected noise ratio (samples from [0, 2×ratio])
         self.spec_transform = spec_transform
         self.training = training
         self.width_downsizing = width_downsizing
@@ -282,7 +282,7 @@ class SpectrogramDataset(Dataset):
         
         print(f"Dataset initialized with {len(self.filenames)} data files and {len(self.noise_filenames)} noise files")
         print(f"Spectrogram transform: {self.spec_transform}")
-        print(f"Training mode: {self.training} (noise ratio: {self.noise_ratio})")
+        print(f"Training mode: {self.training} (expected noise ratio: {self.noise_ratio}, uniformly sampled [0, {2*self.noise_ratio:.1f}])")
         if width_downsizing:
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:
@@ -390,7 +390,7 @@ class SpectrogramDataset(Dataset):
         # Do not noise-mix explicit background/noise samples (all-zero labels)
         # They should remain pure negatives to teach rejection.
         is_all_zero_label = bool((self.labels[idx].sum() == 0).item())
-        if self.training and (not is_all_zero_label) and len(self.noise_filenames) > 0 and self.noise_ratio > 0:
+        if self.training and (not is_all_zero_label) and len(self.noise_filenames) > 0 and self.max_noise_ratio > 0:
             x = self.mix_with_noise(x)
             assert x.ndim == 3, f"After noise mix should be 3D (H,W,C), got {x.shape}"
         
@@ -484,9 +484,16 @@ class SpectrogramDataset(Dataset):
         return array
 
     def mix_with_noise(self, bird_spectrogram):
-        """Mix bird spectrogram with noise spectrogram."""
+        """Mix bird spectrogram with noise spectrogram.
+        
+        Uses a random noise ratio sampled uniformly from [0, 2×noise_ratio]
+        so the expected (mean) noise ratio equals the specified parameter.
+        """
         if not self.noise_filenames or self.noise_ratio <= 0:
             return bird_spectrogram
+        
+        # Sample random noise ratio: uniform[0, 2×ratio] so E[noise] = ratio
+        actual_noise_ratio = self.rng.uniform(0.0, 2.0 * self.noise_ratio)
         
         noise_file = self.rng.choice(self.noise_filenames)
         noise_data = np.load(noise_file)
@@ -517,7 +524,8 @@ class SpectrogramDataset(Dataset):
         energy_scale = bird_energy / noise_energy
         noise_linear_scaled = noise_linear * energy_scale
         
-        mixed_linear = (1.0 - self.noise_ratio) * bird_linear + self.noise_ratio * noise_linear_scaled
+        # Mix with randomly sampled ratio
+        mixed_linear = (1.0 - actual_noise_ratio) * bird_linear + actual_noise_ratio * noise_linear_scaled
         
         return mixed_linear
 
@@ -657,7 +665,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         img_width: Target image width
         channels: Number of channels
         cropping_mode: How to crop images ('center' or 'random')
-        noise_ratio: Ratio for mixing noise during training
+        noise_ratio: Expected noise mixing ratio (samples uniformly from [0, 2×noise_ratio] so E[noise]=noise_ratio)
         spec_transform: Spectrogram transformation (None uses config default)
         num_workers: Number of workers for data loading
         width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])

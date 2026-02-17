@@ -223,7 +223,7 @@ class BirdClefFineTuner:
         if self.mixup_alpha > 0:
             print(f"  Mixup alpha: {self.mixup_alpha}")
         if self.noise_ratio > 0:
-            print(f"  Noise augmentation: {self.noise_ratio}")
+            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}])"))
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -665,12 +665,12 @@ Examples:
                        help="Optional cap for multilabel BCE pos_weight (e.g., 20). Only used with --class-weights")
     parser.add_argument('--normalize', action='store_true',
                        help="Apply background normalization to spectrograms (recommended for soundscapes)")
-    parser.add_argument('--no-baseline-removal', action='store_true',
-                       help="Disable baseline removal (default: enabled). Baseline removal subtracts 10th percentile to fix DC offset differences between datasets")
+    parser.add_argument('--baseline-removal', action='store_true',
+                       help="Baseline removal (default: disabled). Baseline removal subtracts 10th percentile to fix DC offset differences between datasets")
     parser.add_argument('--mixup', type=float, default=0.0,
                        help="Mixup alpha for data augmentation (default: 0.0 = disabled, try 0.2-0.4)")
     parser.add_argument('--noise', type=float, default=0.0,
-                       help="Noise mixing ratio for augmentation (default: 0.0 = disabled, try 0.2-0.5)")
+                       help="Expected noise mixing ratio for augmentation (uniformly sampled [0, 2×ratio] so E[noise]=ratio). 0.0=disabled, 0.3=30%% expected noise")
     parser.add_argument('--noise-folder', type=str, default=None,
                        help="Path to noise data folder for augmentation (default: same as data_folder)")
     parser.add_argument('--no-temporal-roll', action='store_true',
@@ -712,7 +712,7 @@ Examples:
         noise_folder=args.noise_folder,
         use_temporal_roll=not args.no_temporal_roll,
         validation_split=args.validation_split,
-        remove_baseline=not args.no_baseline_removal
+        remove_baseline=args.baseline_removal
     )
     
     # Load data and create model
