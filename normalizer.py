@@ -17,28 +17,36 @@ def normalize_spectrogram(img, gaussian_sigma=3.0, eps=1e-6):
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
     
-    # Assume for any frequency band no more than half of the pixels are interesting
-    # Therefore take the bottom half as non-interesting to estimate the background
-    H, W = img.shape
-    sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :W//2]
+    # # Assume for any frequency band no more than half of the pixels are interesting
+    # # Therefore take the bottom half as non-interesting to estimate the background
+    # H, W = img.shape
+    # sorted_pixels = np.sort(img, axis=1)
+    # bg_pixels = sorted_pixels[:, :W//2]
     
-    # Calculate mean and variance of background pixels per frequency band
-    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    var0 = np.var(bg_pixels, axis=1, keepdims=True)
+    # # Calculate mean and variance of background pixels per frequency band
+    # mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
+    # var0 = np.var(bg_pixels, axis=1, keepdims=True)
         
-    # Normalize: z-score normalization per frequency band
-    sg_normalized = (img - mu0) / (np.sqrt(var0) + eps)
+    # # Normalize: z-score normalization per frequency band
+    # sg_normalized = (img - mu0) / (np.sqrt(var0) + eps)
 
-    flat_order = np.argsort(sg_normalized, axis=None)
+    # sorted_pixels = np.sort(sg_normalized, axis=0)
+    # bg_pixels = sorted_pixels[:H//2, :]
+    # overall_bg_level = np.mean(bg_pixels)
+    # mu0 = np.mean(bg_pixels, axis=0, keepdims=True)
+    # var0 = np.var(bg_pixels, axis=0, keepdims=True)
+    # sg_normalized = (sg_normalized - mu0 - overall_bg_level) / (np.sqrt(var0) + eps)
 
+
+    flat_order = np.argsort(img, axis=1)
     ranks = np.empty_like(flat_order)
-    ranks[flat_order] = np.arange(flat_order.size)
 
-    result = ranks.reshape(sg_normalized.shape)
-    
-    sg_normalized = result / (sg_normalized.shape[0] * sg_normalized.shape[1])
+    # Assign ranks row by row
+    for i in range(img.shape[0]):
+        ranks[i, flat_order[i]] = np.arange(img.shape[1])
 
+    # Normalize ranks to [0, 1]
+    sg_normalized = ranks / (img.shape[1] - 1)
     return sg_normalized
 
 def normalize_spectrogram_old(img, gaussian_sigma=3.0, eps=1e-6):
