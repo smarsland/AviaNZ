@@ -27,13 +27,23 @@ def normalize_spectrogram(img):
     # now do KDE for the columns
     for col in range(W):
         x = img[:, col]
-        bandwidth = 10 * np.std(x) * len(x) ** (-1/5) + 1e-6
+        bandwidth = 4 * np.std(x) * len(x) ** (-1/5) + 1e-6
         distances = np.abs(x.reshape(-1, 1) - x.reshape(1, -1))
         weights = np.exp(-0.5 * (distances / bandwidth) ** 2)
         density = np.sum(weights, axis=1) / (len(x) * bandwidth * np.sqrt(2*np.pi))
         density = (density - np.min(density)) / (np.max(density) - np.min(density) + 1e-6)
-        img[:, col] = (1 - density)
-    
+        img[:, col] = 1 - density
+
+    flat_order = np.argsort(img, axis=1)
+    ranks = np.empty_like(flat_order)
+
+    # Assign ranks row by row
+    for i in range(img.shape[0]):
+        ranks[i, flat_order[i]] = np.arange(img.shape[1])
+
+    # Normalize ranks to [0, 1]
+    img = ranks / (img.shape[1] - 1)
+
     return img
 
 def normalize_spectrogram_old(img):

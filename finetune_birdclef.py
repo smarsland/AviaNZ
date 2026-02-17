@@ -180,7 +180,7 @@ class BirdClefFineTuner:
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, noise_ratio=0.0, 
                  noise_folder=None, use_temporal_roll=True, validation_split=0.2,
-                 remove_baseline=True):
+                 remove_baseline=True, test_folder=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -200,6 +200,7 @@ class BirdClefFineTuner:
         self.use_temporal_roll = use_temporal_roll
         self.validation_split = validation_split
         self.remove_baseline = remove_baseline
+        self.test_folder = test_folder
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -229,8 +230,36 @@ class BirdClefFineTuner:
         """Load data using existing AviaNZ data pipeline."""
         print("\nLoading dataset...")
         
-        data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-        self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
+        if self.test_folder:
+            print(f"  Using separate test folder: {self.test_folder}")
+            
+            train_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
+            train_data = train_loader.load_data(self.multilabel, validation_share=0.0)
+            
+            test_loader = DataLoader(self.test_folder, noise_folder=self.noise_folder)
+            test_data = test_loader.load_data(self.multilabel, validation_share=0.0)
+            
+            if train_data['categories'] != test_data['categories']:
+                print(f"  WARNING: Train and test categories differ!")
+                print(f"    Train: {train_data['categories']}")
+                print(f"    Test: {test_data['categories']}")
+            
+            self.data = {
+                'train_filenames': train_data['train_filenames'],
+                'train_labels': train_data['train_labels'],
+                'test_filenames': test_data['train_filenames'],
+                'test_labels': test_data['train_labels'],
+                'train_primary_species': train_data['train_primary_species'],
+                'test_primary_species': test_data['train_primary_species'],
+                'train_noise_filenames': train_data['train_noise_filenames'],
+                'test_noise_filenames': test_data['train_noise_filenames'],
+                'categories': train_data['categories'],
+                'class_names': train_data['class_names'],
+                'nclasses': train_data['nclasses']
+            }
+        else:
+            data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
+            self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
         
         self.num_classes = self.data['nclasses']
         self.categories = self.data['categories']
@@ -617,6 +646,9 @@ Examples:
   # Basic fine-tuning (all layers trainable, 10 epochs)
   python finetune_birdclef.py data/train outputs/birdclef_ft
   
+  # Use separate test folder instead of automatic validation split
+  python finetune_birdclef.py data/train outputs/birdclef_ft --test-folder data/test
+  
   # Freeze backbone, train only classifier (fast, good for small datasets)
   python finetune_birdclef.py data/train outputs/birdclef_ft --freeze-backbone --epochs 5
   
@@ -677,6 +709,8 @@ Examples:
                        help="Disable temporal rolling augmentation")
     parser.add_argument('--validation-split', type=float, default=0.2,
                        help="Validation split ratio (default: 0.2 = 20%%, use 0 to disable validation)")
+    parser.add_argument('--test-folder', type=str, default=None,
+                       help="Path to separate test data folder (with labels.json). If provided, all data_folder is used for training and validation comes from here.")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     
@@ -712,7 +746,8 @@ Examples:
         noise_folder=args.noise_folder,
         use_temporal_roll=not args.no_temporal_roll,
         validation_split=args.validation_split,
-        remove_baseline=args.baseline_removal
+        remove_baseline=args.baseline_removal,
+        test_folder=args.test_folder
     )
     
     # Load data and create model
