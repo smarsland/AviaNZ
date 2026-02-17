@@ -7,6 +7,7 @@ import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import wasserstein_distance, mannwhitneyu
 from normalizer import normalize_spectrogram
 
 
@@ -354,7 +355,318 @@ def plot_sample_spectrograms(output_path, doc_dir, joe_dir, num_samples=3):
     plt.close(fig)
 
 
-def write_recommendations(output_path, doc_stats, joe_stats):
+def compute_frequency_band_statistics(data_dir, num_bands=8):
+    freq_band_stats = {f'band_{i}': [] for i in range(num_bands)}
+    
+    for npy_path in sorted(data_dir.rglob('*.npy')):
+        spec = np.load(npy_path)
+        if spec.size == 0:
+            continue
+        
+        freq_bins = spec.shape[0]
+        band_size = freq_bins // num_bands
+        
+        for i in range(num_bands):
+            start = i * band_size
+            end = (i + 1) * band_size if i < num_bands - 1 else freq_bins
+            band_energy = np.mean(spec[start:end, :])
+            freq_band_stats[f'band_{i}'].append(band_energy)
+    
+    return freq_band_stats
+
+
+def compute_spectral_features(spec):
+    if spec.size == 0:
+        return None
+    
+    # Spectral centroid (center of mass of spectrum)
+    freq_axis = np.arange(spec.shape[0])
+    spectral_centroid = np.sum(spec * freq_axis[:, np.newaxis], axis=0) / (np.sum(spec, axis=0) + 1e-10)
+    
+    # Spectral spread (standard deviation around centroid)
+    spectral_spread = np.sqrt(np.sum(spec * (freq_axis[:, np.newaxis] - spectral_centroid) ** 2, axis=0) / (np.sum(spec, axis=0) + 1e-10))
+    
+    # Spectral flatness (Wiener entropy - measure of noise-like vs tonal)
+    geometric_mean = np.exp(np.mean(np.log(spec + 1e-10), axis=0))
+    arithmetic_mean = np.mean(spec, axis=0)
+    spectral_flatness = geometric_mean / (arithmetic_mean + 1e-10)
+    
+    # Spectral rolloff (frequency below which 85% of energy is contained)
+    cumsum = np.cumsum(spec, axis=0)
+    total_energy = cumsum[-1, :]
+    rolloff_threshold = 0.85 * total_energy
+    spectral_rolloff = np.argmax(cumsum >= rolloff_threshold, axis=0)
+    
+    return {
+        'centroid_mean': np.mean(spectral_centroid),
+        'centroid_std': np.std(spectral_centroid),
+        'spread_mean': np.mean(spectral_spread),
+        'spread_std': np.std(spectral_spread),
+        'flatness_mean': np.mean(spectral_flatness),
+        'flatness_std': np.std(spectral_flatness),
+        'rolloff_mean': np.mean(spectral_rolloff),
+        'rolloff_std': np.std(spectral_rolloff)
+    }
+
+
+def compute_dataset_spectral_features(data_dir):
+    all_features = []
+    
+    for npy_path in sorted(data_dir.rglob('*.npy')):
+        spec = np.load(npy_path)
+        features = compute_spectral_features(spec)
+        if features is not None:
+            all_features.append(features)
+    
+    aggregated = {}
+    for key in all_features[0].keys():
+        values = [f[key] for f in all_features]
+        aggregated[key] = {
+            'mean': np.mean(values),
+            'std': np.std(values),
+            'min': np.min(values),
+            'max': np.max(values),
+            'values': values
+        }
+    
+    return aggregated
+
+
+def plot_frequency_band_comparison(output_path, doc_stats, joe_stats, num_bands=8):
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig.suptitle('Frequency Band Energy Distribution', fontsize=14, fontweight='bold')
+    
+    band_labels = [f'Band {i}\n({i*1000}Hz)' for i in range(num_bands)]
+    
+    # Box plot comparison
+    ax = axes[0]
+    doc_data = [doc_stats[f'band_{i}'] for i in range(num_bands)]
+    joe_data = [joe_stats[f'band_{i}'] for i in range(num_bands)]
+    
+    positions_doc = np.arange(num_bands) * 2
+    positions_joe = positions_doc + 0.8
+    
+    bp1 = ax.boxplot(doc_data, positions=positions_doc, widths=0.6, patch_artist=True,
+                     boxprops=dict(facecolor='blue', alpha=0.5),
+                     medianprops=dict(color='darkblue', linewidth=2))
+    bp2 = ax.boxplot(joe_data, positions=positions_joe, widths=0.6, patch_artist=True,
+                     boxprops=dict(facecolor='orange', alpha=0.5),
+                     medianprops=dict(color='darkorange', linewidth=2))
+    
+    ax.set_xticks(positions_doc + 0.4)
+    ax.set_xticklabels([f'Band {i}' for i in range(num_bands)], rotation=45)
+    ax.set_ylabel('Energy')
+    ax.set_title('Per-Band Energy Distribution')
+    ax.legend([bp1['boxes'][0], bp2['boxes'][0]], ['DOC', 'Joe_Mo'])
+    ax.set_yscale('log')
+    ax.grid(True, alpha=0.3)
+    
+    # Ratio plot
+    ax = axes[1]
+    doc_medians = [np.median(doc_stats[f'band_{i}']) for i in range(num_bands)]
+    joe_medians = [np.median(joe_stats[f'band_{i}']) for i in range(num_bands)]
+    ratios = np.array(joe_medians) / (np.array(doc_medians) + 1e-10)
+    
+    ax.bar(range(num_bands), ratios, color='purple', alpha=0.6)
+    ax.axhline(y=1.0, color='red', linestyle='--', linewidth=2, label='Equal energy')
+    ax.set_xlabel('Frequency Band')
+    ax.set_ylabel('Joe_Mo / DOC Energy Ratio')
+    ax.set_title('Energy Ratio by Frequency Band')
+    ax.set_xticks(range(num_bands))
+    ax.set_xticklabels([f'Band {i}' for i in range(num_bands)])
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_spectral_feature_comparison(output_path, doc_features, joe_features):
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    fig.suptitle('Spectral Feature Comparison', fontsize=14, fontweight='bold')
+    
+    feature_names = ['centroid_mean', 'centroid_std', 'spread_mean', 'spread_std',
+                     'flatness_mean', 'flatness_std', 'rolloff_mean', 'rolloff_std']
+    
+    for idx, feature in enumerate(feature_names):
+        ax = axes[idx // 4, idx % 4]
+        
+        doc_vals = doc_features[feature]['values']
+        joe_vals = joe_features[feature]['values']
+        
+        ax.hist(doc_vals, bins=50, alpha=0.5, label='DOC', density=True, color='blue')
+        ax.hist(joe_vals, bins=50, alpha=0.5, label='Joe_Mo', density=True, color='orange')
+        
+        ax.set_xlabel(feature.replace('_', ' ').title())
+        ax.set_ylabel('Density')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+
+        dist = wasserstein_distance(doc_vals, joe_vals)
+        ax.set_title(f'{feature.replace("_", " ").title()}\nWasserstein: {dist:.2e}')
+    
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+
+
+def analyze_prediction_correctness(base_dir, model_name, test_name, output_dir):
+    labels_path = base_dir / f"{test_name}_split" / "test" / "labels.json"
+    preds_path = base_dir / f"{test_name}_split" / "test" / f"birdclef_{model_name}_trained_{test_name}_test.csv"
+    data_dir = base_dir / f"{test_name}_split" / "test" / "data"
+    
+    with open(labels_path, 'r') as f:
+        labels_data = json.load(f)
+    
+    filename_to_class = {}
+    for item in labels_data.get('files', []):
+        filename = item['filename']
+        primary_class = item.get('primary_class', item.get('primary_species'))
+        filename_to_class[filename] = primary_class
+    
+    with open(preds_path, 'r') as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    
+    categories = [col for col in rows[0].keys() if col not in ['File_Path', 'row_id']]
+    
+    correct_samples = []
+    incorrect_samples = []
+    
+    for row in rows:
+        filename = row['row_id']
+        
+        if filename not in filename_to_class:
+            continue
+        
+        true_class = filename_to_class[filename]
+        scores = [float(row[cat]) for cat in categories]
+        pred_class = categories[np.argmax(scores)]
+        
+        spec_path = data_dir / filename
+        
+        if not spec_path.exists():
+            continue
+        
+        spec = np.load(spec_path)
+        
+        if pred_class == true_class:
+            correct_samples.append({
+                'filename': filename,
+                'class': true_class,
+                'spec': spec,
+                'confidence': max(scores)
+            })
+        else:
+            incorrect_samples.append({
+                'filename': filename,
+                'true_class': true_class,
+                'pred_class': pred_class,
+                'spec': spec,
+                'confidence': max(scores)
+            })
+    
+    return correct_samples, incorrect_samples
+
+
+def compute_sample_statistics(samples):
+    stats = {
+        'means': [],
+        'maxs': [],
+        'stds': [],
+        'centroid': [],
+        'spread': [],
+        'flatness': [],
+        'rolloff': []
+    }
+    
+    for sample in samples:
+        spec = sample['spec']
+        stats['means'].append(np.mean(spec))
+        stats['maxs'].append(np.max(spec))
+        stats['stds'].append(np.std(spec))
+        
+        features = compute_spectral_features(spec)
+        if features:
+            stats['centroid'].append(features['centroid_mean'])
+            stats['spread'].append(features['spread_mean'])
+            stats['flatness'].append(features['flatness_mean'])
+            stats['rolloff'].append(features['rolloff_mean'])
+    
+    return stats
+
+
+def plot_correct_vs_incorrect_analysis(output_path, correct_stats, incorrect_stats, title):
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    fig.suptitle(title, fontsize=14, fontweight='bold')
+    
+    metrics = ['means', 'maxs', 'stds', 'centroid', 'spread', 'flatness', 'rolloff']
+    metric_labels = ['Mean Energy', 'Max Energy', 'Std Energy', 'Spectral Centroid', 
+                     'Spectral Spread', 'Spectral Flatness', 'Spectral Rolloff']
+    
+    for idx in range(7):
+        ax = axes[idx // 4, idx % 4]
+        metric = metrics[idx]
+        
+        if len(correct_stats.get(metric, [])) == 0 or len(incorrect_stats.get(metric, [])) == 0:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center')
+            ax.set_title(metric_labels[idx])
+            continue
+        
+        correct_vals = correct_stats[metric]
+        incorrect_vals = incorrect_stats[metric]
+        
+        # Create box plot comparison
+        bp = ax.boxplot([correct_vals, incorrect_vals], 
+                        labels=['Correct', 'Incorrect'],
+                        patch_artist=True,
+                        boxprops=dict(alpha=0.6))
+        bp['boxes'][0].set_facecolor('green')
+        bp['boxes'][1].set_facecolor('red')
+        
+        ax.set_ylabel(metric_labels[idx])
+        ax.grid(True, alpha=0.3)
+        
+
+        try:
+            stat, pval = mannwhitneyu(correct_vals, incorrect_vals)
+            significance = ' ***' if pval < 0.001 else ' **' if pval < 0.01 else ' *' if pval < 0.05 else ''
+            ax.set_title(f'{metric_labels[idx]}\np={pval:.3f}{significance}')
+        except:
+            ax.set_title(metric_labels[idx])
+    
+    # Summary stats in last subplot
+    ax = axes[1, 3]
+    ax.axis('off')
+    
+    summary_text = f"""SUMMARY:
+
+Correct predictions: {len(correct_stats['means'])}
+Incorrect predictions: {len(incorrect_stats['means'])}
+
+Accuracy: {100 * len(correct_stats['means']) / (len(correct_stats['means']) + len(incorrect_stats['means'])):.1f}%
+
+Significant differences (p<0.05) 
+indicate features that distinguish
+correct from incorrect predictions.
+
+Large differences suggest the
+model is sensitive to that feature
+and cross-domain shift in that
+feature is causing failures.
+    """
+    
+    ax.text(0.1, 0.5, summary_text, fontsize=10, verticalalignment='center',
+            fontfamily='monospace', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+
+
+def write_analysis_summary(output_path, doc_stats, joe_stats, doc_features, joe_features):
     doc_mean_avg = np.mean(doc_stats['means'])
     joe_mean_avg = np.mean(joe_stats['means'])
     ratio = joe_mean_avg / doc_mean_avg
@@ -392,66 +704,59 @@ def write_recommendations(output_path, doc_stats, joe_stats):
         f.write("-------------------------------------------------------\n")
         f.write("Add --normalize flag when training:\n\n")
         f.write("  python finetune_birdclef.py data/train outputs/model --normalize\n\n")
-        f.write("This applies per-frequency-band z-score normalization that:\n")
-        f.write("  ✓ Makes models scale-invariant\n")
-        f.write("  ✓ Reduces background noise\n")
-        f.write("  ✓ Enhances bird call features\n")
-        f.write("  ✓ Should work for both datasets\n\n")
+        f.write("\n")
+        f.write("=" * 80 + "\n")
+        f.write("MAGNITUDE STATISTICS\n")
+        f.write("=" * 80 + "\n\n")
+        f.write(f"DOC Dataset:\n")
+        f.write(f"  Mean:   {np.mean(doc_stats['means']):.1f} ± {np.std(doc_stats['means']):.1f}\n")
+        f.write(f"  Max:    {np.mean(doc_stats['maxs']):.1f} ± {np.std(doc_stats['maxs']):.1f}\n")
+        f.write(f"  Width:  min={min(doc_stats['widths'])}, max={max(doc_stats['widths'])}, median={int(np.median(doc_stats['widths']))}\n")
+        f.write(f"  Samples: {len(doc_stats['means'])}\n\n")
         
-        f.write("OPTION 2: Pre-normalize the Data\n")
-        f.write("---------------------------------\n")
-        f.write("Normalize all spectrograms during data generation:\n\n")
-        f.write("  from normalizer import normalize_spectrogram\n")
-        f.write("  spec_normalized = normalize_spectrogram(spec_raw)\n")
-        f.write("  np.save(output_path, spec_normalized)\n\n")
-        f.write("Benefits:\n")
-        f.write("  ✓ Normalization done once (faster training)\n")
-        f.write("  ✓ Consistent preprocessing\n")
-        f.write("  ✗ Requires regenerating all data\n\n")
+        f.write(f"Joe_Mo Dataset:\n")
+        f.write(f"  Mean:   {np.mean(joe_stats['means']):.1f} ± {np.std(joe_stats['means']):.1f}\n")
+        f.write(f"  Max:    {np.mean(joe_stats['maxs']):.1f} ± {np.std(joe_stats['maxs']):.1f}\n")
+        f.write(f"  Width:  min={min(joe_stats['widths'])}, max={max(joe_stats['widths'])}, median={int(np.median(joe_stats['widths']))}\n")
+        f.write(f"  Samples: {len(joe_stats['means'])}\n\n")
         
-        f.write("OPTION 3: Use Instance Normalization in Model\n")
-        f.write("----------------------------------------------\n")
-        f.write("Add instance normalization layer at model input:\n\n")
-        f.write("  # In model __init__:\n")
-        f.write("  self.input_norm = nn.InstanceNorm2d(1, affine=False)\n\n")
-        f.write("  # In forward pass:\n")
-        f.write("  x = self.input_norm(x)\n\n")
-        f.write("Benefits:\n")
-        f.write("  ✓ Per-sample normalization\n")
-        f.write("  ✓ Scale-invariant\n")
-        f.write("  ✗ Adds computational overhead\n\n")
+        f.write(f"Magnitude Ratio (Joe_Mo / DOC):\n")
+        f.write(f"  Mean: {ratio:.2f}x\n")
+        f.write(f"  Max:  {np.mean(joe_stats['maxs']) / np.mean(doc_stats['maxs']):.2f}x\n\n")
         
-        f.write("OPTION 4: Train on Combined Data\n")
-        f.write("---------------------------------\n")
-        f.write("Combine both datasets for training with normalization:\n\n")
-        f.write("  python finetune_birdclef.py data/combined outputs/model --normalize\n\n")
-        f.write("Benefits:\n")
-        f.write("  ✓ Model sees both distributions\n")
-        f.write("  ✓ Better generalization\n")
-        f.write("  ✗ Requires merging datasets\n\n")
+        f.write("\n")
+        f.write("=" * 80 + "\n")
+        f.write("SPECTRAL FEATURE ANALYSIS\n")
+        f.write("=" * 80 + "\n\n")
         
-        f.write("\nTESTING THE FIX:\n")
-        f.write("================\n\n")
-        f.write("1. Retrain models WITH normalization:\n\n")
-        f.write("   python finetune_birdclef.py test/test/doc_split/train \\\n")
-        f.write("          test/test/doc_trained --normalize --epochs 10\n\n")
-        f.write("   python finetune_birdclef.py test/test/joe_mo_split/train \\\n")
-        f.write("          test/test/joe_mo_trained --normalize --epochs 10\n\n")
-        f.write("2. Generate predictions on both test sets\n\n")
-        f.write("3. Re-run domain_shift_diagnostics.py to compare accuracy\n\n")
-        f.write("Expected results:\n")
-        f.write("  - Same-domain accuracy should remain high\n")
-        f.write("  - Cross-domain accuracy should IMPROVE SIGNIFICANTLY\n")
-        f.write("  - If still poor, consider combining datasets for training\n\n")
+        feature_names = ['centroid_mean', 'spread_mean', 'flatness_mean', 'rolloff_mean']
+        feature_labels = ['Spectral Centroid', 'Spectral Spread', 'Spectral Flatness', 'Spectral Rolloff']
         
-        f.write("\nADDITIONAL OBSERVATIONS:\n")
-        f.write("========================\n\n")
-        f.write(f"Width variation:\n")
-        f.write(f"  DOC:    min={min(doc_stats['widths'])}, max={max(doc_stats['widths'])}, median={int(np.median(doc_stats['widths']))}\n")
-        f.write(f"  Joe_Mo: min={min(joe_stats['widths'])}, max={max(joe_stats['widths'])}, median={int(np.median(joe_stats['widths']))}\n\n")
-        f.write(f"Note: Joe_Mo has extreme width variation (34 to 29969 bins), suggesting\n")
-        f.write(f"highly variable call durations. This is handled by the data pipeline's\n")
-        f.write(f"tiling/repetition strategy, but such variation may hurt performance.\n\n")
+        for fname, flabel in zip(feature_names, feature_labels):
+            doc_mean = doc_features[fname]['mean']
+            joe_mean = joe_features[fname]['mean']
+            doc_std = doc_features[fname]['std']
+            joe_std = joe_features[fname]['std']
+            
+            f.write(f"{flabel}:\n")
+            f.write(f"  DOC:    {doc_mean:.2f} ± {doc_std:.2f}\n")
+            f.write(f"  Joe_Mo: {joe_mean:.2f} ± {joe_std:.2f}\n")
+            f.write(f"  Diff:   {abs(joe_mean - doc_mean):.2f} ({100 * abs(joe_mean - doc_mean) / (doc_mean + 1e-10):.1f}%)\n\n")
+        
+        f.write("\n")
+        f.write("INTERPRETATION:\n")
+        f.write("---------------\n")
+        f.write("Spectral Centroid: Center of mass of frequency distribution\n")
+        f.write("  - Higher = more high-frequency energy\n")
+        f.write("  - Differences indicate frequency band emphasis mismatch\n\n")
+        f.write("Spectral Spread: Variance of frequencies around centroid\n")
+        f.write("  - Higher = energy spread across wide frequency range\n")
+        f.write("  - Lower = energy concentrated in narrow band\n\n")
+        f.write("Spectral Flatness: 0=tonal (pure tone), 1=noise-like (white noise)\n")
+        f.write("  - Differences indicate different call structure or background characteristics\n\n")
+        f.write("Spectral Rolloff: Frequency below which 85% of energy is contained\n")
+        f.write("  - Higher = more high-frequency content\n")
+        f.write("  - Differences indicate bandwidth mismatch\n\n")
 
 
 def main():
@@ -473,13 +778,13 @@ Expected folder structure:
       test/*.csv   (predictions)
 
 Example:
-  python domain_shift_diagnostics.py test/test
+  python domain_shift_diagnostics.py test
   python domain_shift_diagnostics.py /path/to/experiments
         """
     )
     parser.add_argument('base_dir', type=str, nargs='?', 
-                       default='test/test',
-                       help='Base directory containing doc_split and joe_mo_split folders (default: test/test)')
+                       default='test',
+                       help='Base directory containing doc_split and joe_mo_split folders (default: test)')
     
     args = parser.parse_args()
     base_dir = Path(args.base_dir).resolve()
@@ -597,11 +902,60 @@ Example:
     )
     print(f"   ✓ Saved: {test_length_path.name}")
     
-    # 6. Write comprehensive recommendations
-    print("6. Generating recommendations report...")
-    recommendations_path = output_dir / "RECOMMENDATIONS.txt"
-    write_recommendations(recommendations_path, doc_train_stats, joe_train_stats)
-    print(f"   ✓ Saved: {recommendations_path.name}")
+    # 6. Frequency band analysis
+    print("6. Analyzing frequency band energy distribution...")
+    doc_freq_stats = compute_frequency_band_statistics(base_dir / "doc_split" / "train" / "data", num_bands=8)
+    joe_freq_stats = compute_frequency_band_statistics(base_dir / "joe_mo_split" / "train" / "data", num_bands=8)
+    freq_band_path = output_dir / "frequency_band_comparison.png"
+    plot_frequency_band_comparison(freq_band_path, doc_freq_stats, joe_freq_stats, num_bands=8)
+    print(f"   ✓ Saved: {freq_band_path.name}")
+    
+    # 7. Spectral feature analysis
+    print("7. Computing spectral features...")
+    doc_spectral = compute_dataset_spectral_features(base_dir / "doc_split" / "train" / "data")
+    joe_spectral = compute_dataset_spectral_features(base_dir / "joe_mo_split" / "train" / "data")
+    spectral_path = output_dir / "spectral_features_comparison.png"
+    plot_spectral_feature_comparison(spectral_path, doc_spectral, joe_spectral)
+    print(f"   ✓ Saved: {spectral_path.name}")
+    
+    # 8. Analyze correct vs incorrect predictions for cross-domain scenarios
+    print("8. Analyzing prediction patterns for cross-domain transfer...")
+    
+    print("   a. DOC model on Joe_Mo test data...")
+    doc_on_joe_correct, doc_on_joe_incorrect = analyze_prediction_correctness(
+        base_dir, "doc", "joe_mo", output_dir
+    )
+    doc_on_joe_correct_stats = compute_sample_statistics(doc_on_joe_correct)
+    doc_on_joe_incorrect_stats = compute_sample_statistics(doc_on_joe_incorrect)
+    doc_on_joe_path = output_dir / "doc_model_on_joe_data_correct_vs_incorrect.png"
+    plot_correct_vs_incorrect_analysis(
+        doc_on_joe_path, 
+        doc_on_joe_correct_stats, 
+        doc_on_joe_incorrect_stats,
+        "DOC Model on Joe_Mo Test: Correct vs Incorrect Predictions"
+    )
+    print(f"      ✓ Saved: {doc_on_joe_path.name}")
+    
+    print("   b. Joe_Mo model on DOC test data...")
+    joe_on_doc_correct, joe_on_doc_incorrect = analyze_prediction_correctness(
+        base_dir, "joe_mo", "doc", output_dir
+    )
+    joe_on_doc_correct_stats = compute_sample_statistics(joe_on_doc_correct)
+    joe_on_doc_incorrect_stats = compute_sample_statistics(joe_on_doc_incorrect)
+    joe_on_doc_path = output_dir / "joe_model_on_doc_data_correct_vs_incorrect.png"
+    plot_correct_vs_incorrect_analysis(
+        joe_on_doc_path,
+        joe_on_doc_correct_stats,
+        joe_on_doc_incorrect_stats,
+        "Joe_Mo Model on DOC Test: Correct vs Incorrect Predictions"
+    )
+    print(f"      ✓ Saved: {joe_on_doc_path.name}")
+    
+    # 9. Write analysis summary
+    print("9. Generating analysis summary...")
+    summary_path = output_dir / "ANALYSIS_SUMMARY.txt"
+    write_analysis_summary(summary_path, doc_train_stats, joe_train_stats, doc_spectral, joe_spectral)
+    print(f"   ✓ Saved: {summary_path.name}")
     
     print()
     print("="*60)
@@ -610,16 +964,15 @@ Example:
     print()
     print(f"All outputs saved to: {output_dir}")
     print()
-    print("KEY FINDINGS:")
-    doc_mean = np.mean(doc_train_stats['means'])
-    joe_mean = np.mean(joe_train_stats['means'])
-    ratio = joe_mean / doc_mean
-    print(f"  • Joe_Mo spectrograms are {ratio:.2f}x larger in magnitude than DOC")
-    print(f"  • This scale mismatch causes poor cross-dataset transfer")
+    print("KEY DIAGNOSTICS GENERATED:")
+    print(f"  • Magnitude distributions")
+    print(f"  • Frequency band energy profiles")
+    print(f"  • Spectral feature comparisons")
+    print(f"  • Per-class accuracy heatmaps")
+    print(f"  • Cross-domain prediction analysis (correct vs incorrect)")
+    print(f"  • Sample visualization comparisons")
     print()
-    print("RECOMMENDED ACTION:")
-    print(f"  → Retrain models with --normalize flag")
-    print(f"  → See {recommendations_path.name} for detailed instructions")
+    print(f"Review {summary_path.name} for detailed findings.")
     print()
 
 
