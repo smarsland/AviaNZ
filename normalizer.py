@@ -19,30 +19,19 @@ def normalize_spectrogram(img):
     H, W = img.shape
 
     sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :W//2]
+    bg_pixels = sorted_pixels[:, :W//4]
     mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
     var0 = np.var(bg_pixels, axis=1, keepdims=True)
     img = (img - mu0) / (np.sqrt(var0) + 1e-6)
     
-    # now do KDE for the columns
+    # For each time bin (column), compute rarity scores
+    # Common values (vertical lines) = low score, rare values (localized) = high score
     for col in range(W):
         x = img[:, col]
-        bandwidth = 4 * np.std(x) * len(x) ** (-1/5) + 1e-6
-        distances = np.abs(x.reshape(-1, 1) - x.reshape(1, -1))
-        weights = np.exp(-0.5 * (distances / bandwidth) ** 2)
-        density = np.sum(weights, axis=1) / (len(x) * bandwidth * np.sqrt(2*np.pi))
-        density = (density - np.min(density)) / (np.max(density) - np.min(density) + 1e-6)
-        img[:, col] = 1 - density
-
-    flat_order = np.argsort(img, axis=1)
-    ranks = np.empty_like(flat_order)
-
-    # Assign ranks row by row
-    for i in range(img.shape[0]):
-        ranks[i, flat_order[i]] = np.arange(img.shape[1])
-
-    # Normalize ranks to [0, 1]
-    img = ranks / (img.shape[1] - 1)
+        median = np.median(x)
+        mad = np.median(np.abs(x - median))
+        distance = np.abs(x - median) / (mad + 1e-6)
+        img[:, col] = distance
 
     return img
 
