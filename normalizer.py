@@ -8,35 +8,41 @@ import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
 
+def normalize_spectrogram(img):
+    """
+    Apply background normalization to a spectrogram.
+    KDE is computed using only the lowest 1/2 of points in each row.
+    """
+    # Ensure input is float
+    img = np.asarray(img, dtype=np.float32)
+    
+    H, W = img.shape
 
-def normalize_spectrogram(img, gaussian_sigma=3.0, eps=1e-6):
+    sorted_pixels = np.sort(img, axis=1)
+    bg_pixels = sorted_pixels[:, :W//2]
+    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
+    var0 = np.var(bg_pixels, axis=1, keepdims=True)
+    img = (img - mu0) / (np.sqrt(var0) + 1e-6)
+    
+    # now do KDE for the columns
+    for col in range(W):
+        x = img[:, col]
+        bandwidth = 10 * np.std(x) * len(x) ** (-1/5) + 1e-6
+        distances = np.abs(x.reshape(-1, 1) - x.reshape(1, -1))
+        weights = np.exp(-0.5 * (distances / bandwidth) ** 2)
+        density = np.sum(weights, axis=1) / (len(x) * bandwidth * np.sqrt(2*np.pi))
+        density = (density - np.min(density)) / (np.max(density) - np.min(density) + 1e-6)
+        img[:, col] = (1 - density)
+    
+    return img
+
+def normalize_spectrogram_old(img):
     """
     Apply background normalization to a spectrogram.
    
     """
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
-    
-    # # Assume for any frequency band no more than half of the pixels are interesting
-    # # Therefore take the bottom half as non-interesting to estimate the background
-    # H, W = img.shape
-    # sorted_pixels = np.sort(img, axis=1)
-    # bg_pixels = sorted_pixels[:, :W//2]
-    
-    # # Calculate mean and variance of background pixels per frequency band
-    # mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    # var0 = np.var(bg_pixels, axis=1, keepdims=True)
-        
-    # # Normalize: z-score normalization per frequency band
-    # sg_normalized = (img - mu0) / (np.sqrt(var0) + eps)
-
-    # sorted_pixels = np.sort(sg_normalized, axis=0)
-    # bg_pixels = sorted_pixels[:H//2, :]
-    # overall_bg_level = np.mean(bg_pixels)
-    # mu0 = np.mean(bg_pixels, axis=0, keepdims=True)
-    # var0 = np.var(bg_pixels, axis=0, keepdims=True)
-    # sg_normalized = (sg_normalized - mu0 - overall_bg_level) / (np.sqrt(var0) + eps)
-
 
     flat_order = np.argsort(img, axis=1)
     ranks = np.empty_like(flat_order)
@@ -49,7 +55,7 @@ def normalize_spectrogram(img, gaussian_sigma=3.0, eps=1e-6):
     sg_normalized = ranks / (img.shape[1] - 1)
     return sg_normalized
 
-def normalize_spectrogram_old(img, gaussian_sigma=3.0, eps=1e-6):
+def normalize_spectrogram_old_old(img):
     """
     Apply background normalization to a spectrogram.
    
@@ -72,7 +78,7 @@ def normalize_spectrogram_old(img, gaussian_sigma=3.0, eps=1e-6):
 
     return sg_normalized
 
-def visualize_normalization(img, gaussian_sigma=3.0, eps=1e-6):
+def visualize_normalization(img):
     """
     Visualize original and normalized spectrograms side by side.
     
@@ -81,7 +87,8 @@ def visualize_normalization(img, gaussian_sigma=3.0, eps=1e-6):
         gaussian_sigma: Sigma for Gaussian smoothing (default: 3.0)
         eps: Small epsilon value (default: 1e-6)
     """
-    sg_normalized = normalize_spectrogram(img, gaussian_sigma, eps)
+    sg_normalized = normalize_spectrogram(img)
+    sg_normalized = sg_normalized / (np.max(sg_normalized) + 1e-6)
     
     plt.figure(figsize=(12, 6))
     plt.subplot(2, 1, 1)
@@ -96,7 +103,7 @@ def visualize_normalization(img, gaussian_sigma=3.0, eps=1e-6):
     plt.show()
 
 
-def visualize_folder(folder_path="NZ_bird_spec/data", gaussian_sigma=3.0, eps=1e-6):
+def visualize_folder(folder_path="NZ_bird_spec/data"):
     """
     Visualize normalization for all spectrograms in a folder.
     
@@ -123,7 +130,7 @@ def visualize_folder(folder_path="NZ_bird_spec/data", gaussian_sigma=3.0, eps=1e
             img = 10*(np.log10(img)-np.log10(minsg))
             img = np.abs(img)
             
-            visualize_normalization(img, gaussian_sigma, eps)
+            visualize_normalization(img)
 
 
 if __name__ == "__main__":
