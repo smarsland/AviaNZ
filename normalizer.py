@@ -31,6 +31,18 @@ def normalize_spectrogram(img):
         contributions = kernel / np.sum(kernel,axis=0)
         estimates = np.sum(contributions * col.reshape(-1,1),axis=0)
         img[:,c] = img[:,c] - estimates
+    
+    img = np.asarray(img, dtype=np.float32)
+
+    flat_order = np.argsort(img, axis=1)
+    ranks = np.empty_like(flat_order)
+
+    # Assign ranks row by row
+    for i in range(img.shape[0]):
+        ranks[i, flat_order[i]] = np.arange(img.shape[1])
+
+    # Normalize ranks to [0, 1]
+    img = ranks / (img.shape[1] - 1)
 
     return img
 
