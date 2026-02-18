@@ -230,36 +230,27 @@ class BirdClefFineTuner:
         """Load data using existing AviaNZ data pipeline."""
         print("\nLoading dataset...")
         
+        data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
+        self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
+        
         if self.test_folder:
-            print(f"  Using separate test folder: {self.test_folder}")
-            
-            train_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-            train_data = train_loader.load_data(self.multilabel, validation_share=0.0)
-            
+            print(f"  Loading separate test set from: {self.test_folder}")
             test_loader = DataLoader(self.test_folder, noise_folder=self.noise_folder)
             test_data = test_loader.load_data(self.multilabel, validation_share=0.0)
             
-            if train_data['categories'] != test_data['categories']:
+            if self.data['categories'] != test_data['categories']:
                 print(f"  WARNING: Train and test categories differ!")
-                print(f"    Train: {train_data['categories']}")
+                print(f"    Train: {self.data['categories']}")
                 print(f"    Test: {test_data['categories']}")
             
-            self.data = {
-                'train_filenames': train_data['train_filenames'],
-                'train_labels': train_data['train_labels'],
-                'test_filenames': test_data['train_filenames'],
-                'test_labels': test_data['train_labels'],
-                'train_primary_species': train_data['train_primary_species'],
-                'test_primary_species': test_data['train_primary_species'],
-                'train_noise_filenames': train_data['train_noise_filenames'],
-                'test_noise_filenames': test_data['train_noise_filenames'],
-                'categories': train_data['categories'],
-                'class_names': train_data['class_names'],
-                'nclasses': train_data['nclasses']
+            self.test_data = {
+                'filenames': test_data['train_filenames'],
+                'labels': test_data['train_labels'],
+                'primary_species': test_data['train_primary_species'],
+                'noise_filenames': test_data['train_noise_filenames']
             }
         else:
-            data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-            self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
+            self.test_data = None
         
         self.num_classes = self.data['nclasses']
         self.categories = self.data['categories']
@@ -503,6 +494,72 @@ class BirdClefFineTuner:
             return total_loss / len(self.val_loader), avg_metrics
         return total_loss / len(self.val_loader), 100. * correct / total
     
+    def evaluate_test_set(self):
+        from data_utils import SpectrogramDataset
+        from torch.utils.data import DataLoader as TorchDataLoader
+        
+        img_height = config.DEFAULT_FREQ_BINS
+        img_width = config.DEFAULT_TIME_BINS
+        
+        test_dataset = SpectrogramDataset(
+            self.test_data['filenames'],
+            self.test_data['labels'],
+            img_height,
+            img_width,
+            config.DEFAULT_CHANNELS,
+            cropping_mode='center',
+            noise_filenames=None,
+            noise_ratio=0.0,
+            spec_transform=None,
+            training=False,
+            width_downsizing=None,
+            normalize=self.normalize,
+            use_sparse_patches=False,
+            num_sparse_patches=0,
+            use_temporal_roll=False,
+            remove_baseline=self.remove_baseline
+        )
+        
+        test_loader = TorchDataLoader(
+            test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=4 if torch.cuda.is_available() else 2,
+            pin_memory=True
+        )
+        
+        self.model.eval()
+        correct = 0
+        total = 0
+        metrics_sum = {'macro_f1': 0.0, 'micro_f1': 0.0, 'macro_precision': 0.0, 'macro_recall': 0.0}
+        
+        with torch.no_grad():
+            for batch_idx, (data, target) in enumerate(test_loader):
+                data, target = data.to(self.device), target.to(self.device)
+                output = self.model(data)
+                
+                if self.multilabel:
+                    batch_metrics = self._compute_multilabel_metrics(output, target)
+                    for k in metrics_sum:
+                        metrics_sum[k] += batch_metrics[k] * target.size(0)
+                else:
+                    pred = output.argmax(dim=1)
+                    if target.dim() == 2:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target
+                    correct += pred.eq(target_labels).sum().item()
+                
+                total += target.size(0)
+        
+        if self.multilabel:
+            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            print(f"  Test Macro F1: {avg_metrics['macro_f1']:.4f}")
+            print(f"  Test Micro F1: {avg_metrics['micro_f1']:.4f}")
+        else:
+            test_acc = 100. * correct / total
+            print(f"  Test Accuracy: {test_acc:.2f}%")
+    
     def train(self):
         """Main training loop."""
         print("\nStarting fine-tuning...")
@@ -608,6 +665,10 @@ class BirdClefFineTuner:
             else:
                 print(f"  Best val accuracy: {best_val_metric:.2f}%")
         print(f"  Models saved to: {self.output_folder}")
+        
+        if self.test_data is not None:
+            print(f"\nEvaluating on test set...")
+            self.evaluate_test_set()
     
     def save_model(self, filename):
         """Save model and config."""
@@ -646,7 +707,7 @@ Examples:
   # Basic fine-tuning (all layers trainable, 10 epochs)
   python finetune_birdclef.py data/train outputs/birdclef_ft
   
-  # Use separate test folder instead of automatic validation split
+  # Evaluate on separate test set after training (not used for early stopping)
   python finetune_birdclef.py data/train outputs/birdclef_ft --test-folder data/test
   
   # Freeze backbone, train only classifier (fast, good for small datasets)
@@ -710,7 +771,7 @@ Examples:
     parser.add_argument('--validation-split', type=float, default=0.2,
                        help="Validation split ratio (default: 0.2 = 20%%, use 0 to disable validation)")
     parser.add_argument('--test-folder', type=str, default=None,
-                       help="Path to separate test data folder (with labels.json). If provided, all data_folder is used for training and validation comes from here.")
+                       help="Path to separate test data folder (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     
