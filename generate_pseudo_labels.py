@@ -124,6 +124,14 @@ class PseudoLabeler:
             self.model = MultiScaleAST(num_classes, multilabel, input_size=input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
             self.model = CNNModel(self.expected_freq_bins, self.expected_time_bins, num_classes)
+        elif model_type == 'birdclef_finetuned':
+            print("Loading fine-tuned BirdClef model...")
+            from finetune_birdclef import BirdClefFineTuneModel
+            self.model = BirdClefFineTuneModel(
+                num_classes=num_classes,
+                pretrained_path=None,
+                freeze_backbone=False
+            )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
