@@ -324,13 +324,13 @@ class BirdClefFineTuner:
         category_map = {source_categories.index(cat): target_categories.index(cat) 
                        for cat in source_categories if cat in target_categories}
         
-        if self.multilabel:
+        if labels.ndim == 2:
             remapped = np.zeros_like(labels)
             for src_idx, tgt_idx in category_map.items():
                 remapped[:, tgt_idx] = labels[:, src_idx]
             return remapped.tolist()
         else:
-            remapped = np.array([category_map.get(label, -1) for label in labels])
+            remapped = np.array([category_map.get(int(label), -1) for label in labels])
             if (remapped == -1).any():
                 print(f"  ERROR: Some labels couldn't be remapped!")
             return remapped.tolist()
