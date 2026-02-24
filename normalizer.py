@@ -24,13 +24,13 @@ def normalize_spectrogram(img):
     var0 = np.var(bg_pixels, axis=1, keepdims=True)
     img = (img - mu0) / (np.sqrt(var0) + 1e-6)
     
-    # for c in range(img.shape[1]):
-    #     col = img[:,c]
-    #     distances = np.abs(np.linspace(0,1,len(col)).reshape(-1,1)-np.linspace(0,1,len(col)).reshape(1,-1))
-    #     kernel = np.exp(-20 * distances**2)
-    #     contributions = kernel / np.sum(kernel,axis=0)
-    #     estimates = np.sum(contributions * col.reshape(-1,1),axis=0)
-    #     img[:,c] = img[:,c] - estimates
+    for c in range(img.shape[1]):
+        col = img[:,c]
+        distances = np.abs(np.linspace(0,1,len(col)).reshape(-1,1)-np.linspace(0,1,len(col)).reshape(1,-1))
+        kernel = np.exp(-20 * distances**2)
+        contributions = kernel / np.sum(kernel,axis=0)
+        estimates = np.sum(contributions * col.reshape(-1,1),axis=0)
+        img[:,c] = img[:,c] - estimates
     
     img = np.asarray(img, dtype=np.float32)
 
@@ -42,7 +42,7 @@ def normalize_spectrogram(img):
         ranks[i, flat_order[i]] = np.arange(img.shape[1])
 
     # Normalize ranks to [0, 1]
-    img = ranks / (img.shape[1] - 1)
+    # img = ranks / (img.shape[1] - 1)
 
     return img
 

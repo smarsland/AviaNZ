@@ -103,7 +103,12 @@ class ModelPredictor:
             from models import MultiScaleAST
             self.model = MultiScaleAST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
-            self.model = CNNModel(num_classes, multilabel, dropout=0.0)
+            if inference_time_bins != training_time_bins:
+                raise ValueError(
+                    f"CNN checkpoints are input-size dependent; can't resize time bins {training_time_bins} -> {inference_time_bins}. "
+                    f"Re-generate spectrograms to the trained size or re-train the CNN."
+                )
+            self.model = CNNModel(self.expected_freq_bins, training_time_bins, num_classes)
         elif model_type == 'birdclef_finetuned':
             print("Loading fine-tuned BirdClef model...")
             from finetune_birdclef import BirdClefFineTuneModel

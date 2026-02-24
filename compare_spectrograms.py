@@ -147,7 +147,7 @@ class SpectrogramComparer:
 
 
 if __name__ == '__main__':
-    doc_root = 'test/doc_split/test'
-    joe_mo_root = 'test/joe_mo_split/test'
+    doc_root = 'test/doc_split/train'
+    joe_mo_root = 'test/joe_mo_split/train'
     
     comparer = SpectrogramComparer(doc_root, joe_mo_root)

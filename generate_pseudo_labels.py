@@ -19,6 +19,7 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from models import AST, CNNModel
+from normalizer import normalize_spectrogram
 import config
 
 
@@ -26,7 +27,8 @@ class PseudoLabeler:
     """Generate pseudo-labels from a trained model."""
     
     def __init__(self, model_path, model_config, data_folder, output_labels_file, 
-                 threshold=0.5, use_soft_labels=False, top_k=None, device=None):
+                 threshold=0.5, use_soft_labels=False, top_k=None, device=None,
+                 normalize=False, remove_baseline=None):
         """
         Initialize pseudo-labeler.
         
@@ -47,6 +49,8 @@ class PseudoLabeler:
         self.threshold = threshold
         self.use_soft_labels = use_soft_labels
         self.top_k = top_k
+        self.normalize = normalize
+        self.remove_baseline = remove_baseline  # None = auto-detect from model config
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -80,7 +84,9 @@ class PseudoLabeler:
         num_classes = model_config['num_classes']
         multilabel = model_config.get('multilabel', False)
         model_type = model_config.get('model_type', 'AST').lower()
-        
+
+        self.multilabel = multilabel
+
         # Get class names from model config
         self.categories = model_config['class_names']
         
@@ -95,17 +101,39 @@ class PseudoLabeler:
         print(f"Input size: {input_size}")
         print(f"Classes: {', '.join(self.categories)}")
         
+        # Auto-detect normalization / baseline removal from model config if not explicitly set
+        if model_config.get('normalize', False) and not self.normalize:
+            print(f"\u26a0\ufe0f  Model was trained with normalization but --normalize flag not set")
+            print(f"   Auto-enabling normalization for consistency")
+            self.normalize = True
+
+        if self.remove_baseline is None:
+            self.remove_baseline = model_config.get('remove_baseline', False)
+            if self.remove_baseline:
+                print(f"\u26a1 Baseline removal: enabled (from model config)")
+            else:
+                print(f"Baseline removal: disabled (not in model config / old model)")
+
+        use_reconstruction = model_config.get('use_reconstruction', False)
+
         # Create model
         if model_type == 'ast':
-            self.model = AST(num_classes, multilabel, input_size=input_size, dropout=0.0)
-            self.model.interpolate_pos_embed(input_size)
+            self.model = AST(num_classes, multilabel, input_size=input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+        elif model_type == 'multiscaleast':
+            from models import MultiScaleAST
+            self.model = MultiScaleAST(num_classes, multilabel, input_size=input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
-            self.model = CNNModel(self.expected_freq_bins, self.expected_time_bins, num_classes, multilabel, dropout=0.0)
+            self.model = CNNModel(self.expected_freq_bins, self.expected_time_bins, num_classes)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
-        
-        # Load weights
-        self.model.load_state_dict(state_dict, strict=True)
+
+        # Load weights (allow minor mismatches for AST positional embeddings)
+        missing_keys, unexpected_keys = self.model.load_state_dict(state_dict, strict=False)
+        if missing_keys:
+            print(f"Warning: Missing keys when loading checkpoint (showing up to 5): {missing_keys[:5]}")
+        if unexpected_keys:
+            print(f"Warning: Unexpected keys when loading checkpoint (showing up to 5): {unexpected_keys[:5]}")
+
         self.model.to(self.device)
         self.model.eval()
         
@@ -147,9 +175,11 @@ class PseudoLabeler:
                     raise ValueError(f"Unexpected spectrogram shape: {spec.shape}")
                 
                 # Pad or crop to expected dimensions
+                # Use tiling (repeat) for time padding to avoid silence artifacts
                 if time_bins < self.expected_time_bins:
-                    pad_width = self.expected_time_bins - time_bins
-                    spec = np.pad(spec, ((0, 0), (0, pad_width)), mode='constant')
+                    tiles_needed = int(np.ceil(self.expected_time_bins / time_bins))
+                    spec = np.tile(spec, (1, tiles_needed))
+                    spec = spec[:, :self.expected_time_bins]
                 elif time_bins > self.expected_time_bins:
                     spec = spec[:, :self.expected_time_bins]
                 
@@ -158,10 +188,18 @@ class PseudoLabeler:
                     spec = np.pad(spec, ((0, pad_height), (0, 0)), mode='constant')
                 elif freq_bins > self.expected_freq_bins:
                     spec = spec[:self.expected_freq_bins, :]
+
+                # Remove baseline offset before log transform
+                if self.remove_baseline:
+                    baseline = np.percentile(spec, 10)
+                    spec = np.maximum(spec - baseline, 0)
                 
                 # Normalize (log transform)
                 LOG_OFFSET = 1e-7
                 spec = np.log(spec + LOG_OFFSET)
+
+                if self.normalize:
+                    spec = normalize_spectrogram(spec)
                 
                 # Convert to tensor
                 spec_tensor = torch.from_numpy(spec).float()
@@ -170,7 +208,14 @@ class PseudoLabeler:
                 
                 # Get predictions
                 outputs = self.model(spec_tensor)
-                probs = torch.sigmoid(outputs).cpu().numpy()[0]
+
+                if isinstance(outputs, tuple):
+                    outputs = outputs[0]
+
+                if self.multilabel:
+                    probs = torch.sigmoid(outputs).cpu().numpy()[0]
+                else:
+                    probs = torch.softmax(outputs, dim=1).cpu().numpy()[0]
                 
                 # Create new file entry with pseudo-labels
                 new_file_info = {
@@ -342,6 +387,10 @@ Workflow:
                        help="Only keep top-k predictions per sample (default: None = keep all above threshold)")
     parser.add_argument('--device', type=str, default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
+    parser.add_argument('--normalize', action='store_true',
+                       help="Apply background normalization to spectrograms (auto-detected from config, but can override)")
+    parser.add_argument('--no-baseline-removal', action='store_true',
+                       help="Disable baseline removal (default: auto-detect from model config)")
     
     args = parser.parse_args()
     
@@ -353,7 +402,9 @@ Workflow:
         threshold=args.threshold,
         use_soft_labels=args.soft_labels,
         top_k=args.top_k,
-        device=torch.device(args.device) if args.device else None
+        device=torch.device(args.device) if args.device else None,
+        normalize=args.normalize,
+        remove_baseline=False if args.no_baseline_removal else None
     )
     
     labeler.run()
