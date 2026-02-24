@@ -241,16 +241,19 @@ class BirdClefFineTuner:
             test_loader = DataLoader(self.test_folder, noise_folder=self.noise_folder)
             test_data = test_loader.load_data(self.multilabel, validation_share=0.0)
             
+            test_labels = test_data['train_labels']
             if self.data['categories'] != test_data['categories']:
-                print(f"  WARNING: Train and test1 categories differ!")
+                print(f"  WARNING: Train and test1 categories differ - remapping labels!")
                 print(f"    Train: {self.data['categories']}")
                 print(f"    Test1: {test_data['categories']}")
+                test_labels = self._remap_labels(test_data['train_labels'], test_data['categories'], self.data['categories'])
             
+            test_name = f"{Path(self.test_folder).parent.name}/{Path(self.test_folder).name}"
             self.test_datasets.append({
-                'name': Path(self.test_folder).name,
+                'name': test_name,
                 'path': self.test_folder,
                 'filenames': test_data['train_filenames'],
-                'labels': test_data['train_labels'],
+                'labels': test_labels,
                 'primary_species': test_data['train_primary_species'],
                 'noise_filenames': test_data['train_noise_filenames']
             })
@@ -260,16 +263,19 @@ class BirdClefFineTuner:
             test_loader2 = DataLoader(self.test_folder2, noise_folder=self.noise_folder)
             test_data2 = test_loader2.load_data(self.multilabel, validation_share=0.0)
             
+            test_labels2 = test_data2['train_labels']
             if self.data['categories'] != test_data2['categories']:
-                print(f"  WARNING: Train and test2 categories differ!")
+                print(f"  WARNING: Train and test2 categories differ - remapping labels!")
                 print(f"    Train: {self.data['categories']}")
                 print(f"    Test2: {test_data2['categories']}")
+                test_labels2 = self._remap_labels(test_data2['train_labels'], test_data2['categories'], self.data['categories'])
             
+            test_name2 = f"{Path(self.test_folder2).parent.name}/{Path(self.test_folder2).name}"
             self.test_datasets.append({
-                'name': Path(self.test_folder2).name,
+                'name': test_name2,
                 'path': self.test_folder2,
                 'filenames': test_data2['train_filenames'],
-                'labels': test_data2['train_labels'],
+                'labels': test_labels2,
                 'primary_species': test_data2['train_primary_species'],
                 'noise_filenames': test_data2['train_noise_filenames']
             })
@@ -311,6 +317,23 @@ class BirdClefFineTuner:
             print(f"  Val samples: {len(self.val_loader.dataset)}")
         else:
             print(f"  Val samples: 0 (validation disabled)")
+    
+    def _remap_labels(self, labels, source_categories, target_categories):
+        import numpy as np
+        labels = np.array(labels)
+        category_map = {source_categories.index(cat): target_categories.index(cat) 
+                       for cat in source_categories if cat in target_categories}
+        
+        if self.multilabel:
+            remapped = np.zeros_like(labels)
+            for src_idx, tgt_idx in category_map.items():
+                remapped[:, tgt_idx] = labels[:, src_idx]
+            return remapped.tolist()
+        else:
+            remapped = np.array([category_map.get(label, -1) for label in labels])
+            if (remapped == -1).any():
+                print(f"  ERROR: Some labels couldn't be remapped!")
+            return remapped.tolist()
     
     def create_model(self):
         """Create model with pretrained BirdClef weights."""
@@ -691,7 +714,11 @@ class BirdClefFineTuner:
         print(f"  Models saved to: {self.output_folder}")
         
         if self.test_datasets:
-            print(f"\nEvaluating on test sets...")
+            print(f"\nEvaluating on test sets using BEST model...")
+            best_model_path = os.path.join(self.output_folder, 'birdclef_finetuned_best.pt')
+            self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
+            self.model.eval()
+            
             test_results = {}
             for idx, test_data in enumerate(self.test_datasets, 1):
                 print(f"\nTest Set {idx}: {test_data['name']}")
