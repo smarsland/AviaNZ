@@ -335,6 +335,37 @@ class BirdClefFineTuner:
                 print(f"  ERROR: Some labels couldn't be remapped!")
             return remapped.tolist()
     
+    def _compute_accuracy_from_csv(self, csv_path, test_folder):
+        import pandas as pd
+        labels_path = os.path.join(test_folder, 'labels.json')
+        
+        with open(labels_path, 'r') as f:
+            labels_data = json.load(f)
+        
+        true_labels = {}
+        for item in labels_data['files']:
+            true_labels[item['filename']] = item.get('primary_class') or item.get('primary_species')
+        
+        df = pd.read_csv(csv_path)
+        class_columns = [col for col in df.columns if col not in ['row_id', 'File_Path']]
+        
+        correct = 0
+        total = 0
+        
+        for _, row in df.iterrows():
+            filename = row['row_id']
+            if filename not in true_labels:
+                continue
+            
+            pred_class = class_columns[row[class_columns].values.argmax()]
+            true_class = true_labels[filename]
+            
+            if pred_class == true_class:
+                correct += 1
+            total += 1
+        
+        return 100.0 * correct / total if total > 0 else 0.0
+    
     def create_model(self):
         """Create model with pretrained BirdClef weights."""
         print("\nCreating model...")
@@ -578,10 +609,19 @@ class BirdClefFineTuner:
         total = 0
         metrics_sum = {'macro_f1': 0.0, 'micro_f1': 0.0, 'macro_precision': 0.0, 'macro_recall': 0.0}
         
+        print(f"  DEBUG: Evaluating {len(test_loader.dataset)} test samples")
+        print(f"  DEBUG: Model num_classes: {self.model.num_classes}")
+        print(f"  DEBUG: Model categories: {self.categories}")
+        
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(test_loader):
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
+                
+                if batch_idx == 0:
+                    print(f"  DEBUG: First batch - target shape: {target.shape}, output shape: {output.shape}")
+                    print(f"  DEBUG: First sample target: {target[0]}")
+                    print(f"  DEBUG: First sample output (top 3): {output[0].topk(3)}")
                 
                 if self.multilabel:
                     batch_metrics = self._compute_multilabel_metrics(output, target)
@@ -714,25 +754,42 @@ class BirdClefFineTuner:
         print(f"  Models saved to: {self.output_folder}")
         
         if self.test_datasets:
-            print(f"\nEvaluating on test sets using BEST model...")
+            print(f"\nEvaluating on test sets using predict.py...")
             best_model_path = os.path.join(self.output_folder, 'birdclef_finetuned_best.pt')
-            self.model.load_state_dict(torch.load(best_model_path, map_location=self.device))
-            self.model.eval()
+            best_config_path = os.path.join(self.output_folder, 'birdclef_finetuned_best_config.json')
             
             test_results = {}
             for idx, test_data in enumerate(self.test_datasets, 1):
-                print(f"\nTest Set {idx}: {test_data['name']}")
-                result = self.evaluate_test_set(test_data, test_name=test_data['name'])
-                test_results[test_data['name']] = result
+                test_folder = test_data['path']
+                test_name = test_data['name']
+                output_csv = os.path.join(self.output_folder, f'predictions_{test_name.replace("/", "_")}.csv')
+                
+                print(f"\nTest Set {idx}: {test_name}")
+                
+                import subprocess
+                cmd = [
+                    'python', 'predict.py',
+                    best_model_path,
+                    best_config_path,
+                    test_folder,
+                    output_csv,
+                    '--batch-size', str(self.batch_size)
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"  ERROR running predict.py: {result.stderr}")
+                    continue
+                
+                accuracy = self._compute_accuracy_from_csv(output_csv, test_folder)
+                test_results[test_name] = accuracy
+                print(f"  {test_name} Accuracy: {accuracy:.2f}%")
             
             print(f"\n{'='*60}")
             print(f"TEST SET COMPARISON")
             print(f"{'='*60}")
-            for name, result in test_results.items():
-                if self.multilabel:
-                    print(f"  {name:30s} Macro F1: {result:.4f}")
-                else:
-                    print(f"  {name:30s} Accuracy: {result:.2f}%")
+            for name, accuracy in test_results.items():
+                print(f"  {name:30s} Accuracy: {accuracy:.2f}%")
             print(f"{'='*60}")
     
     def save_model(self, filename):
