@@ -98,22 +98,14 @@ class DatasetMerger:
         
         return merged_cats
     
-    def remap_labels(self, file_entry, old_categories, new_categories):
-        """Remap label vector from old category list to new merged list."""
-        if old_categories == new_categories:
-            # No remapping needed
-            return file_entry['labels']
-        
-        old_labels = file_entry['labels']
-        new_labels = [0] * len(new_categories)
-        
-        # Map each old category to new position
-        for old_idx, label_value in enumerate(old_labels):
-            old_cat = old_categories[old_idx]
-            new_idx = new_categories.index(old_cat)
-            new_labels[new_idx] = label_value
-        
-        return new_labels
+    def remap_classes(self, file_entry, old_categories, new_categories):
+        """
+        Remap class names - no changes needed since we store actual species names.
+        Just validate that all classes exist in merged category list.
+        """
+        # No remapping needed - class_names are actual species names, not indices
+        # Just return the entry as-is since category names are preserved
+        return file_entry
     
     def check_duplicates(self):
         """Check for duplicate filenames between datasets."""
@@ -145,15 +137,20 @@ class DatasetMerger:
         
         # Add files from dataset 1
         for entry in self.labels1['files']:
-            new_labels = self.remap_labels(entry, self.labels1['categories'], merged_categories)
+            # Validate classes are in merged categories
+            if entry['primary_class'] not in merged_categories:
+                print(f"  WARNING: Skipping {entry['filename']} - primary_class '{entry['primary_class']}' not in merged categories")
+                continue
+            
             new_entry = {
                 'filename': entry['filename'],
-                'labels': new_labels
+                'primary_class': entry['primary_class'],
+                'class_names': entry['class_names']
             }
             
             # Preserve optional fields
-            if 'primary_species' in entry:
-                new_entry['primary_species'] = entry['primary_species']
+            if 'source_file' in entry:
+                new_entry['source_file'] = entry['source_file']
             if 'noise' in entry:
                 new_entry['noise'] = entry['noise']
             
@@ -164,7 +161,10 @@ class DatasetMerger:
         existing_names = {entry['filename'] for entry in merged_files}
         
         for entry in self.labels2['files']:
-            new_labels = self.remap_labels(entry, self.labels2['categories'], merged_categories)
+            # Validate classes are in merged categories
+            if entry['primary_class'] not in merged_categories:
+                print(f"  WARNING: Skipping {entry['filename']} - primary_class '{entry['primary_class']}' not in merged categories")
+                continue
             
             # Handle duplicates
             original_name = entry['filename']
@@ -186,12 +186,13 @@ class DatasetMerger:
             
             new_entry = {
                 'filename': new_name,
-                'labels': new_labels
+                'primary_class': entry['primary_class'],
+                'class_names': entry['class_names']
             }
             
             # Preserve optional fields
-            if 'primary_species' in entry:
-                new_entry['primary_species'] = entry['primary_species']
+            if 'source_file' in entry:
+                new_entry['source_file'] = entry['source_file']
             if 'noise' in entry:
                 new_entry['noise'] = entry['noise']
             
@@ -213,9 +214,22 @@ class DatasetMerger:
         print(f"\nCopying files from {dataset_name}...")
         
         source_path = Path(source_folder)
+        data_subfolder = source_path / 'data'
+        
+        # Check if files are in data/ subfolder or root
+        if data_subfolder.exists() and data_subfolder.is_dir():
+            source_data_path = data_subfolder
+            print(f"  Using data/ subfolder: {source_data_path}")
+        else:
+            source_data_path = source_path
+            print(f"  Using root folder: {source_data_path}")
+        
+        # Create data/ subfolder in output if it doesn't exist
+        output_data_path = self.output_folder / 'data'
+        output_data_path.mkdir(exist_ok=True)
         
         # Find all .npy files
-        npy_files = list(source_path.glob('*.npy'))
+        npy_files = list(source_data_path.glob('*.npy'))
         
         copied_count = 0
         skipped_count = 0
@@ -230,7 +244,7 @@ class DatasetMerger:
                 continue
             
             new_name = filename_map[original_name]
-            dest_path = self.output_folder / new_name
+            dest_path = output_data_path / new_name
             
             # Copy or symlink
             if self.symlink:
@@ -247,11 +261,11 @@ class DatasetMerger:
                 # Try common audio extensions
                 for audio_ext in ['.wav', '.mp3', '.flac', '.ogg']:
                     audio_name = original_name.replace('.npy', audio_ext)
-                    audio_file = source_path / audio_name
+                    audio_file = source_data_path / audio_name
                     
                     if audio_file.exists():
                         new_audio_name = new_name.replace('.npy', audio_ext)
-                        audio_dest = self.output_folder / new_audio_name
+                        audio_dest = output_data_path / new_audio_name
                         
                         if self.symlink:
                             abs_audio = audio_file.resolve()
