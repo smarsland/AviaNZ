@@ -18,11 +18,11 @@ def normalize_spectrogram(img):
     
     H, W = img.shape
 
-    # sorted_pixels = np.sort(img, axis=1)
-    # bg_pixels = sorted_pixels[:, :W//4]
-    # mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    # var0 = np.var(bg_pixels, axis=1, keepdims=True)
-    # img = (img - mu0) / (np.sqrt(var0) + 1e-6)
+    sorted_pixels = np.sort(img, axis=1)
+    bg_pixels = sorted_pixels[:, :W//4]
+    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
+    var0 = np.var(bg_pixels, axis=1, keepdims=True)
+    img = (img - mu0) / (np.sqrt(var0) + 1e-6)
     
     # for c in range(img.shape[1]):
     #     col = img[:,c]
