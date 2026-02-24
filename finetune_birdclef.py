@@ -180,7 +180,7 @@ class BirdClefFineTuner:
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, noise_ratio=0.0, 
                  noise_folder=None, use_temporal_roll=True, validation_split=0.2,
-                 remove_baseline=True, test_folder=None):
+                 remove_baseline=True, test_folder=None, test_folder2=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -201,6 +201,7 @@ class BirdClefFineTuner:
         self.validation_split = validation_split
         self.remove_baseline = remove_baseline
         self.test_folder = test_folder
+        self.test_folder2 = test_folder2
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -233,24 +234,45 @@ class BirdClefFineTuner:
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
         self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
         
+        self.test_datasets = []
+        
         if self.test_folder:
-            print(f"  Loading separate test set from: {self.test_folder}")
+            print(f"  Loading test set 1 from: {self.test_folder}")
             test_loader = DataLoader(self.test_folder, noise_folder=self.noise_folder)
             test_data = test_loader.load_data(self.multilabel, validation_share=0.0)
             
             if self.data['categories'] != test_data['categories']:
-                print(f"  WARNING: Train and test categories differ!")
+                print(f"  WARNING: Train and test1 categories differ!")
                 print(f"    Train: {self.data['categories']}")
-                print(f"    Test: {test_data['categories']}")
+                print(f"    Test1: {test_data['categories']}")
             
-            self.test_data = {
+            self.test_datasets.append({
+                'name': Path(self.test_folder).name,
+                'path': self.test_folder,
                 'filenames': test_data['train_filenames'],
                 'labels': test_data['train_labels'],
                 'primary_species': test_data['train_primary_species'],
                 'noise_filenames': test_data['train_noise_filenames']
-            }
-        else:
-            self.test_data = None
+            })
+        
+        if self.test_folder2:
+            print(f"  Loading test set 2 from: {self.test_folder2}")
+            test_loader2 = DataLoader(self.test_folder2, noise_folder=self.noise_folder)
+            test_data2 = test_loader2.load_data(self.multilabel, validation_share=0.0)
+            
+            if self.data['categories'] != test_data2['categories']:
+                print(f"  WARNING: Train and test2 categories differ!")
+                print(f"    Train: {self.data['categories']}")
+                print(f"    Test2: {test_data2['categories']}")
+            
+            self.test_datasets.append({
+                'name': Path(self.test_folder2).name,
+                'path': self.test_folder2,
+                'filenames': test_data2['train_filenames'],
+                'labels': test_data2['train_labels'],
+                'primary_species': test_data2['train_primary_species'],
+                'noise_filenames': test_data2['train_noise_filenames']
+            })
         
         self.num_classes = self.data['nclasses']
         self.categories = self.data['categories']
@@ -494,7 +516,7 @@ class BirdClefFineTuner:
             return total_loss / len(self.val_loader), avg_metrics
         return total_loss / len(self.val_loader), 100. * correct / total
     
-    def evaluate_test_set(self):
+    def evaluate_test_set(self, test_data, test_name="Test"):
         from data_utils import SpectrogramDataset
         from torch.utils.data import DataLoader as TorchDataLoader
         
@@ -502,8 +524,8 @@ class BirdClefFineTuner:
         img_width = config.DEFAULT_TIME_BINS
         
         test_dataset = SpectrogramDataset(
-            self.test_data['filenames'],
-            self.test_data['labels'],
+            test_data['filenames'],
+            test_data['labels'],
             img_height,
             img_width,
             config.DEFAULT_CHANNELS,
@@ -554,11 +576,13 @@ class BirdClefFineTuner:
         
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
-            print(f"  Test Macro F1: {avg_metrics['macro_f1']:.4f}")
-            print(f"  Test Micro F1: {avg_metrics['micro_f1']:.4f}")
+            print(f"  {test_name} Macro F1: {avg_metrics['macro_f1']:.4f}")
+            print(f"  {test_name} Micro F1: {avg_metrics['micro_f1']:.4f}")
+            return avg_metrics['macro_f1']
         else:
             test_acc = 100. * correct / total
-            print(f"  Test Accuracy: {test_acc:.2f}%")
+            print(f"  {test_name} Accuracy: {test_acc:.2f}%")
+            return test_acc
     
     def train(self):
         """Main training loop."""
@@ -666,9 +690,23 @@ class BirdClefFineTuner:
                 print(f"  Best val accuracy: {best_val_metric:.2f}%")
         print(f"  Models saved to: {self.output_folder}")
         
-        if self.test_data is not None:
-            print(f"\nEvaluating on test set...")
-            self.evaluate_test_set()
+        if self.test_datasets:
+            print(f"\nEvaluating on test sets...")
+            test_results = {}
+            for idx, test_data in enumerate(self.test_datasets, 1):
+                print(f"\nTest Set {idx}: {test_data['name']}")
+                result = self.evaluate_test_set(test_data, test_name=test_data['name'])
+                test_results[test_data['name']] = result
+            
+            print(f"\n{'='*60}")
+            print(f"TEST SET COMPARISON")
+            print(f"{'='*60}")
+            for name, result in test_results.items():
+                if self.multilabel:
+                    print(f"  {name:30s} Macro F1: {result:.4f}")
+                else:
+                    print(f"  {name:30s} Accuracy: {result:.2f}%")
+            print(f"{'='*60}")
     
     def save_model(self, filename):
         """Save model and config."""
@@ -771,7 +809,9 @@ Examples:
     parser.add_argument('--validation-split', type=float, default=0.2,
                        help="Validation split ratio (default: 0.2 = 20%%, use 0 to disable validation)")
     parser.add_argument('--test-folder', type=str, default=None,
-                       help="Path to separate test data folder (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
+                       help="Path to test data folder 1 (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
+    parser.add_argument('--test-folder2', type=str, default=None,
+                       help="Path to test data folder 2 (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     
@@ -808,7 +848,8 @@ Examples:
         use_temporal_roll=not args.no_temporal_roll,
         validation_split=args.validation_split,
         remove_baseline=args.baseline_removal,
-        test_folder=args.test_folder
+        test_folder=args.test_folder,
+        test_folder2=args.test_folder2
     )
     
     # Load data and create model
