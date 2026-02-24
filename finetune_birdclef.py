@@ -755,6 +755,12 @@ class BirdClefFineTuner:
         
         if self.test_datasets:
             print(f"\nEvaluating on test sets using predict.py...")
+            
+            # Free GPU memory before spawning subprocess
+            del self.model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             best_model_path = os.path.join(self.output_folder, 'birdclef_finetuned_best.pt')
             best_config_path = os.path.join(self.output_folder, 'birdclef_finetuned_best_config.json')
             
