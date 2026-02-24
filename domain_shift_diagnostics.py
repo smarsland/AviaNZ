@@ -984,35 +984,48 @@ Example:
     # 8. Analyze correct vs incorrect predictions for cross-domain scenarios
     print("8. Analyzing prediction patterns for cross-domain transfer...")
     
-    print("   a. DOC model on Joe_Mo test data...")
-    doc_on_joe_correct, doc_on_joe_incorrect = analyze_prediction_correctness(
-        base_dir, "doc", "joe_mo", output_dir
-    )
-    doc_on_joe_correct_stats = compute_sample_statistics(doc_on_joe_correct)
-    doc_on_joe_incorrect_stats = compute_sample_statistics(doc_on_joe_incorrect)
-    doc_on_joe_path = output_dir / "doc_model_on_joe_data_correct_vs_incorrect.png"
-    plot_correct_vs_incorrect_analysis(
-        doc_on_joe_path, 
-        doc_on_joe_correct_stats, 
-        doc_on_joe_incorrect_stats,
-        "DOC Model on Joe_Mo Test: Correct vs Incorrect Predictions"
-    )
-    print(f"      ✓ Saved: {doc_on_joe_path.name}")
+    doc_on_joe_csv = base_dir / "joe_mo_split" / "test" / "birdclef_doc_trained_joe_mo_test.csv"
+    joe_on_doc_csv = base_dir / "doc_split" / "test" / "birdclef_joe_mo_trained_doc_test.csv"
     
-    print("   b. Joe_Mo model on DOC test data...")
-    joe_on_doc_correct, joe_on_doc_incorrect = analyze_prediction_correctness(
-        base_dir, "joe_mo", "doc", output_dir
-    )
-    joe_on_doc_correct_stats = compute_sample_statistics(joe_on_doc_correct)
-    joe_on_doc_incorrect_stats = compute_sample_statistics(joe_on_doc_incorrect)
-    joe_on_doc_path = output_dir / "joe_model_on_doc_data_correct_vs_incorrect.png"
-    plot_correct_vs_incorrect_analysis(
-        joe_on_doc_path,
-        joe_on_doc_correct_stats,
-        joe_on_doc_incorrect_stats,
-        "Joe_Mo Model on DOC Test: Correct vs Incorrect Predictions"
-    )
-    print(f"      ✓ Saved: {joe_on_doc_path.name}")
+    cross_domain_found = False
+    
+    if doc_on_joe_csv.exists():
+        print("   a. DOC model on Joe_Mo test data...")
+        doc_on_joe_correct, doc_on_joe_incorrect = analyze_prediction_correctness(
+            base_dir, "doc", "joe_mo", output_dir
+        )
+        doc_on_joe_correct_stats = compute_sample_statistics(doc_on_joe_correct)
+        doc_on_joe_incorrect_stats = compute_sample_statistics(doc_on_joe_incorrect)
+        doc_on_joe_path = output_dir / "doc_model_on_joe_data_correct_vs_incorrect.png"
+        plot_correct_vs_incorrect_analysis(
+            doc_on_joe_path, 
+            doc_on_joe_correct_stats, 
+            doc_on_joe_incorrect_stats,
+            "DOC Model on Joe_Mo Test: Correct vs Incorrect Predictions"
+        )
+        print(f"      ✓ Saved: {doc_on_joe_path.name}")
+        cross_domain_found = True
+    
+    if joe_on_doc_csv.exists():
+        print("   b. Joe_Mo model on DOC test data...")
+        joe_on_doc_correct, joe_on_doc_incorrect = analyze_prediction_correctness(
+            base_dir, "joe_mo", "doc", output_dir
+        )
+        joe_on_doc_correct_stats = compute_sample_statistics(joe_on_doc_correct)
+        joe_on_doc_incorrect_stats = compute_sample_statistics(joe_on_doc_incorrect)
+        joe_on_doc_path = output_dir / "joe_model_on_doc_data_correct_vs_incorrect.png"
+        plot_correct_vs_incorrect_analysis(
+            joe_on_doc_path,
+            joe_on_doc_correct_stats,
+            joe_on_doc_incorrect_stats,
+            "Joe_Mo Model on DOC Test: Correct vs Incorrect Predictions"
+        )
+        print(f"      ✓ Saved: {joe_on_doc_path.name}")
+        cross_domain_found = True
+    
+    if not cross_domain_found:
+        print("   ⚠ No cross-domain predictions found (birdclef_doc_trained_joe_mo_test.csv or birdclef_joe_mo_trained_doc_test.csv)")
+        print("   Skipping detailed cross-domain correctness analysis")
     
     # 9. Write analysis summary
     print("9. Generating analysis summary...")
