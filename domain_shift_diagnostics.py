@@ -97,12 +97,12 @@ def plot_accuracy_heatmap(output_path, title, classes, values, columns):
 def write_accuracy_table(output_path, classes, totals, per_class_by_model, model_labels):
     with open(output_path, "w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
-        header = ["species", "support"] + [f"{label}_acc" for label in model_labels]
+        header = ["species", "support"] + model_labels
         writer.writerow(header)
         for cls in classes:
             row = [cls, totals.get(cls, 0)]
             for values in per_class_by_model:
-                row.append(values.get(cls, 0.0))
+                row.append(f"{values.get(cls, 0.0):.4f}")
             writer.writerow(row)
 
 
@@ -168,44 +168,66 @@ def write_class_mismatch_report(output_path, rows):
             writer.writerow([dataset, "|".join(sorted(missing)), "|".join(sorted(extra))])
 
 
-def compute_combined_heatmap(base_dir):
-    combos = [
-        {
-            "label": "doc->doc",
-            "labels": base_dir / "doc_split" / "test" / "labels.json",
-            "preds": base_dir / "doc_split" / "test" / "birdclef_doc_trained_doc_test.csv",
-        },
-        {
-            "label": "joe->doc",
-            "labels": base_dir / "doc_split" / "test" / "labels.json",
-            "preds": base_dir / "doc_split" / "test" / "birdclef_joe_mo_trained_doc_test.csv",
-        },
-        {
-            "label": "doc->joe",
-            "labels": base_dir / "joe_mo_split" / "test" / "labels.json",
-            "preds": base_dir / "joe_mo_split" / "test" / "birdclef_doc_trained_joe_mo_test.csv",
-        },
-        {
-            "label": "joe->joe",
-            "labels": base_dir / "joe_mo_split" / "test" / "labels.json",
-            "preds": base_dir / "joe_mo_split" / "test" / "birdclef_joe_mo_trained_joe_mo_test.csv",
-        },
-    ]
+def discover_prediction_csvs(test_dir):
+    csv_files = []
+    for csv_path in test_dir.glob("*.csv"):
+        csv_files.append(csv_path)
+    return sorted(csv_files)
 
+
+def compute_all_predictions_accuracy(base_dir):
+    results = []
+    
+    doc_test_dir = base_dir / "doc_split" / "test"
+    joe_test_dir = base_dir / "joe_mo_split" / "test"
+    
+    for test_dir, test_name in [(doc_test_dir, "DOC Test"), (joe_test_dir, "Joe_Mo Test")]:
+        if not test_dir.exists():
+            continue
+            
+        labels_path = test_dir / "labels.json"
+        if not labels_path.exists():
+            continue
+            
+        row_to_class, _ = load_labels(labels_path)
+        csv_files = discover_prediction_csvs(test_dir)
+        
+        for csv_path in csv_files:
+            model_name = csv_path.stem
+            _, rows = load_predictions(csv_path)
+            per_class, total, overall = compute_per_class_accuracy(row_to_class, rows)
+            
+            results.append({
+                'test_set': test_name,
+                'model': model_name,
+                'csv_path': csv_path,
+                'overall_accuracy': overall,
+                'per_class': per_class,
+                'total': total
+            })
+            
+    return results
+
+
+def compute_combined_heatmap(base_dir):
+    results = compute_all_predictions_accuracy(base_dir)
+    
+    if not results:
+        return [], Counter(), [], [], []
+    
     totals = Counter()
     per_class_by_model = []
-
-    for combo in combos:
-        row_to_class, _ = load_labels(combo["labels"])
-        _, rows = load_predictions(combo["preds"])
-        per_class, total, overall = compute_per_class_accuracy(row_to_class, rows)
-        totals.update(total)
-        per_class_by_model.append(per_class)
-        print(f"{combo['label']} overall accuracy: {overall:.4f}")
+    combo_labels = []
+    
+    for result in results:
+        totals.update(result['total'])
+        per_class_by_model.append(result['per_class'])
+        combo_labels.append(f"{result['model']}\n{result['test_set']}")
+        print(f"{result['model']} on {result['test_set']}: {result['overall_accuracy']:.4f}")
 
     classes = sorted(totals.keys())
     values = [[values.get(cls, 0.0) for values in per_class_by_model] for cls in classes]
-    return classes, totals, per_class_by_model, values, [combo["label"] for combo in combos]
+    return classes, totals, per_class_by_model, values, combo_labels
 
 
 def compute_magnitude_statistics(data_dir):
@@ -666,6 +688,45 @@ feature is causing failures.
     plt.close(fig)
 
 
+def write_accuracy_summary(output_path, results):
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("=" * 80 + "\n")
+        f.write("MODEL PERFORMANCE SUMMARY\n")
+        f.write("=" * 80 + "\n\n")
+        
+        if not results:
+            f.write("No prediction CSVs found.\n")
+            return
+        
+        doc_results = [r for r in results if "DOC" in r['test_set']]
+        joe_results = [r for r in results if "Joe_Mo" in r['test_set']]
+        
+        f.write("Performance on DOC Test Set:\n")
+        f.write("-" * 80 + "\n")
+        if doc_results:
+            for r in doc_results:
+                f.write(f"  {r['model']:50s} {r['overall_accuracy']*100:6.2f}%\n")
+        else:
+            f.write("  No predictions found\n")
+        
+        f.write("\n")
+        f.write("Performance on Joe_Mo Test Set:\n")
+        f.write("-" * 80 + "\n")
+        if joe_results:
+            for r in joe_results:
+                f.write(f"  {r['model']:50s} {r['overall_accuracy']*100:6.2f}%\n")
+        else:
+            f.write("  No predictions found\n")
+        
+        f.write("\n")
+        f.write("=" * 80 + "\n")
+        f.write("INTERPRETATION:\n")
+        f.write("=" * 80 + "\n\n")
+        f.write("- Models with similar accuracy on both test sets generalize well\n")
+        f.write("- Large accuracy drops indicate domain shift problems\n")
+        f.write("- Compare same model across different test sets to assess robustness\n")
+
+
 def write_analysis_summary(output_path, doc_stats, joe_stats, doc_features, joe_features):
     doc_mean_avg = np.mean(doc_stats['means'])
     joe_mean_avg = np.mean(joe_stats['means'])
@@ -835,42 +896,44 @@ Example:
     print(f"   ✓ Saved: {samples_plot_path.name}")
     
     # 3. Per-class accuracy heatmap
-    print("3. Computing per-class accuracy...")
+    print("3. Computing per-class accuracy for all prediction CSVs...")
     classes, totals, per_class_by_model, values, combo_labels = compute_combined_heatmap(base_dir)
-    heatmap_path = output_dir / "per_class_accuracy_6x4.png"
-    plot_accuracy_heatmap(
-        heatmap_path,
-        "Per-class accuracy: train -> test",
-        classes,
-        values,
-        combo_labels,
-    )
-    print(f"   ✓ Saved: {heatmap_path.name}")
+    
+    results = compute_all_predictions_accuracy(base_dir)
+    
+    if classes:
+        heatmap_path = output_dir / "per_class_accuracy_all_models.png"
+        plot_accuracy_heatmap(
+            heatmap_path,
+            "Per-class accuracy: All Models on All Test Sets",
+            classes,
+            values,
+            combo_labels,
+        )
+        print(f"   ✓ Saved: {heatmap_path.name}")
 
-    table_path = output_dir / "per_class_accuracy_6x4.csv"
-    write_accuracy_table(table_path, classes, totals, per_class_by_model, combo_labels)
-    print(f"   ✓ Saved: {table_path.name}")
+        table_path = output_dir / "per_class_accuracy_all_models.csv"
+        write_accuracy_table(table_path, classes, totals, per_class_by_model, combo_labels)
+        print(f"   ✓ Saved: {table_path.name}")
+        
+        summary_path = output_dir / "ACCURACY_SUMMARY.txt"
+        write_accuracy_summary(summary_path, results)
+        print(f"   ✓ Saved: {summary_path.name}")
+    else:
+        print("   ⚠ No prediction CSVs found, skipping accuracy analysis")
 
+    results = compute_all_predictions_accuracy(base_dir)
+    
     mismatch_rows = []
-    class_sets = {
-        "doc_test": extract_label_classes(base_dir / "doc_split" / "test" / "labels.json"),
-        "joe_test": extract_label_classes(base_dir / "joe_mo_split" / "test" / "labels.json"),
-    }
-
-    prediction_columns = {
-        "doc->doc": load_predictions(base_dir / "doc_split" / "test" / "birdclef_doc_trained_doc_test.csv")[0],
-        "joe->doc": load_predictions(base_dir / "doc_split" / "test" / "birdclef_joe_mo_trained_doc_test.csv")[0],
-        "doc->joe": load_predictions(base_dir / "joe_mo_split" / "test" / "birdclef_doc_trained_joe_mo_test.csv")[0],
-        "joe->joe": load_predictions(base_dir / "joe_mo_split" / "test" / "birdclef_joe_mo_trained_joe_mo_test.csv")[0],
-    }
-
-    for label, columns in prediction_columns.items():
-        test_key = "doc_test" if label.endswith("->doc") else "joe_test"
-        label_classes = class_sets[test_key]
-        pred_classes = set(columns)
+    for result in results:
+        test_dir = base_dir / ("doc_split" if "DOC" in result['test_set'] else "joe_mo_split") / "test"
+        label_classes = extract_label_classes(test_dir / "labels.json")
+        pred_columns, _ = load_predictions(result['csv_path'])
+        pred_classes = set(pred_columns)
         missing = label_classes - pred_classes
         extra = pred_classes - label_classes
-        mismatch_rows.append((label, missing, extra))
+        display_label = f"{result['model']} on {result['test_set']}"
+        mismatch_rows.append((display_label, missing, extra))
 
     # 4. Class mismatch report
     print("4. Analyzing class mismatches...")
@@ -964,15 +1027,20 @@ Example:
     print()
     print(f"All outputs saved to: {output_dir}")
     print()
-    print("KEY DIAGNOSTICS GENERATED:")
+    print("KEY RESULTS:")
+    print(f"  📊 ACCURACY_SUMMARY.txt - Model performance comparison")
+    print(f"  📈 per_class_accuracy_all_models.png - Visual comparison")
+    print(f"  📋 per_class_accuracy_all_models.csv - Detailed per-class results")
+    print()
+    print("ADDITIONAL DIAGNOSTICS:")
     print(f"  • Magnitude distributions")
     print(f"  • Frequency band energy profiles")
     print(f"  • Spectral feature comparisons")
-    print(f"  • Per-class accuracy heatmaps")
     print(f"  • Cross-domain prediction analysis (correct vs incorrect)")
     print(f"  • Sample visualization comparisons")
     print()
-    print(f"Review {summary_path.name} for detailed findings.")
+    print(f"Review ACCURACY_SUMMARY.txt for quick performance overview.")
+    print(f"Review ANALYSIS_SUMMARY.txt for detailed domain shift findings.")
     print()
 
 
