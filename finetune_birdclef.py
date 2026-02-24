@@ -756,7 +756,7 @@ class BirdClefFineTuner:
         if self.test_datasets:
             print(f"\nEvaluating on test sets using predict.py...")
             
-            # Free GPU memory before spawning subprocess
+            # Free GPU memory before evaluation
             del self.model
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -772,20 +772,16 @@ class BirdClefFineTuner:
                 
                 print(f"\nTest Set {idx}: {test_name}")
                 
-                import subprocess
-                cmd = [
-                    'python', 'predict.py',
+                from predict import ModelPredictor
+                predictor = ModelPredictor(
                     best_model_path,
                     best_config_path,
                     test_folder,
                     output_csv,
-                    '--batch-size', str(self.batch_size)
-                ]
-                
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode != 0:
-                    print(f"  ERROR running predict.py: {result.stderr}")
-                    continue
+                    batch_size=self.batch_size,
+                    device=self.device
+                )
+                predictor.run()
                 
                 accuracy = self._compute_accuracy_from_csv(output_csv, test_folder)
                 test_results[test_name] = accuracy
