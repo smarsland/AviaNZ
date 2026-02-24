@@ -18,21 +18,21 @@ def normalize_spectrogram(img):
     
     H, W = img.shape
 
-    sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :W//4]
-    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    var0 = np.var(bg_pixels, axis=1, keepdims=True)
-    img = (img - mu0) / (np.sqrt(var0) + 1e-6)
+    # sorted_pixels = np.sort(img, axis=1)
+    # bg_pixels = sorted_pixels[:, :W//4]
+    # mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
+    # var0 = np.var(bg_pixels, axis=1, keepdims=True)
+    # img = (img - mu0) / (np.sqrt(var0) + 1e-6)
     
-    for c in range(img.shape[1]):
-        col = img[:,c]
-        distances = np.abs(np.linspace(0,1,len(col)).reshape(-1,1)-np.linspace(0,1,len(col)).reshape(1,-1))
-        kernel = np.exp(-20 * distances**2)
-        contributions = kernel / np.sum(kernel,axis=0)
-        estimates = np.sum(contributions * col.reshape(-1,1),axis=0)
-        img[:,c] = img[:,c] - estimates
+    # for c in range(img.shape[1]):
+    #     col = img[:,c]
+    #     distances = np.abs(np.linspace(0,1,len(col)).reshape(-1,1)-np.linspace(0,1,len(col)).reshape(1,-1))
+    #     kernel = np.exp(-20 * distances**2)
+    #     contributions = kernel / np.sum(kernel,axis=0)
+    #     estimates = np.sum(contributions * col.reshape(-1,1),axis=0)
+    #     img[:,c] = img[:,c] - estimates
     
-    img = np.asarray(img, dtype=np.float32)
+    # img = np.asarray(img, dtype=np.float32)
 
     flat_order = np.argsort(img, axis=1)
     ranks = np.empty_like(flat_order)
