@@ -2077,9 +2077,40 @@ class ManualInterface(QMainWindow):
         #return y * self.sp.sampleRate//2 / sgy + self.sp.minFreqShow
 
     def convertFreqtoY(self,f):
-        """ Unit conversion """
-        sgy = np.shape(self.sg)[1]
-        return (f-self.sp.minFreqShow) * sgy / (self.sp.audio_data.sample_rate//2)
+        """ Unit conversion from Hz to Y-coordinate in the displayed spectrogram """
+        # Check if using Mel or Bark scale (non-linear frequency mapping)
+        if hasattr(self.sp, 'sgScale') and self.sp.sgScale in ['Mel Frequency', 'Bark Frequency']:
+            # For Mel/Bark: convert frequency to scale, then map linearly to pixels
+            if self.sp.sgScale == 'Mel Frequency':
+                f_scaled = self.sp.convertHztoMel(f)
+                min_scaled = self.sp.convertHztoMel(self.sp.minFreqShow)
+                max_scaled = self.sp.convertHztoMel(self.sp.maxFreqShow)
+            else:  # Bark Frequency
+                f_scaled = self.sp.convertHztoBark(f)
+                min_scaled = self.sp.convertHztoBark(self.sp.minFreqShow)
+                max_scaled = self.sp.convertHztoBark(self.sp.maxFreqShow)
+            
+            # Use cached display dimensions
+            if hasattr(self, 'sg_pixelstart') and hasattr(self, 'sg_pixelend'):
+                sgy = self.sg_pixelend - self.sg_pixelstart
+            else:
+                sgy = np.shape(self.sg)[1]
+            
+            return (f_scaled - min_scaled) * sgy / (max_scaled - min_scaled)
+        
+        else:
+            # Linear frequency scale
+            # Use the cached values from setfigs() which defines the displayed portion
+            if hasattr(self, 'sg_pixelstart') and hasattr(self, 'sg_pixelend'):
+                sgy = self.sg_pixelend - self.sg_pixelstart  # Height of displayed portion
+            else:
+                # Fallback if not yet initialized
+                height_per_bin = self.sp.audio_data.sample_rate // 2 / np.shape(self.sg)[1]
+                pixelstart = int(self.sp.minFreqShow / height_per_bin)
+                pixelend = int(self.sp.maxFreqShow / height_per_bin)
+                sgy = pixelend - pixelstart
+            
+            return (f - self.sp.minFreqShow) * sgy / (self.sp.maxFreqShow - self.sp.minFreqShow)
 
     def drawOverview(self):
         """ On loading a new file, update the overview figure to show where you are up to in the file.
@@ -2167,6 +2198,10 @@ class ManualInterface(QMainWindow):
         height = self.sp.audio_data.sample_rate // 2 / np.shape(self.sg)[1]
         pixelstart = int(self.sp.minFreqShow/height)
         pixelend = int(self.sp.maxFreqShow/height)
+        
+        # Store these for use in convertFreqtoY
+        self.sg_pixelstart = pixelstart
+        self.sg_pixelend = pixelend
 
         self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
         self.overviewImageRegion.setBounds([0, len(self.sg)])

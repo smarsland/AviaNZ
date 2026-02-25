@@ -589,6 +589,10 @@ class Spectrogram:
                 onesided=onesided, complex_values=complex_values, need_even=need_even
             )
 
+        # Store scale parameters for frequency-to-Y conversion
+        self.sgScale = sgScale
+        self.nfilters = nfilters
+        
         if sgScale == 'Mel Frequency':
             self.convertToMel(filt='mel',nfilters=nfilters,minfreq=0,maxfreq=None,normalise=True)
         elif sgScale == 'Bark Frequency':
