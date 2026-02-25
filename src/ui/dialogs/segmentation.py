@@ -425,6 +425,7 @@ class SegmentationDialog(QDialog):
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
         alg = self.algs.currentText()
+        model_filename = None
         if alg=="Wavelet Filter":
             filtname = self.species_wv.currentText()
         elif alg=="WV Changepoint":
@@ -436,7 +437,6 @@ class SegmentationDialog(QDialog):
             model_filename = self.nnModel.currentData()
         else:
             filtname = None
-            model_filename = None
         settings = {"medThr": self.medThr.value(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),

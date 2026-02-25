@@ -5100,6 +5100,41 @@ class ManualInterface(QMainWindow):
                 ws.readBatch(self.sp.audio_data.data, self.sp.audio_data.sample_rate, d=False, spInfo=[speciesData], wpmode="new", wind=False)
                 newSegments = ws.waveletSegment(0, wpmode="new")
                 # this will produce a list of lists (over subfilters)
+                
+                # Post-processing for Wavelet Filter
+                print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
+                print('Post-processing...')
+                # load target NN model if exists
+                self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, [filtname])
+                # postProcess currently operates on single-level list of segments,
+                # so we run it over subfilters for wavelets:
+                for filtix in range(len(speciesData['Filters'])):
+                    subfilter = speciesData['Filters'][filtix]
+                    NNmodel = None
+                    if 'NN' in speciesData:
+                        NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
+
+                    post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
+                                               tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
+                                               subfilter=subfilter, NNmodel=NNmodel, cert=50)
+                    if NNmodel:
+                        print('Post-processing with NN')
+                        post.NN()
+                        print('After NN: segments: ', len(post.segments))
+                    if settings["rain"]:
+                        post.rainClick()
+                        print('After rain segments: ', len(post.segments))
+                    if 'F0' in subfilter and 'F0Range' in subfilter:
+                        if subfilter['F0']:
+                            print("Checking for fundamental frequency...")
+                            post.fundamentalFrq()
+                            print("After FF segments:", len(post.segments))
+                    # joinGaps only for Wavelet Filter, not WV Changepoint
+                    post.joinGaps(maxgap=subfilter['TimeRange'][3])
+                    if subfilter['TimeRange'][0]>0:
+                        post.deleteShort(minlength=subfilter['TimeRange'][0])
+                    
+                    newSegments[filtix] = post.segments
             elif alg == 'WV Changepoint':
                 print("Changepoint detection requested")
                 speciesData = self.FilterDicts[filtname]
@@ -5110,6 +5145,39 @@ class ManualInterface(QMainWindow):
                 # nuisance-signal changepoint detector (alg 2)
                 # with all params passed:
                 newSegments = ws.waveletSegmentChp(0, alpha=settings["chpalpha"], window=settings["chpwindow"], maxlen=settings["maxlen"], alg=2, silent=False, wind=settings["wind"])
+                
+                # Post-processing for WV Changepoint
+                print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
+                print('Post-processing...')
+                # load target NN model if exists
+                self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, [filtname])
+                # postProcess currently operates on single-level list of segments,
+                # so we run it over subfilters for wavelets:
+                for filtix in range(len(speciesData['Filters'])):
+                    subfilter = speciesData['Filters'][filtix]
+                    NNmodel = None
+                    if 'NN' in speciesData:
+                        NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
+
+                    post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
+                                               tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
+                                               subfilter=subfilter, NNmodel=NNmodel, cert=50)
+                    if NNmodel:
+                        print('Post-processing with NN')
+                        post.NN()
+                        print('After NN: segments: ', len(post.segments))
+                    if settings["rain"]:
+                        post.rainClick()
+                        print('After rain segments: ', len(post.segments))
+                    if 'F0' in subfilter and 'F0Range' in subfilter:
+                        if subfilter['F0']:
+                            print("Checking for fundamental frequency...")
+                            post.fundamentalFrq()
+                            print("After FF segments:", len(post.segments))
+                    if subfilter['TimeRange'][0]>0:
+                        post.deleteShort(minlength=subfilter['TimeRange'][0])
+                    
+                    newSegments[filtix] = post.segments
 
             # TODO: make sure cross corr outputs lists of lists
             elif alg == 'Cross-Correlation':
@@ -5268,7 +5336,6 @@ class ManualInterface(QMainWindow):
                     segment_times.append((start_time, end_time))
                 
                 newSegments = []
-                segment_metadata = {}  # Map (start_time, class_idx) to certainty for multilabel support
                 multilabel = model_config.get('multilabel', False)
                 class_names = model_config.get('class_names', [])
                 
@@ -5282,16 +5349,10 @@ class ManualInterface(QMainWindow):
                         
                         # Check each class independently, create segment for each above threshold
                         for class_idx, prob in enumerate(probs):
-                            # Clamp probability to [0, 1] range in case of numerical issues
                             prob = np.clip(prob, 0.0, 1.0)
                             if prob >= min_confidence:
                                 certainty = int(prob * 100)
-                                
-                                # Create separate segment for each detected class
-                                seg_key = (start_time, class_idx)
-                                if start_time not in [s[0] for s in newSegments]:
-                                    newSegments.append([start_time, end_time])
-                                segment_metadata[seg_key] = certainty
+                                newSegments.append([[start_time, end_time], certainty, class_idx])
                     else:
                         # Single-label: apply softmax to get probabilities
                         import torch.nn.functional as F
@@ -5300,30 +5361,26 @@ class ManualInterface(QMainWindow):
                         
                         max_prob_idx = np.argmax(probs)
                         max_prob = probs[max_prob_idx]
-                        # Clamp probability to [0, 1] range
                         max_prob = np.clip(max_prob, 0.0, 1.0)
                         
                         if max_prob >= min_confidence:
                             certainty = int(max_prob * 100)
-                            
-                            # Add segment with time and store metadata separately
-                            newSegments.append([start_time, end_time])
-                            # Store metadata keyed by (start_time, class_idx)
-                            segment_metadata[(start_time, max_prob_idx)] = certainty
+                            newSegments.append([[start_time, end_time], certainty, max_prob_idx])
                 
                 print(f'Segments detected (above {int(min_confidence*100)}% confidence): {len(newSegments)}')
                 if len(newSegments) > 0:
                     print(f'  Example segments: {newSegments[:3]}')
-                    print(f'  Example metadata: {list(segment_metadata.items())[:3]}')
                 
                 # Apply post-processing if enabled
                 if settings.get("nnPostProcess", True):
                     print('Post-processing...')
+                    # Extract just time ranges and certainties for PostProcess
+                    segments_for_pp = [seg[0] for seg in newSegments]
                     post = segmentation.PostProcess(
                         configdir=self.configdir,
                         audioData=self.sp.audio_data.data,
                         sampleRate=self.sp.audio_data.sample_rate,
-                        segments=newSegments,
+                        segments=segments_for_pp,
                         subfilter={},
                         cert=0
                     )
@@ -5334,69 +5391,25 @@ class ManualInterface(QMainWindow):
                     print(f'Segments remaining after merge (gap <={settings["maxgap"]:.2f} secs): {len(post.segments)}')
                     post.deleteShort(minlength=settings["minlen"])
                     print(f'Segments remaining after deleting short (<{settings["minlen"]:.2f} secs): {len(post.segments)}')
-                    newSegments = post.segments
                     
-                    # Convert to expected format with certainties
-                    newSegments_with_cert = []
-                    for seg in newSegments:
-                        start_time = seg[0][0]  # seg is [[start, end], cert] from PostProcess
-                        # Find matching certainty
-                        matching_keys = [(k[1], segment_metadata[k]) for k in segment_metadata.keys() if k[0] == start_time]
-                        if matching_keys:
-                            certainty = matching_keys[0][1]  # Use first match certainty
+                    # Map merged segments back to their original detections
+                    # After merging, use the highest certainty from any component segment
+                    merged_segments = []
+                    for pp_seg in post.segments:
+                        seg_start, seg_end = pp_seg[0][0], pp_seg[0][1]
+                        # Find all original detections that overlap with this merged segment
+                        overlapping = [s for s in newSegments 
+                                     if not (s[0][1] <= seg_start or s[0][0] >= seg_end)]
+                        if overlapping:
+                            max_cert = max(s[1] for s in overlapping)
+                            class_idx = overlapping[0][2]
                         else:
-                            certainty = 50  # Fallback
-                        newSegments_with_cert.append([[seg[0][0], seg[0][1]], certainty])
-                    newSegments = newSegments_with_cert
+                            max_cert = 50
+                            class_idx = 0
+                        merged_segments.append([[seg_start, seg_end], max_cert, class_idx])
+                    newSegments = merged_segments
                 else:
                     print('Post-processing disabled')
-                    # Convert to expected format with certainties (no post-processing)
-                    newSegments_with_cert = []
-                    for seg in newSegments:
-                        start_time = seg[0]
-                        # Find matching certainty
-                        matching_keys = [(k[1], segment_metadata[k]) for k in segment_metadata.keys() if k[0] == start_time]
-                        if matching_keys:
-                            certainty = matching_keys[0][1]
-                        else:
-                            certainty = 50
-                        newSegments_with_cert.append([[seg[0], seg[1]], certainty])
-                    newSegments = newSegments_with_cert
-            elif alg == 'Wavelet Filter' or alg == 'WV Changepoint':
-                print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
-                print(newSegments)
-                print('Post-processing...')
-                # load target NN model if exists
-                self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, [filtname])
-                # postProcess currently operates on single-level list of segments,
-                # so we run it over subfilters for wavelets:
-                for filtix in range(len(speciesData['Filters'])):
-                    subfilter = speciesData['Filters'][filtix]
-                    NNmodel = None
-                    if 'NN' in speciesData:
-                        NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
-
-                    post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
-                                               tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=subfilter, NNmodel=NNmodel, cert=50)
-                    if NNmodel:
-                        print('Post-processing with NN')
-                        post.NN()
-                        print('After NN: segments: ', len(post.segments))
-                    if settings["rain"]:
-                        post.rainClick()
-                        print('After rain segments: ', len(post.segments))
-                    if 'F0' in subfilter and 'F0Range' in subfilter:
-                        if subfilter['F0']:
-                            print("Checking for fundamental frequency...")
-                            post.fundamentalFrq()
-                            print("After FF segments:", len(post.segments))
-                    if alg=='Wavelet Filter':
-                        post.joinGaps(maxgap=subfilter['TimeRange'][3])
-                    if subfilter['TimeRange'][0]>0:
-                        post.deleteShort(minlength=subfilter['TimeRange'][0])
-
-                    newSegments[filtix] = post.segments
             else:
                 # Other algorithms (Default, Median Clipping, etc.)
                 print(f'Segments detected: {len(newSegments)}')
@@ -5424,8 +5437,10 @@ class ManualInterface(QMainWindow):
                     y1 = speciesSubf['FreqRange'][0]
                     y2 = min(self.sp.audio_data.sample_rate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
-                        self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
-                                [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
+                        # PostProcess always returns [[start, end], certainty] format
+                        start_time, end_time, certainty = seg[0][0], seg[0][1], seg[1]
+                        self.addSegment(start_time, end_time, y1, y2,
+                                [{"species": filtspecies, "certainty": certainty, "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
             elif alg=='Cross-Correlation' and filtname != 'Choose species...':
                 # TODO: this has not been updated for a while
@@ -5435,47 +5450,36 @@ class ManualInterface(QMainWindow):
                     y1 = speciesSubf['FreqRange'][0]
                     y2 = min(self.sp.audio_data.sample_rate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
-                        self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
+                        self.addSegment(seg[0][0], seg[0][1], y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             elif alg == 'NN_Model':
                 y1 = 0
-                y2 = self.sp.audio_data.sample_rate // 2  # Use original sample rate for display
+                y2 = inference_sr // 2
                 for seg in newSegments:
                     start_time = seg[0][0]
-                    # Get all classes detected for this segment
-                    matching_keys = [(k[1], segment_metadata[k]) for k in segment_metadata.keys() if k[0] == start_time]
+                    end_time = seg[0][1]
+                    certainty = seg[1]
+                    class_idx = seg[2]
                     
-                    if matching_keys:
-                        if multilabel and len(matching_keys) > 1:
-                            # Multiple species detected - create one label per species
-                            labels = []
-                            for class_idx, certainty in matching_keys:
-                                # Use actual species name from class_names if available
-                                if class_names and 0 <= class_idx < len(class_names):
-                                    species_label = class_names[class_idx]
-                                else:
-                                    species_label = f"Class_{class_idx}"
-                                labels.append({"species": species_label, "certainty": certainty})
-                        else:
-                            # Single species
-                            class_idx, certainty = matching_keys[0]
-                            # Use actual species name from class_names if available
-                            if class_names and 0 <= class_idx < len(class_names):
-                                species_label = class_names[class_idx]
-                            else:
-                                species_label = f"Class_{class_idx}"
-                            labels = [{"species": species_label, "certainty": certainty}]
+                    # Use actual species name from class_names if available
+                    if class_names and 0 <= class_idx < len(class_names):
+                        species_label = class_names[class_idx]
                     else:
-                        # No metadata found - shouldn't happen
-                        labels = [{"species": "NN Detection", "certainty": 50}]
+                        species_label = f"Class_{class_idx}"
+                    labels = [{"species": species_label, "certainty": certainty}]
                     
-                    self.addSegment(seg[0][0] + self.startRead, seg[0][1] + self.startRead, y1, y2,
+                    self.addSegment(start_time + self.startRead, end_time + self.startRead, y1, y2,
                             labels, index=-1, coordsAbsolute=True)
                     self.segmentsToSave = True
             else:
                 for seg in newSegments:
-                    self.addSegment(seg[0][0],seg[0][1])
+                    if isinstance(seg[0], (list, tuple)):
+                        self.addSegment(seg[0][0], seg[0][1], 0, 0,
+                                [{'species': "Don't Know", 'certainty': seg[1]}])
+                    else:
+                        self.addSegment(seg[0], seg[1], 0, 0,
+                                [{'species': "Don't Know", 'certainty': 0}])
                     self.segmentsToSave = True
 
             self.segmentDialog.undo.setEnabled(True)
