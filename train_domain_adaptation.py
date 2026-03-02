@@ -351,13 +351,7 @@ class DomainAdaptationTrainer:
                 shuffle=False, num_workers=num_workers, pin_memory=True
             )
         else:
-            self.target_val_loader = None   shuffle=False, num_workers=num_workers, pin_memory=True
-        )
-        
-        self.target_val_loader = TorchDataLoader(
-            self.target_val_dataset, batch_size=self.batch_size,
-            shuffle=False, num_workers=num_workers, pin_memory=True
-        )
+            self.target_val_loader = None
     
     def create_model(self):
         print("\nCreating DANN model...")
