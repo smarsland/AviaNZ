@@ -337,6 +337,12 @@ class DomainAdaptationTrainer:
             self.source_train_dataset, batch_size=self.batch_size,
             shuffle=True, num_workers=num_workers, pin_memory=True
         )
+        
+        self.target_train_loader = TorchDataLoader(
+            self.target_train_dataset, batch_size=self.batch_size,
+            shuffle=True, num_workers=num_workers, pin_memory=True
+        )
+        
         if self.source_val_dataset:
             self.source_val_loader = TorchDataLoader(
                 self.source_val_dataset, batch_size=self.batch_size,
