@@ -325,13 +325,19 @@ class DomainClassifierTrainer:
             
             self.optimizer.zero_grad()
             output = self.model(data)
-            loss = self.criterion(output, target)
+            
+            if target.dim() == 2:
+                target_labels = target.argmax(dim=1)
+            else:
+                target_labels = target.long()
+            
+            loss = self.criterion(output, target_labels)
             loss.backward()
             self.optimizer.step()
             
             total_loss += loss.item()
             pred = output.argmax(dim=1)
-            correct += pred.eq(target).sum().item()
+            correct += pred.eq(target_labels).sum().item()
             total += target.size(0)
             
             all_preds.extend(pred.cpu().numpy())
@@ -357,11 +363,17 @@ class DomainClassifierTrainer:
             for data, target in self.val_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
-                loss = self.criterion(output, target)
+                
+                if target.dim() == 2:
+                    target_labels = target.argmax(dim=1)
+                else:
+                    target_labels = target.long()
+                
+                loss = self.criterion(output, target_labels)
                 
                 total_loss += loss.item()
                 pred = output.argmax(dim=1)
-                correct += pred.eq(target).sum().item()
+                correct += pred.eq(target_labels).sum().item()
                 total += target.size(0)
                 
                 all_preds.extend(pred.cpu().numpy())
