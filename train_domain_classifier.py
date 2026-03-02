@@ -341,7 +341,7 @@ class DomainClassifierTrainer:
             total += target.size(0)
             
             all_preds.extend(pred.cpu().numpy())
-            all_labels.extend(target.cpu().numpy())
+            all_labels.extend(target_labels.cpu().numpy())
             
             pbar.set_postfix({
                 'loss': total_loss / (batch_idx + 1),
@@ -377,7 +377,7 @@ class DomainClassifierTrainer:
                 total += target.size(0)
                 
                 all_preds.extend(pred.cpu().numpy())
-                all_labels.extend(target.cpu().numpy())
+                all_labels.extend(target_labels.cpu().numpy())
         
         return total_loss / len(self.val_loader), 100. * correct / total, all_preds, all_labels
     
