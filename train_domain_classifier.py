@@ -33,7 +33,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import config
-from data_utils import DataLoader
+from data_utils import DataLoader, SpectrogramDataset
 
 
 class SimpleCNN(nn.Module):
@@ -144,34 +144,6 @@ class DomainClassifierModel(nn.Module):
             return self.classifier(features)
 
 
-class DomainDataset(Dataset):
-    """Dataset that loads spectrograms and assigns domain labels."""
-    
-    def __init__(self, filenames, domain_labels, normalize=False):
-        self.filenames = filenames
-        self.domain_labels = domain_labels
-        self.normalize = normalize
-    
-    def __len__(self):
-        return len(self.filenames)
-    
-    def __getitem__(self, idx):
-        spec = np.load(self.filenames[idx])
-        
-        if self.normalize:
-            from normalizer import normalize_spectrogram
-            spec = normalize_spectrogram(spec)
-        
-        spec = torch.from_numpy(spec).float()
-        
-        if spec.dim() == 2:
-            spec = spec.unsqueeze(0)
-        
-        label = self.domain_labels[idx]
-        
-        return spec, label
-
-
 class DomainClassifierTrainer:
     """Trains and evaluates domain classifier."""
     
@@ -229,22 +201,67 @@ class DomainClassifierTrainer:
         all_filenames = [all_filenames[i] for i in indices]
         domain_labels = [domain_labels[i] for i in indices]
         
+        domain_labels_onehot = []
+        for label in domain_labels:
+            onehot = [0.0, 0.0]
+            onehot[label] = 1.0
+            domain_labels_onehot.append(onehot)
+        
         if self.validation_split > 0:
             split_idx = int(len(all_filenames) * (1 - self.validation_split))
             train_filenames = all_filenames[:split_idx]
-            train_labels = domain_labels[:split_idx]
+            train_labels = domain_labels_onehot[:split_idx]
+            train_labels_int = domain_labels[:split_idx]
             val_filenames = all_filenames[split_idx:]
-            val_labels = domain_labels[split_idx:]
+            val_labels = domain_labels_onehot[split_idx:]
         else:
             train_filenames = all_filenames
-            train_labels = domain_labels
+            train_labels = domain_labels_onehot
+            train_labels_int = domain_labels
             val_filenames = []
             val_labels = []
         
-        self.train_dataset = DomainDataset(train_filenames, train_labels, self.normalize)
+        img_height = config.DEFAULT_FREQ_BINS
+        img_width = config.DEFAULT_TIME_BINS
+        
+        self.train_dataset = SpectrogramDataset(
+            train_filenames,
+            train_labels,
+            img_height,
+            img_width,
+            config.DEFAULT_CHANNELS,
+            cropping_mode='random',
+            noise_filenames=None,
+            noise_ratio=0.0,
+            spec_transform=None,
+            training=True,
+            width_downsizing=None,
+            normalize=self.normalize,
+            use_sparse_patches=False,
+            num_sparse_patches=0,
+            use_temporal_roll=True,
+            remove_baseline=False
+        )
         
         if val_filenames:
-            self.val_dataset = DomainDataset(val_filenames, val_labels, self.normalize)
+            self.val_dataset = SpectrogramDataset(
+                val_filenames,
+                val_labels,
+                img_height,
+                img_width,
+                config.DEFAULT_CHANNELS,
+                cropping_mode='center',
+                noise_filenames=None,
+                noise_ratio=0.0,
+                spec_transform=None,
+                training=False,
+                width_downsizing=None,
+                normalize=self.normalize,
+                use_sparse_patches=False,
+                num_sparse_patches=0,
+                use_temporal_roll=False,
+                remove_baseline=False
+            )
         else:
             self.val_dataset = None
         
@@ -272,8 +289,8 @@ class DomainClassifierTrainer:
         if self.val_dataset:
             print(f"  Val samples: {len(self.val_dataset)}")
         
-        domain1_train = sum(1 for l in train_labels if l == 0)
-        domain2_train = sum(1 for l in train_labels if l == 1)
+        domain1_train = sum(1 for l in train_labels_int if l == 0)
+        domain2_train = sum(1 for l in train_labels_int if l == 1)
         print(f"  Train balance: Dataset1={domain1_train}, Dataset2={domain2_train}")
     
     def create_model(self):
