@@ -223,6 +223,22 @@ class DomainAdaptationTrainer:
         print(f"  Lambda (domain): {lambda_domain} ({lambda_schedule} schedule)")
         print(f"  Multi-label: {multilabel}")
     
+    def remap_labels(self, labels, source_categories, target_categories):
+        labels = np.array(labels)
+        category_map = {source_categories.index(cat): target_categories.index(cat) 
+                       for cat in source_categories if cat in target_categories}
+        
+        if labels.ndim == 2:
+            remapped = np.zeros_like(labels)
+            for src_idx, tgt_idx in category_map.items():
+                remapped[:, tgt_idx] = labels[:, src_idx]
+            return remapped.tolist()
+        else:
+            remapped = np.array([category_map.get(int(label), -1) for label in labels])
+            if (remapped == -1).any():
+                print(f"  ERROR: Some labels couldn't be remapped!")
+            return remapped.tolist()
+    
     def load_data(self):
         print("\nLoading datasets...")
         
@@ -233,11 +249,18 @@ class DomainAdaptationTrainer:
         target_data = target_loader.load_data(self.multilabel, validation_share=self.validation_split)
         
         if source_data['categories'] != target_data['categories']:
-            raise ValueError(
-                f"Source and target datasets have different classes!\n"
-                f"  Source: {source_data['categories']}\n"
-                f"  Target: {target_data['categories']}\n"
-                f"You need matching species lists for domain adaptation."
+            print(f"  WARNING: Source and target categories differ - remapping labels!")
+            print(f"    Source: {source_data['categories']}")
+            print(f"    Target: {target_data['categories']}")
+            target_data['train_labels'] = self.remap_labels(
+                target_data['train_labels'], 
+                target_data['categories'], 
+                source_data['categories']
+            )
+            target_data['val_labels'] = self.remap_labels(
+                target_data['val_labels'], 
+                target_data['categories'], 
+                source_data['categories']
             )
         
         self.num_classes = source_data['nclasses']
