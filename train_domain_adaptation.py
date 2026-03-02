@@ -268,11 +268,16 @@ class DomainAdaptationTrainer:
         self.categories = source_data['categories']
         
         print(f"  Classes: {self.num_classes}")
-        print(f"  Source samples: {len(source_data['train_filenames'])} train, {len(source_data['val_filenames'])} val")
-        print(f"  Target samples: {len(target_data['train_filenames'])} train, {len(target_data['val_filenames'])} val")
+        print(f"  Source samples: {len(source_data['train_filenames'])} train, {len(source_data.get('val_filenames', []))} val")
+        print(f"  Target samples: {len(target_data['train_filenames'])} train, {len(target_data.get('val_filenames', []))} val")
         
         img_height = config.DEFAULT_FREQ_BINS
         img_width = config.DEFAULT_TIME_BINS
+        
+        source_val_filenames = source_data.get('val_filenames', [])
+        source_val_labels = source_data.get('val_labels', [])
+        target_val_filenames = target_data.get('val_filenames', [])
+        target_val_labels = target_data.get('val_labels', [])
         
         self.source_train_dataset = SpectrogramDataset(
             source_data['train_filenames'],
@@ -296,27 +301,33 @@ class DomainAdaptationTrainer:
             remove_baseline=self.remove_baseline
         )
         
-        self.source_val_dataset = SpectrogramDataset(
-            source_data['val_filenames'],
-            source_data['val_labels'],
-            img_height, img_width, config.DEFAULT_CHANNELS,
-            cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
-            spec_transform=None, training=False, width_downsizing=None,
-            normalize=self.normalize, use_sparse_patches=False,
-            num_sparse_patches=0, use_temporal_roll=False,
-            remove_baseline=self.remove_baseline
-        )
+        if source_val_filenames:
+            self.source_val_dataset = SpectrogramDataset(
+                source_val_filenames,
+                source_val_labels,
+                img_height, img_width, config.DEFAULT_CHANNELS,
+                cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
+                spec_transform=None, training=False, width_downsizing=None,
+                normalize=self.normalize, use_sparse_patches=False,
+                num_sparse_patches=0, use_temporal_roll=False,
+                remove_baseline=self.remove_baseline
+            )
+        else:
+            self.source_val_dataset = None
         
-        self.target_val_dataset = SpectrogramDataset(
-            target_data['val_filenames'],
-            target_data['val_labels'],
-            img_height, img_width, config.DEFAULT_CHANNELS,
-            cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
-            spec_transform=None, training=False, width_downsizing=None,
-            normalize=self.normalize, use_sparse_patches=False,
-            num_sparse_patches=0, use_temporal_roll=False,
-            remove_baseline=self.remove_baseline
-        )
+        if target_val_filenames:
+            self.target_val_dataset = SpectrogramDataset(
+                target_val_filenames,
+                target_val_labels,
+                img_height, img_width, config.DEFAULT_CHANNELS,
+                cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
+                spec_transform=None, training=False, width_downsizing=None,
+                normalize=self.normalize, use_sparse_patches=False,
+                num_sparse_patches=0, use_temporal_roll=False,
+                remove_baseline=self.remove_baseline
+            )
+        else:
+            self.target_val_dataset = None
         
         num_workers = 4 if torch.cuda.is_available() else 2
         
@@ -324,15 +335,21 @@ class DomainAdaptationTrainer:
             self.source_train_dataset, batch_size=self.batch_size,
             shuffle=True, num_workers=num_workers, pin_memory=True
         )
+        if self.source_val_dataset:
+            self.source_val_loader = TorchDataLoader(
+                self.source_val_dataset, batch_size=self.batch_size,
+                shuffle=False, num_workers=num_workers, pin_memory=True
+            )
+        else:
+            self.source_val_loader = None
         
-        self.target_train_loader = TorchDataLoader(
-            self.target_train_dataset, batch_size=self.batch_size,
-            shuffle=True, num_workers=num_workers, pin_memory=True
-        )
-        
-        self.source_val_loader = TorchDataLoader(
-            self.source_val_dataset, batch_size=self.batch_size,
-            shuffle=False, num_workers=num_workers, pin_memory=True
+        if self.target_val_dataset:
+            self.target_val_loader = TorchDataLoader(
+                self.target_val_dataset, batch_size=self.batch_size,
+                shuffle=False, num_workers=num_workers, pin_memory=True
+            )
+        else:
+            self.target_val_loader = None   shuffle=False, num_workers=num_workers, pin_memory=True
         )
         
         self.target_val_loader = TorchDataLoader(
@@ -464,6 +481,9 @@ class DomainAdaptationTrainer:
                 class_acc, domain_acc)
     
     def validate(self, val_loader, dataset_name):
+        if val_loader is None:
+            return 0.0
+        
         self.model.eval()
         correct = 0
         total = 0
@@ -516,10 +536,10 @@ class DomainAdaptationTrainer:
             history['source_val_acc'].append(source_val_acc)
             history['target_val_acc'].append(target_val_acc)
             
-            print(f"\nEpoch {epoch+1}/{self.epochs}:")
+            print(f"Epoch {epoch+1}/{self.epochs}:")
             print(f"  Train - Class Loss: {train_class_loss:.4f}, Domain Loss: {train_domain_loss:.4f}")
             print(f"  Train - Domain Acc: {train_domain_acc:.2f}% (want ~50% = confused)")
-            if not self.multilabel:
+            if not self.multilabel and (source_val_acc > 0 or target_val_acc > 0):
                 print(f"  Val - Source Acc: {source_val_acc:.2f}%, Target Acc: {target_val_acc:.2f}%")
             
             if target_val_acc > best_target_acc:
