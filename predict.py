@@ -117,6 +117,14 @@ class ModelPredictor:
                 pretrained_path=None,
                 freeze_backbone=False
             )
+        elif model_type == 'dann':
+            print("Loading DANN (domain adaptation) model...")
+            from train_domain_adaptation import DANNModel
+            self.model = DANNModel(
+                num_classes=num_classes,
+                architecture=model_config.get('architecture', 'resnet18'),
+                pretrained_path=None
+            )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
