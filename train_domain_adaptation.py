@@ -187,7 +187,7 @@ class DomainAdaptationTrainer:
                  epochs=30, batch_size=32, lr=1e-4,
                  lambda_domain=1.0, lambda_schedule='fixed',
                  multilabel=False, normalize=False, validation_split=0.2,
-                 remove_baseline=False, device=None):
+                 remove_baseline=False, test_folder=None, test_folder2=None, device=None):
         
         self.source_folder = source_folder
         self.target_folder = target_folder
@@ -203,6 +203,8 @@ class DomainAdaptationTrainer:
         self.normalize = normalize
         self.validation_split = validation_split
         self.remove_baseline = remove_baseline
+        self.test_folder = test_folder
+        self.test_folder2 = test_folder2
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -257,9 +259,9 @@ class DomainAdaptationTrainer:
                 target_data['categories'], 
                 source_data['categories']
             )
-            if 'val_labels' in target_data and len(target_data.get('val_filenames', [])) > 0:
-                target_data['val_labels'] = self.remap_labels(
-                    target_data['val_labels'], 
+            if len(target_data['test_filenames']) > 0:
+                target_data['test_labels'] = self.remap_labels(
+                    target_data['test_labels'], 
                     target_data['categories'], 
                     source_data['categories']
                 )
@@ -268,16 +270,16 @@ class DomainAdaptationTrainer:
         self.categories = source_data['categories']
         
         print(f"  Classes: {self.num_classes}")
-        print(f"  Source samples: {len(source_data['train_filenames'])} train, {len(source_data.get('val_filenames', []))} val")
-        print(f"  Target samples: {len(target_data['train_filenames'])} train, {len(target_data.get('val_filenames', []))} val")
+        print(f"  Source samples: {len(source_data['train_filenames'])} train, {len(source_data['test_filenames'])} val")
+        print(f"  Target samples: {len(target_data['train_filenames'])} train, {len(target_data['test_filenames'])} val")
         
         img_height = config.DEFAULT_FREQ_BINS
         img_width = config.DEFAULT_TIME_BINS
         
-        source_val_filenames = source_data.get('val_filenames', [])
-        source_val_labels = source_data.get('val_labels', [])
-        target_val_filenames = target_data.get('val_filenames', [])
-        target_val_labels = target_data.get('val_labels', [])
+        source_val_filenames = source_data['test_filenames']
+        source_val_labels = source_data['test_labels']
+        target_val_filenames = target_data['test_filenames']
+        target_val_labels = target_data['test_labels']
         
         self.source_train_dataset = SpectrogramDataset(
             source_data['train_filenames'],
@@ -301,10 +303,10 @@ class DomainAdaptationTrainer:
             remove_baseline=self.remove_baseline
         )
         
-        if source_val_filenames:
+        if len(source_val_filenames) > 0:
             self.source_val_dataset = SpectrogramDataset(
                 source_val_filenames,
-                source_val_labels,
+                source_val_labels.tolist() if hasattr(source_val_labels, 'tolist') else source_val_labels,
                 img_height, img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
                 spec_transform=None, training=False, width_downsizing=None,
@@ -315,10 +317,10 @@ class DomainAdaptationTrainer:
         else:
             self.source_val_dataset = None
         
-        if target_val_filenames:
+        if len(target_val_filenames) > 0:
             self.target_val_dataset = SpectrogramDataset(
                 target_val_filenames,
-                target_val_labels,
+                target_val_labels.tolist() if hasattr(target_val_labels, 'tolist') else target_val_labels,
                 img_height, img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
                 spec_transform=None, training=False, width_downsizing=None,
@@ -563,6 +565,98 @@ class DomainAdaptationTrainer:
         print(f"  (50% = perfect confusion, 100% = no adaptation)")
         print(f"{'='*60}")
         print(f"\nModels saved to: {self.output_folder}")
+        
+        if self.test_folder or self.test_folder2:
+            print(f"\nEvaluating on test sets using predict.py...")
+            
+            del self.model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            best_model_path = os.path.join(self.output_folder, 'dann_best.pt')
+            best_config_path = os.path.join(self.output_folder, 'dann_best_config.json')
+            
+            test_results = {}
+            
+            if self.test_folder:
+                test_name = f"{Path(self.test_folder).parent.name}/{Path(self.test_folder).name}"
+                output_csv = os.path.join(self.output_folder, f'predictions_{test_name.replace("/", "_")}.csv')
+                
+                print(f"\nTest Set 1: {test_name}")
+                
+                from predict import ModelPredictor
+                predictor = ModelPredictor(
+                    best_model_path,
+                    best_config_path,
+                    self.test_folder,
+                    output_csv,
+                    batch_size=self.batch_size,
+                    device=self.device
+                )
+                predictor.run()
+                
+                test_acc = self.compute_accuracy_from_csv(output_csv, self.test_folder)
+                test_results[test_name] = test_acc
+                print(f"  {test_name} Accuracy: {test_acc:.2f}%")
+            
+            if self.test_folder2:
+                test_name2 = f"{Path(self.test_folder2).parent.name}/{Path(self.test_folder2).name}"
+                output_csv2 = os.path.join(self.output_folder, f'predictions_{test_name2.replace("/", "_")}.csv')
+                
+                print(f"\nTest Set 2: {test_name2}")
+                
+                from predict import ModelPredictor
+                predictor2 = ModelPredictor(
+                    best_model_path,
+                    best_config_path,
+                    self.test_folder2,
+                    output_csv2,
+                    batch_size=self.batch_size,
+                    device=self.device
+                )
+                predictor2.run()
+                
+                test_acc2 = self.compute_accuracy_from_csv(output_csv2, self.test_folder2)
+                test_results[test_name2] = test_acc2
+                print(f"  {test_name2} Accuracy: {test_acc2:.2f}%")
+            
+            print(f"\n{'='*60}")
+            print(f"TEST SET COMPARISON")
+            print(f"{'='*60}")
+            for name, accuracy in test_results.items():
+                print(f"  {name:30s} Accuracy: {accuracy:.2f}%")
+            print(f"{'='*60}")
+    
+    def compute_accuracy_from_csv(self, csv_path, test_folder):
+        import pandas as pd
+        labels_path = os.path.join(test_folder, 'labels.json')
+        
+        with open(labels_path, 'r') as f:
+            labels_data = json.load(f)
+        
+        true_labels = {}
+        for item in labels_data['files']:
+            true_labels[item['filename']] = item.get('primary_class') or item.get('primary_species')
+        
+        df = pd.read_csv(csv_path)
+        class_columns = [col for col in df.columns if col not in ['row_id', 'File_Path']]
+        
+        correct = 0
+        total = 0
+        
+        for _, row in df.iterrows():
+            filename = row['row_id']
+            if filename not in true_labels:
+                continue
+            
+            pred_class = class_columns[row[class_columns].values.argmax()]
+            true_class = true_labels[filename]
+            
+            if pred_class == true_class:
+                correct += 1
+            total += 1
+        
+        return 100.0 * correct / total if total > 0 else 0.0
     
     def plot_training_curves(self, history):
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -690,6 +784,10 @@ Interpretation:
                        help="Enable baseline removal")
     parser.add_argument('--validation-split', type=float, default=0.2,
                        help="Validation split (default: 0.2)")
+    parser.add_argument('--test-folder', type=str, default=None,
+                       help="Path to test data folder 1 (with labels.json). Evaluated AFTER training completes.")
+    parser.add_argument('--test-folder2', type=str, default=None,
+                       help="Path to test data folder 2 (with labels.json). Evaluated AFTER training completes.")
     parser.add_argument('--device', default=None,
                        help="Device (cuda/cpu, default: auto)")
     
@@ -718,6 +816,8 @@ Interpretation:
         normalize=args.normalize,
         validation_split=args.validation_split,
         remove_baseline=args.baseline_removal,
+        test_folder=args.test_folder,
+        test_folder2=args.test_folder2,
         device=torch.device(args.device) if args.device else None
     )
     
