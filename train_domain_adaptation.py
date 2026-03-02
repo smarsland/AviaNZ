@@ -257,11 +257,12 @@ class DomainAdaptationTrainer:
                 target_data['categories'], 
                 source_data['categories']
             )
-            target_data['val_labels'] = self.remap_labels(
-                target_data['val_labels'], 
-                target_data['categories'], 
-                source_data['categories']
-            )
+            if 'val_labels' in target_data and len(target_data.get('val_filenames', [])) > 0:
+                target_data['val_labels'] = self.remap_labels(
+                    target_data['val_labels'], 
+                    target_data['categories'], 
+                    source_data['categories']
+                )
         
         self.num_classes = source_data['nclasses']
         self.categories = source_data['categories']
