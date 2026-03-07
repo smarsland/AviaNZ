@@ -579,8 +579,13 @@ class DomainClassifierTrainer:
         
         for idx in range(len(dataset)):
             label = dataset.labels[idx]
-            if isinstance(label, list):
+            if isinstance(label, (list, tuple)):
                 domain = 0 if label[0] > label[1] else 1
+            elif torch.is_tensor(label):
+                if label.numel() > 1:
+                    domain = 0 if label[0] > label[1] else 1
+                else:
+                    domain = int(label.item())
             else:
                 domain = int(label)
             
@@ -637,7 +642,18 @@ class DomainClassifierTrainer:
         
         axes[2].imshow(overlay)
         pred_label = 'Dataset 1' if pred_class == 0 else 'Dataset 2'
-        true_label = 'Dataset 1' if (label[0] > label[1] if isinstance(label, torch.Tensor) else label == 0) else 'Dataset 2'
+        
+        if isinstance(label, (list, tuple)):
+            true_class = 0 if label[0] > label[1] else 1
+        elif torch.is_tensor(label):
+            if label.numel() > 1:
+                true_class = 0 if label[0] > label[1] else 1
+            else:
+                true_class = int(label.item())
+        else:
+            true_class = int(label)
+        
+        true_label = 'Dataset 1' if true_class == 0 else 'Dataset 2'
         axes[2].set_title(f'Overlay\nTrue: {true_label} | Pred: {pred_label}\nConf: {probs[pred_class]:.2%}', fontsize=12)
         axes[2].axis('off')
         
