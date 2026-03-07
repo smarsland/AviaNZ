@@ -613,8 +613,15 @@ class DomainClassifierTrainer:
         img_tensor = img.unsqueeze(0).to(self.device)
         
         spec_filename = dataset.filenames[idx]
-        spec_data = np.load(spec_filename)
-        raw_spec = spec_data['spec']
+        
+        if spec_filename.endswith('.npz'):
+            spec_data = np.load(spec_filename)
+            if 'spec' in spec_data:
+                raw_spec = spec_data['spec']
+            else:
+                raw_spec = spec_data[spec_data.files[0]]
+        else:
+            raw_spec = np.load(spec_filename)
         
         with torch.no_grad():
             output = self.model(img_tensor)
