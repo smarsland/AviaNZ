@@ -612,6 +612,10 @@ class DomainClassifierTrainer:
         img, label = dataset[idx]
         img_tensor = img.unsqueeze(0).to(self.device)
         
+        spec_filename = dataset.filenames[idx]
+        spec_data = np.load(spec_filename)
+        raw_spec = spec_data['spec']
+        
         with torch.no_grad():
             output = self.model(img_tensor)
             pred_class = output.argmax(dim=1).item()
@@ -621,25 +625,32 @@ class DomainClassifierTrainer:
         
         img_np = img.squeeze().cpu().numpy()
         
-        zoom_factors = (img_np.shape[0] / cam.shape[0], img_np.shape[1] / cam.shape[1])
+        zoom_factors = (raw_spec.shape[0] / cam.shape[0], raw_spec.shape[1] / cam.shape[1])
         cam_resized = zoom(cam, zoom_factors, order=1)
         
-        fig, axes = plt.subplots(3, 1, figsize=(14, 18))
+        fig, axes = plt.subplots(4, 1, figsize=(16, 20))
         
-        im0 = axes[0].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
-        axes[0].set_title(f'Original Spectrogram (as model sees it)\nShape: {img_np.shape}, Range: [{img_np.min():.2f}, {img_np.max():.2f}]', fontsize=12)
+        im0 = axes[0].imshow(raw_spec, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
+        axes[0].set_title(f'RAW Spectrogram from .npz file\nShape: {raw_spec.shape}, Range: [{raw_spec.min():.2f}, {raw_spec.max():.2f}]', fontsize=12, fontweight='bold')
         axes[0].set_ylabel('Frequency Bin', fontsize=10)
         axes[0].set_xlabel('Time Bin', fontsize=10)
         plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
         
-        im1 = axes[1].imshow(cam_resized, aspect='auto', origin='lower', cmap='jet', vmin=0, vmax=1, interpolation='bilinear')
-        axes[1].set_title('Grad-CAM Heatmap (Red = High Attention)', fontsize=12)
+        im1 = axes[1].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
+        axes[1].set_title(f'What MODEL sees (after dataset transforms)\nShape: {img_np.shape}, Range: [{img_np.min():.2f}, {img_np.max():.2f}]', fontsize=12, fontweight='bold')
         axes[1].set_ylabel('Frequency Bin', fontsize=10)
         axes[1].set_xlabel('Time Bin', fontsize=10)
         plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
         
-        axes[2].imshow(img_np, aspect='auto', origin='lower', cmap='gray', alpha=0.8, interpolation='none')
-        im2 = axes[2].imshow(cam_resized, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1, interpolation='bilinear')
+        im2 = axes[2].imshow(cam_resized, aspect='auto', origin='lower', cmap='jet', vmin=0, vmax=1, interpolation='none')
+        axes[2].set_title('Grad-CAM Heatmap (Red = High Attention)', fontsize=12, fontweight='bold')
+        axes[2].set_ylabel('Frequency Bin', fontsize=10)
+        axes[2].set_xlabel('Time Bin', fontsize=10)
+        plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
+        
+        axes[3].imshow(raw_spec, aspect='auto', origin='lower', cmap='gray', interpolation='none')
+        im3 = axes[3].imshow(cam_resized, aspect='auto', origin='lower', cmap='jet', alpha=0.6, vmin=0, vmax=1, interpolation='none')
+        
         pred_label = 'Dataset 1' if pred_class == 0 else 'Dataset 2'
         
         if isinstance(label, (list, tuple)):
@@ -653,13 +664,12 @@ class DomainClassifierTrainer:
             true_class = int(label)
         
         true_label = 'Dataset 1' if true_class == 0 else 'Dataset 2'
-        axes[2].set_title(f'Overlay: Spectrogram + Attention\nTrue: {true_label} | Pred: {pred_label} | Conf: {probs[pred_class]:.2%}', fontsize=12)
-        axes[2].set_ylabel('Frequency Bin', fontsize=10)
-        axes[2].set_xlabel('Time Bin', fontsize=10)
-        plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
+        axes[3].set_title(f'Overlay on RAW spectrogram\nTrue: {true_label} | Pred: {pred_label} | Conf: {probs[pred_class]:.2%}', fontsize=12, fontweight='bold')
+        axes[3].set_ylabel('Frequency Bin', fontsize=10)
+        axes[3].set_xlabel('Time Bin', fontsize=10)
+        plt.colorbar(im3, ax=axes[3], fraction=0.046, pad=0.04)
         
         plt.tight_layout()
-        filename = dataset.filenames[idx]
         output_path = os.path.join(output_folder, f'{dataset_name}_{idx:03d}.png')
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
         plt.close()
