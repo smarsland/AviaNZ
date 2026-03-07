@@ -621,26 +621,25 @@ class DomainClassifierTrainer:
         
         img_np = img.squeeze().cpu().numpy()
         
-        img_normalized = (img_np - img_np.min()) / (img_np.max() - img_np.min() + 1e-8)
-        img_colored = plt.cm.viridis(img_normalized)[:, :, :3]
-        
         cam_resized = cv2.resize(cam, (img_np.shape[1], img_np.shape[0]))
-        heatmap = plt.cm.jet(cam_resized)[:, :, :3]
+        heatmap = cam_resized
         
-        overlay = 0.6 * img_colored + 0.4 * heatmap
-        overlay = np.clip(overlay, 0, 1)
+        fig, axes = plt.subplots(3, 1, figsize=(12, 16))
         
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        im0 = axes[0].imshow(img_np, aspect='auto', origin='lower', cmap='viridis')
+        axes[0].set_title('Original Spectrogram (as model sees it)', fontsize=12)
+        axes[0].set_ylabel('Frequency Bin')
+        axes[0].set_xlabel('Time Bin')
+        plt.colorbar(im0, ax=axes[0])
         
-        axes[0].imshow(img_colored)
-        axes[0].set_title('Original Spectrogram', fontsize=12)
-        axes[0].axis('off')
-        
-        axes[1].imshow(heatmap)
+        im1 = axes[1].imshow(heatmap, aspect='auto', origin='lower', cmap='jet', vmin=0, vmax=1)
         axes[1].set_title('Grad-CAM Heatmap\n(Red = High Attention)', fontsize=12)
-        axes[1].axis('off')
+        axes[1].set_ylabel('Frequency Bin')
+        axes[1].set_xlabel('Time Bin')
+        plt.colorbar(im1, ax=axes[1])
         
-        axes[2].imshow(overlay)
+        axes[2].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', alpha=0.7)
+        im2 = axes[2].imshow(heatmap, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1)
         pred_label = 'Dataset 1' if pred_class == 0 else 'Dataset 2'
         
         if isinstance(label, (list, tuple)):
@@ -654,8 +653,10 @@ class DomainClassifierTrainer:
             true_class = int(label)
         
         true_label = 'Dataset 1' if true_class == 0 else 'Dataset 2'
-        axes[2].set_title(f'Overlay\nTrue: {true_label} | Pred: {pred_label}\nConf: {probs[pred_class]:.2%}', fontsize=12)
-        axes[2].axis('off')
+        axes[2].set_title(f'Overlay: Spectrogram + Attention\nTrue: {true_label} | Pred: {pred_label} | Conf: {probs[pred_class]:.2%}', fontsize=12)
+        axes[2].set_ylabel('Frequency Bin')
+        axes[2].set_xlabel('Time Bin')
+        plt.colorbar(im2, ax=axes[2])
         
         plt.tight_layout()
         filename = dataset.filenames[idx]
