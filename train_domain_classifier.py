@@ -31,7 +31,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import cv2
+from scipy.ndimage import zoom
 
 import config
 from data_utils import DataLoader, SpectrogramDataset
@@ -621,25 +621,25 @@ class DomainClassifierTrainer:
         
         img_np = img.squeeze().cpu().numpy()
         
-        cam_resized = cv2.resize(cam, (img_np.shape[1], img_np.shape[0]))
-        heatmap = cam_resized
+        zoom_factors = (img_np.shape[0] / cam.shape[0], img_np.shape[1] / cam.shape[1])
+        cam_resized = zoom(cam, zoom_factors, order=1)
         
-        fig, axes = plt.subplots(3, 1, figsize=(12, 16))
+        fig, axes = plt.subplots(3, 1, figsize=(14, 18))
         
-        im0 = axes[0].imshow(img_np, aspect='auto', origin='lower', cmap='viridis')
-        axes[0].set_title('Original Spectrogram (as model sees it)', fontsize=12)
-        axes[0].set_ylabel('Frequency Bin')
-        axes[0].set_xlabel('Time Bin')
-        plt.colorbar(im0, ax=axes[0])
+        im0 = axes[0].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
+        axes[0].set_title(f'Original Spectrogram (as model sees it)\nShape: {img_np.shape}, Range: [{img_np.min():.2f}, {img_np.max():.2f}]', fontsize=12)
+        axes[0].set_ylabel('Frequency Bin', fontsize=10)
+        axes[0].set_xlabel('Time Bin', fontsize=10)
+        plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
         
-        im1 = axes[1].imshow(heatmap, aspect='auto', origin='lower', cmap='jet', vmin=0, vmax=1)
-        axes[1].set_title('Grad-CAM Heatmap\n(Red = High Attention)', fontsize=12)
-        axes[1].set_ylabel('Frequency Bin')
-        axes[1].set_xlabel('Time Bin')
-        plt.colorbar(im1, ax=axes[1])
+        im1 = axes[1].imshow(cam_resized, aspect='auto', origin='lower', cmap='jet', vmin=0, vmax=1, interpolation='bilinear')
+        axes[1].set_title('Grad-CAM Heatmap (Red = High Attention)', fontsize=12)
+        axes[1].set_ylabel('Frequency Bin', fontsize=10)
+        axes[1].set_xlabel('Time Bin', fontsize=10)
+        plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
         
-        axes[2].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', alpha=0.7)
-        im2 = axes[2].imshow(heatmap, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1)
+        axes[2].imshow(img_np, aspect='auto', origin='lower', cmap='gray', alpha=0.8, interpolation='none')
+        im2 = axes[2].imshow(cam_resized, aspect='auto', origin='lower', cmap='jet', alpha=0.5, vmin=0, vmax=1, interpolation='bilinear')
         pred_label = 'Dataset 1' if pred_class == 0 else 'Dataset 2'
         
         if isinstance(label, (list, tuple)):
@@ -654,9 +654,9 @@ class DomainClassifierTrainer:
         
         true_label = 'Dataset 1' if true_class == 0 else 'Dataset 2'
         axes[2].set_title(f'Overlay: Spectrogram + Attention\nTrue: {true_label} | Pred: {pred_label} | Conf: {probs[pred_class]:.2%}', fontsize=12)
-        axes[2].set_ylabel('Frequency Bin')
-        axes[2].set_xlabel('Time Bin')
-        plt.colorbar(im2, ax=axes[2])
+        axes[2].set_ylabel('Frequency Bin', fontsize=10)
+        axes[2].set_xlabel('Time Bin', fontsize=10)
+        plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
         
         plt.tight_layout()
         filename = dataset.filenames[idx]
