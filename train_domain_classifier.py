@@ -743,6 +743,8 @@ Interpretation:
                        help="Validation split ratio (default: 0.2)")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
+    parser.add_argument('--num-visualizations', type=int, default=10,
+                       help="Number of Grad-CAM visualizations to generate per dataset (default: 10)")
     
     args = parser.parse_args()
     
@@ -763,10 +765,10 @@ Interpretation:
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
-        normalize=args.normalize,,
-        num_visualizations=args.num_visualizations
+        normalize=args.normalize,
         validation_split=args.validation_split,
-        device=torch.device(args.device) if args.device else None
+        device=torch.device(args.device) if args.device else None,
+        num_visualizations=args.num_visualizations
     )
     
     trainer.load_data()
