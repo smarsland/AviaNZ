@@ -8,43 +8,122 @@ import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
 
-def normalize_spectrogram(img):
+def gaussianity_score(x):
     """
-    Apply background normalization to a spectrogram.
-    KDE is computed using only the lowest 1/2 of points in each row.
+    Jarque-Bera statistic (lower = more Gaussian).
     """
-    # Ensure input is float
-    img = np.asarray(img, dtype=np.float32)
+    n = len(x)
+    if n < 3:
+        return np.inf
+
+    mean = np.mean(x)
+    std = np.std(x)
+    if std < 1e-8:
+        return np.inf
+
+    z = (x - mean) / std
+    skew = np.mean(z**3)
+    kurt = np.mean(z**4)
+
+    jb = (n / 6.0) * (skew**2 + 0.25 * (kurt - 3)**2)
+    return jb
+
+
+def top_tail_gaussian_split(x, min_frac=0.5, max_frac=0.99, step=1):
+    """
+    Find the threshold that separates background (Gaussian noise) from signal.
+    Stops when adding more points makes the distribution less Gaussian.
+    """
+    x = np.sort(np.asarray(x))
+    n = len(x)
+
+    min_size = max(5, int(np.ceil(n * min_frac)))
+    max_size = int(np.floor(n * max_frac))
+    
+    # Adaptive step size for efficiency
+    if step == 1 and (max_size - min_size) > 100:
+        step = max(1, (max_size - min_size) // 50)
+
+    prev_score = gaussianity_score(x[:min_size])
+    best_split = min_size
+
+    # Find where the distribution stops improving (starts getting less Gaussian)
+    for split in range(min_size + step, max_size + 1, step):
+        x_low = x[:split]
+        score = gaussianity_score(x_low)
+
+        # If score increased (got worse), we've passed the background
+        if score > prev_score * 1.2:  # 20% worse
+            return x[best_split]
+        
+        # If score improved, update best
+        if score < prev_score:
+            best_split = split
+        
+        prev_score = score
+
+    return x[best_split]
+
+def normalize_spectrogram(img, method='gaussian_split', robust=True):
+    """
+    Apply background normalization to a spectrogram using per-frequency-band statistics.
+    
+    For each frequency band (row), estimates background noise distribution and normalizes
+    to z-scores, making signals stand out from noise.
+    
+    Args:
+        img: Input spectrogram (H x W array), typically in dB scale
+        method: Background estimation method
+            - 'gaussian_split': Use Gaussian fitting to find background (default)
+            - 'percentile': Use bottom 50th percentile as background
+        robust: If True, use robust statistics (median/MAD) instead of mean/std
+    
+    Returns:
+        Normalized spectrogram (H x W array) where background noise ~ N(0, 1)
+    """
+    # Make a copy to avoid modifying input
+    img = np.asarray(img, dtype=np.float32).copy()
     
     H, W = img.shape
+    normalized = np.zeros_like(img)
 
-    sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :W//4]
-    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    var0 = np.var(bg_pixels, axis=1, keepdims=True)
-    img = (img - mu0) / (np.sqrt(var0) + 1e-6)
+    for row in range(H):
+        row_data = img[row, :]
+        
+        # Estimate background region
+        if method == 'gaussian_split':
+            threshold = top_tail_gaussian_split(row_data)
+            bg_mask = row_data < threshold
+        elif method == 'percentile':
+            threshold = np.percentile(row_data, 50)
+            bg_mask = row_data < threshold
+        else:
+            raise ValueError(f"Unknown method: {method}")
+        
+        # Handle edge case: no background pixels
+        if np.sum(bg_mask) < 3:
+            # Fall back to global statistics
+            bg_data = row_data
+        else:
+            bg_data = row_data[bg_mask]
+        
+        # Compute background statistics
+        if robust:
+            # Median Absolute Deviation (more robust to outliers)
+            loc = np.median(bg_data)
+            mad = np.median(np.abs(bg_data - loc))
+            scale = mad * 1.4826  # Scale factor to match std for Gaussian
+        else:
+            # Standard mean and standard deviation
+            loc = np.mean(bg_data)
+            scale = np.std(bg_data)
+        
+        # Normalize to z-scores
+        normalized[row, :] = (row_data - loc) / (scale + 1e-8)
     
-    for c in range(img.shape[1]):
-        col = img[:,c]
-        distances = np.abs(np.linspace(0,1,len(col)).reshape(-1,1)-np.linspace(0,1,len(col)).reshape(1,-1))
-        kernel = np.exp(-20 * distances**2)
-        contributions = kernel / np.sum(kernel,axis=0)
-        estimates = np.sum(contributions * col.reshape(-1,1),axis=0)
-        img[:,c] = img[:,c] - estimates
-    
-    img = np.asarray(img, dtype=np.float32)
+    normalized[normalized>3] = np.random.normal(0, scale=1, size=np.sum(normalized>3))
 
-    flat_order = np.argsort(img, axis=1)
-    ranks = np.empty_like(flat_order)
-
-    # Assign ranks row by row
-    for i in range(img.shape[0]):
-        ranks[i, flat_order[i]] = np.arange(img.shape[1])
-
-    # Normalize ranks to [0, 1]
-    # img = ranks / (img.shape[1] - 1)
-
-    return img
+    return normalized
 
 def normalize_spectrogram_old(img):
     """

@@ -31,9 +31,57 @@ from sklearn.metrics import confusion_matrix, classification_report
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import cv2
 
 import config
 from data_utils import DataLoader, SpectrogramDataset
+
+
+class GradCAM:
+    """Grad-CAM for visualizing what the model focuses on."""
+    
+    def __init__(self, model, target_layer):
+        self.model = model
+        self.target_layer = target_layer
+        self.gradients = None
+        self.activations = None
+        
+        self.target_layer.register_forward_hook(self.save_activation)
+        self.target_layer.register_backward_hook(self.save_gradient)
+    
+    def save_activation(self, module, input, output):
+        self.activations = output.detach()
+    
+    def save_gradient(self, module, grad_input, grad_output):
+        self.gradients = grad_output[0].detach()
+    
+    def generate_cam(self, input_image, target_class=None):
+        self.model.eval()
+        
+        output = self.model(input_image)
+        
+        if target_class is None:
+            target_class = output.argmax(dim=1)
+        
+        self.model.zero_grad()
+        class_loss = output[0, target_class]
+        class_loss.backward()
+        
+        gradients = self.gradients[0]
+        activations = self.activations[0]
+        
+        weights = gradients.mean(dim=(1, 2), keepdim=True)
+        cam = (weights * activations).sum(dim=0)
+        
+        cam = torch.relu(cam)
+        cam = cam - cam.min()
+        if cam.max() > 0:
+            cam = cam / cam.max()
+        
+        return cam.cpu().numpy()
+    
+    def remove_hooks(self):
+        pass
 
 
 class SimpleCNN(nn.Module):
@@ -150,7 +198,8 @@ class DomainClassifierTrainer:
     def __init__(self, dataset1_folder, dataset2_folder, output_folder,
                  architecture='resnet18', pretrained_path=None, 
                  epochs=20, batch_size=32, lr=1e-4, 
-                 normalize=False, validation_split=0.2, device=None):
+                 normalize=False, validation_split=0.2, device=None,
+                 num_visualizations=10):
         
         self.dataset1_folder = dataset1_folder
         self.dataset2_folder = dataset2_folder
@@ -162,6 +211,7 @@ class DomainClassifierTrainer:
         self.lr = lr
         self.normalize = normalize
         self.validation_split = validation_split
+        self.num_visualizations = num_visualizations
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -494,6 +544,110 @@ class DomainClassifierTrainer:
         self.plot_training_curves(history)
         
         print(f"\nResults saved to: {self.output_folder}")
+        
+        if self.num_visualizations > 0:
+            self.generate_gradcam_visualizations()
+    
+    def get_target_layer(self):
+        if self.architecture == 'simple_cnn':
+            return self.model.model.conv_layers[-3]
+        elif 'resnet' in self.architecture:
+            return self.model.backbone.layer4[-1].conv2
+        elif 'efficientnet' in self.architecture:
+            return self.model.backbone.conv_head
+        elif 'regnet' in self.architecture:
+            return self.model.backbone.s4.b1.f.c3
+        else:
+            layers = list(self.model.backbone.children())
+            return layers[-2]
+    
+    def generate_gradcam_visualizations(self):
+        print(f"\n{'='*60}")
+        print("Generating Grad-CAM Visualizations")
+        print(f"{'='*60}")
+        
+        viz_folder = os.path.join(self.output_folder, 'gradcam_visualizations')
+        os.makedirs(viz_folder, exist_ok=True)
+        
+        target_layer = self.get_target_layer()
+        gradcam = GradCAM(self.model, target_layer)
+        
+        dataset = self.val_dataset if self.val_dataset else self.train_dataset
+        
+        domain0_indices = []
+        domain1_indices = []
+        
+        for idx in range(len(dataset)):
+            label = dataset.labels[idx]
+            if isinstance(label, list):
+                domain = 0 if label[0] > label[1] else 1
+            else:
+                domain = int(label)
+            
+            if domain == 0 and len(domain0_indices) < self.num_visualizations:
+                domain0_indices.append(idx)
+            elif domain == 1 and len(domain1_indices) < self.num_visualizations:
+                domain1_indices.append(idx)
+            
+            if len(domain0_indices) >= self.num_visualizations and len(domain1_indices) >= self.num_visualizations:
+                break
+        
+        print(f"Generating {len(domain0_indices)} visualizations for Dataset 1")
+        print(f"Generating {len(domain1_indices)} visualizations for Dataset 2")
+        
+        for idx in tqdm(domain0_indices, desc="Dataset 1"):
+            self.visualize_sample(dataset, idx, gradcam, viz_folder, 'dataset1')
+        
+        for idx in tqdm(domain1_indices, desc="Dataset 2"):
+            self.visualize_sample(dataset, idx, gradcam, viz_folder, 'dataset2')
+        
+        print(f"Visualizations saved to: {viz_folder}")
+    
+    def visualize_sample(self, dataset, idx, gradcam, output_folder, dataset_name):
+        img, label = dataset[idx]
+        img_tensor = img.unsqueeze(0).to(self.device)
+        
+        with torch.no_grad():
+            output = self.model(img_tensor)
+            pred_class = output.argmax(dim=1).item()
+            probs = torch.softmax(output, dim=1)[0]
+        
+        cam = gradcam.generate_cam(img_tensor, target_class=pred_class)
+        
+        img_np = img.squeeze().cpu().numpy()
+        
+        img_normalized = (img_np - img_np.min()) / (img_np.max() - img_np.min() + 1e-8)
+        img_colored = plt.cm.viridis(img_normalized)[:, :, :3]
+        
+        cam_resized = cv2.resize(cam, (img_np.shape[1], img_np.shape[0]))
+        heatmap = plt.cm.jet(cam_resized)[:, :, :3]
+        
+        overlay = 0.6 * img_colored + 0.4 * heatmap
+        overlay = np.clip(overlay, 0, 1)
+        
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        
+        axes[0].imshow(img_colored)
+        axes[0].set_title('Original Spectrogram', fontsize=12)
+        axes[0].axis('off')
+        
+        axes[1].imshow(heatmap)
+        axes[1].set_title('Grad-CAM Heatmap\n(Red = High Attention)', fontsize=12)
+        axes[1].axis('off')
+        
+        axes[2].imshow(overlay)
+        pred_label = 'Dataset 1' if pred_class == 0 else 'Dataset 2'
+        true_label = 'Dataset 1' if (label[0] > label[1] if isinstance(label, torch.Tensor) else label == 0) else 'Dataset 2'
+        axes[2].set_title(f'Overlay\nTrue: {true_label} | Pred: {pred_label}\nConf: {probs[pred_class]:.2%}', fontsize=12)
+        axes[2].axis('off')
+        
+    parser.add_argument('--num-visualizations', type=int, default=10,
+                       help="Number of Grad-CAM visualizations to generate per dataset (default: 10)")
+        plt.tight_layout()
+        filename = dataset.filenames[idx]
+        output_path = os.path.join(output_folder, f'{dataset_name}_{idx:03d}.png')
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        plt.close()
     
     def plot_training_curves(self, history):
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -611,7 +765,8 @@ Interpretation:
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
-        normalize=args.normalize,
+        normalize=args.normalize,,
+        num_visualizations=args.num_visualizations
         validation_split=args.validation_split,
         device=torch.device(args.device) if args.device else None
     )
