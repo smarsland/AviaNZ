@@ -641,8 +641,6 @@ class DomainClassifierTrainer:
         axes[2].set_title(f'Overlay\nTrue: {true_label} | Pred: {pred_label}\nConf: {probs[pred_class]:.2%}', fontsize=12)
         axes[2].axis('off')
         
-    parser.add_argument('--num-visualizations', type=int, default=10,
-                       help="Number of Grad-CAM visualizations to generate per dataset (default: 10)")
         plt.tight_layout()
         filename = dataset.filenames[idx]
         output_path = os.path.join(output_folder, f'{dataset_name}_{idx:03d}.png')
