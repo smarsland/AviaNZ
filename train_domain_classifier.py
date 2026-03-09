@@ -13,6 +13,13 @@ Usage:
     
     # Simple CNN (faster, no pretraining)
     python train_domain_classifier.py dataset1/ dataset2/ outputs/domain --architecture simple_cnn
+
+Data Processing Notes:
+    - Spectrograms are log-transformed for better visualization and model training
+    - Time axis padding: If spectrogram width < 1024 bins, padding is added at the RIGHT (end)
+      using random sampling from per-frequency distributions to maintain statistical properties
+    - Visualizations show: (1) raw spectrogram, (2) processed (with padding), (3) Grad-CAM attention
+    - Red/cyan lines in visualizations mark where padding begins
 """
 
 import argparse
@@ -283,7 +290,7 @@ class DomainClassifierTrainer:
             cropping_mode='random',
             noise_filenames=None,
             noise_ratio=0.0,
-            spec_transform=None,
+            spec_transform='Log',
             training=True,
             width_downsizing=None,
             normalize=self.normalize,
@@ -303,7 +310,7 @@ class DomainClassifierTrainer:
                 cropping_mode='center',
                 noise_filenames=None,
                 noise_ratio=0.0,
-                spec_transform=None,
+                spec_transform='Log',
                 training=False,
                 width_downsizing=None,
                 normalize=self.normalize,
@@ -609,6 +616,25 @@ class DomainClassifierTrainer:
         print(f"Visualizations saved to: {viz_folder}")
     
     def visualize_sample(self, dataset, idx, gradcam, output_folder, dataset_name):
+        """
+        Visualize a sample with Grad-CAM attention.
+        
+        Shows three panels:
+        1. Raw spectrogram (log-scaled) as stored in .npy file
+        2. Processed spectrogram (after padding, cropping, log transform) as the model sees it  
+        3. Grad-CAM attention overlay showing what regions the model focuses on
+        
+        Padding behavior:
+        - If original width < 1024, padding is added at the RIGHT (end of time axis)
+        - Padding uses per-frequency random sampling (maintains freq stats but not temporal coherence)
+        - Red/cyan vertical lines mark the padding boundary
+        - This padding is NECESSARY for the model but is NOT a sign of data issues
+        
+        The "blur" you may observe in the padded region is expected:
+        - Random sampling preserves amplitude distribution per frequency band
+        - But destroys temporal structure (intentionally - prevents model from learning padding artifacts)
+        - The model learns to ignore these regions through training
+        """
         img, label = dataset[idx]
         img_tensor = img.unsqueeze(0).to(self.device)
         
@@ -621,19 +647,46 @@ class DomainClassifierTrainer:
         
         img_np = img.squeeze().cpu().numpy()
         
+        filepath = dataset.filenames[idx]
+        raw_data = np.load(filepath)
+        while raw_data.ndim > 2:
+            raw_data = np.squeeze(raw_data)
+        
+        LOG_OFFSET = 1e-7
+        raw_log = np.log(raw_data + LOG_OFFSET)
+        
         zoom_factors = (img_np.shape[0] / cam.shape[0], img_np.shape[1] / cam.shape[1])
         cam_resized = zoom(cam, zoom_factors, order=1)
         
-        fig, axes = plt.subplots(2, 1, figsize=(16, 12))
+        fig, axes = plt.subplots(3, 1, figsize=(16, 15))
         
-        im0 = axes[0].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
-        axes[0].set_title(f'Spectrogram (as model sees it)\nShape: {img_np.shape}, Range: [{img_np.min():.2f}, {img_np.max():.2f}]', fontsize=14, fontweight='bold')
+        im0 = axes[0].imshow(raw_log, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
+        padding_boundary = raw_data.shape[1]
+        if padding_boundary < config.DEFAULT_TIME_BINS:
+            axes[0].axvline(x=padding_boundary - 0.5, color='red', linewidth=2, linestyle='--', 
+                          label=f'Padding boundary (original width: {padding_boundary})')
+            axes[0].legend(loc='upper right')
+        axes[0].set_title(f'Raw Spectrogram (log scale)\nOriginal shape: {raw_data.shape}, Range: [{raw_log.min():.2f}, {raw_log.max():.2f}]', 
+                         fontsize=14, fontweight='bold')
         axes[0].set_ylabel('Frequency Bin', fontsize=11)
         axes[0].set_xlabel('Time Bin', fontsize=11)
         plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
         
-        axes[1].imshow(img_np, aspect='auto', origin='lower', cmap='gray', interpolation='none', alpha=0.6)
-        im1 = axes[1].imshow(cam_resized, aspect='auto', origin='lower', cmap='hot', alpha=0.7, vmin=0, vmax=1, interpolation='none')
+        im1 = axes[1].imshow(img_np, aspect='auto', origin='lower', cmap='viridis', interpolation='none')
+        if padding_boundary < config.DEFAULT_TIME_BINS:
+            axes[1].axvline(x=padding_boundary - 0.5, color='red', linewidth=2, linestyle='--',
+                          label=f'Random-sampled padding: {config.DEFAULT_TIME_BINS - padding_boundary} bins')
+            axes[1].legend(loc='upper right')
+        axes[1].set_title(f'Processed (as model sees it, with log transform)\nShape: {img_np.shape}, Range: [{img_np.min():.2f}, {img_np.max():.2f}]', 
+                         fontsize=14, fontweight='bold')
+        axes[1].set_ylabel('Frequency Bin', fontsize=11)
+        axes[1].set_xlabel('Time Bin', fontsize=11)
+        plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+        
+        axes[2].imshow(img_np, aspect='auto', origin='lower', cmap='gray', interpolation='none', alpha=0.6)
+        im2 = axes[2].imshow(cam_resized, aspect='auto', origin='lower', cmap='hot', alpha=0.7, vmin=0, vmax=1, interpolation='none')
+        if padding_boundary < config.DEFAULT_TIME_BINS:
+            axes[2].axvline(x=padding_boundary - 0.5, color='cyan', linewidth=2, linestyle='--', alpha=0.8)
         
         pred_label = 'Dataset 1' if pred_class == 0 else 'Dataset 2'
         
@@ -648,10 +701,11 @@ class DomainClassifierTrainer:
             true_class = int(label)
         
         true_label = 'Dataset 1' if true_class == 0 else 'Dataset 2'
-        axes[1].set_title(f'Grad-CAM Attention Overlay (hot=high attention)\nTrue: {true_label} | Pred: {pred_label} | Conf: {probs[pred_class]:.2%}', fontsize=14, fontweight='bold')
-        axes[1].set_ylabel('Frequency Bin', fontsize=11)
-        axes[1].set_xlabel('Time Bin', fontsize=11)
-        cbar = plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+        axes[2].set_title(f'Grad-CAM Attention (hot=high attention, cyan=padding boundary)\nTrue: {true_label} | Pred: {pred_label} | Conf: {probs[pred_class]:.2%}', 
+                         fontsize=14, fontweight='bold')
+        axes[2].set_ylabel('Frequency Bin', fontsize=11)
+        axes[2].set_xlabel('Time Bin', fontsize=11)
+        cbar = plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
         cbar.set_label('Attention', rotation=270, labelpad=20)
         
         plt.tight_layout()
