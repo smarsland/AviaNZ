@@ -8,120 +8,25 @@ import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
 
-def gaussianity_score(x):
-    """
-    Jarque-Bera statistic (lower = more Gaussian).
-    """
-    n = len(x)
-    if n < 3:
-        return np.inf
-
-    mean = np.mean(x)
-    std = np.std(x)
-    if std < 1e-8:
-        return np.inf
-
-    z = (x - mean) / std
-    skew = np.mean(z**3)
-    kurt = np.mean(z**4)
-
-    jb = (n / 6.0) * (skew**2 + 0.25 * (kurt - 3)**2)
-    return jb
-
-
-def top_tail_gaussian_split(x, min_frac=0.5, max_frac=0.99, step=1):
-    """
-    Find the threshold that separates background (Gaussian noise) from signal.
-    Stops when adding more points makes the distribution less Gaussian.
-    """
-    x = np.sort(np.asarray(x))
-    n = len(x)
-
-    min_size = max(5, int(np.ceil(n * min_frac)))
-    max_size = int(np.floor(n * max_frac))
-    
-    # Adaptive step size for efficiency
-    if step == 1 and (max_size - min_size) > 100:
-        step = max(1, (max_size - min_size) // 50)
-
-    prev_score = gaussianity_score(x[:min_size])
-    best_split = min_size
-
-    # Find where the distribution stops improving (starts getting less Gaussian)
-    for split in range(min_size + step, max_size + 1, step):
-        x_low = x[:split]
-        score = gaussianity_score(x_low)
-
-        # If score increased (got worse), we've passed the background
-        if score > prev_score * 1.2:  # 20% worse
-            return x[best_split]
-        
-        # If score improved, update best
-        if score < prev_score:
-            best_split = split
-        
-        prev_score = score
-
-    return x[best_split]
 
 def normalize_spectrogram(img, method='gaussian_split', robust=True):
-    """
-    Apply background normalization to a spectrogram using per-frequency-band statistics.
-    
-    For each frequency band (row), estimates background noise distribution and normalizes
-    to z-scores, making signals stand out from noise.
-    
-    Args:
-        img: Input spectrogram (H x W array), typically in dB scale
-        method: Background estimation method
-            - 'gaussian_split': Use Gaussian fitting to find background (default)
-            - 'percentile': Use bottom 50th percentile as background
-        robust: If True, use robust statistics (median/MAD) instead of mean/std
-    
-    Returns:
-        Normalized spectrogram (H x W array) where background noise ~ N(0, 1)
-    """
-    # Make a copy to avoid modifying input
     img = np.asarray(img, dtype=np.float32).copy()
     
-    H, W = img.shape
-    normalized = np.zeros_like(img)
+    flat_order_row = np.argsort(img, axis=1)
+    ranks_row = np.empty_like(flat_order_row)
+    for i in range(img.shape[0]):
+        ranks_row[i, flat_order_row[i]] = np.arange(img.shape[1])
 
-    for row in range(H):
-        row_data = img[row, :]
-        
-        # Estimate background region
-        if method == 'gaussian_split':
-            threshold = top_tail_gaussian_split(row_data)
-            bg_mask = row_data < threshold
-        elif method == 'percentile':
-            threshold = np.percentile(row_data, 50)
-            bg_mask = row_data < threshold
-        else:
-            raise ValueError(f"Unknown method: {method}")
-        
-        # Handle edge case: no background pixels
-        if np.sum(bg_mask) < 3:
-            # Fall back to global statistics
-            bg_data = row_data
-        else:
-            bg_data = row_data[bg_mask]
-        
-        # Compute background statistics
-        if robust:
-            # Median Absolute Deviation (more robust to outliers)
-            loc = np.median(bg_data)
-            mad = np.median(np.abs(bg_data - loc))
-            scale = mad * 1.4826  # Scale factor to match std for Gaussian
-        else:
-            # Standard mean and standard deviation
-            loc = np.mean(bg_data)
-            scale = np.std(bg_data)
-        
-        # Normalize to z-scores
-        normalized[row, :] = (row_data - loc) / (scale + 1e-8)
-    
-    normalized[normalized>3] = np.random.normal(0, scale=1, size=np.sum(normalized>3))
+    ranks_row = ranks_row / (img.shape[1] - 1)
+
+    flat_order_col = np.argsort(ranks_row, axis=0)
+    ranks_col = np.empty_like(flat_order_col)
+    for i in range(img.shape[1]):
+        ranks_col[flat_order_col[:,i], i] = np.arange(img.shape[0])
+
+    ranks_col = ranks_col / (img.shape[0] - 1)
+
+    normalized = ranks_row * ranks_col
 
     return normalized
 
