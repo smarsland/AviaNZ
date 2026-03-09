@@ -18,7 +18,8 @@ Data Processing Notes:
     - Spectrograms are log-transformed for better visualization and model training
     - Time axis padding: If spectrogram width < 1024 bins, padding is added at the RIGHT (end)
       using random sampling from per-frequency distributions to maintain statistical properties
-    - Visualizations show: (1) raw spectrogram, (2) processed (with padding), (3) Grad-CAM attention
+    - Temporal roll: During training, spectrograms are randomly shifted along time axis (circular)
+    - Visualizations show: (1) processed spectrogram (log-transformed), (2) Grad-CAM attention
     - Red/cyan lines in visualizations mark where padding begins
 """
 
@@ -628,8 +629,8 @@ class DomainClassifierTrainer:
         - Padding uses per-frequency random sampling (maintains freq stats but not temporal coherence)
         - Red/cyan vertical lines mark the padding boundary
         
-        Note: Random augmentation (temporal roll, time stretch, freq shift) only happens
-        during training, not during validation/visualization.
+        Note: During training, temporal roll (random circular shift) is applied for augmentation.
+        Validation/visualization uses center crop with no augmentation.
         """
         img, label = dataset[idx]
         img_tensor = img.unsqueeze(0).to(self.device)

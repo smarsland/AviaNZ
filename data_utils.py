@@ -246,7 +246,7 @@ class SpectrogramDataset(Dataset):
             normalize: Whether to apply background normalization
             use_sparse_patches: If True, only extract patches with signal (sparse attention)
             num_sparse_patches: Number of patches to extract in sparse mode (K)
-            use_temporal_roll: (Deprecated - no longer used with random sampling padding)
+            use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             remove_baseline: If True, subtract 10th percentile to remove DC offset/noise floor differences
         
         Note: For time axis, uses RANDOM SAMPLING (samples from per-frequency distribution)
@@ -369,6 +369,11 @@ class SpectrogramDataset(Dataset):
         # Process the spectrogram
         x = self.apply_padding_and_add_channels(data)
         assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
+        
+        # Apply temporal roll (random circular shift along time axis) during training
+        if self.use_temporal_roll and self.training:
+            shift_amount = self.rng.randint(0, x.shape[1])
+            x = np.roll(x, shift_amount, axis=1)
         
         x = self.apply_crop(x)
         assert x.ndim == 3, f"After crop should be 3D (H,W,C), got {x.shape}"
@@ -674,7 +679,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         normalize: If True, apply background normalization to spectrograms
         use_sparse_patches: If True, only extract patches with signal (sparse attention)
         num_sparse_patches: Number of patches to extract in sparse mode (K)
-        use_temporal_roll: If True, randomly roll start position in tiled/repeated signals (training only)
+        use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
     
     Returns:
