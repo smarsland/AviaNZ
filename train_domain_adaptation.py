@@ -103,23 +103,17 @@ class DANNModel(nn.Module):
         
         self.pooling = nn.AdaptiveAvgPool2d(1)
         
-        self.class_classifier = nn.Sequential(
-            nn.Linear(backbone_out, 512),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, num_classes)
-        )
+        # Simple classifier like BirdClef - just one linear layer
+        self.class_classifier = nn.Linear(backbone_out, num_classes)
         
         self.gradient_reversal = GradientReversalLayer()
         
+        # Domain classifier can be deeper since it's a simpler task (binary)
         self.domain_classifier = nn.Sequential(
             nn.Linear(backbone_out, 512),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, 2)
+            nn.Linear(512, 2)
         )
         
         if pretrained_path:
@@ -171,13 +165,32 @@ class DANNModel(nn.Module):
         return class_output, domain_output, features
     
     def predict(self, x):
+        """Inference mode - use batch statistics instead of running statistics.
+        
+        This prevents domain shift: running stats are from mixed source+target training,
+        but test data is pure source or pure target. Using batch stats adapts to test distribution.
+        """
+        # Temporarily switch batch norm to training mode (uses batch stats, not running stats)
+        bn_training_mode = {}
+        for name, module in self.named_modules():
+            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                bn_training_mode[name] = module.training
+                module.train()
+        
         features = self.backbone(x)
         if isinstance(features, dict):
             features = features['features']
         if len(features.shape) == 4:
             features = self.pooling(features)
             features = features.view(features.size(0), -1)
-        return self.class_classifier(features)
+        output = self.class_classifier(features)
+        
+        # Restore original training mode for batch norm layers
+        for name, module in self.named_modules():
+            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                module.train(bn_training_mode[name])
+        
+        return output
 
 
 class DomainAdaptationTrainer:
@@ -377,27 +390,6 @@ class DomainAdaptationTrainer:
         
         self.domain_criterion = nn.CrossEntropyLoss()
         
-        self.optimizer = optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=0.01)
-        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
-        
-        total_params = sum(p.numel() for p in self.model.parameters())
-        print(f"  Total parameters: {total_params:,}")
-    
-    def get_lambda_domain(self, epoch):
-        if self.lambda_schedule == 'fixed':
-            return self.lambda_domain
-        elif self.lambda_schedule == 'progressive':
-            p = epoch / self.epochs
-            return 2.0 / (1.0 + np.exp(-10 * p)) - 1.0
-        else:
-            return self.lambda_domain
-    
-    def train_epoch(self, epoch):
-        self.model.train()
-        total_class_loss = 0
-        total_domain_loss = 0
-        total_loss = 0
-        correct_class = 0
         # Use differential learning rates like BirdClef fine-tuning:
         # - Lower LR for pretrained backbone (needs fine adjustments)
         # - Higher LR for new classifier heads (need fast convergence)
@@ -421,7 +413,28 @@ class DomainAdaptationTrainer:
         print(f"  Total parameters: {total_params:,}")
         print(f"  Optimizer: AdamW with differential LR")
         print(f"    Backbone LR: {self.lr:.1e}")
-        print(f"    Classifier heads LR: {self.lr * 10:.1e
+        print(f"    Classifier heads LR: {self.lr * 10:.1e}")
+    
+    def get_lambda_domain(self, epoch):
+        if self.lambda_schedule == 'fixed':
+            return self.lambda_domain
+        elif self.lambda_schedule == 'progressive':
+            p = epoch / self.epochs
+            return 2.0 / (1.0 + np.exp(-10 * p)) - 1.0
+        else:
+            return self.lambda_domain
+    
+    def train_epoch(self, epoch):
+        self.model.train()
+        total_class_loss = 0
+        total_domain_loss = 0
+        total_loss = 0
+        correct_class = 0
+        correct_domain = 0
+        total_samples = 0
+        
+        lambda_domain = self.get_lambda_domain(epoch)
+        
         source_iter = iter(self.source_train_loader)
         target_iter = iter(self.target_train_loader)
         
