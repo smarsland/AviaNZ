@@ -18,9 +18,10 @@ Usage:
     python train_domain_adaptation.py source_data/ target_data/ outputs/dann_model \\
         --pretrained BirdClefModels/model_fold0.pth --architecture regnety_008
     
-    # Control adversarial strength (0.1-1.0, higher = more domain confusion)
+    # Control adversarial strength (0.5-10.0, higher = more domain confusion)
+    # For strong domain adaptation, use 1.0-5.0. For lambda << 1.0, adversarial signal is too weak.
     python train_domain_adaptation.py source_data/ target_data/ outputs/dann_model \\
-        --lambda-domain 0.5 --epochs 30
+        --lambda-domain 1.0 --epochs 30
 """
 
 import argparse
@@ -509,6 +510,12 @@ class DomainAdaptationTrainer:
             for data, target in val_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model.predict(data)
+                
+                # DEBUG: Check if outputs are reasonable
+                if total == 0:
+                    print(f"  DEBUG [{dataset_name}] First batch output stats: min={output.min().item():.3f}, max={output.max().item():.3f}, mean={output.mean().item():.3f}")
+                    print(f"  DEBUG [{dataset_name}] First prediction: {output[0].cpu().numpy()}")
+                    print(f"  DEBUG [{dataset_name}] First target: {target[0].cpu().numpy() if target.dim() == 2 else target[0].item()}")
                 
                 if self.multilabel:
                     # For multilabel, evaluate on primary class (argmax of one-hot)
