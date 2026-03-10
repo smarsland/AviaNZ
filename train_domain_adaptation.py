@@ -124,8 +124,6 @@ class DANNModel(nn.Module):
         
         if pretrained_path:
             self.load_pretrained_backbone(pretrained_path)
-        
-        self.convert_batchnorm_to_groupnorm()
     
     def load_pretrained_backbone(self, pretrained_path):
         print(f"Loading pretrained backbone from {pretrained_path}")
@@ -155,27 +153,6 @@ class DANNModel(nn.Module):
         
         self.backbone.load_state_dict(backbone_dict, strict=False)
         print("  Loaded pretrained backbone weights")
-    
-    def convert_batchnorm_to_groupnorm(self):
-        """Convert all BatchNorm layers to GroupNorm to avoid domain shift issues.
-        
-        CRITICAL for domain adaptation: BatchNorm running stats trained on mixed
-        source+target batches don't generalize to pure source/target test data.
-        GroupNorm normalizes per-sample, avoiding this issue entirely.
-        """
-        def replace_bn(module):
-            for name, child in module.named_children():
-                if isinstance(child, (nn.BatchNorm1d, nn.BatchNorm2d)):
-                    num_channels = child.num_features
-                    num_groups = min(32, num_channels)
-                    while num_channels % num_groups != 0:
-                        num_groups -= 1
-                    setattr(module, name, nn.GroupNorm(num_groups, num_channels))
-                else:
-                    replace_bn(child)
-        
-        replace_bn(self.backbone)
-        print("  Converted BatchNorm to GroupNorm (domain-invariant normalization)")
     
     def forward(self, x, lambda_domain=1.0):
         features = self.backbone(x)
@@ -421,11 +398,30 @@ class DomainAdaptationTrainer:
         total_domain_loss = 0
         total_loss = 0
         correct_class = 0
-        correct_domain = 0
-        total_samples = 0
+        # Use differential learning rates like BirdClef fine-tuning:
+        # - Lower LR for pretrained backbone (needs fine adjustments)
+        # - Higher LR for new classifier heads (need fast convergence)
+        backbone_params = []
+        classifier_params = []
         
-        lambda_domain = self.get_lambda_domain(epoch)
+        for name, param in self.model.named_parameters():
+            if 'class_classifier' in name or 'domain_classifier' in name or 'gradient_reversal' in name:
+                classifier_params.append(param)
+            else:
+                backbone_params.append(param)
         
+        self.optimizer = optim.AdamW([
+            {'params': backbone_params, 'lr': self.lr},
+            {'params': classifier_params, 'lr': self.lr * 10}  # 10x LR for new heads
+        ], weight_decay=0.01)
+        
+        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
+        
+        total_params = sum(p.numel() for p in self.model.parameters())
+        print(f"  Total parameters: {total_params:,}")
+        print(f"  Optimizer: AdamW with differential LR")
+        print(f"    Backbone LR: {self.lr:.1e}")
+        print(f"    Classifier heads LR: {self.lr * 10:.1e
         source_iter = iter(self.source_train_loader)
         target_iter = iter(self.target_train_loader)
         
