@@ -178,7 +178,7 @@ class BirdClefFineTuner:
                  epochs=10, batch_size=32, lr=1e-4, freeze_backbone=False, 
                  freeze_stages=0, multilabel=False, device=None,
                  use_class_weights=False, pos_weight_cap=None,
-                 normalize=False, mixup_alpha=0.0, noise_ratio=0.0, 
+                 normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, use_temporal_roll=True, validation_split=0.2,
                  remove_baseline=True, test_folder=None, test_folder2=None):
         
@@ -195,6 +195,7 @@ class BirdClefFineTuner:
         self.pos_weight_cap = pos_weight_cap
         self.normalize = normalize
         self.mixup_alpha = mixup_alpha
+        self.mixup_mode = mixup_mode
         self.noise_ratio = noise_ratio
         self.noise_folder = noise_folder
         self.use_temporal_roll = use_temporal_roll
@@ -223,7 +224,8 @@ class BirdClefFineTuner:
         if self.normalize:
             print(f"  Background normalization: enabled")
         if self.mixup_alpha > 0:
-            print(f"  Mixup alpha: {self.mixup_alpha}")
+            mode_name = {'mixup': 'Mixup', 'cutmix': 'CutMix', 'both': 'Mixup+CutMix'}[self.mixup_mode]
+            print(f"  {mode_name} alpha: {self.mixup_alpha}")
         if self.noise_ratio > 0:
             print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}])")
     
@@ -309,7 +311,8 @@ class BirdClefFineTuner:
             use_sparse_patches=False,
             num_sparse_patches=0,
             use_temporal_roll=self.use_temporal_roll,
-            remove_baseline=self.remove_baseline
+            remove_baseline=self.remove_baseline,
+            mixup_mode=self.mixup_mode
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
@@ -481,12 +484,24 @@ class BirdClefFineTuner:
             if self.multilabel:
                 loss = self.criterion(output, target.float())
             else:
-                # For single-label, target might be one-hot encoded
+                # For single-label classification
                 if target.dim() == 2 and target.shape[1] > 1:
-                    target_labels = target.argmax(dim=1)
+                    # Check if soft labels (from mixup) - sum != 1.0 for each sample
+                    # or has fractional values
+                    is_soft = not torch.all((target == 0) | (target == 1))
+                    
+                    if is_soft:
+                        # Soft labels from mixup - use log_softmax + manual cross entropy
+                        # CrossEntropyLoss expects logits and soft targets
+                        log_probs = torch.log_softmax(output, dim=1)
+                        loss = -(target * log_probs).sum(dim=1).mean()
+                    else:
+                        # Hard one-hot labels - convert to class indices
+                        target_labels = target.argmax(dim=1)
+                        loss = self.criterion(output, target_labels)
                 else:
                     target_labels = target.long()
-                loss = self.criterion(output, target_labels)
+                    loss = self.criterion(output, target_labels)
             
             loss.backward()
             self.optimizer.step()
@@ -501,6 +516,8 @@ class BirdClefFineTuner:
             else:
                 pred = output.argmax(dim=1)
                 if target.dim() == 2:
+                    # Use argmax for accuracy even with soft labels
+                    # (measures accuracy on dominant class, not perfect but reasonable)
                     target_labels = target.argmax(dim=1)
                 else:
                     target_labels = target
@@ -843,6 +860,12 @@ Examples:
   # Multi-label with augmentation
   python finetune_birdclef.py data/train outputs/birdclef_ft --multilabel --mixup 0.3 --epochs 15
   
+  # Try CutMix augmentation (paste rectangular regions instead of blending)
+  python finetune_birdclef.py data/train outputs/birdclef_ft --mixup 0.3 --mixup-mode cutmix
+  
+  # Combine both Mixup and CutMix (randomly applies one or the other)
+  python finetune_birdclef.py data/train outputs/birdclef_ft --mixup 0.3 --mixup-mode both
+  
   # For soundscapes: use normalization + noise augmentation
   python finetune_birdclef.py data/train outputs/birdclef_ft --normalize --noise 0.3 --noise-folder noise_data
   
@@ -886,6 +909,8 @@ Examples:
                        help="Baseline removal (default: disabled). Baseline removal subtracts 10th percentile to fix DC offset differences between datasets")
     parser.add_argument('--mixup', type=float, default=0.0,
                        help="Mixup alpha for data augmentation (default: 0.0 = disabled, try 0.2-0.4)")
+    parser.add_argument('--mixup-mode', type=str, default='mixup', choices=['mixup', 'cutmix', 'both'],
+                       help="Augmentation mode when --mixup > 0: 'mixup' (blend entire spectrograms), 'cutmix' (paste rectangular regions), 'both' (randomly apply either). Default: mixup")
     parser.add_argument('--noise', type=float, default=0.0,
                        help="Expected noise mixing ratio for augmentation (uniformly sampled [0, 2×ratio] so E[noise]=ratio). 0.0=disabled, 0.3=30%% expected noise")
     parser.add_argument('--noise-folder', type=str, default=None,
@@ -929,6 +954,7 @@ Examples:
         pos_weight_cap=args.pos_weight_cap,
         normalize=args.normalize,
         mixup_alpha=args.mixup,
+        mixup_mode=args.mixup_mode,
         noise_ratio=args.noise,
         noise_folder=args.noise_folder,
         use_temporal_roll=not args.no_temporal_roll,

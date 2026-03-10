@@ -659,7 +659,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False,
                        use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                       remove_baseline=True):
+                       remove_baseline=True, mixup_mode='mixup'):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -681,6 +681,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         num_sparse_patches: Number of patches to extract in sparse mode (K)
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
+        mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
     
     Returns:
         tuple: (train_loader, val_loader)
@@ -801,9 +802,18 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         train_collate_fn = sparse_collate_fn
         val_collate_fn = sparse_collate_fn
     elif mixup_alpha > 0:
-        # Standard mode with mixup
-        print(f"Mixup enabled with alpha={mixup_alpha}")
-        train_collate_fn = MixupCollate(mixup_alpha)
+        # Standard mode with mixup/cutmix
+        if mixup_mode == 'mixup':
+            print(f"Mixup enabled with alpha={mixup_alpha}")
+            train_collate_fn = MixupCollate(mixup_alpha)
+        elif mixup_mode == 'cutmix':
+            print(f"CutMix enabled with alpha={mixup_alpha}")
+            train_collate_fn = CutMixCollate(mixup_alpha)
+        elif mixup_mode == 'both':
+            print(f"Mixup + CutMix enabled with alpha={mixup_alpha} (50/50 mix)")
+            train_collate_fn = MixupCutMixCollate(mixup_alpha, mixup_prob=0.5)
+        else:
+            raise ValueError(f"Invalid mixup_mode: {mixup_mode}. Must be 'mixup', 'cutmix', or 'both'")
         val_collate_fn = None
     else:
         # Standard mode without mixup
@@ -895,6 +905,116 @@ class MixupCollate:
             return mixed_data, mixed_labels
         else:
             return data, labels
+
+
+class CutMixCollate:
+    """Collate function that applies CutMix augmentation to batches.
+    
+    CutMix cuts rectangular regions from one spectrogram and pastes them onto another,
+    unlike Mixup which blends entire spectrograms. This preserves local structure better
+    and forces models to recognize birds from partial spectrograms.
+    
+    Reference: CutMix: Regularization Strategy to Train Strong Classifiers with 
+               Localizable Features (https://arxiv.org/abs/1905.04899)
+    """
+    
+    def __init__(self, alpha=0.3):
+        """
+        Args:
+            alpha: CutMix interpolation strength (beta distribution parameter)
+                   Controls the size of the cut region. Same semantics as Mixup.
+        """
+        self.alpha = alpha
+    
+    def __call__(self, batch):
+        """Apply CutMix to a batch of samples.
+        
+        Args:
+            batch: List of (data, label) tuples from dataset
+            
+        Returns:
+            Mixed batch (data_tensor, label_tensor)
+        """
+        # Default collate
+        data = torch.stack([item[0] for item in batch])
+        labels = torch.stack([item[1] for item in batch])
+        
+        if self.alpha > 0:
+            # Sample mixing coefficient from Beta distribution
+            lam = np.random.beta(self.alpha, self.alpha)
+            
+            # Random permutation of batch
+            batch_size = data.size(0)
+            index = torch.randperm(batch_size)
+            
+            # Identify which samples are all-zero (noise samples)
+            # Don't cutmix noise samples - they need to stay exactly zero
+            zero_mask = (labels.sum(dim=1) == 0)  # Shape: (batch_size,)
+            zero_mask_permuted = zero_mask[index]
+            
+            # Only mix if BOTH samples are non-zero (both have birds)
+            can_mix = ~zero_mask & ~zero_mask_permuted  # Shape: (batch_size,)
+            
+            if can_mix.any():
+                # Generate random bounding box
+                # Box area should be proportional to (1 - lam) so that lambda represents
+                # the proportion of the ORIGINAL image kept
+                _, _, H, W = data.shape
+                cut_ratio = np.sqrt(1.0 - lam)  # Square root for 2D area
+                cut_h = int(H * cut_ratio)
+                cut_w = int(W * cut_ratio)
+                
+                # Random center point for the box
+                cx = np.random.randint(W)
+                cy = np.random.randint(H)
+                
+                # Bounding box coordinates (with clipping)
+                x1 = np.clip(cx - cut_w // 2, 0, W)
+                x2 = np.clip(cx + cut_w // 2, 0, W)
+                y1 = np.clip(cy - cut_h // 2, 0, H)
+                y2 = np.clip(cy + cut_h // 2, 0, H)
+                
+                # Actual lambda based on the realized box area
+                actual_lam = 1.0 - ((x2 - x1) * (y2 - y1)) / (H * W)
+                
+                # Apply CutMix: paste cut region from permuted batch onto original
+                mixed_data = data.clone()
+                mixed_data[can_mix, :, y1:y2, x1:x2] = data[index][can_mix, :, y1:y2, x1:x2]
+                
+                # Mix labels according to actual area ratio
+                mixed_labels = actual_lam * labels.clone()
+                mixed_labels[can_mix] = actual_lam * labels[can_mix] + (1.0 - actual_lam) * labels[index][can_mix]
+                
+                return mixed_data, mixed_labels
+            else:
+                return data, labels
+        else:
+            return data, labels
+
+
+class MixupCutMixCollate:
+    """Collate function that randomly applies either Mixup or CutMix.
+    
+    Combines both augmentation strategies for maximum regularization.
+    """
+    
+    def __init__(self, alpha=0.3, mixup_prob=0.5):
+        """
+        Args:
+            alpha: Interpolation strength for both methods
+            mixup_prob: Probability of using mixup (vs cutmix)
+        """
+        self.alpha = alpha
+        self.mixup_prob = mixup_prob
+        self.mixup_collate = MixupCollate(alpha)
+        self.cutmix_collate = CutMixCollate(alpha)
+    
+    def __call__(self, batch):
+        """Randomly apply either Mixup or CutMix."""
+        if np.random.rand() < self.mixup_prob:
+            return self.mixup_collate(batch)
+        else:
+            return self.cutmix_collate(batch)
 
 
 def get_dataset_info(folder):
