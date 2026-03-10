@@ -449,6 +449,12 @@ class DomainAdaptationTrainer:
             domain_loss = self.domain_criterion(domain_output_s, domain_labels_s) + \
                          self.domain_criterion(domain_output_t, domain_labels_t)
             
+            # Average the two domain losses to prevent over-weighting adversarial objective
+            # (sum of two losses would give 2x weight vs class loss)
+            domain_loss = domain_loss / 2.0
+            
+            # Total loss: classification + domain adversarial loss
+            # Lambda scaling is handled by gradient reversal layer (affects feature extractor gradients)
             loss = class_loss + domain_loss
             loss.backward()
             self.optimizer.step()
