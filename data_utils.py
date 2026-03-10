@@ -239,7 +239,7 @@ class SpectrogramDataset(Dataset):
             channels: Number of channels
             cropping_mode: How to crop images ('center' or 'random')
             noise_filenames: List of noise file paths for augmentation
-            noise_ratio: Expected noise mixing ratio (samples uniformly from [0, 2×noise_ratio] so E[noise]=noise_ratio)
+            noise_ratio: Expected noise mixing ratio (samples uniformly from [0, min(2×noise_ratio, 1.0)], clipped to valid range)
             spec_transform: Transform to apply ("Log", "PCEN", "Box-Cox", "Sigmoid", None)
             training: Whether this is training data (affects augmentation)
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
@@ -284,7 +284,7 @@ class SpectrogramDataset(Dataset):
         
         print(f"Dataset initialized with {len(self.filenames)} data files and {len(self.noise_filenames)} noise files")
         print(f"Spectrogram transform: {self.spec_transform}")
-        print(f"Training mode: {self.training} (expected noise ratio: {self.noise_ratio}, uniformly sampled [0, {2*self.noise_ratio:.1f}])")
+        print(f"Training mode: {self.training} (expected noise ratio: {self.noise_ratio}, uniformly sampled [0, min({2*self.noise_ratio:.1f}, 1.0)], clipped)")
         if width_downsizing:
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:
@@ -439,6 +439,8 @@ class SpectrogramDataset(Dataset):
             LOG_OFFSET = 1e-7
             
             if self.spec_transform == "Log":
+                # Ensure non-negative values before log (clipping any potential numerical errors)
+                sg = np.maximum(sg, 0.0)
                 sg_safe = sg + LOG_OFFSET
                 return np.log(sg_safe)
                 
@@ -493,8 +495,9 @@ class SpectrogramDataset(Dataset):
     def mix_with_noise(self, bird_spectrogram):
         """Mix bird spectrogram with noise spectrogram.
         
-        Uses a random noise ratio sampled uniformly from [0, 2×noise_ratio]
-        so the expected (mean) noise ratio equals the specified parameter.
+        Uses a random noise ratio sampled uniformly from [0, min(2×noise_ratio, 1.0)]
+        so the expected (mean) noise ratio approximates the specified parameter.
+        The ratio is clipped to [0, 1] to ensure valid mixing (prevents negative values).
         
         Supports two modes:
         - 'full': Mix entire noise spectrogram (traditional approach)
@@ -513,7 +516,9 @@ class SpectrogramDataset(Dataset):
         # else: mode is 'full', keep use_background_mode = False
         
         # Sample random noise ratio: uniform[0, 2×ratio] so E[noise] = ratio
+        # Clip to [0, 1.0] to prevent negative values in mixing formula
         actual_noise_ratio = self.rng.uniform(0.0, 2.0 * self.noise_ratio)
+        actual_noise_ratio = np.clip(actual_noise_ratio, 0.0, 1.0)
         
         # Select noise source file
         noise_file = self.rng.choice(self.noise_filenames)
@@ -739,7 +744,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         img_width: Target image width
         channels: Number of channels
         cropping_mode: How to crop images ('center' or 'random')
-        noise_ratio: Expected noise mixing ratio (samples uniformly from [0, 2×noise_ratio] so E[noise]=noise_ratio)
+        noise_ratio: Expected noise mixing ratio (samples uniformly from [0, min(2×noise_ratio, 1.0)], clipped to valid range)
         spec_transform: Spectrogram transformation (None uses config default)
         num_workers: Number of workers for data loading
         width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])

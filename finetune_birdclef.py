@@ -229,7 +229,7 @@ class BirdClefFineTuner:
             print(f"  {mode_name} alpha: {self.mixup_alpha}")
         if self.noise_ratio > 0:
             noise_mode_name = {'full': 'full spectrogram', 'background': 'quiet segments', 'both': 'mixed'}
-            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}]), mode: {noise_mode_name.get(self.noise_mode, self.noise_mode)}")
+            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, min({2*self.noise_ratio:.1f}, 1.0)], clipped), mode: {noise_mode_name.get(self.noise_mode, self.noise_mode)}")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -921,7 +921,7 @@ Examples:
     parser.add_argument('--mixup-mode', type=str, default='mixup', choices=['mixup', 'cutmix', 'both'],
                        help="Augmentation mode when --mixup > 0: 'mixup' (blend entire spectrograms), 'cutmix' (paste rectangular regions), 'both' (randomly apply either). Default: mixup")
     parser.add_argument('--noise', type=float, default=0.0,
-                       help="Expected noise mixing ratio for augmentation (uniformly sampled [0, 2×ratio] so E[noise]=ratio). 0.0=disabled, 0.3=30%% expected noise")
+                       help="Expected noise mixing ratio for augmentation (uniformly sampled [0, min(2×ratio, 1.0)] so E[noise]≈ratio, clipped to valid range). 0.0=disabled, 0.3=30%% expected noise")
     parser.add_argument('--noise-folder', type=str, default=None,
                        help="Path to noise data folder for augmentation (default: same as data_folder)")
     parser.add_argument('--noise-mode', type=str, default='full', choices=['full', 'background', 'both'],
