@@ -60,7 +60,7 @@ def normalize_spectrogram_old_old(img):
     # Assume for any frequency band no more than half of the pixels are interesting
     # Therefore take the bottom half as non-interesting to estimate the background
     H, W = img.shape
-    sorted_pixels = np.sort(img, axis=1)log
+    sorted_pixels = np.sort(img, axis=1)
     bg_pixels = sorted_pixels[:, :W//2]
     
     # Calculate mean and variance of background pixels per frequency band
