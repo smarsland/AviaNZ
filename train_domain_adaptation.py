@@ -370,6 +370,20 @@ class DomainAdaptationTrainer:
         )
         self.model.to(self.device)
         
+        # For domain adaptation with batch norm: freeze BN parameters and running stats
+        # This prevents batch norm from learning mixed-domain statistics that don't generalize
+        # Instead, we rely on pretrained BirdClef batch norm (if using --pretrained)
+        # or disable momentum to compute per-batch statistics
+        if self.pretrained_path:
+            print("  Freezing batch norm at pretrained statistics (critical for domain adaptation)")
+            for name, module in self.model.named_modules():
+                if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                    module.eval()
+                    for param in module.parameters():
+                        param.requires_grad = False
+        else:
+            print("  WARNING: Training without pretrained weights - batch norm may learn domain-confused statistics")
+        
         if self.multilabel:
             self.class_criterion = nn.BCEWithLogitsLoss()
         else:
@@ -381,7 +395,9 @@ class DomainAdaptationTrainer:
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
         
         total_params = sum(p.numel() for p in self.model.parameters())
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"  Total parameters: {total_params:,}")
+        print(f"  Trainable parameters: {trainable_params:,}")
     
     def get_lambda_domain(self, epoch):
         if self.lambda_schedule == 'fixed':
@@ -394,6 +410,13 @@ class DomainAdaptationTrainer:
     
     def train_epoch(self, epoch):
         self.model.train()
+        
+        # Keep batch norm in eval mode even when model is in train mode
+        # This prevents batch norm statistics from being corrupted by mixed-domain training
+        for module in self.model.modules():
+            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                module.eval()
+        
         total_class_loss = 0
         total_domain_loss = 0
         total_loss = 0

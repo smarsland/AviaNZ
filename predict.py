@@ -217,13 +217,17 @@ class ModelPredictor:
                     spec = np.tile(spec, (1, tiles_needed))
                     spec = spec[:, :self.expected_time_bins]  # Crop to exact size
                 elif time_bins > self.expected_time_bins:
-                    spec = spec[:, :self.expected_time_bins]
+                    # CENTER crop (matches validation cropping_mode='center')
+                    start_col = (time_bins - self.expected_time_bins) // 2
+                    spec = spec[:, start_col:start_col + self.expected_time_bins]
                 
                 if freq_bins < self.expected_freq_bins:
                     pad_height = self.expected_freq_bins - freq_bins
                     spec = np.pad(spec, ((0, pad_height), (0, 0)), mode='constant')
                 elif freq_bins > self.expected_freq_bins:
-                    spec = spec[:self.expected_freq_bins, :]
+                    # CENTER crop for frequency too
+                    start_row = (freq_bins - self.expected_freq_bins) // 2
+                    spec = spec[start_row:start_row + self.expected_freq_bins, :]
                 
                 # Remove baseline offset before log transform (CRITICAL for cross-dataset consistency)
                 if self.remove_baseline:
