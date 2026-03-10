@@ -61,6 +61,7 @@ class ModelPredictor:
         model_type = model_config.get('model_type', 'AST').lower()
 
         self.multilabel = multilabel
+        self.model_type = model_type
         self.categories = model_config['class_names']
         
         self.expected_freq_bins = model_config.get('freq_bins', config.DEFAULT_FREQ_BINS)
@@ -276,7 +277,11 @@ class ModelPredictor:
                     spec_tensor = spec_tensor.unsqueeze(0).unsqueeze(0)
                     spec_tensor = spec_tensor.to(self.device)
                     
-                    outputs = self.model(spec_tensor)
+                    # DANN models have separate predict() method for inference
+                    if self.model_type == 'dann':
+                        outputs = self.model.predict(spec_tensor)
+                    else:
+                        outputs = self.model(spec_tensor)
                 
                 # Handle reconstruction output if present
                 if isinstance(outputs, tuple):

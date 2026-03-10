@@ -463,8 +463,16 @@ class DomainAdaptationTrainer:
             total_domain_loss += domain_loss.item()
             total_loss += loss.item()
             
-            if not self.multilabel:
-                pred_class = class_output_s.argmax(dim=1)
+            # Track classification accuracy (works for both multilabel and single-label)
+            pred_class = class_output_s.argmax(dim=1)
+            if self.multilabel:
+                # For multilabel, compare against primary class (argmax of target)
+                if source_labels.dim() == 2:
+                    source_labels_primary = source_labels.argmax(dim=1)
+                else:
+                    source_labels_primary = source_labels.long()
+                correct_class += pred_class.eq(source_labels_primary).sum().item()
+            else:
                 correct_class += pred_class.eq(source_labels_idx).sum().item()
             
             pred_domain_s = domain_output_s.argmax(dim=1)
@@ -477,11 +485,12 @@ class DomainAdaptationTrainer:
             pbar.set_postfix({
                 'cls_loss': total_class_loss / (batch_idx + 1),
                 'dom_loss': total_domain_loss / (batch_idx + 1),
+                'cls_acc': 100. * correct_class / max(len(self.source_train_dataset), 1),
                 'dom_acc': 100. * correct_domain / total_samples,
                 'lambda': lambda_domain
             })
         
-        class_acc = 100. * correct_class / len(self.source_train_dataset) if not self.multilabel else 0.0
+        class_acc = 100. * correct_class / len(self.source_train_dataset)
         domain_acc = 100. * correct_domain / total_samples
         
         return (total_class_loss / num_batches, 
@@ -502,7 +511,15 @@ class DomainAdaptationTrainer:
                 output = self.model.predict(data)
                 
                 if self.multilabel:
-                    continue
+                    # For multilabel, evaluate on primary class (argmax of one-hot)
+                    # This allows tracking progress even in multilabel mode
+                    pred = output.argmax(dim=1)
+                    if target.dim() == 2:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target.long()
+                    correct += pred.eq(target_labels).sum().item()
+                    total += target.size(0)
                 else:
                     if target.dim() == 2:
                         target_labels = target.argmax(dim=1)
@@ -512,7 +529,7 @@ class DomainAdaptationTrainer:
                     correct += pred.eq(target_labels).sum().item()
                     total += target.size(0)
         
-        acc = 100. * correct / total if not self.multilabel else 0.0
+        acc = 100. * correct / total if total > 0 else 0.0
         return acc
     
     def train(self):
@@ -545,9 +562,9 @@ class DomainAdaptationTrainer:
             history['target_val_acc'].append(target_val_acc)
             
             print(f"Epoch {epoch+1}/{self.epochs}:")
-            print(f"  Train - Class Loss: {train_class_loss:.4f}, Domain Loss: {train_domain_loss:.4f}")
-            print(f"  Train - Domain Acc: {train_domain_acc:.2f}% (want ~50% = confused)")
-            if not self.multilabel and (source_val_acc > 0 or target_val_acc > 0):
+            print(f"  Train - Class Loss: {train_class_loss:.4f}, Class Acc: {train_class_acc:.2f}%")
+            print(f"  Train - Domain Loss: {train_domain_loss:.4f}, Domain Acc: {train_domain_acc:.2f}% (want ~50% = confused)")
+            if source_val_acc > 0 or target_val_acc > 0:
                 print(f"  Val - Source Acc: {source_val_acc:.2f}%, Target Acc: {target_val_acc:.2f}%")
             
             if target_val_acc > best_target_acc:
