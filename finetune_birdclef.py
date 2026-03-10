@@ -179,7 +179,7 @@ class BirdClefFineTuner:
                  freeze_stages=0, multilabel=False, device=None,
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
-                 noise_folder=None, use_temporal_roll=True, validation_split=0.2,
+                 noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
                  remove_baseline=True, test_folder=None, test_folder2=None):
         
         self.data_folder = data_folder
@@ -198,6 +198,7 @@ class BirdClefFineTuner:
         self.mixup_mode = mixup_mode
         self.noise_ratio = noise_ratio
         self.noise_folder = noise_folder
+        self.noise_mode = noise_mode
         self.use_temporal_roll = use_temporal_roll
         self.validation_split = validation_split
         self.remove_baseline = remove_baseline
@@ -227,7 +228,8 @@ class BirdClefFineTuner:
             mode_name = {'mixup': 'Mixup', 'cutmix': 'CutMix', 'both': 'Mixup+CutMix'}[self.mixup_mode]
             print(f"  {mode_name} alpha: {self.mixup_alpha}")
         if self.noise_ratio > 0:
-            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}])")
+            noise_mode_name = {'full': 'full spectrogram', 'background': 'quiet segments', 'both': 'mixed'}
+            print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, {2*self.noise_ratio:.1f}]), mode: {noise_mode_name.get(self.noise_mode, self.noise_mode)}")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -312,7 +314,8 @@ class BirdClefFineTuner:
             num_sparse_patches=0,
             use_temporal_roll=self.use_temporal_roll,
             remove_baseline=self.remove_baseline,
-            mixup_mode=self.mixup_mode
+            mixup_mode=self.mixup_mode,
+            noise_mode=self.noise_mode
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
@@ -869,6 +872,12 @@ Examples:
   # For soundscapes: use normalization + noise augmentation
   python finetune_birdclef.py data/train outputs/birdclef_ft --normalize --noise 0.3 --noise-folder noise_data
   
+  # Smart noise extraction: extract only quiet/background segments (no label mixing)
+  python finetune_birdclef.py data/train outputs/birdclef_ft --noise 0.3 --noise-folder noise_data --noise-mode background
+  
+  # Mix of full and background noise extraction
+  python finetune_birdclef.py data/train outputs/birdclef_ft --noise 0.3 --noise-folder noise_data --noise-mode both
+  
   # Then generate predictions:
   python predict.py outputs/birdclef_ft/birdclef_finetuned_best.pt \\
                     outputs/birdclef_ft/birdclef_finetuned_best_config.json \\
@@ -915,6 +924,8 @@ Examples:
                        help="Expected noise mixing ratio for augmentation (uniformly sampled [0, 2×ratio] so E[noise]=ratio). 0.0=disabled, 0.3=30%% expected noise")
     parser.add_argument('--noise-folder', type=str, default=None,
                        help="Path to noise data folder for augmentation (default: same as data_folder)")
+    parser.add_argument('--noise-mode', type=str, default='full', choices=['full', 'background', 'both'],
+                       help="Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments only), 'both' (random 50/50). Default: full")
     parser.add_argument('--no-temporal-roll', action='store_true',
                        help="Disable temporal rolling augmentation")
     parser.add_argument('--validation-split', type=float, default=0.2,
@@ -957,6 +968,7 @@ Examples:
         mixup_mode=args.mixup_mode,
         noise_ratio=args.noise,
         noise_folder=args.noise_folder,
+        noise_mode=args.noise_mode,
         use_temporal_roll=not args.no_temporal_roll,
         validation_split=args.validation_split,
         remove_baseline=args.baseline_removal,

@@ -227,7 +227,7 @@ class SpectrogramDataset(Dataset):
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
                  use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                 remove_baseline=True):
+                 remove_baseline=True, noise_mode='full'):
         """
         Initialize SpectrogramDataset.
         
@@ -248,6 +248,7 @@ class SpectrogramDataset(Dataset):
             num_sparse_patches: Number of patches to extract in sparse mode (K)
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             remove_baseline: If True, subtract 10th percentile to remove DC offset/noise floor differences
+            noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
         
         Note: For time axis, uses RANDOM SAMPLING (samples from per-frequency distribution)
         instead of zero-padding or tiling to avoid creating distinguishable artifacts.
@@ -269,6 +270,7 @@ class SpectrogramDataset(Dataset):
         self.num_sparse_patches = num_sparse_patches
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.remove_baseline = remove_baseline
+        self.noise_mode = noise_mode
         self.rng = np.random.RandomState(21390)
         
         # Calculate final dimensions after downsampling
@@ -493,13 +495,27 @@ class SpectrogramDataset(Dataset):
         
         Uses a random noise ratio sampled uniformly from [0, 2×noise_ratio]
         so the expected (mean) noise ratio equals the specified parameter.
+        
+        Supports two modes:
+        - 'full': Mix entire noise spectrogram (traditional approach)
+        - 'background': Extract quiet segments from noise/training files (smart noise)
+        - 'both': Randomly choose between full and background (50/50)
         """
         if not self.noise_filenames or self.noise_ratio <= 0:
             return bird_spectrogram
         
+        # Determine which mode to use
+        use_background_mode = False
+        if self.noise_mode == 'background':
+            use_background_mode = True
+        elif self.noise_mode == 'both':
+            use_background_mode = self.rng.rand() < 0.5
+        # else: mode is 'full', keep use_background_mode = False
+        
         # Sample random noise ratio: uniform[0, 2×ratio] so E[noise] = ratio
         actual_noise_ratio = self.rng.uniform(0.0, 2.0 * self.noise_ratio)
         
+        # Select noise source file
         noise_file = self.rng.choice(self.noise_filenames)
         noise_data = np.load(noise_file)
         if not np.isfinite(noise_data).all():
@@ -508,11 +524,24 @@ class SpectrogramDataset(Dataset):
         # Process noise with zero-padding for height, tiling for width
         noise_processed = self.apply_padding_and_add_channels(noise_data, is_noise=True)
         
-        # Apply random crop to noise (always random for noise)
-        original_cropping_mode = self.cropping_mode
-        self.cropping_mode = "random"
-        noise_cropped = self.apply_crop(noise_processed)
-        self.cropping_mode = original_cropping_mode
+        if use_background_mode:
+            # BACKGROUND MODE: Extract quiet segments only
+            # Get target dimensions from bird spectrogram
+            target_width = bird_spectrogram.shape[1]
+            
+            # Extract background noise from quiet regions
+            noise_cropped = self.extract_background_noise(
+                noise_processed, 
+                target_width, 
+                quietest_percentile=20
+            )
+        else:
+            # FULL MODE: Use entire noise spectrogram (traditional)
+            # Apply random crop to noise (always random for noise)
+            original_cropping_mode = self.cropping_mode
+            self.cropping_mode = "random"
+            noise_cropped = self.apply_crop(noise_processed)
+            self.cropping_mode = original_cropping_mode
         
         # Apply width downsampling to noise if specified (to match bird spectrogram)
         if self.width_downsizing and self.width_downsizing > 1:
@@ -546,6 +575,46 @@ class SpectrogramDataset(Dataset):
             start_col = self.rng.randint(0, w - self.img_width + 1) if w > self.img_width else 0
         
         return array[start_row:start_row + self.img_height, start_col:start_col + self.img_width]
+    
+    def extract_background_noise(self, source_spectrogram, target_width, quietest_percentile=20):
+        """Extract background noise from quiet regions of a spectrogram.
+        
+        This identifies low-energy time columns (likely background/silence) and 
+        extracts them to use as realistic noise augmentation.
+        
+        Args:
+            source_spectrogram: Spectrogram to extract noise from (H, W, C)
+            target_width: Target width for the output noise
+            quietest_percentile: Percentile threshold for "quiet" columns (default: 20 = bottom 20%)
+        
+        Returns:
+            Extracted background noise spectrogram (H, target_width, C)
+        """
+        h, w, c = source_spectrogram.shape
+        
+        # Remove channel dimension for energy calculation
+        spec_2d = source_spectrogram[:, :, 0] if c == 1 else source_spectrogram.mean(axis=2)
+        
+        # Calculate energy per time column (sum over frequency axis)
+        energy_per_column = spec_2d.sum(axis=0)  # Shape: (w,)
+        
+        # Find columns below energy threshold (quietest X%)
+        threshold = np.percentile(energy_per_column, quietest_percentile)
+        quiet_indices = np.where(energy_per_column <= threshold)[0]
+        
+        if len(quiet_indices) == 0:
+            # Fallback: if no quiet columns found, use columns with minimum energy
+            num_quiet = max(1, int(w * quietest_percentile / 100))
+            quiet_indices = np.argsort(energy_per_column)[:num_quiet]
+        
+        # Strategy: Randomly sample from quiet columns with replacement
+        # This creates more variety than simple tiling
+        sampled_indices = self.rng.choice(quiet_indices, size=target_width, replace=True)
+        
+        # Extract columns
+        background_noise = source_spectrogram[:, sampled_indices, :]  # (H, target_width, C)
+        
+        return background_noise
 
     def apply_specaugment(self, x):
         """Apply spectrogram augmentations: time stretch, frequency shift, and time/frequency masking.
@@ -659,7 +728,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False,
                        use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                       remove_baseline=True, mixup_mode='mixup'):
+                       remove_baseline=True, mixup_mode='mixup', noise_mode='full'):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -682,6 +751,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
+        noise_mode: Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
     
     Returns:
         tuple: (train_loader, val_loader)
@@ -705,7 +775,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_sparse_patches=use_sparse_patches,
         num_sparse_patches=num_sparse_patches,
         use_temporal_roll=use_temporal_roll,
-        remove_baseline=remove_baseline
+        remove_baseline=remove_baseline,
+        noise_mode=noise_mode
     )
     
     # Only create validation dataset if validation data exists
@@ -722,7 +793,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             use_sparse_patches=use_sparse_patches,
             num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
-            remove_baseline=remove_baseline
+            remove_baseline=remove_baseline,
+            noise_mode='full'  # Not used (no noise in validation)
         )
     else:
         val_dataset = None
