@@ -623,13 +623,13 @@ class DomainAdaptationTrainer:
                 self.save_config('dann_best_config.json')
                 print(f"  ✓ Saved best model (target acc: {target_val_acc:.2f}%)")
         
-        # Calibrate batch norm before saving final model
-        print("\nCalibrating batch norm statistics...")
-        self.calibrate_batchnorm()
-        
         self.save_model('dann_final.pt')
         
-        self.save_model('dann_final.pt'
+        history_path = os.path.join(self.output_folder, 'training_history.json')
+        with open(history_path, 'w') as f:
+            json.dump(history, f, indent=2)
+        
+        self.plot_training_curves(history)
         
         print(f"\n{'='*60}")
         print(f"DOMAIN ADAPTATION RESULTS")
