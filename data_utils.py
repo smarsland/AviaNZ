@@ -16,6 +16,26 @@ from scipy.ndimage import label
 from normalizer import normalize_spectrogram
 
 
+def get_background_spectrogram(img):
+    H, W = img.shape
+    sorted_pixels = np.sort(img, axis=1)
+    bg_pixels = sorted_pixels[:, :W//2]
+    
+    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
+    var0 = np.var(bg_pixels, axis=1, keepdims=True)
+
+    sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
+
+    for row in range(H):
+        outliers = sg_normalized[row, :] > 3
+        not_outliers = sg_normalized[row, :] <= 3
+        sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
+
+    sg_fixed = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
+
+    return sg_fixed
+
+
 class DataLoader:
     """Handles loading and splitting of spectrogram data."""
     
@@ -227,7 +247,7 @@ class SpectrogramDataset(Dataset):
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
                  use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                 remove_baseline=True, noise_mode='full'):
+                 remove_baseline=True, noise_mode='full', background_prob=0.0):
         """
         Initialize SpectrogramDataset.
         
@@ -249,6 +269,7 @@ class SpectrogramDataset(Dataset):
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             remove_baseline: If True, subtract 10th percentile to remove DC offset/noise floor differences
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
+            background_prob: Probability of replacing sample with its background spectrogram (zeros labels)
         
         Note: For time axis, uses RANDOM SAMPLING (samples from per-frequency distribution)
         instead of zero-padding or tiling to avoid creating distinguishable artifacts.
@@ -271,6 +292,7 @@ class SpectrogramDataset(Dataset):
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.remove_baseline = remove_baseline
         self.noise_mode = noise_mode
+        self.background_prob = background_prob if training else 0.0
         self.rng = np.random.RandomState(21390)
         
         # Calculate final dimensions after downsampling
@@ -291,6 +313,8 @@ class SpectrogramDataset(Dataset):
             print(f"Background normalization: enabled")
         if remove_baseline:
             print(f"⚡ Baseline removal: enabled (subtracts 10th percentile to remove DC offset/noise floor)")
+        if self.background_prob > 0:
+            print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
         print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
         if use_sparse_patches:
             print(f"⚡ Sparse patch mode: extracting top {num_sparse_patches} patches by signal density")
@@ -325,6 +349,12 @@ class SpectrogramDataset(Dataset):
             data = np.squeeze(data)
         assert data.ndim == 2, f"Data should be 2D after squeeze, got {data.shape}"
         
+        # Background replacement augmentation: replace with background spectrogram and zero labels
+        replace_with_background = False
+        if self.training and self.background_prob > 0 and self.rng.rand() < self.background_prob:
+            data = get_background_spectrogram(data)
+            replace_with_background = True
+        
         # Sparse patch mode: extract signal-rich patches only
         if self.use_sparse_patches:
             # Keep original linear data for signal extraction
@@ -357,6 +387,8 @@ class SpectrogramDataset(Dataset):
             
             # Get label
             y = self.labels[idx]
+            if replace_with_background:
+                y = torch.zeros_like(y)
             
             # Return patches, positions, mask, and label
             # Custom collate function will handle batching
@@ -423,6 +455,8 @@ class SpectrogramDataset(Dataset):
         
         # Get label
         y = self.labels[idx]
+        if replace_with_background:
+            y = torch.zeros_like(y)
         
         return x, y
 
@@ -733,7 +767,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False,
                        use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                       remove_baseline=True, mixup_mode='mixup', noise_mode='full'):
+                       remove_baseline=True, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -757,6 +791,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
         noise_mode: Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
+        background_prob: Probability of replacing sample with background spectrogram and zeroing labels
     
     Returns:
         tuple: (train_loader, val_loader)
@@ -781,7 +816,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         num_sparse_patches=num_sparse_patches,
         use_temporal_roll=use_temporal_roll,
         remove_baseline=remove_baseline,
-        noise_mode=noise_mode
+        noise_mode=noise_mode,
+        background_prob=background_prob
     )
     
     # Only create validation dataset if validation data exists
@@ -799,6 +835,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
             remove_baseline=remove_baseline,
+            noise_mode=noise_mode,
+            background_prob=0.0  # No background replacement for validation,
             noise_mode='full'  # Not used (no noise in validation)
         )
     else:

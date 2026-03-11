@@ -180,7 +180,7 @@ class BirdClefFineTuner:
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
-                 remove_baseline=True, test_folder=None, test_folder2=None):
+                 remove_baseline=True, test_folder=None, test_folder2=None, background_prob=0.0):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -204,6 +204,7 @@ class BirdClefFineTuner:
         self.remove_baseline = remove_baseline
         self.test_folder = test_folder
         self.test_folder2 = test_folder2
+        self.background_prob = background_prob
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -230,6 +231,8 @@ class BirdClefFineTuner:
         if self.noise_ratio > 0:
             noise_mode_name = {'full': 'full spectrogram', 'background': 'quiet segments', 'both': 'mixed'}
             print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, min({2*self.noise_ratio:.1f}, 1.0)], clipped), mode: {noise_mode_name.get(self.noise_mode, self.noise_mode)}")
+        if self.background_prob > 0:
+            print(f"  Background replacement: {self.background_prob*100:.1f}% (replaces samples with background, zeros labels)")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -315,7 +318,8 @@ class BirdClefFineTuner:
             use_temporal_roll=self.use_temporal_roll,
             remove_baseline=self.remove_baseline,
             mixup_mode=self.mixup_mode,
-            noise_mode=self.noise_mode
+            noise_mode=self.noise_mode,
+            background_prob=self.background_prob
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
@@ -926,6 +930,8 @@ Examples:
                        help="Path to noise data folder for augmentation (default: same as data_folder)")
     parser.add_argument('--noise-mode', type=str, default='full', choices=['full', 'background', 'both'],
                        help="Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments only), 'both' (random 50/50). Default: full")
+    parser.add_argument('--background-prob', type=float, default=0.0,
+                       help="Probability of replacing training sample with its background spectrogram and zeroing labels (teaches model to recognize no-bird-present). 0.0=disabled, 0.1=10%% of samples. Recommended: 0.05-0.15")
     parser.add_argument('--no-temporal-roll', action='store_true',
                        help="Disable temporal rolling augmentation")
     parser.add_argument('--validation-split', type=float, default=0.2,
@@ -973,7 +979,8 @@ Examples:
         validation_split=args.validation_split,
         remove_baseline=args.baseline_removal,
         test_folder=args.test_folder,
-        test_folder2=args.test_folder2
+        test_folder2=args.test_folder2,
+        background_prob=args.background_prob
     )
     
     # Load data and create model
