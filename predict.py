@@ -247,7 +247,10 @@ class ModelPredictor:
             for i in range(min(3, len(filenames))):
                 print(f"  File {i}: {files[i].get('class_names', files[i].get('primary_class', '???'))} → {labels[i]}")
         
-        # Create SpectrogramDataset (same parameters as validation in training)
+        # Use default spec_transform from config (matches training/validation)
+        spec_transform = config.DEFAULT_SPEC_TRANSFORM
+        
+        # Create SpectrogramDataset (EXACTLY matching validation in create_data_loaders)
         img_height = self.expected_freq_bins
         img_width = self.expected_time_bins
         
@@ -260,7 +263,7 @@ class ModelPredictor:
             cropping_mode='center',
             noise_filenames=None,
             noise_ratio=0.0,
-            spec_transform=None,
+            spec_transform=spec_transform,  # Use config.DEFAULT_SPEC_TRANSFORM (matches training/validation)
             training=False,
             width_downsizing=None,
             normalize=self.normalize,

@@ -601,6 +601,9 @@ class BirdClefFineTuner:
         img_height = config.DEFAULT_FREQ_BINS
         img_width = config.DEFAULT_TIME_BINS
         
+        # Use default spec_transform from config (matches training/validation)
+        spec_transform = config.DEFAULT_SPEC_TRANSFORM
+        
         test_dataset = SpectrogramDataset(
             test_data['filenames'],
             test_data['labels'],
@@ -610,7 +613,7 @@ class BirdClefFineTuner:
             cropping_mode='center',
             noise_filenames=None,
             noise_ratio=0.0,
-            spec_transform=None,
+            spec_transform=spec_transform,
             training=False,
             width_downsizing=None,
             normalize=self.normalize,
