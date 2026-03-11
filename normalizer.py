@@ -8,55 +8,7 @@ import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
 
-
-def normalize_spectrogram(img, method='gaussian_split', robust=True):
-    img = np.asarray(img, dtype=np.float32).copy()
-    
-    flat_order_row = np.argsort(img, axis=1)
-    ranks_row = np.empty_like(flat_order_row)
-    for i in range(img.shape[0]):
-        ranks_row[i, flat_order_row[i]] = np.arange(img.shape[1])
-
-    ranks_row = ranks_row / (img.shape[1] - 1)
-
-    flat_order_col = np.argsort(ranks_row, axis=0)
-    ranks_col = np.empty_like(flat_order_col)
-    for i in range(img.shape[1]):
-        ranks_col[flat_order_col[:,i], i] = np.arange(img.shape[0])
-
-    ranks_col = ranks_col / (img.shape[0] - 1)
-
-    normalized = ranks_row * ranks_col
-
-    return normalized
-
-def normalize_spectrogram_old(img):
-    """
-    Apply background normalization to a spectrogram.
-   
-    """
-    # Ensure input is float
-    img = np.asarray(img, dtype=np.float32)
-
-    flat_order = np.argsort(img, axis=1)
-    ranks = np.empty_like(flat_order)
-
-    # Assign ranks row by row
-    for i in range(img.shape[0]):
-        ranks[i, flat_order[i]] = np.arange(img.shape[1])
-
-    # Normalize ranks to [0, 1]
-    sg_normalized = ranks / (img.shape[1] - 1)
-    return sg_normalized
-
-def normalize_spectrogram_old_old(img):
-    """
-    Apply background normalization to a spectrogram.
-   
-    """
-    # Ensure input is float
-    img = np.asarray(img, dtype=np.float32)
-    
+def get_background_spectrogram(img):
     # Assume for any frequency band no more than half of the pixels are interesting
     # Therefore take the bottom half as non-interesting to estimate the background
     H, W = img.shape
@@ -66,11 +18,29 @@ def normalize_spectrogram_old_old(img):
     # Calculate mean and variance of background pixels per frequency band
     mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
     var0 = np.var(bg_pixels, axis=1, keepdims=True)
-        
-    # Normalize: z-score normalization per frequency band
-    sg_normalized = (img - mu0) / (np.sqrt(var0) + eps)
 
-    return sg_normalized
+    # Normalize: z-score normalization per frequency band
+    sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
+
+    for row in range(H):
+        outliers = sg_normalized[row, :] > 3
+        not_outliers = sg_normalized[row, :] <= 3
+        sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
+
+    sg_fixed = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
+
+    return sg_fixed
+
+def normalize_spectrogram(img):
+    """
+    Apply background normalization to a spectrogram.
+   
+    """
+    # Ensure input is float
+    img = np.asarray(img, dtype=np.float32)
+    img = img - get_background_spectrogram(img)
+
+    return img
 
 def visualize_normalization(img):
     """
