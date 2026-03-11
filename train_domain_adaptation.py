@@ -338,6 +338,13 @@ class DomainAdaptationTrainer:
             shuffle=True, num_workers=num_workers, pin_memory=True
         )
         
+        # For lambda=0 (no domain adaptation), create merged dataset for true equivalence with finetuning
+        merged_train_dataset = ConcatDataset([self.source_train_dataset, self.target_train_dataset])
+        self.merged_train_loader = TorchDataLoader(
+            merged_train_dataset, batch_size=self.batch_size,
+            shuffle=True, num_workers=num_workers, pin_memory=True
+        )
+        
         if self.source_val_dataset:
             self.source_val_loader = TorchDataLoader(
                 self.source_val_dataset, batch_size=self.batch_size,
@@ -416,6 +423,67 @@ class DomainAdaptationTrainer:
         
         lambda_domain = self.get_lambda_domain(epoch)
         
+        # When lambda=0, use merged dataset for true equivalence with finetuning
+        if lambda_domain == 0.0:
+            pbar = tqdm(self.merged_train_loader, desc=f"Epoch {epoch+1}/{self.epochs}")
+            
+            for batch_idx, (data, target) in enumerate(pbar):
+                data = data.to(self.device)
+                target = target.to(self.device)
+                
+                self.optimizer.zero_grad()
+                
+                # Forward pass with merged data (just like finetuning)
+                class_output, domain_output, _ = self.model(data, lambda_domain)
+                
+                # Compute loss like finetuning
+                if self.multilabel:
+                    class_loss = self.class_criterion(class_output, target.float())
+                else:
+                    if target.dim() == 2:
+                        target_idx = target.argmax(dim=1)
+                    else:
+                        target_idx = target.long()
+                    class_loss = self.class_criterion(class_output, target_idx)
+                
+                loss = class_loss
+                loss.backward()
+                self.optimizer.step()
+                
+                total_class_loss += class_loss.item()
+                total_domain_loss += 0.0
+                total_loss += loss.item()
+                
+                # Track accuracy
+                pred_class = class_output.argmax(dim=1)
+                if self.multilabel:
+                    if target.dim() == 2:
+                        labels_primary = target.argmax(dim=1)
+                    else:
+                        labels_primary = target.long()
+                    correct_class += pred_class.eq(labels_primary).sum().item()
+                else:
+                    if target.dim() == 2:
+                        target_idx = target.argmax(dim=1)
+                    else:
+                        target_idx = target.long()
+                    correct_class += pred_class.eq(target_idx).sum().item()
+                
+                total_samples += target.size(0)
+                
+                pbar.set_postfix({
+                    'class_loss': total_class_loss / (batch_idx + 1),
+                    'class_acc': 100. * correct_class / total_samples
+                })
+            
+            train_class_acc = 100. * correct_class / total_samples
+            avg_class_loss = total_class_loss / len(self.merged_train_loader)
+            avg_domain_loss = 0.0
+            train_domain_acc = 0.0
+            
+            return avg_class_loss, avg_domain_loss, train_class_acc, train_domain_acc
+        
+        # Standard DANN training with separate source/target loaders
         source_iter = iter(self.source_train_loader)
         target_iter = iter(self.target_train_loader)
         
