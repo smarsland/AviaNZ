@@ -489,6 +489,7 @@ class SpectrogramDataset(Dataset):
         - For each frequency row, randomly sample from existing values to fill padding
         - Preserves per-frequency statistics without creating repetition or silence artifacts
         - Creates statistically-similar but temporally-incoherent padding
+        - Distribution is consistent across training/validation/test (RNG state doesn't matter)
         
         Frequency axis: zero-padding (different recordings may have different freq ranges)
         """

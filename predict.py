@@ -200,6 +200,7 @@ class ModelPredictor:
             
             # Extract label (handle different label formats)
             if 'label' in file_info:
+                # Direct label field (list or int)
                 if isinstance(file_info['label'], list):
                     labels.append(file_info['label'])
                 else:
@@ -212,6 +213,22 @@ class ModelPredictor:
                         label_idx = self.categories.index(file_info['label'])
                         label_vec[label_idx] = 1
                     labels.append(label_vec)
+            elif 'class_names' in file_info:
+                # Multilabel format: class_names is a list
+                label_vec = [0] * len(self.categories)
+                for class_name in file_info['class_names']:
+                    if class_name in self.categories:
+                        label_idx = self.categories.index(class_name)
+                        label_vec[label_idx] = 1
+                labels.append(label_vec)
+            elif 'primary_class' in file_info:
+                # Single-class format: primary_class is a string
+                label_vec = [0] * len(self.categories)
+                class_name = file_info['primary_class']
+                if class_name in self.categories:
+                    label_idx = self.categories.index(class_name)
+                    label_vec[label_idx] = 1
+                labels.append(label_vec)
             else:
                 # No label provided: dummy label
                 labels.append([0] * len(self.categories))
