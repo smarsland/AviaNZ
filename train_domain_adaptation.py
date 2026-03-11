@@ -165,32 +165,13 @@ class DANNModel(nn.Module):
         return class_output, domain_output, features
     
     def predict(self, x):
-        """Inference mode - use batch statistics instead of running statistics.
-        
-        This prevents domain shift: running stats are from mixed source+target training,
-        but test data is pure source or pure target. Using batch stats adapts to test distribution.
-        """
-        # Temporarily switch batch norm to training mode (uses batch stats, not running stats)
-        bn_training_mode = {}
-        for name, module in self.named_modules():
-            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
-                bn_training_mode[name] = module.training
-                module.train()
-        
         features = self.backbone(x)
         if isinstance(features, dict):
             features = features['features']
         if len(features.shape) == 4:
             features = self.pooling(features)
             features = features.view(features.size(0), -1)
-        output = self.class_classifier(features)
-        
-        # Restore original training mode for batch norm layers
-        for name, module in self.named_modules():
-            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
-                module.train(bn_training_mode[name])
-        
-        return output
+        return self.class_classifier(features)
 
 
 class DomainAdaptationTrainer:
