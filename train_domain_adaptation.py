@@ -360,6 +360,20 @@ class DomainAdaptationTrainer:
             )
         else:
             self.target_val_loader = None
+        
+        # Create merged validation loader for lambda=0
+        if self.source_val_dataset and self.target_val_dataset:
+            merged_val_dataset = ConcatDataset([self.source_val_dataset, self.target_val_dataset])
+            self.merged_val_loader = TorchDataLoader(
+                merged_val_dataset, batch_size=self.batch_size,
+                shuffle=False, num_workers=num_workers, pin_memory=True
+            )
+        elif self.source_val_dataset:
+            self.merged_val_loader = self.source_val_loader
+        elif self.target_val_dataset:
+            self.merged_val_loader = self.target_val_loader
+        else:
+            self.merged_val_loader = None
     
     def create_model(self):
         print("\nCreating DANN model...")
@@ -706,28 +720,56 @@ class DomainAdaptationTrainer:
         for epoch in range(self.epochs):
             train_class_loss, train_domain_loss, train_class_acc, train_domain_acc = self.train_epoch(epoch)
             
-            source_val_acc = self.validate(self.source_val_loader, "Source")
-            target_val_acc = self.validate(self.target_val_loader, "Target")
+            lambda_domain = self.get_lambda_domain(epoch)
             
-            self.scheduler.step()
-            
-            history['train_class_loss'].append(train_class_loss)
-            history['train_domain_loss'].append(train_domain_loss)
-            history['train_class_acc'].append(train_class_acc)
-            history['train_domain_acc'].append(train_domain_acc)
-            history['source_val_acc'].append(source_val_acc)
-            history['target_val_acc'].append(target_val_acc)
-            
-            print(f"Epoch {epoch+1}/{self.epochs}:")
-            print(f"  Train - Class Loss: {train_class_loss:.4f}, Class Acc: {train_class_acc:.2f}%")
-            print(f"  Train - Domain Loss: {train_domain_loss:.4f}, Domain Acc: {train_domain_acc:.2f}% (want ~50% = confused)")
-            if source_val_acc > 0 or target_val_acc > 0:
-                print(f"  Val - Source Acc: {source_val_acc:.2f}%, Target Acc: {target_val_acc:.2f}%")
-            
-            if target_val_acc > best_target_acc:
-                best_target_acc = target_val_acc
-                self.save_model('dann_best.pt')
-                print(f"  ✓ Saved best model (target acc: {target_val_acc:.2f}%)")
+            if lambda_domain == 0.0:
+                # For lambda=0, validate on merged set like finetuning
+                merged_val_acc = self.validate(self.merged_val_loader, "Merged") if self.merged_val_loader else 0.0
+                source_val_acc = 0.0
+                target_val_acc = 0.0
+                
+                self.scheduler.step()
+                
+                history['train_class_loss'].append(train_class_loss)
+                history['train_domain_loss'].append(train_domain_loss)
+                history['train_class_acc'].append(train_class_acc)
+                history['train_domain_acc'].append(train_domain_acc)
+                history['source_val_acc'].append(source_val_acc)
+                history['target_val_acc'].append(target_val_acc)
+                
+                print(f"Epoch {epoch+1}/{self.epochs}:")
+                print(f"  Train - Class Loss: {train_class_loss:.4f}, Class Acc: {train_class_acc:.2f}%")
+                if merged_val_acc > 0:
+                    print(f"  Val - Merged Acc: {merged_val_acc:.2f}%")
+                
+                if merged_val_acc > best_target_acc:
+                    best_target_acc = merged_val_acc
+                    self.save_model('dann_best.pt')
+                    print(f"  ✓ Saved best model (merged val acc: {merged_val_acc:.2f}%)")
+            else:
+                # Standard DANN validation on separate sets
+                source_val_acc = self.validate(self.source_val_loader, "Source")
+                target_val_acc = self.validate(self.target_val_loader, "Target")
+                
+                self.scheduler.step()
+                
+                history['train_class_loss'].append(train_class_loss)
+                history['train_domain_loss'].append(train_domain_loss)
+                history['train_class_acc'].append(train_class_acc)
+                history['train_domain_acc'].append(train_domain_acc)
+                history['source_val_acc'].append(source_val_acc)
+                history['target_val_acc'].append(target_val_acc)
+                
+                print(f"Epoch {epoch+1}/{self.epochs}:")
+                print(f"  Train - Class Loss: {train_class_loss:.4f}, Class Acc: {train_class_acc:.2f}%")
+                print(f"  Train - Domain Loss: {train_domain_loss:.4f}, Domain Acc: {train_domain_acc:.2f}% (want ~50% = confused)")
+                if source_val_acc > 0 or target_val_acc > 0:
+                    print(f"  Val - Source Acc: {source_val_acc:.2f}%, Target Acc: {target_val_acc:.2f}%")
+                
+                if target_val_acc > best_target_acc:
+                    best_target_acc = target_val_acc
+                    self.save_model('dann_best.pt')
+                    print(f"  ✓ Saved best model (target acc: {target_val_acc:.2f}%)")
         
         self.save_model('dann_final.pt')
         
