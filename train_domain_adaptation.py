@@ -364,6 +364,14 @@ class DomainAdaptationTrainer:
         )
         self.model.to(self.device)
         
+        # CRITICAL: Set batch norm momentum=0 for domain adaptation
+        # This prevents batch norm from accumulating running stats from mixed source+target batches
+        # Instead, it uses only current batch statistics (which match test distribution)
+        print("  Setting batch norm momentum=0 (use batch statistics, not running averages)")
+        for module in self.model.modules():
+            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                module.momentum = 0.0
+        
         if self.multilabel:
             self.class_criterion = nn.BCEWithLogitsLoss()
         else:
