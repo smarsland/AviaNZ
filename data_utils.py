@@ -835,9 +835,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
             remove_baseline=remove_baseline,
-            noise_mode=noise_mode,
-            background_prob=0.0  # No background replacement for validation,
-            noise_mode='full'  # Not used (no noise in validation)
+            noise_mode='full',  # Not used (no noise in validation)
+            background_prob=0.0  # No background replacement for validation
         )
     else:
         val_dataset = None

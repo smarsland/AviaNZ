@@ -521,15 +521,19 @@ class DomainAdaptationTrainer:
                 correct_class += pred_class_t.eq(target_labels_idx).sum().item()
             
             pred_domain = domain_output.argmax(dim=1)
-            correct_domain += pred_domain.eq(domain_labels
+            correct_domain += pred_domain.eq(domain_labels).sum().item()
+            
+            total_samples += batch_size_s + batch_size_t
+            
+            pbar.set_postfix({
                 'cls_loss': total_class_loss / (batch_idx + 1),
                 'dom_loss': total_domain_loss / (batch_idx + 1),
-                'cls_acc': 100. * correct_class / max(len(self.source_train_dataset), 1),
+                'cls_acc': 100. * correct_class / max(len(self.source_train_dataset) + len(self.target_train_dataset), 1),
                 'dom_acc': 100. * correct_domain / total_samples,
                 'lambda': lambda_domain
             })
         
-        class_acc = 100. * correct_class / len(self.source_train_dataset)
+        class_acc = 100. * correct_class / (len(self.source_train_dataset) + len(self.target_train_dataset))
         domain_acc = 100. * correct_domain / total_samples
         
         return (total_class_loss / num_batches, 
