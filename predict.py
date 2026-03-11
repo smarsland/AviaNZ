@@ -159,6 +159,18 @@ class ModelPredictor:
         self.model.to(self.device)
         self.model.eval()
         
+        # CRITICAL FIX for DANN: Keep batch norm in train mode for inference
+        # DANN trains on mixed source+target batches, corrupting batch norm running statistics
+        # At test time, use batch statistics (train mode) instead of running statistics (eval mode)
+        if model_type == 'dann':
+            print("DANN model: Using batch statistics for inference (batch norm in train mode)")
+            for module in self.model.modules():
+                if isinstance(module, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)):
+                    module.train()
+                    # Disable gradient computation for batch norm parameters
+                    for param in module.parameters():
+                        param.requires_grad = False
+        
         print("Model loaded successfully")
     
     def load_data(self):

@@ -524,6 +524,13 @@ class DomainAdaptationTrainer:
             return 0.0
         
         self.model.eval()
+        
+        # CRITICAL: Keep batch norm in train mode during validation for DANN
+        # Running statistics are corrupted by mixed source+target training, use batch statistics instead
+        for module in self.model.modules():
+            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+                module.train()
+        
         correct = 0
         total = 0
         
