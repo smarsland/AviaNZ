@@ -70,6 +70,7 @@ class ModelPredictor:
         training_time_bins = model_config.get('time_bins', config.DEFAULT_TIME_BINS)
         
         inference_time_bins = self.inference_time_bins if self.inference_time_bins is not None else training_time_bins
+        self.expected_time_bins = inference_time_bins  # Save for use in load_data()
         
         if inference_time_bins != training_time_bins:
             print(f"⚡ Resizing model input: {training_time_bins} → {inference_time_bins} time bins")
@@ -191,34 +192,37 @@ class ModelPredictor:
         
         for file_info in files:
             spec_path = os.path.join(self.data_folder, "data", file_info['filename'])
-            if os.path.exists(spec_path):
-                filenames.append(spec_path)
-                
-                # Extract label (handle different label formats)
-                if 'label' in file_info:
-                    if isinstance(file_info['label'], list):
-                        labels.append(file_info['label'])
-                    else:
-                        # Single-class label: convert to one-hot
-                        label_vec = [0] * len(self.categories)
-                        if isinstance(file_info['label'], int):
-                            label_vec[file_info['label']] = 1
-                        else:
-                            # String label: find index
-                            label_idx = self.categories.index(file_info['label'])
-                            label_vec[label_idx] = 1
-                        labels.append(label_vec)
+            if not os.path.exists(spec_path):
+                print(f"⚠️  Skipping missing file: {spec_path}")
+                continue
+            
+            filenames.append(spec_path)
+            
+            # Extract label (handle different label formats)
+            if 'label' in file_info:
+                if isinstance(file_info['label'], list):
+                    labels.append(file_info['label'])
                 else:
-                    # No label provided: dummy label
-                    labels.append([0] * len(self.categories))
-                
-                self.file_metadata.append(file_info)
+                    # Single-class label: convert to one-hot
+                    label_vec = [0] * len(self.categories)
+                    if isinstance(file_info['label'], int):
+                        label_vec[file_info['label']] = 1
+                    else:
+                        # String label: find index
+                        label_idx = self.categories.index(file_info['label'])
+                        label_vec[label_idx] = 1
+                    labels.append(label_vec)
+            else:
+                # No label provided: dummy label
+                labels.append([0] * len(self.categories))
+            
+            self.file_metadata.append(file_info)
         
         print(f"Found {len(filenames)} valid spectrogram files")
         
         # Create SpectrogramDataset (same parameters as validation in training)
         img_height = self.expected_freq_bins
-        img_width = self.inference_time_bins if self.inference_time_bins is not None else config.DEFAULT_TIME_BINS
+        img_width = self.expected_time_bins
         
         self.test_dataset = SpectrogramDataset(
             filenames,
