@@ -466,29 +466,43 @@ class DomainAdaptationTrainer:
             
             # CRITICAL: Train classification on BOTH source and target (like BirdClef merged training)
             # Domain adaptation should learn from all available labeled data
-            if self.multilabel:
-                class_loss_s = self.class_criterion(class_output_s, source_labels_split.float())
-                class_loss_t = self.class_criterion(class_output_t, target_labels_split.float())
-                class_loss = (class_loss_s + class_loss_t) / 2.0
+            if lambda_domain == 0.0:
+                # When lambda=0, behave exactly like merged training (no equal weighting, no domain loss)
+                if self.multilabel:
+                    class_loss = self.class_criterion(class_output, combined_labels.float())
+                else:
+                    if combined_labels.dim() == 2:
+                        combined_labels_idx = combined_labels.argmax(dim=1)
+                    else:
+                        combined_labels_idx = combined_labels.long()
+                    class_loss = self.class_criterion(class_output, combined_labels_idx)
+                domain_loss = torch.tensor(0.0, device=self.device)
+                loss = class_loss
             else:
-                if source_labels_split.dim() == 2:
-                    source_labels_idx = source_labels_split.argmax(dim=1)
+                # Standard DANN with equal dataset weighting
+                if self.multilabel:
+                    class_loss_s = self.class_criterion(class_output_s, source_labels_split.float())
+                    class_loss_t = self.class_criterion(class_output_t, target_labels_split.float())
+                    class_loss = (class_loss_s + class_loss_t) / 2.0
                 else:
-                    source_labels_idx = source_labels_split.long()
-                if target_labels_split.dim() == 2:
-                    target_labels_idx = target_labels_split.argmax(dim=1)
-                else:
-                    target_labels_idx = target_labels_split.long()
-                class_loss_s = self.class_criterion(class_output_s, source_labels_idx)
-                class_loss_t = self.class_criterion(class_output_t, target_labels_idx)
-                class_loss = (class_loss_s + class_loss_t) / 2.0
-            
-            # Domain loss on combined output
-            domain_loss = self.domain_criterion(domain_output, domain_labels)
-            
-            # Total loss: classification + domain adversarial loss
-            # Lambda scaling is handled by gradient reversal layer (affects feature extractor gradients)
-            loss = class_loss + domain_loss
+                    if source_labels_split.dim() == 2:
+                        source_labels_idx = source_labels_split.argmax(dim=1)
+                    else:
+                        source_labels_idx = source_labels_split.long()
+                    if target_labels_split.dim() == 2:
+                        target_labels_idx = target_labels_split.argmax(dim=1)
+                    else:
+                        target_labels_idx = target_labels_split.long()
+                    class_loss_s = self.class_criterion(class_output_s, source_labels_idx)
+                    class_loss_t = self.class_criterion(class_output_t, target_labels_idx)
+                    class_loss = (class_loss_s + class_loss_t) / 2.0
+                
+                # Domain loss on combined output
+                domain_loss = self.domain_criterion(domain_output, domain_labels)
+                
+                # Total loss: classification + domain adversarial loss
+                # Lambda scaling is handled by gradient reversal layer (affects feature extractor gradients)
+                loss = class_loss + domain_loss
             loss.backward()
             self.optimizer.step()
             
