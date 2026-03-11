@@ -453,12 +453,20 @@ class DomainAdaptationTrainer:
                 torch.ones(batch_size_t, dtype=torch.long, device=self.device)
             ], dim=0)
             
+            # When lambda=0, shuffle the combined batch to match random finetuning behavior
+            if lambda_domain == 0.0:
+                perm = torch.randperm(combined_data.size(0), device=self.device)
+                combined_data = combined_data[perm]
+                combined_labels = combined_labels[perm]
+                domain_labels = domain_labels[perm]
+            
             self.optimizer.zero_grad()
             
             # Single forward pass on combined batch (batch norm sees mixed distribution!)
             class_output, domain_output, _ = self.model(combined_data, lambda_domain)
             
             # Split outputs for separate source/target classification loss
+            # Note: after shuffling with lambda=0, this split is meaningless, but we keep the structure
             class_output_s = class_output[:batch_size_s]
             class_output_t = class_output[batch_size_s:]
             source_labels_split = combined_labels[:batch_size_s]
@@ -507,32 +515,49 @@ class DomainAdaptationTrainer:
             self.optimizer.step()
             
             total_class_loss += class_loss.item()
-            total_domain_loss += domain_loss.item()
+            total_domain_loss += domain_loss.item() if isinstance(domain_loss, torch.Tensor) else domain_loss
             total_loss += loss.item()
             
-            # Track classification accuracy on BOTH source and target
-            pred_class_s = class_output_s.argmax(dim=1)
-            pred_class_t = class_output_t.argmax(dim=1)
-            
-            if self.multilabel:
-                # For multilabel, compare against primary class (argmax of target)
-                if source_labels.dim() == 2:
-                    source_labels_primary = source_labels.argmax(dim=1)
+            # Track classification accuracy
+            if lambda_domain == 0.0:
+                # After shuffling, compute accuracy over entire combined batch
+                pred_class = class_output.argmax(dim=1)
+                if self.multilabel:
+                    if combined_labels.dim() == 2:
+                        labels_primary = combined_labels.argmax(dim=1)
+                    else:
+                        labels_primary = combined_labels.long()
+                    correct_class += pred_class.eq(labels_primary).sum().item()
                 else:
-                    source_labels_primary = source_labels.long()
-                if target_labels_split.dim() == 2:
-                    source_labels_primary = source_labels_split.argmax(dim=1)
-                else:
-                    source_labels_primary = source_labels_split.long()
-                if target_labels_split.dim() == 2:
-                    target_labels_primary = target_labels_split.argmax(dim=1)
-                else:
-                    target_labels_primary = target_labels_split.long()
-                correct_class += pred_class_s.eq(source_labels_primary).sum().item()
-                correct_class += pred_class_t.eq(target_labels_primary).sum().item()
+                    if combined_labels.dim() == 2:
+                        labels_idx = combined_labels.argmax(dim=1)
+                    else:
+                        labels_idx = combined_labels.long()
+                    correct_class += pred_class.eq(labels_idx).sum().item()
             else:
-                correct_class += pred_class_s.eq(source_labels_idx).sum().item()
-                correct_class += pred_class_t.eq(target_labels_idx).sum().item()
+                # Track classification accuracy on BOTH source and target separately
+                pred_class_s = class_output_s.argmax(dim=1)
+                pred_class_t = class_output_t.argmax(dim=1)
+                
+                if self.multilabel:
+                    # For multilabel, compare against primary class (argmax of target)
+                    if source_labels.dim() == 2:
+                        source_labels_primary = source_labels.argmax(dim=1)
+                    else:
+                        source_labels_primary = source_labels.long()
+                    if target_labels_split.dim() == 2:
+                        source_labels_primary = source_labels_split.argmax(dim=1)
+                    else:
+                        source_labels_primary = source_labels_split.long()
+                    if target_labels_split.dim() == 2:
+                        target_labels_primary = target_labels_split.argmax(dim=1)
+                    else:
+                        target_labels_primary = target_labels_split.long()
+                    correct_class += pred_class_s.eq(source_labels_primary).sum().item()
+                    correct_class += pred_class_t.eq(target_labels_primary).sum().item()
+                else:
+                    correct_class += pred_class_s.eq(source_labels_idx).sum().item()
+                    correct_class += pred_class_t.eq(target_labels_idx).sum().item()
             
             pred_domain = domain_output.argmax(dim=1)
             correct_domain += pred_domain.eq(domain_labels).sum().item()
