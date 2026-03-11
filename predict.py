@@ -84,11 +84,13 @@ class ModelPredictor:
         
         # Auto-detect baseline removal from model config if not explicitly set
         if self.remove_baseline is None:
-            self.remove_baseline = model_config.get('remove_baseline', False)  # Default False (backwards compat)
-            if self.remove_baseline:
-                print(f"⚡ Baseline removal: enabled (from model config)")
+            if 'remove_baseline' in model_config:
+                self.remove_baseline = model_config['remove_baseline']
+                status = "enabled" if self.remove_baseline else "disabled"
+                print(f"Baseline removal: {status} (from model config)")
             else:
-                print(f"Baseline removal: disabled (not in model config / old model)")
+                self.remove_baseline = False  # Default False (backwards compat)
+                print(f"Baseline removal: disabled (old model, no config found - assuming False)")
         
         training_input_size = (self.expected_freq_bins, training_time_bins)
         

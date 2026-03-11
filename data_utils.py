@@ -767,7 +767,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False,
                        use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                       remove_baseline=True, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
+                       remove_baseline=False, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
     
