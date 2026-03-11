@@ -619,8 +619,7 @@ class DomainAdaptationTrainer:
             
             if target_val_acc > best_target_acc:
                 best_target_acc = target_val_acc
-                torch.save(self.model.state_dict(), os.path.join(self.output_folder, 'dann_best.pt'))
-                self.save_config('dann_best_config.json')
+                self.save_model('dann_best.pt')
                 print(f"  ✓ Saved best model (target acc: {target_val_acc:.2f}%)")
         
         self.save_model('dann_final.pt')
