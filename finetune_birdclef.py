@@ -180,7 +180,7 @@ class BirdClefFineTuner:
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
-                 remove_baseline=True, test_folder=None, test_folder2=None, background_prob=0.0):
+                 remove_baseline=False, test_folder=None, test_folder2=None, background_prob=0.0):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
