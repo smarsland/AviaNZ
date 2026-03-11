@@ -237,6 +237,16 @@ class ModelPredictor:
         
         print(f"Found {len(filenames)} valid spectrogram files")
         
+        # Convert labels to numpy array (same format as DataLoader.load_data)
+        labels = np.array(labels, dtype=np.float32)
+        
+        # DEBUG: Print category mapping
+        print(f"Model categories (order matters!): {self.categories}")
+        if len(filenames) > 0:
+            print(f"Sample label extraction:")
+            for i in range(min(3, len(filenames))):
+                print(f"  File {i}: {files[i].get('class_names', files[i].get('primary_class', '???'))} → {labels[i]}")
+        
         # Create SpectrogramDataset (same parameters as validation in training)
         img_height = self.expected_freq_bins
         img_width = self.expected_time_bins
