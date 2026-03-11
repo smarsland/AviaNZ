@@ -281,7 +281,7 @@ class DomainAdaptationTrainer:
             source_data['train_labels'],
             img_height, img_width, config.DEFAULT_CHANNELS,
             cropping_mode='random', noise_filenames=None, noise_ratio=0.0,
-            spec_transform=None, training=True, width_downsizing=None,
+            spec_transform=config.DEFAULT_SPEC_TRANSFORM, training=True, width_downsizing=None,
             normalize=self.normalize, use_sparse_patches=False,
             num_sparse_patches=0, use_temporal_roll=True,
             remove_baseline=self.remove_baseline
@@ -292,7 +292,7 @@ class DomainAdaptationTrainer:
             target_data['train_labels'],
             img_height, img_width, config.DEFAULT_CHANNELS,
             cropping_mode='random', noise_filenames=None, noise_ratio=0.0,
-            spec_transform=None, training=True, width_downsizing=None,
+            spec_transform=config.DEFAULT_SPEC_TRANSFORM, training=True, width_downsizing=None,
             normalize=self.normalize, use_sparse_patches=False,
             num_sparse_patches=0, use_temporal_roll=True,
             remove_baseline=self.remove_baseline
@@ -304,7 +304,7 @@ class DomainAdaptationTrainer:
                 source_val_labels.tolist() if hasattr(source_val_labels, 'tolist') else source_val_labels,
                 img_height, img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
-                spec_transform=None, training=False, width_downsizing=None,
+                spec_transform=config.DEFAULT_SPEC_TRANSFORM, training=False, width_downsizing=None,
                 normalize=self.normalize, use_sparse_patches=False,
                 num_sparse_patches=0, use_temporal_roll=False,
                 remove_baseline=self.remove_baseline
@@ -318,7 +318,7 @@ class DomainAdaptationTrainer:
                 target_val_labels.tolist() if hasattr(target_val_labels, 'tolist') else target_val_labels,
                 img_height, img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='center', noise_filenames=None, noise_ratio=0.0,
-                spec_transform=None, training=False, width_downsizing=None,
+                spec_transform=config.DEFAULT_SPEC_TRANSFORM, training=False, width_downsizing=None,
                 normalize=self.normalize, use_sparse_patches=False,
                 num_sparse_patches=0, use_temporal_roll=False,
                 remove_baseline=self.remove_baseline
