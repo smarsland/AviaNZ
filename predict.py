@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+from torch.utils.data import DataLoader as TorchDataLoader
 from models import AST, CNNModel
 from data_utils import SpectrogramDataset
 from normalizer import normalize_spectrogram
@@ -41,7 +42,8 @@ class ModelPredictor:
         
         self.model = None
         self.categories = None
-        self.dataset = None
+        self.test_dataset = None
+        self.test_loader = None
         self.multilabel = False
     
     def load_model(self):
@@ -162,7 +164,7 @@ class ModelPredictor:
         print("Model loaded successfully")
     
     def load_data(self):
-        """Load spectrogram data and labels."""
+        """Load spectrogram data and labels using SpectrogramDataset (matches training)."""
         print(f"Loading data from {self.data_folder}")
         
         labels_file = os.path.join(self.data_folder, "labels.json")
@@ -180,112 +182,89 @@ class ModelPredictor:
         print(f"Found {len(files)} files")
         print(f"Model expects {len(self.categories)} categories")
         
-        self.file_specs = []
-        self.file_metadata = []
+        # Build file paths and labels in the format SpectrogramDataset expects
+        filenames = []
+        labels = []
+        self.file_metadata = []  # Keep metadata for saving predictions
         
         for file_info in files:
             spec_path = os.path.join(self.data_folder, "data", file_info['filename'])
             if os.path.exists(spec_path):
-                self.file_specs.append(spec_path)
+                filenames.append(spec_path)
+                
+                # Extract label (handle different label formats)
+                if 'label' in file_info:
+                    if isinstance(file_info['label'], list):
+                        labels.append(file_info['label'])
+                    else:
+                        # Single-class label: convert to one-hot
+                        label_vec = [0] * len(self.categories)
+                        if isinstance(file_info['label'], int):
+                            label_vec[file_info['label']] = 1
+                        else:
+                            # String label: find index
+                            label_idx = self.categories.index(file_info['label'])
+                            label_vec[label_idx] = 1
+                        labels.append(label_vec)
+                else:
+                    # No label provided: dummy label
+                    labels.append([0] * len(self.categories))
+                
                 self.file_metadata.append(file_info)
         
-        print(f"Found {len(self.file_specs)} valid spectrogram files")
+        print(f"Found {len(filenames)} valid spectrogram files")
+        
+        # Create SpectrogramDataset (same parameters as validation in training)
+        img_height = self.expected_freq_bins
+        img_width = self.inference_time_bins if self.inference_time_bins is not None else config.DEFAULT_TIME_BINS
+        
+        self.test_dataset = SpectrogramDataset(
+            filenames,
+            labels,
+            img_height,
+            img_width,
+            config.DEFAULT_CHANNELS,
+            cropping_mode='center',
+            noise_filenames=None,
+            noise_ratio=0.0,
+            spec_transform=None,
+            training=False,
+            width_downsizing=None,
+            normalize=self.normalize,
+            use_sparse_patches=self.use_sparse_patches,
+            num_sparse_patches=self.num_sparse_patches,
+            use_temporal_roll=False,
+            remove_baseline=self.remove_baseline
+        )
+        
+        # Create DataLoader (same as validation)
+        self.test_loader = TorchDataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=4 if torch.cuda.is_available() else 2,
+            pin_memory=True
+        )
+        
+        print(f"Created DataLoader with batch_size={self.batch_size}")
     
     def predict(self):
-        """Generate predictions for all data."""
+        """Generate predictions using DataLoader (matches training/validation)."""
         print("Generating predictions...")
         
         all_predictions = []
-        all_source_files = []
-        all_row_ids = []
+        
+        self.model.eval()
         
         with torch.no_grad():
-            for spec_path, file_info in tqdm(zip(self.file_specs, self.file_metadata), 
-                                            total=len(self.file_specs), desc="Predicting"):
-                spec = np.load(spec_path)
+            for data, target in tqdm(self.test_loader, desc="Predicting"):
+                data = data.to(self.device)
                 
-                if spec.ndim == 2:
-                    freq_bins, time_bins = spec.shape
+                # DANN models have separate predict() method for inference
+                if self.model_type == 'dann':
+                    outputs = self.model.predict(data)
                 else:
-                    raise ValueError(f"Unexpected spectrogram shape: {spec.shape}")
-                
-                # Pad or crop to expected dimensions from model config
-                # Use TILING for padding (matches training: data_utils.py uses np.tile, not np.pad)
-                if time_bins < self.expected_time_bins:
-                    # Tile/repeat the signal instead of zero-padding
-                    tiles_needed = int(np.ceil(self.expected_time_bins / time_bins))
-                    spec = np.tile(spec, (1, tiles_needed))
-                    spec = spec[:, :self.expected_time_bins]  # Crop to exact size
-                elif time_bins > self.expected_time_bins:
-                    # CENTER crop (matches validation cropping_mode='center')
-                    start_col = (time_bins - self.expected_time_bins) // 2
-                    spec = spec[:, start_col:start_col + self.expected_time_bins]
-                
-                if freq_bins < self.expected_freq_bins:
-                    pad_height = self.expected_freq_bins - freq_bins
-                    spec = np.pad(spec, ((0, pad_height), (0, 0)), mode='constant')
-                elif freq_bins > self.expected_freq_bins:
-                    # CENTER crop for frequency too
-                    start_row = (freq_bins - self.expected_freq_bins) // 2
-                    spec = spec[start_row:start_row + self.expected_freq_bins, :]
-                
-                # Remove baseline offset before log transform (CRITICAL for cross-dataset consistency)
-                if self.remove_baseline:
-                    baseline = np.percentile(spec, 10)
-                    spec = np.maximum(spec - baseline, 0)
-                
-                LOG_OFFSET = 1e-7
-                spec = np.log(spec + LOG_OFFSET)
-                
-                # Apply background normalization if enabled
-                if self.normalize:
-                    spec = normalize_spectrogram(spec)
-                
-                # Handle sparse patches mode
-                if self.use_sparse_patches:
-                    from data_utils import extract_signal_regions, extract_sparse_patches
-                    
-                    # Extract signal regions from linear spectrogram (before log)
-                    spec_linear = np.load(spec_path)  # Reload linear version
-                    
-                    # Resize if needed
-                    if spec_linear.shape != (self.expected_freq_bins, self.expected_time_bins):
-                        from scipy.ndimage import zoom
-                        h_ratio = self.expected_freq_bins / spec_linear.shape[0]
-                        w_ratio = self.expected_time_bins / spec_linear.shape[1]
-                        spec_linear = zoom(spec_linear, (h_ratio, w_ratio), order=1)
-                    
-                    spec_normalized, labeled_regions = extract_signal_regions(spec_linear)
-                    
-                    # Extract sparse patches
-                    patches, positions, mask = extract_sparse_patches(
-                        spec_normalized, labeled_regions,
-                        num_patches=self.num_sparse_patches,
-                        patch_size=16
-                    )
-                    
-                    # Convert to tensors with correct shape: (1, K, 1, 16, 16)
-                    patches_tensor = torch.from_numpy(patches).float()  # (K, 16, 16)
-                    patches_tensor = patches_tensor.unsqueeze(0).unsqueeze(2)  # (1, K, 1, 16, 16)
-                    positions_tensor = torch.from_numpy(positions).long().unsqueeze(0)  # (1, K, 2)
-                    mask_tensor = torch.from_numpy(mask).bool().unsqueeze(0)  # (1, K)
-                    
-                    patches_tensor = patches_tensor.to(self.device)
-                    positions_tensor = positions_tensor.to(self.device)
-                    mask_tensor = mask_tensor.to(self.device)
-                    
-                    outputs = self.model(patches_tensor, sparse_mode=True, positions=positions_tensor, mask=mask_tensor)
-                else:
-                    # Standard mode
-                    spec_tensor = torch.from_numpy(spec).float()
-                    spec_tensor = spec_tensor.unsqueeze(0).unsqueeze(0)
-                    spec_tensor = spec_tensor.to(self.device)
-                    
-                    # DANN models have separate predict() method for inference
-                    if self.model_type == 'dann':
-                        outputs = self.model.predict(spec_tensor)
-                    else:
-                        outputs = self.model(spec_tensor)
+                    outputs = self.model(data)
                 
                 # Handle reconstruction output if present
                 if isinstance(outputs, tuple):
@@ -296,26 +275,12 @@ class ModelPredictor:
                 else:
                     probs = torch.softmax(outputs, dim=1)
                 
-                all_predictions.append(probs.cpu().numpy()[0])
-                
-                filename = file_info['filename']
-                source_file = file_info.get('source_file', filename)
-                
-                if 'row_id' in file_info:
-                    row_id = file_info['row_id']
-                else:
-                    row_id = filename
-                
-                all_source_files.append(source_file)
-                all_row_ids.append(row_id)
+                all_predictions.append(probs.cpu().numpy())
         
         all_predictions = np.vstack(all_predictions)
         
-        print(f"Generated {len(all_predictions)} predictions from {len(self.file_specs)} files")
+        print(f"Generated {len(all_predictions)} predictions")
         print(f"Predictions shape: {all_predictions.shape}")
-        
-        self.source_files = all_source_files
-        self.row_ids = all_row_ids
         
         return all_predictions
     
@@ -323,15 +288,31 @@ class ModelPredictor:
         """Save predictions to CSV in kaytoo-compatible format."""
         print(f"Saving predictions to {self.output_file}")
         
+        # Extract source_files and row_ids from metadata
+        source_files = []
+        row_ids = []
+        
+        for file_info in self.file_metadata:
+            filename = file_info['filename']
+            source_file = file_info.get('source_file', filename)
+            
+            if 'row_id' in file_info:
+                row_id = file_info['row_id']
+            else:
+                row_id = filename
+            
+            source_files.append(source_file)
+            row_ids.append(row_id)
+        
         df = pd.DataFrame(predictions, columns=self.categories)
         
-        df.insert(0, 'File_Path', self.source_files)
-        df.insert(1, 'row_id', self.row_ids)
+        df.insert(0, 'File_Path', source_files)
+        df.insert(1, 'row_id', row_ids)
         
         os.makedirs(os.path.dirname(self.output_file) or '.', exist_ok=True)
         df.to_csv(self.output_file, index=False)
         
-        print(f"Saved {len(df)} predictions ({len(set(self.source_files))} unique files)")
+        print(f"Saved {len(df)} predictions ({len(set(source_files))} unique files)")
     
     def run(self):
         """Run full prediction pipeline."""
