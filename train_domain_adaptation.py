@@ -364,14 +364,6 @@ class DomainAdaptationTrainer:
         )
         self.model.to(self.device)
         
-        # CRITICAL: Set batch norm momentum=0 for domain adaptation
-        # This prevents batch norm from accumulating running stats from mixed source+target batches
-        # Instead, it uses only current batch statistics (which match test distribution)
-        print("  Setting batch norm momentum=0 (use batch statistics, not running averages)")
-        for module in self.model.modules():
-            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
-                module.momentum = 0.0
-        
         if self.multilabel:
             self.class_criterion = nn.BCEWithLogitsLoss()
         else:
@@ -447,33 +439,52 @@ class DomainAdaptationTrainer:
             source_data = source_data.to(self.device)
             source_labels = source_labels.to(self.device)
             target_data = target_data.to(self.device)
+            target_labels = target_labels.to(self.device)
             
             batch_size_s = source_data.size(0)
             batch_size_t = target_data.size(0)
             
-            domain_labels_s = torch.zeros(batch_size_s, dtype=torch.long, device=self.device)
-            domain_labels_t = torch.ones(batch_size_t, dtype=torch.long, device=self.device)
+            # CRITICAL: Concatenate source and target into SINGLE batch
+            # This makes batch norm see the same mixed distribution as BirdClef training
+            combined_data = torch.cat([source_data, target_data], dim=0)
+            combined_labels = torch.cat([source_labels, target_labels], dim=0)
+            domain_labels = torch.cat([
+                torch.zeros(batch_size_s, dtype=torch.long, device=self.device),
+                torch.ones(batch_size_t, dtype=torch.long, device=self.device)
+            ], dim=0)
             
             self.optimizer.zero_grad()
             
-            class_output_s, domain_output_s, _ = self.model(source_data, lambda_domain)
-            _, domain_output_t, _ = self.model(target_data, lambda_domain)
+            # Single forward pass on combined batch (batch norm sees mixed distribution!)
+            class_output, domain_output, _ = self.model(combined_data, lambda_domain)
             
+            # Split outputs for separate source/target classification loss
+            class_output_s = class_output[:batch_size_s]
+            class_output_t = class_output[batch_size_s:]
+            source_labels_split = combined_labels[:batch_size_s]
+            target_labels_split = combined_labels[batch_size_s:]
+            
+            # CRITICAL: Train classification on BOTH source and target (like BirdClef merged training)
+            # Domain adaptation should learn from all available labeled data
             if self.multilabel:
-                class_loss = self.class_criterion(class_output_s, source_labels.float())
+                class_loss_s = self.class_criterion(class_output_s, source_labels_split.float())
+                class_loss_t = self.class_criterion(class_output_t, target_labels_split.float())
+                class_loss = (class_loss_s + class_loss_t) / 2.0
             else:
-                if source_labels.dim() == 2:
-                    source_labels_idx = source_labels.argmax(dim=1)
+                if source_labels_split.dim() == 2:
+                    source_labels_idx = source_labels_split.argmax(dim=1)
                 else:
-                    source_labels_idx = source_labels.long()
-                class_loss = self.class_criterion(class_output_s, source_labels_idx)
+                    source_labels_idx = source_labels_split.long()
+                if target_labels_split.dim() == 2:
+                    target_labels_idx = target_labels_split.argmax(dim=1)
+                else:
+                    target_labels_idx = target_labels_split.long()
+                class_loss_s = self.class_criterion(class_output_s, source_labels_idx)
+                class_loss_t = self.class_criterion(class_output_t, target_labels_idx)
+                class_loss = (class_loss_s + class_loss_t) / 2.0
             
-            domain_loss = self.domain_criterion(domain_output_s, domain_labels_s) + \
-                         self.domain_criterion(domain_output_t, domain_labels_t)
-            
-            # Average the two domain losses to prevent over-weighting adversarial objective
-            # (sum of two losses would give 2x weight vs class loss)
-            domain_loss = domain_loss / 2.0
+            # Domain loss on combined output
+            domain_loss = self.domain_criterion(domain_output, domain_labels)
             
             # Total loss: classification + domain adversarial loss
             # Lambda scaling is handled by gradient reversal layer (affects feature extractor gradients)
@@ -485,26 +496,32 @@ class DomainAdaptationTrainer:
             total_domain_loss += domain_loss.item()
             total_loss += loss.item()
             
-            # Track classification accuracy (works for both multilabel and single-label)
-            pred_class = class_output_s.argmax(dim=1)
+            # Track classification accuracy on BOTH source and target
+            pred_class_s = class_output_s.argmax(dim=1)
+            pred_class_t = class_output_t.argmax(dim=1)
+            
             if self.multilabel:
                 # For multilabel, compare against primary class (argmax of target)
                 if source_labels.dim() == 2:
                     source_labels_primary = source_labels.argmax(dim=1)
                 else:
                     source_labels_primary = source_labels.long()
-                correct_class += pred_class.eq(source_labels_primary).sum().item()
+                if target_labels_split.dim() == 2:
+                    source_labels_primary = source_labels_split.argmax(dim=1)
+                else:
+                    source_labels_primary = source_labels_split.long()
+                if target_labels_split.dim() == 2:
+                    target_labels_primary = target_labels_split.argmax(dim=1)
+                else:
+                    target_labels_primary = target_labels_split.long()
+                correct_class += pred_class_s.eq(source_labels_primary).sum().item()
+                correct_class += pred_class_t.eq(target_labels_primary).sum().item()
             else:
-                correct_class += pred_class.eq(source_labels_idx).sum().item()
+                correct_class += pred_class_s.eq(source_labels_idx).sum().item()
+                correct_class += pred_class_t.eq(target_labels_idx).sum().item()
             
-            pred_domain_s = domain_output_s.argmax(dim=1)
-            pred_domain_t = domain_output_t.argmax(dim=1)
-            correct_domain += pred_domain_s.eq(domain_labels_s).sum().item()
-            correct_domain += pred_domain_t.eq(domain_labels_t).sum().item()
-            
-            total_samples += batch_size_s + batch_size_t
-            
-            pbar.set_postfix({
+            pred_domain = domain_output.argmax(dim=1)
+            correct_domain += pred_domain.eq(domain_labels
                 'cls_loss': total_class_loss / (batch_idx + 1),
                 'dom_loss': total_domain_loss / (batch_idx + 1),
                 'cls_acc': 100. * correct_class / max(len(self.source_train_dataset), 1),
@@ -524,12 +541,6 @@ class DomainAdaptationTrainer:
             return 0.0
         
         self.model.eval()
-        
-        # CRITICAL: Keep batch norm in train mode during validation for DANN
-        # Running statistics are corrupted by mixed source+target training, use batch statistics instead
-        for module in self.model.modules():
-            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
-                module.train()
         
         correct = 0
         total = 0
@@ -604,16 +615,17 @@ class DomainAdaptationTrainer:
             
             if target_val_acc > best_target_acc:
                 best_target_acc = target_val_acc
-                self.save_model('dann_best.pt')
+                torch.save(self.model.state_dict(), os.path.join(self.output_folder, 'dann_best.pt'))
+                self.save_config('dann_best_config.json')
                 print(f"  ✓ Saved best model (target acc: {target_val_acc:.2f}%)")
+        
+        # Calibrate batch norm before saving final model
+        print("\nCalibrating batch norm statistics...")
+        self.calibrate_batchnorm()
         
         self.save_model('dann_final.pt')
         
-        history_path = os.path.join(self.output_folder, 'training_history.json')
-        with open(history_path, 'w') as f:
-            json.dump(history, f, indent=2)
-        
-        self.plot_training_curves(history)
+        self.save_model('dann_final.pt'
         
         print(f"\n{'='*60}")
         print(f"DOMAIN ADAPTATION RESULTS")
