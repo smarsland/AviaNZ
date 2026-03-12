@@ -26,7 +26,7 @@ COMBINED_TRAIN="${OUTPUT_BASE}/combined_train"
 RESULTS_DIR="${OUTPUT_BASE}/experiments_$(date +%Y%m%d_%H%M%S)"
 
 SPECIES="nezfan1,silver3,comcha,nezbel1,eurbla,morepo2"
-MAX_SAMPLES=100
+MAX_SAMPLES=120
 TEST_SIZE=0.17
 
 echo "Results will be saved to: $RESULTS_DIR"
