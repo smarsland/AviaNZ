@@ -131,7 +131,8 @@ class DatasetMerger:
         print("\nMerging label data...")
         
         has_duplicates = self.check_duplicates()
-        filename_map = {}  # Track filename changes for duplicates
+        files1_map = {}  # Track filename changes for dataset 1
+        files2_map = {}  # Track filename changes for dataset 2 (with renames)
         
         merged_files = []
         
@@ -155,7 +156,7 @@ class DatasetMerger:
                 new_entry['noise'] = entry['noise']
             
             merged_files.append(new_entry)
-            filename_map[entry['filename']] = entry['filename']  # No change for ds1
+            files1_map[entry['filename']] = entry['filename']  # No change for ds1
         
         # Add files from dataset 2 (with duplicate handling)
         existing_names = {entry['filename'] for entry in merged_files}
@@ -181,7 +182,7 @@ class DatasetMerger:
             else:
                 new_name = original_name
             
-            filename_map[original_name] = new_name
+            files2_map[original_name] = new_name
             existing_names.add(new_name)
             
             new_entry = {
@@ -207,7 +208,7 @@ class DatasetMerger:
         print(f"  Merged {len(merged_files)} total files")
         print(f"  Categories: {len(merged_categories)}")
         
-        return filename_map
+        return files1_map, files2_map
     
     def copy_files(self, source_folder, filename_map, dataset_name):
         """Copy or symlink spectrogram and audio files."""
@@ -308,13 +309,7 @@ class DatasetMerger:
         merged_categories = self.merge_categories()
         
         # Merge labels data (with duplicate handling)
-        filename_map = self.merge_labels_data(merged_categories)
-        
-        # Create filename maps for each dataset
-        files1_map = {entry['filename']: filename_map[entry['filename']] 
-                      for entry in self.labels1['files']}
-        files2_map = {entry['filename']: filename_map[entry['filename']] 
-                      for entry in self.labels2['files']}
+        files1_map, files2_map = self.merge_labels_data(merged_categories)
         
         # Copy/symlink files from both datasets
         self.copy_files(self.folder1, files1_map, "Dataset 1")
