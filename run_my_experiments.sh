@@ -14,17 +14,25 @@ DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 
 OUTPUT_BASE="/local/scratch/freangi"
 
+# Set to 1 to skip data loading (if datasets already exist)
+SKIP_LOAD=0
+
+# Set to 1 to skip splitting (if splits already exist)
+SKIP_SPLIT=0
+
 # =============================================================================
 # NO NEED TO EDIT BELOW THIS LINE
 # =============================================================================
 
 AVIANZ_FULL="${OUTPUT_BASE}/joe_mo"
-AVIANZ_TRAIN="${OUTPUT_BASE}/joe_mo_train"
-AVIANZ_TEST="${OUTPUT_BASE}/joe_mo_test"
+AVIANZ_SPLIT_BASE="${OUTPUT_BASE}/joe_mo_split"
+AVIANZ_TRAIN="${AVIANZ_SPLIT_BASE}/train"
+AVIANZ_TEST="${AVIANZ_SPLIT_BASE}/test"
 
 DOC_FULL="${OUTPUT_BASE}/doc"
-DOC_TRAIN="${OUTPUT_BASE}/doc_train"
-DOC_TEST="${OUTPUT_BASE}/doc_test"
+DOC_SPLIT_BASE="${OUTPUT_BASE}/doc_split"
+DOC_TRAIN="${DOC_SPLIT_BASE}/train"
+DOC_TEST="${DOC_SPLIT_BASE}/test"
 
 COMBINED_TRAIN="${OUTPUT_BASE}/combined_train"
 RESULTS_DIR="${OUTPUT_BASE}/experiments_$(date +%Y%m%d_%H%M%S)"
@@ -38,8 +46,16 @@ echo "AviaNZ Cross-Dataset Training Pipeline"
 echo "=========================================="
 echo ""
 echo "This will:"
-echo "  1. Create datasets (100 samples per species)"
-echo "  2. Split into train/test (17% test)"
+if [ $SKIP_LOAD -eq 0 ]; then
+    echo "  1. Create datasets (100 samples per species)"
+else
+    echo "  1. [SKIP] Create datasets"
+fi
+if [ $SKIP_SPLIT -eq 0 ]; then
+    echo "  2. Split into train/test (17% test)"
+else
+    echo "  2. [SKIP] Split datasets"
+fi
 echo "  3. Merge training sets"
 echo "  4. Run 6 training experiments"
 echo "  5. Generate publication plots"
@@ -50,44 +66,60 @@ echo "  DOC raw:        $DOC_RAW"
 echo "  Output:         $OUTPUT_BASE"
 echo "  Results:        $RESULTS_DIR"
 echo ""
+echo "Skip flags:"
+echo "  SKIP_LOAD=$SKIP_LOAD  SKIP_SPLIT=$SKIP_SPLIT"
+echo "  (Set to 1 at top of script to skip steps)"
+echo ""
 
 read -p "Press Enter to start (or Ctrl+C to cancel)..."
 
-# Step 1: Create datasets
-echo ""
-echo "=========================================="
-echo "Step 1/5: Creating datasets"
-echo "=========================================="
+if [ $SKIP_LOAD -eq 0 ]; then
+    # Step 1: Create datasets
+    echo ""
+    echo "=========================================="
+    echo "Step 1/5: Creating datasets"
+    echo "=========================================="
 
-echo "Creating AviaNZ dataset..."
-python3 data_loader.py avianz "$AVIANZ_RAW" "$AVIANZ_FULL" \
-    --species "$SPECIES" \
-    --max-samples $MAX_SAMPLES
+    echo "Creating AviaNZ dataset..."
+    python3 data_loader.py avianz "$AVIANZ_RAW" "$AVIANZ_FULL" \
+        --species "$SPECIES" \
+        --max-samples $MAX_SAMPLES
 
-echo ""
-echo "Creating DOC dataset..."
-python3 data_loader.py doc "$DOC_RAW" "$DOC_FULL" \
-    --species "$SPECIES" \
-    --max-samples $MAX_SAMPLES
+    echo ""
+    echo "Creating DOC dataset..."
+    python3 data_loader.py doc "$DOC_RAW" "$DOC_FULL" \
+        --species "$SPECIES" \
+        --max-samples $MAX_SAMPLES
+else
+    echo ""
+    echo "=========================================="
+    echo "Step 1/5: SKIPPED (data already loaded)"
+    echo "=========================================="
+fi
 
-# Step 2: Split datasets
-echo ""
-echo "=========================================="
-echo "Step 2/5: Splitting datasets"
-echo "=========================================="
+if [ $SKIP_SPLIT -eq 0 ]; then
+    # Step 2: Split datasets
+    echo ""
+    echo "=========================================="
+    echo "Step 2/5: Splitting datasets"
+    echo "=========================================="
 
-echo "Splitting AviaNZ..."
-python3 split_dataset.py "$AVIANZ_FULL" \
-    --output-train "$AVIANZ_TRAIN" \
-    --output-test "$AVIANZ_TEST" \
-    --test-size $TEST_SIZE
+    echo "Splitting AviaNZ..."
+    python3 split_dataset.py "$AVIANZ_FULL" "$AVIANZ_SPLIT_BASE" \
+        --test-ratio $TEST_SIZE \
+        --overwrite
 
-echo ""
-echo "Splitting DOC..."
-python3 split_dataset.py "$DOC_FULL" \
-    --output-train "$DOC_TRAIN" \
-    --output-test "$DOC_TEST" \
-    --test-size $TEST_SIZE
+    echo ""
+    echo "Splitting DOC..."
+    python3 split_dataset.py "$DOC_FULL" "$DOC_SPLIT_BASE" \
+        --test-ratio $TEST_SIZE \
+        --overwrite
+else
+    echo ""
+    echo "=========================================="
+    echo "Step 2/5: SKIPPED (splits already exist)"
+    echo "=========================================="
+fi
 
 # Step 3: Merge
 echo ""
