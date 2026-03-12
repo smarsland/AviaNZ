@@ -15,7 +15,7 @@ DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT_BASE="/local/scratch/freangi"
 
 # Set to 1 to skip data loading (if datasets already exist)
-SKIP_LOAD=0
+SKIP_LOAD=1
 
 # Set to 1 to skip splitting (if splits already exist)
 SKIP_SPLIT=0
