@@ -161,8 +161,9 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).name
-            test2_name = Path(exp['test2']).name
+            # Use parent folder name for better identification
+            test1_name = Path(exp['test1']).parent.name
+            test2_name = Path(exp['test2']).parent.name
             
             test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
             test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
