@@ -7,8 +7,8 @@ DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT_BASE="/local/scratch/freangi"
 
 # Skip flags (set to 1 to skip)
-SKIP_LOAD=0
-SKIP_SPLIT=0
+SKIP_LOAD=1
+SKIP_SPLIT=1
 
 # Config
 
