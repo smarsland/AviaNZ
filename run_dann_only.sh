@@ -7,7 +7,7 @@ AVIANZ_TEST="/local/scratch/freangi/joe_mo_split/test"
 DOC_TEST="/local/scratch/freangi/doc_split/test"
 AVIANZ_TRAIN="/local/scratch/freangi/joe_mo_split/train"
 DOC_TRAIN="/local/scratch/freangi/doc_split/train"
-RESULTS_DIR="experiments_20260313_064819"
+RESULTS_DIR="/local/scratch/freangi/experiments_20260313_064819"
 
 echo "Running 2 DANN experiments..."
 echo "================================"

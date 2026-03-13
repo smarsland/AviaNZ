@@ -335,7 +335,16 @@ class CrossDatasetExperiments:
         """Extract test accuracy from training output."""
         lines = output.split('\n')
         for line in lines:
+            # Match both "joe_mo_split" and "joe_mo_split/test" formats
             if test_name in line and 'Accuracy:' in line:
+                try:
+                    acc_str = line.split('Accuracy:')[1].strip().rstrip('%')
+                    return float(acc_str)
+                except:
+                    pass
+        # Also try matching with /test suffix for DANN output
+        for line in lines:
+            if f"{test_name}/test" in line and 'Accuracy:' in line:
                 try:
                     acc_str = line.split('Accuracy:')[1].strip().rstrip('%')
                     return float(acc_str)
@@ -500,8 +509,16 @@ class CrossDatasetExperiments:
         """Plot training curves for all experiments."""
         print(f"\nGenerating training curves...")
         
-        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-        axes = axes.flatten()
+        # Calculate grid size based on number of experiments
+        n_exp = len(self.results)
+        ncols = 4 if n_exp > 6 else 3
+        nrows = (n_exp + ncols - 1) // ncols
+        
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows))
+        if n_exp == 1:
+            axes = [axes]
+        else:
+            axes = axes.flatten()
         
         for i, r in enumerate(self.results):
             ax = axes[i]
@@ -522,6 +539,10 @@ class CrossDatasetExperiments:
             ax.set_title(r['description'], fontsize=10, fontweight='bold')
             ax.legend(fontsize=8)
             ax.grid(alpha=0.3)
+        
+        # Hide any unused subplots
+        for i in range(len(self.results), len(axes)):
+            axes[i].axis('off')
         
         plt.tight_layout()
         
