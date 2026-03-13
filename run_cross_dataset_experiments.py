@@ -281,7 +281,8 @@ class CrossDatasetExperiments:
         for r in self.results:
             exp_names.append(r['name'].replace('_', '\n'))
             
-            if 'avianz' in r['test1_name']:
+            # joe_mo_split is AviaNZ, doc_split is DOC
+            if 'joe_mo' in r['test1_name']:
                 avianz_scores.append(r['test1_acc'])
                 doc_scores.append(r['test2_acc'])
             else:
@@ -399,6 +400,79 @@ class CrossDatasetExperiments:
         print(f"  Saved to: {plot_path}")
         plt.close()
     
+    def plot_heatmap(self):
+        """Generate 3x2 heatmap of train dataset vs test dataset accuracy."""
+        print(f"\nGenerating heatmap...")
+        
+        # Create matrices for full and frozen
+        train_datasets = ['AviaNZ', 'DOC', 'Combined']
+        test_datasets = ['AviaNZ Test', 'DOC Test']
+        
+        full_matrix = np.zeros((3, 2))
+        frozen_matrix = np.zeros((3, 2))
+        
+        mapping = {
+            'avianz': 0,
+            'doc': 1,
+            'combined': 2
+        }
+        
+        for r in self.results:
+            # Determine train dataset index
+            train_idx = None
+            for key, idx in mapping.items():
+                if r['name'].startswith(key):
+                    train_idx = idx
+                    break
+            
+            if train_idx is None:
+                continue
+            
+            # Get scores (joe_mo is AviaNZ, doc_split is DOC)
+            if 'joe_mo' in r['test1_name']:
+                avianz_score = r['test1_acc']
+                doc_score = r['test2_acc']
+            else:
+                avianz_score = r['test2_acc']
+                doc_score = r['test1_acc']
+            
+            # Fill matrices
+            if r['freeze_backbone']:
+                frozen_matrix[train_idx, 0] = avianz_score
+                frozen_matrix[train_idx, 1] = doc_score
+            else:
+                full_matrix[train_idx, 0] = avianz_score
+                full_matrix[train_idx, 1] = doc_score
+        
+        # Create side-by-side heatmaps
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Full fine-tuning heatmap
+        sns.heatmap(full_matrix, annot=True, fmt='.1f', cmap='RdYlGn', 
+                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
+                    xticklabels=test_datasets, yticklabels=train_datasets,
+                    ax=ax1, linewidths=1, linecolor='gray')
+        ax1.set_title('Full Fine-tuning', fontsize=14, fontweight='bold', pad=15)
+        ax1.set_xlabel('Test Dataset', fontsize=12, labelpad=10)
+        ax1.set_ylabel('Training Dataset', fontsize=12, labelpad=10)
+        
+        # Frozen backbone heatmap
+        sns.heatmap(frozen_matrix, annot=True, fmt='.1f', cmap='RdYlGn',
+                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
+                    xticklabels=test_datasets, yticklabels=train_datasets,
+                    ax=ax2, linewidths=1, linecolor='gray')
+        ax2.set_title('Frozen Backbone', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_xlabel('Test Dataset', fontsize=12, labelpad=10)
+        ax2.set_ylabel('Training Dataset', fontsize=12, labelpad=10)
+        
+        plt.suptitle('Cross-Dataset Performance Heatmap', fontsize=16, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        
+        plot_path = self.output_folder / 'heatmap.png'
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"  Saved to: {plot_path}")
+        plt.close()
+    
     def plot_freeze_comparison(self):
         """Compare frozen vs full fine-tuning."""
         print(f"\nGenerating freeze comparison plot...")
@@ -416,7 +490,8 @@ class CrossDatasetExperiments:
             frozen_res = next((r for r in self.results if f'{dataset}_frozen' == r['name']), None)
             
             if full_res:
-                if 'avianz' in full_res['test1_name']:
+                # joe_mo_split is AviaNZ, doc_split is DOC
+                if 'joe_mo' in full_res['test1_name']:
                     full_avianz.append(full_res['test1_acc'])
                     full_doc.append(full_res['test2_acc'])
                 else:
@@ -424,7 +499,8 @@ class CrossDatasetExperiments:
                     full_doc.append(full_res['test1_acc'])
             
             if frozen_res:
-                if 'avianz' in frozen_res['test1_name']:
+                # joe_mo_split is AviaNZ, doc_split is DOC
+                if 'joe_mo' in frozen_res['test1_name']:
                     frozen_avianz.append(frozen_res['test1_acc'])
                     frozen_doc.append(frozen_res['test2_acc'])
                 else:
@@ -542,6 +618,7 @@ class CrossDatasetExperiments:
             f.write("GENERATED FILES\n")
             f.write("="*60 + "\n\n")
             f.write("  - summary_table.csv (tabular results)\n")
+            f.write("  - heatmap.png (cross-dataset performance matrix)\n")
             f.write("  - test_accuracy_comparison.png (bar chart)\n")
             f.write("  - generalization_gap.png (train vs test)\n")
             f.write("  - training_curves.png (all training curves)\n")
@@ -565,6 +642,7 @@ class CrossDatasetExperiments:
             
             self.save_results()
             self.generate_summary_table()
+            self.plot_heatmap()
             self.plot_test_accuracy_comparison()
             self.plot_generalization_gap()
             self.plot_training_curves()
@@ -577,6 +655,7 @@ class CrossDatasetExperiments:
             print(f"\nResults saved to: {self.output_folder}")
             print(f"\nGenerated files:")
             print(f"  - summary_table.csv")
+            print(f"  - heatmap.png")
             print(f"  - test_accuracy_comparison.png")
             print(f"  - generalization_gap.png")
             print(f"  - training_curves.png")

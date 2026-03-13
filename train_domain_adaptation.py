@@ -75,7 +75,7 @@ class GradientReversalLayer(nn.Module):
 class DANNModel(nn.Module):
     """Domain-Adversarial Neural Network for cross-dataset adaptation."""
     
-    def __init__(self, num_classes, architecture='resnet18', pretrained_path=None):
+    def __init__(self, num_classes, architecture='resnet18', pretrained_path=None, freeze_backbone=False):
         super().__init__()
         self.num_classes = num_classes
         self.architecture = architecture
@@ -118,6 +118,16 @@ class DANNModel(nn.Module):
         
         if pretrained_path:
             self.load_pretrained_backbone(pretrained_path)
+        
+        if freeze_backbone:
+            print("  Freezing entire backbone - only training classifiers")
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+            
+            total_params = sum(p.numel() for p in self.parameters())
+            trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+            print(f"  Total params: {total_params:,}")
+            print(f"  Trainable params: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
     
     def load_pretrained_backbone(self, pretrained_path):
         print(f"Loading pretrained backbone from {pretrained_path}")
@@ -182,7 +192,8 @@ class DomainAdaptationTrainer:
                  epochs=30, batch_size=32, lr=1e-4,
                  lambda_domain=1.0, lambda_schedule='fixed',
                  multilabel=False, normalize=False, validation_split=0.2,
-                 remove_baseline=False, test_folder=None, test_folder2=None, device=None):
+                 remove_baseline=False, test_folder=None, test_folder2=None, 
+                 freeze_backbone=False, device=None):
         
         self.source_folder = source_folder
         self.target_folder = target_folder
@@ -200,6 +211,7 @@ class DomainAdaptationTrainer:
         self.remove_baseline = remove_baseline
         self.test_folder = test_folder
         self.test_folder2 = test_folder2
+        self.freeze_backbone = freeze_backbone
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -219,6 +231,7 @@ class DomainAdaptationTrainer:
         print(f"  Learning rate: {lr}")
         print(f"  Lambda (domain): {lambda_domain} ({lambda_schedule} schedule)")
         print(f"  Multi-label: {multilabel}")
+        print(f"  Freeze backbone: {freeze_backbone}")
     
     def remap_labels(self, labels, source_categories, target_categories):
         labels = np.array(labels)
@@ -381,7 +394,8 @@ class DomainAdaptationTrainer:
         self.model = DANNModel(
             num_classes=self.num_classes,
             architecture=self.architecture,
-            pretrained_path=self.pretrained_path
+            pretrained_path=self.pretrained_path,
+            freeze_backbone=self.freeze_backbone
         )
         self.model.to(self.device)
         
@@ -1004,6 +1018,8 @@ Interpretation:
                        help="Apply background normalization")
     parser.add_argument('--baseline-removal', action='store_true',
                        help="Enable baseline removal")
+    parser.add_argument('--freeze-backbone', action='store_true',
+                       help="Freeze backbone layers (only train classifiers)")
     parser.add_argument('--validation-split', type=float, default=0.2,
                        help="Validation split (default: 0.2)")
     parser.add_argument('--test-folder', type=str, default=None,
@@ -1038,6 +1054,7 @@ Interpretation:
         normalize=args.normalize,
         validation_split=args.validation_split,
         remove_baseline=args.baseline_removal,
+        freeze_backbone=args.freeze_backbone,
         test_folder=args.test_folder,
         test_folder2=args.test_folder2,
         device=torch.device(args.device) if args.device else None

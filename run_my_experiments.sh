@@ -56,7 +56,7 @@ fi
 echo "Merging training sets..."
 python3 merge_datasets.py "$AVIANZ_TRAIN" "$DOC_TRAIN" "$COMBINED_TRAIN"
 
-echo "Running experiments..."
+echo "Running standard fine-tuning experiments..."
 python3 run_cross_dataset_experiments.py \
     --avianz-train "$AVIANZ_TRAIN" \
     --avianz-test "$AVIANZ_TEST" \
@@ -66,5 +66,58 @@ python3 run_cross_dataset_experiments.py \
     --output "$RESULTS_DIR" \
     --epochs 100 \
     --batch-size 32
+
+echo ""
+echo "Running DANN (Domain Adaptation) experiments..."
+
+# DANN: AviaNZ->DOC (full)
+echo "DANN AviaNZ->DOC (full fine-tuning)..."
+python3 train_domain_adaptation.py \
+    "$AVIANZ_TRAIN" "$DOC_TRAIN" "${RESULTS_DIR}/dann_avianz_doc_full" \
+    --architecture regnety_008 \
+    --pretrained BirdClefModels/model_fold0.pth \
+    --epochs 100 \
+    --batch-size 32 \
+    --lambda-domain 1.0 \
+    --test-folder "$AVIANZ_TEST" \
+    --test-folder2 "$DOC_TEST"
+
+# DANN: AviaNZ->DOC (frozen)
+echo "DANN AviaNZ->DOC (frozen backbone)..."
+python3 train_domain_adaptation.py \
+    "$AVIANZ_TRAIN" "$DOC_TRAIN" "${RESULTS_DIR}/dann_avianz_doc_frozen" \
+    --architecture regnety_008 \
+    --pretrained BirdClefModels/model_fold0.pth \
+    --epochs 100 \
+    --batch-size 32 \
+    --lambda-domain 1.0 \
+    --freeze-backbone \
+    --test-folder "$AVIANZ_TEST" \
+    --test-folder2 "$DOC_TEST"
+
+# DANN: DOC->AviaNZ (full)
+echo "DANN DOC->AviaNZ (full fine-tuning)..."
+python3 train_domain_adaptation.py \
+    "$DOC_TRAIN" "$AVIANZ_TRAIN" "${RESULTS_DIR}/dann_doc_avianz_full" \
+    --architecture regnety_008 \
+    --pretrained BirdClefModels/model_fold0.pth \
+    --epochs 100 \
+    --batch-size 32 \
+    --lambda-domain 1.0 \
+    --test-folder "$DOC_TEST" \
+    --test-folder2 "$AVIANZ_TEST"
+
+# DANN: DOC->AviaNZ (frozen)
+echo "DANN DOC->AviaNZ (frozen backbone)..."
+python3 train_domain_adaptation.py \
+    "$DOC_TRAIN" "$AVIANZ_TRAIN" "${RESULTS_DIR}/dann_doc_avianz_frozen" \
+    --architecture regnety_008 \
+    --pretrained BirdClefModels/model_fold0.pth \
+    --epochs 100 \
+    --batch-size 32 \
+    --lambda-domain 1.0 \
+    --freeze-backbone \
+    --test-folder "$DOC_TEST" \
+    --test-folder2 "$AVIANZ_TEST"
 
 echo "Done. Results: $RESULTS_DIR"
