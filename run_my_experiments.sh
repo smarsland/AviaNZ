@@ -66,7 +66,7 @@ python3 run_cross_dataset_experiments.py \
     --doc-test "$DOC_TEST" \
     --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
-    --epochs 100 \
+    --epochs 50 \
     --batch-size 32
 
 echo "Done. Results: $RESULTS_DIR"
