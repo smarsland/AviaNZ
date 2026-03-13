@@ -258,7 +258,7 @@ class CrossDatasetExperiments:
             '--pretrained', self.model_path,
             '--epochs', str(self.epochs),
             '--batch-size', str(self.batch_size),
-            '--lambda-domain', '0.1',
+            '--lambda-domain', '0.0',
             '--test-folder', exp['test1'],
             '--test-folder2', exp['test2']
         ]
