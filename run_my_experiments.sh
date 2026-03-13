@@ -35,11 +35,13 @@ if [ $SKIP_LOAD -eq 0 ]; then
     echo "Creating datasets..."
     python3 data_loader.py avianz "$AVIANZ_RAW" "$AVIANZ_FULL" \
         --species "$SPECIES" \
-        --max-samples $MAX_SAMPLES
+        --max-samples $MAX_SAMPLES \
+        --ignore-multilabel
 
     python3 data_loader.py doc "$DOC_RAW" "$DOC_FULL" \
         --species "$SPECIES" \
-        --max-samples $MAX_SAMPLES
+        --max-samples $MAX_SAMPLES \
+        --ignore-multilabel
 fi
 
 if [ $SKIP_SPLIT -eq 0 ]; then

@@ -552,20 +552,21 @@ class CrossDatasetExperiments:
         plt.close()
     
     def plot_heatmap(self):
-        """Generate 3x2 heatmap of train dataset vs test dataset accuracy."""
+        """Generate 4x2 heatmap of train dataset vs test dataset accuracy."""
         print(f"\nGenerating heatmap...")
         
-        # Create matrices for full and frozen
-        train_datasets = ['AviaNZ', 'DOC', 'Combined']
+        # Create matrices for full and frozen (now 4x2 to include DANN)
+        train_datasets = ['AviaNZ', 'DOC', 'Combined', 'DANN']
         test_datasets = ['AviaNZ Test', 'DOC Test']
         
-        full_matrix = np.zeros((3, 2))
-        frozen_matrix = np.zeros((3, 2))
+        full_matrix = np.zeros((4, 2))
+        frozen_matrix = np.zeros((4, 2))
         
         mapping = {
             'avianz': 0,
             'doc': 1,
-            'combined': 2
+            'combined': 2,
+            'dann': 3
         }
         
         for r in self.results:
