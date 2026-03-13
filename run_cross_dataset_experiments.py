@@ -64,6 +64,7 @@ class CrossDatasetExperiments:
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': False,
+                'type': 'finetune',
                 'description': 'Train on AviaNZ (full fine-tuning)'
             },
             {
@@ -72,6 +73,7 @@ class CrossDatasetExperiments:
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': True,
+                'type': 'finetune',
                 'description': 'Train on AviaNZ (frozen backbone)'
             },
             {
@@ -80,6 +82,7 @@ class CrossDatasetExperiments:
                 'test1': doc_test,
                 'test2': avianz_test,
                 'freeze': False,
+                'type': 'finetune',
                 'description': 'Train on DOC (full fine-tuning)'
             },
             {
@@ -88,6 +91,7 @@ class CrossDatasetExperiments:
                 'test1': doc_test,
                 'test2': avianz_test,
                 'freeze': True,
+                'type': 'finetune',
                 'description': 'Train on DOC (frozen backbone)'
             },
             {
@@ -96,6 +100,7 @@ class CrossDatasetExperiments:
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': False,
+                'type': 'finetune',
                 'description': 'Train on Combined (full fine-tuning)'
             },
             {
@@ -104,7 +109,28 @@ class CrossDatasetExperiments:
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': True,
+                'type': 'finetune',
                 'description': 'Train on Combined (frozen backbone)'
+            },
+            {
+                'name': 'dann_combined_full',
+                'source': avianz_train,
+                'target': doc_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'freeze': False,
+                'type': 'dann',
+                'description': 'DANN on Combined (full fine-tuning)'
+            },
+            {
+                'name': 'dann_combined_frozen',
+                'source': avianz_train,
+                'target': doc_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'freeze': True,
+                'type': 'dann',
+                'description': 'DANN on Combined (frozen backbone)'
             }
         ]
         
@@ -124,7 +150,14 @@ class CrossDatasetExperiments:
         print(f"\nTotal experiments: {len(self.experiments)}")
     
     def run_experiment(self, exp):
-        """Run a single training experiment."""
+        """Run a single training experiment (finetune or DANN)."""
+        if exp['type'] == 'dann':
+            return self.run_dann_experiment(exp)
+        else:
+            return self.run_finetune_experiment(exp)
+    
+    def run_finetune_experiment(self, exp):
+        """Run a single fine-tuning experiment."""
         print(f"\n{'='*60}")
         print(f"Experiment: {exp['name']}")
         print(f"{'='*60}")
@@ -181,6 +214,103 @@ class CrossDatasetExperiments:
                 'test2_acc': test2_acc,
                 'best_val_acc': max([v for v in history['val_acc'] if v is not None], default=None),
                 'history': history,
+                'output_folder': str(exp_output)
+            }
+            
+            self.results.append(exp_result)
+            
+            print(f"\n✓ Experiment complete:")
+            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            if exp_result['final_val_acc'] is not None:
+                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+            print(f"  Test {test1_name}: {test1_acc:.2f}%")
+            print(f"  Test {test2_name}: {test2_acc:.2f}%")
+            
+            return exp_result
+            
+        except subprocess.CalledProcessError as e:
+            print(f"\n❌ Experiment failed!")
+            print(f"Error: {e}")
+            print(f"Output: {e.output}")
+            return None
+    
+    def run_dann_experiment(self, exp):
+        """Run a DANN domain adaptation experiment."""
+        print(f"\n{'='*60}")
+        print(f"Experiment: {exp['name']}")
+        print(f"{'='*60}")
+        print(f"Description: {exp['description']}")
+        print(f"Source: {exp['source']}")
+        print(f"Target: {exp['target']}")
+        print(f"Test on: {exp['test1']} and {exp['test2']}")
+        print(f"Freeze backbone: {exp['freeze']}")
+        
+        exp_output = self.output_folder / exp['name']
+        exp_output.mkdir(exist_ok=True)
+        
+        cmd = [
+            sys.executable,
+            'train_domain_adaptation.py',
+            exp['source'],
+            exp['target'],
+            str(exp_output),
+            '--architecture', 'regnety_008',
+            '--pretrained', self.model_path,
+            '--epochs', str(self.epochs),
+            '--batch-size', str(self.batch_size),
+            '--lambda-domain', '1.0',
+            '--test-folder', exp['test1'],
+            '--test-folder2', exp['test2']
+        ]
+        
+        if exp['freeze']:
+            cmd.append('--freeze-backbone')
+        
+        print(f"\nRunning: {' '.join(cmd)}")
+        
+        try:
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            print(result.stdout)
+            
+            history_path = exp_output / 'training_history.json'
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+            
+            test1_name = Path(exp['test1']).parent.name
+            test2_name = Path(exp['test2']).parent.name
+            
+            test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
+            test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
+            
+            # Convert DANN history to standard format
+            val_acc = history.get('target_val_acc', [0] * len(history.get('train_class_acc', [])))
+            
+            exp_result = {
+                'name': exp['name'],
+                'description': exp['description'],
+                'train_dataset': 'combined_train',
+                'freeze_backbone': exp['freeze'],
+                'final_train_acc': history['train_class_acc'][-1] if history.get('train_class_acc') else 0,
+                'final_val_acc': val_acc[-1] if val_acc else None,
+                'test1_name': test1_name,
+                'test1_acc': test1_acc,
+                'test2_name': test2_name,
+                'test2_acc': test2_acc,
+                'best_val_acc': max(val_acc) if val_acc else None,
+                'history': {
+                    'train_acc': history.get('train_class_acc', []),
+                    'val_acc': val_acc,
+                    'train_loss': history.get('train_class_loss', []),
+                    'val_loss': [],
+                    'train_macro_f1': [],
+                    'val_macro_f1': [],
+                    'train_micro_f1': [],
+                    'val_micro_f1': [],
+                    'train_exact_match': [],
+                    'val_exact_match': [],
+                    'train_bit_acc': [],
+                    'val_bit_acc': []
+                },
                 'output_folder': str(exp_output)
             }
             
