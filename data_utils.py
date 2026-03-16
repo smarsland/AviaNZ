@@ -91,21 +91,25 @@ class DataLoader:
 
             if os.path.exists(file_path):
                 filenames.append(file_path)
-                primary_species.append(file_info['primary_class'])
+                
+                if 'primary_class' in file_info:
+                    primary_species.append(file_info['primary_class'])
+                else:
+                    primary_species.append('noise')
+                
                 source_files.append(file_info.get('source_file'))
 
                 if use_multilabel:
                     label_vector = [0.0] * len(categories)
-                    for class_name in file_info['class_names']:
-                        if class_name in category_to_idx:
-                            label_vector[category_to_idx[class_name]] = 1.0
+                    if 'class_names' in file_info:
+                        for class_name in file_info['class_names']:
+                            if class_name in category_to_idx:
+                                label_vector[category_to_idx[class_name]] = 1.0
                     labels.append(label_vector)
                 else:
                     label_vector = [0.0] * len(categories)
-                    if file_info['primary_class'] in category_to_idx:
+                    if 'primary_class' in file_info and file_info['primary_class'] in category_to_idx:
                         label_vector[category_to_idx[file_info['primary_class']]] = 1.0
-                    else:
-                        label_vector[0] = 1.0
                     labels.append(label_vector)
         
         # Load noise data if available
