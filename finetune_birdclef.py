@@ -601,6 +601,7 @@ class BirdClefFineTuner:
                 
                 self.optimizer.zero_grad()
                 
+                # Extract features from both domains
                 features = self.model.backbone(combined_data)
                 if isinstance(features, dict):
                     features = features['features']
@@ -608,8 +609,9 @@ class BirdClefFineTuner:
                     features = self.model.pooling(features)
                     features = features.view(features.size(0), -1)
                 
-                class_output = self.model.classifier(features)
-                source_class_output = class_output[:batch_size_s]
+                # Classification: only on source domain
+                source_features = features[:batch_size_s]
+                source_class_output = self.model.classifier(source_features)
                 
                 if self.multilabel:
                     class_loss = self.criterion(source_class_output, source_target.float())
