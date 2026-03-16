@@ -929,3 +929,101 @@ class KaytooModel(nn.Module):
             return logit
         else:
             return logit
+
+
+class GradientReversalFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, lambda_param):
+        ctx.lambda_param = lambda_param
+        return x.view_as(x)
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.neg() * ctx.lambda_param, None
+
+
+class GradientReversalLayer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lambda_param = 1.0
+    
+    def set_lambda(self, lambda_param):
+        self.lambda_param = lambda_param
+    
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_param)
+
+
+class DomainDiscriminator(nn.Module):
+    def __init__(self, input_dim=2048, hidden_dim=1024):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(hidden_dim, 1)
+        )
+    
+    def forward(self, x):
+        return self.net(x)
+
+
+class DANNModel(nn.Module):
+    def __init__(self, num_classes, backbone_name='regnety_008', pretrained=True, freeze_backbone=False):
+        super().__init__()
+        self.num_classes = num_classes
+        self.freeze_backbone = freeze_backbone
+        
+        base_model = timm.create_model(backbone_name, pretrained=pretrained)
+        
+        if hasattr(base_model, 'fc'):
+            feature_dim = base_model.fc.in_features
+            backbone_layers = list(base_model.children())[:-1]
+        elif hasattr(base_model, 'head'):
+            if hasattr(base_model.head, 'fc'):
+                feature_dim = base_model.head.fc.in_features
+            else:
+                feature_dim = base_model.num_features
+            backbone_layers = list(base_model.children())[:-1]
+        elif hasattr(base_model, 'classifier'):
+            feature_dim = base_model.classifier.in_features
+            backbone_layers = list(base_model.children())[:-1]
+        else:
+            feature_dim = base_model.num_features
+            backbone_layers = list(base_model.children())
+        
+        self.feature_extractor = nn.Sequential(*backbone_layers)
+        self.feature_dim = feature_dim
+        
+        if freeze_backbone:
+            for param in self.feature_extractor.parameters():
+                param.requires_grad = False
+        
+        self.class_classifier = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(feature_dim, num_classes)
+        )
+        
+        self.grl = GradientReversalLayer()
+        self.domain_classifier = DomainDiscriminator(input_dim=feature_dim)
+    
+    def forward(self, x, alpha=1.0):
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+        
+        features = self.feature_extractor(x)
+        if features.dim() > 2:
+            features = features.mean(dim=[-2, -1])
+        
+        class_output = self.class_classifier(features)
+        
+        self.grl.set_lambda(alpha)
+        reversed_features = self.grl(features)
+        domain_output = self.domain_classifier(reversed_features)
+        
+        return class_output, domain_output, features

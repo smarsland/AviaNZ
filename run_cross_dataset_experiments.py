@@ -44,7 +44,8 @@ class CrossDatasetExperiments:
     """Manages cross-dataset training experiments."""
     
     def __init__(self, avianz_train, avianz_test, doc_train, doc_test, 
-                 combined_train, output_folder, model_path, epochs=10, batch_size=32):
+                 combined_train, output_folder, model_path, epochs=10, batch_size=32, 
+                 lambda_domain=0.1, noise_folder=None):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -54,6 +55,8 @@ class CrossDatasetExperiments:
         self.model_path = model_path
         self.epochs = epochs
         self.batch_size = batch_size
+        self.lambda_domain = lambda_domain
+        self.noise_folder = noise_folder
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
@@ -113,24 +116,48 @@ class CrossDatasetExperiments:
                 'description': 'Train on Combined (frozen backbone)'
             },
             {
-                'name': 'dann_combined_full',
+                'name': 'dann_avianz_to_noise_full',
                 'source': avianz_train,
-                'target': doc_train,
+                'target': noise_folder if noise_folder else avianz_train,
+                'target_is_noise': True if noise_folder else False,
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': False,
                 'type': 'dann',
-                'description': 'DANN on Combined (full fine-tuning)'
+                'description': 'DANN AviaNZ->Noise (full)'
             },
             {
-                'name': 'dann_combined_frozen',
+                'name': 'dann_avianz_to_noise_frozen',
                 'source': avianz_train,
-                'target': doc_train,
+                'target': noise_folder if noise_folder else avianz_train,
+                'target_is_noise': True if noise_folder else False,
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': True,
                 'type': 'dann',
-                'description': 'DANN on Combined (frozen backbone)'
+                'description': 'DANN AviaNZ->Noise (frozen)'
+            },
+            {
+                'name': 'dann_doc_to_noise_full',
+                'source': doc_train,
+                'target': noise_folder if noise_folder else doc_train,
+                'target_is_noise': True if noise_folder else False,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': False,
+                'type': 'dann',
+                'description': 'DANN DOC->Noise (full)'
+            },
+            {
+                'name': 'dann_doc_to_noise_frozen',
+                'source': doc_train,
+                'target': noise_folder if noise_folder else doc_train,
+                'target_is_noise': True if noise_folder else False,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': True,
+                'type': 'dann',
+                'description': 'DANN DOC->Noise (frozen)'
             }
         ]
         
@@ -144,10 +171,19 @@ class CrossDatasetExperiments:
         print(f"DOC train: {doc_train}")
         print(f"DOC test: {doc_test}")
         print(f"Combined train: {combined_train}")
-        print(f"Output: {output_folder}")
-        print(f"Model: {model_path}")
-        print(f"Epochs: {epochs}")
+        if noise_folder:
+            print(f"Noise folder (DANN target): {noise_folder}")
+        else:
+            print(f"WARNING: No noise folder - DANN will use source as target (pointless)")
+        print(f"\nExperiment breakdown:")
+        print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
+        print(f"  DANN: 4 experiments (AviaNZ->Noise, DOC->Noise × frozen/full)")
         print(f"\nTotal experiments: {len(self.experiments)}")
+        print(f"\nNote: DANN trains on SOURCE labels, adapts to NOISE (unlabeled)
+        print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
+        print(f"  DANN: 4 experiments (AviaNZ→DOC, DOC→AviaNZ × frozen/full)")
+        print(f"\nTotal experiments: {len(self.experiments)}")
+        print(f"\nNote: DANN does domain adaptation (source→target), not combined training")
     
     def run_experiment(self, exp):
         """Run a single training experiment (finetune or DANN)."""
@@ -258,13 +294,16 @@ class CrossDatasetExperiments:
             '--pretrained', self.model_path,
             '--epochs', str(self.epochs),
             '--batch-size', str(self.batch_size),
-            '--lambda-domain', '0.0',
+            '--lambda-domain', str(self.lambda_domain),
             '--test-folder', exp['test1'],
             '--test-folder2', exp['test2']
         ]
         
         if exp['freeze']:
             cmd.append('--freeze-backbone')
+        
+        if exp.get('target_is_noise', False):
+            cmd.append('--target-is-noise')
         
         print(f"\nRunning: {' '.join(cmd)}")
         
@@ -1129,6 +1168,10 @@ def main():
                        help='Number of epochs per experiment (default: 10)')
     parser.add_argument('--batch-size', type=int, default=32,
                        help='Batch size (default: 32)')
+    parser.add_argument('--lambda-domain', type=float, default=0.1,
+                       help='DANN domain loss weight (default: 0.1)')
+    parser.add_argument('--noise-folder', default=None,
+                       help='Noise folder for DANN target domain (unlabeled)')
     
     args = parser.parse_args()
     
@@ -1142,6 +1185,11 @@ def main():
         print(f"ERROR: Model not found: {args.model}")
         return
     
+    if args.noise_folder and not os.path.exists(args.noise_folder):
+        print(f"WARNING: Noise folder not found: {args.noise_folder}")
+        print(f"         DANN will fallback to using source as target (not recommended)")
+        args.noise_folder = None
+    
     experiments = CrossDatasetExperiments(
         avianz_train=args.avianz_train,
         avianz_test=args.avianz_test,
@@ -1151,7 +1199,9 @@ def main():
         output_folder=args.output,
         model_path=args.model,
         epochs=args.epochs,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        lambda_domain=args.lambda_domain,
+        noise_folder=args.noise_folder
     )
     
     experiments.run()

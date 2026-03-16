@@ -26,8 +26,8 @@ def get_background_spectrogram(img):
     sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
 
     for row in range(H):
-        outliers = sg_normalized[row, :] > 3
-        not_outliers = sg_normalized[row, :] <= 3
+        outliers = sg_normalized[row, :] > 4
+        not_outliers = sg_normalized[row, :] <= 4
         sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
 
     img = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
@@ -42,7 +42,7 @@ def normalize_spectrogram(img):
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
 
-    img = median_filter(img, size=(1, 10))
+    img = median_filter(img, size=(1, 5))
 
     img = img - get_background_spectrogram(img)
 

@@ -6,6 +6,9 @@ AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT_BASE="/local/scratch/freangi"
 
+# Noise folder for DANN (set this to your noise data path)
+NOISE_FOLDER="${OUTPUT_BASE}/noise"
+
 # Skip flags (set to 1 to skip)
 SKIP_LOAD=1
 SKIP_SPLIT=1
@@ -67,6 +70,7 @@ python3 run_cross_dataset_experiments.py \
     --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
     --epochs 50 \
-    --batch-size 32
+    --batch-size 32 \
+    --noise-folder "$NOISE_FOLDER"
 
 echo "Done. Results: $RESULTS_DIR"
