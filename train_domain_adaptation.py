@@ -68,25 +68,28 @@ class DANNTrainer:
         print("\nLoading datasets...")
         
         loader_source = DataLoader(self.source_folder)
-        self.source_data = loader_source.load_data(multilabel=False, validation_share=0.0)
+        self.source_data = loader_source.load_data(use_multilabel=False, validation_share=0.0)
         
         if self.target_is_noise:
             loader_target = DataLoader(self.target_folder)
-            target_raw = loader_target.load_data(multilabel=False, validation_share=0.0)
+            target_raw = loader_target.load_data(use_multilabel=False, validation_share=0.0)
+            num_noise_samples = len(target_raw['train_filenames'])
+            num_classes = self.source_data['nclasses']
+            dummy_labels = np.zeros((num_noise_samples, num_classes), dtype=np.float32)
             self.target_data = {
                 'nclasses': self.source_data['nclasses'],
                 'categories': self.source_data['categories'],
                 'train_filenames': target_raw['train_filenames'],
-                'train_labels': [0] * len(target_raw['train_filenames']),
-                'train_primary_species': ['noise'] * len(target_raw['train_filenames']),
+                'train_labels': dummy_labels,
+                'train_primary_species': ['noise'] * num_noise_samples,
                 'val_filenames': [],
-                'val_labels': [],
+                'val_labels': np.zeros((0, num_classes), dtype=np.float32),
                 'val_primary_species': []
             }
             print(f"  Target is NOISE (unlabeled data for domain adaptation)")
         else:
             loader_target = DataLoader(self.target_folder)
-            self.target_data = loader_target.load_data(multilabel=False, validation_share=0.15)
+            self.target_data = loader_target.load_data(use_multilabel=False, validation_share=0.15)
             if self.source_data['categories'] != self.target_data['categories']:
                 raise ValueError("Source and target datasets must have same species")
         
@@ -117,7 +120,7 @@ class DANNTrainer:
         self.test_datasets = []
         if self.test_folder:
             test_loader = DataLoader(self.test_folder)
-            test_data = test_loader.load_data(multilabel=False, validation_share=0.0)
+            test_data = test_loader.load_data(use_multilabel=False, validation_share=0.0)
             test_name = f"{Path(self.test_folder).parent.name}/{Path(self.test_folder).name}"
             self.test_datasets.append({
                 'name': test_name,
@@ -128,7 +131,7 @@ class DANNTrainer:
         
         if self.test_folder2:
             test_loader2 = DataLoader(self.test_folder2)
-            test_data2 = test_loader2.load_data(multilabel=False, validation_share=0.0)
+            test_data2 = test_loader2.load_data(use_multilabel=False, validation_share=0.0)
             test_name2 = f"{Path(self.test_folder2).parent.name}/{Path(self.test_folder2).name}"
             self.test_datasets.append({
                 'name': test_name2,
