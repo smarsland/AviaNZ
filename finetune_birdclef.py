@@ -441,7 +441,7 @@ class BirdClefFineTuner:
             print("  Adding DANN domain discriminator...")
             feat_dim = self.model.feature_dim
             
-            self.grl = GradientReversalLayer(lambda_val=self.lambda_domain)
+            self.grl = GradientReversalLayer()
             self.domain_classifier = DomainDiscriminator(feat_dim)
             self.grl.to(self.device)
             self.domain_classifier.to(self.device)
@@ -551,7 +551,7 @@ class BirdClefFineTuner:
         if self.use_dann and self.target_loader:
             p = epoch / self.epochs
             alpha = 2.0 / (1.0 + np.exp(-10 * p)) - 1.0
-            self.grl.lambda_val = alpha * self.lambda_domain
+            self.grl.lambda_param = alpha * self.lambda_domain
             
             source_iter = iter(self.train_loader)
             target_iter = iter(self.target_loader)
@@ -653,7 +653,7 @@ class BirdClefFineTuner:
                         'cls': f'{class_loss.item():.3f}',
                         'dom': f'{domain_loss.item():.3f}',
                         'acc': f'{100.*correct/total:.1f}%',
-                        'α': f'{self.grl.lambda_val:.3f}'
+                        'α': f'{self.grl.lambda_param:.3f}'
                     })
             else:
                 batch_idx, (data, target) = batch_idx
