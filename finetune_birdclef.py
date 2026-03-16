@@ -468,8 +468,8 @@ class BirdClefFineTuner:
         ]
         
         if self.use_dann:
-            # Domain classifier should have same LR as backbone, not higher
-            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr})
+            # Domain classifier needs moderate LR - competitive but not overwhelming
+            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr * 3})
         
         self.optimizer = optim.AdamW(param_groups, weight_decay=0.01)
         
@@ -546,6 +546,8 @@ class BirdClefFineTuner:
         total_domain_loss = 0
         correct = 0
         total = 0
+        domain_correct = 0
+        domain_total = 0
 
         metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
@@ -620,6 +622,12 @@ class BirdClefFineTuner:
                 
                 domain_loss = self.domain_criterion(domain_output.squeeze(), domain_labels)
                 
+                # Track domain discriminator accuracy (should approach 50% if DANN working)
+                domain_pred = (torch.sigmoid(domain_output.squeeze()) > 0.5).float()
+                domain_correct += (domain_pred == domain_labels).sum().item()
+                domain_total += domain_labels.size(0)
+                domain_acc = 100.0 * domain_correct / domain_total
+                
                 # GRL handles gradient reversal and scaling internally
                 loss = class_loss + domain_loss
                 
@@ -648,13 +656,16 @@ class BirdClefFineTuner:
                     pbar.set_postfix({
                         'cls': f'{class_loss.item():.3f}',
                         'dom': f'{domain_loss.item():.3f}',
-                        'f1': f'{metrics_sum["macro_f1"]/max(total,1):.3f}'
+                        'f1': f'{metrics_sum["macro_f1"]/max(total,1):.3f}',
+                        'dacc': f'{domain_acc:.1f}%',
+                        'α': f'{self.grl.lambda_param:.3f}'
                     })
                 else:
                     pbar.set_postfix({
                         'cls': f'{class_loss.item():.3f}',
                         'dom': f'{domain_loss.item():.3f}',
                         'acc': f'{100.*correct/total:.1f}%',
+                        'dacc': f'{domain_acc:.1f}%',
                         'α': f'{self.grl.lambda_param:.3f}'
                     })
             else:
@@ -713,8 +724,15 @@ class BirdClefFineTuner:
         
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            if self.use_dann and self.target_loader:
+                avg_metrics['domain_acc'] = 100.0 * domain_correct / max(domain_total, 1)
             return total_loss / len(self.train_loader), avg_metrics
-        return total_loss / (n_batches if self.use_dann and self.target_loader else len(self.train_loader)), 100. * correct / total
+        
+        train_acc = 100. * correct / total
+        if self.use_dann and self.target_loader:
+            avg_loss = total_loss / n_batches
+            return avg_loss, (train_acc, 100.0 * domain_correct / max(domain_total, 1))
+        return total_loss / len(self.train_loader), train_acc
     
     def validate(self):
         """Validate on validation set."""
@@ -892,13 +910,16 @@ class BirdClefFineTuner:
             
             print(f"Epoch {epoch+1}/{self.epochs}:")
             if self.multilabel:
-                print(
+                metrics_str = (
                     f"  Train Loss: {train_loss:.4f}, "
                     f"Macro F1: {train_metrics['macro_f1']:.4f}, "
                     f"Micro F1: {train_metrics['micro_f1']:.4f}, "
                     f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
                     f"Exact: {train_metrics['exact_match']:.4f}"
                 )
+                if self.use_dann and 'domain_acc' in train_metrics:
+                    metrics_str += f", Domain Acc: {train_metrics['domain_acc']:.1f}%"
+                print(metrics_str)
                 if val_metrics:
                     print(
                         f"  Val Loss: {val_loss:.4f}, "
@@ -908,7 +929,11 @@ class BirdClefFineTuner:
                         f"Exact: {val_metrics['exact_match']:.4f}"
                     )
             else:
-                print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_metrics:.2f}%")
+                if self.use_dann and isinstance(train_metrics, tuple):
+                    train_acc, domain_acc = train_metrics
+                    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, Domain Acc: {domain_acc:.1f}%")
+                else:
+                    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_metrics:.2f}%")
                 if val_metrics is not None:
                     print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_metrics:.2f}%")
             
