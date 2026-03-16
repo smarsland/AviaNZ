@@ -91,9 +91,11 @@ class DANNTrainer:
                 'train_filenames': noise_files,
                 'train_labels': dummy_labels,
                 'train_primary_species': ['noise'] * num_noise_samples,
+                'train_noise_filenames': [],
                 'val_filenames': [],
                 'val_labels': np.zeros((0, num_classes), dtype=np.float32),
-                'val_primary_species': []
+                'val_primary_species': [],
+                'val_noise_filenames': []
             }
             print(f"  Target is NOISE (unlabeled data for domain adaptation)")
             print(f"  Loaded {num_noise_samples} noise files from {self.target_folder}")
