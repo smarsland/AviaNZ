@@ -266,8 +266,9 @@ class DANNTrainer:
             total_domain_loss += domain_loss.item()
             
             _, predicted = torch.max(source_class_output, 1)
+            _, source_labels_idx = torch.max(source_labels, 1)
             total += source_labels.size(0)
-            correct += (predicted == source_labels).sum().item()
+            correct += (predicted == source_labels_idx).sum().item()
             
             pbar.set_postfix({
                 'cls_loss': f'{class_loss.item():.4f}',
@@ -298,8 +299,9 @@ class DANNTrainer:
                 class_output, _, _ = self.model(data, alpha=0.0)
                 
                 _, predicted = torch.max(class_output, 1)
+                _, labels_idx = torch.max(labels, 1)
                 total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                correct += (predicted == labels_idx).sum().item()
         
         val_acc = 100.0 * correct / total
         return val_acc
@@ -338,8 +340,9 @@ class DANNTrainer:
                 class_output, _, _ = self.model(data, alpha=0.0)
                 
                 _, predicted = torch.max(class_output, 1)
+                _, labels_idx = torch.max(labels, 1)
                 total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                correct += (predicted == labels_idx).sum().item()
         
         test_acc = 100.0 * correct / total
         return test_acc
