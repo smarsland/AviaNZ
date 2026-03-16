@@ -70,7 +70,6 @@ python3 run_cross_dataset_experiments.py \
     --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
     --epochs 50 \
-    --batch-size 32 \
-    --noise-folder "$NOISE_FOLDER"
+    --batch-size 32
 
 echo "Done. Results: $RESULTS_DIR"

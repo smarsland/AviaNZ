@@ -34,8 +34,9 @@ from tqdm import tqdm
 from pathlib import Path
 
 import config
-from data_utils import DataLoader, create_data_loaders
+from data_utils import DataLoader, create_data_loaders, SpectrogramDataset
 from evaluation_utils import EvaluationManager
+from models import GradientReversalLayer, DomainDiscriminator
 
 
 class BirdClefFineTuneModel(nn.Module):
@@ -180,7 +181,8 @@ class BirdClefFineTuner:
                  use_class_weights=False, pos_weight_cap=None,
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
-                 remove_baseline=False, test_folder=None, test_folder2=None, background_prob=0.0):
+                 remove_baseline=False, test_folder=None, test_folder2=None, background_prob=0.0,
+                 use_dann=False, target_folder=None, lambda_domain=0.1):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -198,6 +200,9 @@ class BirdClefFineTuner:
         self.mixup_mode = mixup_mode
         self.noise_ratio = noise_ratio
         self.noise_folder = noise_folder
+        self.use_dann = use_dann
+        self.target_folder = target_folder
+        self.lambda_domain = lambda_domain
         self.noise_mode = noise_mode
         self.use_temporal_roll = use_temporal_roll
         self.validation_split = validation_split
@@ -233,6 +238,9 @@ class BirdClefFineTuner:
             print(f"  Noise augmentation: expected ratio {self.noise_ratio} (uniformly sampled [0, min({2*self.noise_ratio:.1f}, 1.0)], clipped), mode: {noise_mode_name.get(self.noise_mode, self.noise_mode)}")
         if self.background_prob > 0:
             print(f"  Background replacement: {self.background_prob*100:.1f}% (replaces samples with background, zeros labels)")
+        if self.use_dann:
+            print(f"  DANN: enabled (lambda={self.lambda_domain})")
+            print(f"  Target domain: {self.target_folder}")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -327,6 +335,43 @@ class BirdClefFineTuner:
             print(f"  Val samples: {len(self.val_loader.dataset)}")
         else:
             print(f"  Val samples: 0 (validation disabled)")
+        
+        if self.use_dann and self.target_folder:
+            print(f"\n  Loading DANN target domain (unlabeled)...")
+            target_loader = DataLoader(self.target_folder)
+            target_data = target_loader.load_data(use_multilabel=False, validation_share=0.0)
+            
+            img_height = config.DEFAULT_FREQ_BINS
+            img_width = config.DEFAULT_TIME_BINS
+            spec_transform = None
+            
+            target_dataset = SpectrogramDataset(
+                target_data['train_filenames'], target_data['train_labels'],
+                img_height, img_width, config.DEFAULT_CHANNELS, 'random',
+                noise_filenames=target_data['train_noise_filenames'],
+                noise_ratio=0.0,
+                spec_transform=spec_transform,
+                training=True,
+                width_downsizing=None,
+                normalize=self.normalize,
+                use_sparse_patches=False,
+                num_sparse_patches=0,
+                use_temporal_roll=self.use_temporal_roll,
+                remove_baseline=self.remove_baseline,
+                noise_mode='full',
+                background_prob=0.0
+            )
+            
+            self.target_loader = torch.utils.data.DataLoader(
+                target_dataset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=num_workers,
+                pin_memory=True if torch.cuda.is_available() else False
+            )
+            print(f"  Target domain samples: {len(self.target_loader.dataset)}")
+        else:
+            self.target_loader = None
     
     def _remap_labels(self, labels, source_categories, target_categories):
         import numpy as np
@@ -388,6 +433,23 @@ class BirdClefFineTuner:
         )
         
         self.model.to(self.device)
+        
+        if self.use_dann:
+            print("  Adding DANN domain discriminator...")
+            if 'efficientnet' in 'regnety_008':
+                feat_dim = self.model.backbone.get_classifier().in_features
+            elif 'resnet' in 'regnety_008':
+                feat_dim = self.model.backbone.fc.in_features
+            elif 'regnet' in 'regnety_008':
+                feat_dim = self.model.backbone.head.fc.in_features
+            else:
+                feat_dim = 768
+            
+            self.grl = GradientReversalLayer(lambda_val=self.lambda_domain)
+            self.domain_classifier = DomainDiscriminator(feat_dim)
+            self.grl.to(self.device)
+            self.domain_classifier.to(self.device)
+            self.domain_criterion = nn.BCEWithLogitsLoss()
 
         # Loss function
         if self.multilabel:
@@ -404,10 +466,15 @@ class BirdClefFineTuner:
         classifier_params = [p for n, p in self.model.named_parameters() 
                             if 'classifier' in n and p.requires_grad]
         
-        self.optimizer = optim.AdamW([
+        param_groups = [
             {'params': backbone_params, 'lr': self.lr},
-            {'params': classifier_params, 'lr': self.lr * 10}  # 10x LR for new head
-        ], weight_decay=0.01)
+            {'params': classifier_params, 'lr': self.lr * 10}
+        ]
+        
+        if self.use_dann:
+            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr * 10})
+        
+        self.optimizer = optim.AdamW(param_groups, weight_decay=0.01)
         
         # Cosine annealing scheduler
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs)
@@ -473,81 +540,183 @@ class BirdClefFineTuner:
     def train_epoch(self, epoch):
         """Train for one epoch."""
         self.model.train()
+        if self.use_dann:
+            self.grl.train()
+            self.domain_classifier.train()
+            
         total_loss = 0
+        total_class_loss = 0
+        total_domain_loss = 0
         correct = 0
         total = 0
 
         metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
-        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.epochs}")
+        if self.use_dann and self.target_loader:
+            p = epoch / self.epochs
+            alpha = 2.0 / (1.0 + np.exp(-10 * p)) - 1.0
+            self.grl.lambda_val = alpha * self.lambda_domain
+            
+            source_iter = iter(self.train_loader)
+            target_iter = iter(self.target_loader)
+            n_batches = min(len(self.train_loader), len(self.target_loader))
+            pbar = tqdm(range(n_batches), desc=f"Epoch {epoch+1}/{self.epochs}")
+        else:
+            pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.epochs}")
         
-        for batch_idx, (data, target) in enumerate(pbar):
-            data, target = data.to(self.device), target.to(self.device)
-            
-            self.optimizer.zero_grad()
-            output = self.model(data)
-            
-            # Handle target format for loss computation
-            if self.multilabel:
-                loss = self.criterion(output, target.float())
-            else:
-                # For single-label classification
-                if target.dim() == 2 and target.shape[1] > 1:
-                    # Check if soft labels (from mixup) - sum != 1.0 for each sample
-                    # or has fractional values
-                    is_soft = not torch.all((target == 0) | (target == 1))
-                    
-                    if is_soft:
-                        # Soft labels from mixup - use log_softmax + manual cross entropy
-                        # CrossEntropyLoss expects logits and soft targets
-                        log_probs = torch.log_softmax(output, dim=1)
-                        loss = -(target * log_probs).sum(dim=1).mean()
+        for batch_idx in (pbar if self.use_dann and self.target_loader else enumerate(pbar)):
+            if self.use_dann and self.target_loader:
+                try:
+                    source_data, source_target = next(source_iter)
+                except StopIteration:
+                    source_iter = iter(self.train_loader)
+                    source_data, source_target = next(source_iter)
+                
+                try:
+                    target_data, _ = next(target_iter)
+                except StopIteration:
+                    target_iter = iter(self.target_loader)
+                    target_data, _ = next(target_iter)
+                
+                source_data = source_data.to(self.device)
+                source_target = source_target.to(self.device)
+                target_data = target_data.to(self.device)
+                
+                batch_size_s = source_data.size(0)
+                batch_size_t = target_data.size(0)
+                
+                combined_data = torch.cat([source_data, target_data], dim=0)
+                
+                self.optimizer.zero_grad()
+                
+                features = self.model.backbone(combined_data)
+                if isinstance(features, dict):
+                    features = features['features']
+                if len(features.shape) == 4:
+                    features = self.model.pooling(features)
+                    features = features.view(features.size(0), -1)
+                
+                class_output = self.model.classifier(features)
+                source_class_output = class_output[:batch_size_s]
+                
+                if self.multilabel:
+                    class_loss = self.criterion(source_class_output, source_target.float())
+                else:
+                    if source_target.dim() == 2 and source_target.shape[1] > 1:
+                        is_soft = not torch.all((source_target == 0) | (source_target == 1))
+                        if is_soft:
+                            log_probs = torch.log_softmax(source_class_output, dim=1)
+                            class_loss = -(source_target * log_probs).sum(dim=1).mean()
+                        else:
+                            target_labels = source_target.argmax(dim=1)
+                            class_loss = self.criterion(source_class_output, target_labels)
                     else:
-                        # Hard one-hot labels - convert to class indices
-                        target_labels = target.argmax(dim=1)
+                        target_labels = source_target.long()
+                        class_loss = self.criterion(source_class_output, target_labels)
+                
+                reversed_features = self.grl(features)
+                domain_output = self.domain_classifier(reversed_features)
+                
+                domain_labels_source = torch.zeros(batch_size_s).to(self.device)
+                domain_labels_target = torch.ones(batch_size_t).to(self.device)
+                domain_labels = torch.cat([domain_labels_source, domain_labels_target], dim=0)
+                
+                domain_loss = self.domain_criterion(domain_output.squeeze(), domain_labels)
+                
+                loss = class_loss + domain_loss
+                
+                loss.backward()
+                self.optimizer.step()
+                
+                total_class_loss += class_loss.item()
+                total_domain_loss += domain_loss.item()
+                total_loss += loss.item()
+                
+                if self.multilabel:
+                    batch_metrics = self._compute_multilabel_metrics(source_class_output, source_target)
+                    for k in metrics_sum:
+                        metrics_sum[k] += batch_metrics[k] * source_target.size(0)
+                else:
+                    pred = source_class_output.argmax(dim=1)
+                    if source_target.dim() == 2:
+                        target_labels = source_target.argmax(dim=1)
+                    else:
+                        target_labels = source_target
+                    correct += pred.eq(target_labels).sum().item()
+                
+                total += source_target.size(0)
+                
+                if self.multilabel:
+                    pbar.set_postfix({
+                        'cls': f'{class_loss.item():.3f}',
+                        'dom': f'{domain_loss.item():.3f}',
+                        'f1': f'{metrics_sum["macro_f1"]/max(total,1):.3f}'
+                    })
+                else:
+                    pbar.set_postfix({
+                        'cls': f'{class_loss.item():.3f}',
+                        'dom': f'{domain_loss.item():.3f}',
+                        'acc': f'{100.*correct/total:.1f}%',
+                        'α': f'{self.grl.lambda_val:.3f}'
+                    })
+            else:
+                batch_idx, (data, target) = batch_idx
+                data, target = data.to(self.device), target.to(self.device)
+                
+                self.optimizer.zero_grad()
+                output = self.model(data)
+                
+                if self.multilabel:
+                    loss = self.criterion(output, target.float())
+                else:
+                    if target.dim() == 2 and target.shape[1] > 1:
+                        is_soft = not torch.all((target == 0) | (target == 1))
+                        
+                        if is_soft:
+                            log_probs = torch.log_softmax(output, dim=1)
+                            loss = -(target * log_probs).sum(dim=1).mean()
+                        else:
+                            target_labels = target.argmax(dim=1)
+                            loss = self.criterion(output, target_labels)
+                    else:
+                        target_labels = target.long()
                         loss = self.criterion(output, target_labels)
+                
+                loss.backward()
+                self.optimizer.step()
+                
+                total_loss += loss.item()
+                
+                if self.multilabel:
+                    batch_metrics = self._compute_multilabel_metrics(output, target)
+                    for k in metrics_sum:
+                        metrics_sum[k] += batch_metrics[k] * target.size(0)
                 else:
-                    target_labels = target.long()
-                    loss = self.criterion(output, target_labels)
-            
-            loss.backward()
-            self.optimizer.step()
-            
-            total_loss += loss.item()
-            
-            # Compute accuracy
-            if self.multilabel:
-                batch_metrics = self._compute_multilabel_metrics(output, target)
-                for k in metrics_sum:
-                    metrics_sum[k] += batch_metrics[k] * target.size(0)
-            else:
-                pred = output.argmax(dim=1)
-                if target.dim() == 2:
-                    # Use argmax for accuracy even with soft labels
-                    # (measures accuracy on dominant class, not perfect but reasonable)
-                    target_labels = target.argmax(dim=1)
+                    pred = output.argmax(dim=1)
+                    if target.dim() == 2:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target
+                    correct += pred.eq(target_labels).sum().item()
+                
+                total += target.size(0)
+                
+                if self.multilabel:
+                    pbar.set_postfix({
+                        'loss': total_loss / (batch_idx + 1),
+                        'macro_f1': metrics_sum['macro_f1'] / max(total, 1),
+                        'bit_acc': metrics_sum['bit_acc'] / max(total, 1)
+                    })
                 else:
-                    target_labels = target
-                correct += pred.eq(target_labels).sum().item()
-            
-            total += target.size(0)
-            
-            if self.multilabel:
-                pbar.set_postfix({
-                    'loss': total_loss / (batch_idx + 1),
-                    'macro_f1': metrics_sum['macro_f1'] / max(total, 1),
-                    'bit_acc': metrics_sum['bit_acc'] / max(total, 1)
-                })
-            else:
-                pbar.set_postfix({
-                    'loss': total_loss / (batch_idx + 1),
-                    'acc': 100. * correct / total
-                })
+                    pbar.set_postfix({
+                        'loss': total_loss / (batch_idx + 1),
+                        'acc': 100. * correct / total
+                    })
         
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
             return total_loss / len(self.train_loader), avg_metrics
-        return total_loss / len(self.train_loader), 100. * correct / total
+        return total_loss / (n_batches if self.use_dann and self.target_loader else len(self.train_loader)), 100. * correct / total
     
     def validate(self):
         """Validate on validation set."""
@@ -945,6 +1114,12 @@ Examples:
                        help="Path to test data folder 2 (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
+    parser.add_argument('--use-dann', action='store_true',
+                       help="Enable Domain Adaptive Neural Network (DANN) training for domain adaptation")
+    parser.add_argument('--target-folder', type=str, default=None,
+                       help="Path to target domain folder for DANN (unlabeled domain for adaptation)")
+    parser.add_argument('--lambda-domain', type=float, default=0.1,
+                       help="Domain loss weight for DANN (default: 0.1)")
     
     args = parser.parse_args()
     
@@ -983,7 +1158,10 @@ Examples:
         remove_baseline=args.baseline_removal,
         test_folder=args.test_folder,
         test_folder2=args.test_folder2,
-        background_prob=args.background_prob
+        background_prob=args.background_prob,
+        use_dann=args.use_dann,
+        target_folder=args.target_folder,
+        lambda_domain=args.lambda_domain
     )
     
     # Load data and create model

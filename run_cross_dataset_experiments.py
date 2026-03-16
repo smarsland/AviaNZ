@@ -114,52 +114,52 @@ class CrossDatasetExperiments:
                 'freeze': True,
                 'type': 'finetune',
                 'description': 'Train on Combined (frozen backbone)'
-            },
-            {
-                'name': 'dann_avianz_to_noise_full',
-                'source': avianz_train,
-                'target': noise_folder if noise_folder else avianz_train,
-                'target_is_noise': True if noise_folder else False,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': False,
-                'type': 'dann',
-                'description': 'DANN AviaNZ->Noise (full)'
-            },
-            {
-                'name': 'dann_avianz_to_noise_frozen',
-                'source': avianz_train,
-                'target': noise_folder if noise_folder else avianz_train,
-                'target_is_noise': True if noise_folder else False,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': True,
-                'type': 'dann',
-                'description': 'DANN AviaNZ->Noise (frozen)'
-            },
-            {
-                'name': 'dann_doc_to_noise_full',
-                'source': doc_train,
-                'target': noise_folder if noise_folder else doc_train,
-                'target_is_noise': True if noise_folder else False,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'freeze': False,
-                'type': 'dann',
-                'description': 'DANN DOC->Noise (full)'
-            },
-            {
-                'name': 'dann_doc_to_noise_frozen',
-                'source': doc_train,
-                'target': noise_folder if noise_folder else doc_train,
-                'target_is_noise': True if noise_folder else False,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'freeze': True,
-                'type': 'dann',
-                'description': 'DANN DOC->Noise (frozen)'
             }
         ]
+        
+        if noise_folder:
+            self.experiments.extend([
+                {
+                    'name': 'dann_avianz_to_noise_full',
+                    'source': avianz_train,
+                    'target': noise_folder,
+                    'test1': avianz_test,
+                    'test2': doc_test,
+                    'freeze': False,
+                    'type': 'dann',
+                    'description': 'DANN AviaNZ->Noise (full)'
+                },
+                {
+                    'name': 'dann_avianz_to_noise_frozen',
+                    'source': avianz_train,
+                    'target': noise_folder,
+                    'test1': avianz_test,
+                    'test2': doc_test,
+                    'freeze': True,
+                    'type': 'dann',
+                    'description': 'DANN AviaNZ->Noise (frozen)'
+                },
+                {
+                    'name': 'dann_doc_to_noise_full',
+                    'source': doc_train,
+                    'target': noise_folder,
+                    'test1': doc_test,
+                    'test2': avianz_test,
+                    'freeze': False,
+                    'type': 'dann',
+                    'description': 'DANN DOC->Noise (full)'
+                },
+                {
+                    'name': 'dann_doc_to_noise_frozen',
+                    'source': doc_train,
+                    'target': noise_folder,
+                    'test1': doc_test,
+                    'test2': avianz_test,
+                    'freeze': True,
+                    'type': 'dann',
+                    'description': 'DANN DOC->Noise (frozen)'
+                }
+            ])
         
         self.results = []
         
@@ -173,11 +173,15 @@ class CrossDatasetExperiments:
         print(f"Combined train: {combined_train}")
         if noise_folder:
             print(f"Noise folder (DANN target): {noise_folder}")
+            print(f"\nExperiment breakdown:")
+            print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
+            print(f"  DANN: 4 experiments (AviaNZ->Noise, DOC->Noise × frozen/full)")
+            print(f"  Total: {len(self.experiments)} experiments")
         else:
-            print(f"WARNING: No noise folder - DANN will use source as target (pointless)")
-        print(f"\nExperiment breakdown:")
-        print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
-        print(f"  DANN: 4 experiments (AviaNZ->Noise, DOC->Noise × frozen/full)")
+            print(f"No noise folder provided - DANN experiments skipped")
+            print(f"\nExperiment breakdown:")
+            print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
+            print(f"  Total: {len(self.experiments)} experiments")
         print(f"\nTotal experiments: {len(self.experiments)}")
         print(f"\nNote: DANN trains on SOURCE labels, adapts to NOISE (unlabeled)
         print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
@@ -286,24 +290,21 @@ class CrossDatasetExperiments:
         
         cmd = [
             sys.executable,
-            'train_domain_adaptation.py',
+            'finetune_birdclef.py',
             exp['source'],
-            exp['target'],
             str(exp_output),
-            '--architecture', 'regnety_008',
             '--pretrained', self.model_path,
             '--epochs', str(self.epochs),
             '--batch-size', str(self.batch_size),
-            '--lambda-domain', str(self.lambda_domain),
             '--test-folder', exp['test1'],
-            '--test-folder2', exp['test2']
+            '--test-folder2', exp['test2'],
+            '--use-dann',
+            '--target-folder', exp['target'],
+            '--lambda-domain', str(self.lambda_domain)
         ]
         
         if exp['freeze']:
             cmd.append('--freeze-backbone')
-        
-        if exp.get('target_is_noise', False):
-            cmd.append('--target-is-noise')
         
         print(f"\nRunning: {' '.join(cmd)}")
         
@@ -321,35 +322,19 @@ class CrossDatasetExperiments:
             test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
             test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
             
-            # Convert DANN history to standard format
-            val_acc = history.get('target_val_acc', [0] * len(history.get('train_class_acc', [])))
-            
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
-                'train_dataset': 'combined_train',
+                'train_dataset': exp['source'],
                 'freeze_backbone': exp['freeze'],
-                'final_train_acc': history['train_class_acc'][-1] if history.get('train_class_acc') else 0,
-                'final_val_acc': val_acc[-1] if val_acc else None,
+                'final_train_acc': history['train_acc'][-1] if history.get('train_acc') else 0,
+                'final_val_acc': history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
                 'test2_acc': test2_acc,
-                'best_val_acc': max(val_acc) if val_acc else None,
-                'history': {
-                    'train_acc': history.get('train_class_acc', []),
-                    'val_acc': val_acc,
-                    'train_loss': history.get('train_class_loss', []),
-                    'val_loss': [],
-                    'train_macro_f1': [],
-                    'val_macro_f1': [],
-                    'train_micro_f1': [],
-                    'val_micro_f1': [],
-                    'train_exact_match': [],
-                    'val_exact_match': [],
-                    'train_bit_acc': [],
-                    'val_bit_acc': []
-                },
+                'best_val_acc': max([v for v in history.get('val_acc', []) if v is not None], default=None),
+                'history': history,
                 'output_folder': str(exp_output)
             }
             
