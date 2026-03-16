@@ -14,24 +14,27 @@ def get_background_spectrogram(img):
     # Assume for any frequency band no more than half of the pixels are interesting
     # Therefore take the bottom half as non-interesting to estimate the background
     H, W = img.shape
-    sorted_pixels = np.sort(img, axis=1)
-    bg_pixels = sorted_pixels[:, :W//2]
+
+    for iter in range(10):
     
-    # Calculate mean and variance of background pixels per frequency band
-    mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
-    var0 = np.var(bg_pixels, axis=1, keepdims=True)
+        sorted_pixels = np.sort(img, axis=1)
+        bg_pixels = sorted_pixels[:, :W//2]
+        
+        # Calculate mean and variance of background pixels per frequency band
+        mu0 = np.mean(bg_pixels, axis=1, keepdims=True)
+        var0 = np.var(bg_pixels, axis=1, keepdims=True)
 
-    # Normalize: z-score normalization per frequency band
-    sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
+        # Normalize: z-score normalization per frequency band
+        sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
 
-    for row in range(H):
-        outliers = sg_normalized[row, :] > 3
-        not_outliers = sg_normalized[row, :] <= 3
-        sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
+        for row in range(H):
+            outliers = sg_normalized[row, :] > 3
+            not_outliers = sg_normalized[row, :] <= 3
+            sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
 
-    sg_fixed = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
+        img = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
 
-    return sg_fixed
+    return img
 
 def normalize_spectrogram(img):
     """
@@ -40,8 +43,10 @@ def normalize_spectrogram(img):
     """
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
-    
+
     img = img - get_background_spectrogram(img)
+
+    img = median_filter(img, size=(1, 10))
 
     return img
 
