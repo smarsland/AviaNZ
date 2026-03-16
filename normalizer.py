@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
+from scipy.ndimage import median_filter
+
 
 def get_background_spectrogram(img):
     # Assume for any frequency band no more than half of the pixels are interesting
@@ -41,7 +43,7 @@ def normalize_spectrogram(img):
     
     #img = img - get_background_spectrogram(img)
 
-    img = img * np.random.uniform(0, 2, size=img.shape)
+    img = median_filter(img, size=(1, 5))
 
     return img
 
