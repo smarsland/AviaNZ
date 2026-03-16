@@ -42,9 +42,9 @@ def normalize_spectrogram(img):
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
 
-    img = img - get_background_spectrogram(img)
+    img = median_filter(img, size=(1, 10))
 
-    #img = median_filter(img, size=(1, 10))
+    img = img - get_background_spectrogram(img)
 
     return img
 
