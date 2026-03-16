@@ -72,6 +72,9 @@ class BirdClefFineTuneModel(nn.Module):
         
         self.pooling = nn.AdaptiveAvgPool2d(1)
         
+        # Store feature dimension for potential domain adaptation
+        self.feature_dim = backbone_out
+        
         # Create NEW classifier for your species
         self.classifier = nn.Linear(backbone_out, num_classes)
         
@@ -436,14 +439,7 @@ class BirdClefFineTuner:
         
         if self.use_dann:
             print("  Adding DANN domain discriminator...")
-            if 'efficientnet' in 'regnety_008':
-                feat_dim = self.model.backbone.get_classifier().in_features
-            elif 'resnet' in 'regnety_008':
-                feat_dim = self.model.backbone.fc.in_features
-            elif 'regnet' in 'regnety_008':
-                feat_dim = self.model.backbone.head.fc.in_features
-            else:
-                feat_dim = 768
+            feat_dim = self.model.feature_dim
             
             self.grl = GradientReversalLayer(lambda_val=self.lambda_domain)
             self.domain_classifier = DomainDiscriminator(feat_dim)
