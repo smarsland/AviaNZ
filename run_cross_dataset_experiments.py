@@ -460,6 +460,261 @@ class CrossDatasetExperiments:
         print(f"  Saved to: {plot_path}")
         plt.close()
     
+    def plot_validation_performance(self):
+        """Plot validation accuracy comparison across experiments."""
+        print(f"\nGenerating validation performance comparison plot...")
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        exp_names = []
+        val_scores = []
+        best_val_scores = []
+        colors = []
+        
+        for r in self.results:
+            exp_names.append(r['name'].replace('_', '\n'))
+            
+            # Use final validation accuracy (or 0 if None)
+            val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
+            best_val = r['best_val_acc'] if r['best_val_acc'] is not None else 0
+            
+            val_scores.append(val_acc)
+            best_val_scores.append(best_val)
+            
+            if r['freeze_backbone']:
+                colors.append('lightcoral')
+            else:
+                colors.append('steelblue')
+        
+        x = np.arange(len(exp_names))
+        width = 0.35
+        
+        bars1 = ax.bar(x - width/2, val_scores, width, label='Final Val Acc', color='#9b59b6', alpha=0.8)
+        bars2 = ax.bar(x + width/2, best_val_scores, width, label='Best Val Acc', color='#3498db', alpha=0.8)
+        
+        ax.set_ylabel('Accuracy (%)', fontsize=12)
+        ax.set_title('Validation Performance Comparison', fontsize=14, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(exp_names, fontsize=9)
+        ax.legend(fontsize=11)
+        ax.grid(axis='y', alpha=0.3)
+        
+        for bars in [bars1, bars2]:
+            for bar in bars:
+                height = bar.get_height()
+                if height > 0:  # Only show label if not zero
+                    ax.text(bar.get_x() + bar.get_width()/2., height,
+                           f'{height:.1f}%',
+                           ha='center', va='bottom', fontsize=8)
+        
+        plt.tight_layout()
+        
+        plot_path = self.output_folder / 'validation_performance.png'
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"  Saved to: {plot_path}")
+        plt.close()
+    
+    def plot_validation_heatmap(self):
+        """Generate heatmap of train dataset vs validation accuracy."""
+        print(f"\nGenerating validation performance heatmap...")
+        
+        # Dynamically determine which training datasets are present
+        present_datasets = set()
+        for r in self.results:
+            if r['name'].startswith('avianz'):
+                present_datasets.add('AviaNZ')
+            elif r['name'].startswith('doc'):
+                present_datasets.add('DOC')
+            elif r['name'].startswith('combined'):
+                present_datasets.add('Combined')
+            elif r['name'].startswith('dann'):
+                present_datasets.add('DANN')
+        
+        # Order datasets consistently
+        all_possible = ['AviaNZ', 'DOC', 'Combined', 'DANN']
+        train_datasets = [d for d in all_possible if d in present_datasets]
+        
+        n_datasets = len(train_datasets)
+        full_matrix = np.zeros((n_datasets, 1))
+        frozen_matrix = np.zeros((n_datasets, 1))
+        
+        # Create mapping dynamically
+        mapping = {}
+        if 'AviaNZ' in present_datasets:
+            mapping['avianz'] = train_datasets.index('AviaNZ')
+        if 'DOC' in present_datasets:
+            mapping['doc'] = train_datasets.index('DOC')
+        if 'Combined' in present_datasets:
+            mapping['combined'] = train_datasets.index('Combined')
+        if 'DANN' in present_datasets:
+            mapping['dann'] = train_datasets.index('DANN')
+        
+        for r in self.results:
+            # Determine train dataset index
+            train_idx = None
+            for key, idx in mapping.items():
+                if r['name'].startswith(key):
+                    train_idx = idx
+                    break
+            
+            if train_idx is None:
+                continue
+            
+            # Get validation score
+            val_score = r['final_val_acc'] if r['final_val_acc'] is not None else 0
+            
+            # Fill matrices
+            if r['freeze_backbone']:
+                frozen_matrix[train_idx, 0] = val_score
+            else:
+                full_matrix[train_idx, 0] = val_score
+        
+        # Create side-by-side heatmaps
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+        
+        # Full fine-tuning heatmap
+        sns.heatmap(full_matrix, annot=True, fmt='.1f', cmap='RdYlGn', 
+                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
+                    xticklabels=['Validation'], yticklabels=train_datasets,
+                    ax=ax1, linewidths=1, linecolor='gray')
+        ax1.set_title('Full Fine-tuning', fontsize=14, fontweight='bold', pad=15)
+        ax1.set_xlabel('', fontsize=12, labelpad=10)
+        ax1.set_ylabel('Training Dataset', fontsize=12, labelpad=10)
+        
+        # Frozen backbone heatmap
+        sns.heatmap(frozen_matrix, annot=True, fmt='.1f', cmap='RdYlGn',
+                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
+                    xticklabels=['Validation'], yticklabels=train_datasets,
+                    ax=ax2, linewidths=1, linecolor='gray')
+        ax2.set_title('Frozen Backbone', fontsize=14, fontweight='bold', pad=15)
+        ax2.set_xlabel('', fontsize=12, labelpad=10)
+        ax2.set_ylabel('Training Dataset', fontsize=12, labelpad=10)
+        
+        plt.suptitle('Validation Performance Heatmap', fontsize=16, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        
+        plot_path = self.output_folder / 'validation_heatmap.png'
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"  Saved to: {plot_path}")
+        plt.close()
+    
+    def plot_validation_vs_test(self):
+        """Plot validation vs test accuracy - TWO SEPARATE plots for full vs frozen."""
+        print(f"\nGenerating validation vs test comparison plots...")
+        
+        # Separate results by freeze type
+        full_results = [r for r in self.results if not r['freeze_backbone']]
+        frozen_results = [r for r in self.results if r['freeze_backbone']]
+        
+        # Function to plot scatter for a set of results
+        def plot_single_scatter(results, title, color, filename):
+            if not results:
+                return
+            
+            fig, ax = plt.subplots(figsize=(8, 8))
+            
+            # Collect all points, correctly identifying which is AviaNZ vs DOC
+            avianz_vals = []
+            avianz_tests = []
+            doc_vals = []
+            doc_tests = []
+            
+            for r in results:
+                val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
+                
+                # Check which test set is which based on test1_name
+                if 'joe_mo' in r['test1_name']:
+                    # test1 is AviaNZ, test2 is DOC
+                    avianz_vals.append(val_acc)
+                    avianz_tests.append(r['test1_acc'])
+                    doc_vals.append(val_acc)
+                    doc_tests.append(r['test2_acc'])
+                else:
+                    # test1 is DOC, test2 is AviaNZ
+                    doc_vals.append(val_acc)
+                    doc_tests.append(r['test1_acc'])
+                    avianz_vals.append(val_acc)
+                    avianz_tests.append(r['test2_acc'])
+            
+            # Determine nice axis limits
+            all_vals = avianz_vals + doc_vals
+            all_tests = avianz_tests + doc_tests
+            
+            if all_vals and all_tests:
+                min_val = max(0, min(min(all_vals), min(all_tests)) - 10)
+                max_val = min(100, max(max(all_vals), max(all_tests)) + 10)
+                # Round to nearest 10
+                min_val = int(min_val / 10) * 10
+                max_val = int((max_val + 9) / 10) * 10
+            else:
+                min_val, max_val = 0, 100
+            
+            # Plot AviaNZ points (circles)
+            ax.scatter(avianz_vals, avianz_tests, c=color, marker='o', s=220, 
+                      alpha=0.75, edgecolors='black', linewidths=2.5, label='AviaNZ', zorder=3)
+            
+            # Plot DOC points (squares)
+            ax.scatter(doc_vals, doc_tests, c=color, marker='s', s=220, 
+                      alpha=0.75, edgecolors='black', linewidths=2.5, label='DOC', zorder=3)
+            
+            # Add vertical dotted lines and labels for each experiment
+            for r in results:
+                val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
+                
+                # Get correct test scores
+                if 'joe_mo' in r['test1_name']:
+                    test_scores = [r['test1_acc'], r['test2_acc']]
+                else:
+                    test_scores = [r['test2_acc'], r['test1_acc']]
+                
+                # Draw vertical line connecting the two points
+                ax.plot([val_acc, val_acc], [min(test_scores), max(test_scores)], 
+                       'k:', alpha=0.4, linewidth=2, zorder=1)
+                
+                # Add label to the left of the line
+                name = r['name'].replace('_full', '').replace('_frozen', '').upper()
+                mid_point = (min(test_scores) + max(test_scores)) / 2
+                ax.text(val_acc - 1, mid_point, name, 
+                       fontsize=10, alpha=0.85, ha='right', va='center',
+                       fontweight='bold', color='black')
+            
+            # Add diagonal line (perfect prediction)
+            ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.6, linewidth=2.5)
+            
+            # Configure axes
+            ax.set_xlim(min_val, max_val)
+            ax.set_ylim(min_val, max_val)
+            ax.set_xlabel('Validation Accuracy (%)', fontsize=14, fontweight='bold')
+            ax.set_ylabel('Test Accuracy (%)', fontsize=14, fontweight='bold')
+            ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
+            ax.grid(alpha=0.3, linestyle='--', linewidth=1)
+            ax.set_aspect('equal', adjustable='box')
+            
+            # Add legend
+            from matplotlib.lines import Line2D
+            legend_elements = [
+                Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=14, 
+                       label='AviaNZ Test', markeredgecolor='black', markeredgewidth=2),
+                Line2D([0], [0], marker='s', color='w', markerfacecolor=color, markersize=14, 
+                       label='DOC Test', markeredgecolor='black', markeredgewidth=2),
+                Line2D([0], [0], color='k', linestyle='--', linewidth=2.5, label='Perfect Prediction')
+            ]
+            ax.legend(handles=legend_elements, fontsize=12, loc='upper left', framealpha=0.95, 
+                     edgecolor='black', fancybox=False)
+            
+            plt.tight_layout()
+            plot_path = self.output_folder / filename
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            print(f"  Saved to: {plot_path}")
+            plt.close()
+        
+        # Generate two separate plots
+        if full_results:
+            plot_single_scatter(full_results, 'Full Fine-tuning', 'steelblue', 'validation_vs_test_full.png')
+        
+        if frozen_results:
+            plot_single_scatter(frozen_results, 'Frozen Backbone', 'lightcoral', 'validation_vs_test_frozen.png')
+    
     def plot_generalization_gap(self):
         """Plot generalization gap (train vs test performance)."""
         print(f"\nGenerating generalization gap plot...")
@@ -552,22 +807,41 @@ class CrossDatasetExperiments:
         plt.close()
     
     def plot_heatmap(self):
-        """Generate 4x2 heatmap of train dataset vs test dataset accuracy."""
+        """Generate heatmap of train dataset vs test/validation accuracy."""
         print(f"\nGenerating heatmap...")
         
-        # Create matrices for full and frozen (now 4x2 to include DANN)
-        train_datasets = ['AviaNZ', 'DOC', 'Combined', 'DANN']
-        test_datasets = ['AviaNZ Test', 'DOC Test']
+        # Dynamically determine which training datasets are present
+        present_datasets = set()
+        for r in self.results:
+            if r['name'].startswith('avianz'):
+                present_datasets.add('AviaNZ')
+            elif r['name'].startswith('doc'):
+                present_datasets.add('DOC')
+            elif r['name'].startswith('combined'):
+                present_datasets.add('Combined')
+            elif r['name'].startswith('dann'):
+                present_datasets.add('DANN')
         
-        full_matrix = np.zeros((4, 2))
-        frozen_matrix = np.zeros((4, 2))
+        # Order datasets consistently
+        all_possible = ['AviaNZ', 'DOC', 'Combined', 'DANN']
+        train_datasets = [d for d in all_possible if d in present_datasets]
         
-        mapping = {
-            'avianz': 0,
-            'doc': 1,
-            'combined': 2,
-            'dann': 3
-        }
+        metric_names = ['Validation', 'AviaNZ Test', 'DOC Test']
+        
+        n_datasets = len(train_datasets)
+        full_matrix = np.zeros((n_datasets, 3))
+        frozen_matrix = np.zeros((n_datasets, 3))
+        
+        # Create mapping dynamically
+        mapping = {}
+        if 'AviaNZ' in present_datasets:
+            mapping['avianz'] = train_datasets.index('AviaNZ')
+        if 'DOC' in present_datasets:
+            mapping['doc'] = train_datasets.index('DOC')
+        if 'Combined' in present_datasets:
+            mapping['combined'] = train_datasets.index('Combined')
+        if 'DANN' in present_datasets:
+            mapping['dann'] = train_datasets.index('DANN')
         
         for r in self.results:
             # Determine train dataset index
@@ -588,39 +862,48 @@ class CrossDatasetExperiments:
                 avianz_score = r['test2_acc']
                 doc_score = r['test1_acc']
             
-            # Fill matrices
+            # Get validation score
+            val_score = r['final_val_acc'] if r['final_val_acc'] is not None else 0
+            
+            # Fill matrices (Validation first, then test scores)
             if r['freeze_backbone']:
-                frozen_matrix[train_idx, 0] = avianz_score
-                frozen_matrix[train_idx, 1] = doc_score
+                frozen_matrix[train_idx, 0] = val_score
+                frozen_matrix[train_idx, 1] = avianz_score
+                frozen_matrix[train_idx, 2] = doc_score
             else:
-                full_matrix[train_idx, 0] = avianz_score
-                full_matrix[train_idx, 1] = doc_score
+                full_matrix[train_idx, 0] = val_score
+                full_matrix[train_idx, 1] = avianz_score
+                full_matrix[train_idx, 2] = doc_score
         
-        # Create side-by-side heatmaps
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-        
+        # Create separate plots for full and frozen
         # Full fine-tuning heatmap
+        fig, ax = plt.subplots(figsize=(10, 6))
         sns.heatmap(full_matrix, annot=True, fmt='.1f', cmap='RdYlGn', 
                     vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
-                    xticklabels=test_datasets, yticklabels=train_datasets,
-                    ax=ax1, linewidths=1, linecolor='gray')
-        ax1.set_title('Full Fine-tuning', fontsize=14, fontweight='bold', pad=15)
-        ax1.set_xlabel('Test Dataset', fontsize=12, labelpad=10)
-        ax1.set_ylabel('Training Dataset', fontsize=12, labelpad=10)
+                    xticklabels=metric_names, yticklabels=train_datasets,
+                    ax=ax, linewidths=1, linecolor='gray')
+        ax.set_title('Full Fine-tuning Performance', fontsize=16, fontweight='bold', pad=15)
+        ax.set_xlabel('Metric', fontsize=13, labelpad=10)
+        ax.set_ylabel('Training Dataset', fontsize=13, labelpad=10)
+        
+        plt.tight_layout()
+        plot_path = self.output_folder / 'heatmap_full.png'
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"  Saved to: {plot_path}")
+        plt.close()
         
         # Frozen backbone heatmap
+        fig, ax = plt.subplots(figsize=(10, 6))
         sns.heatmap(frozen_matrix, annot=True, fmt='.1f', cmap='RdYlGn',
                     vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
-                    xticklabels=test_datasets, yticklabels=train_datasets,
-                    ax=ax2, linewidths=1, linecolor='gray')
-        ax2.set_title('Frozen Backbone', fontsize=14, fontweight='bold', pad=15)
-        ax2.set_xlabel('Test Dataset', fontsize=12, labelpad=10)
-        ax2.set_ylabel('Training Dataset', fontsize=12, labelpad=10)
+                    xticklabels=metric_names, yticklabels=train_datasets,
+                    ax=ax, linewidths=1, linecolor='gray')
+        ax.set_title('Frozen Backbone Performance', fontsize=16, fontweight='bold', pad=15)
+        ax.set_xlabel('Metric', fontsize=13, labelpad=10)
+        ax.set_ylabel('Training Dataset', fontsize=13, labelpad=10)
         
-        plt.suptitle('Cross-Dataset Performance Heatmap', fontsize=16, fontweight='bold', y=1.02)
         plt.tight_layout()
-        
-        plot_path = self.output_folder / 'heatmap.png'
+        plot_path = self.output_folder / 'heatmap_frozen.png'
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"  Saved to: {plot_path}")
         plt.close()
@@ -631,7 +914,17 @@ class CrossDatasetExperiments:
         
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
         
-        train_datasets = ['avianz', 'doc', 'combined']
+        # Dynamically determine which training datasets are present (exclude DANN for this plot)
+        present_datasets = set()
+        for r in self.results:
+            if r['name'].startswith('avianz'):
+                present_datasets.add('avianz')
+            elif r['name'].startswith('doc'):
+                present_datasets.add('doc')
+            elif r['name'].startswith('combined') and not r['name'].startswith('dann'):
+                present_datasets.add('combined')
+        
+        train_datasets = [d for d in ['avianz', 'doc', 'combined'] if d in present_datasets]
         full_avianz = []
         full_doc = []
         frozen_avianz = []
@@ -770,11 +1063,10 @@ class CrossDatasetExperiments:
             f.write("GENERATED FILES\n")
             f.write("="*60 + "\n\n")
             f.write("  - summary_table.csv (tabular results)\n")
-            f.write("  - heatmap.png (cross-dataset performance matrix)\n")
-            f.write("  - test_accuracy_comparison.png (bar chart)\n")
-            f.write("  - generalization_gap.png (train vs test)\n")
-            f.write("  - training_curves.png (all training curves)\n")
-            f.write("  - freeze_comparison.png (frozen vs full)\n")
+            f.write("  - heatmap_full.png (full fine-tuning performance matrix)\n")
+            f.write("  - heatmap_frozen.png (frozen backbone performance matrix)\n")
+            f.write("  - validation_vs_test_full.png (full fine-tuning: validation as test predictor)\n")
+            f.write("  - validation_vs_test_frozen.png (frozen backbone: validation as test predictor)\n")
             f.write("  - all_results.json (detailed JSON)\n")
             f.write("  - report.txt (this file)\n\n")
         
@@ -795,10 +1087,7 @@ class CrossDatasetExperiments:
             self.save_results()
             self.generate_summary_table()
             self.plot_heatmap()
-            self.plot_test_accuracy_comparison()
-            self.plot_generalization_gap()
-            self.plot_training_curves()
-            self.plot_freeze_comparison()
+            self.plot_validation_vs_test()
             self.generate_report()
             
             print(f"\n{'='*60}")
@@ -807,11 +1096,10 @@ class CrossDatasetExperiments:
             print(f"\nResults saved to: {self.output_folder}")
             print(f"\nGenerated files:")
             print(f"  - summary_table.csv")
-            print(f"  - heatmap.png")
-            print(f"  - test_accuracy_comparison.png")
-            print(f"  - generalization_gap.png")
-            print(f"  - training_curves.png")
-            print(f"  - freeze_comparison.png")
+            print(f"  - heatmap_full.png")
+            print(f"  - heatmap_frozen.png")
+            print(f"  - validation_vs_test_full.png")
+            print(f"  - validation_vs_test_frozen.png")
             print(f"  - all_results.json")
             print(f"  - report.txt")
             print(f"\nUse these images in your PDF/paper!")

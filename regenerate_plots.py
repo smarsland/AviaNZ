@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
 Regenerate plots from existing experiment results.
-Usage: python3 regenerate_plots.py experiments_20260313_064819
+Usage: python3 regenerate_plots.py experiments_20260313_064819 [--ignore-dann]
 """
 
 import json
 import sys
+import argparse
 from pathlib import Path
 
 # Import the experiment class
 from run_cross_dataset_experiments import CrossDatasetExperiments
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 regenerate_plots.py <results_folder>")
-        print("Example: python3 regenerate_plots.py experiments_20260313_064819")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description='Regenerate plots from existing experiment results',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument('results_folder', help='Path to results folder')
+    parser.add_argument('--ignore-dann', action='store_true',
+                       help='Exclude DANN experiments from plots')
     
-    results_dir = Path(sys.argv[1])
+    args = parser.parse_args()
+    
+    results_dir = Path(args.results_folder)
     
     if not results_dir.exists():
         print(f"ERROR: Results folder not found: {results_dir}")
@@ -34,6 +40,12 @@ def main():
     
     print(f"Found {len(data['results'])} experiments")
     
+    # Filter out DANN experiments if requested
+    results = data['results']
+    if args.ignore_dann:
+        results = [r for r in results if not r['name'].startswith('dann')]
+        print(f"Filtering DANN experiments: {len(results)} experiments remaining")
+    
     # Create experiment object (paths don't need to exist for plotting)
     exp = CrossDatasetExperiments(
         avianz_train='/dummy/path',
@@ -47,8 +59,8 @@ def main():
         batch_size=data.get('batch_size', 0)
     )
     
-    # Load the results
-    exp.results = data['results']
+    # Load the filtered results
+    exp.results = results
     
     print("\nRegenerating visualizations...")
     print("=" * 60)
@@ -56,10 +68,7 @@ def main():
     try:
         exp.generate_summary_table()
         exp.plot_heatmap()
-        exp.plot_test_accuracy_comparison()
-        exp.plot_freeze_comparison()
-        exp.plot_generalization_gap()
-        exp.plot_training_curves()
+        exp.plot_validation_vs_test()
         
         print("\n" + "=" * 60)
         print("✓ All plots successfully regenerated!")
@@ -67,11 +76,10 @@ def main():
         print(f"\nFiles in {results_dir}:")
         print("  - summary_table.csv")
         print("  - summary_table.txt")
-        print("  - heatmap.png")
-        print("  - test_accuracy_comparison.png")
-        print("  - freeze_comparison.png")
-        print("  - generalization_gap.png")
-        print("  - training_curves.png")
+        print("  - heatmap_full.png")
+        print("  - heatmap_frozen.png")
+        print("  - validation_vs_test_full.png")
+        print("  - validation_vs_test_frozen.png")
         
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
