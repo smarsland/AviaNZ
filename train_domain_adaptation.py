@@ -85,10 +85,10 @@ class DANNTrainer:
                 'train_labels': dummy_labels,
                 'train_primary_species': ['noise'] * num_noise_samples,
                 'train_noise_filenames': target_raw.get('train_noise_filenames', []),
-                'val_filenames': [],
-                'val_labels': np.zeros((0, num_classes), dtype=np.float32),
-                'val_primary_species': [],
-                'val_noise_filenames': []
+                'test_filenames': [],
+                'test_labels': np.zeros((0, num_classes), dtype=np.float32),
+                'test_primary_species': [],
+                'test_noise_filenames': []
             }
             print(f"  Target is NOISE (unlabeled data for domain adaptation)")
             print(f"  Loaded {num_noise_samples} noise files from {self.target_folder}")
@@ -103,7 +103,7 @@ class DANNTrainer:
         
         print(f"  Source samples: {len(self.source_data['train_filenames'])}")
         print(f"  Target train: {len(self.target_data['train_filenames'])}")
-        print(f"  Target val: {len(self.target_data['val_filenames'])}")
+        print(f"  Target val: {len(self.target_data['test_filenames'])}")
         print(f"  Classes: {self.num_classes}")
         
         img_height = config.DEFAULT_FREQ_BINS
