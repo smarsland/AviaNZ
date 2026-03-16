@@ -38,7 +38,10 @@ def normalize_spectrogram(img):
     """
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
-    img = img - get_background_spectrogram(img)
+    
+    #img = img - get_background_spectrogram(img)
+
+    img = img * np.random.uniform(0, 2, size=img.shape)
 
     return img
 
