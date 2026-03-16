@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import os
+import sys
 import json
 import torch
 import torch.nn as nn
@@ -161,6 +162,13 @@ class DANNTrainer:
         
         if pretrained and self.pretrained_path:
             print(f"  Loading pretrained weights from {self.pretrained_path}")
+            
+            class CFG:
+                pass
+            
+            sys.modules[__name__].CFG = CFG
+            globals()['CFG'] = CFG
+            
             checkpoint = torch.load(self.pretrained_path, map_location='cpu', weights_only=False)
             
             if 'model_state_dict' in checkpoint:
