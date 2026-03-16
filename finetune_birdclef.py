@@ -244,6 +244,10 @@ class BirdClefFineTuner:
         if self.use_dann:
             print(f"  DANN: enabled (lambda={self.lambda_domain})")
             print(f"  Target domain: {self.target_folder}")
+            print(f"  IMPORTANT: Watch 'dacc' (domain accuracy) during training:")
+            print(f"    - dacc ~100% = discriminator winning, DANN failing (increase lambda)")
+            print(f"    - dacc ~50% = DANN working, features domain-invariant")
+            print(f"    - If classification collapses, decrease lambda")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -442,7 +446,9 @@ class BirdClefFineTuner:
             feat_dim = self.model.feature_dim
             
             self.grl = GradientReversalLayer()
-            self.domain_classifier = DomainDiscriminator(feat_dim)
+            # Simplest possible discriminator - just linear layer
+            # Strong discriminator = backbone can't fool it = DANN fails
+            self.domain_classifier = nn.Linear(feat_dim, 1)
             self.grl.to(self.device)
             self.domain_classifier.to(self.device)
             self.domain_criterion = nn.BCEWithLogitsLoss()
@@ -468,8 +474,9 @@ class BirdClefFineTuner:
         ]
         
         if self.use_dann:
-            # Domain classifier needs moderate LR - competitive but not overwhelming
-            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr * 3})
+            # Domain classifier needs LOWER LR than backbone to prevent it from dominating
+            # If discriminator is too good, backbone can't fool it
+            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr})
         
         self.optimizer = optim.AdamW(param_groups, weight_decay=0.01)
         
@@ -552,9 +559,15 @@ class BirdClefFineTuner:
         metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
         if self.use_dann and self.target_loader:
-            p = epoch / self.epochs
-            alpha = 2.0 / (1.0 + np.exp(-10 * p)) - 1.0
+            # DANN schedule: gradually increase domain adaptation strength
+            # Using gentler 0→1 schedule to prevent domain loss from dominating
+            p = float(epoch) / float(self.epochs)
+            alpha = 1.0 / (1.0 + np.exp(-10 * p))  # Sigmoid: 0 → ~1
             self.grl.lambda_param = alpha * self.lambda_domain
+            
+            # Debug: print schedule at key epochs
+            if epoch == 0 or epoch == self.epochs // 2 or epoch == self.epochs - 1:
+                print(f"  [DANN Schedule] Epoch {epoch+1}: alpha={alpha:.3f}, effective_lambda={self.grl.lambda_param:.3f}")
             
             source_iter = iter(self.train_loader)
             target_iter = iter(self.target_loader)
@@ -632,6 +645,11 @@ class BirdClefFineTuner:
                 loss = class_loss + domain_loss
                 
                 loss.backward()
+                
+                # Gradient clipping prevents instability from domain adaptation
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(self.domain_classifier.parameters(), max_norm=1.0)
+                
                 self.optimizer.step()
                 
                 total_class_loss += class_loss.item()
@@ -1141,8 +1159,8 @@ Examples:
                        help="Enable Domain Adaptive Neural Network (DANN) training for domain adaptation")
     parser.add_argument('--target-folder', type=str, default=None,
                        help="Path to target domain folder for DANN (unlabeled domain for adaptation)")
-    parser.add_argument('--lambda-domain', type=float, default=0.1,
-                       help="Domain loss weight for DANN (default: 0.1)")
+    parser.add_argument('--lambda-domain', type=float, default=0.3,
+                       help="Domain loss weight for DANN (default: 0.3). If dacc stays >95%%, increase lambda. If classification collapses, decrease lambda. Typical working range: 0.2-1.0")
     
     args = parser.parse_args()
     
