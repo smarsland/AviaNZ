@@ -46,7 +46,7 @@ def normalize_spectrogram(img):
 
     img = img - get_background_spectrogram(img)
 
-    img = median_filter(img, size=(1, 10))
+    #img = median_filter(img, size=(1, 10))
 
     return img
 
