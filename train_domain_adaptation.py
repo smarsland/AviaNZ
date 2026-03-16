@@ -71,15 +71,24 @@ class DANNTrainer:
         self.source_data = loader_source.load_data(use_multilabel=False, validation_share=0.0)
         
         if self.target_is_noise:
-            loader_target = DataLoader(self.target_folder)
-            target_raw = loader_target.load_data(use_multilabel=False, validation_share=0.0)
-            num_noise_samples = len(target_raw['train_filenames'])
+            noise_data_folder = os.path.join(self.target_folder, 'data')
+            if not os.path.exists(noise_data_folder):
+                noise_data_folder = self.target_folder
+            
+            noise_files = []
+            for root, dirs, files in os.walk(noise_data_folder):
+                for f in files:
+                    if f.endswith(('.png', '.jpg', '.jpeg')):
+                        noise_files.append(os.path.join(root, f))
+            
+            num_noise_samples = len(noise_files)
             num_classes = self.source_data['nclasses']
             dummy_labels = np.zeros((num_noise_samples, num_classes), dtype=np.float32)
+            
             self.target_data = {
                 'nclasses': self.source_data['nclasses'],
                 'categories': self.source_data['categories'],
-                'train_filenames': target_raw['train_filenames'],
+                'train_filenames': noise_files,
                 'train_labels': dummy_labels,
                 'train_primary_species': ['noise'] * num_noise_samples,
                 'val_filenames': [],
@@ -87,6 +96,7 @@ class DANNTrainer:
                 'val_primary_species': []
             }
             print(f"  Target is NOISE (unlabeled data for domain adaptation)")
+            print(f"  Loaded {num_noise_samples} noise files from {self.target_folder}")
         else:
             loader_target = DataLoader(self.target_folder)
             self.target_data = loader_target.load_data(use_multilabel=False, validation_share=0.15)
