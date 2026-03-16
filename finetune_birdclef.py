@@ -619,7 +619,8 @@ class BirdClefFineTuner:
                 
                 domain_loss = self.domain_criterion(domain_output.squeeze(), domain_labels)
                 
-                loss = class_loss + domain_loss
+                # Weight domain loss by same lambda as GRL (alpha * lambda_domain)
+                loss = class_loss + self.grl.lambda_param * domain_loss
                 
                 loss.backward()
                 self.optimizer.step()
