@@ -468,7 +468,8 @@ class BirdClefFineTuner:
         ]
         
         if self.use_dann:
-            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr * 10})
+            # Domain classifier should have same LR as backbone, not higher
+            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr})
         
         self.optimizer = optim.AdamW(param_groups, weight_decay=0.01)
         
