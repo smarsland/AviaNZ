@@ -52,6 +52,7 @@ def main():
         avianz_test='/dummy/path', 
         doc_train='/dummy/path',
         doc_test='/dummy/path',
+        combined_train='/dummy/path',
         output_folder=str(results_dir),
         model_path=data.get('model', 'N/A'),
         epochs=data.get('epochs', 0),

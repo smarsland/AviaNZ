@@ -554,7 +554,7 @@ class CrossDatasetExperiments:
         """Plot test accuracy comparison across experiments."""
         print(f"\nGenerating test accuracy comparison plot...")
         
-        fig, ax = plt.subplots(figsize=(14, 6))
+        fig, ax = plt.subplots(figsize=(16, 8))
         
         exp_names = []
         joe_mo_scores = []
@@ -571,25 +571,28 @@ class CrossDatasetExperiments:
                 doc_scores.append(r['test1_acc'])
         
         x = np.arange(len(exp_names))
-        width = 0.35
+        width = 0.38
         
-        bars1 = ax.bar(x - width/2, joe_mo_scores, width, label='joe_mo Test', color='#3498db', alpha=0.8)
-        bars2 = ax.bar(x + width/2, doc_scores, width, label='doc Test', color='#e74c3c', alpha=0.8)
+        bars1 = ax.bar(x - width/2, joe_mo_scores, width, label='joe_mo Test', 
+                      color='#2E86AB', alpha=0.85, edgecolor='black', linewidth=1.2)
+        bars2 = ax.bar(x + width/2, doc_scores, width, label='doc Test', 
+                      color='#A23B72', alpha=0.85, edgecolor='black', linewidth=1.2)
         
-        ax.set_ylabel('Accuracy (%)', fontsize=12)
-        ax.set_title('Test Accuracy Comparison (8 Experiments)', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Accuracy (%)', fontsize=14, fontweight='bold')
+        ax.set_title('Test Accuracy Comparison Across Experiments', fontsize=16, fontweight='bold', pad=20)
         ax.set_xticks(x)
-        ax.set_xticklabels(exp_names, fontsize=9, rotation=45, ha='right')
-        ax.legend(fontsize=11)
-        ax.grid(axis='y', alpha=0.3)
-        ax.set_ylim([0, 100])
+        ax.set_xticklabels(exp_names, fontsize=11, rotation=0, ha='center')
+        ax.legend(fontsize=13, loc='upper right', framealpha=0.95, edgecolor='black')
+        ax.grid(axis='y', alpha=0.4, linestyle='--')
+        ax.set_ylim([0, 110])
+        ax.set_axisbelow(True)
         
         for bars in [bars1, bars2]:
             for bar in bars:
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height + 1,
+                ax.text(bar.get_x() + bar.get_width()/2., height + 2,
                        f'{height:.1f}',
-                       ha='center', va='bottom', fontsize=8)
+                       ha='center', va='bottom', fontsize=10, fontweight='bold')
         
         plt.tight_layout()
         
@@ -738,26 +741,25 @@ class CrossDatasetExperiments:
         if not self.results:
             return
         
-        fig, ax = plt.subplots(figsize=(10, 10))
+        fig, ax = plt.subplots(figsize=(12, 12))
         
         # Collect all points
         joe_mo_vals = []
         joe_mo_tests = []
         doc_vals = []
         doc_tests = []
+        label_positions = []
         
         for r in self.results:
             val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
             
             # Check which test set is which based on test1_name
             if 'joe_mo' in r['test1_name']:
-                # test1 is joe_mo, test2 is doc
                 joe_mo_vals.append(val_acc)
                 joe_mo_tests.append(r['test1_acc'])
                 doc_vals.append(val_acc)
                 doc_tests.append(r['test2_acc'])
             else:
-                # test1 is doc, test2 is joe_mo
                 doc_vals.append(val_acc)
                 doc_tests.append(r['test1_acc'])
                 joe_mo_vals.append(val_acc)
@@ -770,63 +772,76 @@ class CrossDatasetExperiments:
         if all_vals and all_tests:
             min_val = max(0, min(min(all_vals), min(all_tests)) - 10)
             max_val = min(100, max(max(all_vals), max(all_tests)) + 10)
-            # Round to nearest 10
             min_val = int(min_val / 10) * 10
             max_val = int((max_val + 9) / 10) * 10
         else:
             min_val, max_val = 0, 100
         
         # Plot joe_mo points (circles)
-        ax.scatter(joe_mo_vals, joe_mo_tests, c='steelblue', marker='o', s=220, 
-                  alpha=0.75, edgecolors='black', linewidths=2.5, label='joe_mo Test', zorder=3)
+        ax.scatter(joe_mo_vals, joe_mo_tests, c='#2E86AB', marker='o', s=250, 
+                  alpha=0.8, edgecolors='black', linewidths=2, label='joe_mo Test', zorder=3)
         
         # Plot doc points (squares)
-        ax.scatter(doc_vals, doc_tests, c='lightcoral', marker='s', s=220, 
-                  alpha=0.75, edgecolors='black', linewidths=2.5, label='doc Test', zorder=3)
+        ax.scatter(doc_vals, doc_tests, c='#A23B72', marker='s', s=250, 
+                  alpha=0.8, edgecolors='black', linewidths=2, label='doc Test', zorder=3)
         
-        # Add vertical dotted lines and labels for each experiment
+        # Collect label data for smart positioning
         for r in self.results:
             val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
             
-            # Get correct test scores
             if 'joe_mo' in r['test1_name']:
                 test_scores = [r['test1_acc'], r['test2_acc']]
             else:
                 test_scores = [r['test2_acc'], r['test1_acc']]
             
-            # Draw vertical line connecting the two points
             ax.plot([val_acc, val_acc], [min(test_scores), max(test_scores)], 
-                   'k:', alpha=0.4, linewidth=2, zorder=1)
+                   'k:', alpha=0.3, linewidth=1.5, zorder=1)
             
-            # Add label to the left of the line
-            name = r['name'].upper()
             mid_point = (min(test_scores) + max(test_scores)) / 2
-            ax.text(val_acc - 1, mid_point, name, 
-                   fontsize=9, alpha=0.85, ha='right', va='center',
-                   fontweight='bold', color='black')
+            label_positions.append((val_acc, mid_point, r['name'].upper()))
+        
+        # Sort labels by y-position and adjust for overlaps
+        label_positions.sort(key=lambda x: x[1])
+        min_spacing = 4
+        
+        for i in range(len(label_positions)):
+            if i > 0:
+                prev_y = label_positions[i-1][1]
+                curr_y = label_positions[i][1]
+                if curr_y - prev_y < min_spacing:
+                    label_positions[i] = (label_positions[i][0], prev_y + min_spacing, label_positions[i][2])
+        
+        # Draw labels with better positioning
+        for val_acc, adjusted_y, name in label_positions:
+            ax.annotate(name, xy=(val_acc, adjusted_y), xytext=(-15, 0), 
+                       textcoords='offset points', fontsize=10, fontweight='bold',
+                       ha='right', va='center', 
+                       bbox=dict(boxstyle='round,pad=0.4', facecolor='white', 
+                                edgecolor='gray', alpha=0.85),
+                       zorder=4)
         
         # Add diagonal line (perfect prediction)
-        ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.6, linewidth=2.5)
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.5, linewidth=2.5, label='Perfect Prediction')
         
         # Configure axes
-        ax.set_xlim(min_val, max_val)
+        ax.set_xlim(min_val - 5, max_val)
         ax.set_ylim(min_val, max_val)
-        ax.set_xlabel('Validation Accuracy (%)', fontsize=14, fontweight='bold')
-        ax.set_ylabel('Test Accuracy (%)', fontsize=14, fontweight='bold')
-        ax.set_title('Validation vs Test Accuracy', fontsize=16, fontweight='bold', pad=20)
-        ax.grid(alpha=0.3, linestyle='--', linewidth=1)
+        ax.set_xlabel('Validation Accuracy (%)', fontsize=15, fontweight='bold')
+        ax.set_ylabel('Test Accuracy (%)', fontsize=15, fontweight='bold')
+        ax.set_title('Validation vs Test Accuracy', fontsize=18, fontweight='bold', pad=20)
+        ax.grid(alpha=0.35, linestyle='--', linewidth=1)
         ax.set_aspect('equal', adjustable='box')
         
         # Add legend
         from matplotlib.lines import Line2D
         legend_elements = [
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='steelblue', markersize=14, 
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#2E86AB', markersize=13, 
                    label='joe_mo Test', markeredgecolor='black', markeredgewidth=2),
-            Line2D([0], [0], marker='s', color='w', markerfacecolor='lightcoral', markersize=14, 
+            Line2D([0], [0], marker='s', color='w', markerfacecolor='#A23B72', markersize=13, 
                    label='doc Test', markeredgecolor='black', markeredgewidth=2),
             Line2D([0], [0], color='k', linestyle='--', linewidth=2.5, label='Perfect Prediction')
         ]
-        ax.legend(handles=legend_elements, fontsize=12, loc='upper left', framealpha=0.95, 
+        ax.legend(handles=legend_elements, fontsize=13, loc='upper left', framealpha=0.95, 
                  edgecolor='black', fancybox=False)
         
         plt.tight_layout()
@@ -941,7 +956,8 @@ class CrossDatasetExperiments:
         exp_names = []
         
         for i, r in enumerate(self.results):
-            exp_names.append(r['name'].replace('_', '\n').upper())
+            clean_name = r['name'].replace('_', ' ').title()
+            exp_names.append(clean_name)
             
             # Get scores
             if 'joe_mo' in r['test1_name']:
@@ -961,14 +977,17 @@ class CrossDatasetExperiments:
             matrix[i, 2] = joe_mo_score
             matrix[i, 3] = doc_score
         
-        fig, ax = plt.subplots(figsize=(8, 10))
+        fig, ax = plt.subplots(figsize=(10, 10))
         sns.heatmap(matrix, annot=True, fmt='.1f', cmap='RdYlGn', 
-                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
+                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)', 'pad': 0.02}, 
                     xticklabels=metric_names, yticklabels=exp_names,
-                    ax=ax, linewidths=1, linecolor='gray')
-        ax.set_title('Experiment Results Overview', fontsize=16, fontweight='bold', pad=15)
-        ax.set_xlabel('Metric', fontsize=13, labelpad=10)
-        ax.set_ylabel('Experiment', fontsize=13, labelpad=10)
+                    ax=ax, linewidths=2, linecolor='white', 
+                    annot_kws={'fontsize': 11, 'fontweight': 'bold'})
+        ax.set_title('Experiment Results Overview', fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Metric', fontsize=14, labelpad=12, fontweight='bold')
+        ax.set_ylabel('Experiment', fontsize=14, labelpad=12, fontweight='bold')
+        ax.tick_params(axis='y', labelsize=11, rotation=0)
+        ax.tick_params(axis='x', labelsize=12)
         
         plt.tight_layout()
         plot_path = self.output_folder / 'results_heatmap.png'

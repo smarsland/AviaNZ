@@ -174,7 +174,22 @@ class BirdNETEvaluator:
         print(f"\nRunning BirdNET predictions...")
         for i, file_info in enumerate(files, 1):
             npy_filename = file_info['filename']
-            label = file_info['label']
+            
+            # Handle both 'label' (single-label) and 'class_names' (multi-label) formats
+            if 'label' in file_info:
+                label = file_info['label']
+                gt_labels = [label]  # Single label as list for consistency
+            elif 'class_names' in file_info:
+                gt_labels = file_info['class_names']
+                # For single-label evaluation, use first label (or handle multi-label appropriately)
+                label = gt_labels[0] if gt_labels else None
+            else:
+                print(f"  [{i}/{len(files)}] SKIP: {npy_filename} (no label or class_names field)")
+                continue
+            
+            if label is None:
+                print(f"  [{i}/{len(files)}] SKIP: {npy_filename} (empty label)")
+                continue
             
             # Convert .npy filename to .wav filename
             wav_filename = npy_filename.replace('.npy', '.wav')
@@ -196,21 +211,28 @@ class BirdNETEvaluator:
             predictions.append(pred_code)
             ground_truth.append(label)
             
+            # For multi-label ground truth, prediction is correct if it matches ANY ground truth label
+            is_correct = pred_code in gt_labels if pred_code else False
+            
+            # For display, show all ground truth labels if multiple exist
+            gt_display = label if len(gt_labels) == 1 else f"{label}+{len(gt_labels)-1}"
+            
             file_results.append({
                 'filename': wav_filename,
                 'ground_truth': label,
+                'gt_labels': gt_labels,  # Store all ground truth labels
                 'gt_name': SPECIES_MAPPING.get(label, label),
                 'predicted_species': pred_species,
                 'predicted_code': pred_code,
                 'pred_name': SPECIES_MAPPING.get(pred_code, pred_code) if pred_code else None,
                 'confidence': confidence,
                 'num_detections': len(detections),
-                'correct': pred_code == label
+                'correct': is_correct
             })
             
-            status = '✓' if pred_code == label else '✗'
+            status = '✓' if is_correct else '✗'
             if i % 10 == 0 or i == len(files):
-                print(f"  [{i}/{len(files)}] {status} {wav_filename[:40]:40s} GT:{label:10s} → Pred:{pred_code or 'None':10s} ({confidence:.2f})")
+                print(f"  [{i}/{len(files)}] {status} {wav_filename[:40]:40s} GT:{gt_display:10s} → Pred:{pred_code or 'None':10s} ({confidence:.2f})")
         
         n_correct = sum(1 for r in file_results if r['correct'])
         accuracy = 100.0 * n_correct / len(file_results) if file_results else 0.0
