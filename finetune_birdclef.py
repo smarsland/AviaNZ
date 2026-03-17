@@ -446,9 +446,13 @@ class BirdClefFineTuner:
             feat_dim = self.model.feature_dim
             
             self.grl = GradientReversalLayer()
-            # Simplest possible discriminator - just linear layer
-            # Strong discriminator = backbone can't fool it = DANN fails
-            self.domain_classifier = nn.Linear(feat_dim, 1)
+            # Balanced discriminator - not too strong, not too weak
+            # Single hidden layer with moderate capacity
+            self.domain_classifier = nn.Sequential(
+                nn.Linear(feat_dim, 256),
+                nn.ReLU(),
+                nn.Linear(256, 1)
+            )
             self.grl.to(self.device)
             self.domain_classifier.to(self.device)
             self.domain_criterion = nn.BCEWithLogitsLoss()
@@ -836,6 +840,18 @@ class BirdClefFineTuner:
             pin_memory=True
         )
         
+        # For DANN: adapt batch norm to test domain before evaluating
+        if self.use_dann and 'doc' in test_name.lower():
+            print(f"  Adapting batch norm to test domain ({test_name})...")
+            self.model.train()  # Enable batch norm updates
+            with torch.no_grad():
+                for i, (data, _) in enumerate(test_loader):
+                    data = data.to(self.device)
+                    _ = self.model(data)
+                    if i >= 20:  # Use subset of test data
+                        break
+            print(f"  ✓ Batch norm adapted")
+        
         self.model.eval()
         correct = 0
         total = 0
@@ -991,6 +1007,19 @@ class BirdClefFineTuner:
             else:
                 print(f"  Best val accuracy: {best_val_metric:.2f}%")
         print(f"  Models saved to: {self.output_folder}")
+        
+        # For DANN: update batch norm stats on target domain before testing
+        if self.use_dann and self.target_loader:
+            print(f"\n  Adapting batch norm statistics to target domain...")
+            self.model.train()  # Set to train mode to update batch norm running stats
+            with torch.no_grad():
+                for i, (data, _) in enumerate(self.target_loader):
+                    data = data.to(self.device)
+                    _ = self.model(data)
+                    if i >= 50:  # Use ~50 batches to estimate stats
+                        break
+            self.model.eval()
+            print(f"  ✓ Batch norm adapted to target domain")
         
         if self.test_datasets:
             print(f"\nEvaluating on test sets using predict.py...")
