@@ -216,6 +216,7 @@ class DatasetMerger:
         
         source_path = Path(source_folder)
         data_subfolder = source_path / 'data'
+        audio_subfolder = source_path / 'audio'
         
         # Check if files are in data/ subfolder or root
         if data_subfolder.exists() and data_subfolder.is_dir():
@@ -225,15 +226,26 @@ class DatasetMerger:
             source_data_path = source_path
             print(f"  Using root folder: {source_data_path}")
         
-        # Create data/ subfolder in output if it doesn't exist
+        # Check if audio/ subfolder exists
+        has_audio_folder = audio_subfolder.exists() and audio_subfolder.is_dir()
+        if has_audio_folder:
+            print(f"  Found audio/ subfolder: {audio_subfolder}")
+        
+        # Create output subfolders
         output_data_path = self.output_folder / 'data'
         output_data_path.mkdir(exist_ok=True)
+        
+        output_audio_path = None
+        if self.include_audio and has_audio_folder:
+            output_audio_path = self.output_folder / 'audio'
+            output_audio_path.mkdir(exist_ok=True)
         
         # Find all .npy files
         npy_files = list(source_data_path.glob('*.npy'))
         
         copied_count = 0
         skipped_count = 0
+        audio_copied_count = 0
         
         for npy_file in npy_files:
             original_name = npy_file.name
@@ -247,9 +259,8 @@ class DatasetMerger:
             new_name = filename_map[original_name]
             dest_path = output_data_path / new_name
             
-            # Copy or symlink
+            # Copy or symlink spectrogram
             if self.symlink:
-                # Create absolute symlink
                 abs_source = npy_file.resolve()
                 dest_path.symlink_to(abs_source)
             else:
@@ -257,26 +268,29 @@ class DatasetMerger:
             
             copied_count += 1
             
-            # Also handle corresponding audio file if it exists and requested
-            if self.include_audio:
-                # Try common audio extensions
+            # Handle corresponding audio file if it exists
+            if self.include_audio and has_audio_folder and output_audio_path:
                 for audio_ext in ['.wav', '.mp3', '.flac', '.ogg']:
                     audio_name = original_name.replace('.npy', audio_ext)
-                    audio_file = source_data_path / audio_name
+                    audio_file = audio_subfolder / audio_name
                     
                     if audio_file.exists():
                         new_audio_name = new_name.replace('.npy', audio_ext)
-                        audio_dest = output_data_path / new_audio_name
+                        audio_dest = output_audio_path / new_audio_name
                         
                         if self.symlink:
                             abs_audio = audio_file.resolve()
                             audio_dest.symlink_to(abs_audio)
                         else:
                             shutil.copy2(audio_file, audio_dest)
+                        
+                        audio_copied_count += 1
                         break
         
         action = "Symlinked" if self.symlink else "Copied"
         print(f"  {action} {copied_count} spectrogram files")
+        if audio_copied_count > 0:
+            print(f"  {action} {audio_copied_count} audio files")
         if skipped_count > 0:
             print(f"  Skipped {skipped_count} files not in labels.json")
     

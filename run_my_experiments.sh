@@ -10,8 +10,9 @@ OUTPUT_BASE="/local/scratch/freangi"
 NOISE_FOLDER="${OUTPUT_BASE}/noise"
 
 # Skip flags (set to 1 to skip)
-SKIP_LOAD=1
-SKIP_SPLIT=1
+SKIP_LOAD=0
+SKIP_SPLIT=0
+SKIP_BIRDNET=0
 
 # Config
 
@@ -39,12 +40,14 @@ if [ $SKIP_LOAD -eq 0 ]; then
     python3 data_loader.py avianz "$AVIANZ_RAW" "$AVIANZ_FULL" \
         --species "$SPECIES" \
         --max-samples $MAX_SAMPLES \
-        --ignore-multilabel
+        --ignore-multilabel \
+        --with-audio
 
     python3 data_loader.py doc "$DOC_RAW" "$DOC_FULL" \
         --species "$SPECIES" \
         --max-samples $MAX_SAMPLES \
-        --ignore-multilabel
+        --ignore-multilabel \
+        --with-audio
 fi
 
 if [ $SKIP_SPLIT -eq 0 ]; then
@@ -71,5 +74,16 @@ python3 run_cross_dataset_experiments.py \
     --output "$RESULTS_DIR" \
     --epochs 50 \
     --batch-size 32
+
+if [ $SKIP_BIRDNET -eq 0 ]; then
+    echo ""
+    echo "Running BirdNET evaluation on test sets..."
+    BIRDNET_OUTPUT="${RESULTS_DIR}/birdnet_evaluation"
+    python3 evaluate_birdnet.py \
+        "$AVIANZ_TEST" "$DOC_TEST" \
+        --output "$BIRDNET_OUTPUT" \
+        --min-confidence 0.1
+    echo "BirdNET results: $BIRDNET_OUTPUT"
+fi
 
 echo "Done. Results: $RESULTS_DIR"
