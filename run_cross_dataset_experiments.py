@@ -173,6 +173,17 @@ class CrossDatasetExperiments:
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
+    def extract_accuracy(self, value):
+        if value is None:
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, (tuple, list)):
+            return float(value[0]) if len(value) > 0 else 0.0
+        if isinstance(value, dict):
+            return float(value.get('macro_f1', value.get('accuracy', 0.0)))
+        return 0.0
+    
     def run_experiment(self, exp):
         """Run a single training experiment (finetune, DANN, or MMD)."""
         if exp['type'] == 'dann':
@@ -230,18 +241,22 @@ class CrossDatasetExperiments:
             test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
             test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
             
+            final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
+            final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
+            best_val = max([self.extract_accuracy(v) for v in history.get('val_acc', []) if v is not None], default=None)
+            
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
                 'train_dataset': Path(exp['train']).name,
                 'freeze_backbone': exp['freeze'],
-                'final_train_acc': history['train_acc'][-1],
-                'final_val_acc': history['val_acc'][-1] if history['val_acc'][-1] is not None else None,
+                'final_train_acc': final_train_acc,
+                'final_val_acc': final_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
                 'test2_acc': test2_acc,
-                'best_val_acc': max([v for v in history['val_acc'] if v is not None], default=None),
+                'best_val_acc': best_val,
                 'history': history,
                 'output_folder': str(exp_output)
             }
@@ -316,6 +331,10 @@ class CrossDatasetExperiments:
             test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
             test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
             
+            final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
+            final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
+            best_val = max([self.extract_accuracy(v) for v in history.get('val_acc', []) if v is not None], default=None)
+            
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
@@ -323,13 +342,13 @@ class CrossDatasetExperiments:
                 'freeze_backbone': exp['freeze'],
                 'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
                 'freeze_bn': exp.get('freeze_bn', True),
-                'final_train_acc': history['train_acc'][-1] if history.get('train_acc') else 0,
-                'final_val_acc': history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None,
+                'final_train_acc': final_train_acc,
+                'final_val_acc': final_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
                 'test2_acc': test2_acc,
-                'best_val_acc': max([v for v in history.get('val_acc', []) if v is not None], default=None),
+                'best_val_acc': best_val,
                 'history': history,
                 'output_folder': str(exp_output)
             }
@@ -400,19 +419,23 @@ class CrossDatasetExperiments:
             test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
             test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
             
+            final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
+            final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
+            best_val = max([self.extract_accuracy(v) for v in history.get('val_acc', []) if v is not None], default=None)
+            
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
                 'train_dataset': f"{Path(exp['source']).parent.name} (MMD→{Path(exp['target']).parent.name})",
                 'freeze_backbone': exp['freeze'],
                 'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
-                'final_train_acc': history['train_acc'][-1],
-                'final_val_acc': history['val_acc'][-1] if history['val_acc'][-1] is not None else None,
+                'final_train_acc': final_train_acc,
+                'final_val_acc': final_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
                 'test2_acc': test2_acc,
-                'best_val_acc': max([v for v in history['val_acc'] if v is not None], default=None),
+                'best_val_acc': best_val,
                 'history': history,
                 'output_folder': str(exp_output)
             }
