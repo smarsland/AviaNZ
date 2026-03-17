@@ -293,7 +293,10 @@ class BirdNETEvaluator:
         
         plt.tight_layout()
         
-        plot_path = self.output_folder / f'confusion_matrix_{result["dataset_name"].lower().replace(" ", "_")}.png'
+        # Clean dataset name for filename (replace slashes and spaces)
+        clean_name = result["dataset_name"].lower().replace("/", "_").replace(" ", "_")
+        plot_path = self.output_folder / f'confusion_matrix_{clean_name}.png'
+        plot_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"  Saved to: {plot_path}")
         plt.close()
