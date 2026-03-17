@@ -245,9 +245,10 @@ class BirdClefFineTuner:
             print(f"  DANN: enabled (lambda={self.lambda_domain})")
             print(f"  Target domain: {self.target_folder}")
             print(f"  IMPORTANT: Watch 'dacc' (domain accuracy) during training:")
-            print(f"    - dacc ~100% = discriminator winning, DANN failing (increase lambda)")
-            print(f"    - dacc ~50% = DANN working, features domain-invariant")
-            print(f"    - If classification collapses, decrease lambda")
+            print(f"    - dacc ~50% = GOOD (features domain-invariant, discriminator confused)")
+            print(f"    - dacc 80-95% = domains still separable, DANN struggling")
+            print(f"    - dacc ~100% = trivial separation (check normalization, noise aug, baseline removal)")
+            print(f"    - dacc <50% = possible instability or collapse")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -446,17 +447,24 @@ class BirdClefFineTuner:
             feat_dim = self.model.feature_dim
             
             self.grl = GradientReversalLayer()
-            # Discriminator with feature normalization
-            # L2 normalization forces discriminator to use feature directions, not magnitudes
-            # This prevents it from using trivial low-level domain artifacts
             self.domain_classifier = nn.Sequential(
-                nn.Linear(feat_dim, 256),
+                nn.Linear(feat_dim, 512),
+                nn.BatchNorm1d(512),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(512, 256),
                 nn.ReLU(),
                 nn.Linear(256, 1)
             )
             self.grl.to(self.device)
             self.domain_classifier.to(self.device)
             self.domain_criterion = nn.BCEWithLogitsLoss()
+            
+            for m in self.model.modules():
+                if isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
+                    m.eval()
+                    m.requires_grad_(False)
+            print("  ✓ Frozen BatchNorm layers to prevent domain contamination")
 
         # Loss function
         if self.multilabel:
@@ -479,9 +487,7 @@ class BirdClefFineTuner:
         ]
         
         if self.use_dann:
-            # Domain classifier needs LOWER LR than backbone to prevent it from dominating
-            # If discriminator is too good, backbone can't fool it
-            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr})
+            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr * 0.1})
         
         self.optimizer = optim.AdamW(param_groups, weight_decay=0.01)
         
@@ -564,10 +570,8 @@ class BirdClefFineTuner:
         metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
         if self.use_dann and self.target_loader:
-            # DANN schedule: gradually increase domain adaptation strength
-            # Using gentler 0→1 schedule to prevent domain loss from dominating
             p = float(epoch) / float(self.epochs)
-            alpha = 1.0 / (1.0 + np.exp(-10 * p))  # Sigmoid: 0 → ~1
+            alpha = 2.0 / (1.0 + np.exp(-5 * p)) - 1.0
             self.grl.lambda_param = alpha * self.lambda_domain
             
             # Debug: print schedule at key epochs
@@ -606,7 +610,6 @@ class BirdClefFineTuner:
                 
                 self.optimizer.zero_grad()
                 
-                # Extract features from both domains
                 features = self.model.backbone(combined_data)
                 if isinstance(features, dict):
                     features = features['features']
@@ -614,7 +617,6 @@ class BirdClefFineTuner:
                     features = self.model.pooling(features)
                     features = features.view(features.size(0), -1)
                 
-                # Classification: only on source domain
                 source_features = features[:batch_size_s]
                 source_class_output = self.model.classifier(source_features)
                 
@@ -633,10 +635,8 @@ class BirdClefFineTuner:
                         target_labels = source_target.long()
                         class_loss = self.criterion(source_class_output, target_labels)
                 
-                # Domain discrimination on original features
-                reversed_features = self.grl(features)
-                domain_output = self.domain_classifier(reversed_features)
-                
+                norm_features = torch.nn.functional.normalize(features, p=2, dim=1)
+                reversed_features = self.grl(norm_features)
                 domain_labels_source = torch.zeros(batch_size_s).to(self.device)
                 domain_labels_target = torch.ones(batch_size_t).to(self.device)
                 domain_labels = torch.cat([domain_labels_source, domain_labels_target], dim=0)
@@ -649,8 +649,7 @@ class BirdClefFineTuner:
                 domain_total += domain_labels.size(0)
                 domain_acc = 100.0 * domain_correct / domain_total
                 
-                # GRL handles gradient reversal and scaling internally
-                loss = class_loss + domain_loss
+                loss = class_loss + self.grl.lambda_param * domain_loss
                 
                 loss.backward()
                 
