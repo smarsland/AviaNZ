@@ -60,7 +60,9 @@ class CrossDatasetExperiments:
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
+        # Group joe_mo experiments together, then doc experiments
         self.experiments = [
+            # joe_mo experiments
             {
                 'name': 'joe_mo_baseline',
                 'train': avianz_train,
@@ -72,18 +74,15 @@ class CrossDatasetExperiments:
                 'description': 'Baseline joe_mo'
             },
             {
-                'name': 'doc_baseline',
-                'train': doc_train,
-                'test1': doc_test,
-                'test2': avianz_test,
+                'name': 'joe_mo_normalize',
+                'train': avianz_train,
+                'test1': avianz_test,
+                'test2': doc_test,
                 'freeze': False,
                 'type': 'finetune',
-                'normalize': False,
-                'description': 'Baseline doc'
-            }
-        ]
-        
-        self.experiments.extend([
+                'normalize': True,
+                'description': 'joe_mo + normalize'
+            },
             {
                 'name': 'dann_joe_mo_to_doc',
                 'source': avianz_train,
@@ -95,6 +94,38 @@ class CrossDatasetExperiments:
                 'lambda_domain': lambda_domain,
                 'freeze_bn': True,
                 'description': 'DANN joe_mo→doc'
+            },
+            {
+                'name': 'mmd_joe_mo_to_doc',
+                'source': avianz_train,
+                'target': doc_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'freeze': False,
+                'type': 'mmd',
+                'lambda_domain': lambda_domain,
+                'description': 'MMD joe_mo→doc'
+            },
+            # doc experiments
+            {
+                'name': 'doc_baseline',
+                'train': doc_train,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': False,
+                'type': 'finetune',
+                'normalize': False,
+                'description': 'Baseline doc'
+            },
+            {
+                'name': 'doc_normalize',
+                'train': doc_train,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': False,
+                'type': 'finetune',
+                'normalize': True,
+                'description': 'doc + normalize'
             },
             {
                 'name': 'dann_doc_to_joe_mo',
@@ -109,17 +140,6 @@ class CrossDatasetExperiments:
                 'description': 'DANN doc→joe_mo'
             },
             {
-                'name': 'mmd_joe_mo_to_doc',
-                'source': avianz_train,
-                'target': doc_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': False,
-                'type': 'mmd',
-                'lambda_domain': lambda_domain,
-                'description': 'MMD joe_mo→doc'
-            },
-            {
                 'name': 'mmd_doc_to_joe_mo',
                 'source': doc_train,
                 'target': avianz_train,
@@ -129,28 +149,8 @@ class CrossDatasetExperiments:
                 'type': 'mmd',
                 'lambda_domain': lambda_domain,
                 'description': 'MMD doc→joe_mo'
-            },
-            {
-                'name': 'joe_mo_normalize',
-                'train': avianz_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': False,
-                'type': 'finetune',
-                'normalize': True,
-                'description': 'joe_mo + normalize'
-            },
-            {
-                'name': 'doc_normalize',
-                'train': doc_train,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'freeze': False,
-                'type': 'finetune',
-                'normalize': True,
-                'description': 'doc + normalize'
             }
-        ])
+        ]
         
         self.results = []
         
@@ -162,14 +162,16 @@ class CrossDatasetExperiments:
         print(f"doc train:    {doc_train}")
         print(f"doc test:     {doc_test}")
         print(f"\nExperiment breakdown:")
-        print(f"  1. joe_mo baseline (no tricks)")
-        print(f"  2. doc baseline (no tricks)")
-        print(f"  3. DANN joe_mo→doc")
-        print(f"  4. DANN doc→joe_mo")
-        print(f"  5. MMD joe_mo→doc")
-        print(f"  6. MMD doc→joe_mo")
-        print(f"  7. joe_mo + normalize")
-        print(f"  8. doc + normalize")
+        print(f"  joe_mo experiments:")
+        print(f"    1. joe_mo baseline (no tricks)")
+        print(f"    2. joe_mo + normalize")
+        print(f"    3. DANN joe_mo→doc")
+        print(f"    4. MMD joe_mo→doc")
+        print(f"  doc experiments:")
+        print(f"    5. doc baseline (no tricks)")
+        print(f"    6. doc + normalize")
+        print(f"    7. DANN doc→joe_mo")
+        print(f"    8. MMD doc→joe_mo")
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
@@ -536,47 +538,41 @@ class CrossDatasetExperiments:
         """Plot test accuracy comparison across experiments."""
         print(f"\nGenerating test accuracy comparison plot...")
         
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(14, 6))
         
         exp_names = []
-        avianz_scores = []
+        joe_mo_scores = []
         doc_scores = []
-        colors = []
         
         for r in self.results:
-            exp_names.append(r['name'].replace('_', '\n'))
+            exp_names.append(r['description'])
             
-            # joe_mo_split is AviaNZ, doc_split is DOC
             if 'joe_mo' in r['test1_name']:
-                avianz_scores.append(r['test1_acc'])
+                joe_mo_scores.append(r['test1_acc'])
                 doc_scores.append(r['test2_acc'])
             else:
-                avianz_scores.append(r['test2_acc'])
+                joe_mo_scores.append(r['test2_acc'])
                 doc_scores.append(r['test1_acc'])
-            
-            if r['freeze_backbone']:
-                colors.append('lightcoral')
-            else:
-                colors.append('steelblue')
         
         x = np.arange(len(exp_names))
         width = 0.35
         
-        bars1 = ax.bar(x - width/2, avianz_scores, width, label='AviaNZ Test', color='#2ecc71', alpha=0.8)
-        bars2 = ax.bar(x + width/2, doc_scores, width, label='DOC Test', color='#e74c3c', alpha=0.8)
+        bars1 = ax.bar(x - width/2, joe_mo_scores, width, label='joe_mo Test', color='#3498db', alpha=0.8)
+        bars2 = ax.bar(x + width/2, doc_scores, width, label='doc Test', color='#e74c3c', alpha=0.8)
         
         ax.set_ylabel('Accuracy (%)', fontsize=12)
-        ax.set_title('Cross-Dataset Test Accuracy Comparison', fontsize=14, fontweight='bold')
+        ax.set_title('Test Accuracy Comparison (8 Experiments)', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
-        ax.set_xticklabels(exp_names, fontsize=9)
+        ax.set_xticklabels(exp_names, fontsize=9, rotation=45, ha='right')
         ax.legend(fontsize=11)
         ax.grid(axis='y', alpha=0.3)
+        ax.set_ylim([0, 100])
         
         for bars in [bars1, bars2]:
             for bar in bars:
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.1f}%',
+                ax.text(bar.get_x() + bar.get_width()/2., height + 1,
+                       f'{height:.1f}',
                        ha='center', va='bottom', fontsize=8)
         
         plt.tight_layout()
@@ -595,10 +591,9 @@ class CrossDatasetExperiments:
         exp_names = []
         val_scores = []
         best_val_scores = []
-        colors = []
         
         for r in self.results:
-            exp_names.append(r['name'].replace('_', '\n'))
+            exp_names.append(r['name'].replace('_', '\n').upper())
             
             # Use final validation accuracy (or 0 if None)
             val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
@@ -606,11 +601,6 @@ class CrossDatasetExperiments:
             
             val_scores.append(val_acc)
             best_val_scores.append(best_val)
-            
-            if r['freeze_backbone']:
-                colors.append('lightcoral')
-            else:
-                colors.append('steelblue')
         
         x = np.arange(len(exp_names))
         width = 0.35
@@ -621,9 +611,10 @@ class CrossDatasetExperiments:
         ax.set_ylabel('Accuracy (%)', fontsize=12)
         ax.set_title('Validation Performance Comparison', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
-        ax.set_xticklabels(exp_names, fontsize=9)
+        ax.set_xticklabels(exp_names, fontsize=9, rotation=45, ha='right')
         ax.legend(fontsize=11)
         ax.grid(axis='y', alpha=0.3)
+        ax.set_ylim(0, 100)
         
         for bars in [bars1, bars2]:
             for bar in bars:
@@ -725,121 +716,108 @@ class CrossDatasetExperiments:
         plt.close()
     
     def plot_validation_vs_test(self):
-        """Plot validation vs test accuracy - TWO SEPARATE plots for full vs frozen."""
-        print(f"\nGenerating validation vs test comparison plots...")
+        """Plot validation vs test accuracy."""
+        print(f"\nGenerating validation vs test comparison plot...")
         
-        # Separate results by freeze type
-        full_results = [r for r in self.results if not r['freeze_backbone']]
-        frozen_results = [r for r in self.results if r['freeze_backbone']]
+        if not self.results:
+            return
         
-        # Function to plot scatter for a set of results
-        def plot_single_scatter(results, title, color, filename):
-            if not results:
-                return
+        fig, ax = plt.subplots(figsize=(10, 10))
+        
+        # Collect all points
+        joe_mo_vals = []
+        joe_mo_tests = []
+        doc_vals = []
+        doc_tests = []
+        
+        for r in self.results:
+            val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
             
-            fig, ax = plt.subplots(figsize=(8, 8))
-            
-            # Collect all points, correctly identifying which is AviaNZ vs DOC
-            avianz_vals = []
-            avianz_tests = []
-            doc_vals = []
-            doc_tests = []
-            
-            for r in results:
-                val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
-                
-                # Check which test set is which based on test1_name
-                if 'joe_mo' in r['test1_name']:
-                    # test1 is AviaNZ, test2 is DOC
-                    avianz_vals.append(val_acc)
-                    avianz_tests.append(r['test1_acc'])
-                    doc_vals.append(val_acc)
-                    doc_tests.append(r['test2_acc'])
-                else:
-                    # test1 is DOC, test2 is AviaNZ
-                    doc_vals.append(val_acc)
-                    doc_tests.append(r['test1_acc'])
-                    avianz_vals.append(val_acc)
-                    avianz_tests.append(r['test2_acc'])
-            
-            # Determine nice axis limits
-            all_vals = avianz_vals + doc_vals
-            all_tests = avianz_tests + doc_tests
-            
-            if all_vals and all_tests:
-                min_val = max(0, min(min(all_vals), min(all_tests)) - 10)
-                max_val = min(100, max(max(all_vals), max(all_tests)) + 10)
-                # Round to nearest 10
-                min_val = int(min_val / 10) * 10
-                max_val = int((max_val + 9) / 10) * 10
+            # Check which test set is which based on test1_name
+            if 'joe_mo' in r['test1_name']:
+                # test1 is joe_mo, test2 is doc
+                joe_mo_vals.append(val_acc)
+                joe_mo_tests.append(r['test1_acc'])
+                doc_vals.append(val_acc)
+                doc_tests.append(r['test2_acc'])
             else:
-                min_val, max_val = 0, 100
-            
-            # Plot AviaNZ points (circles)
-            ax.scatter(avianz_vals, avianz_tests, c=color, marker='o', s=220, 
-                      alpha=0.75, edgecolors='black', linewidths=2.5, label='AviaNZ', zorder=3)
-            
-            # Plot DOC points (squares)
-            ax.scatter(doc_vals, doc_tests, c=color, marker='s', s=220, 
-                      alpha=0.75, edgecolors='black', linewidths=2.5, label='DOC', zorder=3)
-            
-            # Add vertical dotted lines and labels for each experiment
-            for r in results:
-                val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
-                
-                # Get correct test scores
-                if 'joe_mo' in r['test1_name']:
-                    test_scores = [r['test1_acc'], r['test2_acc']]
-                else:
-                    test_scores = [r['test2_acc'], r['test1_acc']]
-                
-                # Draw vertical line connecting the two points
-                ax.plot([val_acc, val_acc], [min(test_scores), max(test_scores)], 
-                       'k:', alpha=0.4, linewidth=2, zorder=1)
-                
-                # Add label to the left of the line
-                name = r['name'].replace('_full', '').replace('_frozen', '').upper()
-                mid_point = (min(test_scores) + max(test_scores)) / 2
-                ax.text(val_acc - 1, mid_point, name, 
-                       fontsize=10, alpha=0.85, ha='right', va='center',
-                       fontweight='bold', color='black')
-            
-            # Add diagonal line (perfect prediction)
-            ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.6, linewidth=2.5)
-            
-            # Configure axes
-            ax.set_xlim(min_val, max_val)
-            ax.set_ylim(min_val, max_val)
-            ax.set_xlabel('Validation Accuracy (%)', fontsize=14, fontweight='bold')
-            ax.set_ylabel('Test Accuracy (%)', fontsize=14, fontweight='bold')
-            ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
-            ax.grid(alpha=0.3, linestyle='--', linewidth=1)
-            ax.set_aspect('equal', adjustable='box')
-            
-            # Add legend
-            from matplotlib.lines import Line2D
-            legend_elements = [
-                Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=14, 
-                       label='AviaNZ Test', markeredgecolor='black', markeredgewidth=2),
-                Line2D([0], [0], marker='s', color='w', markerfacecolor=color, markersize=14, 
-                       label='DOC Test', markeredgecolor='black', markeredgewidth=2),
-                Line2D([0], [0], color='k', linestyle='--', linewidth=2.5, label='Perfect Prediction')
-            ]
-            ax.legend(handles=legend_elements, fontsize=12, loc='upper left', framealpha=0.95, 
-                     edgecolor='black', fancybox=False)
-            
-            plt.tight_layout()
-            plot_path = self.output_folder / filename
-            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            print(f"  Saved to: {plot_path}")
-            plt.close()
+                # test1 is doc, test2 is joe_mo
+                doc_vals.append(val_acc)
+                doc_tests.append(r['test1_acc'])
+                joe_mo_vals.append(val_acc)
+                joe_mo_tests.append(r['test2_acc'])
         
-        # Generate two separate plots
-        if full_results:
-            plot_single_scatter(full_results, 'Full Fine-tuning', 'steelblue', 'validation_vs_test_full.png')
+        # Determine nice axis limits
+        all_vals = joe_mo_vals + doc_vals
+        all_tests = joe_mo_tests + doc_tests
         
-        if frozen_results:
-            plot_single_scatter(frozen_results, 'Frozen Backbone', 'lightcoral', 'validation_vs_test_frozen.png')
+        if all_vals and all_tests:
+            min_val = max(0, min(min(all_vals), min(all_tests)) - 10)
+            max_val = min(100, max(max(all_vals), max(all_tests)) + 10)
+            # Round to nearest 10
+            min_val = int(min_val / 10) * 10
+            max_val = int((max_val + 9) / 10) * 10
+        else:
+            min_val, max_val = 0, 100
+        
+        # Plot joe_mo points (circles)
+        ax.scatter(joe_mo_vals, joe_mo_tests, c='steelblue', marker='o', s=220, 
+                  alpha=0.75, edgecolors='black', linewidths=2.5, label='joe_mo Test', zorder=3)
+        
+        # Plot doc points (squares)
+        ax.scatter(doc_vals, doc_tests, c='lightcoral', marker='s', s=220, 
+                  alpha=0.75, edgecolors='black', linewidths=2.5, label='doc Test', zorder=3)
+        
+        # Add vertical dotted lines and labels for each experiment
+        for r in self.results:
+            val_acc = r['final_val_acc'] if r['final_val_acc'] is not None else 0
+            
+            # Get correct test scores
+            if 'joe_mo' in r['test1_name']:
+                test_scores = [r['test1_acc'], r['test2_acc']]
+            else:
+                test_scores = [r['test2_acc'], r['test1_acc']]
+            
+            # Draw vertical line connecting the two points
+            ax.plot([val_acc, val_acc], [min(test_scores), max(test_scores)], 
+                   'k:', alpha=0.4, linewidth=2, zorder=1)
+            
+            # Add label to the left of the line
+            name = r['name'].upper()
+            mid_point = (min(test_scores) + max(test_scores)) / 2
+            ax.text(val_acc - 1, mid_point, name, 
+                   fontsize=9, alpha=0.85, ha='right', va='center',
+                   fontweight='bold', color='black')
+        
+        # Add diagonal line (perfect prediction)
+        ax.plot([min_val, max_val], [min_val, max_val], 'k--', alpha=0.6, linewidth=2.5)
+        
+        # Configure axes
+        ax.set_xlim(min_val, max_val)
+        ax.set_ylim(min_val, max_val)
+        ax.set_xlabel('Validation Accuracy (%)', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Test Accuracy (%)', fontsize=14, fontweight='bold')
+        ax.set_title('Validation vs Test Accuracy', fontsize=16, fontweight='bold', pad=20)
+        ax.grid(alpha=0.3, linestyle='--', linewidth=1)
+        ax.set_aspect('equal', adjustable='box')
+        
+        # Add legend
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='steelblue', markersize=14, 
+                   label='joe_mo Test', markeredgecolor='black', markeredgewidth=2),
+            Line2D([0], [0], marker='s', color='w', markerfacecolor='lightcoral', markersize=14, 
+                   label='doc Test', markeredgecolor='black', markeredgewidth=2),
+            Line2D([0], [0], color='k', linestyle='--', linewidth=2.5, label='Perfect Prediction')
+        ]
+        ax.legend(handles=legend_elements, fontsize=12, loc='upper left', framealpha=0.95, 
+                 edgecolor='black', fancybox=False)
+        
+        plt.tight_layout()
+        plot_path = self.output_folder / 'validation_vs_test.png'
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"  Saved to: {plot_path}")
+        plt.close()
     
     def plot_generalization_gap(self):
         """Plot generalization gap (train vs test performance)."""
@@ -853,7 +831,7 @@ class CrossDatasetExperiments:
         gaps = []
         
         for r in self.results:
-            exp_names.append(r['name'].replace('_', '\n'))
+            exp_names.append(r['name'].replace('_', '\n').upper())
             train_scores.append(r['final_train_acc'])
             
             avg_test = (r['test1_acc'] + r['test2_acc']) / 2
@@ -875,9 +853,10 @@ class CrossDatasetExperiments:
         ax.set_ylabel('Accuracy (%)', fontsize=12)
         ax.set_title('Generalization Gap Analysis', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
-        ax.set_xticklabels(exp_names, fontsize=9)
+        ax.set_xticklabels(exp_names, fontsize=9, rotation=45, ha='right')
         ax.legend(fontsize=11)
         ax.grid(axis='y', alpha=0.3)
+        ax.set_ylim(0, 100)
         
         plt.tight_layout()
         
@@ -936,100 +915,47 @@ class CrossDatasetExperiments:
         """Generate heatmap of train dataset vs test/validation accuracy."""
         print(f"\nGenerating heatmap...")
         
-        # Dynamically determine which training datasets are present
-        present_datasets = set()
-        for r in self.results:
-            if r['name'].startswith('avianz'):
-                present_datasets.add('AviaNZ')
-            elif r['name'].startswith('doc'):
-                present_datasets.add('DOC')
-            elif r['name'].startswith('combined'):
-                present_datasets.add('Combined')
-            elif r['name'].startswith('dann'):
-                present_datasets.add('DANN')
+        if not self.results:
+            return
         
-        # Order datasets consistently
-        all_possible = ['AviaNZ', 'DOC', 'Combined', 'DANN']
-        train_datasets = [d for d in all_possible if d in present_datasets]
+        # Create matrix: each experiment is a row, columns are metrics
+        n_experiments = len(self.results)
+        metric_names = ['Train Acc', 'Val Acc', 'joe_mo Test', 'doc Test']
+        matrix = np.zeros((n_experiments, 4))
+        exp_names = []
         
-        metric_names = ['Validation', 'AviaNZ Test', 'DOC Test']
-        
-        n_datasets = len(train_datasets)
-        full_matrix = np.zeros((n_datasets, 3))
-        frozen_matrix = np.zeros((n_datasets, 3))
-        
-        # Create mapping dynamically
-        mapping = {}
-        if 'AviaNZ' in present_datasets:
-            mapping['avianz'] = train_datasets.index('AviaNZ')
-        if 'DOC' in present_datasets:
-            mapping['doc'] = train_datasets.index('DOC')
-        if 'Combined' in present_datasets:
-            mapping['combined'] = train_datasets.index('Combined')
-        if 'DANN' in present_datasets:
-            mapping['dann'] = train_datasets.index('DANN')
-        
-        for r in self.results:
-            # Determine train dataset index
-            train_idx = None
-            for key, idx in mapping.items():
-                if r['name'].startswith(key):
-                    train_idx = idx
-                    break
+        for i, r in enumerate(self.results):
+            exp_names.append(r['name'].replace('_', '\n').upper())
             
-            if train_idx is None:
-                continue
-            
-            # Get scores (joe_mo is AviaNZ, doc_split is DOC)
+            # Get scores
             if 'joe_mo' in r['test1_name']:
-                avianz_score = r['test1_acc']
+                joe_mo_score = r['test1_acc']
                 doc_score = r['test2_acc']
             else:
-                avianz_score = r['test2_acc']
+                joe_mo_score = r['test2_acc']
                 doc_score = r['test1_acc']
             
-            # Get validation score
+            # Get train and validation scores
+            train_score = r['final_train_acc'] if r['final_train_acc'] is not None else 0
             val_score = r['final_val_acc'] if r['final_val_acc'] is not None else 0
             
-            # Fill matrices (Validation first, then test scores)
-            if r['freeze_backbone']:
-                frozen_matrix[train_idx, 0] = val_score
-                frozen_matrix[train_idx, 1] = avianz_score
-                frozen_matrix[train_idx, 2] = doc_score
-            else:
-                full_matrix[train_idx, 0] = val_score
-                full_matrix[train_idx, 1] = avianz_score
-                full_matrix[train_idx, 2] = doc_score
+            # Fill matrix
+            matrix[i, 0] = train_score
+            matrix[i, 1] = val_score
+            matrix[i, 2] = joe_mo_score
+            matrix[i, 3] = doc_score
         
-        # Create separate plots for full and frozen
-        # Full fine-tuning heatmap
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(full_matrix, annot=True, fmt='.1f', cmap='RdYlGn', 
+        fig, ax = plt.subplots(figsize=(8, 10))
+        sns.heatmap(matrix, annot=True, fmt='.1f', cmap='RdYlGn', 
                     vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
-                    xticklabels=metric_names, yticklabels=train_datasets,
+                    xticklabels=metric_names, yticklabels=exp_names,
                     ax=ax, linewidths=1, linecolor='gray')
-        ax.set_title('Full Fine-tuning Performance', fontsize=16, fontweight='bold', pad=15)
+        ax.set_title('Experiment Results Overview', fontsize=16, fontweight='bold', pad=15)
         ax.set_xlabel('Metric', fontsize=13, labelpad=10)
-        ax.set_ylabel('Training Dataset', fontsize=13, labelpad=10)
+        ax.set_ylabel('Experiment', fontsize=13, labelpad=10)
         
         plt.tight_layout()
-        plot_path = self.output_folder / 'heatmap_full.png'
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        print(f"  Saved to: {plot_path}")
-        plt.close()
-        
-        # Frozen backbone heatmap
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(frozen_matrix, annot=True, fmt='.1f', cmap='RdYlGn',
-                    vmin=0, vmax=100, cbar_kws={'label': 'Accuracy (%)'}, 
-                    xticklabels=metric_names, yticklabels=train_datasets,
-                    ax=ax, linewidths=1, linecolor='gray')
-        ax.set_title('Frozen Backbone Performance', fontsize=16, fontweight='bold', pad=15)
-        ax.set_xlabel('Metric', fontsize=13, labelpad=10)
-        ax.set_ylabel('Training Dataset', fontsize=13, labelpad=10)
-        
-        plt.tight_layout()
-        plot_path = self.output_folder / 'heatmap_frozen.png'
+        plot_path = self.output_folder / 'results_heatmap.png'
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"  Saved to: {plot_path}")
         plt.close()
@@ -1212,6 +1138,7 @@ class CrossDatasetExperiments:
             
             self.save_results()
             self.generate_summary_table()
+            self.plot_test_accuracy_comparison()
             self.plot_heatmap()
             self.plot_validation_vs_test()
             self.generate_report()
@@ -1222,10 +1149,9 @@ class CrossDatasetExperiments:
             print(f"\nResults saved to: {self.output_folder}")
             print(f"\nGenerated files:")
             print(f"  - summary_table.csv")
-            print(f"  - heatmap_full.png")
-            print(f"  - heatmap_frozen.png")
-            print(f"  - validation_vs_test_full.png")
-            print(f"  - validation_vs_test_frozen.png")
+            print(f"  - test_accuracy_comparison.png")
+            print(f"  - results_heatmap.png")
+            print(f"  - validation_vs_test.png")
             print(f"  - all_results.json")
             print(f"  - report.txt")
             print(f"\nUse these images in your PDF/paper!")

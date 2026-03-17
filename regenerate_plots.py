@@ -52,7 +52,6 @@ def main():
         avianz_test='/dummy/path', 
         doc_train='/dummy/path',
         doc_test='/dummy/path',
-        combined_train='/dummy/path',
         output_folder=str(results_dir),
         model_path=data.get('model', 'N/A'),
         epochs=data.get('epochs', 0),
@@ -67,6 +66,7 @@ def main():
     
     try:
         exp.generate_summary_table()
+        exp.plot_test_accuracy_comparison()
         exp.plot_heatmap()
         exp.plot_validation_vs_test()
         
@@ -76,10 +76,9 @@ def main():
         print(f"\nFiles in {results_dir}:")
         print("  - summary_table.csv")
         print("  - summary_table.txt")
-        print("  - heatmap_full.png")
-        print("  - heatmap_frozen.png")
-        print("  - validation_vs_test_full.png")
-        print("  - validation_vs_test_frozen.png")
+        print("  - test_accuracy_comparison.png")
+        print("  - results_heatmap.png")
+        print("  - validation_vs_test.png")
         
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
