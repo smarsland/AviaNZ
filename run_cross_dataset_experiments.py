@@ -1197,8 +1197,8 @@ def main():
                        help='Number of epochs per experiment (default: 10)')
     parser.add_argument('--batch-size', type=int, default=32,
                        help='Batch size (default: 32)')
-    parser.add_argument('--lambda-domain', type=float, default=0.1,
-                       help='DANN domain loss weight (default: 0.1)')
+    parser.add_argument('--lambda-domain', type=float, default=0.3,
+                       help='DANN domain loss weight (default: 0.3)')
     parser.add_argument('--noise-folder', default=None,
                        help='Noise folder for DANN target domain (unlabeled)')
     
