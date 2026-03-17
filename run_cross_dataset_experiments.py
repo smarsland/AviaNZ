@@ -226,10 +226,17 @@ class CrossDatasetExperiments:
         
         print(f"\nRunning: {' '.join(cmd)}")
         
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        print(result.stdout)
+        
+        if result.returncode != 0:
+            print(f"\n❌ Finetune experiment failed!")
+            print(f"Return code: {result.returncode}")
+            if result.stderr:
+                print(f"\nStderr:\n{result.stderr}")
+            return None
+        
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(result.stdout)
-            
             history_path = exp_output / 'training_history.json'
             with open(history_path, 'r') as f:
                 history = json.load(f)
@@ -272,10 +279,11 @@ class CrossDatasetExperiments:
             
             return exp_result
             
-        except subprocess.CalledProcessError as e:
-            print(f"\n❌ Experiment failed!")
+        except Exception as e:
+            print(f"\n❌ Error processing finetune results!")
             print(f"Error: {e}")
-            print(f"Output: {e.output}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def run_dann_experiment(self, exp):
@@ -312,10 +320,17 @@ class CrossDatasetExperiments:
         
         print(f"\nRunning: {' '.join(cmd)}")
         
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        print(result.stdout)
+        
+        if result.returncode != 0:
+            print(f"\n❌ DANN experiment failed!")
+            print(f"Return code: {result.returncode}")
+            if result.stderr:
+                print(f"\nStderr:\n{result.stderr}")
+            return None
+        
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(result.stdout)
-            
             history_path = exp_output / 'training_history.json'
             with open(history_path, 'r') as f:
                 history = json.load(f)
@@ -358,10 +373,11 @@ class CrossDatasetExperiments:
             
             return exp_result
             
-        except subprocess.CalledProcessError as e:
-            print(f"\n❌ Experiment failed!")
+        except Exception as e:
+            print(f"\n❌ Error processing DANN results!")
             print(f"Error: {e}")
-            print(f"Output: {e.output}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def run_mmd_experiment(self, exp):
@@ -399,10 +415,17 @@ class CrossDatasetExperiments:
         
         print(f"\nRunning: {' '.join(cmd)}")
         
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        print(result.stdout)
+        
+        if result.returncode != 0:
+            print(f"\n❌ MMD experiment failed!")
+            print(f"Return code: {result.returncode}")
+            if result.stderr:
+                print(f"\nStderr:\n{result.stderr}")
+            return None
+        
         try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(result.stdout)
-            
             history_path = exp_output / 'training_history.json'
             with open(history_path, 'r') as f:
                 history = json.load(f)
@@ -445,10 +468,11 @@ class CrossDatasetExperiments:
             
             return exp_result
             
-        except subprocess.CalledProcessError as e:
-            print(f"\n❌ MMD experiment failed!")
+        except Exception as e:
+            print(f"\n❌ Error processing MMD results!")
             print(f"Error: {e}")
-            print(f"Output: {e.output}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _extract_test_accuracy(self, output, test_name):
