@@ -637,6 +637,8 @@ class BirdClefFineTuner:
                 
                 norm_features = torch.nn.functional.normalize(features, p=2, dim=1)
                 reversed_features = self.grl(norm_features)
+                domain_output = self.domain_classifier(reversed_features)
+                
                 domain_labels_source = torch.zeros(batch_size_s).to(self.device)
                 domain_labels_target = torch.ones(batch_size_t).to(self.device)
                 domain_labels = torch.cat([domain_labels_source, domain_labels_target], dim=0)
