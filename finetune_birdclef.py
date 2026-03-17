@@ -615,8 +615,8 @@ class BirdClefFineTuner:
         else:
             pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.epochs}")
         
-        for batch_idx in (pbar if self.use_dann and self.target_loader else enumerate(pbar)):
-            if self.use_dann and self.target_loader:
+        for batch_idx in (pbar if (self.use_dann or self.use_mmd) and self.target_loader else enumerate(pbar)):
+            if (self.use_dann or self.use_mmd) and self.target_loader:
                 try:
                     source_data, source_target = next(source_iter)
                 except StopIteration:
