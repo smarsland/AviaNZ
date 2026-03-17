@@ -446,8 +446,9 @@ class BirdClefFineTuner:
             feat_dim = self.model.feature_dim
             
             self.grl = GradientReversalLayer()
-            # Balanced discriminator - not too strong, not too weak
-            # Single hidden layer with moderate capacity
+            # Discriminator with feature normalization
+            # L2 normalization forces discriminator to use feature directions, not magnitudes
+            # This prevents it from using trivial low-level domain artifacts
             self.domain_classifier = nn.Sequential(
                 nn.Linear(feat_dim, 256),
                 nn.ReLU(),
@@ -632,7 +633,10 @@ class BirdClefFineTuner:
                         target_labels = source_target.long()
                         class_loss = self.criterion(source_class_output, target_labels)
                 
-                reversed_features = self.grl(features)
+                # L2-normalize features before discriminator to prevent it from using magnitude/scale
+                # This forces discriminator to use semantic directions, not low-level artifacts
+                features_normalized = nn.functional.normalize(features, p=2, dim=1)
+                reversed_features = self.grl(features_normalized)
                 domain_output = self.domain_classifier(reversed_features)
                 
                 domain_labels_source = torch.zeros(batch_size_s).to(self.device)
