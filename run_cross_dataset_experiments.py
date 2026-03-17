@@ -92,7 +92,6 @@ class CrossDatasetExperiments:
                 'freeze': False,
                 'type': 'dann',
                 'lambda_domain': lambda_domain,
-                'freeze_bn': True,
                 'description': 'DANN joe_mo→doc'
             },
             {
@@ -136,7 +135,6 @@ class CrossDatasetExperiments:
                 'freeze': False,
                 'type': 'dann',
                 'lambda_domain': lambda_domain,
-                'freeze_bn': True,
                 'description': 'DANN doc→joe_mo'
             },
             {
@@ -309,11 +307,6 @@ class CrossDatasetExperiments:
             '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
         ]
         
-        if exp.get('freeze_bn', True):
-            cmd.append('--freeze-bn')
-        else:
-            cmd.append('--no-freeze-bn')
-        
         if exp['freeze']:
             cmd.append('--freeze-backbone')
         
@@ -343,7 +336,6 @@ class CrossDatasetExperiments:
                 'train_dataset': f"{Path(exp['source']).parent.name} (DANN→{Path(exp['target']).parent.name})",
                 'freeze_backbone': exp['freeze'],
                 'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
-                'freeze_bn': exp.get('freeze_bn', True),
                 'final_train_acc': final_train_acc,
                 'final_val_acc': final_val_acc,
                 'test1_name': test1_name,

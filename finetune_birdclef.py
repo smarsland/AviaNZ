@@ -218,8 +218,7 @@ class BirdClefFineTuner:
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
                  remove_baseline=False, test_folder=None, test_folder2=None, background_prob=0.0,
-                 use_dann=False, use_mmd=False, target_folder=None, lambda_domain=0.1, 
-                 freeze_bn=True):
+                 use_dann=False, use_mmd=False, target_folder=None, lambda_domain=0.1):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -241,7 +240,6 @@ class BirdClefFineTuner:
         self.use_mmd = use_mmd
         self.target_folder = target_folder
         self.lambda_domain = lambda_domain
-        self.freeze_bn = freeze_bn
         self.noise_mode = noise_mode
         self.use_temporal_roll = use_temporal_roll
         self.validation_split = validation_split
@@ -278,7 +276,7 @@ class BirdClefFineTuner:
         if self.background_prob > 0:
             print(f"  Background replacement: {self.background_prob*100:.1f}% (replaces samples with background, zeros labels)")
         if self.use_dann:
-            print(f"  DANN: enabled (lambda={self.lambda_domain}, freeze_bn={self.freeze_bn})")
+            print(f"  DANN: enabled (lambda={self.lambda_domain})")
             print(f"  Target domain: {self.target_folder}")
             print(f"  IMPORTANT: Watch 'dacc' (domain accuracy) during training:")
             print(f"    - dacc ~50% = GOOD (features domain-invariant, discriminator confused)")
@@ -500,15 +498,6 @@ class BirdClefFineTuner:
             self.grl.to(self.device)
             self.domain_classifier.to(self.device)
             self.domain_criterion = nn.BCEWithLogitsLoss()
-            
-            if self.freeze_bn:
-                for m in self.model.modules():
-                    if isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
-                        m.eval()
-                        m.requires_grad_(False)
-                print("  ✓ Frozen BatchNorm layers to prevent domain contamination")
-            else:
-                print("  ⚠ BatchNorm NOT frozen (may leak domain signal)")
 
         # Loss function
         if self.multilabel:
@@ -1257,10 +1246,6 @@ Examples:
                        help="Path to target domain folder for domain adaptation (unlabeled domain)")
     parser.add_argument('--lambda-domain', type=float, default=0.3,
                        help="Domain loss weight (default: 0.3). For DANN: if dacc stays >95%%, increase lambda. For MMD: typical range 0.1-0.5")
-    parser.add_argument('--freeze-bn', action='store_true', default=True,
-                       help="Freeze BatchNorm during domain adaptation (default: True, prevents domain contamination)")
-    parser.add_argument('--no-freeze-bn', dest='freeze_bn', action='store_false',
-                       help="Don't freeze BatchNorm (may help but risks domain leakage)")
     
     args = parser.parse_args()
     
@@ -1316,8 +1301,7 @@ Examples:
         use_dann=args.use_dann,
         use_mmd=args.use_mmd,
         target_folder=args.target_folder,
-        lambda_domain=args.lambda_domain,
-        freeze_bn=args.freeze_bn
+        lambda_domain=args.lambda_domain
     )
     
     # Load data and create model
