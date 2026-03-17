@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """
-Comprehensive cross-dataset training and evaluation experiments.
+Simplified cross-dataset experiments for domain adaptation testing.
 
-This script runs multiple training scenarios:
-1. Train on dataset1 (avianz), test on both
-2. Train on dataset2 (doc), test on both  
-3. Train on combined, test on both
+Runs 8 core experiments:
+1. joe_mo baseline (no tricks)
+2. doc baseline (no tricks)
+3. DANN joe_mo→doc
+4. DANN doc→joe_mo
+5. MMD joe_mo→doc
+6. MMD doc→joe_mo
+7. joe_mo + normalize
+8. doc + normalize
 
-Each with:
-- Full fine-tuning (all layers)
-- Frozen backbone (only last layer)
-
-Generates comparison plots and tables for publication.
+Generates comparison tables and plots.
 
 Usage:
     python run_cross_dataset_experiments.py \\
-        --avianz-train /path/to/avianz_train \\
-        --avianz-test /path/to/avianz_test \\
-        --doc-train /path/to/doc_train \\
-        --doc-test /path/to/doc_test \\
-        --combined-train /path/to/combined_train \\
+        --avianz-train /path/to/joe_mo/train \\
+        --avianz-test /path/to/joe_mo/test \\
+        --doc-train /path/to/doc/train \\
+        --doc-test /path/to/doc/test \\
         --output results/experiments
 """
 
@@ -62,137 +62,123 @@ class CrossDatasetExperiments:
         
         self.experiments = [
             {
-                'name': 'avianz_full',
+                'name': 'joe_mo_baseline',
                 'train': avianz_train,
                 'test1': avianz_test,
                 'test2': doc_test,
                 'freeze': False,
                 'type': 'finetune',
-                'description': 'Train on AviaNZ (full fine-tuning)'
+                'normalize': False,
+                'description': 'Baseline joe_mo'
             },
             {
-                'name': 'avianz_frozen',
-                'train': avianz_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': True,
-                'type': 'finetune',
-                'description': 'Train on AviaNZ (frozen backbone)'
-            },
-            {
-                'name': 'doc_full',
+                'name': 'doc_baseline',
                 'train': doc_train,
                 'test1': doc_test,
                 'test2': avianz_test,
                 'freeze': False,
                 'type': 'finetune',
-                'description': 'Train on DOC (full fine-tuning)'
-            },
-            {
-                'name': 'doc_frozen',
-                'train': doc_train,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'freeze': True,
-                'type': 'finetune',
-                'description': 'Train on DOC (frozen backbone)'
-            },
-            {
-                'name': 'combined_full',
-                'train': combined_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': False,
-                'type': 'finetune',
-                'description': 'Train on Combined (full fine-tuning)'
-            },
-            {
-                'name': 'combined_frozen',
-                'train': combined_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': True,
-                'type': 'finetune',
-                'description': 'Train on Combined (frozen backbone)'
+                'normalize': False,
+                'description': 'Baseline doc'
             }
         ]
         
-        if noise_folder:
-            self.experiments.extend([
-                {
-                    'name': 'dann_avianz_to_noise_full',
-                    'source': avianz_train,
-                    'target': noise_folder,
-                    'test1': avianz_test,
-                    'test2': doc_test,
-                    'freeze': False,
-                    'type': 'dann',
-                    'description': 'DANN AviaNZ->Noise (full)'
-                },
-                {
-                    'name': 'dann_avianz_to_noise_frozen',
-                    'source': avianz_train,
-                    'target': noise_folder,
-                    'test1': avianz_test,
-                    'test2': doc_test,
-                    'freeze': True,
-                    'type': 'dann',
-                    'description': 'DANN AviaNZ->Noise (frozen)'
-                },
-                {
-                    'name': 'dann_doc_to_noise_full',
-                    'source': doc_train,
-                    'target': noise_folder,
-                    'test1': doc_test,
-                    'test2': avianz_test,
-                    'freeze': False,
-                    'type': 'dann',
-                    'description': 'DANN DOC->Noise (full)'
-                },
-                {
-                    'name': 'dann_doc_to_noise_frozen',
-                    'source': doc_train,
-                    'target': noise_folder,
-                    'test1': doc_test,
-                    'test2': avianz_test,
-                    'freeze': True,
-                    'type': 'dann',
-                    'description': 'DANN DOC->Noise (frozen)'
-                }
-            ])
+        self.experiments.extend([
+            {
+                'name': 'dann_joe_mo_to_doc',
+                'source': avianz_train,
+                'target': doc_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'freeze': False,
+                'type': 'dann',
+                'lambda_domain': lambda_domain,
+                'freeze_bn': True,
+                'description': 'DANN joe_mo→doc'
+            },
+            {
+                'name': 'dann_doc_to_joe_mo',
+                'source': doc_train,
+                'target': avianz_train,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': False,
+                'type': 'dann',
+                'lambda_domain': lambda_domain,
+                'freeze_bn': True,
+                'description': 'DANN doc→joe_mo'
+            },
+            {
+                'name': 'mmd_joe_mo_to_doc',
+                'source': avianz_train,
+                'target': doc_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'freeze': False,
+                'type': 'mmd',
+                'lambda_domain': lambda_domain,
+                'description': 'MMD joe_mo→doc'
+            },
+            {
+                'name': 'mmd_doc_to_joe_mo',
+                'source': doc_train,
+                'target': avianz_train,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': False,
+                'type': 'mmd',
+                'lambda_domain': lambda_domain,
+                'description': 'MMD doc→joe_mo'
+            },
+            {
+                'name': 'joe_mo_normalize',
+                'train': avianz_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'freeze': False,
+                'type': 'finetune',
+                'normalize': True,
+                'description': 'joe_mo + normalize'
+            },
+            {
+                'name': 'doc_normalize',
+                'train': doc_train,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'freeze': False,
+                'type': 'finetune',
+                'normalize': True,
+                'description': 'doc + normalize'
+            }
+        ])
         
         self.results = []
         
         print(f"{'='*60}")
-        print(f"Cross-Dataset Training Experiments")
+        print(f"Cross-Dataset Experiments (Simplified)")
         print(f"{'='*60}")
-        print(f"AviaNZ train: {avianz_train}")
-        print(f"AviaNZ test: {avianz_test}")
-        print(f"DOC train: {doc_train}")
-        print(f"DOC test: {doc_test}")
-        print(f"Combined train: {combined_train}")
-        if noise_folder:
-            print(f"Noise folder (DANN target): {noise_folder}")
-            print(f"\nExperiment breakdown:")
-            print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
-            print(f"  DANN: 4 experiments (AviaNZ->Noise, DOC->Noise × frozen/full)")
-            print(f"  Total: {len(self.experiments)} experiments")
-        else:
-            print(f"No noise folder provided - DANN experiments skipped")
-            print(f"\nExperiment breakdown:")
-            print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
-            print(f"  Total: {len(self.experiments)} experiments")
-        print(f"\nTotal experiments: {len(self.experiments)}")
-        print(f"\nNote: DANN trains on SOURCE labels, adapts to NOISE (unlabeled)
-        print(f"  Fine-tuning: 6 experiments (AviaNZ, DOC, Combined × frozen/full)")
-        print(f"  DANN: 4 experiments (AviaNZ→DOC, DOC→AviaNZ × frozen/full)")
-        print(f"\nTotal experiments: {len(self.experiments)}")
-        print(f"\nNote: DANN does domain adaptation (source→target), not combined training")
+        print(f"joe_mo train: {avianz_train}")
+        print(f"joe_mo test:  {avianz_test}")
+        print(f"doc train:    {doc_train}")
+        print(f"doc test:     {doc_test}")
+        print(f"\nExperiment breakdown:")
+        print(f"  1. joe_mo baseline (no tricks)")
+        print(f"  2. doc baseline (no tricks)")
+        print(f"  3. DANN joe_mo→doc")
+        print(f"  4. DANN doc→joe_mo")
+        print(f"  5. MMD joe_mo→doc")
+        print(f"  6. MMD doc→joe_mo")
+        print(f"  7. joe_mo + normalize")
+        print(f"  8. doc + normalize")
+        print(f"\nTotal: {len(self.experiments)} experiments")
+        print(f"{'='*60}")
     
     def run_experiment(self, exp):
-        """Run a single training experiment (finetune or DANN)."""
+        """Run a single training experiment (finetune, DANN, or MMD)."""
         if exp['type'] == 'dann':
             return self.run_dann_experiment(exp)
+        elif exp['type'] == 'mmd':
+            return self.run_mmd_experiment(exp)
         else:
             return self.run_finetune_experiment(exp)
     
@@ -223,6 +209,9 @@ class CrossDatasetExperiments:
         
         if exp['freeze']:
             cmd.append('--freeze-backbone')
+        
+        if exp.get('normalize', False):
+            cmd.append('--normalize')
         
         print(f"\nRunning: {' '.join(cmd)}")
         
@@ -300,8 +289,13 @@ class CrossDatasetExperiments:
             '--test-folder2', exp['test2'],
             '--use-dann',
             '--target-folder', exp['target'],
-            '--lambda-domain', str(self.lambda_domain)
+            '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
         ]
+        
+        if exp.get('freeze_bn', True):
+            cmd.append('--freeze-bn')
+        else:
+            cmd.append('--no-freeze-bn')
         
         if exp['freeze']:
             cmd.append('--freeze-backbone')
@@ -325,8 +319,10 @@ class CrossDatasetExperiments:
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
-                'train_dataset': exp['source'],
+                'train_dataset': f"{Path(exp['source']).parent.name} (DANN→{Path(exp['target']).parent.name})",
                 'freeze_backbone': exp['freeze'],
+                'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
+                'freeze_bn': exp.get('freeze_bn', True),
                 'final_train_acc': history['train_acc'][-1] if history.get('train_acc') else 0,
                 'final_val_acc': history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None,
                 'test1_name': test1_name,
@@ -351,6 +347,89 @@ class CrossDatasetExperiments:
             
         except subprocess.CalledProcessError as e:
             print(f"\n❌ Experiment failed!")
+            print(f"Error: {e}")
+            print(f"Output: {e.output}")
+            return None
+    
+    def run_mmd_experiment(self, exp):
+        """Run an MMD domain adaptation experiment."""
+        print(f"\n{'='*60}")
+        print(f"Experiment: {exp['name']}")
+        print(f"{'='*60}")
+        print(f"Description: {exp['description']}")
+        print(f"Source: {exp['source']}")
+        print(f"Target: {exp['target']}")
+        print(f"Test on: {exp['test1']} and {exp['test2']}")
+        print(f"Freeze backbone: {exp['freeze']}")
+        print(f"Lambda: {exp.get('lambda_domain', self.lambda_domain)}")
+        
+        exp_output = self.output_folder / exp['name']
+        exp_output.mkdir(exist_ok=True)
+        
+        cmd = [
+            sys.executable,
+            'finetune_birdclef.py',
+            exp['source'],
+            str(exp_output),
+            '--pretrained', self.model_path,
+            '--epochs', str(self.epochs),
+            '--batch-size', str(self.batch_size),
+            '--test-folder', exp['test1'],
+            '--test-folder2', exp['test2'],
+            '--use-mmd',
+            '--target-folder', exp['target'],
+            '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
+        ]
+        
+        if exp['freeze']:
+            cmd.append('--freeze-backbone')
+        
+        print(f"\nRunning: {' '.join(cmd)}")
+        
+        try:
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            print(result.stdout)
+            
+            history_path = exp_output / 'training_history.json'
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+            
+            test1_name = Path(exp['test1']).parent.name
+            test2_name = Path(exp['test2']).parent.name
+            
+            test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
+            test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
+            
+            exp_result = {
+                'name': exp['name'],
+                'description': exp['description'],
+                'train_dataset': f"{Path(exp['source']).parent.name} (MMD→{Path(exp['target']).parent.name})",
+                'freeze_backbone': exp['freeze'],
+                'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
+                'final_train_acc': history['train_acc'][-1],
+                'final_val_acc': history['val_acc'][-1] if history['val_acc'][-1] is not None else None,
+                'test1_name': test1_name,
+                'test1_acc': test1_acc,
+                'test2_name': test2_name,
+                'test2_acc': test2_acc,
+                'best_val_acc': max([v for v in history['val_acc'] if v is not None], default=None),
+                'history': history,
+                'output_folder': str(exp_output)
+            }
+            
+            self.results.append(exp_result)
+            
+            print(f"\n✓ MMD experiment complete:")
+            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            if exp_result['final_val_acc'] is not None:
+                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+            print(f"  Test {test1_name}: {test1_acc:.2f}%")
+            print(f"  Test {test2_name}: {test2_acc:.2f}%")
+            
+            return exp_result
+            
+        except subprocess.CalledProcessError as e:
+            print(f"\n❌ MMD experiment failed!")
             print(f"Error: {e}")
             print(f"Output: {e.output}")
             return None
@@ -1143,8 +1222,8 @@ def main():
                        help='Path to DOC training dataset')
     parser.add_argument('--doc-test', required=True,
                        help='Path to DOC test dataset')
-    parser.add_argument('--combined-train', required=True,
-                       help='Path to combined training dataset')
+    parser.add_argument('--combined-train', required=False, default=None,
+                       help='Path to combined training dataset (OPTIONAL, not used)')
     parser.add_argument('--output', default='results/cross_dataset_experiments',
                        help='Output folder (default: results/cross_dataset_experiments)')
     parser.add_argument('--model', default='BirdClefModels/model_fold0.pth',
@@ -1160,8 +1239,7 @@ def main():
     
     args = parser.parse_args()
     
-    for path in [args.avianz_train, args.avianz_test, args.doc_train, 
-                 args.doc_test, args.combined_train]:
+    for path in [args.avianz_train, args.avianz_test, args.doc_train, args.doc_test]:
         if not os.path.exists(path):
             print(f"ERROR: Path not found: {path}")
             return
