@@ -633,10 +633,8 @@ class BirdClefFineTuner:
                         target_labels = source_target.long()
                         class_loss = self.criterion(source_class_output, target_labels)
                 
-                # L2-normalize features before discriminator to prevent it from using magnitude/scale
-                # This forces discriminator to use semantic directions, not low-level artifacts
-                features_normalized = nn.functional.normalize(features, p=2, dim=1)
-                reversed_features = self.grl(features_normalized)
+                # Domain discrimination on original features
+                reversed_features = self.grl(features)
                 domain_output = self.domain_classifier(reversed_features)
                 
                 domain_labels_source = torch.zeros(batch_size_s).to(self.device)
@@ -1200,9 +1198,10 @@ Examples:
     args = parser.parse_args()
     
     # Check prerequisites
-    if not os.path.exists(args.pretrained):
+    if args.pretrained and not os.path.exists(args.pretrained):
         print(f"ERROR: Pretrained model not found: {args.pretrained}")
         print("Make sure you have the BirdClef checkpoint in BirdClefModels/")
+        print("Or use --pretrained \"\" to train from scratch (NOT RECOMMENDED)")
         return
     
     if not os.path.exists(os.path.join(args.data_folder, 'labels.json')):
@@ -1210,10 +1209,13 @@ Examples:
         print("Data folder must contain labels.json and .npy spectrogram files")
         return
     
+    # Convert empty pretrained path to None
+    pretrained_path = args.pretrained if args.pretrained else None
+    
     finetuner = BirdClefFineTuner(
         data_folder=args.data_folder,
         output_folder=args.output_folder,
-        pretrained_path=args.pretrained,
+        pretrained_path=pretrained_path,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
