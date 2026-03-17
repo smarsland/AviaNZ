@@ -683,8 +683,10 @@ class BirdClefFineTuner:
                     
                     loss = class_loss + self.grl.lambda_param * domain_loss
                 elif self.use_mmd:
-                    source_features_for_mmd = features[:batch_size_s]
-                    target_features_for_mmd = features[batch_size_s:]
+                    # Normalize features before computing MMD
+                    norm_features = torch.nn.functional.normalize(features, p=2, dim=1)
+                    source_features_for_mmd = norm_features[:batch_size_s]
+                    target_features_for_mmd = norm_features[batch_size_s:]
                     
                     domain_loss = mmd_loss(source_features_for_mmd, target_features_for_mmd)
                     loss = class_loss + self.lambda_domain * domain_loss
