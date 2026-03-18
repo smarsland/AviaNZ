@@ -27,6 +27,7 @@ import argparse
 import os
 import sys
 import json
+import csv
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -263,8 +264,13 @@ class CrossDatasetExperiments:
             test1_name = Path(exp['test1']).parent.name
             test2_name = Path(exp['test2']).parent.name
             
-            test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
-            test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
+            if self.model_type == 'ast':
+                print(f"\nRunning test evaluation for AST model...")
+                test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name)
+                test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name)
+            else:
+                test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
+                test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
             
             final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
             final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
@@ -500,6 +506,98 @@ class CrossDatasetExperiments:
             import traceback
             traceback.print_exc()
             return None
+    
+    def _evaluate_ast_test_set(self, model_folder, test_folder, test_name):
+        """Evaluate AST model on a test set using predict.py and calculate accuracy."""
+        model_path = model_folder / 'ast_model_best.pt'
+        config_path = model_folder / 'ast_model_config.json'
+        output_csv = model_folder / f'predictions_{test_name}.csv'
+        
+        if not model_path.exists():
+            print(f"  ⚠️  Model not found: {model_path}")
+            return 0.0
+        
+        if not config_path.exists():
+            print(f"  ⚠️  Config not found: {config_path}")
+            return 0.0
+        
+        print(f"  Evaluating on {test_name}...")
+        cmd = [
+            sys.executable,
+            'predict.py',
+            str(model_path),
+            str(config_path),
+            test_folder,
+            str(output_csv)
+        ]
+        
+        if self.model_type == 'ast':
+            for exp in self.experiments:
+                if exp.get('normalize', False):
+                    cmd.append('--normalize')
+                    break
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"  ❌ Prediction failed for {test_name}")
+            if result.stderr:
+                print(f"  Error: {result.stderr[:500]}")
+            return 0.0
+        
+        accuracy = self._compute_accuracy_from_predictions(output_csv, test_folder)
+        print(f"  {test_name} Accuracy: {accuracy:.2f}%")
+        return accuracy
+    
+    def _compute_accuracy_from_predictions(self, csv_path, test_folder):
+        """Compute accuracy by comparing predictions CSV to ground truth labels.json."""
+        labels_path = os.path.join(test_folder, 'labels.json')
+        
+        if not os.path.exists(labels_path):
+            print(f"  ⚠️  labels.json not found in {test_folder}")
+            return 0.0
+        
+        with open(labels_path, 'r') as f:
+            labels_data = json.load(f)
+        
+        categories = labels_data['categories']
+        
+        ground_truth = {}
+        for file_info in labels_data['files']:
+            filename = file_info['filename']
+            class_names = file_info.get('class_names', [])
+            label_idx = [categories.index(c) for c in class_names if c in categories]
+            if label_idx:
+                ground_truth[filename] = label_idx[0]
+            else:
+                ground_truth[filename] = -1
+        
+        predictions = {}
+        with open(csv_path, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                filename = row['filename']
+                pred_classes = []
+                for cat in categories:
+                    if cat in row and float(row[cat]) > 0.5:
+                        pred_classes.append(categories.index(cat))
+                if pred_classes:
+                    predictions[filename] = pred_classes[0]
+                else:
+                    predictions[filename] = -1
+        
+        correct = 0
+        total = 0
+        for filename, true_label in ground_truth.items():
+            if filename in predictions:
+                if predictions[filename] == true_label:
+                    correct += 1
+                total += 1
+        
+        if total == 0:
+            return 0.0
+        
+        return (correct / total) * 100.0
     
     def _extract_test_accuracy(self, output, test_name):
         """Extract test accuracy from training output."""
