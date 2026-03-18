@@ -266,8 +266,9 @@ class CrossDatasetExperiments:
             
             if self.model_type == 'ast':
                 print(f"\nRunning test evaluation for AST model...")
-                test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name)
-                test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name)
+                normalize = exp.get('normalize', False)
+                test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
+                test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
             else:
                 test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
                 test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
@@ -507,7 +508,7 @@ class CrossDatasetExperiments:
             traceback.print_exc()
             return None
     
-    def _evaluate_ast_test_set(self, model_folder, test_folder, test_name):
+    def _evaluate_ast_test_set(self, model_folder, test_folder, test_name, normalize=False):
         """Evaluate AST model on a test set using predict.py and calculate accuracy."""
         model_path = model_folder / 'ast_model_best.pt'
         config_path = model_folder / 'ast_model_config.json'
@@ -531,11 +532,8 @@ class CrossDatasetExperiments:
             str(output_csv)
         ]
         
-        if self.model_type == 'ast':
-            for exp in self.experiments:
-                if exp.get('normalize', False):
-                    cmd.append('--normalize')
-                    break
+        if normalize:
+            cmd.append('--normalize')
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         
@@ -576,7 +574,10 @@ class CrossDatasetExperiments:
         with open(csv_path, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                filename = row['filename']
+                # predict.py uses 'row_id' column (which is the filename)
+                filename = row.get('row_id', row.get('filename', ''))
+                if not filename:
+                    continue
                 pred_classes = []
                 for cat in categories:
                     if cat in row and float(row[cat]) > 0.5:
