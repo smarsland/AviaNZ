@@ -573,12 +573,27 @@ class CrossDatasetExperiments:
             print(f"  ⚠️  Predictions CSV not found: {csv_path}")
             return 0.0
         
+        # Load bird name mapping (CommonName -> eBird code)
+        name_map = {}
+        mapping_path = 'DOC_bird_naming_map.csv'
+        if os.path.exists(mapping_path):
+            with open(mapping_path, 'r') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                for row in reader:
+                    if len(row) >= 2:
+                        common_name = row[0]  # e.g., "Fantail"
+                        ebird_code = row[1]   # e.g., "nezfan1"
+                        name_map[common_name] = ebird_code
+                        # Also map in reverse
+                        name_map[ebird_code] = ebird_code
+        
         with open(labels_path, 'r') as f:
             labels_data = json.load(f)
         
         categories = labels_data['categories']
         
-        # Build ground truth mapping: filename -> primary class name
+        # Build ground truth mapping: filename -> primary class name (normalize to eBird code)
         true_labels = {}
         for file_info in labels_data['files']:
             filename = file_info['filename']
@@ -589,6 +604,8 @@ class CrossDatasetExperiments:
                 class_names = file_info.get('class_names', [])
                 primary = class_names[0] if class_names else None
             if primary:
+                # Normalize to eBird code
+                primary = name_map.get(primary, primary)
                 true_labels[filename] = primary
         
         # Read predictions CSV
@@ -606,6 +623,8 @@ class CrossDatasetExperiments:
                 class_probs = [float(row[col]) for col in class_columns]
                 pred_idx = class_probs.index(max(class_probs))
                 pred_class = class_columns[pred_idx]
+                # Normalize to eBird code
+                pred_class = name_map.get(pred_class, pred_class)
                 predictions[filename] = pred_class
         
         # DEBUG: Check first few matches
