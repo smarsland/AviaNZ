@@ -215,10 +215,10 @@ class CrossDatasetExperiments:
                 str(exp_output),
                 '--model', 'ast',
                 '--epochs', str(self.epochs),
-                '--batch-size', str(self.batch_size)
+                '--batch_size', str(self.batch_size)
             ]
             
-            if self.model_path:
+            if self.model_path and not self.model_path.endswith('model_fold0.pth'):
                 cmd.extend(['--pretrained', self.model_path])
             
             if exp.get('normalize', False):
