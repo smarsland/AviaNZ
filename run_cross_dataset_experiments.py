@@ -549,6 +549,12 @@ class CrossDatasetExperiments:
             print(f"  ❌ Prediction failed for {test_name}")
             if result.stderr:
                 print(f"  Error: {result.stderr[:500]}")
+            if result.stdout:
+                print(f"  Output: {result.stdout[:500]}")
+            return 0.0
+        
+        if not output_csv.exists():
+            print(f"  ❌ Prediction CSV was not created: {output_csv}")
             return 0.0
         
         accuracy = self._compute_accuracy_from_predictions(output_csv, test_folder)
@@ -561,6 +567,10 @@ class CrossDatasetExperiments:
         
         if not os.path.exists(labels_path):
             print(f"  ⚠️  labels.json not found in {test_folder}")
+            return 0.0
+        
+        if not os.path.exists(csv_path):
+            print(f"  ⚠️  Predictions CSV not found: {csv_path}")
             return 0.0
         
         with open(labels_path, 'r') as f:
@@ -598,14 +608,26 @@ class CrossDatasetExperiments:
                 pred_class = class_columns[pred_idx]
                 predictions[filename] = pred_class
         
+        # DEBUG: Check first few matches
+        debug_count = 0
+        for filename, true_class in list(true_labels.items())[:3]:
+            pred_class = predictions.get(filename, 'NOT_FOUND')
+            print(f"    DEBUG: {filename} | True: {true_class} | Pred: {pred_class}")
+            debug_count += 1
+        
         # Compare predictions to ground truth
         correct = 0
         total = 0
+        mismatches = 0
         for filename, true_class in true_labels.items():
             if filename in predictions:
                 if predictions[filename] == true_class:
                     correct += 1
+                else:
+                    mismatches += 1
                 total += 1
+        
+        print(f"    DEBUG: Total files={len(true_labels)}, Matched={total}, Correct={correct}, Wrong={mismatches}")
         
         if total == 0:
             return 0.0
@@ -643,8 +665,10 @@ class CrossDatasetExperiments:
             print(f"\n[{i}/{len(self.experiments)}] Starting experiment: {exp['name']}")
             result = self.run_experiment(exp)
             
-            if result is None:
-                print(f"Skipping remaining experiments due to failure.")
+            # Continue if experiment was skipped (e.g., DANN/MMD not supported for AST)
+            # Only break on actual failures (as opposed to unsupported experiments)
+            if result is None and exp['type'] in ['finetune']:
+                print(f"Experiment failed. Skipping remaining experiments.")
                 break
         
         if len(self.results) == len(self.experiments):
@@ -652,8 +676,10 @@ class CrossDatasetExperiments:
             print(f"✓ All experiments complete!")
             print(f"{'='*60}")
         else:
+            ran_count = len(self.results)
+            skipped_count = len(self.experiments) - ran_count
             print(f"\n{'='*60}")
-            print(f"⚠ Completed {len(self.results)}/{len(self.experiments)} experiments")
+            print(f"Completed {ran_count}/{len(self.experiments)} experiments ({skipped_count} skipped/unsupported)")
             print(f"{'='*60}")
     
     def generate_summary_table(self):
