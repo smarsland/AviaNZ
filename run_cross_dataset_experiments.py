@@ -45,7 +45,7 @@ class CrossDatasetExperiments:
     
     def __init__(self, avianz_train, avianz_test, doc_train, doc_test, 
                  combined_train, output_folder, model_path, epochs=10, batch_size=32, 
-                 lambda_domain=0.1, noise_folder=None):
+                 lambda_domain=0.1, noise_folder=None, model_type='birdclef'):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -57,6 +57,7 @@ class CrossDatasetExperiments:
         self.batch_size = batch_size
         self.lambda_domain = lambda_domain
         self.noise_folder = noise_folder
+        self.model_type = model_type
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
@@ -206,23 +207,40 @@ class CrossDatasetExperiments:
         exp_output = self.output_folder / exp['name']
         exp_output.mkdir(exist_ok=True)
         
-        cmd = [
-            sys.executable,
-            'finetune_birdclef.py',
-            exp['train'],
-            str(exp_output),
-            '--pretrained', self.model_path,
-            '--epochs', str(self.epochs),
-            '--batch-size', str(self.batch_size),
-            '--test-folder', exp['test1'],
-            '--test-folder2', exp['test2']
-        ]
-        
-        if exp['freeze']:
-            cmd.append('--freeze-backbone')
-        
-        if exp.get('normalize', False):
-            cmd.append('--normalize')
+        if self.model_type == 'ast':
+            cmd = [
+                sys.executable,
+                'train_models.py',
+                exp['train'],
+                str(exp_output),
+                '--model', 'ast',
+                '--epochs', str(self.epochs),
+                '--batch-size', str(self.batch_size)
+            ]
+            
+            if self.model_path:
+                cmd.extend(['--pretrained', self.model_path])
+            
+            if exp.get('normalize', False):
+                cmd.append('--normalize')
+        else:
+            cmd = [
+                sys.executable,
+                'finetune_birdclef.py',
+                exp['train'],
+                str(exp_output),
+                '--pretrained', self.model_path,
+                '--epochs', str(self.epochs),
+                '--batch-size', str(self.batch_size),
+                '--test-folder', exp['test1'],
+                '--test-folder2', exp['test2']
+            ]
+            
+            if exp['freeze']:
+                cmd.append('--freeze-backbone')
+            
+            if exp.get('normalize', False):
+                cmd.append('--normalize')
         
         print(f"\nRunning: {' '.join(cmd)}")
         
@@ -296,6 +314,10 @@ class CrossDatasetExperiments:
         print(f"Target: {exp['target']}")
         print(f"Test on: {exp['test1']} and {exp['test2']}")
         print(f"Freeze backbone: {exp['freeze']}")
+        
+        if self.model_type == 'ast':
+            print(f"\n⚠️  DANN not supported for AST model type. Skipping {exp['name']}.")
+            return None
         
         exp_output = self.output_folder / exp['name']
         exp_output.mkdir(exist_ok=True)
@@ -391,6 +413,10 @@ class CrossDatasetExperiments:
         print(f"Test on: {exp['test1']} and {exp['test2']}")
         print(f"Freeze backbone: {exp['freeze']}")
         print(f"Lambda: {exp.get('lambda_domain', self.lambda_domain)}")
+        
+        if self.model_type == 'ast':
+            print(f"\n⚠️  MMD not supported for AST model type. Skipping {exp['name']}.")
+            return None
         
         exp_output = self.output_folder / exp['name']
         exp_output.mkdir(exist_ok=True)
@@ -1220,6 +1246,8 @@ def main():
                        help='DANN domain loss weight (default: 0.3)')
     parser.add_argument('--noise-folder', default=None,
                        help='Noise folder for DANN target domain (unlabeled)')
+    parser.add_argument('--model-type', default='birdclef', choices=['birdclef', 'ast'],
+                       help='Model type to use: birdclef (fine-tune BirdCLEF CNN) or ast (train AST from scratch or pretrained). Default: birdclef')
     
     args = parser.parse_args()
     
@@ -1248,7 +1276,8 @@ def main():
         epochs=args.epochs,
         batch_size=args.batch_size,
         lambda_domain=args.lambda_domain,
-        noise_folder=args.noise_folder
+        noise_folder=args.noise_folder,
+        model_type=args.model_type
     )
     
     experiments.run()

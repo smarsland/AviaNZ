@@ -14,6 +14,9 @@ SKIP_LOAD=0
 SKIP_SPLIT=0
 SKIP_BIRDNET=0
 
+# Model type: "birdclef" (default, uses finetune_birdclef.py) or "ast" (uses train_models.py)
+MODEL_TYPE="ast"
+
 # Config
 
 AVIANZ_FULL="${OUTPUT_BASE}/joe_mo"
@@ -73,7 +76,8 @@ python3 run_cross_dataset_experiments.py \
     --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
     --epochs 50 \
-    --batch-size 32
+    --batch-size 32 \
+    --model-type "$MODEL_TYPE"
 
 if [ $SKIP_BIRDNET -eq 0 ]; then
     echo ""
