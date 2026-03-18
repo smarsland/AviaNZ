@@ -179,11 +179,15 @@ class CrossDatasetExperiments:
         if value is None:
             return 0.0
         if isinstance(value, (int, float)):
-            return float(value)
+            # If value is < 1, it's likely a fraction, convert to percentage
+            acc = float(value)
+            if acc < 1.0:
+                acc = acc * 100.0
+            return acc
         if isinstance(value, (tuple, list)):
-            return float(value[0]) if len(value) > 0 else 0.0
+            return self.extract_accuracy(value[0]) if len(value) > 0 else 0.0
         if isinstance(value, dict):
-            return float(value.get('macro_f1', value.get('accuracy', 0.0)))
+            return self.extract_accuracy(value.get('macro_f1', value.get('accuracy', 0.0)))
         return 0.0
     
     def run_experiment(self, exp):
@@ -273,9 +277,13 @@ class CrossDatasetExperiments:
                 test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
                 test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
             
-            final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
-            final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
-            best_val = max([self.extract_accuracy(v) for v in history.get('val_acc', []) if v is not None], default=None)
+            # Handle both train_acc (finetune_birdclef) and train_accuracy (train_models)
+            train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
+            val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
+            
+            final_train_acc = self.extract_accuracy(history[train_acc_key][-1] if history.get(train_acc_key) else None)
+            final_val_acc = self.extract_accuracy(history[val_acc_key][-1] if history.get(val_acc_key) and history[val_acc_key][-1] is not None else None)
+            best_val = max([self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None], default=None)
             
             exp_result = {
                 'name': exp['name'],
@@ -560,38 +568,42 @@ class CrossDatasetExperiments:
         
         categories = labels_data['categories']
         
-        ground_truth = {}
+        # Build ground truth mapping: filename -> primary class name
+        true_labels = {}
         for file_info in labels_data['files']:
             filename = file_info['filename']
-            class_names = file_info.get('class_names', [])
-            label_idx = [categories.index(c) for c in class_names if c in categories]
-            if label_idx:
-                ground_truth[filename] = label_idx[0]
-            else:
-                ground_truth[filename] = -1
+            # Use primary_class or primary_species if available
+            primary = file_info.get('primary_class') or file_info.get('primary_species')
+            if not primary:
+                # Fall back to first class in class_names
+                class_names = file_info.get('class_names', [])
+                primary = class_names[0] if class_names else None
+            if primary:
+                true_labels[filename] = primary
         
+        # Read predictions CSV
         predictions = {}
         with open(csv_path, 'r') as f:
             reader = csv.DictReader(f)
+            class_columns = [col for col in reader.fieldnames if col not in ['row_id', 'File_Path']]
+            
             for row in reader:
-                # predict.py uses 'row_id' column (which is the filename)
                 filename = row.get('row_id', row.get('filename', ''))
-                if not filename:
+                if not filename or not class_columns:
                     continue
-                pred_classes = []
-                for cat in categories:
-                    if cat in row and float(row[cat]) > 0.5:
-                        pred_classes.append(categories.index(cat))
-                if pred_classes:
-                    predictions[filename] = pred_classes[0]
-                else:
-                    predictions[filename] = -1
+                
+                # Use argmax to get predicted class (like training code does)
+                class_probs = [float(row[col]) for col in class_columns]
+                pred_idx = class_probs.index(max(class_probs))
+                pred_class = class_columns[pred_idx]
+                predictions[filename] = pred_class
         
+        # Compare predictions to ground truth
         correct = 0
         total = 0
-        for filename, true_label in ground_truth.items():
+        for filename, true_class in true_labels.items():
             if filename in predictions:
-                if predictions[filename] == true_label:
+                if predictions[filename] == true_class:
                     correct += 1
                 total += 1
         
@@ -1040,12 +1052,19 @@ class CrossDatasetExperiments:
             ax = axes[i]
             history = r['history']
             
-            epochs = range(1, len(history['train_acc']) + 1)
+            # Handle both train_acc (finetune_birdclef) and train_accuracy (train_models)
+            train_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
+            val_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
             
-            ax.plot(epochs, history['train_acc'], 'b-', label='Train', linewidth=2)
-            if history['val_acc'][0] is not None:
-                val_acc = [v if v is not None else 0 for v in history['val_acc']]
-                ax.plot(epochs, val_acc, 'r-', label='Val', linewidth=2)
+            epochs = range(1, len(history[train_key]) + 1)
+            
+            # Convert to percentage if needed
+            train_data = [v * 100 if v < 1 else v for v in history[train_key]]
+            ax.plot(epochs, train_data, 'b-', label='Train', linewidth=2)
+            
+            if history[val_key][0] is not None:
+                val_data = [(v * 100 if v < 1 else v) if v is not None else 0 for v in history[val_key]]
+                ax.plot(epochs, val_data, 'r-', label='Val', linewidth=2)
             
             ax.axhline(y=r['test1_acc'], color='g', linestyle='--', alpha=0.7, label=f'Test {r["test1_name"]}')
             ax.axhline(y=r['test2_acc'], color='orange', linestyle='--', alpha=0.7, label=f'Test {r["test2_name"]}')
