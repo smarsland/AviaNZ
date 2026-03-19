@@ -10,8 +10,8 @@ OUTPUT_BASE="/local/scratch/freangi"
 NOISE_FOLDER="${OUTPUT_BASE}/noise"
 
 # Skip flags (set to 1 to skip)
-SKIP_LOAD=0
-SKIP_SPLIT=0
+SKIP_LOAD=1
+SKIP_SPLIT=1
 SKIP_BIRDNET=1
 
 # Config
@@ -41,13 +41,15 @@ if [ $SKIP_LOAD -eq 0 ]; then
         --species "$SPECIES" \
         --max-samples $MAX_SAMPLES \
         --ignore-multilabel \
-        --with-audio
+        --with-audio \
+        --overwrite
 
     python3 data_loader.py doc "$DOC_RAW" "$DOC_FULL" \
         --species "$SPECIES" \
         --max-samples $MAX_SAMPLES \
         --ignore-multilabel \
-        --with-audio
+        --with-audio \
+        --overwrite
 fi
 
 if [ $SKIP_SPLIT -eq 0 ]; then
