@@ -14,6 +14,11 @@ SKIP_LOAD=1
 SKIP_SPLIT=1
 SKIP_BIRDNET=1
 
+# Freeze early layers? (set to 1 to freeze)
+# BirdClef: freezes first 3 stages (stem, s1, s2), trains s3, s4, classifier
+# AST: freezes first 8 transformer layers, trains last 4 + classifier
+FREEZE_BACKBONE=1
+
 # Config
 
 AVIANZ_FULL="${OUTPUT_BASE}/joe_mo"
@@ -67,6 +72,16 @@ echo "Merging training sets..."
 python3 merge_datasets.py "$AVIANZ_TRAIN" "$DOC_TRAIN" "$COMBINED_TRAIN"
 
 echo "Running all experiments (12 tests: 2 model types × 6 configs)..."
+FREEZE_FLAG=""
+if [ $FREEZE_BACKBONE -eq 1 ]; then
+    FREEZE_FLAG="--freeze-backbone"
+    echo "  Freeze strategy: Early layers frozen"
+    echo "    - BirdClef: Freeze stem, s1, s2 (train s3, s4, classifier)"
+    echo "    - AST: Freeze first 8 layers (train last 4 + classifier)"
+else
+    echo "  Freeze strategy: None (full fine-tuning)"
+fi
+
 python3 run_cross_dataset_experiments.py \
     --avianz-train "$AVIANZ_TRAIN" \
     --avianz-test "$AVIANZ_TEST" \
@@ -75,7 +90,8 @@ python3 run_cross_dataset_experiments.py \
     --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
     --epochs 50 \
-    --batch-size 32
+    --batch-size 16 \
+    $FREEZE_FLAG
 
 if [ $SKIP_BIRDNET -eq 0 ]; then
     echo ""
