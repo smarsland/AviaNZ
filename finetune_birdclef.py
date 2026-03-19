@@ -39,38 +39,6 @@ from evaluation_utils import EvaluationManager
 from models import GradientReversalLayer, DomainDiscriminator
 
 
-def mmd_loss(source_features, target_features, kernel_mul=2.0, kernel_num=5):
-    batch_size = min(source_features.size(0), target_features.size(0))
-    source_features = source_features[:batch_size]
-    target_features = target_features[:batch_size]
-    
-    kernels = gaussian_kernel(source_features, target_features, kernel_mul, kernel_num)
-    
-    XX = kernels[:batch_size, :batch_size]
-    YY = kernels[batch_size:, batch_size:]
-    XY = kernels[:batch_size, batch_size:]
-    YX = kernels[batch_size:, :batch_size]
-    
-    loss = XX.mean() + YY.mean() - XY.mean() - YX.mean()
-    return loss
-
-
-def gaussian_kernel(source, target, kernel_mul, kernel_num):
-    n_samples = source.size(0) + target.size(0)
-    total = torch.cat([source, target], dim=0)
-    
-    total0 = total.unsqueeze(0).expand(total.size(0), total.size(0), total.size(1))
-    total1 = total.unsqueeze(1).expand(total.size(0), total.size(0), total.size(1))
-    
-    L2_distance = ((total0 - total1) ** 2).sum(2)
-    
-    bandwidth = torch.sum(L2_distance) / (n_samples ** 2 - n_samples)
-    bandwidth /= kernel_mul ** (kernel_num // 2)
-    bandwidth_list = [bandwidth * (kernel_mul ** i) for i in range(kernel_num)]
-    
-    kernel_val = [torch.exp(-L2_distance / (2 * bw)) for bw in bandwidth_list]
-    return sum(kernel_val)
-
 
 class BirdClefFineTuneModel(nn.Module):
     """BirdClef RegNetY-008 adapted for AviaNZ species."""
@@ -218,7 +186,7 @@ class BirdClefFineTuner:
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
                  remove_baseline=False, test_folder=None, test_folder2=None, background_prob=0.0,
-                 use_dann=False, use_mmd=False, target_folder=None, lambda_domain=0.1):
+                 use_dann=False, target_folder=None, lambda_domain=0.1):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -237,7 +205,6 @@ class BirdClefFineTuner:
         self.noise_ratio = noise_ratio
         self.noise_folder = noise_folder
         self.use_dann = use_dann
-        self.use_mmd = use_mmd
         self.target_folder = target_folder
         self.lambda_domain = lambda_domain
         self.noise_mode = noise_mode
@@ -283,10 +250,6 @@ class BirdClefFineTuner:
             print(f"    - dacc 80-95% = domains still separable, DANN struggling")
             print(f"    - dacc ~100% = trivial separation (check normalization, noise aug, baseline removal)")
             print(f"    - dacc <50% = possible instability or collapse")
-        if self.use_mmd:
-            print(f"  MMD: enabled (lambda={self.lambda_domain})")
-            print(f"  Target domain: {self.target_folder}")
-            print(f"  MMD directly matches distributions (no adversarial training)")
     
     def load_data(self):
         """Load data using existing AviaNZ data pipeline."""
@@ -382,8 +345,8 @@ class BirdClefFineTuner:
         else:
             print(f"  Val samples: 0 (validation disabled)")
         
-        if (self.use_dann or self.use_mmd) and self.target_folder:
-            method_name = "DANN" if self.use_dann else "MMD"
+        if self.use_dann and self.target_folder:
+            method_name = "DANN"
             print(f"\n  Loading {method_name} target domain (unlabeled)...")
             target_loader = DataLoader(self.target_folder)
             target_data = target_loader.load_data(use_multilabel=False, validation_share=0.0)
@@ -602,11 +565,10 @@ class BirdClefFineTuner:
 
         metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
-        if (self.use_dann or self.use_mmd) and self.target_loader:
-            if self.use_dann:
-                p = float(epoch) / float(self.epochs)
-                alpha = 2.0 / (1.0 + np.exp(-5 * p)) - 1.0
-                self.grl.lambda_param = alpha * self.lambda_domain
+        if self.use_dann and self.target_loader:
+            p = float(epoch) / float(self.epochs)
+            alpha = 2.0 / (1.0 + np.exp(-5 * p)) - 1.0
+            self.grl.lambda_param = alpha * self.lambda_domain
             
             source_iter = iter(self.train_loader)
             target_iter = iter(self.target_loader)
@@ -615,8 +577,8 @@ class BirdClefFineTuner:
         else:
             pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{self.epochs}")
         
-        for batch_idx in (pbar if (self.use_dann or self.use_mmd) and self.target_loader else enumerate(pbar)):
-            if (self.use_dann or self.use_mmd) and self.target_loader:
+        for batch_idx in (pbar if self.use_dann and self.target_loader else enumerate(pbar)):
+            if self.use_dann and self.target_loader:
                 try:
                     source_data, source_target = next(source_iter)
                 except StopIteration:
@@ -682,14 +644,6 @@ class BirdClefFineTuner:
                     domain_acc = 100.0 * domain_correct / domain_total
                     
                     loss = class_loss + self.grl.lambda_param * domain_loss
-                elif self.use_mmd:
-                    # Normalize features before computing MMD
-                    norm_features = torch.nn.functional.normalize(features, p=2, dim=1)
-                    source_features_for_mmd = norm_features[:batch_size_s]
-                    target_features_for_mmd = norm_features[batch_size_s:]
-                    
-                    domain_loss = mmd_loss(source_features_for_mmd, target_features_for_mmd)
-                    loss = class_loss + self.lambda_domain * domain_loss
                 else:
                     domain_loss = torch.tensor(0.0)
                     loss = class_loss
@@ -703,7 +657,7 @@ class BirdClefFineTuner:
                 self.optimizer.step()
                 
                 total_class_loss += class_loss.item()
-                if self.use_dann or self.use_mmd:
+                if self.use_dann:
                     total_domain_loss += domain_loss.item()
                 total_loss += loss.item()
                 
@@ -726,9 +680,8 @@ class BirdClefFineTuner:
                         'cls': f'{class_loss.item():.3f}',
                         'f1': f'{metrics_sum["macro_f1"]/max(total,1):.3f}'
                     }
-                    if self.use_dann or self.use_mmd:
-                        postfix['dom'] = f'{domain_loss.item():.3f}'
                     if self.use_dann:
+                        postfix['dom'] = f'{domain_loss.item():.3f}'
                         postfix['dacc'] = f'{domain_acc:.1f}%'
                         postfix['α'] = f'{self.grl.lambda_param:.3f}'
                     pbar.set_postfix(postfix)
@@ -737,9 +690,8 @@ class BirdClefFineTuner:
                         'cls': f'{class_loss.item():.3f}',
                         'acc': f'{100.*correct/total:.1f}%'
                     }
-                    if self.use_dann or self.use_mmd:
-                        postfix['dom'] = f'{domain_loss.item():.3f}'
                     if self.use_dann:
+                        postfix['dom'] = f'{domain_loss.item():.3f}'
                         postfix['dacc'] = f'{domain_acc:.1f}%'
                         postfix['α'] = f'{self.grl.lambda_param:.3f}'
                     pbar.set_postfix(postfix)
@@ -804,13 +756,11 @@ class BirdClefFineTuner:
             return total_loss / len(self.train_loader), avg_metrics
         
         train_acc = 100. * correct / total
-        if (self.use_dann or self.use_mmd) and self.target_loader:
+        if self.use_dann and self.target_loader:
             avg_loss = total_loss / n_batches
-            if self.use_dann:
-                return avg_loss, (train_acc, 100.0 * domain_correct / max(domain_total, 1))
-            else:
-                return avg_loss, train_acc
-        return total_loss / len(self.train_loader), train_acc
+            return avg_loss, (train_acc, 100.0 * domain_correct / max(domain_total, 1))
+        else:
+            return total_loss / len(self.train_loader), train_acc
     
     def validate(self):
         """Validate on validation set."""
@@ -1242,22 +1192,15 @@ Examples:
                        help="Device to use (cuda/cpu, default: auto-detect)")
     parser.add_argument('--use-dann', action='store_true',
                        help="Enable Domain Adaptive Neural Network (DANN) training for domain adaptation")
-    parser.add_argument('--use-mmd', action='store_true',
-                       help="Enable Maximum Mean Discrepancy (MMD) loss for domain adaptation (simpler/more stable than DANN)")
     parser.add_argument('--target-folder', type=str, default=None,
                        help="Path to target domain folder for domain adaptation (unlabeled domain)")
     parser.add_argument('--lambda-domain', type=float, default=0.3,
-                       help="Domain loss weight (default: 0.3). For DANN: if dacc stays >95%%, increase lambda. For MMD: typical range 0.1-0.5")
+                       help="Domain loss weight (default: 0.3). If dacc stays >95%%, increase lambda.")
     
     args = parser.parse_args()
     
-    if args.use_dann and args.use_mmd:
-        print("ERROR: Cannot use both --use-dann and --use-mmd at the same time")
-        print("Choose one domain adaptation method")
-        return
-    
-    if (args.use_dann or args.use_mmd) and not args.target_folder:
-        print("ERROR: Must specify --target-folder when using domain adaptation")
+    if args.use_dann and not args.target_folder:
+        print("ERROR: Must specify --target-folder when using --use-dann")
         return
     
     # Check prerequisites
@@ -1301,7 +1244,6 @@ Examples:
         test_folder2=args.test_folder2,
         background_prob=args.background_prob,
         use_dann=args.use_dann,
-        use_mmd=args.use_mmd,
         target_folder=args.target_folder,
         lambda_domain=args.lambda_domain
     )

@@ -12,10 +12,7 @@ NOISE_FOLDER="${OUTPUT_BASE}/noise"
 # Skip flags (set to 1 to skip)
 SKIP_LOAD=0
 SKIP_SPLIT=0
-SKIP_BIRDNET=0
-
-# Model type: "birdclef" (default, uses finetune_birdclef.py) or "ast" (uses train_models.py)
-MODEL_TYPE="ast"
+SKIP_BIRDNET=1
 
 # Config
 
@@ -67,7 +64,7 @@ fi
 echo "Merging training sets..."
 python3 merge_datasets.py "$AVIANZ_TRAIN" "$DOC_TRAIN" "$COMBINED_TRAIN"
 
-echo "Running all experiments (fine-tuning + DANN)..."
+echo "Running all experiments (12 tests: 2 model types × 6 configs)..."
 python3 run_cross_dataset_experiments.py \
     --avianz-train "$AVIANZ_TRAIN" \
     --avianz-test "$AVIANZ_TEST" \
@@ -76,8 +73,7 @@ python3 run_cross_dataset_experiments.py \
     --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
     --epochs 50 \
-    --batch-size 32 \
-    --model-type "$MODEL_TYPE"
+    --batch-size 32
 
 if [ $SKIP_BIRDNET -eq 0 ]; then
     echo ""

@@ -2,15 +2,14 @@
 """
 Simplified cross-dataset experiments for domain adaptation testing.
 
-Runs 8 core experiments:
+Runs 12 core experiments (2 model types × 6 training configurations):
+For each model type (BirdClef CNN, AST):
 1. joe_mo baseline (no tricks)
-2. doc baseline (no tricks)
+2. joe_mo + normalize
 3. DANN joe_mo→doc
-4. DANN doc→joe_mo
-5. MMD joe_mo→doc
-6. MMD doc→joe_mo
-7. joe_mo + normalize
-8. doc + normalize
+4. doc baseline (no tricks)
+5. doc + normalize
+6. DANN doc→joe_mo
 
 Generates comparison tables and plots.
 
@@ -46,7 +45,7 @@ class CrossDatasetExperiments:
     
     def __init__(self, avianz_train, avianz_test, doc_train, doc_test, 
                  combined_train, output_folder, model_path, epochs=10, batch_size=32, 
-                 lambda_domain=0.1, noise_folder=None, model_type='birdclef'):
+                 lambda_domain=0.1, noise_folder=None, freeze_backbone=False):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -58,19 +57,18 @@ class CrossDatasetExperiments:
         self.batch_size = batch_size
         self.lambda_domain = lambda_domain
         self.noise_folder = noise_folder
-        self.model_type = model_type
+        self.freeze_backbone = freeze_backbone
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
-        # Group joe_mo experiments together, then doc experiments
-        self.experiments = [
+        # Define base experiment configurations
+        base_experiments = [
             # joe_mo experiments
             {
                 'name': 'joe_mo_baseline',
                 'train': avianz_train,
                 'test1': avianz_test,
                 'test2': doc_test,
-                'freeze': False,
                 'type': 'finetune',
                 'normalize': False,
                 'description': 'Baseline joe_mo'
@@ -80,7 +78,6 @@ class CrossDatasetExperiments:
                 'train': avianz_train,
                 'test1': avianz_test,
                 'test2': doc_test,
-                'freeze': False,
                 'type': 'finetune',
                 'normalize': True,
                 'description': 'joe_mo + normalize'
@@ -91,21 +88,9 @@ class CrossDatasetExperiments:
                 'target': doc_train,
                 'test1': avianz_test,
                 'test2': doc_test,
-                'freeze': False,
                 'type': 'dann',
                 'lambda_domain': lambda_domain,
                 'description': 'DANN joe_mo→doc'
-            },
-            {
-                'name': 'mmd_joe_mo_to_doc',
-                'source': avianz_train,
-                'target': doc_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'freeze': False,
-                'type': 'mmd',
-                'lambda_domain': lambda_domain,
-                'description': 'MMD joe_mo→doc'
             },
             # doc experiments
             {
@@ -113,7 +98,6 @@ class CrossDatasetExperiments:
                 'train': doc_train,
                 'test1': doc_test,
                 'test2': avianz_test,
-                'freeze': False,
                 'type': 'finetune',
                 'normalize': False,
                 'description': 'Baseline doc'
@@ -123,7 +107,6 @@ class CrossDatasetExperiments:
                 'train': doc_train,
                 'test1': doc_test,
                 'test2': avianz_test,
-                'freeze': False,
                 'type': 'finetune',
                 'normalize': True,
                 'description': 'doc + normalize'
@@ -134,44 +117,52 @@ class CrossDatasetExperiments:
                 'target': avianz_train,
                 'test1': doc_test,
                 'test2': avianz_test,
-                'freeze': False,
                 'type': 'dann',
                 'lambda_domain': lambda_domain,
                 'description': 'DANN doc→joe_mo'
-            },
-            {
-                'name': 'mmd_doc_to_joe_mo',
-                'source': doc_train,
-                'target': avianz_train,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'freeze': False,
-                'type': 'mmd',
-                'lambda_domain': lambda_domain,
-                'description': 'MMD doc→joe_mo'
             }
         ]
+        
+        # Generate experiments for both model types
+        self.experiments = []
+        for model_type in ['birdclef', 'ast']:
+            for base_exp in base_experiments:
+                exp = base_exp.copy()
+                exp['model_type'] = model_type
+                exp['freeze'] = freeze_backbone
+                exp['name'] = f"{base_exp['name']}_{model_type}"
+                if freeze_backbone:
+                    exp['name'] += "_frozen"
+                exp['description'] = f"{base_exp['description']} ({model_type.upper()})"
+                if freeze_backbone:
+                    exp['description'] += " [frozen backbone]"
+                self.experiments.append(exp)
         
         self.results = []
         
         print(f"{'='*60}")
-        print(f"Cross-Dataset Experiments (Simplified)")
+        print(f"Cross-Dataset Experiments")
         print(f"{'='*60}")
         print(f"joe_mo train: {avianz_train}")
         print(f"joe_mo test:  {avianz_test}")
         print(f"doc train:    {doc_train}")
         print(f"doc test:     {doc_test}")
-        print(f"\nExperiment breakdown:")
+        if freeze_backbone:
+            print(f"Freeze strategy: Early layers frozen, late layers + classifier trainable")
+            print(f"  - BirdClef: Freeze first 3 stages (stem, s1, s2), train s3, s4, classifier")
+            print(f"  - AST: Freeze first 8 transformer layers, train last 4 layers + classifier")
+        else:
+            print(f"Freeze strategy: None (full fine-tuning of all layers)")
+        print(f"\nExperiment breakdown (2 model types × 6 configs = 12 experiments):")
+        print(f"  Model types: BirdClef CNN, AST")
         print(f"  joe_mo experiments:")
         print(f"    1. joe_mo baseline (no tricks)")
         print(f"    2. joe_mo + normalize")
         print(f"    3. DANN joe_mo→doc")
-        print(f"    4. MMD joe_mo→doc")
         print(f"  doc experiments:")
-        print(f"    5. doc baseline (no tricks)")
-        print(f"    6. doc + normalize")
-        print(f"    7. DANN doc→joe_mo")
-        print(f"    8. MMD doc→joe_mo")
+        print(f"    4. doc baseline (no tricks)")
+        print(f"    5. doc + normalize")
+        print(f"    6. DANN doc→joe_mo")
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
@@ -191,11 +182,9 @@ class CrossDatasetExperiments:
         return 0.0
     
     def run_experiment(self, exp):
-        """Run a single training experiment (finetune, DANN, or MMD)."""
+        """Run a single training experiment (finetune or DANN)."""
         if exp['type'] == 'dann':
             return self.run_dann_experiment(exp)
-        elif exp['type'] == 'mmd':
-            return self.run_mmd_experiment(exp)
         else:
             return self.run_finetune_experiment(exp)
     
@@ -205,6 +194,7 @@ class CrossDatasetExperiments:
         print(f"Experiment: {exp['name']}")
         print(f"{'='*60}")
         print(f"Description: {exp['description']}")
+        print(f"Model type: {exp['model_type'].upper()}")
         print(f"Train on: {exp['train']}")
         print(f"Test on: {exp['test1']} and {exp['test2']}")
         print(f"Freeze backbone: {exp['freeze']}")
@@ -212,7 +202,7 @@ class CrossDatasetExperiments:
         exp_output = self.output_folder / exp['name']
         exp_output.mkdir(exist_ok=True)
         
-        if self.model_type == 'ast':
+        if exp['model_type'] == 'ast':
             cmd = [
                 sys.executable,
                 'train_models.py',
@@ -228,6 +218,10 @@ class CrossDatasetExperiments:
             
             if exp.get('normalize', False):
                 cmd.append('--normalize')
+            
+            # For AST: freeze first 8 transformer layers (keep last 4 + classifier trainable)
+            if exp['freeze']:
+                cmd.extend(['--freeze-layers', '8'])
         else:
             cmd = [
                 sys.executable,
@@ -241,22 +235,23 @@ class CrossDatasetExperiments:
                 '--test-folder2', exp['test2']
             ]
             
+            # For BirdClef: freeze first 3 stages (stem, s1, s2) but keep s3, s4, classifier trainable
             if exp['freeze']:
-                cmd.append('--freeze-backbone')
+                cmd.extend(['--freeze-stages', '3'])
             
             if exp.get('normalize', False):
                 cmd.append('--normalize')
         
         print(f"\nRunning: {' '.join(cmd)}")
+        print(f"{'='*60}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        print(result.stdout)
+        # Stream output in real-time (don't capture)
+        result = subprocess.run(cmd)
         
+        print(f"{'='*60}")
         if result.returncode != 0:
             print(f"\n❌ Finetune experiment failed!")
             print(f"Return code: {result.returncode}")
-            if result.stderr:
-                print(f"\nStderr:\n{result.stderr}")
             return None
         
         try:
@@ -268,14 +263,17 @@ class CrossDatasetExperiments:
             test1_name = Path(exp['test1']).parent.name
             test2_name = Path(exp['test2']).parent.name
             
-            if self.model_type == 'ast':
+            if exp['model_type'] == 'ast':
                 print(f"\nRunning test evaluation for AST model...")
                 normalize = exp.get('normalize', False)
                 test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
                 test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
             else:
-                test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
-                test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
+                # Test accuracies are displayed in console output above
+                # For now, set to 0.0 - they'll be visible in the training logs
+                print(f"\n(Test accuracies are shown in the training output above)")
+                test1_acc = 0.0
+                test2_acc = 0.0
             
             # Handle both train_acc (finetune_birdclef) and train_accuracy (train_models)
             train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
@@ -288,6 +286,7 @@ class CrossDatasetExperiments:
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
+                'model_type': exp['model_type'],
                 'train_dataset': Path(exp['train']).name,
                 'freeze_backbone': exp['freeze'],
                 'final_train_acc': final_train_acc,
@@ -325,13 +324,14 @@ class CrossDatasetExperiments:
         print(f"Experiment: {exp['name']}")
         print(f"{'='*60}")
         print(f"Description: {exp['description']}")
+        print(f"Model type: {exp['model_type'].upper()}")
         print(f"Source: {exp['source']}")
         print(f"Target: {exp['target']}")
         print(f"Test on: {exp['test1']} and {exp['test2']}")
         print(f"Freeze backbone: {exp['freeze']}")
         
-        if self.model_type == 'ast':
-            print(f"\n⚠️  DANN not supported for AST model type. Skipping {exp['name']}.")
+        if exp['model_type'] == 'ast':
+            print(f"\n⚠️  DANN not yet implemented for AST model type. Skipping {exp['name']}.")
             return None
         
         exp_output = self.output_folder / exp['name']
@@ -352,19 +352,20 @@ class CrossDatasetExperiments:
             '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
         ]
         
+        # For BirdClef: freeze first 3 stages (stem, s1, s2) but keep s3, s4, classifier trainable
         if exp['freeze']:
-            cmd.append('--freeze-backbone')
+            cmd.extend(['--freeze-stages', '3'])
         
         print(f"\nRunning: {' '.join(cmd)}")
+        print(f"{'='*60}")
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        print(result.stdout)
+        # Stream output in real-time (don't capture)
+        result = subprocess.run(cmd)
         
+        print(f"{'='*60}")
         if result.returncode != 0:
             print(f"\n❌ DANN experiment failed!")
             print(f"Return code: {result.returncode}")
-            if result.stderr:
-                print(f"\nStderr:\n{result.stderr}")
             return None
         
         try:
@@ -375,8 +376,10 @@ class CrossDatasetExperiments:
             test1_name = Path(exp['test1']).parent.name
             test2_name = Path(exp['test2']).parent.name
             
-            test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
-            test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
+            # Test accuracies are displayed in console output above
+            print(f"\n(Test accuracies are shown in the training output above)")
+            test1_acc = 0.0
+            test2_acc = 0.0
             
             final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
             final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
@@ -385,6 +388,7 @@ class CrossDatasetExperiments:
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
+                'model_type': exp['model_type'],
                 'train_dataset': f"{Path(exp['source']).parent.name} (DANN→{Path(exp['target']).parent.name})",
                 'freeze_backbone': exp['freeze'],
                 'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
@@ -417,105 +421,6 @@ class CrossDatasetExperiments:
             traceback.print_exc()
             return None
     
-    def run_mmd_experiment(self, exp):
-        """Run an MMD domain adaptation experiment."""
-        print(f"\n{'='*60}")
-        print(f"Experiment: {exp['name']}")
-        print(f"{'='*60}")
-        print(f"Description: {exp['description']}")
-        print(f"Source: {exp['source']}")
-        print(f"Target: {exp['target']}")
-        print(f"Test on: {exp['test1']} and {exp['test2']}")
-        print(f"Freeze backbone: {exp['freeze']}")
-        print(f"Lambda: {exp.get('lambda_domain', self.lambda_domain)}")
-        
-        if self.model_type == 'ast':
-            print(f"\n⚠️  MMD not supported for AST model type. Skipping {exp['name']}.")
-            return None
-        
-        exp_output = self.output_folder / exp['name']
-        exp_output.mkdir(exist_ok=True)
-        
-        cmd = [
-            sys.executable,
-            'finetune_birdclef.py',
-            exp['source'],
-            str(exp_output),
-            '--pretrained', self.model_path,
-            '--epochs', str(self.epochs),
-            '--batch-size', str(self.batch_size),
-            '--test-folder', exp['test1'],
-            '--test-folder2', exp['test2'],
-            '--use-mmd',
-            '--target-folder', exp['target'],
-            '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
-        ]
-        
-        if exp['freeze']:
-            cmd.append('--freeze-backbone')
-        
-        print(f"\nRunning: {' '.join(cmd)}")
-        
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        print(result.stdout)
-        
-        if result.returncode != 0:
-            print(f"\n❌ MMD experiment failed!")
-            print(f"Return code: {result.returncode}")
-            if result.stderr:
-                print(f"\nStderr:\n{result.stderr}")
-            return None
-        
-        try:
-            history_path = exp_output / 'training_history.json'
-            with open(history_path, 'r') as f:
-                history = json.load(f)
-            
-            test1_name = Path(exp['test1']).parent.name
-            test2_name = Path(exp['test2']).parent.name
-            
-            test1_acc = self._extract_test_accuracy(result.stdout, test1_name)
-            test2_acc = self._extract_test_accuracy(result.stdout, test2_name)
-            
-            final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
-            final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
-            best_val = max([self.extract_accuracy(v) for v in history.get('val_acc', []) if v is not None], default=None)
-            
-            exp_result = {
-                'name': exp['name'],
-                'description': exp['description'],
-                'train_dataset': f"{Path(exp['source']).parent.name} (MMD→{Path(exp['target']).parent.name})",
-                'freeze_backbone': exp['freeze'],
-                'lambda_domain': exp.get('lambda_domain', self.lambda_domain),
-                'final_train_acc': final_train_acc,
-                'final_val_acc': final_val_acc,
-                'test1_name': test1_name,
-                'test1_acc': test1_acc,
-                'test2_name': test2_name,
-                'test2_acc': test2_acc,
-                'best_val_acc': best_val,
-                'history': history,
-                'output_folder': str(exp_output)
-            }
-            
-            self.results.append(exp_result)
-            
-            print(f"\n✓ MMD experiment complete:")
-            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
-            if exp_result['final_val_acc'] is not None:
-                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
-            print(f"  Test {test1_name}: {test1_acc:.2f}%")
-            print(f"  Test {test2_name}: {test2_acc:.2f}%")
-            
-            return exp_result
-            
-        except Exception as e:
-            print(f"\n❌ Error processing MMD results!")
-            print(f"Error: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
     def _evaluate_ast_test_set(self, model_folder, test_folder, test_name, normalize=False):
         """Evaluate AST model on a test set using predict.py and calculate accuracy."""
         model_path = model_folder / 'ast_model_best.pt'
@@ -543,14 +448,11 @@ class CrossDatasetExperiments:
         if normalize:
             cmd.append('--normalize')
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        print(f"  Running prediction...")
+        result = subprocess.run(cmd)
         
         if result.returncode != 0:
             print(f"  ❌ Prediction failed for {test_name}")
-            if result.stderr:
-                print(f"  Error: {result.stderr[:500]}")
-            if result.stdout:
-                print(f"  Output: {result.stdout[:500]}")
             return 0.0
         
         if not output_csv.exists():
@@ -684,7 +586,7 @@ class CrossDatasetExperiments:
             print(f"\n[{i}/{len(self.experiments)}] Starting experiment: {exp['name']}")
             result = self.run_experiment(exp)
             
-            # Continue if experiment was skipped (e.g., DANN/MMD not supported for AST)
+            # Continue if experiment was skipped (e.g., DANN not yet implemented for AST)
             # Only break on actual failures (as opposed to unsupported experiments)
             if result is None and exp['type'] in ['finetune']:
                 print(f"Experiment failed. Skipping remaining experiments.")
@@ -1407,10 +1309,10 @@ def main():
                        help='Batch size (default: 32)')
     parser.add_argument('--lambda-domain', type=float, default=0.3,
                        help='DANN domain loss weight (default: 0.3)')
+    parser.add_argument('--freeze-backbone', action='store_true',
+                       help='Freeze early layers - BirdClef: freeze first 3 stages (stem,s1,s2), AST: freeze first 8 transformer layers. Keeps later layers + classifier trainable for better fine-tuning on small datasets.')
     parser.add_argument('--noise-folder', default=None,
                        help='Noise folder for DANN target domain (unlabeled)')
-    parser.add_argument('--model-type', default='birdclef', choices=['birdclef', 'ast'],
-                       help='Model type to use: birdclef (fine-tune BirdCLEF CNN) or ast (train AST from scratch or pretrained). Default: birdclef')
     
     args = parser.parse_args()
     
@@ -1440,7 +1342,7 @@ def main():
         batch_size=args.batch_size,
         lambda_domain=args.lambda_domain,
         noise_folder=args.noise_folder,
-        model_type=args.model_type
+        freeze_backbone=args.freeze_backbone
     )
     
     experiments.run()
