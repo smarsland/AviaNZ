@@ -15,7 +15,7 @@ SKIP_SPLIT=1
 SKIP_BIRDNET=1
 
 # Freeze early layers? (set to 1 to freeze)
-# BirdClef: freezes first 3 stages (stem, s1, s2), trains s3, s4, classifier
+# BirdClef: freezes first 4 stages (stem,s1,s2,s3), trains only s4+classifier (~53% params)
 # AST: freezes first 8 transformer layers, trains last 4 + classifier
 FREEZE_BACKBONE=1
 
@@ -75,8 +75,8 @@ echo "Running all experiments (12 tests: 2 model types × 6 configs)..."
 FREEZE_FLAG=""
 if [ $FREEZE_BACKBONE -eq 1 ]; then
     FREEZE_FLAG="--freeze-backbone"
-    echo "  Freeze strategy: Early layers frozen"
-    echo "    - BirdClef: Freeze stem, s1, s2 (train s3, s4, classifier)"
+    echo "  Freeze strategy: Freeze early layers to reduce overfitting"
+    echo "    - BirdClef: Freeze stem, s1, s2, s3 (train only s4 + classifier, ~53% params)"
     echo "    - AST: Freeze first 8 layers (train last 4 + classifier)"
 else
     echo "  Freeze strategy: None (full fine-tuning)"

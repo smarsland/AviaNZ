@@ -10,8 +10,10 @@ import os
 import json
 import time
 import math
+from pathlib import Path
 from sklearn.metrics import precision_recall_fscore_support
 from data_utils import DataLoader, create_data_loaders
+from data_pipeline import SpectrogramDataset
 from models import AST, CNNModel, KaytooModel
 from evaluation_utils import EvaluationManager
 import config
@@ -218,7 +220,9 @@ class ASTTrainer:
                  use_sparse_patches=False, num_sparse_patches=20, dropout=None,
                  bce_smoothing=None, use_temporal_roll=None, trial=None, use_amp=True,
                  normalize=False, noise_as_samples=False, max_noise_samples=None,
-                 pos_weight_cap=20.0, use_adapters=False, per_chunk_norm=False):
+                 pos_weight_cap=20.0, use_adapters=False, per_chunk_norm=False,
+                 use_dann=False, target_folder=None, lambda_domain=0.3,
+                 test_folder=None, test_folder2=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -250,6 +254,11 @@ class ASTTrainer:
         self.pos_weight_cap = pos_weight_cap
         self.use_adapters = use_adapters
         self.per_chunk_norm = per_chunk_norm
+        self.use_dann = use_dann
+        self.target_folder = target_folder
+        self.lambda_domain = lambda_domain
+        self.test_folder = test_folder
+        self.test_folder2 = test_folder2
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -280,6 +289,15 @@ class ASTTrainer:
                     self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
                 print(f"Added {len(noise_files)} noise samples as all-zero training examples")
 
+        # Load target domain data for DANN
+        if self.use_dann:
+            if not self.target_folder:
+                raise ValueError("use_dann=True requires target_folder")
+            print(f"Loading target domain data from {self.target_folder} for DANN...")
+            target_loader = DataLoader(self.target_folder, noise_folder=None)
+            self.target_data = target_loader.load_data(multilabel, validation_share=0.2)
+            print(f"Loaded {len(self.target_data['train_filenames'])} target domain samples")
+
         # Use dimensions from spectrogram params (single source of truth)
         # Avoid duplicating DEFAULT_FREQ_BINS vs SPECTROGRAM_PARAMS['nfilters']
         self.img_height = freq_bins if freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']  # Frequency bins (height)
@@ -297,6 +315,19 @@ class ASTTrainer:
             use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
             use_temporal_roll=self.use_temporal_roll
         )
+        
+        # Create target domain data loader for DANN
+        if self.use_dann:
+            self.target_train_loader, _ = create_data_loaders(
+                self.target_data, batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
+                cropping_mode='random', noise_ratio=0.0,  # No noise augmentation for target
+                spec_transform=None,
+                num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
+                use_class_balancing=False, normalize=self.normalize,
+                use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
+                use_temporal_roll=self.use_temporal_roll
+            )
+            print(f"Created target domain data loader with {len(self.target_train_loader)} batches")
         
         os.makedirs(output_folder, exist_ok=True)
     
@@ -362,9 +393,35 @@ class ASTTrainer:
             total_params = sum(p.numel() for p in model.parameters())
             print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
 
+        # Add DANN components if requested
+        if self.use_dann:
+            print("  Adding DANN domain discriminator for AST...")
+            from models import GradientReversalLayer
+            
+            # AST uses 768-dim embeddings
+            feat_dim = 768
+            
+            self.grl = GradientReversalLayer()
+            self.domain_classifier = nn.Sequential(
+                nn.Linear(feat_dim, 512),
+                nn.BatchNorm1d(512),
+                nn.ReLU(),
+                nn.Dropout(0.3),
+                nn.Linear(512, 256),
+                nn.ReLU(),
+                nn.Linear(256, 1)
+            )
+            self.grl.to(self.device)
+            self.domain_classifier.to(self.device)
+            self.domain_criterion = nn.BCEWithLogitsLoss()
+            print(f"  DANN lambda_domain: {self.lambda_domain}")
+
         # Optimizer and LR schedule
         # Use AdamW (Adam with decoupled weight decay) for better regularization
-        optimizer = optim.AdamW(model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        param_groups = [{'params': model.parameters(), 'lr': self.learning_rate}]
+        if self.use_dann:
+            param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.learning_rate * 0.1})
+        optimizer = optim.AdamW(param_groups, weight_decay=self.weight_decay)
         
         def lr_lambda(epoch):
             if epoch < 5:
@@ -428,6 +485,10 @@ class ASTTrainer:
             
             # Train
             model.train()
+            if self.use_dann:
+                self.grl.train()
+                self.domain_classifier.train()
+                
             train_loss = 0.0
             train_correct = 0
             train_total = 0
@@ -438,138 +499,279 @@ class ASTTrainer:
             all_train_preds = []
             all_train_targets = []
             
-            for batch_idx, batch in enumerate(self.train_loader):
-                # Handle both sparse and standard data formats
-                if self.use_sparse_patches:
-                    # Sparse mode: batch is a dict
-                    patches = batch['patches'].to(self.device)  # (B, K, 1, 16, 16)
-                    positions = batch['positions'].to(self.device)  # (B, K, 2)
-                    mask = batch['mask'].to(self.device)  # (B, K)
-                    target = batch['label'].to(self.device)  # (B, num_classes)
-                    
-                    # Apply mixup at embedding level if enabled
-                    if self.mixup_alpha > 0:
-                        # Generate mixup lambda
-                        lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
-                        batch_size = patches.size(0)
-                        index = torch.randperm(batch_size).to(self.device)
-                        
-                        # Mix patches, positions, masks, and targets
-                        mixed_patches = lam * patches + (1 - lam) * patches[index]
-                        mixed_target = lam * target + (1 - lam) * target[index]
-                        
-                        # For positions and masks, use the primary sample's (no mixing makes sense here)
-                        patches = mixed_patches
-                        target = mixed_target
-                    
-                    optimizer.zero_grad()
-                    
-                    # Forward with sparse patches
-                    with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        if self.use_reconstruction:
-                            output, recon = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                        else:
-                            output = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                else:
-                    # Standard mode: batch is (data, target) tuple
-                    data, target = batch
-                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                    
-                    optimizer.zero_grad()
-                    
-                    with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        if self.use_reconstruction:
-                            output, recon = model(data)
-                        else:
-                            output = model(data)
+            # DANN: set up alternating batch iteration
+            if self.use_dann:
+                # Schedule learning rate for domain adaptation
+                p = float(epoch) / float(self.max_epochs)
+                alpha = 2.0 / (1.0 + np.exp(-5 * p)) - 1.0
+                self.grl.lambda_param = alpha * self.lambda_domain
                 
-                with torch.amp.autocast('cuda', enabled=self.use_amp):
+                source_iter = iter(self.train_loader)
+                target_iter = iter(self.target_train_loader)
+                n_batches = min(len(self.train_loader), len(self.target_train_loader))
+                
+                domain_correct = 0
+                domain_total = 0
+                total_class_loss = 0.0
+                total_domain_loss = 0.0
+            
+            batch_iterator = range(n_batches) if self.use_dann else enumerate(self.train_loader)
+            
+            for batch_idx in batch_iterator:
+                if self.use_dann:
+                    # Get source and target batches
+                    try:
+                        source_batch = next(source_iter)
+                    except StopIteration:
+                        source_iter = iter(self.train_loader)
+                        source_batch = next(source_iter)
+                    
+                    try:
+                        target_batch = next(target_iter)
+                    except StopIteration:
+                        target_iter = iter(self.target_train_loader)
+                        target_batch = next(target_iter)
+                    
+                    # Extract data from batches (handle sparse mode if needed)
+                    if self.use_sparse_patches:
+                        source_data = source_batch['patches'].to(self.device)
+                        source_target = source_batch['label'].to(self.device)
+                        source_positions = source_batch['positions'].to(self.device)
+                        source_mask = source_batch['mask'].to(self.device)
+                        
+                        target_data = target_batch['patches'].to(self.device)
+                        target_positions = target_batch['positions'].to(self.device)
+                        target_mask = target_batch['mask'].to(self.device)
+                    else:
+                        source_data, source_target = source_batch
+                        source_data = source_data.to(self.device, non_blocking=True)
+                        source_target = source_target.to(self.device, non_blocking=True)
+                        
+                        target_data, _ = target_batch
+                        target_data = target_data.to(self.device, non_blocking=True)
+                    
+                    batch_size_s = source_data.size(0)
+                    batch_size_t = target_data.size(0)
+                    
+                    optimizer.zero_grad()
+                    
+                    # Forward pass for source (for classification)
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
+                        if self.use_sparse_patches:
+                            source_output = model(source_data, sparse_mode=True, positions=source_positions, mask=source_mask)
+                            target_output = model(target_data, sparse_mode=True, positions=target_positions, mask=target_mask)
+                            source_features = model.get_features(source_data, sparse_mode=True, positions=source_positions, mask=source_mask)
+                            target_features = model.get_features(target_data, sparse_mode=True, positions=target_positions, mask=target_mask)
+                        else:
+                            source_output = model(source_data)
+                            target_output = model(target_data)
+                            source_features = model.get_features(source_data)
+                            target_features = model.get_features(target_data)
+                        
+                        # Classification loss (only on source domain with labels)
+                        if self.multilabel:
+                            source_output = torch.clamp(source_output, min=-80.0, max=80.0)
+                            class_loss = criterion(source_output, source_target)
+                        else:
+                            if source_target.dim() == 2 and not torch.equal(source_target, source_target.round()):
+                                log_probs = F.log_softmax(source_output, dim=1)
+                                class_loss = -(source_target * log_probs).sum(dim=1).mean()
+                            else:
+                                target_idx = source_target.argmax(dim=1)
+                                class_loss = criterion(source_output, target_idx)
+                        
+                        # Domain adaptation loss
+                        combined_features = torch.cat([source_features, target_features], dim=0)
+                        norm_features = F.normalize(combined_features, p=2, dim=1)
+                        reversed_features = self.grl(norm_features)
+                        domain_output = self.domain_classifier(reversed_features)
+                        
+                        domain_labels_source = torch.zeros(batch_size_s).to(self.device)
+                        domain_labels_target = torch.ones(batch_size_t).to(self.device)
+                        domain_labels = torch.cat([domain_labels_source, domain_labels_target], dim=0)
+                        
+                        domain_loss = self.domain_criterion(domain_output.squeeze(), domain_labels)
+                        
+                        # Combined loss
+                        loss = class_loss + self.grl.lambda_param * domain_loss
+                        
+                        # Domain accuracy tracking
+                        domain_pred = (torch.sigmoid(domain_output.squeeze()) > 0.5).float()
+                        domain_correct += (domain_pred == domain_labels).sum().item()
+                        domain_total += domain_labels.size(0)
+                    
+                    # Backward pass
+                    if self.use_amp:
+                        self.scaler.scale(loss).backward()
+                        self.scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                        torch.nn.utils.clip_grad_norm_(self.domain_classifier.parameters(), max_norm=1.0)
+                        self.scaler.step(optimizer)
+                        self.scaler.update()
+                    else:
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                        torch.nn.utils.clip_grad_norm_(self.domain_classifier.parameters(), max_norm=1.0)
+                        optimizer.step()
+                    
+                    train_loss += loss.item()
+                    total_class_loss += class_loss.item()
+                    total_domain_loss += domain_loss.item()
+                    
+                    # Accuracy tracking (only on source labeled data)
+                    with torch.no_grad():
+                        if self.multilabel:
+                            preds = (torch.sigmoid(source_output) > 0.5).float()
+                            all_train_preds.append(preds.cpu().numpy())
+                            all_train_targets.append(source_target.cpu().numpy())
+                        else:
+                            pred = source_output.argmax(dim=1)
+                            target_idx = source_target.argmax(dim=1) if source_target.dim() == 2 else source_target
+                            train_correct += pred.eq(target_idx).sum().item()
+                            train_total += source_target.size(0)
+                
+                else:
+                    # Standard training (no DANN)
+                    batch_idx, batch = batch_idx
+                    
+                    # Handle both sparse and standard data formats
+                    if self.use_sparse_patches:
+                        # Sparse mode: batch is a dict
+                        patches = batch['patches'].to(self.device)  # (B, K, 1, 16, 16)
+                        positions = batch['positions'].to(self.device)  # (B, K, 2)
+                        mask = batch['mask'].to(self.device)  # (B, K)
+                        target = batch['label'].to(self.device)  # (B, num_classes)
+                        
+                        # Apply mixup at embedding level if enabled
+                        if self.mixup_alpha > 0:
+                            # Generate mixup lambda
+                            lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
+                            batch_size = patches.size(0)
+                            index = torch.randperm(batch_size).to(self.device)
+                            
+                            # Mix patches, positions, masks, and targets
+                            mixed_patches = lam * patches + (1 - lam) * patches[index]
+                            mixed_target = lam * target + (1 - lam) * target[index]
+                            
+                            # For positions and masks, use the primary sample's (no mixing makes sense here)
+                            patches = mixed_patches
+                            target = mixed_target
+                        
+                        optimizer.zero_grad()
+                        
+                        # Forward with sparse patches
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, recon = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                            else:
+                                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                    else:
+                        # Standard mode: batch is (data, target) tuple
+                        data, target = batch
+                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                        
+                        optimizer.zero_grad()
+                        
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, recon = model(data)
+                            else:
+                                output = model(data)
+                    
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
+                        if self.multilabel:
+                            # Clamp logits to prevent numerical overflow in BCE loss
+                            # Logits beyond ±80 cause sigmoid(±80) ≈ 0/1 which creates log(0) = -inf
+                            output = torch.clamp(output, min=-80.0, max=80.0)
+                            loss = criterion(output, target)
+                        else:
+                            # Detect soft (mixup) labels: if any row has fractional values (not strictly 0/1)
+                            if target.dim() == 2 and not torch.equal(target, target.round()):
+                                # Proper soft-label cross-entropy (KL to one-hot mixing)
+                                log_probs = F.log_softmax(output, dim=1)
+                                loss = -(target * log_probs).sum(dim=1).mean()
+                            else:
+                                # Hard labels path (one-hot vectors)
+                                target_idx = target.argmax(dim=1)
+                                loss = criterion(output, target_idx)
+                        
+                        if self.use_reconstruction:
+                            target_spec = data.squeeze(1) if data.dim() == 4 else data
+                            target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
+                            recon_loss = F.mse_loss(recon, target_spec)
+                            loss = loss + self.recon_weight * recon_loss
+                    
+                    # Check for NaN loss BEFORE backward pass
+                    if torch.isnan(loss) or torch.isinf(loss):
+                        print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   DEBUG - Output stats: min={output.min():.4f}, max={output.max():.4f}, mean={output.mean():.4f}")
+                        print(f"   DEBUG - Target stats: min={target.min():.4f}, max={target.max():.4f}, sum={target.sum():.4f}")
+                        if torch.isnan(output).any():
+                            print(f"   ⚠️  MODEL OUTPUT CONTAINS NaN! Model weights are corrupted.")
+                        if torch.isinf(output).any():
+                            print(f"   ⚠️  MODEL OUTPUT CONTAINS Inf! Model exploded.")
+                        print(f"   Stopping epoch early...")
+                        break  # Stop epoch, not just continue
+                    
+                    # Backward pass
+                    if self.use_amp:
+                        self.scaler.scale(loss).backward()
+                        self.scaler.unscale_(optimizer)
+                        # Check for NaN gradients
+                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                            print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                            print(f"   Stopping epoch early...")
+                            self.scaler.update()  # Update scaler to reset state
+                            optimizer.zero_grad()  # Clear bad gradients
+                            break
+                        self.scaler.step(optimizer)
+                        self.scaler.update()
+                    else:
+                        loss.backward()
+                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                            print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                            print(f"   Stopping epoch early...")
+                            optimizer.zero_grad()  # Clear bad gradients  
+                            break
+                        optimizer.step()
+                    
+                    train_loss += loss.item()
+                    
+                    # For metrics, convert soft (mixup) targets back to hard labels
+                    # by rounding to nearest integer (0 or 1)
+                    target_hard = target.round()
+                    
                     if self.multilabel:
-                        # Clamp logits to prevent numerical overflow in BCE loss
-                        # Logits beyond ±80 cause sigmoid(±80) ≈ 0/1 which creates log(0) = -inf
-                        output = torch.clamp(output, min=-80.0, max=80.0)
-                        loss = criterion(output, target)
+                        pred = (torch.sigmoid(output) > 0.5).float()
+                        all_train_preds.append(pred.cpu().numpy())
+                        all_train_targets.append(target_hard.cpu().numpy())
+                        # Primary-class accuracy: only meaningful when there are 2+ classes.
+                        if output.size(1) > 1:
+                            primary_pred = output.argmax(dim=1)
+                            primary_target = target_hard.argmax(dim=1)
+                            train_primary_correct += (primary_pred == primary_target).sum().item()
+                            train_primary_total += target_hard.size(0)
                     else:
-                        # Detect soft (mixup) labels: if any row has fractional values (not strictly 0/1)
-                        if target.dim() == 2 and not torch.equal(target, target.round()):
-                            # Proper soft-label cross-entropy (KL to one-hot mixing)
-                            log_probs = F.log_softmax(output, dim=1)
-                            loss = -(target * log_probs).sum(dim=1).mean()
-                        else:
-                            # Hard labels path (one-hot vectors)
-                            target_idx = target.argmax(dim=1)
-                            loss = criterion(output, target_idx)
-                    
-                    if self.use_reconstruction:
-                        target_spec = data.squeeze(1) if data.dim() == 4 else data
-                        target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
-                        recon_loss = F.mse_loss(recon, target_spec)
-                        loss = loss + self.recon_weight * recon_loss
-                
-                # Check for NaN loss BEFORE backward pass
-                if torch.isnan(loss) or torch.isinf(loss):
-                    print(f"\n❌ CRITICAL: NaN/Inf loss at epoch {epoch+1}, batch {batch_idx}")
-                    print(f"   DEBUG - Output stats: min={output.min():.4f}, max={output.max():.4f}, mean={output.mean():.4f}")
-                    print(f"   DEBUG - Target stats: min={target.min():.4f}, max={target.max():.4f}, sum={target.sum():.4f}")
-                    if torch.isnan(output).any():
-                        print(f"   ⚠️  MODEL OUTPUT CONTAINS NaN! Model weights are corrupted.")
-                    if torch.isinf(output).any():
-                        print(f"   ⚠️  MODEL OUTPUT CONTAINS Inf! Model exploded.")
-                    print(f"   Stopping epoch early...")
-                    break  # Stop epoch, not just continue
-                
-                # Backward pass
-                if self.use_amp:
-                    self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(optimizer)
-                    # Check for NaN gradients
-                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
-                        print(f"   Stopping epoch early...")
-                        self.scaler.update()  # Update scaler to reset state
-                        optimizer.zero_grad()  # Clear bad gradients
-                        break
-                    self.scaler.step(optimizer)
-                    self.scaler.update()
+                        pred = output.argmax(dim=1)
+                        target_labels = target_hard.argmax(dim=1)
+                        train_correct += (pred == target_labels).sum().item()
+                        train_total += target_hard.size(0)
+            
+            # Print progress for DANN training
+            if self.use_dann and batch_idx % 10 == 0:
+                domain_acc = 100.0 * domain_correct / max(1, domain_total)
+                print(f'Epoch {epoch+1}, Batch {batch_idx}/{n_batches}: '
+                      f'cls_loss={total_class_loss/(batch_idx+1):.3f}, '
+                      f'dom_loss={total_domain_loss/(batch_idx+1):.3f}, '
+                      f'domain_acc={domain_acc:.1f}%, alpha={self.grl.lambda_param:.3f}')
+            elif not self.use_dann and batch_idx % 10 == 0:
+                avg_loss = train_loss / max(1, batch_idx)
+                if avg_loss > 100.0:
+                    print(f'⚠️  Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f} (avg: {avg_loss:.4f} - HIGH!)')
                 else:
-                    loss.backward()
-                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
-                        print(f"   Stopping epoch early...")
-                        optimizer.zero_grad()  # Clear bad gradients  
-                        break
-                    optimizer.step()
-                
-                train_loss += loss.item()
-                
-                # For metrics, convert soft (mixup) targets back to hard labels
-                # by rounding to nearest integer (0 or 1)
-                target_hard = target.round()
-                
-                if self.multilabel:
-                    pred = (torch.sigmoid(output) > 0.5).float()
-                    all_train_preds.append(pred.cpu().numpy())
-                    all_train_targets.append(target_hard.cpu().numpy())
-                    # Primary-class accuracy: only meaningful when there are 2+ classes.
-                    if output.size(1) > 1:
-                        primary_pred = output.argmax(dim=1)
-                        primary_target = target_hard.argmax(dim=1)
-                        train_primary_correct += (primary_pred == primary_target).sum().item()
-                        train_primary_total += target_hard.size(0)
-                else:
-                    pred = output.argmax(dim=1)
-                    target_labels = target_hard.argmax(dim=1)
-                    train_correct += (pred == target_labels).sum().item()
-                    train_total += target_hard.size(0)
-                
-                if batch_idx % 10 == 0:
-                    avg_loss = train_loss / max(1, batch_idx)
-                    if avg_loss > 100.0:
-                        print(f'⚠️  Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f} (avg: {avg_loss:.4f} - HIGH!)')
-                    else:
-                        print(f'Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+                    print(f'Epoch {epoch+1}, Batch {batch_idx}, Loss: {loss.item():.4f}')
             
             # Validate
             model.eval()
@@ -808,6 +1010,79 @@ class ASTTrainer:
         evaluator = EvaluationManager(self.output_folder, self.data['class_names'], self.multilabel)
         evaluator.evaluate_model(model, self.val_loader, 'ast_model', self.data, device=self.device)
 
+        # Evaluate on test sets if provided (for DANN experiments)
+        if self.test_folder:
+            print(f"\n{'='*60}")
+            print(f"Evaluating on test set 1: {self.test_folder}")
+            print(f"{'='*60}")
+            test_loader1 = DataLoader(self.test_folder, noise_folder=None)
+            test_data1 = test_loader1.load_data(self.multilabel, validation_share=0.0)
+            
+            test_dataset1 = SpectrogramDataset(
+                test_data1['train_filenames'], test_data1['train_labels'],
+                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
+                noise_filenames=None,
+                noise_ratio=0.0,
+                spec_transform=None,
+                training=False,
+                width_downsizing=None,
+                normalize=self.normalize,
+                use_sparse_patches=self.use_sparse_patches,
+                num_sparse_patches=self.num_sparse_patches,
+                use_temporal_roll=False
+            )
+            
+            test_loader_obj1 = torch.utils.data.DataLoader(
+                test_dataset1,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=2,
+                pin_memory=True if torch.cuda.is_available() else False
+            )
+            
+            # Evaluate and save predictions
+            test_name1 = Path(self.test_folder).parent.name
+            evaluator.evaluate_model(model, test_loader_obj1, f'ast_test_{test_name1}', test_data1, device=self.device)
+            
+            # Save predictions to CSV
+            self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1)
+        
+        if self.test_folder2:
+            print(f"\n{'='*60}")
+            print(f"Evaluating on test set 2: {self.test_folder2}")
+            print(f"{'='*60}")
+            test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
+            test_data2 = test_loader2.load_data(self.multilabel, validation_share=0.0)
+            
+            test_dataset2 = SpectrogramDataset(
+                test_data2['train_filenames'], test_data2['train_labels'],
+                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
+                noise_filenames=None,
+                noise_ratio=0.0,
+                spec_transform=None,
+                training=False,
+                width_downsizing=None,
+                normalize=self.normalize,
+                use_sparse_patches=self.use_sparse_patches,
+                num_sparse_patches=self.num_sparse_patches,
+                use_temporal_roll=False
+            )
+            
+            test_loader_obj2 = torch.utils.data.DataLoader(
+                test_dataset2,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=2,
+                pin_memory=True if torch.cuda.is_available() else False
+            )
+            
+            # Evaluate and save predictions
+            test_name2 = Path(self.test_folder2).parent.name
+            evaluator.evaluate_model(model, test_loader_obj2, f'ast_test_{test_name2}', test_data2, device=self.device)
+            
+            # Save predictions to CSV
+            self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
+
         print(f"Best Val Acc: {best_val_acc:.4f} at epoch {best_epoch}")
         print(f"Done! Saved to {self.output_folder}")
         
@@ -935,6 +1210,52 @@ class ASTTrainer:
         
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
+    
+    def _save_test_predictions(self, model, test_loader, test_data, test_name):
+        """Save test predictions to CSV file for accuracy computation."""
+        import csv
+        
+        model.eval()
+        predictions = {}
+        
+        with torch.no_grad():
+            for batch in test_loader:
+                if self.use_sparse_patches:
+                    patches = batch['patches'].to(self.device)
+                    positions = batch['positions'].to(self.device)
+                    mask = batch['mask'].to(self.device)
+                    filenames = batch['filename']
+                    
+                    output = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                else:
+                    data, target = batch
+                    data = data.to(self.device)
+                    filenames = [test_data['train_filenames'][i] for i in range(len(data))]
+                    
+                    output = model(data)
+                
+                if self.multilabel:
+                    preds = (torch.sigmoid(output) > 0.5).cpu().numpy()
+                else:
+                    preds = output.argmax(dim=1).cpu().numpy()
+                
+                # Map predictions to class names
+                for i, filename in enumerate(filenames):
+                    if self.multilabel:
+                        pred_classes = [test_data['class_names'][j] for j in range(len(preds[i])) if preds[i][j]]
+                        predictions[filename] = ','.join(pred_classes) if pred_classes else 'Empty'
+                    else:
+                        predictions[filename] = test_data['class_names'][preds[i]]
+        
+        # Save to CSV
+        csv_path = os.path.join(self.output_folder, f'predictions_{test_name}.csv')
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['filename', 'predicted_class'])
+            for filename, pred_class in predictions.items():
+                writer.writerow([filename, pred_class])
+        
+        print(f"Saved test predictions to {csv_path}")
 
 class CNNTrainer:
     """Simple CNN trainer."""

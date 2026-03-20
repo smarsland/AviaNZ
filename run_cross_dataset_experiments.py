@@ -148,8 +148,8 @@ class CrossDatasetExperiments:
         print(f"doc train:    {doc_train}")
         print(f"doc test:     {doc_test}")
         if freeze_backbone:
-            print(f"Freeze strategy: Early layers frozen, late layers + classifier trainable")
-            print(f"  - BirdClef: Freeze first 3 stages (stem, s1, s2), train s3, s4, classifier")
+            print(f"Freeze strategy: Freeze early layers to reduce overfitting")
+            print(f"  - BirdClef: Freeze first 4 stages (stem, s1, s2, s3), train only s4 + classifier (~53% params)")
             print(f"  - AST: Freeze first 8 transformer layers, train last 4 layers + classifier")
         else:
             print(f"Freeze strategy: None (full fine-tuning of all layers)")
@@ -235,9 +235,10 @@ class CrossDatasetExperiments:
                 '--test-folder2', exp['test2']
             ]
             
-            # For BirdClef: freeze first 3 stages (stem, s1, s2) but keep s3, s4, classifier trainable
+            # For BirdClef: freeze first 4 stages (stem, s1, s2, s3) to reduce overfitting
+            # Only train s4 + classifier for better generalization
             if exp['freeze']:
-                cmd.extend(['--freeze-stages', '3'])
+                cmd.extend(['--freeze-stages', '4'])
             
             if exp.get('normalize', False):
                 cmd.append('--normalize')
@@ -269,11 +270,9 @@ class CrossDatasetExperiments:
                 test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
                 test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
             else:
-                # Test accuracies are displayed in console output above
-                # For now, set to 0.0 - they'll be visible in the training logs
-                print(f"\n(Test accuracies are shown in the training output above)")
-                test1_acc = 0.0
-                test2_acc = 0.0
+                # Extract test accuracies from saved test results files
+                test1_acc = self._extract_test_from_file(exp_output, test1_name)
+                test2_acc = self._extract_test_from_file(exp_output, test2_name)
             
             # Handle both train_acc (finetune_birdclef) and train_accuracy (train_models)
             train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
@@ -330,31 +329,55 @@ class CrossDatasetExperiments:
         print(f"Test on: {exp['test1']} and {exp['test2']}")
         print(f"Freeze backbone: {exp['freeze']}")
         
-        if exp['model_type'] == 'ast':
-            print(f"\n⚠️  DANN not yet implemented for AST model type. Skipping {exp['name']}.")
-            return None
-        
         exp_output = self.output_folder / exp['name']
         exp_output.mkdir(exist_ok=True)
         
-        cmd = [
-            sys.executable,
-            'finetune_birdclef.py',
-            exp['source'],
-            str(exp_output),
-            '--pretrained', self.model_path,
-            '--epochs', str(self.epochs),
-            '--batch-size', str(self.batch_size),
-            '--test-folder', exp['test1'],
-            '--test-folder2', exp['test2'],
-            '--use-dann',
-            '--target-folder', exp['target'],
-            '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
-        ]
+        if exp['model_type'] == 'ast':
+            # AST: use train_models.py with DANN support
+            cmd = [
+                sys.executable,
+                'train_models.py',
+                exp['source'],
+                str(exp_output),
+                '--model', 'ast',
+                '--epochs', str(self.epochs),
+                '--batch-size', str(self.batch_size),
+                '--use-dann',
+                '--target-folder', exp['target'],
+                '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain)),
+                '--test-folder', exp['test1'],
+                '--test-folder2', exp['test2']
+            ]
+            
+            # For AST: freeze first 8 transformer layers to reduce overfitting
+            if exp['freeze']:
+                cmd.extend(['--freeze-layers', '8'])
+            
+            normalize = exp.get('normalize', False)
+            if normalize:
+                cmd.append('--normalize')
         
-        # For BirdClef: freeze first 3 stages (stem, s1, s2) but keep s3, s4, classifier trainable
-        if exp['freeze']:
-            cmd.extend(['--freeze-stages', '3'])
+        else:
+            # BirdClef: use finetune_birdclef.py
+            cmd = [
+                sys.executable,
+                'finetune_birdclef.py',
+                exp['source'],
+                str(exp_output),
+                '--pretrained', self.model_path,
+                '--epochs', str(self.epochs),
+                '--batch-size', str(self.batch_size),
+                '--test-folder', exp['test1'],
+                '--test-folder2', exp['test2'],
+                '--use-dann',
+                '--target-folder', exp['target'],
+                '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
+            ]
+            
+            # For BirdClef: freeze first 4 stages (stem, s1, s2, s3) to reduce overfitting
+            # Only train s4 + classifier for better generalization
+            if exp['freeze']:
+                cmd.extend(['--freeze-stages', '4'])
         
         print(f"\nRunning: {' '.join(cmd)}")
         print(f"{'='*60}")
@@ -376,10 +399,9 @@ class CrossDatasetExperiments:
             test1_name = Path(exp['test1']).parent.name
             test2_name = Path(exp['test2']).parent.name
             
-            # Test accuracies are displayed in console output above
-            print(f"\n(Test accuracies are shown in the training output above)")
-            test1_acc = 0.0
-            test2_acc = 0.0
+            # Extract test accuracies from saved test results files
+            test1_acc = self._extract_test_from_file(exp_output, test1_name)
+            test2_acc = self._extract_test_from_file(exp_output, test2_name)
             
             final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
             final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
@@ -554,6 +576,38 @@ class CrossDatasetExperiments:
             return 0.0
         
         return (correct / total) * 100.0
+    
+    def _extract_test_from_file(self, exp_output, test_name):
+        """Extract test accuracy from saved prediction CSV file."""
+        # finetune_birdclef.py saves predictions as predictions_{test_name}.csv
+        # test_name comes in as folder name like "joe_mo" or "doc"
+        csv_files = list(exp_output.glob(f'predictions_*{test_name}*.csv'))
+        
+        if not csv_files:
+            print(f"  Warning: No prediction CSV found for {test_name} in {exp_output}")
+            return 0.0
+        
+        csv_path = csv_files[0]  # Use first match
+        
+        # Find the corresponding test folder
+        if 'joe_mo' in test_name.lower():
+            test_folder = self.avianz_test
+        elif 'doc' in test_name.lower():
+            test_folder = self.doc_test
+        else:
+            print(f"  Warning: Cannot determine test folder for {test_name}")
+            return 0.0
+        
+        # Use the existing accuracy computation method
+        try:
+            accuracy = self._compute_accuracy_from_csv(csv_path, test_folder)
+            print(f"  Extracted {test_name} accuracy: {accuracy:.2f}%")
+            return accuracy
+        except Exception as e:
+            print(f"  Error extracting {test_name} accuracy: {e}")
+            import traceback
+            traceback.print_exc()
+            return 0.0
     
     def _extract_test_accuracy(self, output, test_name):
         """Extract test accuracy from training output."""
@@ -1310,7 +1364,7 @@ def main():
     parser.add_argument('--lambda-domain', type=float, default=0.3,
                        help='DANN domain loss weight (default: 0.3)')
     parser.add_argument('--freeze-backbone', action='store_true',
-                       help='Freeze early layers - BirdClef: freeze first 3 stages (stem,s1,s2), AST: freeze first 8 transformer layers. Keeps later layers + classifier trainable for better fine-tuning on small datasets.')
+                       help='Freeze early layers to reduce overfitting - BirdClef: freeze first 4 stages (stem,s1,s2,s3), train only s4+classifier (~53%% params), AST: freeze first 8 transformer layers. Recommended for different acoustic environments.')
     parser.add_argument('--noise-folder', default=None,
                        help='Noise folder for DANN target domain (unlabeled)')
     

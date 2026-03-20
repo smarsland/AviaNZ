@@ -129,7 +129,23 @@ Examples:
     parser.add_argument('--per-chunk-norm', action='store_true',
                        help="[AST] Use per-chunk min-max normalization (like Kaytoo) instead of global AudioSet mean/std. Handles varying recording levels better. Splits spectrogram into chunks and normalizes each independently.")
     
+    # DANN (Domain Adaptation) parameters
+    parser.add_argument('--use-dann', action='store_true',
+                       help="Enable Domain Adaptive Neural Network (DANN) training for domain adaptation")
+    parser.add_argument('--target-folder', type=str, default=None,
+                       help="Path to target domain folder for domain adaptation (unlabeled domain)")
+    parser.add_argument('--lambda-domain', type=float, default=0.3,
+                       help="Domain loss weight (default: 0.3). If dacc stays >95%%, increase lambda.")
+    parser.add_argument('--test-folder', type=str, default=None,
+                       help="Path to test data folder (with labels.json). Evaluated AFTER training completes.")
+    parser.add_argument('--test-folder2', type=str, default=None,
+                       help="Path to test data folder 2 (with labels.json). Evaluated AFTER training completes.")
+    
     args = parser.parse_args()
+    
+    if args.use_dann and not args.target_folder:
+        print("ERROR: Must specify --target-folder when using --use-dann")
+        return
 
     warn_if_multilabel_dataset(args.data_folder, args.multilabel, args.mode)
     
@@ -185,7 +201,12 @@ Examples:
             use_temporal_roll=args.temporal_roll,
             use_adapters=args.adapters,
             per_chunk_norm=args.per_chunk_norm,
-            use_amp=False
+            use_amp=False,
+            use_dann=args.use_dann,
+            target_folder=args.target_folder,
+            lambda_domain=args.lambda_domain,
+            test_folder=args.test_folder,
+            test_folder2=args.test_folder2
         )
     elif args.model == 'cnn':
         print(f"Training Convolutional Neural Network (CNN) model...")

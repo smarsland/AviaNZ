@@ -389,6 +389,104 @@ class AST(nn.Module):
             return logits, recon
         return logits
     
+    def get_features(self, x, sparse_mode=False, positions=None, mask=None):
+        """Extract feature representation before classification layer.
+        
+        Returns pooled 768-dim features for DANN domain discrimination.
+        """
+        x = x.float()
+        
+        if sparse_mode:
+            # Sparse mode: get features from sparse patches
+            import config
+            B, K, C, H, W = x.shape
+            patches_flat = x.contiguous().view(B * K, C * H * W)
+            patches_reshaped = x.view(B * K, H, W)
+            patches_normalized = (patches_reshaped - config.AST_MEAN) / config.AST_STD
+            patches_flat = patches_normalized.view(B * K, H * W)
+            patch_embeddings = self.patch_projection(patches_flat)
+            patch_embeddings = patch_embeddings.view(B, K, -1)
+            
+            # Add positional embeddings
+            embed_dim = patch_embeddings.shape[-1]
+            pos_embed = self.ast.embeddings.position_embeddings
+            spatial_pos_embed = pos_embed[:, 2:, :]
+            N = spatial_pos_embed.shape[1]
+            
+            # Calculate grid and select positions (simplified)
+            h_grid = int(N ** 0.5)
+            w_grid = N // h_grid
+            spatial_pos_embed_reshaped = spatial_pos_embed.reshape(1, h_grid, w_grid, embed_dim)
+            
+            selected_pos_embed = []
+            for b in range(B):
+                batch_pos_embeds = []
+                for k in range(K):
+                    if mask is not None and not mask[b, k]:
+                        batch_pos_embeds.append(torch.zeros(embed_dim, device=x.device))
+                    else:
+                        row, col = positions[b, k]
+                        row = torch.clamp(row, 0, h_grid - 1)
+                        col = torch.clamp(col, 0, w_grid - 1)
+                        pos_emb = spatial_pos_embed_reshaped[0, row.long(), col.long(), :]
+                        batch_pos_embeds.append(pos_emb)
+                selected_pos_embed.append(torch.stack(batch_pos_embeds))
+            selected_pos_embed = torch.stack(selected_pos_embed)
+            
+            patch_embeddings = patch_embeddings + selected_pos_embed
+            
+            cls_token = self.ast.embeddings.cls_token.expand(B, -1, -1)
+            dist_token = self.ast.embeddings.distillation_token.expand(B, -1, -1)
+            embeddings = torch.cat([cls_token, dist_token, patch_embeddings], dim=1)
+            
+            special_pos_embed = pos_embed[:, :2, :]
+            embeddings[:, :2, :] = embeddings[:, :2, :] + special_pos_embed
+            embeddings = self.ast.embeddings.dropout(embeddings)
+            
+            encoder_outputs = self.ast.encoder(embeddings)
+            hidden_states = encoder_outputs.last_hidden_state
+            patch_tokens = hidden_states[:, 2:, :]
+            
+            if mask is not None:
+                masked_patch_tokens = patch_tokens.clone()
+                masked_patch_tokens[~mask] = 0
+                features = self.pool(masked_patch_tokens)
+            else:
+                features = self.pool(patch_tokens)
+        else:
+            # Standard mode
+            if x.dim() == 4 and x.shape[1] == 1:
+                x = x.squeeze(1)
+            
+            import config
+            if self.per_chunk_norm:
+                B, H, W = x.shape
+                chunk_width = W // self.num_chunks
+                chunks = []
+                for i in range(self.num_chunks):
+                    start = i * chunk_width
+                    end = start + chunk_width if i < self.num_chunks - 1 else W
+                    chunk = x[:, :, start:end]
+                    chunk_min = chunk.reshape(B, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
+                    chunk_max = chunk.reshape(B, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
+                    chunk_normalized = (chunk - chunk_min) / (chunk_max - chunk_min + 1e-6)
+                    chunks.append(chunk_normalized)
+                x = torch.cat(chunks, dim=2)
+            else:
+                x = (x - config.AST_MEAN) / config.AST_STD
+            
+            hidden_states = self.ast(x).last_hidden_state
+            
+            if self.use_adapters:
+                for i in range(12):
+                    adapter_output = self.adapters[i](hidden_states)
+                    hidden_states = hidden_states + adapter_output
+            
+            patch_tokens = hidden_states[:, 2:, :]
+            features = self.pool(patch_tokens)
+        
+        return features
+    
     def forward_sparse(self, patches, positions, mask):
         """
         Forward pass with sparse patches.
