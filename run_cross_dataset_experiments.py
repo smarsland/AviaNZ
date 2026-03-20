@@ -611,7 +611,7 @@ class CrossDatasetExperiments:
         
         # Use the existing accuracy computation method
         try:
-            accuracy = self._compute_accuracy_from_csv(csv_path, test_folder)
+            accuracy = self._compute_accuracy_from_predictions(csv_path, test_folder)
             print(f"  ✓ Extracted {test_name} accuracy: {accuracy:.2f}%")
             return accuracy
         except Exception as e:
