@@ -1026,7 +1026,12 @@ class BirdClefFineTuner:
             print(f"  ✓ Batch norm adapted to target domain")
         
         if self.test_datasets:
-            print(f"\nEvaluating on test sets using predict.py...")
+            print(f"\n{'='*60}")
+            print(f"Evaluating on test sets using predict.py...")
+            print(f"Number of test sets: {len(self.test_datasets)}")
+            for i, td in enumerate(self.test_datasets):
+                print(f"  Test set {i+1}: {td['name']}")
+            print(f"{'='*60}")
             
             # Free GPU memory before evaluation
             del self.model

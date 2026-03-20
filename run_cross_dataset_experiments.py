@@ -580,14 +580,23 @@ class CrossDatasetExperiments:
     def _extract_test_from_file(self, exp_output, test_name):
         """Extract test accuracy from saved prediction CSV file."""
         # finetune_birdclef.py saves predictions as predictions_{test_name}.csv
-        # test_name comes in as folder name like "joe_mo" or "doc"
+        # test_name comes in as folder name like "joe_mo_split" or "doc_split"
+        
+        # List all CSV files to debug
+        all_csvs = list(exp_output.glob('*.csv'))
+        print(f"  DEBUG: Looking for predictions in {exp_output}")
+        print(f"  DEBUG: test_name = '{test_name}'")
+        print(f"  DEBUG: All CSV files in directory: {[f.name for f in all_csvs]}")
+        
         csv_files = list(exp_output.glob(f'predictions_*{test_name}*.csv'))
         
         if not csv_files:
-            print(f"  Warning: No prediction CSV found for {test_name} in {exp_output}")
+            print(f"  ⚠️  WARNING: No prediction CSV found for {test_name} in {exp_output}")
+            print(f"      Expected pattern: predictions_*{test_name}*.csv")
             return 0.0
         
         csv_path = csv_files[0]  # Use first match
+        print(f"  DEBUG: Found CSV file: {csv_path.name}")
         
         # Find the corresponding test folder
         if 'joe_mo' in test_name.lower():
@@ -595,16 +604,18 @@ class CrossDatasetExperiments:
         elif 'doc' in test_name.lower():
             test_folder = self.doc_test
         else:
-            print(f"  Warning: Cannot determine test folder for {test_name}")
+            print(f"  ⚠️  WARNING: Cannot determine test folder for {test_name}")
             return 0.0
+        
+        print(f"  DEBUG: Using test folder: {test_folder}")
         
         # Use the existing accuracy computation method
         try:
             accuracy = self._compute_accuracy_from_csv(csv_path, test_folder)
-            print(f"  Extracted {test_name} accuracy: {accuracy:.2f}%")
+            print(f"  ✓ Extracted {test_name} accuracy: {accuracy:.2f}%")
             return accuracy
         except Exception as e:
-            print(f"  Error extracting {test_name} accuracy: {e}")
+            print(f"  ❌ ERROR extracting {test_name} accuracy: {e}")
             import traceback
             traceback.print_exc()
             return 0.0
