@@ -115,8 +115,12 @@ class SpectrogramCleaner(nn.Module):
         self.residual_weight = nn.Parameter(torch.tensor(0.1))
     
     def forward(self, x):
+        original_dim = x.dim()
+        
         if x.dim() == 3:
             x = x.unsqueeze(1)
+        
+        assert x.dim() == 4 and x.shape[1] == 1, f"Expected input (B,1,H,W), got {x.shape}"
         
         x_input = x
         
@@ -132,9 +136,14 @@ class SpectrogramCleaner(nn.Module):
         
         d1 = self.dec1(d2)
         
+        assert d1.shape[1] == 1, f"dec1 should output 1 channel, got {d1.shape}"
+        
         output = x_input + self.residual_weight * d1
         
-        return output.squeeze(1) if output.shape[1] == 1 else output
+        if original_dim == 3:
+            output = output.squeeze(1)
+        
+        return output
 
 
 class MultiScaleCNNFrontend(nn.Module):
