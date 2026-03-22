@@ -92,6 +92,14 @@ class CrossDatasetExperiments:
                 'lambda_domain': lambda_domain,
                 'description': 'DANN joe_mo→doc'
             },
+            {
+                'name': 'joe_mo_cleaner',
+                'train': avianz_train,
+                'test1': avianz_test,
+                'test2': doc_test,
+                'type': 'cleaner',
+                'description': 'joe_mo + spectrogram cleaner'
+            },
             # doc experiments
             {
                 'name': 'doc_baseline',
@@ -120,6 +128,14 @@ class CrossDatasetExperiments:
                 'type': 'dann',
                 'lambda_domain': lambda_domain,
                 'description': 'DANN doc→joe_mo'
+            },
+            {
+                'name': 'doc_cleaner',
+                'train': doc_train,
+                'test1': doc_test,
+                'test2': avianz_test,
+                'type': 'cleaner',
+                'description': 'doc + spectrogram cleaner'
             }
         ]
         
@@ -153,16 +169,18 @@ class CrossDatasetExperiments:
             print(f"  - AST: Freeze first 8 transformer layers, train last 4 layers + classifier")
         else:
             print(f"Freeze strategy: None (full fine-tuning of all layers)")
-        print(f"\nExperiment breakdown (2 model types × 6 configs = 12 experiments):")
+        print(f"\nExperiment breakdown (2 model types × 8 configs = 16 experiments):")
         print(f"  Model types: BirdClef CNN, AST")
         print(f"  joe_mo experiments:")
         print(f"    1. joe_mo baseline (no tricks)")
         print(f"    2. joe_mo + normalize")
         print(f"    3. DANN joe_mo→doc")
+        print(f"    4. joe_mo + spectrogram cleaner")
         print(f"  doc experiments:")
-        print(f"    4. doc baseline (no tricks)")
-        print(f"    5. doc + normalize")
-        print(f"    6. DANN doc→joe_mo")
+        print(f"    5. doc baseline (no tricks)")
+        print(f"    6. doc + normalize")
+        print(f"    7. DANN doc→joe_mo")
+        print(f"    8. doc + spectrogram cleaner")
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
@@ -181,10 +199,97 @@ class CrossDatasetExperiments:
             return self.extract_accuracy(value.get('macro_f1', value.get('accuracy', 0.0)))
         return 0.0
     
+    def is_experiment_complete(self, exp_output):
+        """Check if experiment has already been completed successfully."""
+        history_path = exp_output / 'training_history.json'
+        
+        if not history_path.exists():
+            return False
+        
+        try:
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+            
+            train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
+            val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
+            
+            if train_acc_key in history and val_acc_key in history:
+                if len(history[train_acc_key]) > 0 and len(history[val_acc_key]) > 0:
+                    return True
+            
+            return False
+        except Exception as e:
+            print(f"  Warning: Could not read history file: {e}")
+            return False
+    
+    def load_completed_experiment(self, exp):
+        """Load results from a previously completed experiment."""
+        exp_output = self.output_folder / exp['name']
+        
+        try:
+            history_path = exp_output / 'training_history.json'
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+            
+            test1_name = Path(exp['test1']).parent.name
+            test2_name = Path(exp['test2']).parent.name
+            
+            if exp['model_type'] == 'ast':
+                normalize = exp.get('normalize', False)
+                test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
+                test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
+            else:
+                test1_acc = self._extract_test_from_file(exp_output, test1_name)
+                test2_acc = self._extract_test_from_file(exp_output, test2_name)
+            
+            train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
+            val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
+            
+            final_train_acc = self.extract_accuracy(history[train_acc_key][-1] if history.get(train_acc_key) else None)
+            final_val_acc = self.extract_accuracy(history[val_acc_key][-1] if history.get(val_acc_key) and history[val_acc_key][-1] is not None else None)
+            best_val = max([self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None], default=None)
+            
+            exp_result = {
+                'name': exp['name'],
+                'description': exp['description'],
+                'model_type': exp['model_type'],
+                'train_dataset': Path(exp['train']).name,
+                'freeze_backbone': exp['freeze'],
+                'final_train_acc': final_train_acc,
+                'final_val_acc': final_val_acc,
+                'test1_name': test1_name,
+                'test1_acc': test1_acc,
+                'test2_name': test2_name,
+                'test2_acc': test2_acc,
+                'best_val_acc': best_val,
+                'history': history,
+                'output_folder': str(exp_output)
+            }
+            
+            return exp_result
+            
+        except Exception as e:
+            print(f"\n❌ Error loading completed experiment!")
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     def run_experiment(self, exp):
-        """Run a single training experiment (finetune or DANN)."""
+        """Run a single training experiment (finetune or DANN), or load if already complete."""
+        exp_output = self.output_folder / exp['name']
+        
+        if self.is_experiment_complete(exp_output):
+            print(f"\n{'='*60}")
+            print(f"Experiment: {exp['name']}")
+            print(f"{'='*60}")
+            print(f"✓ Already completed - loading cached results...")
+            return self.load_completed_experiment(exp)
+        
         if exp['type'] == 'dann':
             return self.run_dann_experiment(exp)
+        elif exp['type'] == 'cleaner':
+            return self.run_cleaner_experiment(exp)
         else:
             return self.run_finetune_experiment(exp)
     
@@ -443,6 +548,124 @@ class CrossDatasetExperiments:
             traceback.print_exc()
             return None
     
+    def run_cleaner_experiment(self, exp):
+        """Run an experiment with spectrogram cleaner (trainable preprocessing)."""
+        print(f"\n{'='*60}")
+        print(f"Experiment: {exp['name']}")
+        print(f"{'='*60}")
+        print(f"Description: {exp['description']}")
+        print(f"Model type: {exp['model_type'].upper()}")
+        print(f"Train on: {exp['train']}")
+        print(f"Test on: {exp['test1']} and {exp['test2']}")
+        print(f"Freeze backbone: {exp['freeze']}")
+        print(f"Using trainable spectrogram cleaner for domain adaptation")
+        
+        exp_output = self.output_folder / exp['name']
+        exp_output.mkdir(exist_ok=True)
+        
+        if exp['model_type'] == 'ast':
+            cmd = [
+                sys.executable,
+                'train_models.py',
+                exp['train'],
+                str(exp_output),
+                '--model', 'ast',
+                '--epochs', str(self.epochs),
+                '--batch_size', str(self.batch_size),
+                '--use-cleaner'
+            ]
+            
+            if self.model_path and not self.model_path.endswith('model_fold0.pth'):
+                cmd.extend(['--pretrained', self.model_path])
+            
+            if exp['freeze']:
+                cmd.extend(['--freeze-layers', '8'])
+        else:
+            cmd = [
+                sys.executable,
+                'finetune_birdclef.py',
+                exp['train'],
+                str(exp_output),
+                '--pretrained', self.model_path,
+                '--epochs', str(self.epochs),
+                '--batch-size', str(self.batch_size),
+                '--test-folder', exp['test1'],
+                '--test-folder2', exp['test2'],
+                '--use-cleaner'
+            ]
+            
+            if exp['freeze']:
+                cmd.extend(['--freeze-stages', '4'])
+        
+        print(f"\nRunning: {' '.join(cmd)}")
+        print(f"{'='*60}")
+        
+        result = subprocess.run(cmd)
+        
+        print(f"{'='*60}")
+        if result.returncode != 0:
+            print(f"\n❌ Cleaner experiment failed!")
+            print(f"Return code: {result.returncode}")
+            return None
+        
+        try:
+            history_path = exp_output / 'training_history.json'
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+            
+            test1_name = Path(exp['test1']).parent.name
+            test2_name = Path(exp['test2']).parent.name
+            
+            if exp['model_type'] == 'ast':
+                normalize = exp.get('normalize', False)
+                test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
+                test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
+            else:
+                test1_acc = self._extract_test_from_file(exp_output, test1_name)
+                test2_acc = self._extract_test_from_file(exp_output, test2_name)
+            
+            train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
+            val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
+            
+            final_train_acc = self.extract_accuracy(history[train_acc_key][-1] if history.get(train_acc_key) else None)
+            final_val_acc = self.extract_accuracy(history[val_acc_key][-1] if history.get(val_acc_key) and history[val_acc_key][-1] is not None else None)
+            best_val = max([self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None], default=None)
+            
+            exp_result = {
+                'name': exp['name'],
+                'description': exp['description'],
+                'model_type': exp['model_type'],
+                'train_dataset': Path(exp['train']).name,
+                'freeze_backbone': exp['freeze'],
+                'final_train_acc': final_train_acc,
+                'final_val_acc': final_val_acc,
+                'test1_name': test1_name,
+                'test1_acc': test1_acc,
+                'test2_name': test2_name,
+                'test2_acc': test2_acc,
+                'best_val_acc': best_val,
+                'history': history,
+                'output_folder': str(exp_output)
+            }
+            
+            self.results.append(exp_result)
+            
+            print(f"\n✓ Experiment complete:")
+            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            if exp_result['final_val_acc'] is not None:
+                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+            print(f"  Test {test1_name}: {test1_acc:.2f}%")
+            print(f"  Test {test2_name}: {test2_acc:.2f}%")
+            
+            return exp_result
+            
+        except Exception as e:
+            print(f"\n❌ Error processing cleaner results!")
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     def _evaluate_ast_test_set(self, model_folder, test_folder, test_name, normalize=False):
         """Evaluate AST model on a test set using predict.py and calculate accuracy."""
         model_path = model_folder / 'ast_model_best.pt'
@@ -651,22 +874,16 @@ class CrossDatasetExperiments:
             print(f"\n[{i}/{len(self.experiments)}] Starting experiment: {exp['name']}")
             result = self.run_experiment(exp)
             
-            # Continue if experiment was skipped (e.g., DANN not yet implemented for AST)
-            # Only break on actual failures (as opposed to unsupported experiments)
-            if result is None and exp['type'] in ['finetune']:
-                print(f"Experiment failed. Skipping remaining experiments.")
-                break
+            if result is None:
+                print(f"\n{'='*60}")
+                print(f"❌ EXPERIMENT FAILED: {exp['name']}")
+                print(f"{'='*60}")
+                print(f"\nSTOPPING NOW - Check error above")
+                sys.exit(1)
         
-        if len(self.results) == len(self.experiments):
-            print(f"\n{'='*60}")
-            print(f"✓ All experiments complete!")
-            print(f"{'='*60}")
-        else:
-            ran_count = len(self.results)
-            skipped_count = len(self.experiments) - ran_count
-            print(f"\n{'='*60}")
-            print(f"Completed {ran_count}/{len(self.experiments)} experiments ({skipped_count} skipped/unsupported)")
-            print(f"{'='*60}")
+        print(f"\n{'='*60}")
+        print(f"✓ All {len(self.experiments)} experiments complete!")
+        print(f"{'='*60}")
     
     def generate_summary_table(self):
         """Generate summary table of all results."""

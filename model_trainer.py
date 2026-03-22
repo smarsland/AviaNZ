@@ -221,7 +221,7 @@ class ASTTrainer:
                  normalize=False, noise_as_samples=False, max_noise_samples=None,
                  pos_weight_cap=20.0, use_adapters=False, per_chunk_norm=False,
                  use_dann=False, target_folder=None, lambda_domain=0.3,
-                 test_folder=None, test_folder2=None):
+                 test_folder=None, test_folder2=None, use_cleaner=False):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -258,6 +258,7 @@ class ASTTrainer:
         self.lambda_domain = lambda_domain
         self.test_folder = test_folder
         self.test_folder2 = test_folder2
+        self.use_cleaner = use_cleaner
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -414,12 +415,33 @@ class ASTTrainer:
             self.domain_classifier.to(self.device)
             self.domain_criterion = nn.BCEWithLogitsLoss()
             print(f"  DANN lambda_domain: {self.lambda_domain}")
+        
+        # Add spectrogram cleaner if requested
+        if self.use_cleaner:
+            print("  Adding trainable spectrogram cleaner...")
+            from models import SpectrogramCleaner
+            
+            self.cleaner = SpectrogramCleaner(input_size=input_size).to(self.device)
+            
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            print(f"  Backbone frozen - training only spectrogram cleaner + classifier")
+            
+            for param in model.classifier.parameters():
+                param.requires_grad = True
+            
+            trainable_params = sum(p.numel() for p in self.cleaner.parameters()) + sum(p.numel() for p in model.classifier.parameters() if p.requires_grad)
+            total_params = sum(p.numel() for p in model.parameters()) + sum(p.numel() for p in self.cleaner.parameters())
+            print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
 
         # Optimizer and LR schedule
         # Use AdamW (Adam with decoupled weight decay) for better regularization
         param_groups = [{'params': model.parameters(), 'lr': self.learning_rate}]
         if self.use_dann:
             param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.learning_rate * 0.1})
+        if self.use_cleaner:
+            param_groups.append({'params': self.cleaner.parameters(), 'lr': self.learning_rate})
         optimizer = optim.AdamW(param_groups, weight_decay=self.weight_decay)
         
         def lr_lambda(epoch):
@@ -487,6 +509,8 @@ class ASTTrainer:
             if self.use_dann:
                 self.grl.train()
                 self.domain_classifier.train()
+            if self.use_cleaner:
+                self.cleaner.train()
                 
             train_loss = 0.0
             train_correct = 0
@@ -558,12 +582,10 @@ class ASTTrainer:
                     with torch.amp.autocast('cuda', enabled=self.use_amp):
                         if self.use_sparse_patches:
                             source_output = model(source_data, sparse_mode=True, positions=source_positions, mask=source_mask)
-                            target_output = model(target_data, sparse_mode=True, positions=target_positions, mask=target_mask)
                             source_features = model.get_features(source_data, sparse_mode=True, positions=source_positions, mask=source_mask)
                             target_features = model.get_features(target_data, sparse_mode=True, positions=target_positions, mask=target_mask)
                         else:
                             source_output = model(source_data)
-                            target_output = model(target_data)
                             source_features = model.get_features(source_data)
                             target_features = model.get_features(target_data)
                         
@@ -672,6 +694,9 @@ class ASTTrainer:
                         optimizer.zero_grad()
                         
                         with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_cleaner:
+                                data = self.cleaner(data)
+                            
                             if self.use_reconstruction:
                                 output, recon = model(data)
                             else:
@@ -774,6 +799,8 @@ class ASTTrainer:
             
             # Validate
             model.eval()
+            if self.use_cleaner:
+                self.cleaner.eval()
             val_loss = 0.0
             val_correct = 0
             val_total = 0
@@ -802,6 +829,9 @@ class ASTTrainer:
                         data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                         
                         with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_cleaner:
+                                data = self.cleaner(data)
+                            
                             if self.use_reconstruction:
                                 output, _ = model(data)
                             else:
@@ -1148,6 +1178,10 @@ class ASTTrainer:
         filename = 'ast_model_best.pt' if best else 'ast_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
         
+        if self.use_cleaner:
+            cleaner_filename = 'cleaner_best.pt' if best else 'cleaner.pt'
+            torch.save(self.cleaner.state_dict(), os.path.join(self.output_folder, cleaner_filename))
+        
         # Always save configuration for model deployment
         model_config = config.get_model_config()
         
@@ -1163,6 +1197,7 @@ class ASTTrainer:
         model_config['use_reconstruction'] = self.use_reconstruction
         model_config['use_sparse_patches'] = self.use_sparse_patches
         model_config['num_sparse_patches'] = self.num_sparse_patches
+        model_config['use_cleaner'] = self.use_cleaner
         
         # Save to JSON
         config_path = os.path.join(self.output_folder, 'ast_model_config.json')

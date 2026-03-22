@@ -32,13 +32,15 @@ DOC_TRAIN="${DOC_SPLIT_BASE}/train"
 DOC_TEST="${DOC_SPLIT_BASE}/test"
 
 COMBINED_TRAIN="${OUTPUT_BASE}/combined_train"
-RESULTS_DIR="${OUTPUT_BASE}/experiments_$(date +%Y%m%d_%H%M%S)"
+RESULTS_DIR="${OUTPUT_BASE}/experiments"
 
 SPECIES="nezfan1,silver3,comcha,nezbel1,eurbla,morepo2"
 MAX_SAMPLES=120
 TEST_SIZE=0.17
 
-echo "Results will be saved to: $RESULTS_DIR"
+echo "Results dir: $RESULTS_DIR"
+echo "Completed experiments will be skipped automatically"
+echo ""
 
 if [ $SKIP_LOAD -eq 0 ]; then
     echo "Creating datasets..."
@@ -71,7 +73,7 @@ fi
 echo "Merging training sets..."
 python3 merge_datasets.py "$AVIANZ_TRAIN" "$DOC_TRAIN" "$COMBINED_TRAIN"
 
-echo "Running all experiments (12 tests: 2 model types × 6 configs)..."
+echo "Running all experiments (16 tests: 2 model types × 8 configs)..."
 FREEZE_FLAG=""
 if [ $FREEZE_BACKBONE -eq 1 ]; then
     FREEZE_FLAG="--freeze-backbone"
@@ -81,6 +83,14 @@ if [ $FREEZE_BACKBONE -eq 1 ]; then
 else
     echo "  Freeze strategy: None (full fine-tuning)"
 fi
+
+echo ""
+echo "Experiment types (per dataset pair):"
+echo "  1. Baseline (no tricks)"
+echo "  2. Normalize (background normalization)"
+echo "  3. DANN (domain adaptation with gradient reversal)"
+echo "  4. Cleaner (trainable spectrogram preprocessing)"
+echo ""
 
 python3 run_cross_dataset_experiments.py \
     --avianz-train "$AVIANZ_TRAIN" \

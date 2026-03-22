@@ -141,6 +141,9 @@ Examples:
     parser.add_argument('--test-folder2', type=str, default=None,
                        help="Path to test data folder 2 (with labels.json). Evaluated AFTER training completes.")
     
+    parser.add_argument('--use-cleaner', action='store_true',
+                       help="Use trainable spectrogram cleaner network for domain adaptation. Keeps backbone frozen and learns preprocessing transform.")
+    
     args = parser.parse_args()
     
     if args.use_dann and not args.target_folder:
@@ -206,7 +209,8 @@ Examples:
             target_folder=args.target_folder,
             lambda_domain=args.lambda_domain,
             test_folder=args.test_folder,
-            test_folder2=args.test_folder2
+            test_folder2=args.test_folder2,
+            use_cleaner=args.use_cleaner
         )
     elif args.model == 'cnn':
         print(f"Training Convolutional Neural Network (CNN) model...")

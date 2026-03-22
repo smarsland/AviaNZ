@@ -48,6 +48,95 @@ class SpectrogramDecoder(nn.Module):
         
         return recon
 
+
+class SpectrogramCleaner(nn.Module):
+    """Trainable spectrogram preprocessing network.
+    
+    A lightweight U-Net-style architecture that learns to clean/enhance spectrograms
+    before they are fed to the frozen classifier. This allows the model to adapt
+    to domain shifts by learning a preprocessing transformation while keeping
+    the classifier features intact.
+    """
+    def __init__(self, input_size=(128, 512), channels=[32, 64, 128]):
+        super().__init__()
+        self.input_size = input_size
+        
+        self.enc1 = nn.Sequential(
+            nn.Conv2d(1, channels[0], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[0]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels[0], channels[0], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[0]),
+            nn.ReLU(inplace=True)
+        )
+        
+        self.enc2 = nn.Sequential(
+            nn.MaxPool2d(2),
+            nn.Conv2d(channels[0], channels[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[1]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels[1], channels[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[1]),
+            nn.ReLU(inplace=True)
+        )
+        
+        self.enc3 = nn.Sequential(
+            nn.MaxPool2d(2),
+            nn.Conv2d(channels[1], channels[2], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[2]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels[2], channels[2], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[2]),
+            nn.ReLU(inplace=True)
+        )
+        
+        self.dec3 = nn.Sequential(
+            nn.ConvTranspose2d(channels[2], channels[1], kernel_size=2, stride=2),
+            nn.BatchNorm2d(channels[1]),
+            nn.ReLU(inplace=True)
+        )
+        
+        self.dec2 = nn.Sequential(
+            nn.Conv2d(channels[1] * 2, channels[1], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[1]),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(channels[1], channels[0], kernel_size=2, stride=2),
+            nn.BatchNorm2d(channels[0]),
+            nn.ReLU(inplace=True)
+        )
+        
+        self.dec1 = nn.Sequential(
+            nn.Conv2d(channels[0] * 2, channels[0], kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels[0]),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels[0], 1, kernel_size=1)
+        )
+        
+        self.residual_weight = nn.Parameter(torch.tensor(0.1))
+    
+    def forward(self, x):
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+        
+        x_input = x
+        
+        e1 = self.enc1(x)
+        e2 = self.enc2(e1)
+        e3 = self.enc3(e2)
+        
+        d3 = self.dec3(e3)
+        d3 = torch.cat([d3, e2], dim=1)
+        
+        d2 = self.dec2(d3)
+        d2 = torch.cat([d2, e1], dim=1)
+        
+        d1 = self.dec1(d2)
+        
+        output = x_input + self.residual_weight * d1
+        
+        return output.squeeze(1) if output.shape[1] == 1 else output
+
+
 class MultiScaleCNNFrontend(nn.Module):
     
     def __init__(self, input_channels=1, embed_dim=768):
