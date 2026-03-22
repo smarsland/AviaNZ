@@ -249,11 +249,16 @@ class CrossDatasetExperiments:
             final_val_acc = self.extract_accuracy(history[val_acc_key][-1] if history.get(val_acc_key) and history[val_acc_key][-1] is not None else None)
             best_val = max([self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None], default=None)
             
+            if exp['type'] == 'dann':
+                train_dataset_name = f"{Path(exp['source']).parent.name} (DANN→{Path(exp['target']).parent.name})"
+            else:
+                train_dataset_name = Path(exp['train']).name
+            
             exp_result = {
                 'name': exp['name'],
                 'description': exp['description'],
                 'model_type': exp['model_type'],
-                'train_dataset': Path(exp['train']).name,
+                'train_dataset': train_dataset_name,
                 'freeze_backbone': exp['freeze'],
                 'final_train_acc': final_train_acc,
                 'final_val_acc': final_val_acc,
@@ -265,6 +270,18 @@ class CrossDatasetExperiments:
                 'history': history,
                 'output_folder': str(exp_output)
             }
+            
+            if exp['type'] == 'dann':
+                exp_result['lambda_domain'] = exp.get('lambda_domain', self.lambda_domain)
+            
+            self.results.append(exp_result)
+            
+            print(f"\n✓ Loaded cached results:")
+            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            if exp_result['final_val_acc'] is not None:
+                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+            print(f"  Test {test1_name}: {test1_acc:.2f}%")
+            print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
             return exp_result
             
