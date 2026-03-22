@@ -186,7 +186,7 @@ class BirdClefFineTuner:
                  normalize=False, mixup_alpha=0.0, mixup_mode='mixup', noise_ratio=0.0, 
                  noise_folder=None, noise_mode='full', use_temporal_roll=True, validation_split=0.2,
                  remove_baseline=False, test_folder=None, test_folder2=None, background_prob=0.0,
-                 use_dann=False, target_folder=None, lambda_domain=0.1):
+                 use_dann=False, target_folder=None, lambda_domain=0.1, use_cleaner=False):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -207,6 +207,7 @@ class BirdClefFineTuner:
         self.use_dann = use_dann
         self.target_folder = target_folder
         self.lambda_domain = lambda_domain
+        self.use_cleaner = use_cleaner
         self.noise_mode = noise_mode
         self.use_temporal_roll = use_temporal_roll
         self.validation_split = validation_split
@@ -461,6 +462,25 @@ class BirdClefFineTuner:
             self.grl.to(self.device)
             self.domain_classifier.to(self.device)
             self.domain_criterion = nn.BCEWithLogitsLoss()
+        
+        if self.use_cleaner:
+            print("  Adding trainable spectrogram cleaner...")
+            from models import SpectrogramCleaner
+            
+            self.cleaner = SpectrogramCleaner(input_size=(128, 512)).to(self.device)
+            
+            for param in self.model.parameters():
+                param.requires_grad = False
+            
+            print(f"  Backbone frozen - training only spectrogram cleaner + classifier")
+            
+            for n, p in self.model.named_parameters():
+                if 'classifier' in n:
+                    p.requires_grad = True
+            
+            trainable_params = sum(p.numel() for p in self.cleaner.parameters()) + sum(p.numel() for n, p in self.model.named_parameters() if p.requires_grad)
+            total_params = sum(p.numel() for p in self.model.parameters()) + sum(p.numel() for p in self.cleaner.parameters())
+            print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
 
         # Loss function
         if self.multilabel:
@@ -484,6 +504,9 @@ class BirdClefFineTuner:
         
         if self.use_dann:
             param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.lr * 0.1})
+        
+        if self.use_cleaner:
+            param_groups.append({'params': self.cleaner.parameters(), 'lr': self.lr})
         
         self.optimizer = optim.AdamW(param_groups, weight_decay=0.01)
         
@@ -554,6 +577,8 @@ class BirdClefFineTuner:
         if self.use_dann:
             self.grl.train()
             self.domain_classifier.train()
+        if self.use_cleaner:
+            self.cleaner.train()
             
         total_loss = 0
         total_class_loss = 0
@@ -699,6 +724,9 @@ class BirdClefFineTuner:
                 batch_idx, (data, target) = batch_idx
                 data, target = data.to(self.device), target.to(self.device)
                 
+                if self.use_cleaner:
+                    data = self.cleaner(data)
+                
                 self.optimizer.zero_grad()
                 output = self.model(data)
                 
@@ -765,6 +793,8 @@ class BirdClefFineTuner:
     def validate(self):
         """Validate on validation set."""
         self.model.eval()
+        if self.use_cleaner:
+            self.cleaner.eval()
         total_loss = 0
         correct = 0
         total = 0
@@ -774,6 +804,10 @@ class BirdClefFineTuner:
         with torch.no_grad():
             for data, target in self.val_loader:
                 data, target = data.to(self.device), target.to(self.device)
+                
+                if self.use_cleaner:
+                    data = self.cleaner(data)
+                
                 output = self.model(data)
                 
                 # Handle target format for loss computation
@@ -851,12 +885,16 @@ class BirdClefFineTuner:
             with torch.no_grad():
                 for i, (data, _) in enumerate(test_loader):
                     data = data.to(self.device)
+                    if self.use_cleaner:
+                        data = self.cleaner(data)
                     _ = self.model(data)
                     if i >= 20:  # Use subset of test data
                         break
             print(f"  ✓ Batch norm adapted")
         
         self.model.eval()
+        if self.use_cleaner:
+            self.cleaner.eval()
         correct = 0
         total = 0
         metrics_sum = {'macro_f1': 0.0, 'micro_f1': 0.0, 'macro_precision': 0.0, 'macro_recall': 0.0}
@@ -868,6 +906,10 @@ class BirdClefFineTuner:
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(test_loader):
                 data, target = data.to(self.device), target.to(self.device)
+                
+                if self.use_cleaner:
+                    data = self.cleaner(data)
+                
                 output = self.model(data)
                 
                 if batch_idx == 0:
@@ -1078,6 +1120,10 @@ class BirdClefFineTuner:
         # Save model weights
         torch.save(self.model.state_dict(), model_path)
         
+        if self.use_cleaner:
+            cleaner_path = model_path.replace('.pt', '_cleaner.pt')
+            torch.save(self.cleaner.state_dict(), cleaner_path)
+        
         # Save config for inference
         config_path = model_path.replace('.pt', '_config.json')
         config_dict = {
@@ -1092,7 +1138,8 @@ class BirdClefFineTuner:
             'freq_bins': config.DEFAULT_FREQ_BINS,
             'time_bins': config.DEFAULT_TIME_BINS,
             'normalize': self.normalize,
-            'remove_baseline': self.remove_baseline
+            'remove_baseline': self.remove_baseline,
+            'use_cleaner': self.use_cleaner
         }
         
         with open(config_path, 'w') as f:
@@ -1201,6 +1248,8 @@ Examples:
                        help="Path to target domain folder for domain adaptation (unlabeled domain)")
     parser.add_argument('--lambda-domain', type=float, default=0.3,
                        help="Domain loss weight (default: 0.3). If dacc stays >95%%, increase lambda.")
+    parser.add_argument('--use-cleaner', action='store_true',
+                       help="Use trainable spectrogram cleaner network for domain adaptation. Keeps backbone frozen and learns preprocessing transform.")
     
     args = parser.parse_args()
     
@@ -1250,7 +1299,8 @@ Examples:
         background_prob=args.background_prob,
         use_dann=args.use_dann,
         target_folder=args.target_folder,
-        lambda_domain=args.lambda_domain
+        lambda_domain=args.lambda_domain,
+        use_cleaner=args.use_cleaner
     )
     
     # Load data and create model
