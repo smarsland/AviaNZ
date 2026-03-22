@@ -456,6 +456,8 @@ class CrossDatasetExperiments:
         
         if exp['model_type'] == 'ast':
             # AST: use train_models.py with DANN support
+            # Reduce batch size for DANN since it loads both source+target simultaneously
+            ast_dann_batch_size = max(4, self.batch_size // 2)
             cmd = [
                 sys.executable,
                 'train_models.py',
@@ -463,7 +465,7 @@ class CrossDatasetExperiments:
                 str(exp_output),
                 '--model', 'ast',
                 '--epochs', str(self.epochs),
-                '--batch_size', str(self.batch_size),
+                '--batch_size', str(ast_dann_batch_size),
                 '--use-dann',
                 '--target-folder', exp['target'],
                 '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain)),
