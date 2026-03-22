@@ -463,7 +463,7 @@ class CrossDatasetExperiments:
                 str(exp_output),
                 '--model', 'ast',
                 '--epochs', str(self.epochs),
-                '--batch-size', str(self.batch_size),
+                '--batch_size', str(self.batch_size),
                 '--use-dann',
                 '--target-folder', exp['target'],
                 '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain)),
