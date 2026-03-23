@@ -9,9 +9,18 @@ OUTPUT_BASE="/local/scratch/freangi"
 # Noise folder for DANN (set this to your noise data path)
 NOISE_FOLDER="${OUTPUT_BASE}/noise"
 
+# Optional robustness training (set to 1 to enable)
+USE_NOISE_AUG=1
+NOISE_RATIO=0.25
+NOISE_MODE="both"   # BirdClef only: full|background|both
+BACKGROUND_PROB=0.05  # BirdClef only: replace samples with background and zero labels
+USE_MIXUP=0
+MIXUP_ALPHA=0.25
+NOISE_AS_SAMPLES=0   # AST only: adds noise spectrograms as all-zero-label samples
+
 # Skip flags (set to 1 to skip)
-SKIP_LOAD=1
-SKIP_SPLIT=1
+SKIP_LOAD=0
+SKIP_SPLIT=0
 SKIP_BIRDNET=1
 
 # Freeze early layers? (set to 1 to freeze)
@@ -63,17 +72,19 @@ if [ $SKIP_SPLIT -eq 0 ]; then
     echo "Splitting datasets..."
     python3 split_dataset.py "$AVIANZ_FULL" "$AVIANZ_SPLIT_BASE" \
         --test-ratio $TEST_SIZE \
+        --group-key source_file \
         --overwrite
 
     python3 split_dataset.py "$DOC_FULL" "$DOC_SPLIT_BASE" \
         --test-ratio $TEST_SIZE \
+        --group-key source_file \
         --overwrite
 fi
 
 echo "Merging training sets..."
 python3 merge_datasets.py "$AVIANZ_TRAIN" "$DOC_TRAIN" "$COMBINED_TRAIN"
 
-echo "Running all experiments (16 tests: 2 model types × 8 configs)..."
+echo "Running all experiments (8 tests: 2 model types × 4 configs)..."
 FREEZE_FLAG=""
 if [ $FREEZE_BACKBONE -eq 1 ]; then
     FREEZE_FLAG="--freeze-backbone"
@@ -88,8 +99,6 @@ echo ""
 echo "Experiment types (per dataset pair):"
 echo "  1. Baseline (no tricks)"
 echo "  2. Normalize (background normalization)"
-echo "  3. DANN (domain adaptation with gradient reversal)"
-echo "  4. Cleaner (trainable spectrogram preprocessing)"
 echo ""
 
 python3 run_cross_dataset_experiments.py \
@@ -101,7 +110,10 @@ python3 run_cross_dataset_experiments.py \
     --output "$RESULTS_DIR" \
     --epochs 50 \
     --batch-size 16 \
-    $FREEZE_FLAG
+    $FREEZE_FLAG \
+    $( [ $USE_NOISE_AUG -eq 1 ] && echo "--noise $NOISE_RATIO --noise-folder $NOISE_FOLDER --noise-mode $NOISE_MODE --background-prob $BACKGROUND_PROB" ) \
+    $( [ $USE_MIXUP -eq 1 ] && echo "--mixup $MIXUP_ALPHA" ) \
+    $( [ $NOISE_AS_SAMPLES -eq 1 ] && echo "--noise-as-samples" )
 
 if [ $SKIP_BIRDNET -eq 0 ]; then
     echo ""

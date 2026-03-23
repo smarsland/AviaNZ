@@ -85,6 +85,132 @@ def stratified_split(files_by_class, test_ratio, random_state=42):
     return train_files, test_files, split_info
 
 
+def _get_primary_class(file_entry):
+    if 'primary_class' in file_entry and file_entry['primary_class']:
+        return file_entry['primary_class']
+    if 'class_names' in file_entry and len(file_entry['class_names']) > 0:
+        return file_entry['class_names'][0]
+    return 'unknown'
+
+
+def grouped_stratified_split(files, test_ratio, group_key, random_state=42):
+    """Split keeping groups intact (e.g., by source recording).
+
+    Groups are defined by file_entry[group_key]. All entries with the same
+    group id go to either train or test, never both.
+
+    Stratification is approximate: groups are bucketed by their dominant
+    primary class.
+    """
+    if not group_key:
+        raise ValueError("group_key must be provided")
+
+    random.seed(random_state)
+
+    groups = defaultdict(list)
+    for entry in files:
+        gid = entry.get(group_key)
+        if gid is None:
+            gid = entry.get('source_file')
+        if gid is None:
+            gid = entry.get('filename')
+        groups[str(gid)].append(entry)
+
+    group_ids = list(groups.keys())
+    if len(group_ids) < 2:
+        return files, [], {'_all': {'total': len(files), 'train': len(files), 'test': 0}}
+
+    group_dominant_class = {}
+    mixed_groups = []
+    for gid, entries in groups.items():
+        primary_classes = [_get_primary_class(e) for e in entries]
+        class_set = set(primary_classes)
+        counts = defaultdict(int)
+        for c in primary_classes:
+            counts[c] += 1
+        dominant = max(counts.items(), key=lambda x: x[1])[0]
+        group_dominant_class[gid] = dominant
+        if len(class_set) > 1:
+            mixed_groups.append(gid)
+
+    groups_by_class = defaultdict(list)
+    for gid, dominant in group_dominant_class.items():
+        groups_by_class[dominant].append(gid)
+
+    train_group_ids = set()
+    test_group_ids = set()
+    split_info = {}
+    for class_name, gids in groups_by_class.items():
+        class_gids = gids.copy()
+        random.shuffle(class_gids)
+
+        n_groups = len(class_gids)
+        if n_groups <= 1:
+            n_test = 0
+        else:
+            n_test = max(1, int(n_groups * test_ratio))
+            if n_test >= n_groups:
+                n_test = n_groups - 1
+
+        test_set = set(class_gids[-n_test:]) if n_test > 0 else set()
+        train_set = set(class_gids) - test_set
+
+        test_group_ids.update(test_set)
+        train_group_ids.update(train_set)
+
+        split_info[class_name] = {
+            'total_groups': n_groups,
+            'train_groups': len(train_set),
+            'test_groups': len(test_set)
+        }
+
+    # Ensure the mixed groups don't accidentally create an extreme ratio.
+    # Keep overall target test group count near desired ratio.
+    desired_test_groups = int(round(len(group_ids) * test_ratio))
+    current_test_groups = len(test_group_ids)
+    if mixed_groups:
+        shuffled_mixed = mixed_groups.copy()
+        random.shuffle(shuffled_mixed)
+        for gid in shuffled_mixed:
+            if gid in test_group_ids or gid in train_group_ids:
+                continue
+            if current_test_groups < desired_test_groups:
+                test_group_ids.add(gid)
+                current_test_groups += 1
+            else:
+                train_group_ids.add(gid)
+
+    # Final: assign any unassigned groups
+    for gid in group_ids:
+        if gid in train_group_ids or gid in test_group_ids:
+            continue
+        if len(test_group_ids) < desired_test_groups:
+            test_group_ids.add(gid)
+        else:
+            train_group_ids.add(gid)
+
+    # Build file lists
+    train_files = []
+    test_files = []
+    for gid, entries in groups.items():
+        if gid in test_group_ids:
+            test_files.extend(entries)
+        else:
+            train_files.extend(entries)
+
+    random.shuffle(train_files)
+    random.shuffle(test_files)
+
+    split_info['_meta'] = {
+        'group_key': group_key,
+        'total_groups': len(group_ids),
+        'mixed_groups': len(mixed_groups),
+        'train_groups': len(train_group_ids),
+        'test_groups': len(test_group_ids)
+    }
+    return train_files, test_files, split_info
+
+
 def copy_file_and_audio(src_data_folder, dst_data_folder, filename, src_audio_folder=None, dst_audio_folder=None):
     """
     Copy a data file and its corresponding audio file if it exists.
@@ -119,7 +245,7 @@ def copy_file_and_audio(src_data_folder, dst_data_folder, filename, src_audio_fo
                 break
 
 
-def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=42, overwrite=False):
+def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=42, overwrite=False, group_key=None):
     """
     Split a processed dataset into train and test sets.
     
@@ -133,6 +259,8 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     print(f"Splitting dataset from {input_folder}")
     print(f"Test ratio: {test_ratio:.1%} (train: {1-test_ratio:.1%})")
     print(f"Random seed: {random_seed}")
+    if group_key:
+        print(f"Group split: enabled (group_key={group_key})")
     
     # Load labels
     labels_path = os.path.join(input_folder, "labels.json")
@@ -154,35 +282,39 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     if has_audio:
         print(f"  Audio files: Found in audio/ folder")
     
-    # Group files by primary class
+    # Group files by primary class for reporting
     files_by_class = defaultdict(list)
-    
     for file_entry in files:
-        # Determine primary class
-        if 'primary_class' in file_entry:
-            primary_class = file_entry['primary_class']
-        elif 'class_names' in file_entry and len(file_entry['class_names']) > 0:
-            primary_class = file_entry['class_names'][0]
-        else:
-            primary_class = 'unknown'
-        
-        files_by_class[primary_class].append(file_entry)
-    
+        files_by_class[_get_primary_class(file_entry)].append(file_entry)
+
     print(f"\nClass distribution:")
     for class_name in sorted(files_by_class.keys()):
         print(f"  {class_name}: {len(files_by_class[class_name])} files")
-    
-    # Perform stratified split
-    print(f"\nPerforming stratified split...")
-    train_files, test_files, split_info = stratified_split(files_by_class, test_ratio, random_seed)
+
+    # Perform split
+    if group_key:
+        print(f"\nPerforming GROUPED split (keeps groups intact, approximate stratification)...")
+        train_files, test_files, split_info = grouped_stratified_split(files, test_ratio, group_key, random_seed)
+    else:
+        print(f"\nPerforming stratified split...")
+        train_files, test_files, split_info = stratified_split(files_by_class, test_ratio, random_seed)
     
     print(f"\nSplit results:")
     print(f"  Train: {len(train_files)} files")
     print(f"  Test: {len(test_files)} files")
-    print(f"\nPer-class split:")
-    for class_name in sorted(split_info.keys()):
-        info = split_info[class_name]
-        print(f"  {class_name}: {info['train']} train, {info['test']} test (total: {info['total']})")
+    print(f"\nSplit details:")
+    if group_key:
+        meta = split_info.get('_meta', {})
+        print(f"  Groups: {meta.get('total_groups', 'n/a')} total, {meta.get('train_groups', 'n/a')} train, {meta.get('test_groups', 'n/a')} test")
+        print(f"  Mixed-label groups: {meta.get('mixed_groups', 'n/a')}")
+        for class_name in sorted([k for k in split_info.keys() if not k.startswith('_')]):
+            info = split_info[class_name]
+            print(f"  {class_name}: {info['train_groups']} train groups, {info['test_groups']} test groups (total groups: {info['total_groups']})")
+    else:
+        print(f"\nPer-class split:")
+        for class_name in sorted(split_info.keys()):
+            info = split_info[class_name]
+            print(f"  {class_name}: {info['train']} train, {info['test']} test (total: {info['total']})")
     
     # Create output folders
     train_folder = os.path.join(output_base_folder, "train")
@@ -311,6 +443,9 @@ Output Structure:
                        help="Random seed for reproducibility (default: 42)")
     parser.add_argument('--overwrite', action='store_true',
                        help="Overwrite existing output folders")
+
+    parser.add_argument('--group-key', type=str, default=None,
+                       help="Optional metadata key to keep groups intact (prevents leakage). Typical: source_file")
     
     args = parser.parse_args()
     
@@ -325,7 +460,8 @@ Output Structure:
         output_base_folder=args.output_base_folder,
         test_ratio=args.test_ratio,
         random_seed=args.seed,
-        overwrite=args.overwrite
+        overwrite=args.overwrite,
+        group_key=args.group_key
     )
     
     print(f"\n✓ Done! Created train and test splits.")

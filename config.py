@@ -41,6 +41,15 @@ DEFAULT_MIXUP_ALPHA = 0.25  # Reduced to match best practices (Kaytoo uses 0.25,
 DEFAULT_WEIGHT_DECAY = 1e-5  # Reduced slightly for AdamW
 DEFAULT_BCE_SMOOTHING = 0.001  # Minimal smoothing to prevent overconfidence
 
+# GENERALIZATION IMPROVEMENTS (uncomment and adjust as needed):
+# For better cross-domain generalization, try these settings:
+# DEFAULT_DROPOUT = 0.50  # Higher dropout reduces overfitting to source domain
+# DEFAULT_MIXUP_ALPHA = 0.35  # More aggressive mixing improves robustness
+# DEFAULT_NOISE_RATIO = 0.2  # Add background noise augmentation
+# DEFAULT_TIME_STRETCH_RANGE = (0.8, 1.2)  # Wider time stretch range
+# Early stopping: stop if validation doesn't improve for 10 epochs
+# Test-time augmentation: use tta_utils.py for 2-5% accuracy boost
+
 # Data loading defaults
 DEFAULT_MAX_SPECIES = 50
 DEFAULT_MIN_EXAMPLES = 1000

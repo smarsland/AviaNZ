@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """
-Simplified cross-dataset experiments for domain adaptation testing.
+Simplified cross-dataset experiments for testing generalization.
 
-Runs 12 core experiments (2 model types × 6 training configurations):
+Runs 8 core experiments (2 model types × 4 training configurations):
 For each model type (BirdClef CNN, AST):
 1. joe_mo baseline (no tricks)
-2. joe_mo + normalize
-3. DANN joe_mo→doc
-4. doc baseline (no tricks)
-5. doc + normalize
-6. DANN doc→joe_mo
+2. joe_mo + normalize (background normalization)
+3. doc baseline (no tricks)
+4. doc + normalize (background normalization)
 
 Generates comparison tables and plots.
 
@@ -45,7 +43,9 @@ class CrossDatasetExperiments:
     
     def __init__(self, avianz_train, avianz_test, doc_train, doc_test, 
                  combined_train, output_folder, model_path, epochs=10, batch_size=32, 
-                 lambda_domain=0.1, noise_folder=None, freeze_backbone=False):
+                 lambda_domain=0.1, noise_folder=None, freeze_backbone=False,
+                 noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
+                 mixup=None):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -58,6 +58,12 @@ class CrossDatasetExperiments:
         self.lambda_domain = lambda_domain
         self.noise_folder = noise_folder
         self.freeze_backbone = freeze_backbone
+
+        self.noise = noise
+        self.noise_mode = noise_mode
+        self.background_prob = background_prob
+        self.noise_as_samples = noise_as_samples
+        self.mixup = mixup
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
@@ -82,24 +88,6 @@ class CrossDatasetExperiments:
                 'normalize': True,
                 'description': 'joe_mo + normalize'
             },
-            {
-                'name': 'dann_joe_mo_to_doc',
-                'source': avianz_train,
-                'target': doc_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'type': 'dann',
-                'lambda_domain': lambda_domain,
-                'description': 'DANN joe_mo→doc'
-            },
-            {
-                'name': 'joe_mo_cleaner',
-                'train': avianz_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'type': 'cleaner',
-                'description': 'joe_mo + spectrogram cleaner'
-            },
             # doc experiments
             {
                 'name': 'doc_baseline',
@@ -118,26 +106,31 @@ class CrossDatasetExperiments:
                 'type': 'finetune',
                 'normalize': True,
                 'description': 'doc + normalize'
-            },
-            {
-                'name': 'dann_doc_to_joe_mo',
-                'source': doc_train,
-                'target': avianz_train,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'type': 'dann',
-                'lambda_domain': lambda_domain,
-                'description': 'DANN doc→joe_mo'
-            },
-            {
-                'name': 'doc_cleaner',
-                'train': doc_train,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'type': 'cleaner',
-                'description': 'doc + spectrogram cleaner'
             }
         ]
+
+        # Optional: train on combined training set (joe_mo_train + doc_train)
+        if combined_train:
+            base_experiments.extend([
+                {
+                    'name': 'combined_baseline',
+                    'train': combined_train,
+                    'test1': avianz_test,
+                    'test2': doc_test,
+                    'type': 'finetune',
+                    'normalize': False,
+                    'description': 'Baseline combined'
+                },
+                {
+                    'name': 'combined_normalize',
+                    'train': combined_train,
+                    'test1': avianz_test,
+                    'test2': doc_test,
+                    'type': 'finetune',
+                    'normalize': True,
+                    'description': 'combined + normalize'
+                }
+            ])
         
         # Generate experiments for both model types
         self.experiments = []
@@ -169,18 +162,14 @@ class CrossDatasetExperiments:
             print(f"  - AST: Freeze first 8 transformer layers, train last 4 layers + classifier")
         else:
             print(f"Freeze strategy: None (full fine-tuning of all layers)")
-        print(f"\nExperiment breakdown (2 model types × 8 configs = 16 experiments):")
+        per_model = len(base_experiments)
+        print(f"\nExperiment breakdown (2 model types × {per_model} configs = {2*per_model} experiments):")
         print(f"  Model types: BirdClef CNN, AST")
-        print(f"  joe_mo experiments:")
-        print(f"    1. joe_mo baseline (no tricks)")
-        print(f"    2. joe_mo + normalize")
-        print(f"    3. DANN joe_mo→doc")
-        print(f"    4. joe_mo + spectrogram cleaner")
-        print(f"  doc experiments:")
-        print(f"    5. doc baseline (no tricks)")
-        print(f"    6. doc + normalize")
-        print(f"    7. DANN doc→joe_mo")
-        print(f"    8. doc + spectrogram cleaner")
+        print(f"  Datasets:")
+        print(f"    - joe_mo: baseline, normalize")
+        print(f"    - doc: baseline, normalize")
+        if combined_train:
+            print(f"    - combined: baseline, normalize")
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
@@ -303,12 +292,7 @@ class CrossDatasetExperiments:
             print(f"✓ Already completed - loading cached results...")
             return self.load_completed_experiment(exp)
         
-        if exp['type'] == 'dann':
-            return self.run_dann_experiment(exp)
-        elif exp['type'] == 'cleaner':
-            return self.run_cleaner_experiment(exp)
-        else:
-            return self.run_finetune_experiment(exp)
+        return self.run_finetune_experiment(exp)
     
     def run_finetune_experiment(self, exp):
         """Run a single fine-tuning experiment."""
@@ -340,6 +324,16 @@ class CrossDatasetExperiments:
             
             if exp.get('normalize', False):
                 cmd.append('--normalize')
+
+            if self.mixup is not None:
+                cmd.extend(['--mixup', str(self.mixup)])
+
+            if self.noise is not None:
+                cmd.extend(['--noise', str(self.noise)])
+                if self.noise_folder:
+                    cmd.extend(['--noise-folder', str(self.noise_folder)])
+                if self.noise_as_samples:
+                    cmd.append('--noise-as-samples')
             
             # For AST: freeze first 8 transformer layers (keep last 4 + classifier trainable)
             if exp['freeze']:
@@ -364,6 +358,19 @@ class CrossDatasetExperiments:
             
             if exp.get('normalize', False):
                 cmd.append('--normalize')
+
+            if self.mixup is not None:
+                cmd.extend(['--mixup', str(self.mixup)])
+
+            if self.noise is not None:
+                cmd.extend(['--noise', str(self.noise)])
+                if self.noise_folder:
+                    cmd.extend(['--noise-folder', str(self.noise_folder)])
+                if self.noise_mode is not None:
+                    cmd.extend(['--noise-mode', str(self.noise_mode)])
+
+            if self.background_prob is not None:
+                cmd.extend(['--background-prob', str(self.background_prob)])
         
         print(f"\nRunning: {' '.join(cmd)}")
         print(f"{'='*60}")
@@ -1614,7 +1621,7 @@ def main():
     parser.add_argument('--doc-test', required=True,
                        help='Path to DOC test dataset')
     parser.add_argument('--combined-train', required=False, default=None,
-                       help='Path to combined training dataset (OPTIONAL, not used)')
+                       help='Path to combined training dataset (OPTIONAL). If provided, adds combined baseline/normalize experiments that train on this set and evaluate on both held-out tests.')
     parser.add_argument('--output', default='results/cross_dataset_experiments',
                        help='Output folder (default: results/cross_dataset_experiments)')
     parser.add_argument('--model', default='BirdClefModels/model_fold0.pth',
@@ -1628,7 +1635,18 @@ def main():
     parser.add_argument('--freeze-backbone', action='store_true',
                        help='Freeze early layers to reduce overfitting - BirdClef: freeze first 4 stages (stem,s1,s2,s3), train only s4+classifier (~53%% params), AST: freeze first 8 transformer layers. Recommended for different acoustic environments.')
     parser.add_argument('--noise-folder', default=None,
-                       help='Noise folder for DANN target domain (unlabeled)')
+                       help='Optional noise folder for augmentation mixing (unlabeled background). Used by --noise in train_models.py / finetune_birdclef.py')
+
+    parser.add_argument('--noise', type=float, default=None,
+                       help='Expected noise mixing ratio for augmentation (e.g., 0.2 = 20%% expected noise). Only used if provided.')
+    parser.add_argument('--noise-mode', type=str, default=None, choices=['full', 'background', 'both'],
+                       help='[BirdClef] Noise extraction mode for augmentation mixing. Only used if provided.')
+    parser.add_argument('--noise-as-samples', action='store_true',
+                       help='[AST] Add noise spectrograms as extra all-zero-label training samples (requires --noise-folder)')
+    parser.add_argument('--background-prob', type=float, default=None,
+                       help='[BirdClef] Probability of replacing a training sample with its background (labels zeroed). Only used if provided.')
+    parser.add_argument('--mixup', type=float, default=None,
+                       help='Mixup alpha (0 disables). Only used if provided.')
     
     args = parser.parse_args()
     
@@ -1658,7 +1676,12 @@ def main():
         batch_size=args.batch_size,
         lambda_domain=args.lambda_domain,
         noise_folder=args.noise_folder,
-        freeze_backbone=args.freeze_backbone
+        freeze_backbone=args.freeze_backbone,
+        noise=args.noise,
+        noise_mode=args.noise_mode,
+        background_prob=args.background_prob,
+        noise_as_samples=args.noise_as_samples,
+        mixup=args.mixup
     )
     
     experiments.run()
