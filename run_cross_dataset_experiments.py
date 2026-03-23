@@ -778,20 +778,35 @@ class CrossDatasetExperiments:
         predictions = {}
         with open(csv_path, 'r') as f:
             reader = csv.DictReader(f)
-            class_columns = [col for col in reader.fieldnames if col not in ['row_id', 'File_Path']]
+            fieldnames = list(reader.fieldnames)
             
-            for row in reader:
-                filename = row.get('row_id', row.get('filename', ''))
-                if not filename or not class_columns:
-                    continue
+            # Handle two formats:
+            # 1. Probability format: File_Path, row_id, class1, class2, ...
+            # 2. Simple format: filename, predicted_class
+            if 'predicted_class' in fieldnames:
+                # Simple format from model_trainer._save_test_predictions
+                for row in reader:
+                    filename = row.get('filename', '')
+                    pred_class = row.get('predicted_class', '')
+                    # Normalize to eBird code
+                    pred_class = name_map.get(pred_class, pred_class)
+                    predictions[filename] = pred_class
+            else:
+                # Probability format from predict.py
+                class_columns = [col for col in fieldnames if col not in ['row_id', 'File_Path']]
                 
-                # Use argmax to get predicted class (like training code does)
-                class_probs = [float(row[col]) for col in class_columns]
-                pred_idx = class_probs.index(max(class_probs))
-                pred_class = class_columns[pred_idx]
-                # Normalize to eBird code
-                pred_class = name_map.get(pred_class, pred_class)
-                predictions[filename] = pred_class
+                for row in reader:
+                    filename = row.get('row_id', row.get('filename', ''))
+                    if not filename or not class_columns:
+                        continue
+                    
+                    # Use argmax to get predicted class (like training code does)
+                    class_probs = [float(row[col]) for col in class_columns]
+                    pred_idx = class_probs.index(max(class_probs))
+                    pred_class = class_columns[pred_idx]
+                    # Normalize to eBird code
+                    pred_class = name_map.get(pred_class, pred_class)
+                    predictions[filename] = pred_class
         
         # DEBUG: Check first few matches
         debug_count = 0

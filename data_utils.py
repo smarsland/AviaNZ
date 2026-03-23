@@ -310,7 +310,10 @@ class SpectrogramDataset(Dataset):
         
         print(f"Dataset initialized with {len(self.filenames)} data files and {len(self.noise_filenames)} noise files")
         print(f"Spectrogram transform: {self.spec_transform}")
-        print(f"Training mode: {self.training} (expected noise ratio: {self.noise_ratio}, uniformly sampled [0, min({2*self.noise_ratio:.1f}, 1.0)], clipped)")
+        if self.noise_ratio > 0:
+            print(f"Training mode: {self.training} (expected noise ratio: {self.noise_ratio}, uniformly sampled [0, min({2*self.noise_ratio:.1f}, 1.0)], clipped)")
+        else:
+            print(f"Training mode: {self.training} (noise augmentation: disabled)")
         if width_downsizing:
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:

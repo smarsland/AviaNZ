@@ -16,7 +16,7 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import DataLoader as TorchDataLoader
-from models import AST, CNNModel
+from models import AST, CNNModel, SpectrogramCleaner
 from data_utils import SpectrogramDataset
 from normalizer import normalize_spectrogram
 import config
@@ -41,6 +41,7 @@ class ModelPredictor:
         print(f"Using device: {self.device}")
         
         self.model = None
+        self.cleaner = None  # Optional spectrogram cleaner
         self.categories = None
         self.test_dataset = None
         self.test_loader = None
@@ -163,6 +164,16 @@ class ModelPredictor:
         
         self.model.to(self.device)
         self.model.eval()
+        
+        # Try to load cleaner if it exists
+        cleaner_path = Path(self.model_path).parent / 'cleaner_best.pt'
+        if cleaner_path.exists():
+            print(f"Loading spectrogram cleaner from {cleaner_path}")
+            self.cleaner = SpectrogramCleaner()
+            self.cleaner.load_state_dict(torch.load(cleaner_path, map_location=self.device))
+            self.cleaner = self.cleaner.to(self.device)
+            self.cleaner.eval()
+            print("Cleaner loaded successfully")
         
         print("Model loaded successfully")
     
@@ -295,6 +306,10 @@ class ModelPredictor:
         with torch.no_grad():
             for data, target in tqdm(self.test_loader, desc="Predicting"):
                 data = data.to(self.device)
+                
+                # Apply cleaner if it was used during training
+                if self.cleaner is not None:
+                    data = self.cleaner(data)
                 
                 # DANN models have separate predict() method for inference
                 if self.model_type == 'dann':
