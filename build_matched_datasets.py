@@ -43,7 +43,24 @@ from data_loader import AviaNZDataProcessor
 from spectrogram_utils import SpectrogramProcessor
 
 
-def make_spec_processor():
+def load_avianz_name_mapping(mapping_csv):
+    """
+    Build a CommonName -> eBird dict from DOC_bird_naming_map.csv.
+    Includes CommonName, ExtraName, and ListDOCBirds variants.
+    """
+    df = pd.read_csv(mapping_csv)
+    mapping = {}
+    for _, row in df.iterrows():
+        ebird = row['eBird']
+        if pd.isna(ebird):
+            continue
+        for col in ['CommonName', 'ExtraName', 'ListDOCBirds']:
+            val = row.get(col)
+            if pd.notna(val) and str(val).strip():
+                mapping[str(val).strip()] = str(ebird).strip()
+    return mapping
+
+
     return SpectrogramProcessor(
         window_seconds=config.DEFAULT_WINDOW_SECONDS,
         hop_seconds=config.DEFAULT_HOP_SECONDS,
@@ -170,7 +187,7 @@ def build_doc_dataset(records, doc_raw, output_folder):
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (the human's primary/uncertain
@@ -181,7 +198,8 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed):
     record i was successfully matched.
     """
     spec_proc = make_spec_processor()
-    proc = AviaNZDataProcessor()
+    name_mapping = load_avianz_name_mapping(mapping_csv)
+    proc = AviaNZDataProcessor(name_mapping=name_mapping)
 
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
@@ -303,7 +321,7 @@ def main():
 
     print('\n=== Step 3: find matching AviaNZ sample for each DOC record ===')
     avianz_labels, matched_mask = build_avianz_dataset(
-        kept_records, args.avianz_raw, avianz_out, args.seed
+        kept_records, args.avianz_raw, avianz_out, args.seed, args.mapping
     )
 
     # Drop DOC samples that had no AviaNZ match
