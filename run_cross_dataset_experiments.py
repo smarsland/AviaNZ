@@ -681,9 +681,9 @@ class CrossDatasetExperiments:
                 class_names = file_info.get('class_names', [])
                 primary = class_names[0] if class_names else None
             if primary:
-                # Normalize to eBird code
+                # Normalize to eBird code and lowercase for case-insensitive comparison
                 primary = name_map.get(primary, primary)
-                true_labels[filename] = primary
+                true_labels[filename] = primary.lower()
         
         # Read predictions CSV
         predictions = {}
@@ -699,9 +699,9 @@ class CrossDatasetExperiments:
                 for row in reader:
                     filename = row.get('filename', '')
                     pred_class = row.get('predicted_class', '')
-                    # Normalize to eBird code
+                    # Normalize to eBird code and lowercase for case-insensitive comparison
                     pred_class = name_map.get(pred_class, pred_class)
-                    predictions[filename] = pred_class
+                    predictions[filename] = pred_class.lower()
             else:
                 # Probability format from predict.py
                 class_columns = [col for col in fieldnames if col not in ['row_id', 'File_Path']]
@@ -715,9 +715,9 @@ class CrossDatasetExperiments:
                     class_probs = [float(row[col]) for col in class_columns]
                     pred_idx = class_probs.index(max(class_probs))
                     pred_class = class_columns[pred_idx]
-                    # Normalize to eBird code
+                    # Normalize to eBird code and lowercase for case-insensitive comparison
                     pred_class = name_map.get(pred_class, pred_class)
-                    predictions[filename] = pred_class
+                    predictions[filename] = pred_class.lower()
         
         # DEBUG: Check first few matches
         debug_count = 0
@@ -858,12 +858,17 @@ class CrossDatasetExperiments:
         for r in self.results:
             exp_names.append(r['description'])
             
-            if 'joe_mo' in r['test1_name']:
+            # Check for 'avianz' in test name (avianz_split is joe_mo data)
+            if 'avianz' in r['test1_name'].lower():
                 joe_mo_scores.append(r['test1_acc'])
                 doc_scores.append(r['test2_acc'])
-            else:
+            elif 'doc' in r['test1_name'].lower():
                 joe_mo_scores.append(r['test2_acc'])
                 doc_scores.append(r['test1_acc'])
+            else:
+                # Fallback
+                joe_mo_scores.append(r['test1_acc'])
+                doc_scores.append(r['test2_acc'])
         
         x = np.arange(len(exp_names))
         width = 0.38
@@ -1261,13 +1266,17 @@ class CrossDatasetExperiments:
             clean_name = r['name'].replace('_', ' ').title()
             exp_names.append(clean_name)
             
-            # Get scores
-            if 'joe_mo' in r['test1_name']:
+            # Get scores - check for 'avianz' in test name (avianz_split is joe_mo data)
+            if 'avianz' in r['test1_name'].lower():
                 joe_mo_score = r['test1_acc']
                 doc_score = r['test2_acc']
-            else:
+            elif 'doc' in r['test1_name'].lower():
                 joe_mo_score = r['test2_acc']
                 doc_score = r['test1_acc']
+            else:
+                # Fallback for unclear naming
+                joe_mo_score = r['test1_acc']
+                doc_score = r['test2_acc']
             
             # Get train and validation scores
             train_score = r['final_train_acc'] if r['final_train_acc'] is not None else 0
