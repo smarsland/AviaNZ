@@ -23,10 +23,8 @@ SKIP_LOAD=0
 SKIP_SPLIT=0
 SKIP_BIRDNET=1
 
-# Freeze early layers? (set to 1 to freeze)
-# BirdClef: freezes first 4 stages (stem,s1,s2,s3), trains only s4+classifier (~53% params)
-# AST: freezes first 8 transformer layers, trains last 4 + classifier
-FREEZE_BACKBONE=1
+# Freezing is disabled (BirdClef only, baseline only)
+FREEZE_BACKBONE=0
 
 # Config
 
@@ -40,7 +38,6 @@ DOC_SPLIT_BASE="${OUTPUT_BASE}/doc_split"
 DOC_TRAIN="${DOC_SPLIT_BASE}/train"
 DOC_TEST="${DOC_SPLIT_BASE}/test"
 
-COMBINED_TRAIN="${OUTPUT_BASE}/combined_train"
 RESULTS_DIR="${OUTPUT_BASE}/experiments"
 
 SPECIES="nezfan1,silver3,comcha,nezbel1,eurbla,morepo2"
@@ -81,24 +78,10 @@ if [ $SKIP_SPLIT -eq 0 ]; then
         --overwrite
 fi
 
-echo "Merging training sets..."
-python3 merge_datasets.py "$AVIANZ_TRAIN" "$DOC_TRAIN" "$COMBINED_TRAIN"
-
-echo "Running all experiments (8 tests: 2 model types × 4 configs)..."
-FREEZE_FLAG=""
-if [ $FREEZE_BACKBONE -eq 1 ]; then
-    FREEZE_FLAG="--freeze-backbone"
-    echo "  Freeze strategy: Freeze early layers to reduce overfitting"
-    echo "    - BirdClef: Freeze stem, s1, s2, s3 (train only s4 + classifier, ~53% params)"
-    echo "    - AST: Freeze first 8 layers (train last 4 + classifier)"
-else
-    echo "  Freeze strategy: None (full fine-tuning)"
-fi
-
-echo ""
-echo "Experiment types (per dataset pair):"
-echo "  1. Baseline (no tricks)"
-echo "  2. Normalize (background normalization)"
+echo "Running experiments (2 runs: BirdClef baseline only)..."
+echo "  1) Train joe_mo -> test joe_mo + doc"
+echo "  2) Train doc    -> test doc + joe_mo"
+echo "  (No normalization, no freezing, no AST)"
 echo ""
 
 python3 run_cross_dataset_experiments.py \
@@ -106,11 +89,9 @@ python3 run_cross_dataset_experiments.py \
     --avianz-test "$AVIANZ_TEST" \
     --doc-train "$DOC_TRAIN" \
     --doc-test "$DOC_TEST" \
-    --combined-train "$COMBINED_TRAIN" \
     --output "$RESULTS_DIR" \
     --epochs 50 \
     --batch-size 16 \
-    $FREEZE_FLAG \
     $( [ $USE_NOISE_AUG -eq 1 ] && echo "--noise $NOISE_RATIO --noise-folder $NOISE_FOLDER --noise-mode $NOISE_MODE --background-prob $BACKGROUND_PROB" ) \
     $( [ $USE_MIXUP -eq 1 ] && echo "--mixup $MIXUP_ALPHA" ) \
     $( [ $NOISE_AS_SAMPLES -eq 1 ] && echo "--noise-as-samples" )

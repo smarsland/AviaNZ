@@ -2,12 +2,9 @@
 """
 Simplified cross-dataset experiments for testing generalization.
 
-Runs 8 core experiments (2 model types × 4 training configurations):
-For each model type (BirdClef CNN, AST):
-1. joe_mo baseline (no tricks)
-2. joe_mo + normalize (background normalization)
-3. doc baseline (no tricks)
-4. doc + normalize (background normalization)
+Runs 2 core experiments (BirdClef CNN only):
+1. Train on joe_mo (baseline), test on joe_mo test + doc test
+2. Train on doc (baseline), test on doc test + joe_mo test
 
 Generates comparison tables and plots.
 
@@ -41,23 +38,21 @@ import config
 class CrossDatasetExperiments:
     """Manages cross-dataset training experiments."""
     
-    def __init__(self, avianz_train, avianz_test, doc_train, doc_test, 
-                 combined_train, output_folder, model_path, epochs=10, batch_size=32, 
-                 lambda_domain=0.1, noise_folder=None, freeze_backbone=False,
+    def __init__(self, avianz_train, avianz_test, doc_train, doc_test,
+                 output_folder, model_path, epochs=10, batch_size=32,
+                 lambda_domain=0.1, noise_folder=None,
                  noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
                  mixup=None):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
         self.doc_test = doc_test
-        self.combined_train = combined_train
         self.output_folder = Path(output_folder)
         self.model_path = model_path
         self.epochs = epochs
         self.batch_size = batch_size
         self.lambda_domain = lambda_domain
         self.noise_folder = noise_folder
-        self.freeze_backbone = freeze_backbone
 
         self.noise = noise
         self.noise_mode = noise_mode
@@ -67,7 +62,7 @@ class CrossDatasetExperiments:
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
-        # Define base experiment configurations
+        # Define base experiment configurations (INTENTIONALLY MINIMAL)
         base_experiments = [
             # joe_mo experiments
             {
@@ -76,17 +71,7 @@ class CrossDatasetExperiments:
                 'test1': avianz_test,
                 'test2': doc_test,
                 'type': 'finetune',
-                'normalize': False,
                 'description': 'Baseline joe_mo'
-            },
-            {
-                'name': 'joe_mo_normalize',
-                'train': avianz_train,
-                'test1': avianz_test,
-                'test2': doc_test,
-                'type': 'finetune',
-                'normalize': True,
-                'description': 'joe_mo + normalize'
             },
             # doc experiments
             {
@@ -95,57 +80,20 @@ class CrossDatasetExperiments:
                 'test1': doc_test,
                 'test2': avianz_test,
                 'type': 'finetune',
-                'normalize': False,
                 'description': 'Baseline doc'
-            },
-            {
-                'name': 'doc_normalize',
-                'train': doc_train,
-                'test1': doc_test,
-                'test2': avianz_test,
-                'type': 'finetune',
-                'normalize': True,
-                'description': 'doc + normalize'
             }
         ]
-
-        # Optional: train on combined training set (joe_mo_train + doc_train)
-        if combined_train:
-            base_experiments.extend([
-                {
-                    'name': 'combined_baseline',
-                    'train': combined_train,
-                    'test1': avianz_test,
-                    'test2': doc_test,
-                    'type': 'finetune',
-                    'normalize': False,
-                    'description': 'Baseline combined'
-                },
-                {
-                    'name': 'combined_normalize',
-                    'train': combined_train,
-                    'test1': avianz_test,
-                    'test2': doc_test,
-                    'type': 'finetune',
-                    'normalize': True,
-                    'description': 'combined + normalize'
-                }
-            ])
         
-        # Generate experiments for both model types
+        # Generate experiments (BirdClef only)
         self.experiments = []
-        for model_type in ['birdclef', 'ast']:
-            for base_exp in base_experiments:
-                exp = base_exp.copy()
-                exp['model_type'] = model_type
-                exp['freeze'] = freeze_backbone
-                exp['name'] = f"{base_exp['name']}_{model_type}"
-                if freeze_backbone:
-                    exp['name'] += "_frozen"
-                exp['description'] = f"{base_exp['description']} ({model_type.upper()})"
-                if freeze_backbone:
-                    exp['description'] += " [frozen backbone]"
-                self.experiments.append(exp)
+        model_type = 'birdclef'
+        for base_exp in base_experiments:
+            exp = base_exp.copy()
+            exp['model_type'] = model_type
+            exp['freeze'] = False
+            exp['name'] = f"{base_exp['name']}_{model_type}"
+            exp['description'] = f"{base_exp['description']} (BIRDCLEF)"
+            self.experiments.append(exp)
         
         self.results = []
         
@@ -156,20 +104,11 @@ class CrossDatasetExperiments:
         print(f"joe_mo test:  {avianz_test}")
         print(f"doc train:    {doc_train}")
         print(f"doc test:     {doc_test}")
-        if freeze_backbone:
-            print(f"Freeze strategy: Freeze early layers to reduce overfitting")
-            print(f"  - BirdClef: Freeze first 4 stages (stem, s1, s2, s3), train only s4 + classifier (~53% params)")
-            print(f"  - AST: Freeze first 8 transformer layers, train last 4 layers + classifier")
-        else:
-            print(f"Freeze strategy: None (full fine-tuning of all layers)")
-        per_model = len(base_experiments)
-        print(f"\nExperiment breakdown (2 model types × {per_model} configs = {2*per_model} experiments):")
-        print(f"  Model types: BirdClef CNN, AST")
-        print(f"  Datasets:")
-        print(f"    - joe_mo: baseline, normalize")
-        print(f"    - doc: baseline, normalize")
-        if combined_train:
-            print(f"    - combined: baseline, normalize")
+        print(f"Freeze strategy: Disabled")
+        print(f"Normalization: Disabled")
+        print(f"\nExperiment breakdown (2 experiments):")
+        print(f"  1) joe_mo baseline (train joe_mo, test joe_mo + doc)")
+        print(f"  2) doc baseline (train doc, test doc + joe_mo)")
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
@@ -303,74 +242,35 @@ class CrossDatasetExperiments:
         print(f"Model type: {exp['model_type'].upper()}")
         print(f"Train on: {exp['train']}")
         print(f"Test on: {exp['test1']} and {exp['test2']}")
-        print(f"Freeze backbone: {exp['freeze']}")
+        print(f"Freeze backbone: disabled")
         
         exp_output = self.output_folder / exp['name']
         exp_output.mkdir(exist_ok=True)
         
-        if exp['model_type'] == 'ast':
-            cmd = [
-                sys.executable,
-                'train_models.py',
-                exp['train'],
-                str(exp_output),
-                '--model', 'ast',
-                '--epochs', str(self.epochs),
-                '--batch_size', str(self.batch_size)
-            ]
-            
-            if self.model_path and not self.model_path.endswith('model_fold0.pth'):
-                cmd.extend(['--pretrained', self.model_path])
-            
-            if exp.get('normalize', False):
-                cmd.append('--normalize')
+        cmd = [
+            sys.executable,
+            'finetune_birdclef.py',
+            exp['train'],
+            str(exp_output),
+            '--pretrained', self.model_path,
+            '--epochs', str(self.epochs),
+            '--batch-size', str(self.batch_size),
+            '--test-folder', exp['test1'],
+            '--test-folder2', exp['test2']
+        ]
 
-            if self.mixup is not None:
-                cmd.extend(['--mixup', str(self.mixup)])
+        if self.mixup is not None:
+            cmd.extend(['--mixup', str(self.mixup)])
 
-            if self.noise is not None:
-                cmd.extend(['--noise', str(self.noise)])
-                if self.noise_folder:
-                    cmd.extend(['--noise-folder', str(self.noise_folder)])
-                if self.noise_as_samples:
-                    cmd.append('--noise-as-samples')
-            
-            # For AST: freeze first 8 transformer layers (keep last 4 + classifier trainable)
-            if exp['freeze']:
-                cmd.extend(['--freeze-layers', '8'])
-        else:
-            cmd = [
-                sys.executable,
-                'finetune_birdclef.py',
-                exp['train'],
-                str(exp_output),
-                '--pretrained', self.model_path,
-                '--epochs', str(self.epochs),
-                '--batch-size', str(self.batch_size),
-                '--test-folder', exp['test1'],
-                '--test-folder2', exp['test2']
-            ]
-            
-            # For BirdClef: freeze first 4 stages (stem, s1, s2, s3) to reduce overfitting
-            # Only train s4 + classifier for better generalization
-            if exp['freeze']:
-                cmd.extend(['--freeze-stages', '4'])
-            
-            if exp.get('normalize', False):
-                cmd.append('--normalize')
+        if self.noise is not None:
+            cmd.extend(['--noise', str(self.noise)])
+            if self.noise_folder:
+                cmd.extend(['--noise-folder', str(self.noise_folder)])
+            if self.noise_mode is not None:
+                cmd.extend(['--noise-mode', str(self.noise_mode)])
 
-            if self.mixup is not None:
-                cmd.extend(['--mixup', str(self.mixup)])
-
-            if self.noise is not None:
-                cmd.extend(['--noise', str(self.noise)])
-                if self.noise_folder:
-                    cmd.extend(['--noise-folder', str(self.noise_folder)])
-                if self.noise_mode is not None:
-                    cmd.extend(['--noise-mode', str(self.noise_mode)])
-
-            if self.background_prob is not None:
-                cmd.extend(['--background-prob', str(self.background_prob)])
+        if self.background_prob is not None:
+            cmd.extend(['--background-prob', str(self.background_prob)])
         
         print(f"\nRunning: {' '.join(cmd)}")
         print(f"{'='*60}")
@@ -1620,8 +1520,6 @@ def main():
                        help='Path to DOC training dataset')
     parser.add_argument('--doc-test', required=True,
                        help='Path to DOC test dataset')
-    parser.add_argument('--combined-train', required=False, default=None,
-                       help='Path to combined training dataset (OPTIONAL). If provided, adds combined baseline/normalize experiments that train on this set and evaluate on both held-out tests.')
     parser.add_argument('--output', default='results/cross_dataset_experiments',
                        help='Output folder (default: results/cross_dataset_experiments)')
     parser.add_argument('--model', default='BirdClefModels/model_fold0.pth',
@@ -1632,8 +1530,6 @@ def main():
                        help='Batch size (default: 32)')
     parser.add_argument('--lambda-domain', type=float, default=0.3,
                        help='DANN domain loss weight (default: 0.3)')
-    parser.add_argument('--freeze-backbone', action='store_true',
-                       help='Freeze early layers to reduce overfitting - BirdClef: freeze first 4 stages (stem,s1,s2,s3), train only s4+classifier (~53%% params), AST: freeze first 8 transformer layers. Recommended for different acoustic environments.')
     parser.add_argument('--noise-folder', default=None,
                        help='Optional noise folder for augmentation mixing (unlabeled background). Used by --noise in train_models.py / finetune_birdclef.py')
 
@@ -1669,14 +1565,12 @@ def main():
         avianz_test=args.avianz_test,
         doc_train=args.doc_train,
         doc_test=args.doc_test,
-        combined_train=args.combined_train,
         output_folder=args.output,
         model_path=args.model,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lambda_domain=args.lambda_domain,
         noise_folder=args.noise_folder,
-        freeze_backbone=args.freeze_backbone,
         noise=args.noise,
         noise_mode=args.noise_mode,
         background_prob=args.background_prob,
