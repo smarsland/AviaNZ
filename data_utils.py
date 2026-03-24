@@ -186,9 +186,19 @@ class DataLoader:
                 primary_species, test_size=validation_share, random_state=42
             )
         elif primary_species is not None:
-            train_filenames, test_filenames, train_labels, test_labels, train_primary_species, test_primary_species = train_test_split(
-                filenames, labels, primary_species, test_size=validation_share, random_state=42, stratify=primary_species
-            )
+            # Check for singleton classes (only 1 member) which break stratified split
+            from collections import Counter
+            class_counts = Counter(primary_species)
+            singletons = [cls for cls, cnt in class_counts.items() if cnt < 2]
+            if singletons:
+                print(f"Warning: {len(singletons)} class(es) have only 1 sample — falling back to non-stratified split: {singletons}")
+                train_filenames, test_filenames, train_labels, test_labels, train_primary_species, test_primary_species = train_test_split(
+                    filenames, labels, primary_species, test_size=validation_share, random_state=42
+                )
+            else:
+                train_filenames, test_filenames, train_labels, test_labels, train_primary_species, test_primary_species = train_test_split(
+                    filenames, labels, primary_species, test_size=validation_share, random_state=42, stratify=primary_species
+                )
         else:
             train_filenames, test_filenames, train_labels, test_labels = train_test_split(
                 filenames, labels, test_size=validation_share, random_state=42
