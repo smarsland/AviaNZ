@@ -391,7 +391,7 @@ class BirdClefFineTuner:
                        for cat in source_categories if cat in target_categories}
         
         if labels.ndim == 2:
-            remapped = np.zeros_like(labels)
+            remapped = np.zeros((labels.shape[0], len(target_categories)), dtype=labels.dtype)
             for src_idx, tgt_idx in category_map.items():
                 remapped[:, tgt_idx] = labels[:, src_idx]
             return remapped.tolist()

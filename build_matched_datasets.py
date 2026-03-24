@@ -271,7 +271,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
         spec_proc.save_spectrogram(sg, data_dir, basename)
         avianz_labels.append({
             'filename': f'{basename}.npy',
-            'primary_class': seg_codes[0],
+            'primary_class': rec['human_codes'][0],  # use DOC human label for consistency
             'class_names': seg_codes,
             'source_file': wav_file,
             'start_time': start,
