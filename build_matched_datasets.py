@@ -61,6 +61,16 @@ def load_avianz_name_mapping(mapping_csv):
     return mapping
 
 
+def make_spec_processor():
+    return SpectrogramProcessor(
+        window_seconds=config.DEFAULT_WINDOW_SECONDS,
+        hop_seconds=config.DEFAULT_HOP_SECONDS,
+        freq_bins=config.DEFAULT_FREQ_BINS,
+        fs=config.DEFAULT_SAMPLE_RATE,
+        spec_params=config.SPECTROGRAM_PARAMS,
+    )
+
+
     return SpectrogramProcessor(
         window_seconds=config.DEFAULT_WINDOW_SECONDS,
         hop_seconds=config.DEFAULT_HOP_SECONDS,
