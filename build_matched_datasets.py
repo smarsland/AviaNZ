@@ -71,21 +71,14 @@ def make_spec_processor():
     )
 
 
-    return SpectrogramProcessor(
-        window_seconds=config.DEFAULT_WINDOW_SECONDS,
-        hop_seconds=config.DEFAULT_HOP_SECONDS,
-        freq_bins=config.DEFAULT_FREQ_BINS,
-        fs=config.DEFAULT_SAMPLE_RATE,
-        spec_params=config.SPECTROGRAM_PARAMS,
-    )
-
-
 def parse_reviewed_csv(csv_path, mapping_csv):
     """
     Returns a list of records, one per usable DOC sample.  Each record has:
-      species1_codes : list of eBird codes from Species 1.  Usually one code,
-                       but "/" gives multiple (ambiguous — any is acceptable).
-      human_codes    : full label = species1_codes + resolved Species 2+ codes.
+      species1_raw   : raw human label string for Species 1 (e.g. "Bellbird/Tui").
+                       Used as the class label in BOTH datasets.
+      human_labels   : [species1_raw] + comma-split Species 2+ items (raw strings).
+      species1_codes : eBird codes resolved from Species 1 — used ONLY as AviaNZ
+                       search keys, never stored as class labels.
       folder, predicted_code, audio_filename : for locating the raw audio.
     """
     ebird_to_common, common_to_ebird = load_bird_name_mapping(mapping_csv)
@@ -108,34 +101,35 @@ def parse_reviewed_csv(csv_path, mapping_csv):
         species1_raw = row.get('Species 1', '')
         if pd.isna(species1_raw):
             species1_raw = ''
+        species1_raw = species1_raw.strip()
+
         species2_raw = row.get('Species 2+', '')
         if pd.isna(species2_raw):
             species2_raw = ''
 
-        # Species 1: "/" means the human was uncertain between two species —
-        # normalize_species_name_to_codes already handles "/" and returns all
-        # candidates.  We keep the full list as search keys for AviaNZ.
-        species1_codes = normalize_species_name_to_codes(
-            species1_raw, common_to_ebird, ebird_to_common, group_cache
-        )
-        if not species1_codes:
+        if not species1_raw:
             skipped_no_label += 1
             continue
 
-        # Species 2+: species that were also present (not uncertain, just co-occurring).
-        species2_codes = parse_species_list_to_codes(
-            species2_raw, common_to_ebird, ebird_to_common, group_cache
+        # eBird codes: ONLY used internally to search AviaNZ for matching segments.
+        # "/" means the human was uncertain — we'll accept a segment matching ANY candidate.
+        species1_codes = normalize_species_name_to_codes(
+            species1_raw, common_to_ebird, ebird_to_common, group_cache
         )
+        # If we can't resolve to any code at all we still keep the record for
+        # DOC, but AviaNZ matching will fail and the pair will be dropped.
 
-        # Full human label for this DOC sample
-        human_codes = list(dict.fromkeys(species1_codes + species2_codes))
+        # Raw human label strings — these ARE the class labels.
+        species2_items = [s.strip() for s in species2_raw.split(',') if s.strip()] if species2_raw else []
+        human_labels = list(dict.fromkeys([species1_raw] + species2_items))
 
         records.append({
             'folder': str(row[col_folder]).strip(),
             'predicted_code': str(row[col_predicted]).strip(),
             'audio_filename': str(row[col_file]).strip(),
-            'species1_codes': species1_codes,
-            'human_codes': human_codes,
+            'species1_raw': species1_raw,       # primary label string
+            'human_labels': human_labels,        # full label strings (raw)
+            'species1_codes': species1_codes,    # eBird codes for AviaNZ search only
         })
 
     print(f'Parsed {len(records)} usable DOC samples from {len(df)} rows')
@@ -184,8 +178,8 @@ def build_doc_dataset(records, doc_raw, output_folder):
 
         labels.append({
             'filename': f'{basename}.npy',
-            'primary_class': rec['human_codes'][0],
-            'class_names': rec['human_codes'],
+            'primary_class': rec['species1_raw'],
+            'class_names': rec['human_labels'],
             'source_file': audio_path,
         })
         kept_records.append(rec)
@@ -269,10 +263,11 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
 
         basename = f'file_{len(avianz_labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
+        # Use the DOC human label — both datasets must have identical class names.
         avianz_labels.append({
             'filename': f'{basename}.npy',
-            'primary_class': rec['human_codes'][0],  # use DOC human label for consistency
-            'class_names': seg_codes,
+            'primary_class': rec['species1_raw'],
+            'class_names': rec['human_labels'],
             'source_file': wav_file,
             'start_time': start,
             'end_time': end,
