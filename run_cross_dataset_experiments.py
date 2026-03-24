@@ -159,16 +159,16 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).parent.name
-            test2_name = Path(exp['test2']).parent.name
+            test1_name = Path(exp['test1']).name
+            test2_name = Path(exp['test2']).name
             
             if exp['model_type'] == 'ast':
                 normalize = exp.get('normalize', False)
                 test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
                 test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
             else:
-                test1_acc = self._extract_test_from_file(exp_output, test1_name)
-                test2_acc = self._extract_test_from_file(exp_output, test2_name)
+                test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
+                test2_acc = self._extract_test_from_file(exp_output, test2_name, exp['test2'])
             
             train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
             val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
@@ -289,9 +289,15 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            # Use parent folder name for better identification
-            test1_name = Path(exp['test1']).parent.name
-            test2_name = Path(exp['test2']).parent.name
+            test1_name = Path(exp['test1']).name
+            test2_name = Path(exp['test2']).name
+            
+            if str(exp['test1']) == str(exp['train']):
+                print(f"  ⚠️  WARNING: test1 folder is the same as the train folder: {exp['test1']}")
+                print(f"      Test accuracy will be meaninglessly high (measured on training data).")
+            if str(exp['test2']) == str(exp['train']):
+                print(f"  ⚠️  WARNING: test2 folder is the same as the train folder: {exp['test2']}")
+                print(f"      Test accuracy will be meaninglessly high (measured on training data).")
             
             if exp['model_type'] == 'ast':
                 print(f"\nRunning test evaluation for AST model...")
@@ -300,8 +306,8 @@ class CrossDatasetExperiments:
                 test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
             else:
                 # Extract test accuracies from saved test results files
-                test1_acc = self._extract_test_from_file(exp_output, test1_name)
-                test2_acc = self._extract_test_from_file(exp_output, test2_name)
+                test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
+                test2_acc = self._extract_test_from_file(exp_output, test2_name, exp['test2'])
             
             # Handle both train_acc (finetune_birdclef) and train_accuracy (train_models)
             train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
@@ -427,12 +433,12 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).parent.name
-            test2_name = Path(exp['test2']).parent.name
+            test1_name = Path(exp['test1']).name
+            test2_name = Path(exp['test2']).name
             
             # Extract test accuracies from saved test results files
-            test1_acc = self._extract_test_from_file(exp_output, test1_name)
-            test2_acc = self._extract_test_from_file(exp_output, test2_name)
+            test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
+            test2_acc = self._extract_test_from_file(exp_output, test2_name, exp['test2'])
             
             final_train_acc = self.extract_accuracy(history['train_acc'][-1] if history.get('train_acc') else None)
             final_val_acc = self.extract_accuracy(history['val_acc'][-1] if history.get('val_acc') and history['val_acc'][-1] is not None else None)
@@ -539,16 +545,16 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).parent.name
-            test2_name = Path(exp['test2']).parent.name
+            test1_name = Path(exp['test1']).name
+            test2_name = Path(exp['test2']).name
             
             if exp['model_type'] == 'ast':
                 normalize = exp.get('normalize', False)
                 test1_acc = self._evaluate_ast_test_set(exp_output, exp['test1'], test1_name, normalize)
                 test2_acc = self._evaluate_ast_test_set(exp_output, exp['test2'], test2_name, normalize)
             else:
-                test1_acc = self._extract_test_from_file(exp_output, test1_name)
-                test2_acc = self._extract_test_from_file(exp_output, test2_name)
+                test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
+                test2_acc = self._extract_test_from_file(exp_output, test2_name, exp['test2'])
             
             train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
             val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
@@ -639,12 +645,10 @@ class CrossDatasetExperiments:
         labels_path = os.path.join(test_folder, 'labels.json')
         
         if not os.path.exists(labels_path):
-            print(f"  ⚠️  labels.json not found in {test_folder}")
-            return 0.0
+            raise FileNotFoundError(f"labels.json not found in test folder: {test_folder}")
         
         if not os.path.exists(csv_path):
-            print(f"  ⚠️  Predictions CSV not found: {csv_path}")
-            return 0.0
+            raise FileNotFoundError(f"Predictions CSV not found: {csv_path}")
         
         # Load bird name mapping (CommonName -> eBird code)
         name_map = {}
@@ -741,48 +745,32 @@ class CrossDatasetExperiments:
         
         return (correct / total) * 100.0
     
-    def _extract_test_from_file(self, exp_output, test_name):
+    def _extract_test_from_file(self, exp_output, test_name, test_folder):
         """Extract test accuracy from saved prediction CSV file."""
-        # finetune_birdclef.py saves predictions as predictions_{test_name}.csv
-        # test_name comes in as folder name like "joe_mo_split" or "doc_split"
+        # finetune_birdclef.py saves predictions as predictions_{parent}_{test_name}.csv
+        # where parent is the parent directory name and test_name is the folder name.
         
-        # List all CSV files to debug
         all_csvs = list(exp_output.glob('*.csv'))
         print(f"  DEBUG: Looking for predictions in {exp_output}")
         print(f"  DEBUG: test_name = '{test_name}'")
         print(f"  DEBUG: All CSV files in directory: {[f.name for f in all_csvs]}")
+        print(f"  DEBUG: Using test folder: {test_folder}")
         
         csv_files = list(exp_output.glob(f'predictions_*{test_name}*.csv'))
         
         if not csv_files:
-            print(f"  ⚠️  WARNING: No prediction CSV found for {test_name} in {exp_output}")
-            print(f"      Expected pattern: predictions_*{test_name}*.csv")
-            return 0.0
+            raise FileNotFoundError(
+                f"No prediction CSV found for '{test_name}' in {exp_output}.\n"
+                f"Expected pattern: predictions_*{test_name}*.csv\n"
+                f"Available CSVs: {[f.name for f in all_csvs]}"
+            )
         
         csv_path = csv_files[0]  # Use first match
         print(f"  DEBUG: Found CSV file: {csv_path.name}")
         
-        # Find the corresponding test folder
-        if 'joe_mo' in test_name.lower():
-            test_folder = self.avianz_test
-        elif 'doc' in test_name.lower():
-            test_folder = self.doc_test
-        else:
-            print(f"  ⚠️  WARNING: Cannot determine test folder for {test_name}")
-            return 0.0
-        
-        print(f"  DEBUG: Using test folder: {test_folder}")
-        
-        # Use the existing accuracy computation method
-        try:
-            accuracy = self._compute_accuracy_from_predictions(csv_path, test_folder)
-            print(f"  ✓ Extracted {test_name} accuracy: {accuracy:.2f}%")
-            return accuracy
-        except Exception as e:
-            print(f"  ❌ ERROR extracting {test_name} accuracy: {e}")
-            import traceback
-            traceback.print_exc()
-            return 0.0
+        accuracy = self._compute_accuracy_from_predictions(csv_path, test_folder)
+        print(f"  ✓ Extracted {test_name} accuracy: {accuracy:.2f}%")
+        return accuracy
     
     def _extract_test_accuracy(self, output, test_name):
         """Extract test accuracy from training output."""
