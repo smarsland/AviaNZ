@@ -346,8 +346,22 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
         if doc_counts[species] >= min_samples_per_class and avianz_counts[species] >= min_samples_per_class:
             common_classes.add(species)
     
-    doc_filtered = [e for e in doc_labels if any(c in common_classes for c in e['class_names'])]
-    avianz_filtered = [e for e in avianz_labels if any(c in common_classes for c in e['class_names'])]
+    # Filter entries to those with at least one common class, AND remove rare classes from class_names
+    doc_filtered = []
+    for e in doc_labels:
+        filtered_classes = [c for c in e['class_names'] if c in common_classes]
+        if filtered_classes:
+            e_copy = e.copy()
+            e_copy['class_names'] = filtered_classes
+            doc_filtered.append(e_copy)
+    
+    avianz_filtered = []
+    for e in avianz_labels:
+        filtered_classes = [c for c in e['class_names'] if c in common_classes]
+        if filtered_classes:
+            e_copy = e.copy()
+            e_copy['class_names'] = filtered_classes
+            avianz_filtered.append(e_copy)
     
     print(f'\n=== Filtering to common classes (min {min_samples_per_class} samples each) ===')
     print(f'  Before: DOC={len(doc_labels)}, AviaNZ={len(avianz_labels)}')
@@ -422,7 +436,7 @@ def main():
     print(f'\nMatched dataset size: {len(doc_labels_final)} DOC  /  {len(avianz_labels)} AviaNZ')
 
     # Filter to common classes present in both datasets with sufficient samples
-    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=20)
+    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=5)
 
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')
