@@ -124,15 +124,17 @@ else
     echo "=== Step 3: SKIPPED (already ran baseline) ==="
 fi
 
-# ---- Step 4: Test different normalizations ------------------
+# ---- Step 4: Test normalization strategies ------------------
 if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
     echo ""
     echo "=== Step 4: Testing normalization strategies ==="
     echo "  1. Log (baseline - already done)"
-    echo "  2. PCEN (alternative to log)"
-    echo "  3. Log + --normalize (log + background subtraction)"
-    echo "  4. PCEN + --normalize (PCEN + background subtraction)"
+    echo "  2. Log + --normalize"
+    echo "  3. PCEN"
+    echo "  4. PCEN + --normalize"
     echo ""
+    
+    RESULTS_DIR="${OUTPUT_BASE}/experiments_matched"
     
     MIXUP_ARGS=""
     if [ $USE_MIXUP -eq 1 ]; then
@@ -144,29 +146,14 @@ if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
         FORCE_ARGS="--force"
     fi
     
-    # Test 2: PCEN (no background norm)
-    echo "--- Running: PCEN ---"
-    python3 run_cross_dataset_experiments.py \
-        --avianz-train "$AVIANZ_TRAIN" \
-        --avianz-test  "$AVIANZ_TEST" \
-        --doc-train    "$DOC_TRAIN" \
-        --doc-test     "$DOC_TEST" \
-        --output       "${OUTPUT_BASE}/experiments_pcen" \
-        --epochs       $EPOCHS \
-        --batch-size   $BATCH_SIZE \
-        --spec-transform PCEN \
-        $MIXUP_ARGS \
-        $FORCE_ARGS
-    
-    # Test 3: Log + background normalization
-    echo ""
+    # Test 2: Log + --normalize
     echo "--- Running: Log + --normalize ---"
     python3 run_cross_dataset_experiments.py \
         --avianz-train "$AVIANZ_TRAIN" \
         --avianz-test  "$AVIANZ_TEST" \
         --doc-train    "$DOC_TRAIN" \
         --doc-test     "$DOC_TEST" \
-        --output       "${OUTPUT_BASE}/experiments_log_norm" \
+        --output       "$RESULTS_DIR" \
         --epochs       $EPOCHS \
         --batch-size   $BATCH_SIZE \
         --spec-transform Log \
@@ -174,7 +161,22 @@ if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
         $MIXUP_ARGS \
         $FORCE_ARGS
     
-    # Test 4: PCEN + background normalization  
+    # Test 3: PCEN
+    echo ""
+    echo "--- Running: PCEN ---"
+    python3 run_cross_dataset_experiments.py \
+        --avianz-train "$AVIANZ_TRAIN" \
+        --avianz-test  "$AVIANZ_TEST" \
+        --doc-train    "$DOC_TRAIN" \
+        --doc-test     "$DOC_TEST" \
+        --output       "$RESULTS_DIR" \
+        --epochs       $EPOCHS \
+        --batch-size   $BATCH_SIZE \
+        --spec-transform PCEN \
+        $MIXUP_ARGS \
+        $FORCE_ARGS
+    
+    # Test 4: PCEN + --normalize
     echo ""
     echo "--- Running: PCEN + --normalize ---"
     python3 run_cross_dataset_experiments.py \
@@ -182,7 +184,7 @@ if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
         --avianz-test  "$AVIANZ_TEST" \
         --doc-train    "$DOC_TRAIN" \
         --doc-test     "$DOC_TEST" \
-        --output       "${OUTPUT_BASE}/experiments_pcen_norm" \
+        --output       "$RESULTS_DIR" \
         --epochs       $EPOCHS \
         --batch-size   $BATCH_SIZE \
         --spec-transform PCEN \
@@ -195,9 +197,13 @@ fi
 
 echo ""
 echo "============================================================"
-echo " Done. Results:"
-echo "  Baseline (Log):           ${OUTPUT_BASE}/experiments_matched"
-echo "  PCEN:                     ${OUTPUT_BASE}/experiments_pcen"
-echo "  Log + normalize:          ${OUTPUT_BASE}/experiments_log_norm"
-echo "  PCEN + normalize:         ${OUTPUT_BASE}/experiments_pcen_norm"
+echo " Done. All results in: $RESULTS_DIR"
+echo "   - joe_mo_baseline_birdclef (Log baseline - already done)"
+echo "   - joe_mo_baseline_birdclef_normalized (Log + normalize)"
+echo "   - joe_mo_baseline_birdclef_pcen (PCEN)"
+echo "   - joe_mo_baseline_birdclef_pcen_normalized (PCEN + normalize)"
+echo "   - doc_baseline_birdclef (Log baseline - already done)"
+echo "   - doc_baseline_birdclef_normalized (Log + normalize)"
+echo "   - doc_baseline_birdclef_pcen (PCEN)"
+echo "   - doc_baseline_birdclef_pcen_normalized (PCEN + normalize)"
 echo "============================================================"

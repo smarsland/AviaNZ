@@ -90,12 +90,27 @@ class CrossDatasetExperiments:
         # Generate experiments (BirdClef only)
         self.experiments = []
         model_type = 'birdclef'
+        
+        # Add suffix based on spec_transform and normalize
+        suffix = ""
+        if spec_transform != 'Log' or normalize:
+            parts = []
+            if spec_transform != 'Log':
+                parts.append(spec_transform.lower())
+            if normalize:
+                parts.append("normalized")
+            suffix = "_" + "_".join(parts)
+        
         for base_exp in base_experiments:
             exp = base_exp.copy()
             exp['model_type'] = model_type
             exp['freeze'] = False
-            exp['name'] = f"{base_exp['name']}_{model_type}"
+            exp['name'] = f"{base_exp['name']}_{model_type}{suffix}"
             exp['description'] = f"{base_exp['description']} (BIRDCLEF)"
+            if spec_transform != 'Log':
+                exp['description'] += f" [{spec_transform}]"
+            if normalize:
+                exp['description'] += " [normalized]"
             self.experiments.append(exp)
         
         self.results = []

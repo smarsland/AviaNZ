@@ -12,28 +12,24 @@
 
 \affil[1]{School of Mathematics and Statistics, Victoria University of Wellington, New Zealand}
 
-
-\addbibresource{fa2026_template.bib} % BibTeX bibliography file
-
 % Main document
 % ------------------------------------
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Automatic bird call recognition systems face significant challenges when deployed across different recording environments due to domain shift - variations in recording equipment, background noise, and environmental conditions that cause trained models to underperform on data from new contexts. We investigate the impact of spectrogram normalization strategies on cross-domain generalization in bird call recognition. Using two datasets with identical species distributions but different acoustic environments (DOC Conservation and AviaNZ field recordings), we compare four normalization approaches: logarithmic scaling (baseline), Per-Channel Energy Normalization (PCEN), our proposed background-subtraction method, and combinations thereof. Our experiments with a fine-tuned BirdClef model reveal domain shift of 19-29 percentage points in classification accuracy when transferring between environments. We analyze how different normalization strategies affect this gap and their implications for deploying robust bird monitoring systems in diverse ecological contexts.
+Automatic bird call recognition systems face significant challenges when deployed across different recording environments due to domain shift - variations in recording equipment, background noise, and environmental conditions that cause trained models to underperform on data from new contexts. We highlight this problem for bird call recognition by constructing identically labelled datasets from difference sources. We investigate the impact of spectrogram normalization strategies on cross-domain generalization and the impact of adding noise in terms of both breadth and depth. 
 \end{abstract}
 
 \keywords{bird call recognition, domain adaptation, spectrogram normalization, PCEN, transfer learning}
 
-
 \section{Introduction}
 
-Automated bird call recognition has become an essential tool for biodiversity monitoring, enabling large-scale ecological surveys through passive acoustic monitoring \cite{kahl2021overview}. However, a critical challenge facing these systems is \textit{domain shift}: the performance degradation that occurs when models trained on one dataset are applied to recordings from different environments, equipment, or recording conditions \cite{morfi2020few}.
+Automated bird call recognition has become an essential tool for biodiversity monitoring, enabling large-scale ecological surveys through passive acoustic monitoring. However, a critical challenge facing these systems is \textit{domain shift}: the performance degradation that occurs when models trained on one dataset are applied to recordings from different environments, equipment, or recording conditions.
 
-While deep learning approaches have achieved impressive performance on benchmark datasets \cite{kahl2021birdclef}, their real-world deployment often reveals substantial accuracy drops when encountering new recording contexts. This domain shift stems from multiple factors: variations in recording equipment frequency response, differences in ambient noise profiles, varying distances to sound sources, and environmental acoustic characteristics \cite{stowell2019automatic}.
+While deep learning approaches have achieved impressive performance on benchmark datasets, their real-world deployment often reveals substantial accuracy drops when encountering new recording contexts. This domain shift stems from multiple factors: variations in recording equipment frequency response, differences in ambient noise profiles, varying distances to sound sources, and environmental acoustic characteristics.
 
-Spectrogram preprocessing and normalization strategies play a crucial role in model robustness. Traditional logarithmic scaling of spectrograms captures the perceptual characteristics of sound but may amplify recording-specific noise characteristics. Per-Channel Energy Normalization (PCEN) was developed specifically to address amplitude variations and reduce sensitivity to recording conditions \cite{wang2017trainable}. Background subtraction methods have been proposed to isolate vocalizations from ambient soundscapes, but their effectiveness across domains remains understudied.
+Spectrogram preprocessing and normalization strategies play a crucial role in model robustness. Traditional logarithmic scaling of spectrograms captures the perceptual characteristics of sound but may amplify recording-specific noise characteristics. Per-Channel Energy Normalization (PCEN) was developed specifically to address amplitude variations and reduce sensitivity to recording conditions. Background subtraction methods have been proposed to isolate vocalizations from ambient soundscapes, but their effectiveness across domains remains understudied.
 
 In this work, we systematically investigate how different spectrogram normalization strategies affect cross-domain generalization in bird call recognition. We construct two datasets with identical species label distributions but drawn from different recording environments: DOC Conservation recordings and AviaNZ field recordings from New Zealand. Using a BirdClef-pretrained convolutional neural network fine-tuned on our data, we compare four normalization strategies across training and test domain combinations.
 
@@ -47,7 +43,7 @@ To isolate the effects of domain shift while controlling for species distributio
 
 \textbf{DOC Dataset}: Extracted from New Zealand Department of Conservation (DOC) biodiversity monitoring recordings, covering forest and wetland habitats. Recordings were made using standardized equipment and protocols for conservation monitoring.
 
-\textbf{AviaNZ Dataset}: Field recordings collected using AviaNZ software \cite{marsland2019avianz} from diverse locations across New Zealand, representing more varied recording equipment and environmental conditions typical of citizen science contributions.
+\textbf{AviaNZ Dataset}: Field recordings collected using AviaNZ software from diverse locations across New Zealand, representing more varied recording equipment and environmental conditions typical of citizen science contributions.
 
 Both datasets were matched to contain identical species distributions across 20 New Zealand bird species, with balanced representation to avoid confounding domain shift with class imbalance effects. Each dataset was split into training (75\%) and test (25\%) subsets using stratified sampling to maintain species balance. Spectrograms were extracted using a 25ms Hann window with 10ms hop length, producing mel-scale frequency representations with 128 frequency bins spanning 0-8kHz, resampled to 16kHz.
 
@@ -61,7 +57,7 @@ S_{\text{log}}(f,t) = \log(S(f,t) + \epsilon)
 \end{equation}
 where $S(f,t)$ is the linear magnitude spectrogram and $\epsilon = 10^{-7}$ prevents numerical issues. This is the standard preprocessing used in most bioacoustic recognition systems.
 
-\textbf{Per-Channel Energy Normalization (PCEN)}: Adaptive gain control that normalizes each frequency band independently \cite{wang2017trainable}:
+\textbf{Per-Channel Energy Normalization (PCEN)}: Adaptive gain control that normalizes each frequency band independently:
 \begin{equation}
 \text{PCEN}(f,t) = \left(\frac{S(f,t)}{(M(f,t) + \epsilon)^{\alpha}} + \delta\right)^r - \delta^r
 \end{equation}
@@ -77,7 +73,7 @@ This approach aims to enhance the signal-to-noise ratio by removing persistent b
 
 \subsection{Model Architecture and Training}
 
-We employ transfer learning using a BirdClef-pretrained RegNetY-008 convolutional neural network \cite{kahl2021birdclef}, which was pretrained on a global bird species dataset. The model consists of a convolutional backbone (RegNetY-008 architecture) followed by an adaptive average pooling layer and a linear classifier.
+We employ transfer learning using a BirdClef-pretrained RegNetY-008 convolutional neural network, which was pretrained on a global bird species dataset. The model consists of a convolutional backbone (RegNetY-008 architecture) followed by an adaptive average pooling layer and a linear classifier.
 
 For our experiments, we replace the final classification layer to match our 20 New Zealand species and fine-tune the entire network (including backbone) on our training data. Training hyperparameters: AdamW optimizer with learning rate $1 \times 10^{-4}$ for the backbone and $1 \times 10^{-3}$ for the classifier, batch size 16, cosine annealing learning rate schedule, 50 epochs with early stopping based on validation accuracy. We use mixup augmentation ($\alpha = 0.25$) to improve generalization.
 
@@ -187,8 +183,5 @@ As bioacoustic monitoring scales to larger geographic coverage and longer time s
 
 \section{Acknowledgments}
 We thank the New Zealand Department of Conservation for providing access to biodiversity monitoring recordings, and the AviaNZ community for field recording contributions. This research was supported by Victoria University of Wellington.
-
-
-\printbibliography
 
 \end{document}
