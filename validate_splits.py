@@ -27,20 +27,13 @@ def load_split_classes(split_folder):
     files = metadata.get('files', [])
     categories = set(metadata.get('categories', []))
     
-    # Also collect classes from actual files
+    # Collect ALL classes (multilabel setting)
     file_classes = set()
     class_counts = defaultdict(int)
     for entry in files:
-        primary = entry.get('primary_class')
-        if primary:
-            file_classes.add(primary)
-            class_counts[primary] += 1
-        
-        class_names = entry.get('class_names', [])
-        file_classes.update(class_names)
-        for cn in class_names:
-            if cn != primary:
-                class_counts[cn] += 1
+        for cls in entry.get('class_names', []):
+            file_classes.add(cls)
+            class_counts[cls] += 1
     
     return {
         'folder': split_folder,

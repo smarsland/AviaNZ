@@ -222,7 +222,6 @@ def build_doc_dataset(records, doc_raw, output_folder):
 
         labels.append({
             'filename': f'{basename}.npy',
-            'primary_class': rec['species1_raw'],
             'class_names': rec['human_labels'],
             'source_file': audio_path,
         })
@@ -310,7 +309,6 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
         # Use the DOC human label — both datasets must have identical class names.
         avianz_labels.append({
             'filename': f'{basename}.npy',
-            'primary_class': rec['species1_raw'],
             'class_names': rec['human_labels'],
             'source_file': wav_file,
             'start_time': start,
@@ -324,30 +322,33 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
     return avianz_labels, matched_mask
 
 
-def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=10):
+def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20):
     """
     Filter both datasets to keep only species that appear with sufficient samples in BOTH.
     This ensures train/test splits will have the same classes available.
     
-    With test_ratio=0.25 and min=10, each class gets ~7-8 train and ~2-3 test samples.
+    With test_ratio=0.25 and min=20, each class gets ~15 train and ~5 test samples.
+    This is enough to ensure robust train/test splits with guaranteed class overlap.
     """
     doc_counts = defaultdict(int)
     avianz_counts = defaultdict(int)
     
     for e in doc_labels:
         doc_counts[e['primary_class']] += 1
+    for cls in e['class_names']:
+            doc_counts[cls] += 1
     
     for e in avianz_labels:
-        avianz_counts[e['primary_class']] += 1
+        for cls in e['class_names']:
+            avianz_counts[cls] += 1
     
     common_classes = set()
     for species in set(doc_counts.keys()) & set(avianz_counts.keys()):
         if doc_counts[species] >= min_samples_per_class and avianz_counts[species] >= min_samples_per_class:
             common_classes.add(species)
     
-    doc_filtered = [e for e in doc_labels if e['primary_class'] in common_classes]
-    avianz_filtered = [e for e in avianz_labels if e['primary_class'] in common_classes]
-    
+    doc_filtered = [e for e in doc_labels if any(c in common_classes for c in e['class_names'])]
+    avianz_filtered = [e for e in avianz_labels if any(c in common_classes for c in e['class_names'])
     print(f'\n=== Filtering to common classes (min {min_samples_per_class} samples each) ===')
     print(f'  Before: DOC={len(doc_labels)}, AviaNZ={len(avianz_labels)}')
     print(f'  Common classes: {len(common_classes)} species')
@@ -419,7 +420,7 @@ def main():
     print(f'\nMatched dataset size: {len(doc_labels_final)} DOC  /  {len(avianz_labels)} AviaNZ')
 
     # Filter to common classes present in both datasets with sufficient samples
-    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=10)
+    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=20)
 
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')

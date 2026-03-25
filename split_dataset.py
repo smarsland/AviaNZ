@@ -52,10 +52,10 @@ def random_split(files, test_ratio, random_state=42):
     """
     random.seed(random_state)
     
-    # Group by class
+    # Group by first class (for stratification in multilabel setting)
     files_by_class = defaultdict(list)
     for f in files:
-        files_by_class[_get_primary_class(f)].append(f)
+        files_by_class[_get_first_class(f)].append(f)
     
     train_files = []
     test_files = []
@@ -93,9 +93,8 @@ def random_split(files, test_ratio, random_state=42):
     return train_files, test_files, split_info
 
 
-def _get_primary_class(file_entry):
-    if 'primary_class' in file_entry and file_entry['primary_class']:
-        return file_entry['primary_class']
+def _get_first_class(file_entry):
+    """Get first class name for grouping purposes in multilabel setting."""
     if 'class_names' in file_entry and len(file_entry['class_names']) > 0:
         return file_entry['class_names'][0]
     return 'unknown'
@@ -149,13 +148,15 @@ def grouped_random_split(files, test_ratio, group_key, random_state=42):
     random.shuffle(train_files)
     random.shuffle(test_files)
 
-    # Compute per-class stats for reporting
+    # Compute per-class stats for reporting (counts all classes in multilabel)
     train_by_class = defaultdict(int)
     test_by_class = defaultdict(int)
     for f in train_files:
-        train_by_class[_get_primary_class(f)] += 1
+        for cls in f.get('class_names', []):
+            train_by_class[cls] += 1
     for f in test_files:
-        test_by_class[_get_primary_class(f)] += 1
+        for cls in f.get('class_names', []):
+            test_by_class[cls] += 1
     
     split_info = {}
     for class_name in set(train_by_class.keys()) | set(test_by_class.keys()):
@@ -241,10 +242,10 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     src_audio_folder = os.path.join(input_folder, "audio")
     has_audio = os.path.exists(src_audio_folder) and os.path.isdir(src_audio_folder)
     if has_audio:
-        print(f"  Audio files: Found in audio/ folder")
-    
-    # Group files by primary class for reporting
+        print(f"  Audfirst class for reporting
     files_by_class = defaultdict(list)
+    for file_entry in files:
+        files_by_class[_get_firstst)
     for file_entry in files:
         files_by_class[_get_primary_class(file_entry)].append(file_entry)
 

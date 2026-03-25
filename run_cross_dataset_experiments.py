@@ -256,7 +256,8 @@ class CrossDatasetExperiments:
             '--epochs', str(self.epochs),
             '--batch-size', str(self.batch_size),
             '--test-folder', exp['test1'],
-            '--test-folder2', exp['test2']
+            '--test-folder2', exp['test2'],
+            '--multilabel'
         ]
 
         if self.mixup is not None:
@@ -408,7 +409,8 @@ class CrossDatasetExperiments:
                 '--test-folder2', exp['test2'],
                 '--use-dann',
                 '--target-folder', exp['target'],
-                '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain))
+                '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain)),
+                '--multilabel'
             ]
             
             # For BirdClef: freeze first 4 stages (stem, s1, s2, s3) to reduce overfitting
@@ -523,7 +525,8 @@ class CrossDatasetExperiments:
                 '--batch-size', str(self.batch_size),
                 '--test-folder', exp['test1'],
                 '--test-folder2', exp['test2'],
-                '--use-cleaner'
+                '--use-cleaner',
+                '--multilabel'
             ]
             
             if exp['freeze']:
