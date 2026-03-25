@@ -50,6 +50,12 @@ NOISE_FOLDER="${MATCHED_BASE}/noise"
 NOISE_RATIO=0.5  # Fixed 50% noise mixing - we test variety, not amount
 NOISE_LEVELS=(10 20 50 100 200 500 1000)  # Number of noise files to sample from
 
+# Logging setup - capture all output to log file
+LOG_FILE="${OUTPUT_BASE}/experiments_log.txt"
+mkdir -p "$(dirname "$LOG_FILE")"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "Logging to: $LOG_FILE"
+
 echo "============================================================"
 echo " Domain Shift Experiments"
 echo "  Raw AviaNZ : $AVIANZ_RAW"
