@@ -36,7 +36,11 @@ def load_labels(labels_path):
 
 def random_split(files, test_ratio, random_state=42):
     """
-    Simple random split - no stratification, no grouping.
+    Random split ensuring every class appears in BOTH train and test.
+    
+    For each class:
+    - If it has 1 sample: goes to train only
+    - If it has 2+ samples: at least 1 goes to train, at least 1 to test, rest random
     
     Args:
         files: List of file entries
@@ -48,33 +52,43 @@ def random_split(files, test_ratio, random_state=42):
     """
     random.seed(random_state)
     
-    # Shuffle all files
-    all_files = files.copy()
-    random.shuffle(all_files)
+    # Group by class
+    files_by_class = defaultdict(list)
+    for f in files:
+        files_by_class[_get_primary_class(f)].append(f)
     
-    # Calculate split point
-    n_files = len(all_files)
-    n_test = int(n_files * test_ratio)
-    
-    # Split
-    train_files = all_files[n_test:]
-    test_files = all_files[:n_test]
-    
-    # Compute per-class stats for reporting
-    train_by_class = defaultdict(int)
-    test_by_class = defaultdict(int)
-    for f in train_files:
-        train_by_class[_get_primary_class(f)] += 1
-    for f in test_files:
-        test_by_class[_get_primary_class(f)] += 1
-    
+    train_files = []
+    test_files = []
     split_info = {}
-    for class_name in set(train_by_class.keys()) | set(test_by_class.keys()):
-        split_info[class_name] = {
-            'train': train_by_class[class_name],
-            'test': test_by_class[class_name],
-            'total': train_by_class[class_name] + test_by_class[class_name]
-        }
+    
+    for class_name, class_files in files_by_class.items():
+        shuffled = class_files.copy()
+        random.shuffle(shuffled)
+        
+        n_files = len(shuffled)
+        
+        if n_files == 1:
+            # Only 1 sample: put in train
+            train_files.extend(shuffled)
+            split_info[class_name] = {'train': 1, 'test': 0, 'total': 1}
+        else:
+            # Guarantee at least 1 in each split
+            # Then distribute the rest according to test_ratio
+            n_test = max(1, int(n_files * test_ratio))
+            n_test = min(n_test, n_files - 1)  # Ensure at least 1 for train
+            
+            test_files.extend(shuffled[:n_test])
+            train_files.extend(shuffled[n_test:])
+            
+            split_info[class_name] = {
+                'train': n_files - n_test,
+                'test': n_test,
+                'total': n_files
+            }
+    
+    # Final shuffle
+    random.shuffle(train_files)
+    random.shuffle(test_files)
     
     return train_files, test_files, split_info
 
