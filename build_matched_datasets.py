@@ -3,9 +3,11 @@ Build matched DOC and AviaNZ datasets for clean domain-shift testing.
 
 For each of the ~1000 human-reviewed DOC samples (non-poor-quality, with a
 resolvable species label), extract a spectrogram from the raw DOC audio and
-label it with the human truth.  Then find one AviaNZ segment annotated with
-the same species (or any of the ambiguous candidates if the human wrote
-"Tui/bellbird") and label it with its own AviaNZ annotation.
+label it with the human truth (normalized: lowercase, no leading '?').
+
+Then find one AviaNZ segment annotated with the same species (or any of the
+ambiguous candidates if the human wrote "Tui/bellbird") and label it with
+the same normalized human label.
 
 Result: ~1000 DOC samples and ~1000 AviaNZ samples, matched record-for-record
 by human label.  Same number, same species distribution, different domain.
@@ -43,6 +45,42 @@ from data_loader import AviaNZDataProcessor
 from spectrogram_utils import SpectrogramProcessor
 
 
+def normalize_label(label):
+    """
+    Normalize human labels to be consistent:
+    - Lowercase
+    - Strip whitespace
+    - Standardize spacing around slashes
+    
+    Returns None if label should be skipped (uncertain/empty).
+    """
+    if not label or pd.isna(label):
+        return None
+    
+    label = str(label).strip()
+    
+    # Skip uncertain labels (starting with ? or just ?)
+    if label.startswith('?') or label == '?':
+        return None
+    
+    # Skip empty after stripping
+    if not label:
+        return None
+    
+    # Lowercase
+    label = label.lower()
+    
+    # Normalize spacing around slashes (e.g., "tui / bellbird" -> "tui/bellbird")
+    label = label.replace(' / ', '/')
+    label = label.replace('/ ', '/')
+    label = label.replace(' /', '/')
+    
+    # Standardize hyphenation in common names
+    label = label.replace('long tailed', 'long-tailed')
+    
+    return label
+
+
 def load_avianz_name_mapping(mapping_csv):
     """
     Build a CommonName -> eBird dict from DOC_bird_naming_map.csv.
@@ -74,9 +112,9 @@ def make_spec_processor():
 def parse_reviewed_csv(csv_path, mapping_csv):
     """
     Returns a list of records, one per usable DOC sample.  Each record has:
-      species1_raw   : raw human label string for Species 1 (e.g. "Bellbird/Tui").
+      species1_raw   : normalized human label string for Species 1 (e.g. "bellbird/tui").
                        Used as the class label in BOTH datasets.
-      human_labels   : [species1_raw] + comma-split Species 2+ items (raw strings).
+      human_labels   : [species1_raw] + comma-split Species 2+ items (normalized).
       species1_codes : eBird codes resolved from Species 1 — used ONLY as AviaNZ
                        search keys, never stored as class labels.
       folder, predicted_code, audio_filename : for locating the raw audio.
@@ -92,6 +130,7 @@ def parse_reviewed_csv(csv_path, mapping_csv):
     records = []
     skipped_poor = 0
     skipped_no_label = 0
+    skipped_uncertain = 0
 
     for _, row in df.iterrows():
         if is_poor_quality(row.get('Note', '')):
@@ -103,37 +142,42 @@ def parse_reviewed_csv(csv_path, mapping_csv):
             species1_raw = ''
         species1_raw = species1_raw.strip()
 
+        # Normalize and check if we should skip this label
+        species1_normalized = normalize_label(species1_raw)
+        if species1_normalized is None:
+            skipped_uncertain += 1
+            continue
+
         species2_raw = row.get('Species 2+', '')
         if pd.isna(species2_raw):
             species2_raw = ''
 
-        if not species1_raw:
-            skipped_no_label += 1
-            continue
-
         # eBird codes: ONLY used internally to search AviaNZ for matching segments.
         # "/" means the human was uncertain — we'll accept a segment matching ANY candidate.
+        # Use the ORIGINAL (pre-normalized) label to look up eBird codes
         species1_codes = normalize_species_name_to_codes(
             species1_raw, common_to_ebird, ebird_to_common, group_cache
         )
         # If we can't resolve to any code at all we still keep the record for
         # DOC, but AviaNZ matching will fail and the pair will be dropped.
 
-        # Raw human label strings — these ARE the class labels.
-        species2_items = [s.strip() for s in species2_raw.split(',') if s.strip()] if species2_raw else []
-        human_labels = list(dict.fromkeys([species1_raw] + species2_items))
+        # Normalize secondary species labels
+        species2_items = [normalize_label(s) for s in species2_raw.split(',') if s.strip()] if species2_raw else []
+        species2_items = [s for s in species2_items if s is not None]  # Filter out uncertain ones
+        human_labels = list(dict.fromkeys([species1_normalized] + species2_items))
 
         records.append({
             'folder': str(row[col_folder]).strip(),
             'predicted_code': str(row[col_predicted]).strip(),
             'audio_filename': str(row[col_file]).strip(),
-            'species1_raw': species1_raw,       # primary label string
-            'human_labels': human_labels,        # full label strings (raw)
-            'species1_codes': species1_codes,    # eBird codes for AviaNZ search only
+            'species1_raw': species1_normalized,       # primary label string (normalized)
+            'human_labels': human_labels,               # full label strings (normalized, no uncertain)
+            'species1_codes': species1_codes,           # eBird codes for AviaNZ search only
         })
 
     print(f'Parsed {len(records)} usable DOC samples from {len(df)} rows')
     print(f'  skipped poor quality : {skipped_poor}')
+    print(f'  skipped uncertain    : {skipped_uncertain}')
     print(f'  skipped no label     : {skipped_no_label}')
     return records
 
