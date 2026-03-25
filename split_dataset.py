@@ -36,55 +36,82 @@ def load_labels(labels_path):
 
 def random_split(files, test_ratio, random_state=42):
     """
-    Random split ensuring every class appears in BOTH train and test.
+    Random split ensuring every class appears in BOTH train and test (multilabel-aware).
     
-    For each class:
-    - If it has 1 sample: goes to train only
-    - If it has 2+ samples: at least 1 goes to train, at least 1 to test, rest random
+    In multilabel setting, each file can have multiple classes. This function ensures
+    that for every class:
+    - At least one file containing that class goes to train
+    - At least one file containing that class goes to test (if possible)
+    
+    Algorithm:
+    1. Find all classes and which files contain them
+    2. For each class, reserve at least one file for train and one for test
+    3. Randomly assign remaining files according to test_ratio
     
     Args:
-        files: List of file entries
+        files: List of file entries with 'class_names' field
         test_ratio: Fraction of data to use for testing (0.0 to 1.0)
         random_state: Random seed for reproducibility
         
     Returns:
-        train_files, test_files: Lists of file entries for train and test sets
+        train_files, test_files, split_info: Lists of file entries and per-class counts
     """
     random.seed(random_state)
     
-    # Group by first class (for stratification in multilabel setting)
-    files_by_class = defaultdict(list)
-    for f in files:
-        files_by_class[_get_first_class(f)].append(f)
+    # Build class-to-files mapping
+    class_to_files = defaultdict(set)
+    for i, f in enumerate(files):
+        for cls in f.get('class_names', []):
+            class_to_files[cls].add(i)
     
-    train_files = []
-    test_files = []
+    # Track which files go to train vs test
+    assigned = {}  # file_idx -> 'train' or 'test'
+    
+    # Phase 1: Ensure each class with 2+ files has at least one in train and one in test
+    for cls, file_indices in class_to_files.items():
+        file_list = list(file_indices)
+        
+        if len(file_list) == 1:
+            # Only one file for this class - put in train
+            idx = file_list[0]
+            if idx not in assigned:
+                assigned[idx] = 'train'
+        elif len(file_list) >= 2:
+            # Ensure at least one in train and one in test
+            random.shuffle(file_list)
+            unassigned = [idx for idx in file_list if idx not in assigned]
+            
+            # Check if we already have representation in both splits
+            has_train = any(assigned.get(idx) == 'train' for idx in file_list)
+            has_test = any(assigned.get(idx) == 'test' for idx in file_list)
+            
+            if not has_train and unassigned:
+                assigned[unassigned.pop(0)] = 'train'
+            if not has_test and unassigned:
+                assigned[unassigned.pop(0)] = 'test'
+    
+    # Phase 2: Randomly assign remaining files according to test_ratio
+    for i in range(len(files)):
+        if i not in assigned:
+            if random.random() < test_ratio:
+                assigned[i] = 'test'
+            else:
+                assigned[i] = 'train'
+    
+    # Build train and test sets
+    train_files = [files[i] for i in range(len(files)) if assigned[i] == 'train']
+    test_files = [files[i] for i in range(len(files)) if assigned[i] == 'test']
+    
+    # Build split info (count by class)
     split_info = {}
-    
-    for class_name, class_files in files_by_class.items():
-        shuffled = class_files.copy()
-        random.shuffle(shuffled)
-        
-        n_files = len(shuffled)
-        
-        if n_files == 1:
-            # Only 1 sample: put in train
-            train_files.extend(shuffled)
-            split_info[class_name] = {'train': 1, 'test': 0, 'total': 1}
-        else:
-            # Guarantee at least 1 in each split
-            # Then distribute the rest according to test_ratio
-            n_test = max(1, int(n_files * test_ratio))
-            n_test = min(n_test, n_files - 1)  # Ensure at least 1 for train
-            
-            test_files.extend(shuffled[:n_test])
-            train_files.extend(shuffled[n_test:])
-            
-            split_info[class_name] = {
-                'train': n_files - n_test,
-                'test': n_test,
-                'total': n_files
-            }
+    for cls, file_indices in class_to_files.items():
+        train_count = sum(1 for idx in file_indices if assigned[idx] == 'train')
+        test_count = sum(1 for idx in file_indices if assigned[idx] == 'test')
+        split_info[cls] = {
+            'train': train_count,
+            'test': test_count,
+            'total': len(file_indices)
+        }
     
     # Final shuffle
     random.shuffle(train_files)

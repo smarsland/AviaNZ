@@ -436,7 +436,9 @@ def main():
     print(f'\nMatched dataset size: {len(doc_labels_final)} DOC  /  {len(avianz_labels)} AviaNZ')
 
     # Filter to common classes present in both datasets with sufficient samples
-    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=5)
+    # With test_ratio=0.25, min=20 gives ~15 train, ~5 test per class
+    # This ensures robust splits even with multilabel (where splitting by first class may miss some labels)
+    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=20)
 
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')

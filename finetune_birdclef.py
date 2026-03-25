@@ -790,6 +790,57 @@ class BirdClefFineTuner:
         else:
             return total_loss / len(self.train_loader), train_acc
     
+    def evaluate_train(self):
+        """Evaluate on training set (in eval mode, no augmentation)."""
+        self.model.eval()
+        if self.use_cleaner:
+            self.cleaner.eval()
+        total_loss = 0
+        correct = 0
+        total = 0
+
+        metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
+        
+        with torch.no_grad():
+            for data, target in self.train_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                
+                if self.use_cleaner:
+                    data = self.cleaner(data)
+                
+                output = self.model(data)
+                
+                # Handle target format for loss computation
+                if self.multilabel:
+                    loss = self.criterion(output, target.float())
+                else:
+                    if target.dim() == 2 and target.shape[1] > 1:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target.long()
+                    loss = self.criterion(output, target_labels)
+                
+                total_loss += loss.item()
+                
+                if self.multilabel:
+                    batch_metrics = self._compute_multilabel_metrics(output, target)
+                    for k in metrics_sum:
+                        metrics_sum[k] += batch_metrics[k] * target.size(0)
+                else:
+                    pred = output.argmax(dim=1)
+                    if target.dim() == 2:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target
+                    correct += pred.eq(target_labels).sum().item()
+                
+                total += target.size(0)
+
+        if self.multilabel:
+            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            return total_loss / len(self.train_loader), avg_metrics
+        return total_loss / len(self.train_loader), 100. * correct / total
+    
     def validate(self):
         """Validate on validation set."""
         self.model.eval()
@@ -966,6 +1017,9 @@ class BirdClefFineTuner:
         for epoch in range(self.epochs):
             train_loss, train_metrics = self.train_epoch(epoch)
             
+            # Evaluate on training set (in eval mode, no augmentation)
+            train_eval_loss, train_eval_metrics = self.evaluate_train()
+            
             # Only validate if validation set exists
             if self.val_loader is not None:
                 val_loss, val_metrics = self.validate()
@@ -978,29 +1032,30 @@ class BirdClefFineTuner:
             history['val_loss'].append(val_loss if val_loss is not None else None)
 
             if self.multilabel:
-                history['train_macro_f1'].append(train_metrics['macro_f1'])
+                # Store eval metrics (not training-mode metrics) for history
+                history['train_macro_f1'].append(train_eval_metrics['macro_f1'])
                 history['val_macro_f1'].append(val_metrics['macro_f1'] if val_metrics else None)
-                history['train_micro_f1'].append(train_metrics['micro_f1'])
+                history['train_micro_f1'].append(train_eval_metrics['micro_f1'])
                 history['val_micro_f1'].append(val_metrics['micro_f1'] if val_metrics else None)
-                history['train_exact_match'].append(train_metrics['exact_match'])
+                history['train_exact_match'].append(train_eval_metrics['exact_match'])
                 history['val_exact_match'].append(val_metrics['exact_match'] if val_metrics else None)
-                history['train_bit_acc'].append(train_metrics['bit_acc'])
+                history['train_bit_acc'].append(train_eval_metrics['bit_acc'])
                 history['val_bit_acc'].append(val_metrics['bit_acc'] if val_metrics else None)
                 # Store exact_match as primary metric (used by experiment runner)
-                history['train_acc'].append(train_metrics['exact_match'] * 100)
+                history['train_acc'].append(train_eval_metrics['exact_match'] * 100)
                 history['val_acc'].append(val_metrics['exact_match'] * 100 if val_metrics else None)
             else:
-                history['train_acc'].append(train_metrics)
+                history['train_acc'].append(train_eval_metrics)
                 history['val_acc'].append(val_metrics if val_metrics is not None else None)
             
             print(f"Epoch {epoch+1}/{self.epochs}:")
             if self.multilabel:
                 metrics_str = (
                     f"  Train Loss: {train_loss:.4f}, "
-                    f"Macro F1: {train_metrics['macro_f1']:.4f}, "
-                    f"Micro F1: {train_metrics['micro_f1']:.4f}, "
-                    f"Bit Acc: {train_metrics['bit_acc']*100:.2f}%, "
-                    f"Exact: {train_metrics['exact_match']*100:.2f}%"
+                    f"Macro F1: {train_eval_metrics['macro_f1']:.4f}, "
+                    f"Micro F1: {train_eval_metrics['micro_f1']:.4f}, "
+                    f"Bit Acc: {train_eval_metrics['bit_acc']*100:.2f}%, "
+                    f"Exact: {train_eval_metrics['exact_match']*100:.2f}%"
                 )
                 if self.use_dann and 'domain_acc' in train_metrics:
                     metrics_str += f", Domain Acc: {train_metrics['domain_acc']:.1f}%"
@@ -1016,9 +1071,9 @@ class BirdClefFineTuner:
             else:
                 if self.use_dann and isinstance(train_metrics, tuple):
                     train_acc, domain_acc = train_metrics
-                    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, Domain Acc: {domain_acc:.1f}%")
+                    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_eval_metrics:.2f}%, Domain Acc: {domain_acc:.1f}%")
                 else:
-                    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_metrics:.2f}%")
+                    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_eval_metrics:.2f}%")
                 if val_metrics is not None:
                     print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_metrics:.2f}%")
             

@@ -159,8 +159,11 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).name
-            test2_name = Path(exp['test2']).name
+            # Extract meaningful test names (parent directory + folder name)
+            test1_path = Path(exp['test1'])
+            test2_path = Path(exp['test2'])
+            test1_name = f"{test1_path.parent.name}/{test1_path.name}"
+            test2_name = f"{test2_path.parent.name}/{test2_path.name}"
             
             if exp['model_type'] == 'ast':
                 normalize = exp.get('normalize', False)
@@ -290,8 +293,11 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).name
-            test2_name = Path(exp['test2']).name
+            # Extract meaningful test names (parent directory + folder name)
+            test1_path = Path(exp['test1'])
+            test2_path = Path(exp['test2'])
+            test1_name = f"{test1_path.parent.name}/{test1_path.name}"
+            test2_name = f"{test2_path.parent.name}/{test2_path.name}"
             
             if str(exp['test1']) == str(exp['train']):
                 print(f"  ⚠️  WARNING: test1 folder is the same as the train folder: {exp['test1']}")
@@ -435,8 +441,11 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).name
-            test2_name = Path(exp['test2']).name
+            # Extract meaningful test names (parent directory + folder name)
+            test1_path = Path(exp['test1'])
+            test2_path = Path(exp['test2'])
+            test1_name = f"{test1_path.parent.name}/{test1_path.name}"
+            test2_name = f"{test2_path.parent.name}/{test2_path.name}"
             
             # Extract test accuracies from saved test results files
             test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
@@ -548,8 +557,11 @@ class CrossDatasetExperiments:
             with open(history_path, 'r') as f:
                 history = json.load(f)
             
-            test1_name = Path(exp['test1']).name
-            test2_name = Path(exp['test2']).name
+            # Extract meaningful test names (parent directory + folder name)
+            test1_path = Path(exp['test1'])
+            test2_path = Path(exp['test2'])
+            test1_name = f"{test1_path.parent.name}/{test1_path.name}"
+            test2_name = f"{test2_path.parent.name}/{test2_path.name}"
             
             if exp['model_type'] == 'ast':
                 normalize = exp.get('normalize', False)
