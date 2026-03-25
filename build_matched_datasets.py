@@ -369,7 +369,9 @@ def write_labels_json(output_folder, labels, dataset_name):
     species_counts = defaultdict(int)
     all_codes = set()
     for e in labels:
-        species_counts[e['primary_class']] += 1
+        # Count each species in this multilabel entry
+        for species in e['class_names']:
+            species_counts[species] += 1
         all_codes.update(e['class_names'])
 
     payload = {
