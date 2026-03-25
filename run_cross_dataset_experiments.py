@@ -764,6 +764,7 @@ class CrossDatasetExperiments:
         """Extract test accuracy from saved prediction CSV file."""
         # finetune_birdclef.py saves predictions as predictions_{parent}_{test_name}.csv
         # where parent is the parent directory name and test_name is the folder name.
+        # test_name comes as "parent/test", need to convert to "parent_test" for file matching
         
         all_csvs = list(exp_output.glob('*.csv'))
         print(f"  DEBUG: Looking for predictions in {exp_output}")
@@ -771,12 +772,14 @@ class CrossDatasetExperiments:
         print(f"  DEBUG: All CSV files in directory: {[f.name for f in all_csvs]}")
         print(f"  DEBUG: Using test folder: {test_folder}")
         
-        csv_files = list(exp_output.glob(f'predictions_*{test_name}*.csv'))
+        # Convert test_name from "parent/folder" to "parent_folder" for filename matching
+        test_name_pattern = test_name.replace('/', '_')
+        csv_files = list(exp_output.glob(f'predictions_*{test_name_pattern}*.csv'))
         
         if not csv_files:
             raise FileNotFoundError(
                 f"No prediction CSV found for '{test_name}' in {exp_output}.\n"
-                f"Expected pattern: predictions_*{test_name}*.csv\n"
+                f"Expected pattern: predictions_*{test_name_pattern}*.csv\n"
                 f"Available CSVs: {[f.name for f in all_csvs]}"
             )
         
