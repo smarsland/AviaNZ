@@ -242,12 +242,12 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     src_audio_folder = os.path.join(input_folder, "audio")
     has_audio = os.path.exists(src_audio_folder) and os.path.isdir(src_audio_folder)
     if has_audio:
-        print(f"  Audfirst class for reporting
+        print(f"  Audio folder: present")
+    
+    # Group files by first class for reporting
     files_by_class = defaultdict(list)
     for file_entry in files:
-        files_by_class[_get_firstst)
-    for file_entry in files:
-        files_by_class[_get_primary_class(file_entry)].append(file_entry)
+        files_by_class[_get_first_class(file_entry)].append(file_entry)
 
     print(f"\nClass distribution:")
     for class_name in sorted(files_by_class.keys()):
