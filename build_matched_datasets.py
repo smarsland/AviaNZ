@@ -324,10 +324,12 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
     return avianz_labels, matched_mask
 
 
-def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=5):
+def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=10):
     """
     Filter both datasets to keep only species that appear with sufficient samples in BOTH.
     This ensures train/test splits will have the same classes available.
+    
+    With test_ratio=0.25 and min=10, each class gets ~7-8 train and ~2-3 test samples.
     """
     doc_counts = defaultdict(int)
     avianz_counts = defaultdict(int)
@@ -417,7 +419,7 @@ def main():
     print(f'\nMatched dataset size: {len(doc_labels_final)} DOC  /  {len(avianz_labels)} AviaNZ')
 
     # Filter to common classes present in both datasets with sufficient samples
-    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=5)
+    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=10)
 
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')
