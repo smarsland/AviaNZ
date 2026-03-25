@@ -44,8 +44,8 @@ MIXUP_ALPHA=0.25
 TEST_SIZE=0.25
 
 # Skip flags (set to 1 to skip a step)
-SKIP_BUILD=0
-SKIP_SPLIT=0
+SKIP_BUILD=1
+SKIP_SPLIT=1
 SKIP_EXPERIMENTS=0
 
 # Force re-run experiments even if results exist (set to 1 to force)
