@@ -480,24 +480,52 @@ class SpectrogramDataset(Dataset):
     def apply_spec_transform(self, sg):
         """Apply spectrogram transformation (log, PCEN, etc.).
         
-        Returns log-mel spectrogram without normalization.
-        Normalization happens in the model forward pass using AudioSet statistics.
+        Returns transformed spectrogram.
+        For PCEN, implements Per-Channel Energy Normalization (arXiv 1607.05666, arXiv 1905.08352v2).
         """
         if self.spec_transform == "None" or self.spec_transform is None:
-            # Return linear magnitude as-is (not recommended for AST)
             return sg
-        else:
-            LOG_OFFSET = 1e-7
+        
+        LOG_OFFSET = 1e-7
+        
+        if self.spec_transform == "Log":
+            sg = np.maximum(sg, 0.0)
+            sg_safe = sg + LOG_OFFSET
+            return np.log(sg_safe)
+        
+        elif self.spec_transform == "PCEN":
+            from scipy import signal
+            gain = 0.8
+            bias = 10
+            power = 0.25
+            t = 0.060
+            eps = 1e-6
             
-            if self.spec_transform == "Log":
-                # Ensure non-negative values before log (clipping any potential numerical errors)
-                sg = np.maximum(sg, 0.0)
-                sg_safe = sg + LOG_OFFSET
-                return np.log(sg_safe)
-                
-            else:
-                print(f"Warning: Unknown transform {self.spec_transform}, using linear")
-                return sg
+            fs = 16000
+            hop_samples = int(0.010 * fs)
+            s = 1 - np.exp(-hop_samples / (t * fs))
+            
+            sg_2d = sg[:, :, 0] if sg.ndim == 3 else sg
+            M = signal.lfilter([s], [1, s-1], sg_2d, axis=1)
+            smooth = (eps + M)**(-gain)
+            pcen = (sg_2d * smooth + bias)**power - bias**power
+            
+            if sg.ndim == 3:
+                result = np.zeros_like(sg)
+                result[:, :, 0] = pcen
+                return result
+            return pcen
+        
+        elif self.spec_transform == "Box-Cox":
+            from scipy.stats import boxcox
+            size = sg.shape
+            sg_flat = np.maximum(sg.flatten() + LOG_OFFSET, 1e-10)
+            sg_transformed, lam = boxcox(sg_flat)
+            return np.reshape(sg_transformed, size)
+        
+        else:
+            print(f"Warning: Unknown transform {self.spec_transform}, using linear")
+            return sg
 
     def apply_padding_and_add_channels(self, array, is_noise=False):
         """Apply padding and ensure correct number of channels.

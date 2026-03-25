@@ -42,7 +42,7 @@ class CrossDatasetExperiments:
                  output_folder, model_path, epochs=10, batch_size=32,
                  lambda_domain=0.1, noise_folder=None,
                  noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
-                 mixup=None, force_rerun=False):
+                 mixup=None, force_rerun=False, spec_transform='Log', normalize=False):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -60,6 +60,8 @@ class CrossDatasetExperiments:
         self.background_prob = background_prob
         self.noise_as_samples = noise_as_samples
         self.mixup = mixup
+        self.spec_transform = spec_transform
+        self.normalize = normalize
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
@@ -264,8 +266,12 @@ class CrossDatasetExperiments:
             '--batch-size', str(self.batch_size),
             '--test-folder', exp['test1'],
             '--test-folder2', exp['test2'],
-            '--multilabel'
+            '--multilabel',
+            '--spec-transform', self.spec_transform
         ]
+
+        if self.normalize:
+            cmd.append('--normalize')
 
         if self.mixup is not None:
             cmd.extend(['--mixup', str(self.mixup)])
@@ -1694,6 +1700,10 @@ def main():
                        help='[BirdClef] Probability of replacing a training sample with its background (labels zeroed). Only used if provided.')
     parser.add_argument('--mixup', type=float, default=None,
                        help='Mixup alpha (0 disables). Only used if provided.')
+    parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
+                       help='Spectrogram transform (default: Log = standard log scaling). PCEN is robust to amplitude variation.')
+    parser.add_argument('--normalize', action='store_true',
+                       help='Apply background normalization (--normalize flag in finetune_birdclef.py)')
     parser.add_argument('--force', action='store_true',
                        help='Force re-run of experiments even if results already exist')
     
@@ -1729,7 +1739,9 @@ def main():
         noise_mode=args.noise_mode,
         background_prob=args.background_prob,
         noise_as_samples=args.noise_as_samples,
-        mixup=args.mixup
+        mixup=args.mixup,
+        spec_transform=args.spec_transform,
+        normalize=args.normalize
     )
     
     experiments.run()
