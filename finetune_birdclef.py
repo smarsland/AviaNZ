@@ -259,21 +259,12 @@ class BirdClefFineTuner:
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
         self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
         
-        print(f"\n=== DIAGNOSTIC: Class mapping (training data) ===")
-        print(f"Categories: {self.data['categories']}")
-        print(f"Num classes: {self.data['nclasses']}")
-        
         self.test_datasets = []
         
         if self.test_folder:
             print(f"  Loading test set 1 from: {self.test_folder}")
             test_loader = DataLoader(self.test_folder, noise_folder=self.noise_folder)
             test_data = test_loader.load_data(self.multilabel, validation_share=0.0)
-            
-            print(f"\n=== DIAGNOSTIC: Class mapping (test set 1) ===")
-            print(f"Categories: {test_data['categories']}")
-            print(f"Num classes: {test_data['nclasses']}")
-            print(f"Match training? {self.data['categories'] == test_data['categories']}")
             
             test_labels = test_data['train_labels']
             if self.data['categories'] != test_data['categories']:
@@ -618,6 +609,56 @@ class BirdClefFineTuner:
             'micro_f1': micro_f1,
         }
     
+    def _evaluate(self, loader):
+        """Unified evaluation function - same code path for train/val/test."""
+        self.model.eval()
+        if self.use_cleaner:
+            self.cleaner.eval()
+        
+        total_loss = 0
+        correct = 0
+        total = 0
+        metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
+        
+        with torch.no_grad():
+            for data, target in loader:
+                data, target = data.to(self.device), target.to(self.device)
+                
+                if self.use_cleaner:
+                    data = self.cleaner(data)
+                
+                output = self.model(data)
+                
+                if self.multilabel:
+                    loss = self.criterion(output, target.float())
+                    batch_metrics = self._compute_multilabel_metrics(output, target)
+                    for k in metrics_sum:
+                        metrics_sum[k] += batch_metrics[k] * target.size(0)
+                else:
+                    if target.dim() == 2 and target.shape[1] > 1:
+                        target_labels = target.argmax(dim=1)
+                    else:
+                        target_labels = target.long()
+                    loss = self.criterion(output, target_labels)
+                    pred = output.argmax(dim=1)
+                    correct += pred.eq(target_labels).sum().item()
+                
+                total_loss += loss.item()
+                total += target.size(0)
+        
+        if self.multilabel:
+            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            return total_loss / len(loader), avg_metrics
+        return total_loss / len(loader), 100. * correct / total
+    
+    def evaluate_train(self):
+        """Evaluate on training set."""
+        return self._evaluate(self.train_eval_loader)
+    
+    def validate(self):
+        """Evaluate on validation set."""
+        return self._evaluate(self.val_loader)
+    
     def train_epoch(self, epoch):
         """Train for one epoch."""
         self.model.train()
@@ -837,84 +878,6 @@ class BirdClefFineTuner:
         else:
             return total_loss / len(self.train_loader), train_acc
     
-    def evaluate_train(self):
-        """Evaluate on training set (in eval mode, no augmentation)."""
-        print(f"\n  === DIAGNOSTIC: evaluate_train() ===")
-        print(f"  Model training mode: {self.model.training}")
-        print(f"  Train_eval_loader dataset type: {type(self.train_eval_loader.dataset)}")
-        print(f"  Train_eval_loader size: {len(self.train_eval_loader.dataset)}")
-        if hasattr(self.train_eval_loader.dataset, 'cropping_mode'):
-            print(f"  Cropping mode: {self.train_eval_loader.dataset.cropping_mode}")
-        if hasattr(self.train_eval_loader.dataset, 'training'):
-            print(f"  Dataset training flag: {self.train_eval_loader.dataset.training}")
-        
-        self.model.eval()
-        if self.use_cleaner:
-            self.cleaner.eval()
-        total_loss = 0
-        correct = 0
-        total = 0
-
-        metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
-        
-        with torch.no_grad():
-            for data, target in self.train_eval_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                
-                if self.use_cleaner:
-                    data = self.cleaner(data)
-                
-                output = self.model(data)
-                
-                # Handle target format for loss computation
-                if self.multilabel:
-                    loss = self.criterion(output, target.float())
-                else:
-                    if target.dim() == 2 and target.shape[1] > 1:
-                        target_labels = target.argmax(dim=1)
-                    else:
-                        target_labels = target.long()
-                    loss = self.criterion(output, target_labels)
-                
-                total_loss += loss.item()
-                
-                if self.multilabel:
-                    batch_metrics = self._compute_multilabel_metrics(output, target)
-                    for k in metrics_sum:
-                        metrics_sum[k] += batch_metrics[k] * target.size(0)
-                else:
-                    pred = output.argmax(dim=1)
-                    if target.dim() == 2:
-                        target_labels = target.argmax(dim=1)
-                    else:
-                        target_labels = target
-                    correct += pred.eq(target_labels).sum().item()
-                
-                total += target.size(0)
-
-        if self.multilabel:
-            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
-            print(f"  === END DIAGNOSTIC: evaluate_train() ===")
-            print(f"  Total samples evaluated: {total}")
-            print(f"  Exact match: {avg_metrics['exact_match']*100:.2f}%")
-            print(f"  Macro F1: {avg_metrics['macro_f1']:.4f}")
-            return total_loss / len(self.train_eval_loader), avg_metrics
-        print(f"  === END DIAGNOSTIC: evaluate_train() ===")
-        print(f"  Total samples evaluated: {total}")
-        print(f"  Accuracy: {100. * correct / total:.2f}%")
-        return total_loss / len(self.train_eval_loader), 100. * correct / total
-    
-    def validate(self):
-        """Validate on validation set."""
-        print(f"\n  === DIAGNOSTIC: validate() ===")
-        print(f"  Model training mode: {self.model.training}")
-        print(f"  Val_loader dataset type: {type(self.val_loader.dataset)}")
-        print(f"  Val_loader size: {len(self.val_loader.dataset)}")
-        if hasattr(self.val_loader.dataset, 'cropping_mode'):
-            print(f"  Cropping mode: {self.val_loader.dataset.cropping_mode}")
-        if hasattr(self.val_loader.dataset, 'training'):
-            print(f"  Dataset training flag: {self.val_loader.dataset.training}")
-        
         self.model.eval()
         if self.use_cleaner:
             self.cleaner.eval()
@@ -972,16 +935,11 @@ class BirdClefFineTuner:
         return total_loss / len(self.val_loader), 100. * correct / total
     
     def evaluate_test_set(self, test_data, test_name="Test"):
-        print(f"\n  === DIAGNOSTIC: evaluate_test_set({test_name}) ===")
-        
         from data_utils import SpectrogramDataset
         from torch.utils.data import DataLoader as TorchDataLoader
         
         img_height = config.DEFAULT_FREQ_BINS
         img_width = config.DEFAULT_TIME_BINS
-        
-        # Use default spec_transform from config (matches training/validation)
-        spec_transform = config.DEFAULT_SPEC_TRANSFORM
         
         test_dataset = SpectrogramDataset(
             test_data['filenames'],
@@ -992,7 +950,7 @@ class BirdClefFineTuner:
             cropping_mode='center',
             noise_filenames=None,
             noise_ratio=0.0,
-            spec_transform=spec_transform,
+            spec_transform=config.DEFAULT_SPEC_TRANSFORM,
             training=False,
             width_downsizing=None,
             normalize=self.normalize,
@@ -1002,11 +960,6 @@ class BirdClefFineTuner:
             remove_baseline=self.remove_baseline
         )
         
-        print(f"  Test dataset type: {type(test_dataset)}")
-        print(f"  Test dataset size: {len(test_dataset)}")
-        print(f"  Cropping mode: {test_dataset.cropping_mode}")
-        print(f"  Training flag: {test_dataset.training}")
-        
         test_loader = TorchDataLoader(
             test_dataset,
             batch_size=self.batch_size,
@@ -1015,74 +968,16 @@ class BirdClefFineTuner:
             pin_memory=True
         )
         
-        # For DANN: adapt batch norm to test domain before evaluating
-        if self.use_dann and 'doc' in test_name.lower():
-            print(f"  Adapting batch norm to test domain ({test_name})...")
-            self.model.train()  # Enable batch norm updates
-            with torch.no_grad():
-                for i, (data, _) in enumerate(test_loader):
-                    data = data.to(self.device)
-                    if self.use_cleaner:
-                        data = self.cleaner(data)
-                    _ = self.model(data)
-                    if i >= 20:  # Use subset of test data
-                        break
-            print(f"  ✓ Batch norm adapted")
-        
-        self.model.eval()
-        if self.use_cleaner:
-            self.cleaner.eval()
-        correct = 0
-        total = 0
-        metrics_sum = {'macro_f1': 0.0, 'micro_f1': 0.0, 'macro_precision': 0.0, 'macro_recall': 0.0}
-        
-        print(f"  DEBUG: Evaluating {len(test_loader.dataset)} test samples")
-        print(f"  DEBUG: Model num_classes: {self.model.num_classes}")
-        print(f"  DEBUG: Model categories: {self.categories}")
-        
-        with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(test_loader):
-                data, target = data.to(self.device), target.to(self.device)
-                
-                if self.use_cleaner:
-                    data = self.cleaner(data)
-                
-                output = self.model(data)
-                
-                if batch_idx == 0:
-                    print(f"  DEBUG: First batch - target shape: {target.shape}, output shape: {output.shape}")
-                    print(f"  DEBUG: First sample target: {target[0]}")
-                    print(f"  DEBUG: First sample output (top 3): {output[0].topk(3)}")
-                
-                if self.multilabel:
-                    batch_metrics = self._compute_multilabel_metrics(output, target)
-                    for k in metrics_sum:
-                        metrics_sum[k] += batch_metrics[k] * target.size(0)
-                else:
-                    pred = output.argmax(dim=1)
-                    if target.dim() == 2:
-                        target_labels = target.argmax(dim=1)
-                    else:
-                        target_labels = target
-                    correct += pred.eq(target_labels).sum().item()
-                
-                total += target.size(0)
+        # Use unified evaluate function
+        _, metrics = self._evaluate(test_loader)
         
         if self.multilabel:
-            avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
-            print(f"  === END DIAGNOSTIC: evaluate_test_set({test_name}) ===")
-            print(f"  Total samples evaluated: {total}")
-            print(f"  {test_name} Exact Match: {avg_metrics['exact_match']*100:.2f}%")
-            print(f"  {test_name} Macro F1: {avg_metrics['macro_f1']:.4f}")
-            print(f"  {test_name} Micro F1: {avg_metrics['micro_f1']:.4f}")
-            print(f"  {test_name} Bit Accuracy: {avg_metrics['bit_acc']*100:.2f}%")
-            return avg_metrics['exact_match'] * 100  # Return exact match as percentage
+            print(f"  {test_name} Exact Match: {metrics['exact_match']*100:.2f}%")
+            print(f"  {test_name} Macro F1: {metrics['macro_f1']:.4f}")
+            return metrics['exact_match'] * 100
         else:
-            test_acc = 100. * correct / total
-            print(f"  === END DIAGNOSTIC: evaluate_test_set({test_name}) ===")
-            print(f"  Total samples evaluated: {total}")
-            print(f"  {test_name} Accuracy: {test_acc:.2f}%")
-            return test_acc
+            print(f"  {test_name} Accuracy: {metrics:.2f}%")
+            return metrics
     
     def train(self):
         """Main training loop."""
