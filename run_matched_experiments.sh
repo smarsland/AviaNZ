@@ -48,6 +48,9 @@ SKIP_BUILD=0
 SKIP_SPLIT=0
 SKIP_EXPERIMENTS=0
 
+# Force re-run experiments even if results exist (set to 1 to force)
+FORCE_RERUN=1
+
 echo "============================================================"
 echo " Matched dataset experiments"
 echo "  Raw AviaNZ : $AVIANZ_RAW"
@@ -103,6 +106,11 @@ if [ $SKIP_EXPERIMENTS -eq 0 ]; then
         MIXUP_ARGS="--mixup $MIXUP_ALPHA"
     fi
 
+    FORCE_ARGS=""
+    if [ $FORCE_RERUN -eq 1 ]; then
+        FORCE_ARGS="--force"
+    fi
+
     python3 run_cross_dataset_experiments.py \
         --avianz-train "$AVIANZ_TRAIN" \
         --avianz-test  "$AVIANZ_TEST" \
@@ -112,7 +120,8 @@ if [ $SKIP_EXPERIMENTS -eq 0 ]; then
         --epochs       $EPOCHS \
         --batch-size   $BATCH_SIZE \
         $NOISE_ARGS \
-        $MIXUP_ARGS
+        $MIXUP_ARGS \
+        $FORCE_ARGS
 else
     echo "=== Step 3: SKIPPED (SKIP_EXPERIMENTS=1) ==="
 fi

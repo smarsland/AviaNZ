@@ -259,12 +259,21 @@ class BirdClefFineTuner:
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
         self.data = data_loader.load_data(self.multilabel, validation_share=self.validation_split)
         
+        print(f"\n=== DIAGNOSTIC: Class mapping (training data) ===")
+        print(f"Categories: {self.data['categories']}")
+        print(f"Num classes: {self.data['nclasses']}")
+        
         self.test_datasets = []
         
         if self.test_folder:
             print(f"  Loading test set 1 from: {self.test_folder}")
             test_loader = DataLoader(self.test_folder, noise_folder=self.noise_folder)
             test_data = test_loader.load_data(self.multilabel, validation_share=0.0)
+            
+            print(f"\n=== DIAGNOSTIC: Class mapping (test set 1) ===")
+            print(f"Categories: {test_data['categories']}")
+            print(f"Num classes: {test_data['nclasses']}")
+            print(f"Match training? {self.data['categories'] == test_data['categories']}")
             
             test_labels = test_data['train_labels']
             if self.data['categories'] != test_data['categories']:
@@ -338,6 +347,34 @@ class BirdClefFineTuner:
             mixup_mode=self.mixup_mode,
             noise_mode=self.noise_mode,
             background_prob=self.background_prob
+        )
+        
+        # Create separate eval loader for training data (no augmentation)
+        # Use ALL training data (train + val) for evaluation, same as test set
+        all_train_filenames = self.data['train_filenames'] + (self.data.get('val_filenames', []) or [])
+        all_train_labels = np.vstack([self.data['train_labels'], self.data.get('val_labels', np.array([]))]) if self.data.get('val_labels') is not None and len(self.data.get('val_labels', [])) > 0 else self.data['train_labels']
+        
+        train_eval_dataset = SpectrogramDataset(
+            all_train_filenames,
+            all_train_labels,
+            img_height,
+            img_width,
+            config.DEFAULT_CHANNELS,
+            cropping_mode='center',
+            noise_filenames=None,
+            noise_ratio=0.0,
+            spec_transform=config.DEFAULT_SPEC_TRANSFORM,
+            training=False,
+            normalize=self.normalize,
+            use_temporal_roll=False,
+            remove_baseline=self.remove_baseline
+        )
+        self.train_eval_loader = TorchDataLoader(
+            train_eval_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=torch.cuda.is_available()
         )
         
         print(f"  Train samples: {len(self.train_loader.dataset)}")
@@ -792,6 +829,15 @@ class BirdClefFineTuner:
     
     def evaluate_train(self):
         """Evaluate on training set (in eval mode, no augmentation)."""
+        print(f"\n  === DIAGNOSTIC: evaluate_train() ===")
+        print(f"  Model training mode: {self.model.training}")
+        print(f"  Train_eval_loader dataset type: {type(self.train_eval_loader.dataset)}")
+        print(f"  Train_eval_loader size: {len(self.train_eval_loader.dataset)}")
+        if hasattr(self.train_eval_loader.dataset, 'cropping_mode'):
+            print(f"  Cropping mode: {self.train_eval_loader.dataset.cropping_mode}")
+        if hasattr(self.train_eval_loader.dataset, 'training'):
+            print(f"  Dataset training flag: {self.train_eval_loader.dataset.training}")
+        
         self.model.eval()
         if self.use_cleaner:
             self.cleaner.eval()
@@ -802,7 +848,7 @@ class BirdClefFineTuner:
         metrics_sum = {'bit_acc': 0.0, 'exact_match': 0.0, 'macro_f1': 0.0, 'micro_f1': 0.0}
         
         with torch.no_grad():
-            for data, target in self.train_loader:
+            for data, target in self.train_eval_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 
                 if self.use_cleaner:
@@ -838,11 +884,27 @@ class BirdClefFineTuner:
 
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
-            return total_loss / len(self.train_loader), avg_metrics
-        return total_loss / len(self.train_loader), 100. * correct / total
+            print(f"  === END DIAGNOSTIC: evaluate_train() ===")
+            print(f"  Total samples evaluated: {total}")
+            print(f"  Exact match: {avg_metrics['exact_match']*100:.2f}%")
+            print(f"  Macro F1: {avg_metrics['macro_f1']:.4f}")
+            return total_loss / len(self.train_eval_loader), avg_metrics
+        print(f"  === END DIAGNOSTIC: evaluate_train() ===")
+        print(f"  Total samples evaluated: {total}")
+        print(f"  Accuracy: {100. * correct / total:.2f}%")
+        return total_loss / len(self.train_eval_loader), 100. * correct / total
     
     def validate(self):
         """Validate on validation set."""
+        print(f"\n  === DIAGNOSTIC: validate() ===")
+        print(f"  Model training mode: {self.model.training}")
+        print(f"  Val_loader dataset type: {type(self.val_loader.dataset)}")
+        print(f"  Val_loader size: {len(self.val_loader.dataset)}")
+        if hasattr(self.val_loader.dataset, 'cropping_mode'):
+            print(f"  Cropping mode: {self.val_loader.dataset.cropping_mode}")
+        if hasattr(self.val_loader.dataset, 'training'):
+            print(f"  Dataset training flag: {self.val_loader.dataset.training}")
+        
         self.model.eval()
         if self.use_cleaner:
             self.cleaner.eval()
@@ -889,10 +951,19 @@ class BirdClefFineTuner:
 
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            print(f"  === END DIAGNOSTIC: validate() ===")
+            print(f"  Total samples evaluated: {total}")
+            print(f"  Exact match: {avg_metrics['exact_match']*100:.2f}%")
+            print(f"  Macro F1: {avg_metrics['macro_f1']:.4f}")
             return total_loss / len(self.val_loader), avg_metrics
+        print(f"  === END DIAGNOSTIC: validate() ===")
+        print(f"  Total samples evaluated: {total}")
+        print(f"  Accuracy: {100. * correct / total:.2f}%")
         return total_loss / len(self.val_loader), 100. * correct / total
     
     def evaluate_test_set(self, test_data, test_name="Test"):
+        print(f"\n  === DIAGNOSTIC: evaluate_test_set({test_name}) ===")
+        
         from data_utils import SpectrogramDataset
         from torch.utils.data import DataLoader as TorchDataLoader
         
@@ -920,6 +991,11 @@ class BirdClefFineTuner:
             use_temporal_roll=False,
             remove_baseline=self.remove_baseline
         )
+        
+        print(f"  Test dataset type: {type(test_dataset)}")
+        print(f"  Test dataset size: {len(test_dataset)}")
+        print(f"  Cropping mode: {test_dataset.cropping_mode}")
+        print(f"  Training flag: {test_dataset.training}")
         
         test_loader = TorchDataLoader(
             test_dataset,
@@ -984,6 +1060,8 @@ class BirdClefFineTuner:
         
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            print(f"  === END DIAGNOSTIC: evaluate_test_set({test_name}) ===")
+            print(f"  Total samples evaluated: {total}")
             print(f"  {test_name} Exact Match: {avg_metrics['exact_match']*100:.2f}%")
             print(f"  {test_name} Macro F1: {avg_metrics['macro_f1']:.4f}")
             print(f"  {test_name} Micro F1: {avg_metrics['micro_f1']:.4f}")
@@ -991,6 +1069,8 @@ class BirdClefFineTuner:
             return avg_metrics['exact_match'] * 100  # Return exact match as percentage
         else:
             test_acc = 100. * correct / total
+            print(f"  === END DIAGNOSTIC: evaluate_test_set({test_name}) ===")
+            print(f"  Total samples evaluated: {total}")
             print(f"  {test_name} Accuracy: {test_acc:.2f}%")
             return test_acc
     

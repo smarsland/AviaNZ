@@ -42,7 +42,7 @@ class CrossDatasetExperiments:
                  output_folder, model_path, epochs=10, batch_size=32,
                  lambda_domain=0.1, noise_folder=None,
                  noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
-                 mixup=None):
+                 mixup=None, force_rerun=False):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -53,6 +53,7 @@ class CrossDatasetExperiments:
         self.batch_size = batch_size
         self.lambda_domain = lambda_domain
         self.noise_folder = noise_folder
+        self.force_rerun = force_rerun
 
         self.noise = noise
         self.noise_mode = noise_mode
@@ -129,6 +130,9 @@ class CrossDatasetExperiments:
     
     def is_experiment_complete(self, exp_output):
         """Check if experiment has already been completed successfully."""
+        if self.force_rerun:
+            return False  # Always return False when force_rerun is enabled
+        
         history_path = exp_output / 'training_history.json'
         
         if not history_path.exists():
@@ -1690,6 +1694,8 @@ def main():
                        help='[BirdClef] Probability of replacing a training sample with its background (labels zeroed). Only used if provided.')
     parser.add_argument('--mixup', type=float, default=None,
                        help='Mixup alpha (0 disables). Only used if provided.')
+    parser.add_argument('--force', action='store_true',
+                       help='Force re-run of experiments even if results already exist')
     
     args = parser.parse_args()
     
@@ -1718,6 +1724,7 @@ def main():
         batch_size=args.batch_size,
         lambda_domain=args.lambda_domain,
         noise_folder=args.noise_folder,
+        force_rerun=args.force,
         noise=args.noise,
         noise_mode=args.noise_mode,
         background_prob=args.background_prob,
