@@ -1423,23 +1423,50 @@ class CrossDatasetExperiments:
         plt.close()
     
     def save_results(self):
-        """Save all results to JSON."""
+        """Save all results to JSON, merging with existing results if present."""
         print(f"\nSaving results...")
+        
+        json_path = self.output_folder / 'all_results.json'
+        
+        # Load existing results if file exists
+        existing_results = []
+        if json_path.exists():
+            try:
+                with open(json_path, 'r') as f:
+                    existing_data = json.load(f)
+                    existing_results = existing_data.get('results', [])
+                print(f"  Found {len(existing_results)} existing results")
+            except Exception as e:
+                print(f"  Warning: Could not load existing results: {e}")
+        
+        # Merge results, avoiding duplicates by experiment name
+        existing_names = {r['name'] for r in existing_results}
+        merged_results = existing_results.copy()
+        
+        for new_result in self.results:
+            if new_result['name'] in existing_names:
+                # Replace existing result with new one
+                merged_results = [r for r in merged_results if r['name'] != new_result['name']]
+                merged_results.append(new_result)
+                print(f"  Updated: {new_result['name']}")
+            else:
+                # Add new result
+                merged_results.append(new_result)
+                print(f"  Added: {new_result['name']}")
         
         results_dict = {
             'timestamp': datetime.now().isoformat(),
-            'experiments': len(self.results),
+            'experiments': len(merged_results),
             'epochs': self.epochs,
             'batch_size': self.batch_size,
             'model': self.model_path,
-            'results': self.results
+            'results': merged_results
         }
         
-        json_path = self.output_folder / 'all_results.json'
         with open(json_path, 'w') as f:
             json.dump(results_dict, f, indent=2)
         
-        print(f"  Saved to: {json_path}")
+        print(f"  Saved {len(merged_results)} total results to: {json_path}")
     
     def generate_report(self):
         """Generate comprehensive analysis report."""
@@ -1656,6 +1683,15 @@ class CrossDatasetExperiments:
             print(f"{'='*60}")
             
             self.save_results()
+            
+            # Reload ALL results (including previously saved ones) for plotting
+            json_path = self.output_folder / 'all_results.json'
+            if json_path.exists():
+                with open(json_path, 'r') as f:
+                    all_data = json.load(f)
+                    self.results = all_data['results']
+                print(f"\nLoaded {len(self.results)} total experiments for visualization")
+            
             self.generate_summary_table()
             self.plot_test_accuracy_comparison()
             self.plot_heatmap()
