@@ -351,8 +351,18 @@ class BirdClefFineTuner:
         
         # Create separate eval loader for training data (no augmentation)
         # Use ALL training data (train + val) for evaluation, same as test set
-        all_train_filenames = self.data['train_filenames'] + (self.data.get('val_filenames', []) or [])
-        all_train_labels = np.vstack([self.data['train_labels'], self.data.get('val_labels', np.array([]))]) if self.data.get('val_labels') is not None and len(self.data.get('val_labels', [])) > 0 else self.data['train_labels']
+        from torch.utils.data import DataLoader as TorchDataLoader
+        
+        # Combine train and val splits for evaluation
+        all_train_filenames = self.data['train_filenames'][:]
+        all_train_labels = self.data['train_labels'].copy()
+        
+        if self.data.get('val_filenames') and len(self.data.get('val_filenames', [])) > 0:
+            all_train_filenames.extend(self.data['val_filenames'])
+            all_train_labels = np.vstack([all_train_labels, self.data['val_labels']])
+            print(f"  Train eval: combining {len(self.data['train_filenames'])} train + {len(self.data['val_filenames'])} val = {len(all_train_filenames)} total")
+        else:
+            print(f"  Train eval: using {len(all_train_filenames)} training samples (no validation split)")
         
         train_eval_dataset = SpectrogramDataset(
             all_train_filenames,
