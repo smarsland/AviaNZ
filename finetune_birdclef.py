@@ -933,9 +933,11 @@ class BirdClefFineTuner:
         
         if self.multilabel:
             avg_metrics = {k: metrics_sum[k] / max(total, 1) for k in metrics_sum}
+            print(f"  {test_name} Exact Match: {avg_metrics['exact_match']*100:.2f}%")
             print(f"  {test_name} Macro F1: {avg_metrics['macro_f1']:.4f}")
             print(f"  {test_name} Micro F1: {avg_metrics['micro_f1']:.4f}")
-            return avg_metrics['macro_f1']
+            print(f"  {test_name} Bit Accuracy: {avg_metrics['bit_acc']*100:.2f}%")
+            return avg_metrics['exact_match'] * 100  # Return exact match as percentage
         else:
             test_acc = 100. * correct / total
             print(f"  {test_name} Accuracy: {test_acc:.2f}%")
@@ -984,8 +986,9 @@ class BirdClefFineTuner:
                 history['val_exact_match'].append(val_metrics['exact_match'] if val_metrics else None)
                 history['train_bit_acc'].append(train_metrics['bit_acc'])
                 history['val_bit_acc'].append(val_metrics['bit_acc'] if val_metrics else None)
-                history['train_acc'].append(train_metrics['macro_f1'])
-                history['val_acc'].append(val_metrics['macro_f1'] if val_metrics else None)
+                # Store exact_match as primary metric (used by experiment runner)
+                history['train_acc'].append(train_metrics['exact_match'] * 100)
+                history['val_acc'].append(val_metrics['exact_match'] * 100 if val_metrics else None)
             else:
                 history['train_acc'].append(train_metrics)
                 history['val_acc'].append(val_metrics if val_metrics is not None else None)
@@ -996,8 +999,8 @@ class BirdClefFineTuner:
                     f"  Train Loss: {train_loss:.4f}, "
                     f"Macro F1: {train_metrics['macro_f1']:.4f}, "
                     f"Micro F1: {train_metrics['micro_f1']:.4f}, "
-                    f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
-                    f"Exact: {train_metrics['exact_match']:.4f}"
+                    f"Bit Acc: {train_metrics['bit_acc']*100:.2f}%, "
+                    f"Exact: {train_metrics['exact_match']*100:.2f}%"
                 )
                 if self.use_dann and 'domain_acc' in train_metrics:
                     metrics_str += f", Domain Acc: {train_metrics['domain_acc']:.1f}%"
@@ -1007,8 +1010,8 @@ class BirdClefFineTuner:
                         f"  Val Loss: {val_loss:.4f}, "
                         f"Macro F1: {val_metrics['macro_f1']:.4f}, "
                         f"Micro F1: {val_metrics['micro_f1']:.4f}, "
-                        f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
-                        f"Exact: {val_metrics['exact_match']:.4f}"
+                        f"Bit Acc: {val_metrics['bit_acc']*100:.2f}%, "
+                        f"Exact: {val_metrics['exact_match']*100:.2f}%"
                     )
             else:
                 if self.use_dann and isinstance(train_metrics, tuple):
@@ -1022,8 +1025,8 @@ class BirdClefFineTuner:
             # Determine current metric for model saving
             if val_metrics is not None:
                 if self.multilabel:
-                    current_metric = val_metrics['macro_f1']
-                    metric_name = 'val_macro_f1'
+                    current_metric = val_metrics['exact_match']
+                    metric_name = 'val_exact_match'
                 else:
                     current_metric = val_metrics
                     metric_name = 'val_acc'

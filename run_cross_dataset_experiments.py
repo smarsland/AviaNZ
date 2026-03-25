@@ -338,9 +338,9 @@ class CrossDatasetExperiments:
             self.results.append(exp_result)
             
             print(f"\n✓ Experiment complete:")
-            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            print(f"  Final train exact match: {exp_result['final_train_acc']:.2f}%")
             if exp_result['final_val_acc'] is not None:
-                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+                print(f"  Final val exact match: {exp_result['final_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
@@ -467,9 +467,9 @@ class CrossDatasetExperiments:
             self.results.append(exp_result)
             
             print(f"\n✓ Experiment complete:")
-            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            print(f"  Final train exact match: {exp_result['final_train_acc']:.2f}%")
             if exp_result['final_val_acc'] is not None:
-                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+                print(f"  Final val exact match: {exp_result['final_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
@@ -586,9 +586,9 @@ class CrossDatasetExperiments:
             self.results.append(exp_result)
             
             print(f"\n✓ Experiment complete:")
-            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            print(f"  Final train exact match: {exp_result['final_train_acc']:.2f}%")
             if exp_result['final_val_acc'] is not None:
-                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+                print(f"  Final val exact match: {exp_result['final_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
@@ -827,8 +827,8 @@ class CrossDatasetExperiments:
                 'Experiment': r['description'],
                 'Train Dataset': r['train_dataset'],
                 'Freeze': 'Yes' if r['freeze_backbone'] else 'No',
-                'Train Acc': f"{r['final_train_acc']:.2f}",
-                'Val Acc': f"{r['final_val_acc']:.2f}" if r['final_val_acc'] is not None else 'N/A',
+                'Train Exact Match': f"{r['final_train_acc']:.2f}",
+                'Val Exact Match': f"{r['final_val_acc']:.2f}" if r['final_val_acc'] is not None else 'N/A',
                 f'Test {r["test1_name"]}': f"{r['test1_acc']:.2f}",
                 f'Test {r["test2_name"]}': f"{r['test2_acc']:.2f}"
             })
@@ -849,7 +849,7 @@ class CrossDatasetExperiments:
         return df
     
     def plot_test_accuracy_comparison(self):
-        """Plot test accuracy comparison across experiments."""
+        """Plot test exact match accuracy comparison across experiments."""
         print(f"\nGenerating test accuracy comparison plot...")
         
         fig, ax = plt.subplots(figsize=(16, 8))
@@ -881,8 +881,8 @@ class CrossDatasetExperiments:
         bars2 = ax.bar(x + width/2, doc_scores, width, label='doc Test', 
                       color='#A23B72', alpha=0.85, edgecolor='black', linewidth=1.2)
         
-        ax.set_ylabel('Accuracy (%)', fontsize=14, fontweight='bold')
-        ax.set_title('Test Accuracy Comparison Across Experiments', fontsize=16, fontweight='bold', pad=20)
+        ax.set_ylabel('Exact Match Accuracy (%)', fontsize=14, fontweight='bold')
+        ax.set_title('Test Exact Match Accuracy Comparison Across Experiments', fontsize=16, fontweight='bold', pad=20)
         ax.set_xticks(x)
         ax.set_xticklabels(exp_names, fontsize=11, rotation=0, ha='center')
         ax.legend(fontsize=13, loc='upper right', framealpha=0.95, edgecolor='black')
@@ -1477,61 +1477,99 @@ class CrossDatasetExperiments:
             print(f"\n{f.read()}")
     
     def plot_confusion_matrices(self):
-        """Plot per-experiment confusion matrices from saved prediction CSVs."""
+        """Plot per-experiment pairwise confusion matrices for multilabel."""
         try:
             import seaborn as sns
-            from sklearn.metrics import confusion_matrix as sk_cm
+            from sklearn.metrics import multilabel_confusion_matrix
         except ImportError:
             print("  Skipping confusion matrices (pip install seaborn scikit-learn)")
             return
 
         print(f"\n{'='*60}")
-        print("Plotting confusion matrices...")
+        print("Plotting pairwise confusion matrices (multilabel)...")
         print(f"{'='*60}")
 
-        def load_gt(test_folder):
+        def load_gt_multilabel(test_folder):
+            """Load ground truth as multi-hot vectors."""
             labels_path = Path(test_folder) / 'labels.json'
             if not labels_path.exists():
-                return None
+                return None, None
             with open(labels_path) as f:
                 data = json.load(f)
+            
+            all_classes = sorted(data['categories'])
             gt = {}
             for item in data['files']:
                 fname = item['filename']
-                label = item.get('primary_class') or item.get('primary_species')
-                if not label:
-                    cl = item.get('class_names', [])
-                    label = cl[0] if cl else None
-                if fname and label:
-                    gt[fname] = label
-            return gt
+                classes = item.get('class_names', [])
+                # Multi-hot vector
+                vec = [1 if c in classes else 0 for c in all_classes]
+                gt[fname] = vec
+            return gt, all_classes
 
-        def save_cm(y_true, y_pred, title, out_png):
-            labels = sorted(set(y_true) | set(y_pred))
-            cm = sk_cm(y_true, y_pred, labels=labels)
-            row_sums = cm.sum(axis=1, keepdims=True)
-            cm_norm = np.where(row_sums > 0, cm.astype(float) / row_sums, 0.0)
-            n = len(labels)
+        def load_predictions_multilabel(csv_path, all_classes):
+            """Load predictions as multi-hot vectors (threshold at 0.5)."""
+            df = pd.read_csv(csv_path)
+            preds = {}
+            for _, row in df.iterrows():
+                fname = row['row_id']
+                vec = []
+                for c in all_classes:
+                    if c in df.columns:
+                        vec.append(1 if row[c] >= 0.5 else 0)
+                    else:
+                        vec.append(0)
+                preds[fname] = vec
+            return preds
+
+        def build_pairwise_confusion(y_true, y_pred, class_names):
+            """
+            Build pairwise confusion matrix.
+            C[i,j] = how often class i is in ground truth while class j is incorrectly predicted.
+            """
+            y_true = np.array(y_true)
+            y_pred = np.array(y_pred)
+            K = len(class_names)
+            confusion = np.zeros((K, K))
+            
+            for n in range(len(y_true)):
+                true_labels = np.where(y_true[n] == 1)[0]
+                pred_labels = np.where(y_pred[n] == 1)[0]
+                
+                for i in true_labels:
+                    for j in pred_labels:
+                        if i != j:  # Only confusions, not correct predictions
+                            confusion[i, j] += 1
+            
+            # Normalize by row (how often each true class appears)
+            row_sums = y_true.sum(axis=0, keepdims=True).T
+            confusion_norm = np.where(row_sums > 0, confusion / row_sums, 0.0)
+            
+            return confusion, confusion_norm
+
+        def save_confusion_matrix(confusion_norm, class_names, title, out_png):
+            """Save normalized pairwise confusion heatmap."""
+            n = len(class_names)
             cell = max(0.55, min(1.2, 10.0 / n))
             fig, ax = plt.subplots(figsize=(n * cell + 2, n * cell + 1.5))
-            sns.heatmap(cm_norm, annot=True, fmt='.2f', cmap='Blues',
-                        xticklabels=labels, yticklabels=labels,
+            
+            sns.heatmap(confusion_norm, annot=True, fmt='.2f', cmap='Reds',
+                        xticklabels=class_names, yticklabels=class_names,
                         ax=ax, vmin=0, vmax=1, linewidths=0.3, linecolor='whitesmoke')
-            ax.set_xlabel('Predicted', fontsize=11)
-            ax.set_ylabel('True', fontsize=11)
-            ax.set_title(title, fontsize=12, pad=10)
+            ax.set_xlabel('Incorrectly Predicted', fontsize=11)
+            ax.set_ylabel('True Class', fontsize=11)
+            ax.set_title(f'{title}\n(pairwise confusion: when row class present, col class wrongly predicted)', 
+                        fontsize=11, pad=10)
             plt.xticks(rotation=45, ha='right', fontsize=8)
             plt.yticks(rotation=0, fontsize=8)
             plt.tight_layout()
             plt.savefig(out_png, dpi=150)
             plt.close()
-            pd.DataFrame(cm, index=labels, columns=labels).to_csv(
-                str(out_png).replace('.png', '_counts.csv'))
-            acc = (np.array(y_true) == np.array(y_pred)).mean() * 100
-            print(f"  Saved: {out_png}  (n={len(y_true)}, acc={acc:.1f}%, {n} classes)")
+            print(f"  Saved: {out_png}")
 
-        gt_doc   = load_gt(self.doc_test)
-        gt_avianz = load_gt(self.avianz_test)
+        gt_doc, classes_doc = load_gt_multilabel(self.doc_test)
+        gt_avianz, classes_avianz = load_gt_multilabel(self.avianz_test)
+        
         if gt_doc is None:
             print(f"  WARNING: no labels.json in {self.doc_test} — skipping DOC confusion matrices")
         if gt_avianz is None:
@@ -1540,31 +1578,33 @@ class CrossDatasetExperiments:
         for csv_path in sorted(self.output_folder.glob('*/predictions_*.csv')):
             exp_name = csv_path.parent.name
             csv_stem = csv_path.stem
-            is_doc   = 'doc' in csv_stem.lower()
-            gt       = gt_doc if is_doc else gt_avianz
-            if gt is None:
+            is_doc = 'doc' in csv_stem.lower()
+            
+            gt = gt_doc if is_doc else gt_avianz
+            classes = classes_doc if is_doc else classes_avianz
+            
+            if gt is None or classes is None:
                 continue
 
-            df = pd.read_csv(csv_path)
-            class_cols = [c for c in df.columns if c not in ('File_Path', 'row_id')]
-            y_true, y_pred = [], []
-            for _, row in df.iterrows():
-                fname = row['row_id']
-                if fname not in gt:
-                    continue
-                pred = class_cols[row[class_cols].values.argmax()]
-                y_true.append(gt[fname])
-                y_pred.append(pred)
-
-            if not y_true:
-                print(f"  ERROR: no matching rows in {csv_path.name} — labels.json mismatch?")
+            preds = load_predictions_multilabel(csv_path, classes)
+            
+            # Align filenames
+            common_files = sorted(set(gt.keys()) & set(preds.keys()))
+            if not common_files:
+                print(f"  ERROR: no matching files in {csv_path.name}")
                 continue
-
+            
+            y_true = [gt[f] for f in common_files]
+            y_pred = [preds[f] for f in common_files]
+            
+            confusion, confusion_norm = build_pairwise_confusion(y_true, y_pred, classes)
+            
             train_on = 'AviaNZ' if 'joe_mo' in exp_name else 'DOC'
-            test_on  = 'AviaNZ' if not is_doc else 'DOC'
-            title = f'Train: {train_on}  →  Test: {test_on}\n({exp_name})'
+            test_on = 'AviaNZ' if not is_doc else 'DOC'
+            title = f'Train: {train_on}  →  Test: {test_on} ({exp_name})'
             out_png = csv_path.parent / f'confusion_{csv_stem}.png'
-            save_cm(y_true, y_pred, title, out_png)
+            
+            save_confusion_matrix(confusion_norm, classes, title, out_png)
 
     def run(self):
         """Run complete experiment pipeline."""

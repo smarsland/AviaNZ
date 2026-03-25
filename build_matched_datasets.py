@@ -334,8 +334,7 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
     avianz_counts = defaultdict(int)
     
     for e in doc_labels:
-        doc_counts[e['primary_class']] += 1
-    for cls in e['class_names']:
+        for cls in e['class_names']:
             doc_counts[cls] += 1
     
     for e in avianz_labels:
@@ -348,7 +347,8 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
             common_classes.add(species)
     
     doc_filtered = [e for e in doc_labels if any(c in common_classes for c in e['class_names'])]
-    avianz_filtered = [e for e in avianz_labels if any(c in common_classes for c in e['class_names'])
+    avianz_filtered = [e for e in avianz_labels if any(c in common_classes for c in e['class_names'])]
+    
     print(f'\n=== Filtering to common classes (min {min_samples_per_class} samples each) ===')
     print(f'  Before: DOC={len(doc_labels)}, AviaNZ={len(avianz_labels)}')
     print(f'  Common classes: {len(common_classes)} species')
