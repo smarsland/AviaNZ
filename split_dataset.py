@@ -34,12 +34,12 @@ def load_labels(labels_path):
         return json.load(f)
 
 
-def stratified_split(files_by_class, test_ratio, random_state=42):
+def random_split(files, test_ratio, random_state=42):
     """
-    Split files into train and test sets with stratification.
+    Simple random split - no stratification, no grouping.
     
     Args:
-        files_by_class: Dict mapping class names to lists of file entries
+        files: List of file entries
         test_ratio: Fraction of data to use for testing (0.0 to 1.0)
         random_state: Random seed for reproducibility
         
@@ -48,39 +48,33 @@ def stratified_split(files_by_class, test_ratio, random_state=42):
     """
     random.seed(random_state)
     
-    train_files = []
-    test_files = []
+    # Shuffle all files
+    all_files = files.copy()
+    random.shuffle(all_files)
+    
+    # Calculate split point
+    n_files = len(all_files)
+    n_test = int(n_files * test_ratio)
+    
+    # Split
+    train_files = all_files[n_test:]
+    test_files = all_files[:n_test]
+    
+    # Compute per-class stats for reporting
+    train_by_class = defaultdict(int)
+    test_by_class = defaultdict(int)
+    for f in train_files:
+        train_by_class[_get_primary_class(f)] += 1
+    for f in test_files:
+        test_by_class[_get_primary_class(f)] += 1
     
     split_info = {}
-    
-    for class_name, files in files_by_class.items():
-        # Shuffle files for this class
-        class_files = files.copy()
-        random.shuffle(class_files)
-        
-        # Calculate split point
-        n_files = len(class_files)
-        n_test = max(1, int(n_files * test_ratio))  # At least 1 test sample if possible
-        n_train = n_files - n_test
-        
-        # Handle edge case: if only 1 file, put it in train
-        if n_files == 1:
-            n_train = 1
-            n_test = 0
-        
-        # Split
-        train_files.extend(class_files[:n_train])
-        test_files.extend(class_files[n_train:n_train + n_test])
-        
+    for class_name in set(train_by_class.keys()) | set(test_by_class.keys()):
         split_info[class_name] = {
-            'total': n_files,
-            'train': n_train,
-            'test': n_test
+            'train': train_by_class[class_name],
+            'test': test_by_class[class_name],
+            'total': train_by_class[class_name] + test_by_class[class_name]
         }
-    
-    # Shuffle the combined sets
-    random.shuffle(train_files)
-    random.shuffle(test_files)
     
     return train_files, test_files, split_info
 
@@ -93,14 +87,14 @@ def _get_primary_class(file_entry):
     return 'unknown'
 
 
-def grouped_stratified_split(files, test_ratio, group_key, random_state=42):
-    """Split keeping groups intact (e.g., by source recording).
-
+def grouped_random_split(files, test_ratio, group_key, random_state=42):
+    """
+    Split keeping groups intact (e.g., by source recording).
+    
     Groups are defined by file_entry[group_key]. All entries with the same
     group id go to either train or test, never both.
-
-    Stratification is approximate: groups are bucketed by their dominant
-    primary class.
+    
+    Simple random split without stratification - randomly assigns groups to train/test.
     """
     if not group_key:
         raise ValueError("group_key must be provided")
@@ -120,74 +114,14 @@ def grouped_stratified_split(files, test_ratio, group_key, random_state=42):
     if len(group_ids) < 2:
         return files, [], {'_all': {'total': len(files), 'train': len(files), 'test': 0}}
 
-    group_dominant_class = {}
-    mixed_groups = []
-    for gid, entries in groups.items():
-        primary_classes = [_get_primary_class(e) for e in entries]
-        class_set = set(primary_classes)
-        counts = defaultdict(int)
-        for c in primary_classes:
-            counts[c] += 1
-        dominant = max(counts.items(), key=lambda x: x[1])[0]
-        group_dominant_class[gid] = dominant
-        if len(class_set) > 1:
-            mixed_groups.append(gid)
-
-    groups_by_class = defaultdict(list)
-    for gid, dominant in group_dominant_class.items():
-        groups_by_class[dominant].append(gid)
-
-    train_group_ids = set()
-    test_group_ids = set()
-    split_info = {}
-    for class_name, gids in groups_by_class.items():
-        class_gids = gids.copy()
-        random.shuffle(class_gids)
-
-        n_groups = len(class_gids)
-        if n_groups <= 1:
-            n_test = 0
-        else:
-            n_test = max(1, int(n_groups * test_ratio))
-            if n_test >= n_groups:
-                n_test = n_groups - 1
-
-        test_set = set(class_gids[-n_test:]) if n_test > 0 else set()
-        train_set = set(class_gids) - test_set
-
-        test_group_ids.update(test_set)
-        train_group_ids.update(train_set)
-
-        split_info[class_name] = {
-            'total_groups': n_groups,
-            'train_groups': len(train_set),
-            'test_groups': len(test_set)
-        }
-
-    # Ensure the mixed groups don't accidentally create an extreme ratio.
-    # Keep overall target test group count near desired ratio.
-    desired_test_groups = int(round(len(group_ids) * test_ratio))
-    current_test_groups = len(test_group_ids)
-    if mixed_groups:
-        shuffled_mixed = mixed_groups.copy()
-        random.shuffle(shuffled_mixed)
-        for gid in shuffled_mixed:
-            if gid in test_group_ids or gid in train_group_ids:
-                continue
-            if current_test_groups < desired_test_groups:
-                test_group_ids.add(gid)
-                current_test_groups += 1
-            else:
-                train_group_ids.add(gid)
-
-    # Final: assign any unassigned groups
-    for gid in group_ids:
-        if gid in train_group_ids or gid in test_group_ids:
-            continue
-        if len(test_group_ids) < desired_test_groups:
-            test_group_ids.add(gid)
-        else:
-            train_group_ids.add(gid)
+    # Simple random shuffle and split
+    random.shuffle(group_ids)
+    n_test_groups = max(1, int(len(group_ids) * test_ratio))
+    if n_test_groups >= len(group_ids):
+        n_test_groups = len(group_ids) - 1
+    
+    test_group_ids = set(group_ids[:n_test_groups])
+    train_group_ids = set(group_ids[n_test_groups:])
 
     # Build file lists
     train_files = []
@@ -201,10 +135,25 @@ def grouped_stratified_split(files, test_ratio, group_key, random_state=42):
     random.shuffle(train_files)
     random.shuffle(test_files)
 
+    # Compute per-class stats for reporting
+    train_by_class = defaultdict(int)
+    test_by_class = defaultdict(int)
+    for f in train_files:
+        train_by_class[_get_primary_class(f)] += 1
+    for f in test_files:
+        test_by_class[_get_primary_class(f)] += 1
+    
+    split_info = {}
+    for class_name in set(train_by_class.keys()) | set(test_by_class.keys()):
+        split_info[class_name] = {
+            'train': train_by_class[class_name],
+            'test': test_by_class[class_name],
+            'total': train_by_class[class_name] + test_by_class[class_name]
+        }
+    
     split_info['_meta'] = {
         'group_key': group_key,
         'total_groups': len(group_ids),
-        'mixed_groups': len(mixed_groups),
         'train_groups': len(train_group_ids),
         'test_groups': len(test_group_ids)
     }
@@ -259,8 +208,6 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     print(f"Splitting dataset from {input_folder}")
     print(f"Test ratio: {test_ratio:.1%} (train: {1-test_ratio:.1%})")
     print(f"Random seed: {random_seed}")
-    if group_key:
-        print(f"Group split: enabled (group_key={group_key})")
     
     # Load labels
     labels_path = os.path.join(input_folder, "labels.json")
@@ -291,30 +238,17 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     for class_name in sorted(files_by_class.keys()):
         print(f"  {class_name}: {len(files_by_class[class_name])} files")
 
-    # Perform split
-    if group_key:
-        print(f"\nPerforming GROUPED split (keeps groups intact, approximate stratification)...")
-        train_files, test_files, split_info = grouped_stratified_split(files, test_ratio, group_key, random_seed)
-    else:
-        print(f"\nPerforming stratified split...")
-        train_files, test_files, split_info = stratified_split(files_by_class, test_ratio, random_seed)
+    # Perform simple random split (no stratification, no grouping)
+    print(f"\nPerforming simple random split...")
+    train_files, test_files, split_info = random_split(files, test_ratio, random_seed)
     
     print(f"\nSplit results:")
     print(f"  Train: {len(train_files)} files")
     print(f"  Test: {len(test_files)} files")
-    print(f"\nSplit details:")
-    if group_key:
-        meta = split_info.get('_meta', {})
-        print(f"  Groups: {meta.get('total_groups', 'n/a')} total, {meta.get('train_groups', 'n/a')} train, {meta.get('test_groups', 'n/a')} test")
-        print(f"  Mixed-label groups: {meta.get('mixed_groups', 'n/a')}")
-        for class_name in sorted([k for k in split_info.keys() if not k.startswith('_')]):
-            info = split_info[class_name]
-            print(f"  {class_name}: {info['train_groups']} train groups, {info['test_groups']} test groups (total groups: {info['total_groups']})")
-    else:
-        print(f"\nPer-class split:")
-        for class_name in sorted(split_info.keys()):
-            info = split_info[class_name]
-            print(f"  {class_name}: {info['train']} train, {info['test']} test (total: {info['total']})")
+    print(f"\nPer-class split:")
+    for class_name in sorted(split_info.keys()):
+        info = split_info[class_name]
+        print(f"  {class_name}: {info['train']} train, {info['test']} test (total: {info['total']})")
     
     # Create output folders
     train_folder = os.path.join(output_base_folder, "train")

@@ -280,6 +280,44 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
     return avianz_labels, matched_mask
 
 
+def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=5):
+    """
+    Filter both datasets to keep only species that appear with sufficient samples in BOTH.
+    This ensures train/test splits will have the same classes available.
+    """
+    doc_counts = defaultdict(int)
+    avianz_counts = defaultdict(int)
+    
+    for e in doc_labels:
+        doc_counts[e['primary_class']] += 1
+    
+    for e in avianz_labels:
+        avianz_counts[e['primary_class']] += 1
+    
+    common_classes = set()
+    for species in set(doc_counts.keys()) & set(avianz_counts.keys()):
+        if doc_counts[species] >= min_samples_per_class and avianz_counts[species] >= min_samples_per_class:
+            common_classes.add(species)
+    
+    doc_filtered = [e for e in doc_labels if e['primary_class'] in common_classes]
+    avianz_filtered = [e for e in avianz_labels if e['primary_class'] in common_classes]
+    
+    print(f'\n=== Filtering to common classes (min {min_samples_per_class} samples each) ===')
+    print(f'  Before: DOC={len(doc_labels)}, AviaNZ={len(avianz_labels)}')
+    print(f'  Common classes: {len(common_classes)} species')
+    print(f'  After: DOC={len(doc_filtered)}, AviaNZ={len(avianz_filtered)}')
+    print(f'  Classes: {sorted(common_classes)}')
+    
+    removed_doc = set(doc_counts.keys()) - common_classes
+    removed_avianz = set(avianz_counts.keys()) - common_classes
+    if removed_doc:
+        print(f'  Removed from DOC: {removed_doc}')
+    if removed_avianz:
+        print(f'  Removed from AviaNZ: {removed_avianz}')
+    
+    return doc_filtered, avianz_filtered
+
+
 def write_labels_json(output_folder, labels, dataset_name):
     species_counts = defaultdict(int)
     all_codes = set()
@@ -332,7 +370,10 @@ def main():
     # Drop DOC samples that had no AviaNZ match
     doc_labels_final = [l for l, m in zip(doc_labels, matched_mask) if m]
 
-    print(f'\nFinal dataset size: {len(doc_labels_final)} DOC  /  {len(avianz_labels)} AviaNZ')
+    print(f'\nMatched dataset size: {len(doc_labels_final)} DOC  /  {len(avianz_labels)} AviaNZ')
+
+    # Filter to common classes present in both datasets with sufficient samples
+    doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=5)
 
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')
