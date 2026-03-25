@@ -129,9 +129,8 @@ if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
     echo ""
     echo "=== Step 4: Testing normalization strategies ==="
     echo "  1. Log (baseline - already done)"
-    echo "  2. Log + --normalize"
-    echo "  3. PCEN"
-    echo "  4. PCEN + --normalize"
+    echo "  2. Log + --normalize (log + background subtraction)"
+    echo "  3. PCEN (alternative to log, already does normalization)"
     echo ""
     
     RESULTS_DIR="${OUTPUT_BASE}/experiments_matched"
@@ -161,9 +160,9 @@ if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
         $MIXUP_ARGS \
         $FORCE_ARGS
     
-    # Test 3: PCEN
+    # Test 3: PCEN (no normalize - PCEN already does its own normalization)
     echo ""
-    echo "--- Running: PCEN ---"
+    echo "--- Running: PCEN (no --normalize, PCEN does its own thing) ---"
     python3 run_cross_dataset_experiments.py \
         --avianz-train "$AVIANZ_TRAIN" \
         --avianz-test  "$AVIANZ_TEST" \
@@ -173,22 +172,6 @@ if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
         --epochs       $EPOCHS \
         --batch-size   $BATCH_SIZE \
         --spec-transform PCEN \
-        $MIXUP_ARGS \
-        $FORCE_ARGS
-    
-    # Test 4: PCEN + --normalize
-    echo ""
-    echo "--- Running: PCEN + --normalize ---"
-    python3 run_cross_dataset_experiments.py \
-        --avianz-train "$AVIANZ_TRAIN" \
-        --avianz-test  "$AVIANZ_TEST" \
-        --doc-train    "$DOC_TRAIN" \
-        --doc-test     "$DOC_TEST" \
-        --output       "$RESULTS_DIR" \
-        --epochs       $EPOCHS \
-        --batch-size   $BATCH_SIZE \
-        --spec-transform PCEN \
-        --normalize \
         $MIXUP_ARGS \
         $FORCE_ARGS
 else
@@ -200,10 +183,8 @@ echo "============================================================"
 echo " Done. All results in: $RESULTS_DIR"
 echo "   - joe_mo_baseline_birdclef (Log baseline - already done)"
 echo "   - joe_mo_baseline_birdclef_normalized (Log + normalize)"
-echo "   - joe_mo_baseline_birdclef_pcen (PCEN)"
-echo "   - joe_mo_baseline_birdclef_pcen_normalized (PCEN + normalize)"
+echo "   - joe_mo_baseline_birdclef_pcen (PCEN - alternative to log)"
 echo "   - doc_baseline_birdclef (Log baseline - already done)"
 echo "   - doc_baseline_birdclef_normalized (Log + normalize)"
-echo "   - doc_baseline_birdclef_pcen (PCEN)"
-echo "   - doc_baseline_birdclef_pcen_normalized (PCEN + normalize)"
+echo "   - doc_baseline_birdclef_pcen (PCEN - alternative to log)"
 echo "============================================================"
