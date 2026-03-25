@@ -28,23 +28,27 @@ AVIANZ_TEST="${AVIANZ_SPLIT_BASE}/test"
 # Training config
 EPOCHS=50
 BATCH_SIZE=16
-USE_NOISE_AUG=0
-NOISE_RATIO=0.0
-NOISE_MODE="both"
-BACKGROUND_PROB=0.0
 USE_MIXUP=1
 MIXUP_ALPHA=0.25
-
 TEST_SIZE=0.25
 
 # Skip flags (set to 1 to skip a step)
-SKIP_BUILD=0
-SKIP_SPLIT=0
-SKIP_BASELINE=0
-SKIP_NORMALIZATION_TESTS=0
+SKIP_BUILD=1
+SKIP_SPLIT=1
+SKIP_NORMALIZATION_EXPERIMENTS=0  # Compare different spectrogram normalizations (no noise)
+SKIP_NOISE_EXPERIMENTS=0           # Test effect of noise variety on robustness
 
 # Force re-run experiments even if results exist (set to 1 to force)
 FORCE_RERUN=0
+
+# EXPERIMENT 1: Normalization strategies to test (no noise augmentation)
+# Options: Log, PCEN, Box-Cox, None
+NORMALIZATION_METHODS=("Log" "Log+normalize" "PCEN" "Box-Cox")
+
+# EXPERIMENT 2: Noise augmentation config for testing variety hypothesis
+NOISE_FOLDER="${MATCHED_BASE}/noise"
+NOISE_RATIO=0.5  # Fixed 50% noise mixing - we test variety, not amount
+NOISE_LEVELS=(10 20 50 100 200 500 1000)  # Number of noise files to sample from
 
 echo "============================================================"
 echo " Domain Shift Experiments"
@@ -86,105 +90,173 @@ else
     echo "=== Step 2: SKIPPED (SKIP_SPLIT=1) ==="
 fi
 
-# ---- Step 3: Baseline experiments (already done) ------------
-if [ $SKIP_BASELINE -eq 0 ]; then
+# =============================================================================
+# EXPERIMENT 1: NORMALIZATION COMPARISON
+# Test different spectrogram normalization strategies for domain robustness
+# =============================================================================
+
+if [ $SKIP_NORMALIZATION_EXPERIMENTS -eq 0 ]; then
     echo ""
-    echo "=== Step 3: Baseline experiments (Log transform only) ==="
+    echo "========================================================================"
+    echo " EXPERIMENT 1: NORMALIZATION COMPARISON"
+    echo "========================================================================"
+    echo " Testing strategies: ${NORMALIZATION_METHODS[@]}"
+    echo " Goal: Find which normalization reduces domain shift most"
+    echo "========================================================================"
     
     RESULTS_DIR="${OUTPUT_BASE}/experiments_matched"
     
-    NOISE_ARGS=""
-    if [ $USE_NOISE_AUG -eq 1 ] && [ -d "$NOISE_FOLDER" ]; then
-        NOISE_ARGS="--noise $NOISE_RATIO --noise-folder $NOISE_FOLDER --noise-mode $NOISE_MODE --background-prob $BACKGROUND_PROB"
-    fi
-
     MIXUP_ARGS=""
     if [ $USE_MIXUP -eq 1 ]; then
         MIXUP_ARGS="--mixup $MIXUP_ALPHA"
     fi
-
+    
     FORCE_ARGS=""
     if [ $FORCE_RERUN -eq 1 ]; then
         FORCE_ARGS="--force"
     fi
-
-    python3 run_cross_dataset_experiments.py \
-        --avianz-train "$AVIANZ_TRAIN" \
-        --avianz-test  "$AVIANZ_TEST" \
-        --doc-train    "$DOC_TRAIN" \
-        --doc-test     "$DOC_TEST" \
-        --output       "$RESULTS_DIR" \
-        --epochs       $EPOCHS \
-        --batch-size   $BATCH_SIZE \
-        --spec-transform Log \
-        $NOISE_ARGS \
-        $MIXUP_ARGS \
-        $FORCE_ARGS
+    
+    for METHOD in "${NORMALIZATION_METHODS[@]}"; do
+        echo ""
+        echo "--- Testing: $METHOD ---"
+        
+        # Parse method into spec-transform and normalize flag
+        SPEC_TRANSFORM="Log"
+        NORMALIZE_FLAG=""
+        
+        if [[ "$METHOD" == "Log+normalize" ]]; then
+            SPEC_TRANSFORM="Log"
+            NORMALIZE_FLAG="--normalize"
+        elif [[ "$METHOD" == "PCEN" ]]; then
+            SPEC_TRANSFORM="PCEN"
+            NORMALIZE_FLAG=""
+        elif [[ "$METHOD" == "Box-Cox" ]]; then
+            SPEC_TRANSFORM="Box-Cox"
+            NORMALIZE_FLAG=""
+        elif [[ "$METHOD" == "None" ]]; then
+            SPEC_TRANSFORM="None"
+            NORMALIZE_FLAG=""
+        fi
+        
+        python3 run_cross_dataset_experiments.py \
+            --avianz-train "$AVIANZ_TRAIN" \
+            --avianz-test  "$AVIANZ_TEST" \
+            --doc-train    "$DOC_TRAIN" \
+            --doc-test     "$DOC_TEST" \
+            --output       "$RESULTS_DIR" \
+            --epochs       $EPOCHS \
+            --batch-size   $BATCH_SIZE \
+            --spec-transform "$SPEC_TRANSFORM" \
+            $NORMALIZE_FLAG \
+            $MIXUP_ARGS \
+            $FORCE_ARGS
+        
+        echo "✓ Completed: $METHOD"
+    done
+    
+    echo ""
+    echo "✓ NORMALIZATION EXPERIMENTS COMPLETE"
 else
-    echo "=== Step 3: SKIPPED (already ran baseline) ==="
+    echo "=== EXPERIMENT 1: SKIPPED (SKIP_NORMALIZATION_EXPERIMENTS=1) ==="
 fi
 
-# ---- Step 4: Test normalization strategies ------------------
-if [ $SKIP_NORMALIZATION_TESTS -eq 0 ]; then
+# =============================================================================
+# EXPERIMENT 2: NOISE AUGMENTATION
+# Test hypothesis: More noise variety improves cross-domain robustness
+# Uses best normalization from Experiment 1 (Log+normalize)
+# =============================================================================
+
+if [ $SKIP_NOISE_EXPERIMENTS -eq 0 ]; then
     echo ""
-    echo "=== Step 4: Testing normalization strategies ==="
-    echo "  1. Log (baseline - already done)"
-    echo "  2. Log + --normalize (log + background subtraction)"
-    echo "  3. PCEN (alternative to log, already does normalization)"
-    echo ""
+    echo "========================================================================"
+    echo " EXPERIMENT 2: NOISE AUGMENTATION"
+    echo "========================================================================"
+    echo " Hypothesis: More noise VARIETY → better domain robustness"
+    echo " Fixed noise ratio: $NOISE_RATIO (50% mixing)"
+    echo " Testing: ${NOISE_LEVELS[@]} + all available noise files"
+    echo " Using: Log + normalize (best from Experiment 1)"
+    echo "========================================================================"
     
-    RESULTS_DIR="${OUTPUT_BASE}/experiments_matched"
-    
-    MIXUP_ARGS=""
-    if [ $USE_MIXUP -eq 1 ]; then
-        MIXUP_ARGS="--mixup $MIXUP_ALPHA"
+    if [ ! -d "$NOISE_FOLDER" ]; then
+        echo "ERROR: Noise folder not found: $NOISE_FOLDER"
+        echo "SKIPPING noise experiments"
+    else
+        TOTAL_NOISE=$(find "$NOISE_FOLDER/data" -name "*.npy" 2>/dev/null | wc -l)
+        echo "Available noise files: $TOTAL_NOISE"
+        
+        if [ $TOTAL_NOISE -eq 0 ]; then
+            echo "ERROR: No noise files in $NOISE_FOLDER/data/"
+            echo "SKIPPING noise experiments"
+        else
+            # Add "all" to test levels
+            ALL_LEVELS=("${NOISE_LEVELS[@]}" "$TOTAL_NOISE")
+            
+            RESULTS_DIR="${OUTPUT_BASE}/experiments_noise"
+            
+            MIXUP_ARGS=""
+            if [ $USE_MIXUP -eq 1 ]; then
+                MIXUP_ARGS="--mixup $MIXUP_ALPHA"
+            fi
+            
+            for N_NOISE in "${ALL_LEVELS[@]}"; do
+                echo ""
+                echo "--- Testing: $N_NOISE noise files ---"
+                
+                if [ $N_NOISE -eq 0 ]; then
+                    # No noise (baseline for comparison)
+                    NOISE_ARGS=""
+                elif [ $N_NOISE -eq $TOTAL_NOISE ]; then
+                    # Use all available noise
+                    NOISE_ARGS="--noise $NOISE_RATIO --noise-folder $NOISE_FOLDER --noise-mode both"
+                else
+                    # Create subset of N noise files
+                    NOISE_SUBSET="${OUTPUT_BASE}/matched/noise_subset_${N_NOISE}"
+                    
+                    if [ ! -d "$NOISE_SUBSET" ] || [ $FORCE_RERUN -eq 1 ]; then
+                        echo "  Creating subset: $N_NOISE files"
+                        rm -rf "$NOISE_SUBSET"
+                        mkdir -p "$NOISE_SUBSET/data"
+                        find "$NOISE_FOLDER/data" -name "*.npy" | shuf -n $N_NOISE | while read f; do
+                            cp "$f" "$NOISE_SUBSET/data/"
+                        done
+                        if [ -f "$NOISE_FOLDER/labels.json" ]; then
+                            cp "$NOISE_FOLDER/labels.json" "$NOISE_SUBSET/"
+                        fi
+                    fi
+                    
+                    NOISE_ARGS="--noise $NOISE_RATIO --noise-folder $NOISE_SUBSET --noise-mode both"
+                fi
+                
+                # Run experiment with this noise level
+                python3 run_cross_dataset_experiments.py \
+                    --avianz-train "$AVIANZ_TRAIN" \
+                    --avianz-test  "$AVIANZ_TEST" \
+                    --doc-train    "$DOC_TRAIN" \
+                    --doc-test     "$DOC_TEST" \
+                    --output       "$RESULTS_DIR" \
+                    --epochs       $EPOCHS \
+                    --batch-size   $BATCH_SIZE \
+                    --spec-transform Log \
+                    --normalize \
+                    $MIXUP_ARGS \
+                    $NOISE_ARGS
+                
+                echo "✓ Completed: $N_NOISE noise files"
+            done
+            
+            echo ""
+            echo "✓ NOISE EXPERIMENTS COMPLETE"
+        fi
     fi
-    
-    FORCE_ARGS=""
-    if [ $FORCE_RERUN -eq 1 ]; then
-        FORCE_ARGS="--force"
-    fi
-    
-    # Test 2: Log + --normalize
-    echo "--- Running: Log + --normalize ---"
-    python3 run_cross_dataset_experiments.py \
-        --avianz-train "$AVIANZ_TRAIN" \
-        --avianz-test  "$AVIANZ_TEST" \
-        --doc-train    "$DOC_TRAIN" \
-        --doc-test     "$DOC_TEST" \
-        --output       "$RESULTS_DIR" \
-        --epochs       $EPOCHS \
-        --batch-size   $BATCH_SIZE \
-        --spec-transform Log \
-        --normalize \
-        $MIXUP_ARGS \
-        $FORCE_ARGS
-    
-    # Test 3: PCEN (no normalize - PCEN already does its own normalization)
-    echo ""
-    echo "--- Running: PCEN (no --normalize, PCEN does its own thing) ---"
-    python3 run_cross_dataset_experiments.py \
-        --avianz-train "$AVIANZ_TRAIN" \
-        --avianz-test  "$AVIANZ_TEST" \
-        --doc-train    "$DOC_TRAIN" \
-        --doc-test     "$DOC_TEST" \
-        --output       "$RESULTS_DIR" \
-        --epochs       $EPOCHS \
-        --batch-size   $BATCH_SIZE \
-        --spec-transform PCEN \
-        $MIXUP_ARGS \
-        $FORCE_ARGS
 else
-    echo "=== Step 4: SKIPPED (SKIP_NORMALIZATION_TESTS=1) ==="
+    echo "=== EXPERIMENT 2: SKIPPED (SKIP_NOISE_EXPERIMENTS=1) ==="
 fi
 
 echo ""
 echo "============================================================"
-echo " Done. All results in: $RESULTS_DIR"
-echo "   - joe_mo_baseline_birdclef (Log baseline - already done)"
-echo "   - joe_mo_baseline_birdclef_normalized (Log + normalize)"
-echo "   - joe_mo_baseline_birdclef_pcen (PCEN - alternative to log)"
-echo "   - doc_baseline_birdclef (Log baseline - already done)"
-echo "   - doc_baseline_birdclef_normalized (Log + normalize)"
-echo "   - doc_baseline_birdclef_pcen (PCEN - alternative to log)"
+echo " ALL EXPERIMENTS COMPLETE"
+echo "============================================================"
+echo " Results:"
+echo "   Normalization: ${OUTPUT_BASE}/experiments_matched"
+echo "   Noise:         ${OUTPUT_BASE}/experiments_noise"
 echo "============================================================"

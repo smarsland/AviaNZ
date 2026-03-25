@@ -88,6 +88,9 @@ Examples:
 
     parser.add_argument('--normalize', action='store_true',
                        help="Apply background normalization to spectrograms during training/validation (recommended for soundscapes; must match inference)")
+    
+    parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
+                       help="Spectrogram transformation: 'Log' (standard log scaling), 'PCEN' (Per-Channel Energy Normalization - robust to amplitude variations), 'Box-Cox' (adaptive power transform), 'None' (linear). Default: Log")
 
     parser.add_argument('--noise-as-samples', action='store_true',
                        help="Include noise spectrograms as additional all-zero-label training samples (improves empty/background rejection)")
@@ -186,6 +189,7 @@ Examples:
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
             normalize=args.normalize,
+            spec_transform=args.spec_transform,
             noise_as_samples=args.noise_as_samples,
             max_noise_samples=args.max_noise_samples,
             pos_weight_cap=args.pos_weight_cap,
@@ -231,6 +235,7 @@ Examples:
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
             normalize=args.normalize,
+            spec_transform=args.spec_transform,
             noise_as_samples=args.noise_as_samples,
             max_noise_samples=args.max_noise_samples,
             freq_bins=args.freq_bins,

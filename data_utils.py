@@ -495,10 +495,13 @@ class SpectrogramDataset(Dataset):
         
         elif self.spec_transform == "PCEN":
             from scipy import signal
-            gain = 0.8
-            bias = 10
-            power = 0.25
-            t = 0.060
+            # PCEN parameters - optimized for mel spectrograms
+            # Original paper used bias=10 for large filterbank energies
+            # but our mel spectrograms have smaller scale, so use bias=2
+            gain = 0.8        # alpha: AGC gain (0.8 standard)
+            bias = 2.0        # delta: bias (2 for mel, 10 for raw energies)
+            power = 0.25      # r: compression power  
+            t = 0.060         # time constant for IIR smoothing
             eps = 1e-6
             
             fs = 16000
@@ -506,7 +509,9 @@ class SpectrogramDataset(Dataset):
             s = 1 - np.exp(-hop_samples / (t * fs))
             
             sg_2d = sg[:, :, 0] if sg.ndim == 3 else sg
+            # Apply IIR filtering for temporal smoothing
             M = signal.lfilter([s], [1, s-1], sg_2d, axis=1)
+            # PCEN formula: ((S / (M+eps)^alpha) + delta)^r - delta^r
             smooth = (eps + M)**(-gain)
             pcen = (sg_2d * smooth + bias)**power - bias**power
             
