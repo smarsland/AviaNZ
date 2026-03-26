@@ -35,7 +35,7 @@ TEST_SIZE=0.25
 # Skip flags (set to 1 to skip a step)
 SKIP_BUILD=1
 SKIP_SPLIT=1
-SKIP_NORMALIZATION_EXPERIMENTS=0  # Compare different spectrogram normalizations (no noise)
+SKIP_NORMALIZATION_EXPERIMENTS=1  # Compare different spectrogram normalizations (no noise)
 SKIP_NOISE_EXPERIMENTS=0           # Test effect of noise variety on robustness
 
 # Force re-run experiments even if results exist (set to 1 to force)
@@ -46,7 +46,7 @@ FORCE_RERUN=0
 NORMALIZATION_METHODS=("Log" "Log+normalize" "PCEN" "Box-Cox")
 
 # EXPERIMENT 2: Noise augmentation config for testing variety hypothesis
-NOISE_FOLDER="${MATCHED_BASE}/noise"
+NOISE_FOLDER="${OUTPUT_BASE}/noise"
 NOISE_RATIO=0.5  # Fixed 50% noise mixing - we test variety, not amount
 NOISE_LEVELS=(10 20 50 100 200 500 1000)  # Number of noise files to sample from
 
