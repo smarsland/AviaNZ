@@ -825,7 +825,7 @@ def sparse_collate_fn(batch):
 def create_data_loaders(data, batch_size, img_height, img_width, channels=1, 
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None, 
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
-                       use_class_balancing=False, normalize=False,
+                       use_class_balancing=False, normalize=False, normalize_median_filter=True,
                        use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
                        remove_baseline=False, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
@@ -845,6 +845,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         mixup_alpha: Mixup alpha parameter (0 = disabled, 0.3-0.5 recommended)
         use_class_balancing: If True, balance classes using WeightedRandomSampler
         normalize: If True, apply background normalization to spectrograms
+        normalize_median_filter: If True (default), use median filter during normalization
         use_sparse_patches: If True, only extract patches with signal (sparse attention)
         num_sparse_patches: Number of patches to extract in sparse mode (K)
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
@@ -872,6 +873,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         training=True,
         width_downsizing=width_downsizing,
         normalize=normalize,
+        normalize_median_filter=normalize_median_filter,
         use_sparse_patches=use_sparse_patches,
         num_sparse_patches=num_sparse_patches,
         use_temporal_roll=use_temporal_roll,
@@ -891,6 +893,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             training=False,
             width_downsizing=width_downsizing,
             normalize=normalize,
+            normalize_median_filter=normalize_median_filter,
             use_sparse_patches=use_sparse_patches,
             num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
