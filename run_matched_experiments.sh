@@ -35,7 +35,7 @@ TEST_SIZE=0.25
 # Skip flags (set to 1 to skip a step)
 SKIP_BUILD=1
 SKIP_SPLIT=1
-SKIP_NORMALIZATION_EXPERIMENTS=1  # Compare different spectrogram normalizations (no noise)
+SKIP_NORMALIZATION_EXPERIMENTS=0  # Compare different spectrogram normalizations (no noise)
 SKIP_NOISE_EXPERIMENTS=0           # Test effect of noise variety on robustness
 
 # Force re-run experiments even if results exist (set to 1 to force)

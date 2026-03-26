@@ -309,6 +309,18 @@ class SpectrogramDataset(Dataset):
         self.background_prob = background_prob if training else 0.0
         self.rng = np.random.RandomState(21390)
         
+        # Cache noise data in memory (WAY faster than loading from disk every time)
+        self.noise_cache = []
+        if self.noise_filenames:
+            print(f"Loading {len(self.noise_filenames)} noise files into memory...")
+            for noise_file in self.noise_filenames:
+                noise_data = np.load(noise_file)
+                if not np.isfinite(noise_data).all():
+                    print(f"WARNING: Skipping noise file with NaN/Inf: {noise_file}")
+                    continue
+                self.noise_cache.append(noise_data)
+            print(f"✓ Cached {len(self.noise_cache)} noise files in memory")
+        
         # Calculate final dimensions after downsampling
         final_width = img_width // width_downsizing if width_downsizing else img_width
         
@@ -522,10 +534,11 @@ class SpectrogramDataset(Dataset):
             return pcen
         
         elif self.spec_transform == "Box-Cox":
-            from scipy.stats import boxcox
+            from scipy.special import boxcox as boxcox_transform
             size = sg.shape
             sg_flat = np.maximum(sg.flatten() + LOG_OFFSET, 1e-10)
-            sg_transformed, lam = boxcox(sg_flat)
+            lam = 0.5
+            sg_transformed = boxcox_transform(sg_flat, lam)
             return np.reshape(sg_transformed, size)
         
         else:
@@ -589,7 +602,7 @@ class SpectrogramDataset(Dataset):
         - 'background': Extract quiet segments from noise/training files (smart noise)
         - 'both': Randomly choose between full and background (50/50)
         """
-        if not self.noise_filenames or self.noise_ratio <= 0:
+        if not self.noise_cache or self.noise_ratio <= 0:
             return bird_spectrogram
         
         # Determine which mode to use
@@ -605,11 +618,9 @@ class SpectrogramDataset(Dataset):
         actual_noise_ratio = self.rng.uniform(0.0, 2.0 * self.noise_ratio)
         actual_noise_ratio = np.clip(actual_noise_ratio, 0.0, 1.0)
         
-        # Select noise source file
-        noise_file = self.rng.choice(self.noise_filenames)
-        noise_data = np.load(noise_file)
-        if not np.isfinite(noise_data).all():
-            raise ValueError(f"NaN/Inf values in noise spectrogram file: {noise_file}")
+        # Use cached noise data (much faster than loading from disk!)
+        noise_idx = self.rng.randint(0, len(self.noise_cache))
+        noise_data = self.noise_cache[noise_idx]
         
         # Process noise with zero-padding for height, tiling for width
         noise_processed = self.apply_padding_and_add_channels(noise_data, is_noise=True)

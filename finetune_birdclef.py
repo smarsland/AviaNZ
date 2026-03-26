@@ -456,10 +456,12 @@ class BirdClefFineTuner:
         
         correct = 0
         total = 0
+        not_found = []
         
         for _, row in df.iterrows():
             filename = row['row_id']
             if filename not in true_labels:
+                not_found.append(filename)
                 continue
             
             pred_class = class_columns[row[class_columns].values.argmax()]
@@ -468,6 +470,14 @@ class BirdClefFineTuner:
             if pred_class == true_class:
                 correct += 1
             total += 1
+        
+        if not_found and len(not_found) == len(df):
+            print(f"  ERROR: NONE of the {len(df)} predictions matched any labels!")
+            print(f"  Sample row_ids from predictions: {not_found[:3]}")
+            print(f"  Sample filenames from labels: {list(true_labels.keys())[:3]}")
+            raise ValueError("Prediction filename mismatch - check data pipeline")
+        elif not_found:
+            print(f"  WARNING: {len(not_found)}/{len(df)} predictions had no matching labels")
         
         return 100.0 * correct / total if total > 0 else 0.0
     
