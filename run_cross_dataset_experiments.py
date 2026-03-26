@@ -1770,6 +1770,8 @@ def main():
                        help='Spectrogram transform (default: Log = standard log scaling). PCEN is robust to amplitude variation.')
     parser.add_argument('--normalize', action='store_true',
                        help='Apply background normalization (--normalize flag in finetune_birdclef.py)')
+    parser.add_argument('--normalize-no-median', action='store_true',
+                       help='Skip median filter in normalization (for ablation studies)')
     parser.add_argument('--experiment-suffix', default='',
                        help='Optional suffix to append to experiment names (e.g., for noise levels)')
     parser.add_argument('--force', action='store_true',
