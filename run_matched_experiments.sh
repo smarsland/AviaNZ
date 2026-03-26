@@ -39,7 +39,7 @@ SKIP_NORMALIZATION_EXPERIMENTS=0  # Compare different spectrogram normalizations
 SKIP_NOISE_EXPERIMENTS=0           # Test effect of noise variety on robustness
 
 # Force re-run experiments even if results exist (set to 1 to force)
-FORCE_RERUN=1
+FORCE_RERUN=0
 
 # EXPERIMENT 1: Normalization strategies to test (no noise augmentation)
 # Options: Log, PCEN, Box-Cox, None

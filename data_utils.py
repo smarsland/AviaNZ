@@ -507,11 +507,11 @@ class SpectrogramDataset(Dataset):
         
         elif self.spec_transform == "PCEN":
             from scipy import signal
-            # PCEN parameters - using standard values from paper (arXiv 1607.05666)
-            gain = 0.8        # alpha: AGC gain (0.8 standard)
-            bias = 10.0       # delta: bias (10.0 per paper for filterbank energies)
-            power = 0.25      # r: compression power  
-            t = 0.395         # time constant for IIR smoothing (395ms per paper)
+            # Per Channel Energy Normalisation (non-trained version) arXiv 1607.05666, arXiv 1905.08352v2
+            gain = 0.8
+            bias = 10
+            power = 0.25
+            t = 0.060
             eps = 1e-6
             
             fs = 16000
@@ -519,9 +519,7 @@ class SpectrogramDataset(Dataset):
             s = 1 - np.exp(-hop_samples / (t * fs))
             
             sg_2d = sg[:, :, 0] if sg.ndim == 3 else sg
-            # Apply IIR filtering for temporal smoothing
             M = signal.lfilter([s], [1, s-1], sg_2d, axis=1)
-            # PCEN formula: ((S / (M+eps)^alpha) + delta)^r - delta^r
             smooth = (eps + M)**(-gain)
             pcen = (sg_2d * smooth + bias)**power - bias**power
             
