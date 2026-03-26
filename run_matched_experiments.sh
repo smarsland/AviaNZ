@@ -204,6 +204,11 @@ if [ $SKIP_NOISE_EXPERIMENTS -eq 0 ]; then
                 MIXUP_ARGS="--mixup $MIXUP_ALPHA"
             fi
             
+            FORCE_ARGS=""
+            if [ $FORCE_RERUN -eq 1 ]; then
+                FORCE_ARGS="--force"
+            fi
+            
             for N_NOISE in "${ALL_LEVELS[@]}"; do
                 echo ""
                 echo "--- Testing: $N_NOISE noise files ---"
@@ -247,7 +252,8 @@ if [ $SKIP_NOISE_EXPERIMENTS -eq 0 ]; then
                     --normalize \
                     --experiment-suffix "_noise${N_NOISE}" \
                     $MIXUP_ARGS \
-                    $NOISE_ARGS
+                    $NOISE_ARGS \
+                    $FORCE_ARGS
                 
                 echo "✓ Completed: $N_NOISE noise files"
             done
