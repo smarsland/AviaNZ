@@ -234,6 +234,7 @@ if [ $SKIP_NOISE_EXPERIMENTS -eq 0 ]; then
                 fi
                 
                 # Run experiment with this noise level
+                # Add suffix to differentiate experiments by noise count
                 python3 run_cross_dataset_experiments.py \
                     --avianz-train "$AVIANZ_TRAIN" \
                     --avianz-test  "$AVIANZ_TEST" \
@@ -244,6 +245,7 @@ if [ $SKIP_NOISE_EXPERIMENTS -eq 0 ]; then
                     --batch-size   $BATCH_SIZE \
                     --spec-transform Log \
                     --normalize \
+                    --experiment-suffix "_noise${N_NOISE}" \
                     $MIXUP_ARGS \
                     $NOISE_ARGS
                 

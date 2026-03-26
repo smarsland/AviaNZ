@@ -42,7 +42,8 @@ class CrossDatasetExperiments:
                  output_folder, model_path, epochs=10, batch_size=32,
                  lambda_domain=0.1, noise_folder=None,
                  noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
-                 mixup=None, force_rerun=False, spec_transform='Log', normalize=False):
+                 mixup=None, force_rerun=False, spec_transform='Log', normalize=False,
+                 experiment_suffix=''):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -105,12 +106,14 @@ class CrossDatasetExperiments:
             exp = base_exp.copy()
             exp['model_type'] = model_type
             exp['freeze'] = False
-            exp['name'] = f"{base_exp['name']}_{model_type}{suffix}"
+            exp['name'] = f"{base_exp['name']}_{model_type}{suffix}{experiment_suffix}"
             exp['description'] = f"{base_exp['description']} (BIRDCLEF)"
             if spec_transform != 'Log':
                 exp['description'] += f" [{spec_transform}]"
             if normalize:
                 exp['description'] += " [normalized]"
+            if experiment_suffix:
+                exp['description'] += f" {experiment_suffix}"
             self.experiments.append(exp)
         
         self.results = []
@@ -1755,6 +1758,8 @@ def main():
                        help='Spectrogram transform (default: Log = standard log scaling). PCEN is robust to amplitude variation.')
     parser.add_argument('--normalize', action='store_true',
                        help='Apply background normalization (--normalize flag in finetune_birdclef.py)')
+    parser.add_argument('--experiment-suffix', default='',
+                       help='Optional suffix to append to experiment names (e.g., for noise levels)')
     parser.add_argument('--force', action='store_true',
                        help='Force re-run of experiments even if results already exist')
     
@@ -1792,7 +1797,8 @@ def main():
         noise_as_samples=args.noise_as_samples,
         mixup=args.mixup,
         spec_transform=args.spec_transform,
-        normalize=args.normalize
+        normalize=args.normalize,
+        experiment_suffix=args.experiment_suffix
     )
     
     experiments.run()
