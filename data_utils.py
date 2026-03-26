@@ -507,13 +507,11 @@ class SpectrogramDataset(Dataset):
         
         elif self.spec_transform == "PCEN":
             from scipy import signal
-            # PCEN parameters - optimized for mel spectrograms
-            # Original paper used bias=10 for large filterbank energies
-            # but our mel spectrograms have smaller scale, so use bias=2
+            # PCEN parameters - using standard values from paper (arXiv 1607.05666)
             gain = 0.8        # alpha: AGC gain (0.8 standard)
-            bias = 2.0        # delta: bias (2 for mel, 10 for raw energies)
+            bias = 10.0       # delta: bias (10.0 per paper for filterbank energies)
             power = 0.25      # r: compression power  
-            t = 0.060         # time constant for IIR smoothing
+            t = 0.395         # time constant for IIR smoothing (395ms per paper)
             eps = 1e-6
             
             fs = 16000

@@ -26,7 +26,7 @@ AVIANZ_TRAIN="${AVIANZ_SPLIT_BASE}/train"
 AVIANZ_TEST="${AVIANZ_SPLIT_BASE}/test"
 
 # Training config
-EPOCHS=50
+EPOCHS=20
 BATCH_SIZE=16
 USE_MIXUP=1
 MIXUP_ALPHA=0.25
@@ -39,7 +39,7 @@ SKIP_NORMALIZATION_EXPERIMENTS=0  # Compare different spectrogram normalizations
 SKIP_NOISE_EXPERIMENTS=0           # Test effect of noise variety on robustness
 
 # Force re-run experiments even if results exist (set to 1 to force)
-FORCE_RERUN=0
+FORCE_RERUN=1
 
 # EXPERIMENT 1: Normalization strategies to test (no noise augmentation)
 # Options: Log, PCEN, Box-Cox, None
@@ -47,8 +47,8 @@ NORMALIZATION_METHODS=("Log" "Log+normalize" "PCEN" "Box-Cox")
 
 # EXPERIMENT 2: Noise augmentation config for testing variety hypothesis
 NOISE_FOLDER="${OUTPUT_BASE}/noise"
-NOISE_RATIO=0.5  # Fixed 50% noise mixing - we test variety, not amount
-NOISE_LEVELS=(10 20 50 100 200 500 1000)  # Number of noise files to sample from
+NOISE_RATIO=0.25
+NOISE_LEVELS=(1 10 100 1000)  # Number of noise files to sample from
 
 # Logging setup - capture all output to log file
 LOG_FILE="${OUTPUT_BASE}/experiments_log.txt"
