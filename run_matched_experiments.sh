@@ -194,8 +194,12 @@ if [ $SKIP_NOISE_EXPERIMENTS -eq 0 ]; then
             echo "ERROR: No noise files in $NOISE_FOLDER/data/"
             echo "SKIPPING noise experiments"
         else
-            # Add "all" to test levels
-            ALL_LEVELS=("${NOISE_LEVELS[@]}" "$TOTAL_NOISE")
+            # Add "all" to test levels (only if not already in list)
+            ALL_LEVELS=("${NOISE_LEVELS[@]}")
+            # Check if TOTAL_NOISE is already in NOISE_LEVELS
+            if [[ ! " ${NOISE_LEVELS[@]} " =~ " ${TOTAL_NOISE} " ]]; then
+                ALL_LEVELS+=("$TOTAL_NOISE")
+            fi
             
             RESULTS_DIR="${OUTPUT_BASE}/experiments_noise"
             
