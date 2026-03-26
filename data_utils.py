@@ -260,8 +260,8 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1, 
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
-                 use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
-                 remove_baseline=True, noise_mode='full', background_prob=0.0):
+                 normalize_median_filter=True, use_sparse_patches=False, num_sparse_patches=20, 
+                 use_temporal_roll=True, remove_baseline=True, noise_mode='full', background_prob=0.0):
         """
         Initialize SpectrogramDataset.
         
@@ -301,6 +301,7 @@ class SpectrogramDataset(Dataset):
         self.training = training
         self.width_downsizing = width_downsizing
         self.normalize = normalize
+        self.normalize_median_filter = normalize_median_filter
         self.use_sparse_patches = use_sparse_patches
         self.num_sparse_patches = num_sparse_patches
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
@@ -470,7 +471,8 @@ class SpectrogramDataset(Dataset):
         if self.normalize:
             # Convert (H, W, C) to (H, W) for normalization
             x_2d = x[:, :, 0] if x.shape[2] == 1 else x[:, :, 0]  # Take first channel
-            x_2d = normalize_spectrogram(x_2d)
+            use_median = getattr(self, 'normalize_median_filter', True)
+            x_2d = normalize_spectrogram(x_2d, use_median_filter=use_median)
             x[:, :, 0] = x_2d  # Put back in the channel
         
         # SpecAugment (time/frequency masking) during training

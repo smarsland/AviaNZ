@@ -43,7 +43,7 @@ FORCE_RERUN=0
 
 # EXPERIMENT 1: Normalization strategies to test (no noise augmentation)
 # Options: Log, PCEN, Box-Cox, None
-NORMALIZATION_METHODS=("Log" "Log+normalize" "PCEN" "Box-Cox")
+NORMALIZATION_METHODS=("Log" "Log+normalize" "Log+normalize-no-median" "PCEN" "Box-Cox")
 
 # EXPERIMENT 2: Noise augmentation config for testing variety hypothesis
 NOISE_FOLDER="${OUTPUT_BASE}/noise"
@@ -129,10 +129,15 @@ if [ $SKIP_NORMALIZATION_EXPERIMENTS -eq 0 ]; then
         # Parse method into spec-transform and normalize flag
         SPEC_TRANSFORM="Log"
         NORMALIZE_FLAG=""
+        NO_MEDIAN_FLAG=""
         
         if [[ "$METHOD" == "Log+normalize" ]]; then
             SPEC_TRANSFORM="Log"
             NORMALIZE_FLAG="--normalize"
+        elif [[ "$METHOD" == "Log+normalize-no-median" ]]; then
+            SPEC_TRANSFORM="Log"
+            NORMALIZE_FLAG="--normalize"
+            NO_MEDIAN_FLAG="--normalize-no-median"
         elif [[ "$METHOD" == "PCEN" ]]; then
             SPEC_TRANSFORM="PCEN"
             NORMALIZE_FLAG=""
@@ -154,6 +159,7 @@ if [ $SKIP_NORMALIZATION_EXPERIMENTS -eq 0 ]; then
             --batch-size   $BATCH_SIZE \
             --spec-transform "$SPEC_TRANSFORM" \
             $NORMALIZE_FLAG \
+            $NO_MEDIAN_FLAG \
             $MIXUP_ARGS \
             $FORCE_ARGS
         

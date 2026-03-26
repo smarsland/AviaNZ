@@ -43,7 +43,7 @@ class CrossDatasetExperiments:
                  lambda_domain=0.1, noise_folder=None,
                  noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
                  mixup=None, force_rerun=False, spec_transform='Log', normalize=False,
-                 experiment_suffix=''):
+                 normalize_no_median=False, experiment_suffix=''):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -63,6 +63,7 @@ class CrossDatasetExperiments:
         self.mixup = mixup
         self.spec_transform = spec_transform
         self.normalize = normalize
+        self.normalize_no_median = normalize_no_median
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
@@ -148,6 +149,24 @@ class CrossDatasetExperiments:
             return self.extract_accuracy(value.get('macro_f1', value.get('accuracy', 0.0)))
         return 0.0
     
+    def get_best_epoch_metrics(self, history):
+        """Extract train/val metrics from the best validation epoch (not final epoch)."""
+        train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
+        val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
+        
+        # Find epoch with best validation accuracy
+        val_accs = [self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None]
+        if not val_accs:
+            # No validation data - use final epoch
+            train_acc = self.extract_accuracy(history[train_acc_key][-1] if history.get(train_acc_key) else None)
+            return train_acc, None, None
+        
+        best_epoch = val_accs.index(max(val_accs))
+        best_val = val_accs[best_epoch]
+        best_train = self.extract_accuracy(history[train_acc_key][best_epoch] if history.get(train_acc_key) and len(history[train_acc_key]) > best_epoch else None)
+        
+        return best_train, best_val, best_val
+    
     def is_experiment_complete(self, exp_output):
         """Check if experiment has already been completed successfully."""
         if self.force_rerun:
@@ -197,12 +216,8 @@ class CrossDatasetExperiments:
                 test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
                 test2_acc = self._extract_test_from_file(exp_output, test2_name, exp['test2'])
             
-            train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
-            val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
-            
-            final_train_acc = self.extract_accuracy(history[train_acc_key][-1] if history.get(train_acc_key) else None)
-            final_val_acc = self.extract_accuracy(history[val_acc_key][-1] if history.get(val_acc_key) and history[val_acc_key][-1] is not None else None)
-            best_val = max([self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None], default=None)
+            # Extract metrics from BEST epoch (same checkpoint used for test evaluation)
+            best_train_acc, best_val_acc, best_val = self.get_best_epoch_metrics(history)
             
             if exp['type'] == 'dann':
                 train_dataset_name = f"{Path(exp['source']).parent.name} (DANN→{Path(exp['target']).parent.name})"
@@ -215,8 +230,8 @@ class CrossDatasetExperiments:
                 'model_type': exp['model_type'],
                 'train_dataset': train_dataset_name,
                 'freeze_backbone': exp['freeze'],
-                'final_train_acc': final_train_acc,
-                'final_val_acc': final_val_acc,
+                'final_train_acc': best_train_acc,
+                'final_val_acc': best_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
@@ -231,10 +246,10 @@ class CrossDatasetExperiments:
             
             self.results.append(exp_result)
             
-            print(f"\n✓ Loaded cached results:")
-            print(f"  Final train acc: {exp_result['final_train_acc']:.2f}%")
+            print(f"\n✓ Loaded cached results (best epoch):")
+            print(f"  Best train acc: {exp_result['final_train_acc']:.2f}%")
             if exp_result['final_val_acc'] is not None:
-                print(f"  Final val acc: {exp_result['final_val_acc']:.2f}%")
+                print(f"  Best val acc: {exp_result['final_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
@@ -290,6 +305,8 @@ class CrossDatasetExperiments:
 
         if self.normalize:
             cmd.append('--normalize')
+        if self.normalize_no_median:
+            cmd.append('--normalize-no-median')
 
         if self.mixup is not None:
             cmd.extend(['--mixup', str(self.mixup)])
@@ -344,13 +361,8 @@ class CrossDatasetExperiments:
                 test1_acc = self._extract_test_from_file(exp_output, test1_name, exp['test1'])
                 test2_acc = self._extract_test_from_file(exp_output, test2_name, exp['test2'])
             
-            # Handle both train_acc (finetune_birdclef) and train_accuracy (train_models)
-            train_acc_key = 'train_accuracy' if 'train_accuracy' in history else 'train_acc'
-            val_acc_key = 'val_accuracy' if 'val_accuracy' in history else 'val_acc'
-            
-            final_train_acc = self.extract_accuracy(history[train_acc_key][-1] if history.get(train_acc_key) else None)
-            final_val_acc = self.extract_accuracy(history[val_acc_key][-1] if history.get(val_acc_key) and history[val_acc_key][-1] is not None else None)
-            best_val = max([self.extract_accuracy(v) for v in history.get(val_acc_key, []) if v is not None], default=None)
+            # Extract metrics from BEST epoch (same checkpoint used for test evaluation)
+            best_train_acc, best_val_acc, best_val = self.get_best_epoch_metrics(history)
             
             exp_result = {
                 'name': exp['name'],
@@ -358,8 +370,8 @@ class CrossDatasetExperiments:
                 'model_type': exp['model_type'],
                 'train_dataset': Path(exp['train']).name,
                 'freeze_backbone': exp['freeze'],
-                'final_train_acc': final_train_acc,
-                'final_val_acc': final_val_acc,
+                'final_train_acc': best_train_acc,
+                'final_val_acc': best_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
@@ -371,10 +383,10 @@ class CrossDatasetExperiments:
             
             self.results.append(exp_result)
             
-            print(f"\n✓ Experiment complete:")
-            print(f"  Final train exact match: {exp_result['final_train_acc']:.2f}%")
+            print(f"\n✓ Experiment complete (best epoch):")
+            print(f"  Best train exact match: {exp_result['final_train_acc']:.2f}%")
             if exp_result['final_val_acc'] is not None:
-                print(f"  Final val exact match: {exp_result['final_val_acc']:.2f}%")
+                print(f"  Best val exact match: {exp_result['final_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
@@ -1798,6 +1810,7 @@ def main():
         mixup=args.mixup,
         spec_transform=args.spec_transform,
         normalize=args.normalize,
+        normalize_no_median=args.normalize_no_median,
         experiment_suffix=args.experiment_suffix
     )
     

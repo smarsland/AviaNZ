@@ -11,8 +11,8 @@ from scipy.ndimage import median_filter
 
 
 def get_background_spectrogram(img):
-    # Assume for any frequency band no more than half of the pixels are interesting
-    # Therefore take the bottom half as non-interesting to estimate the background
+    # Assume for any frequency band no more than 10% of the pixels are interesting
+    # Therefore take the bottom 10% as non-interesting to estimate the background
     H, W = img.shape
     
     sorted_pixels = np.sort(img, axis=1)
@@ -34,15 +34,20 @@ def get_background_spectrogram(img):
 
     return img
 
-def normalize_spectrogram(img):
+def normalize_spectrogram(img, use_median_filter=True):
     """
     Apply background normalization to a spectrogram.
+    
+    Args:
+        img: Input spectrogram (2D numpy array)
+        use_median_filter: Whether to apply temporal median filtering (default: True)
    
     """
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
 
-    img = median_filter(img, size=(1, 5))
+    if use_median_filter:
+        img = median_filter(img, size=(1, 5))
 
     img = img - get_background_spectrogram(img)
 
