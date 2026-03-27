@@ -100,7 +100,10 @@ class CrossDatasetExperiments:
             if spec_transform != 'Log':
                 parts.append(spec_transform.lower())
             if normalize:
-                parts.append("normalized")
+                if normalize_no_median:
+                    parts.append("normalized_no_median")
+                else:
+                    parts.append("normalized")
             suffix = "_" + "_".join(parts)
         
         for base_exp in base_experiments:
@@ -112,7 +115,10 @@ class CrossDatasetExperiments:
             if spec_transform != 'Log':
                 exp['description'] += f" [{spec_transform}]"
             if normalize:
-                exp['description'] += " [normalized]"
+                if normalize_no_median:
+                    exp['description'] += " [normalized_no_median]"
+                else:
+                    exp['description'] += " [normalized]"
             if experiment_suffix:
                 exp['description'] += f" {experiment_suffix}"
             self.experiments.append(exp)
