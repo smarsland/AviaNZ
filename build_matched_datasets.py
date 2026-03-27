@@ -52,7 +52,7 @@ def normalize_label(label):
     - Strip whitespace
     - Standardize spacing around slashes
     
-    Returns None if label should be skipped (uncertain/empty).
+    Returns None if label should be skipped (uncertain/empty/unknown).
     """
     if not label or pd.isna(label):
         return None
@@ -61,6 +61,10 @@ def normalize_label(label):
     
     # Skip uncertain labels (starting with ? or just ?)
     if label.startswith('?') or label == '?':
+        return None
+    
+    # Skip "unknown" classes - these don't exist in AviaNZ data
+    if 'unknown' in label.lower():
         return None
     
     # Skip empty after stripping

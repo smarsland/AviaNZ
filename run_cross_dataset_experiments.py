@@ -699,7 +699,11 @@ class CrossDatasetExperiments:
         return accuracy
     
     def _compute_accuracy_from_predictions(self, csv_path, test_folder):
-        """Compute accuracy by comparing predictions CSV to ground truth labels.json."""
+        """Compute accuracy by comparing predictions CSV to ground truth labels.json.
+        
+        ALWAYS uses multilabel exact match (all labels must be correct).
+        This matches how training accuracy is computed.
+        """
         labels_path = os.path.join(test_folder, 'labels.json')
         
         if not os.path.exists(labels_path):
@@ -728,75 +732,56 @@ class CrossDatasetExperiments:
         
         categories = labels_data['categories']
         
-        # Build ground truth mapping: filename -> primary class name (normalize to eBird code)
-        true_labels = {}
+        # Build binary label vectors for ground truth (multilabel)
+        true_labels = {}  # filename -> binary vector
         for file_info in labels_data['files']:
             filename = file_info['filename']
-            # Use primary_class or primary_species if available
-            primary = file_info.get('primary_class') or file_info.get('primary_species')
-            if not primary:
-                # Fall back to first class in class_names
-                class_names = file_info.get('class_names', [])
-                primary = class_names[0] if class_names else None
-            if primary:
-                # Normalize to eBird code and lowercase for case-insensitive comparison
-                primary = name_map.get(primary, primary)
-                true_labels[filename] = primary.lower()
+            class_names = file_info.get('class_names', [])
+            # Create binary vector
+            label_vec = [0] * len(categories)
+            for cls in class_names:
+                cls_normalized = name_map.get(cls, cls).lower()
+                for i, cat in enumerate(categories):
+                    if name_map.get(cat, cat).lower() == cls_normalized:
+                        label_vec[i] = 1
+                        break
+            true_labels[filename] = label_vec
         
-        # Read predictions CSV
-        predictions = {}
+        # Parse predictions as binary vectors (threshold at 0.5)
+        predictions = {}  # filename -> binary vector
         with open(csv_path, 'r') as f:
             reader = csv.DictReader(f)
             fieldnames = list(reader.fieldnames)
+            class_columns = [col for col in fieldnames if col not in ['row_id', 'File_Path', 'predicted_class', 'filename']]
             
-            # Handle two formats:
-            # 1. Probability format: File_Path, row_id, class1, class2, ...
-            # 2. Simple format: filename, predicted_class
-            if 'predicted_class' in fieldnames:
-                # Simple format from model_trainer._save_test_predictions
-                for row in reader:
-                    filename = row.get('filename', '')
-                    pred_class = row.get('predicted_class', '')
-                    # Normalize to eBird code and lowercase for case-insensitive comparison
-                    pred_class = name_map.get(pred_class, pred_class)
-                    predictions[filename] = pred_class.lower()
-            else:
-                # Probability format from predict.py
-                class_columns = [col for col in fieldnames if col not in ['row_id', 'File_Path']]
-                
-                for row in reader:
-                    filename = row.get('row_id', row.get('filename', ''))
-                    if not filename or not class_columns:
-                        continue
-                    
-                    # Use argmax to get predicted class (like training code does)
-                    class_probs = [float(row[col]) for col in class_columns]
-                    pred_idx = class_probs.index(max(class_probs))
-                    pred_class = class_columns[pred_idx]
-                    # Normalize to eBird code and lowercase for case-insensitive comparison
-                    pred_class = name_map.get(pred_class, pred_class)
-                    predictions[filename] = pred_class.lower()
+            if not class_columns:
+                raise ValueError(f"No class probability columns found in {csv_path}. Found columns: {fieldnames}")
+            
+            for row in reader:
+                filename = row.get('row_id', row.get('filename', ''))
+                if not filename:
+                    continue
+                # Apply threshold to probabilities (matches training evaluation)
+                pred_vec = [1 if float(row[col]) >= 0.5 else 0 for col in class_columns]
+                predictions[filename] = pred_vec
         
-        # DEBUG: Check first few matches
-        debug_count = 0
-        for filename, true_class in list(true_labels.items())[:3]:
-            pred_class = predictions.get(filename, 'NOT_FOUND')
-            print(f"    DEBUG: {filename} | True: {true_class} | Pred: {pred_class}")
-            debug_count += 1
-        
-        # Compare predictions to ground truth
+        # Compute exact match accuracy (same as training)
         correct = 0
         total = 0
-        mismatches = 0
-        for filename, true_class in true_labels.items():
+        for filename, true_vec in true_labels.items():
             if filename in predictions:
-                if predictions[filename] == true_class:
+                pred_vec = predictions[filename]
+                if pred_vec == true_vec:
                     correct += 1
-                else:
-                    mismatches += 1
                 total += 1
         
-        print(f"    DEBUG: Total files={len(true_labels)}, Matched={total}, Correct={correct}, Wrong={mismatches}")
+        # DEBUG
+        for filename, true_vec in list(true_labels.items())[:3]:
+            pred_vec = predictions.get(filename, 'NOT_FOUND')
+            match = "✓" if pred_vec == true_vec else "✗"
+            print(f"    DEBUG: {match} {filename[:50]} | True: {true_vec} | Pred: {pred_vec}")
+        
+        print(f"    Exact match: {correct}/{total} = {100*correct/total:.2f}%")
         
         if total == 0:
             return 0.0

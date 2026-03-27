@@ -187,7 +187,8 @@ class BirdClefFineTuner:
                  mixup_mode='mixup', noise_ratio=0.0, noise_folder=None, noise_mode='full', 
                  use_temporal_roll=True, validation_split=0.2, remove_baseline=False, 
                  test_folder=None, test_folder2=None, background_prob=0.0,
-                 use_dann=False, target_folder=None, lambda_domain=0.1, use_cleaner=False):
+                 use_dann=False, target_folder=None, lambda_domain=0.1, use_cleaner=False,
+                 patience=15):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -218,6 +219,7 @@ class BirdClefFineTuner:
         self.test_folder = test_folder
         self.test_folder2 = test_folder2
         self.background_prob = background_prob
+        self.patience = patience
         
         if device is None:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -234,6 +236,8 @@ class BirdClefFineTuner:
         print(f"  Batch size: {batch_size}")
         print(f"  Learning rate: {lr}")
         print(f"  Multi-label: {multilabel}")
+        if patience > 0:
+            print(f"  Early stopping patience: {patience} epochs")
         if self.multilabel and self.use_class_weights:
             print(f"  Class-weighted BCE: enabled")
         if self.normalize:
@@ -345,23 +349,12 @@ class BirdClefFineTuner:
         )
         
         # Create separate eval loader for training data (no augmentation)
-        # Use ALL training data (train + val) for evaluation, same as test set
+        # Evaluate ONLY on training split (not validation!)
         from torch.utils.data import DataLoader as TorchDataLoader
         
-        # Combine train and val splits for evaluation
-        all_train_filenames = self.data['train_filenames'][:]
-        all_train_labels = self.data['train_labels'].copy()
-        
-        if self.data.get('val_filenames') and len(self.data.get('val_filenames', [])) > 0:
-            all_train_filenames.extend(self.data['val_filenames'])
-            all_train_labels = np.vstack([all_train_labels, self.data['val_labels']])
-            print(f"  Train eval: combining {len(self.data['train_filenames'])} train + {len(self.data['val_filenames'])} val = {len(all_train_filenames)} total")
-        else:
-            print(f"  Train eval: using {len(all_train_filenames)} training samples (no validation split)")
-        
         train_eval_dataset = SpectrogramDataset(
-            all_train_filenames,
-            all_train_labels,
+            self.data['train_filenames'],
+            self.data['train_labels'],
             img_height,
             img_width,
             config.DEFAULT_CHANNELS,
@@ -1001,6 +994,7 @@ class BirdClefFineTuner:
         print("\nStarting fine-tuning...")
 
         best_val_metric = -1.0
+        epochs_without_improvement = 0
         history = {
             'train_loss': [],
             'val_loss': [],
@@ -1103,8 +1097,15 @@ class BirdClefFineTuner:
                 # Save best model based on validation
                 if current_metric > best_val_metric:
                     best_val_metric = current_metric
+                    epochs_without_improvement = 0
                     self.save_model('birdclef_finetuned_best.pt')
                     print(f"  ✓ Saved best model ({metric_name}: {current_metric:.4f})")
+                else:
+                    epochs_without_improvement += 1
+                    if self.patience > 0 and epochs_without_improvement >= self.patience:
+                        print(f"\n  Early stopping: no improvement for {self.patience} epochs")
+                        print(f"  Best {metric_name}: {best_val_metric:.4f}")
+                        break
             else:
                 # No validation - save every epoch as "best"
                 self.save_model('birdclef_finetuned_best.pt')
@@ -1275,6 +1276,8 @@ Examples:
                        help="Path to BirdClef pretrained checkpoint (default: BirdClefModels/model_fold0.pth)")
     parser.add_argument('--epochs', type=int, default=10,
                        help="Number of training epochs (default: 10, try 5-15)")
+    parser.add_argument('--patience', type=int, default=15,
+                       help="Early stopping patience: stop if val metric doesn't improve for N epochs (default: 15, 0 = disabled)")
     parser.add_argument('--batch-size', type=int, default=32,
                        help="Batch size (default: 32)")
     parser.add_argument('--lr', type=float, default=1e-4,
@@ -1354,6 +1357,7 @@ Examples:
         output_folder=args.output_folder,
         pretrained_path=pretrained_path,
         epochs=args.epochs,
+        patience=args.patience,
         batch_size=args.batch_size,
         lr=args.lr,
         freeze_backbone=args.freeze_backbone,

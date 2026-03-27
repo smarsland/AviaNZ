@@ -33,8 +33,8 @@ MIXUP_ALPHA=0.25
 TEST_SIZE=0.25
 
 # Skip flags (set to 1 to skip a step)
-SKIP_BUILD=1
-SKIP_SPLIT=1
+SKIP_BUILD=0
+SKIP_SPLIT=0
 SKIP_NORMALIZATION_EXPERIMENTS=0  # Compare different spectrogram normalizations (no noise)
 SKIP_NOISE_EXPERIMENTS=0           # Test effect of noise variety on robustness
 
