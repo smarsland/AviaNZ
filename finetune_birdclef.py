@@ -1044,11 +1044,23 @@ class BirdClefFineTuner:
                 history['train_bit_acc'].append(train_eval_metrics['bit_acc'])
                 history['val_bit_acc'].append(val_metrics['bit_acc'] if val_metrics else None)
                 # Store exact_match as primary metric (used by experiment runner)
-                history['train_acc'].append(train_eval_metrics['exact_match'] * 100)
-                history['val_acc'].append(val_metrics['exact_match'] * 100 if val_metrics else None)
+                train_acc_pct = train_eval_metrics['exact_match'] * 100
+                val_acc_pct = val_metrics['exact_match'] * 100 if val_metrics else None
+                history['train_acc'].append(train_acc_pct)
+                history['val_acc'].append(val_acc_pct)
+                # Sanity check: values should be percentages in [0, 100]
+                assert 0 <= train_acc_pct <= 100, f"train_acc out of range: {train_acc_pct}"
+                if val_acc_pct is not None:
+                    assert 0 <= val_acc_pct <= 100, f"val_acc out of range: {val_acc_pct}"
             else:
-                history['train_acc'].append(train_eval_metrics)
-                history['val_acc'].append(val_metrics if val_metrics is not None else None)
+                train_acc_pct = train_eval_metrics
+                val_acc_pct = val_metrics if val_metrics is not None else None
+                history['train_acc'].append(train_acc_pct)
+                history['val_acc'].append(val_acc_pct)
+                # Sanity check: values should be percentages in [0, 100]
+                assert 0 <= train_acc_pct <= 100, f"train_acc out of range: {train_acc_pct}"
+                if val_acc_pct is not None:
+                    assert 0 <= val_acc_pct <= 100, f"val_acc out of range: {val_acc_pct}"
             
             print(f"Epoch {epoch+1}/{self.epochs}:")
             if self.multilabel:

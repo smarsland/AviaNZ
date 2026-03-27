@@ -138,11 +138,8 @@ class CrossDatasetExperiments:
         if value is None:
             return 0.0
         if isinstance(value, (int, float)):
-            # If value is < 1, it's likely a fraction, convert to percentage
-            acc = float(value)
-            if acc < 1.0:
-                acc = acc * 100.0
-            return acc
+            # Values are already stored as percentages (0-100), don't convert
+            return float(value)
         if isinstance(value, (tuple, list)):
             return self.extract_accuracy(value[0]) if len(value) > 0 else 0.0
         if isinstance(value, dict):

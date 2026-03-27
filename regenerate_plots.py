@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Regenerate plots from existing experiment results.
-Usage: python3 regenerate_plots.py experiments_20260313_064819 [--ignore-dann]
+Regenerate plots from existing experiment results (after fixing all_results.json).
+Run this after regenerate_results.py to update all visualizations.
+
+Usage: python3 regenerate_plots.py experiments_matched [--ignore-dann]
+       python3 regenerate_plots.py experiments_noise
 """
 
 import json
@@ -52,7 +55,6 @@ def main():
         avianz_test='/dummy/path', 
         doc_train='/dummy/path',
         doc_test='/dummy/path',
-        combined_train='/dummy/path',
         output_folder=str(results_dir),
         model_path=data.get('model', 'N/A'),
         epochs=data.get('epochs', 0),
@@ -70,6 +72,8 @@ def main():
         exp.plot_test_accuracy_comparison()
         exp.plot_heatmap()
         exp.plot_validation_vs_test()
+        exp.generate_report()
+        exp.plot_confusion_matrices()
         
         print("\n" + "=" * 60)
         print("✓ All plots successfully regenerated!")
@@ -80,6 +84,8 @@ def main():
         print("  - test_accuracy_comparison.png")
         print("  - results_heatmap.png")
         print("  - validation_vs_test.png")
+        print("  - report.txt")
+        print("  - <exp>/confusion_*.png")
         
     except Exception as e:
         print(f"\n❌ ERROR: {e}")
