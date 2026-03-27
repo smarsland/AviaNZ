@@ -183,7 +183,7 @@ class BirdClefFineTuner:
                  epochs=10, batch_size=32, lr=1e-4, freeze_backbone=False, 
                  freeze_stages=0, multilabel=False, device=None,
                  use_class_weights=False, pos_weight_cap=None,
-                 normalize=False, normalize_median_filter=True, spec_transform='Log', mixup_alpha=0.0, 
+                 normalize=False, normalize_median_filter=True, median_only=False, spec_transform='Log', mixup_alpha=0.0, 
                  mixup_mode='mixup', noise_ratio=0.0, noise_folder=None, noise_mode='full', 
                  use_temporal_roll=True, validation_split=0.2, remove_baseline=False, 
                  test_folder=None, test_folder2=None, background_prob=0.0,
@@ -203,6 +203,7 @@ class BirdClefFineTuner:
         self.pos_weight_cap = pos_weight_cap
         self.normalize = normalize
         self.normalize_median_filter = normalize_median_filter
+        self.median_only = median_only
         self.spec_transform = spec_transform
         self.mixup_alpha = mixup_alpha
         self.mixup_mode = mixup_mode
@@ -339,6 +340,7 @@ class BirdClefFineTuner:
             use_class_balancing=False,
             normalize=self.normalize,
             normalize_median_filter=self.normalize_median_filter,
+            median_only=self.median_only,
             use_sparse_patches=False,
             num_sparse_patches=0,
             use_temporal_roll=self.use_temporal_roll,
@@ -365,6 +367,7 @@ class BirdClefFineTuner:
             training=False,
             normalize=self.normalize,
             normalize_median_filter=self.normalize_median_filter,
+            median_only=self.median_only,
             use_temporal_roll=False,
             remove_baseline=self.remove_baseline
         )
@@ -402,6 +405,7 @@ class BirdClefFineTuner:
                 width_downsizing=None,
                 normalize=self.normalize,
                 normalize_median_filter=self.normalize_median_filter,
+                median_only=self.median_only,
                 use_sparse_patches=False,
                 num_sparse_patches=0,
                 use_temporal_roll=self.use_temporal_roll,
@@ -964,6 +968,7 @@ class BirdClefFineTuner:
             width_downsizing=None,
             normalize=self.normalize,
             normalize_median_filter=self.normalize_median_filter,
+            median_only=self.median_only,
             use_sparse_patches=False,
             num_sparse_patches=0,
             use_temporal_roll=False,
@@ -1296,6 +1301,8 @@ Examples:
                        help="Apply background normalization to spectrograms (recommended for soundscapes)")
     parser.add_argument('--normalize-no-median', action='store_true',
                        help="Disable median filter in background normalization (ablation test)")
+    parser.add_argument('--median-only', action='store_true',
+                       help="Apply only median filter without background subtraction (ablation test)")
     parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
                        help="Spectrogram transformation method (default: Log). PCEN is robust to amplitude variation.")
     parser.add_argument('--baseline-removal', action='store_true',
@@ -1366,8 +1373,9 @@ Examples:
         device=torch.device(args.device) if args.device else None,
         use_class_weights=args.class_weights,
         pos_weight_cap=args.pos_weight_cap,
-        normalize=args.normalize,
+        normalize=args.normalize or args.median_only,
         normalize_median_filter=not args.normalize_no_median,
+        median_only=args.median_only,
         spec_transform=args.spec_transform,
         mixup_alpha=args.mixup,
         mixup_mode=args.mixup_mode,

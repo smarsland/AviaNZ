@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Simplified cross-dataset experiments for testing generalization.
+Comprehensive cross-dataset experiments for domain shift analysis.
 
-Runs 2 core experiments (BirdClef CNN only):
-1. Train on joe_mo (baseline), test on joe_mo test + doc test
-2. Train on doc (baseline), test on doc test + joe_mo test
+Automatically runs:
+1. Baseline experiments: Train on joe_mo/doc, test on both datasets
+2. DANN domain adaptation experiments (use --skip-dann to disable)
+3. Median-only ablation experiments (use --skip-median-only to disable)
+4. Noise intensity sweep: 5 levels (0, 0.25, 0.5, 0.75, 1.0) (use --skip-noise-sweep to disable)
 
-Generates comparison tables and plots.
+Generates comparison tables, plots, and confusion matrices.
 
 Usage:
     python run_cross_dataset_experiments.py \\
@@ -14,7 +16,9 @@ Usage:
         --avianz-test /path/to/joe_mo/test \\
         --doc-train /path/to/doc/train \\
         --doc-test /path/to/doc/test \\
-        --output results/experiments
+        --noise-folder /path/to/noise \\
+        --output results/experiments \\
+        --normalize
 """
 
 import argparse
@@ -43,7 +47,8 @@ class CrossDatasetExperiments:
                  lambda_domain=0.1, noise_folder=None,
                  noise=None, noise_mode=None, background_prob=None, noise_as_samples=False,
                  mixup=None, force_rerun=False, spec_transform='Log', normalize=False,
-                 normalize_no_median=False, experiment_suffix=''):
+                 normalize_no_median=False, median_only=False, experiment_suffix='',
+                 run_dann=True, run_median_only=True, run_noise_sweep=True):
         self.avianz_train = avianz_train
         self.avianz_test = avianz_test
         self.doc_train = doc_train
@@ -64,6 +69,10 @@ class CrossDatasetExperiments:
         self.spec_transform = spec_transform
         self.normalize = normalize
         self.normalize_no_median = normalize_no_median
+        self.median_only = median_only
+        self.run_dann = run_dann
+        self.run_median_only = run_median_only
+        self.run_noise_sweep = run_noise_sweep
         
         self.output_folder.mkdir(parents=True, exist_ok=True)
         
@@ -88,6 +97,31 @@ class CrossDatasetExperiments:
                 'description': 'Baseline doc'
             }
         ]
+        
+        # Add DANN experiments (always run by default)
+        if self.run_dann and not experiment_suffix and not median_only:
+            base_experiments.extend([
+                {
+                    'name': 'joe_mo_dann',
+                    'train': avianz_train,  # source
+                    'source': avianz_train,
+                    'target': doc_train,
+                    'test1': avianz_test,
+                    'test2': doc_test,
+                    'type': 'dann',
+                    'description': 'DANN joe_mo→doc'
+                },
+                {
+                    'name': 'doc_dann',
+                    'train': doc_train,  # source
+                    'source': doc_train,
+                    'target': avianz_train,
+                    'test1': doc_test,
+                    'test2': avianz_test,
+                    'type': 'dann',
+                    'description': 'DANN doc→joe_mo'
+                }
+            ])
         
         # Generate experiments (BirdClef only)
         self.experiments = []
@@ -119,9 +153,27 @@ class CrossDatasetExperiments:
                     exp['description'] += " [normalized_no_median]"
                 else:
                     exp['description'] += " [normalized]"
+            if median_only:
+                exp['description'] += " [median_only]"
             if experiment_suffix:
                 exp['description'] += f" {experiment_suffix}"
             self.experiments.append(exp)
+        
+        # Add median-only experiments (ablation study - always run by default)
+        if self.run_median_only and not median_only and not experiment_suffix:
+            print("\nAdding median-only ablation experiments...")
+            median_experiments = []
+            for base_exp in [e for e in base_experiments if e['type'] == 'finetune']:
+                exp = base_exp.copy()
+                exp['model_type'] = model_type
+                exp['freeze'] = False
+                exp['name'] = f"{base_exp['name']}_{model_type}_median_only{experiment_suffix}"
+                exp['description'] = f"{base_exp['description']} (BIRDCLEF) [median_only]"
+                exp['median_only'] = True
+                if experiment_suffix:
+                    exp['description'] += f" {experiment_suffix}"
+                median_experiments.append(exp)
+            self.experiments.extend(median_experiments)
         
         self.results = []
         
@@ -132,11 +184,22 @@ class CrossDatasetExperiments:
         print(f"joe_mo test:  {avianz_test}")
         print(f"doc train:    {doc_train}")
         print(f"doc test:     {doc_test}")
-        print(f"Freeze strategy: Disabled")
-        print(f"Normalization: Disabled")
-        print(f"\nExperiment breakdown (2 experiments):")
-        print(f"  1) joe_mo baseline (train joe_mo, test joe_mo + doc)")
-        print(f"  2) doc baseline (train doc, test doc + joe_mo)")
+        print(f"Normalization: {'Enabled' if normalize else 'Disabled'}")
+        print(f"Spec transform: {spec_transform}")
+        
+        # Count experiment types
+        num_baseline = len([e for e in self.experiments if e['type'] == 'finetune' and not e.get('median_only', False)])
+        num_dann = len([e for e in self.experiments if e['type'] == 'dann'])
+        num_median = len([e for e in self.experiments if e.get('median_only', False)])
+        
+        print(f"\nExperiment breakdown:")
+        print(f"  - Baseline finetune: {num_baseline} experiments")
+        if num_dann > 0:
+            print(f"  - DANN domain adaptation: {num_dann} experiments")
+        if num_median > 0:
+            print(f"  - Median-only ablation: {num_median} experiments")
+        if num_median > 0:
+            print(f"  - Median-only ablation: {num_median} experiments")
         print(f"\nTotal: {len(self.experiments)} experiments")
         print(f"{'='*60}")
     
@@ -276,7 +339,10 @@ class CrossDatasetExperiments:
             print(f"✓ Already completed - loading cached results...")
             return self.load_completed_experiment(exp)
         
-        return self.run_finetune_experiment(exp)
+        if exp['type'] == 'dann':
+            return self.run_dann_experiment(exp)
+        else:
+            return self.run_finetune_experiment(exp)
     
     def run_finetune_experiment(self, exp):
         """Run a single fine-tuning experiment."""
@@ -295,21 +361,26 @@ class CrossDatasetExperiments:
         cmd = [
             sys.executable,
             'finetune_birdclef.py',
-            exp['train'],
+            exp['source'],
             str(exp_output),
             '--pretrained', self.model_path,
             '--epochs', str(self.epochs),
             '--batch-size', str(self.batch_size),
+            '--use-dann',
+            '--target-folder', exp['target'],
+            '--lambda-domain', str(exp.get('lambda_domain', self.lambda_domain)),
             '--test-folder', exp['test1'],
             '--test-folder2', exp['test2'],
             '--multilabel',
             '--spec-transform', self.spec_transform
         ]
 
-        if self.normalize:
+        if self.normalize or exp.get('median_only', False):
             cmd.append('--normalize')
         if self.normalize_no_median:
             cmd.append('--normalize-no-median')
+        if exp.get('median_only', False) or self.median_only:
+            cmd.append('--median-only')
 
         if self.mixup is not None:
             cmd.extend(['--mixup', str(self.mixup)])
@@ -1754,8 +1825,8 @@ def main():
                        help='Batch size (default: 32)')
     parser.add_argument('--lambda-domain', type=float, default=0.3,
                        help='DANN domain loss weight (default: 0.3)')
-    parser.add_argument('--noise-folder', default=None,
-                       help='Optional noise folder for augmentation mixing (unlabeled background). Used by --noise in train_models.py / finetune_birdclef.py')
+    parser.add_argument('--noise-folder', required=True,
+                       help='Noise folder for augmentation experiments (REQUIRED for noise sweep)')
 
     parser.add_argument('--noise', type=float, default=None,
                        help='Expected noise mixing ratio for augmentation (e.g., 0.2 = 20%% expected noise). Only used if provided.')
@@ -1773,12 +1844,33 @@ def main():
                        help='Apply background normalization (--normalize flag in finetune_birdclef.py)')
     parser.add_argument('--normalize-no-median', action='store_true',
                        help='Skip median filter in normalization (for ablation studies)')
+    parser.add_argument('--skip-dann', action='store_true',
+                       help='Skip DANN domain adaptation experiments')
+    parser.add_argument('--skip-median-only', action='store_true',
+                       help='Skip median-only ablation experiments')
+    parser.add_argument('--skip-noise-sweep', action='store_true',
+                       help='Skip noise intensity sweep experiments')
     parser.add_argument('--experiment-suffix', default='',
                        help='Optional suffix to append to experiment names (e.g., for noise levels)')
     parser.add_argument('--force', action='store_true',
                        help='Force re-run of experiments even if results already exist')
     
     args = parser.parse_args()
+    
+    # Print experiment plan
+    print(f"\n{'='*70}")
+    print(f"COMPREHENSIVE CROSS-DATASET EXPERIMENT SUITE")
+    print(f"{'='*70}")
+    print(f"\nThis script will automatically run:")
+    print(f"  1. Baseline experiments (joe_mo→doc, doc→joe_mo)")
+    if not args.skip_dann:
+        print(f"  2. DANN domain adaptation experiments")
+    if not args.skip_median_only:
+        print(f"  3. Median-only ablation experiments")
+    if run_noise_sweep:
+        print(f"  4. Noise intensity sweep (5 levels: 0, 0.25, 0.5, 0.75, 1.0)")
+    print(f"\nUse --skip-dann, --skip-median-only, or --skip-noise-sweep to disable.")
+    print(f"{'='*70}\n")
     
     for path in [args.avianz_train, args.avianz_test, args.doc_train, args.doc_test]:
         if not os.path.exists(path):
@@ -1789,10 +1881,61 @@ def main():
         print(f"ERROR: Model not found: {args.model}")
         return
     
-    if args.noise_folder and not os.path.exists(args.noise_folder):
-        print(f"WARNING: Noise folder not found: {args.noise_folder}")
-        print(f"         DANN will fallback to using source as target (not recommended)")
-        args.noise_folder = None
+    if not os.path.exists(args.noise_folder):
+        print(f"ERROR: Noise folder not found: {args.noise_folder}")
+        print(f"       This is required for noise intensity sweep experiments.")
+        print(f"       Use --skip-noise-sweep if you don't want to run noise experiments.")
+        return
+    
+    # Noise intensity sweep (runs by default unless skipped)
+    run_noise_sweep = not args.skip_noise_sweep
+    
+    if run_noise_sweep:
+        noise_levels = [0.0, 0.25, 0.5, 0.75, 1.0]
+        print(f"\n{'='*60}")
+        print(f"NOISE INTENSITY SWEEP: {len(noise_levels)} levels (AUTOMATIC)")
+        print(f"Levels: {noise_levels}")
+        print(f"{'='*60}")
+        
+        for noise_level in noise_levels:
+            print(f"\\n\\n{'#'*60}")
+            print(f"# NOISE LEVEL: {noise_level}")
+            print(f"{'#'*60}\\n")
+            
+            suffix = f"_noise{noise_level:.2f}" if noise_level > 0 else "_noise0.00"
+            
+            experiments = CrossDatasetExperiments(
+                avianz_train=args.avianz_train,
+                avianz_test=args.avianz_test,
+                doc_train=args.doc_train,
+                doc_test=args.doc_test,
+                output_folder=args.output,
+                model_path=args.model,
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                lambda_domain=args.lambda_domain,
+                noise_folder=args.noise_folder,
+                force_rerun=args.force,
+                noise=noise_level if noise_level > 0 else None,
+                noise_mode=args.noise_mode,
+                background_prob=args.background_prob,
+                noise_as_samples=args.noise_as_samples,
+                mixup=args.mixup,
+                spec_transform=args.spec_transform,
+                normalize=args.normalize,
+                normalize_no_median=args.normalize_no_median,
+                median_only=False,
+                experiment_suffix=suffix,
+                run_dann=False,  # Don't duplicate DANN for noise sweep
+                run_median_only=False,  # Don't duplicate median-only for noise sweep
+                run_noise_sweep=False
+            )
+            experiments.run()
+        
+        print(f"\\n\\n{'='*60}")
+        print(f"✓ NOISE INTENSITY SWEEP COMPLETE!")
+        print(f"{'='*60}")
+        return
     
     experiments = CrossDatasetExperiments(
         avianz_train=args.avianz_train,
@@ -1814,7 +1957,11 @@ def main():
         spec_transform=args.spec_transform,
         normalize=args.normalize,
         normalize_no_median=args.normalize_no_median,
-        experiment_suffix=args.experiment_suffix
+        median_only=False,
+        experiment_suffix=args.experiment_suffix,
+        run_dann=not args.skip_dann,
+        run_median_only=not args.skip_median_only,
+        run_noise_sweep=False  # Already handled above
     )
     
     experiments.run()

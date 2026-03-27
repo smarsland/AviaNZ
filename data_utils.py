@@ -260,7 +260,7 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1, 
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
-                 normalize_median_filter=True, use_sparse_patches=False, num_sparse_patches=20, 
+                 normalize_median_filter=True, median_only=False, use_sparse_patches=False, num_sparse_patches=20, 
                  use_temporal_roll=True, remove_baseline=True, noise_mode='full', background_prob=0.0):
         """
         Initialize SpectrogramDataset.
@@ -302,6 +302,7 @@ class SpectrogramDataset(Dataset):
         self.width_downsizing = width_downsizing
         self.normalize = normalize
         self.normalize_median_filter = normalize_median_filter
+        self.median_only = median_only
         self.use_sparse_patches = use_sparse_patches
         self.num_sparse_patches = num_sparse_patches
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
@@ -826,7 +827,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None, 
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False, normalize_median_filter=True,
-                       use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
+                       median_only=False, use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
                        remove_baseline=False, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
@@ -846,6 +847,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         use_class_balancing: If True, balance classes using WeightedRandomSampler
         normalize: If True, apply background normalization to spectrograms
         normalize_median_filter: If True (default), use median filter during normalization
+        median_only: If True, apply only median filter without background subtraction
         use_sparse_patches: If True, only extract patches with signal (sparse attention)
         num_sparse_patches: Number of patches to extract in sparse mode (K)
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
@@ -874,6 +876,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         width_downsizing=width_downsizing,
         normalize=normalize,
         normalize_median_filter=normalize_median_filter,
+        median_only=median_only,
         use_sparse_patches=use_sparse_patches,
         num_sparse_patches=num_sparse_patches,
         use_temporal_roll=use_temporal_roll,
@@ -894,6 +897,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             width_downsizing=width_downsizing,
             normalize=normalize,
             normalize_median_filter=normalize_median_filter,
+            median_only=median_only,
             use_sparse_patches=use_sparse_patches,
             num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
