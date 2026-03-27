@@ -45,7 +45,7 @@ class SpectrogramComparer:
     def group_by_species(self, files):
         by_species = {}
         for file_info in files:
-            species = file_info['primary_class']
+            species = file_info['class_names'][0]
             if species not in by_species:
                 by_species[species] = []
             by_species[species].append(file_info)
@@ -147,7 +147,7 @@ class SpectrogramComparer:
 
 
 if __name__ == '__main__':
-    doc_root = 'test/doc_split/test'
-    joe_mo_root = 'test/joe_mo_split/test'
+    doc_root = '../test/'
+    joe_mo_root = '../test/'
     
     comparer = SpectrogramComparer(doc_root, joe_mo_root)

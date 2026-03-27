@@ -258,8 +258,11 @@ class ModelPredictor:
             for i in range(min(3, len(filenames))):
                 print(f"  File {i}: {files[i].get('class_names', files[i].get('primary_class', '???'))} → {labels[i]}")
         
-        # Use default spec_transform from config (matches training/validation)
-        spec_transform = config.DEFAULT_SPEC_TRANSFORM
+        # Use spec_transform from model config (NOT default - critical for PCEN/Box-Cox/etc!)
+        with open(self.model_config, 'r') as f:
+            model_config = json.load(f)
+        spec_transform = model_config.get('spec_transform', config.DEFAULT_SPEC_TRANSFORM)
+        print(f"Using spec_transform: {spec_transform} (from model config)")
         
         # Create SpectrogramDataset (EXACTLY matching validation in create_data_loaders)
         img_height = self.expected_freq_bins

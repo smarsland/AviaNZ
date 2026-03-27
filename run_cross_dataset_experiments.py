@@ -233,8 +233,8 @@ class CrossDatasetExperiments:
                 'model_type': exp['model_type'],
                 'train_dataset': train_dataset_name,
                 'freeze_backbone': exp['freeze'],
-                'final_train_acc': best_train_acc,
-                'final_val_acc': best_val_acc,
+                'best_train_acc': best_train_acc,
+                'best_val_acc': best_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
@@ -250,9 +250,9 @@ class CrossDatasetExperiments:
             self.results.append(exp_result)
             
             print(f"\n✓ Loaded cached results (best epoch):")
-            print(f"  Best train acc: {exp_result['final_train_acc']:.2f}%")
-            if exp_result['final_val_acc'] is not None:
-                print(f"  Best val acc: {exp_result['final_val_acc']:.2f}%")
+            print(f"  Best train acc: {exp_result['best_train_acc']:.2f}%")
+            if exp_result['best_val_acc'] is not None:
+                print(f"  Best val acc: {exp_result['best_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
@@ -896,8 +896,8 @@ class CrossDatasetExperiments:
                 'Experiment': description,
                 'Train Dataset': train_dataset,
                 'Freeze': 'Yes' if freeze_backbone else 'No',
-                'Train Exact Match': f"{final_train_acc:.2f}",
-                'Val Exact Match': f"{final_val_acc:.2f}" if final_val_acc is not None else 'N/A',
+                'Train (@ best val)': f"{final_train_acc:.2f}",
+                'Val (best)': f"{final_val_acc:.2f}" if final_val_acc is not None else 'N/A',
                 f'Test {test1_name}': f"{test1_acc:.2f}",
                 f'Test {test2_name}': f"{test2_acc:.2f}"
             })
@@ -1510,7 +1510,9 @@ class CrossDatasetExperiments:
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Total experiments: {len(self.results)}\n")
             f.write(f"Epochs per experiment: {self.epochs}\n")
-            f.write(f"Batch size: {self.batch_size}\n\n")
+            f.write(f"Batch size: {self.batch_size}\n")
+            f.write(f"\nNOTE: Train/Val accuracies are from the best validation epoch\n")
+            f.write(f"      (the checkpoint used for test evaluation).\n\n")
             
             f.write("="*60 + "\n")
             f.write("INDIVIDUAL EXPERIMENT RESULTS\n")
@@ -1521,9 +1523,9 @@ class CrossDatasetExperiments:
                 f.write(f"{'-'*60}\n")
                 f.write(f"  Train dataset: {r['train_dataset']}\n")
                 f.write(f"  Freeze backbone: {r['freeze_backbone']}\n")
-                f.write(f"  Train accuracy: {r['final_train_acc']:.2f}%\n")
+                f.write(f"  Train accuracy (@ best val): {r['final_train_acc']:.2f}%\n")
                 if r['final_val_acc'] is not None:
-                    f.write(f"  Val accuracy: {r['final_val_acc']:.2f}%\n")
+                    f.write(f"  Val accuracy (best): {r['final_val_acc']:.2f}%\n")
                 f.write(f"  Test {r['test1_name']}: {r['test1_acc']:.2f}%\n")
                 f.write(f"  Test {r['test2_name']}: {r['test2_acc']:.2f}%\n")
                 f.write(f"  Avg test accuracy: {(r['test1_acc'] + r['test2_acc'])/2:.2f}%\n")
