@@ -233,8 +233,8 @@ class CrossDatasetExperiments:
                 'model_type': exp['model_type'],
                 'train_dataset': train_dataset_name,
                 'freeze_backbone': exp['freeze'],
-                'best_train_acc': best_train_acc,
-                'best_val_acc': best_val_acc,
+                'final_train_acc': best_train_acc,
+                'final_val_acc': best_val_acc,
                 'test1_name': test1_name,
                 'test1_acc': test1_acc,
                 'test2_name': test2_name,
@@ -250,9 +250,9 @@ class CrossDatasetExperiments:
             self.results.append(exp_result)
             
             print(f"\n✓ Loaded cached results (best epoch):")
-            print(f"  Best train acc: {exp_result['best_train_acc']:.2f}%")
-            if exp_result['best_val_acc'] is not None:
-                print(f"  Best val acc: {exp_result['best_val_acc']:.2f}%")
+            print(f"  Train acc (@ best val): {exp_result['final_train_acc']:.2f}%")
+            if exp_result['final_val_acc'] is not None:
+                print(f"  Best val acc: {exp_result['final_val_acc']:.2f}%")
             print(f"  Test {test1_name}: {test1_acc:.2f}%")
             print(f"  Test {test2_name}: {test2_acc:.2f}%")
             
