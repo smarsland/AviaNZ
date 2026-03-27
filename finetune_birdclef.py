@@ -1209,6 +1209,7 @@ class BirdClefFineTuner:
             'freeze_stages': self.freeze_stages,
             'freq_bins': config.DEFAULT_FREQ_BINS,
             'time_bins': config.DEFAULT_TIME_BINS,
+            'spec_transform': self.spec_transform,
             'normalize': self.normalize,
             'remove_baseline': self.remove_baseline,
             'use_cleaner': self.use_cleaner

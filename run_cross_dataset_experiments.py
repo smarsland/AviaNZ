@@ -875,14 +875,25 @@ class CrossDatasetExperiments:
         
         data = []
         for r in self.results:
+            # Handle potentially missing fields from old results
+            description = r.get('description', r.get('name', 'Unknown'))
+            train_dataset = r.get('train_dataset', 'unknown')
+            freeze_backbone = r.get('freeze_backbone', False)
+            final_train_acc = r.get('final_train_acc', 0.0)
+            final_val_acc = r.get('final_val_acc')
+            test1_name = r.get('test1_name', 'test1')
+            test1_acc = r.get('test1_acc', 0.0)
+            test2_name = r.get('test2_name', 'test2')
+            test2_acc = r.get('test2_acc', 0.0)
+            
             data.append({
-                'Experiment': r['description'],
-                'Train Dataset': r['train_dataset'],
-                'Freeze': 'Yes' if r['freeze_backbone'] else 'No',
-                'Train Exact Match': f"{r['final_train_acc']:.2f}",
-                'Val Exact Match': f"{r['final_val_acc']:.2f}" if r['final_val_acc'] is not None else 'N/A',
-                f'Test {r["test1_name"]}': f"{r['test1_acc']:.2f}",
-                f'Test {r["test2_name"]}': f"{r['test2_acc']:.2f}"
+                'Experiment': description,
+                'Train Dataset': train_dataset,
+                'Freeze': 'Yes' if freeze_backbone else 'No',
+                'Train Exact Match': f"{final_train_acc:.2f}",
+                'Val Exact Match': f"{final_val_acc:.2f}" if final_val_acc is not None else 'N/A',
+                f'Test {test1_name}': f"{test1_acc:.2f}",
+                f'Test {test2_name}': f"{test2_acc:.2f}"
             })
         
         df = pd.DataFrame(data)
@@ -1289,7 +1300,7 @@ class CrossDatasetExperiments:
             
             ax.set_xlabel('Epoch', fontsize=10)
             ax.set_ylabel('Accuracy (%)', fontsize=10)
-            ax.set_title(r['description'], fontsize=10, fontweight='bold')
+            ax.set_title(r.get('description', r.get('name', 'Unknown')), fontsize=10, fontweight='bold')
             ax.legend(fontsize=8)
             ax.grid(alpha=0.3)
         
