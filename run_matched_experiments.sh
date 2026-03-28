@@ -58,12 +58,15 @@ echo ""
 # Build matched datasets (if not exist)
 if [ ! -d "$DOC_MATCHED" ] || [ ! -d "$AVIANZ_MATCHED" ]; then
     echo "=== Building matched datasets ==="
+    # Add --fixed-length flag to ensure all files are exactly the same length (10.24s)
+    # This filters out files shorter than model input size and trims all to same length
     python3 build_matched_datasets.py \
         --reviewed-csv "$REVIEWED_CSV" \
         --doc-raw      "$DOC_RAW" \
         --avianz-raw   "$AVIANZ_RAW" \
         --output       "$MATCHED_BASE" \
         --mapping      "$MAPPING"
+        # --fixed-length  # Uncomment to enable fixed-length mode
 else
     echo "=== Matched datasets exist, skipping build ==="
 fi
@@ -74,12 +77,10 @@ if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
     echo "=== Splitting datasets ==="
     python3 split_dataset.py "$DOC_MATCHED" "$DOC_SPLIT_BASE" \
         --test-ratio $TEST_SIZE \
-        --group-key source_file \
         --overwrite
     
     python3 split_dataset.py "$AVIANZ_MATCHED" "$AVIANZ_SPLIT_BASE" \
         --test-ratio $TEST_SIZE \
-        --group-key source_file \
         --overwrite
     
     echo ""

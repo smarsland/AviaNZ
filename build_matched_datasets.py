@@ -32,6 +32,8 @@ import random
 from collections import defaultdict
 
 import pandas as pd
+import soundfile as sf
+import numpy as np
 
 import config
 from analyze_dataset_quality import (
@@ -83,6 +85,34 @@ def normalize_label(label):
     label = label.replace('long tailed', 'long-tailed')
     
     return label
+
+
+def get_audio_duration(audio_path):
+    """Get audio file duration in seconds without loading entire file."""
+    try:
+        info = sf.info(audio_path)
+        return info.frames / info.samplerate
+    except Exception as e:
+        print(f"Error getting duration for {audio_path}: {e}")
+        return None
+
+
+def trim_spectrogram_to_length(sg, target_time_bins):
+    """
+    Trim spectrogram to exactly target_time_bins columns.
+    
+    Args:
+        sg: Spectrogram array of shape (freq_bins, time_bins)
+        target_time_bins: Target number of time bins (columns)
+        
+    Returns:
+        Trimmed spectrogram of shape (freq_bins, target_time_bins)
+    """
+    if sg.shape[1] >= target_time_bins:
+        return sg[:, :target_time_bins]
+    else:
+        # Should not happen if we filter properly, but just in case
+        return None
 
 
 def load_avianz_name_mapping(mapping_csv):
@@ -186,12 +216,17 @@ def parse_reviewed_csv(csv_path, mapping_csv):
     return records
 
 
-def build_doc_dataset(records, doc_raw, output_folder):
+def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_duration=None, target_time_bins=None):
     """
     Extract a spectrogram for each record from the raw DOC audio.
     Labels each sample with the full human_codes.
     Returns (labels, records_with_spectrograms) — the latter is needed so
     AviaNZ matching uses only records that actually produced a spectrogram.
+    
+    Args:
+        fixed_length: If True, filter out files shorter than target_duration and trim to target_time_bins
+        target_duration: Minimum audio duration in seconds (only used if fixed_length=True)
+        target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
     """
     spec_proc = make_spec_processor()
     data_dir = os.path.join(output_folder, 'data')
@@ -201,6 +236,7 @@ def build_doc_dataset(records, doc_raw, output_folder):
     kept_records = []
     missing = 0
     failed = 0
+    too_short = 0
 
     for i, rec in enumerate(records):
         audio_path = os.path.join(
@@ -216,10 +252,27 @@ def build_doc_dataset(records, doc_raw, output_folder):
             missing += 1
             continue
 
+        # Check duration if fixed_length is enabled
+        if fixed_length:
+            duration = get_audio_duration(audio_path)
+            if duration is None:
+                failed += 1
+                continue
+            if duration < target_duration:
+                too_short += 1
+                continue
+
         sg = spec_proc.process_audio_file(audio_path)
         if sg is None:
             failed += 1
             continue
+
+        # Trim to fixed length if enabled
+        if fixed_length:
+            sg = trim_spectrogram_to_length(sg, target_time_bins)
+            if sg is None:
+                too_short += 1
+                continue
 
         basename = f'file_{len(labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
@@ -234,11 +287,11 @@ def build_doc_dataset(records, doc_raw, output_folder):
         if (i + 1) % 100 == 0:
             print(f'  DOC: processed {i+1}/{len(records)}, saved {len(labels)}')
 
-    print(f'DOC: saved {len(labels)} spectrograms  (missing={missing}, failed={failed})')
+    print(f'DOC: saved {len(labels)} spectrograms  (missing={missing}, failed={failed}, too_short={too_short})')
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_duration=None, target_time_bins=None):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (the human's primary/uncertain
@@ -247,6 +300,11 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
 
     Returns (avianz_labels, matched_mask) where matched_mask[i] is True if
     record i was successfully matched.
+    
+    Args:
+        fixed_length: If True, filter out segments shorter than target_duration and trim to target_time_bins
+        target_duration: Minimum audio duration in seconds (only used if fixed_length=True)
+        target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
     """
     spec_proc = make_spec_processor()
     name_mapping = load_avianz_name_mapping(mapping_csv)
@@ -270,6 +328,11 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
             continue
         segments = proc.load_annotation_file(data_file)
         for seg in segments:
+            # Filter by duration if fixed_length is enabled
+            seg_duration = seg.end_time - seg.start_time
+            if fixed_length and seg_duration < target_duration:
+                continue
+                
             seg_codes = [
                 proc.normalize_to_ebird(lab['species'])
                 for lab in seg.labels
@@ -307,6 +370,13 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv):
         if sg is None:
             matched_mask.append(False)
             continue
+
+        # Trim to fixed length if enabled
+        if fixed_length:
+            sg = trim_spectrogram_to_length(sg, target_time_bins)
+            if sg is None:
+                matched_mask.append(False)
+                continue
 
         basename = f'file_{len(avianz_labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
@@ -405,6 +475,55 @@ def write_labels_json(output_folder, labels, dataset_name):
     print(f'Wrote {len(labels)} entries -> {out}')
 
 
+def compute_spectrogram_stats(output_folder, dataset_name):
+    """
+    Compute statistics about spectrograms in the dataset.
+    
+    Returns dict with:
+        - num_files: number of spectrogram files
+        - shapes: list of unique shapes found
+        - total_time_bins: sum of all time bins (columns)
+        - min_time_bins: minimum time bins
+        - max_time_bins: maximum time bins
+        - mean_time_bins: mean time bins
+    """
+    data_dir = os.path.join(output_folder, 'data')
+    npy_files = [f for f in os.listdir(data_dir) if f.endswith('.npy')]
+    
+    if not npy_files:
+        return {
+            'dataset': dataset_name,
+            'num_files': 0,
+            'shapes': [],
+            'total_time_bins': 0,
+            'min_time_bins': 0,
+            'max_time_bins': 0,
+            'mean_time_bins': 0,
+        }
+    
+    shapes = []
+    time_bins_list = []
+    
+    for npy_file in npy_files:
+        sg = np.load(os.path.join(data_dir, npy_file))
+        shapes.append(sg.shape)
+        time_bins_list.append(sg.shape[1])  # columns
+    
+    unique_shapes = list(set(shapes))
+    
+    stats = {
+        'dataset': dataset_name,
+        'num_files': len(npy_files),
+        'shapes': [list(s) for s in unique_shapes],  # Convert tuples to lists for JSON
+        'total_time_bins': sum(time_bins_list),
+        'min_time_bins': min(time_bins_list),
+        'max_time_bins': max(time_bins_list),
+        'mean_time_bins': sum(time_bins_list) / len(time_bins_list),
+    }
+    
+    return stats
+
+
 def main():
     parser = argparse.ArgumentParser(description='Build matched DOC + AviaNZ datasets')
     parser.add_argument('--reviewed-csv', default='doc_reviewed.csv')
@@ -416,6 +535,8 @@ def main():
                         help='Output base; doc_matched/ and avianz_matched/ created inside')
     parser.add_argument('--mapping', default='DOC_bird_naming_map.csv')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--fixed-length', action='store_true',
+                        help='Filter out files shorter than model input size and trim all to same length')
     args = parser.parse_args()
 
     doc_out = os.path.join(args.output, 'doc_matched')
@@ -423,15 +544,40 @@ def main():
     os.makedirs(doc_out, exist_ok=True)
     os.makedirs(avianz_out, exist_ok=True)
 
+    # Compute target duration and time bins based on model config
+    target_duration = config.DEFAULT_TIME_BINS * config.DEFAULT_HOP_SECONDS
+    target_time_bins = config.DEFAULT_TIME_BINS
+    
+    # When fixed_length is enabled, accept files that are at least 90% of target
+    # to avoid being too strict while still ensuring reasonable consistency
+    min_duration = target_duration * 0.9 if args.fixed_length else target_duration
+    
+    if args.fixed_length:
+        print(f'\n=== Fixed-length mode enabled ===')
+        print(f'  Target duration: {target_duration:.2f} seconds')
+        print(f'  Minimum duration (90%): {min_duration:.2f} seconds')
+        print(f'  Target time bins: {target_time_bins}')
+        print(f'  Files shorter than {min_duration:.2f}s will be filtered out')
+        print(f'  All spectrograms will be trimmed to {target_time_bins} columns')
+        print('='*50 + '\n')
+
     print('=== Step 1: parse reviewed CSV ===')
     records = parse_reviewed_csv(args.reviewed_csv, args.mapping)
 
     print('\n=== Step 2: build DOC dataset (human labels, raw audio) ===')
-    doc_labels, kept_records = build_doc_dataset(records, args.doc_raw, doc_out)
+    doc_labels, kept_records = build_doc_dataset(
+        records, args.doc_raw, doc_out, 
+        fixed_length=args.fixed_length,
+        target_duration=min_duration,
+        target_time_bins=target_time_bins
+    )
 
     print('\n=== Step 3: find matching AviaNZ sample for each DOC record ===')
     avianz_labels, matched_mask = build_avianz_dataset(
-        kept_records, args.avianz_raw, avianz_out, args.seed, args.mapping
+        kept_records, args.avianz_raw, avianz_out, args.seed, args.mapping,
+        fixed_length=args.fixed_length,
+        target_duration=min_duration,
+        target_time_bins=target_time_bins
     )
 
     # Drop DOC samples that had no AviaNZ match
@@ -447,6 +593,36 @@ def main():
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')
     write_labels_json(avianz_out, avianz_labels, 'AviaNZ_matched')
+
+    # Compute and report spectrogram statistics
+    print('\n=== Step 5: compute spectrogram statistics ===')
+    doc_stats = compute_spectrogram_stats(doc_out, 'DOC_matched')
+    avianz_stats = compute_spectrogram_stats(avianz_out, 'AviaNZ_matched')
+    
+    print(f'\nDOC dataset:')
+    print(f'  Files: {doc_stats["num_files"]}')
+    print(f'  Unique shapes: {doc_stats["shapes"]}')
+    print(f'  Time bins: min={doc_stats["min_time_bins"]}, max={doc_stats["max_time_bins"]}, mean={doc_stats["mean_time_bins"]:.1f}')
+    print(f'  Total time bins (columns): {doc_stats["total_time_bins"]}')
+    
+    print(f'\nAviaNZ dataset:')
+    print(f'  Files: {avianz_stats["num_files"]}')
+    print(f'  Unique shapes: {avianz_stats["shapes"]}')
+    print(f'  Time bins: min={avianz_stats["min_time_bins"]}, max={avianz_stats["max_time_bins"]}, mean={avianz_stats["mean_time_bins"]:.1f}')
+    print(f'  Total time bins (columns): {avianz_stats["total_time_bins"]}')
+    
+    # Save stats to JSON
+    stats_file = os.path.join(args.output, 'dataset_stats.json')
+    with open(stats_file, 'w') as f:
+        json.dump({
+            'doc': doc_stats,
+            'avianz': avianz_stats,
+            'fixed_length': args.fixed_length,
+            'target_duration': target_duration,
+            'min_duration': min_duration,
+            'target_time_bins': target_time_bins,
+        }, f, indent=2)
+    print(f'\n✓ Saved statistics to: {stats_file}')
 
     print(f'\nDone.\n  {doc_out}\n  {avianz_out}')
 

@@ -1,4 +1,5 @@
 \documentclass[peer-review]{fa2026}
+\usepackage{booktabs}
 %\documentclass[non-peer-review]{fa2026}
 % ------------------------------------
 
@@ -18,48 +19,48 @@
 \maketitle
 
 \begin{abstract}
-We isolate domain shift from label distribution shift by constructing matched datasets with identical species distributions but different recording sources. Using a two-metric framework that separates shift severity (percentage reduction when lacking domain exposure) from deployment performance (absolute cross-domain accuracy), we reveal that domain shift is fundamentally directional: different preprocessing methods selectively improve transfer in specific directions. Standard log scaling shows severe asymmetry (57\% vs 31\% reduction, 1.85$\times$), with homogeneous-to-heterogeneous transfer (DOC→AviaNZ) substantially harder. Simple temporal smoothing (5-frame median filter) selectively improves this difficult direction (reducing loss from 57\% to 26\%) with negligible effect on the reverse (31\% to 24\%), effectively mitigating apparent asymmetry through targeted improvement rather than uniform robustness. PCEN shifts performance toward heterogeneous targets (9\% reduction) at the cost of homogeneous deployment (39\% reduction). For deployment: method selection depends critically on target domain---DANN achieves 48\% on homogeneous targets but 2.06$\times$ asymmetry; PCEN achieves 41\% on heterogeneous targets. No method optimizes both directions simultaneously. When target domain is uncertain, median filtering provides balanced mitigation via selective improvement of the dominant failure mode. Our matched dataset methodology and directional analysis framework provide a rigorous approach for understanding transfer asymmetries in audio classification.
+
 \end{abstract}
 
 \keywords{bird call recognition, domain shift, asymmetric transfer, cross-domain evaluation, bioacoustic monitoring}
 
 \section{Introduction}
 
-Automated bird call recognition enables large-scale biodiversity monitoring but faces critical deployment challenges. Models achieving 60-90\% accuracy on test data often drop to 20-40\% when applied to recordings from different equipment or environments.
+Automated bird call recognition with deep neural networks enables large-scale biodiversity monitoring, but models often struggle in test environments due to differences in recording equipment and background noise. This problem is called \textit{domain shift} and remains a major problem in bioacoustics.
 
-We isolate domain shift from label distribution shift using \textbf{matched dataset construction}: two datasets with identical species distributions (9 New Zealand species, ~700 samples each) but different recording sources (DOC monitoring stations vs. diverse field recordings). We introduce a two-metric framework separating shift severity (percentage reduction when lacking domain exposure) from deployment performance (absolute cross-domain accuracy).
+In this work we examine the effectiveness of different strategies for mitigating domain shift in bird recognition. We construct two matching datasets with identical species distributions (9 New Zealand classes) but different recording sources. The DOC data is generally more homogenous and consistent than the AviaNZ data. We train models on one dataset and test on the other.
 
-Key findings: (1) Domain shift is fundamentally directional—transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) fails far more severely (57\% reduction) than the reverse (31\%). (2) Different preprocessing methods selectively improve specific transfer directions rather than providing uniform robustness—median filtering targets the hard direction (57\%→26\%) with minimal effect on the easy direction (31\%→24\%), while PCEN optimizes heterogeneous targets at the cost of homogeneous deployment. (3) No method optimizes both directions simultaneously—DANN achieves 48\% on homogeneous targets but shows 2.06$\times$ asymmetry; PCEN achieves 41\% on heterogeneous targets. (4) When target domain is uncertain, median filtering provides balanced mitigation by selectively addressing the dominant failure mode.
+We examine both the drop in performance between domains and the absolute performance on different domains. We find that (1) domain shift is strongly asymmetric, with substantially larger proportional performance loss (57\% vs 31\% Reduction\%) when training on DOC data and testing on AviaNZ, (2) different preprocessing methods selectively improve specific transfer directions rather than providing uniform robustness. Median filtering targets the hard direction (57\%→26\% Reduction\%) with minimal effect on the easy direction (31\%→24\%), while PCEN optimizes heterogeneous targets at the cost of homogeneous deployment, (3) no method optimizes both directions simultaneously (DANN achieves 48\% on homogeneous targets but shows 2.06$\times$ asymmetry; PCEN achieves 41\% on heterogeneous targets), and (4) when target domain is uncertain, median filtering provides balanced mitigation by selectively addressing the dominant failure mode.
 
 \section{Methods}
 
 \subsection{Matched Dataset Construction}
 
-We created two datasets with identical species distributions: 9 New Zealand bird species (blackbird, chaffinch, fantail, grey warbler, kaka, morepork, silvereye, tomtit, tui/bellbird), $\geq$20 samples per species (~700 total). DOC dataset: Department of Conservation monitoring recordings. AviaNZ dataset: diverse field recordings across New Zealand. Both datasets split 75/25 train/test with grouped sampling by source file. Spectrograms: 25ms Hann window, 10ms hop, 128 mel bins (0-8kHz), 16kHz sampling.
+We created two datasets with identical species distributions covering 9 New Zealand bird species (blackbird, chaffinch, fantail, grey warbler, kaka, morepork, silvereye, tomtit, tui/bellbird), with at least 20 samples per species (approximately 700 total). The DOC dataset contains Department of Conservation monitoring recordings. The AviaNZ dataset contains diverse field recordings from across New Zealand. Both datasets use 75/25 train/test splits with grouped sampling by source file. Spectrograms use 25ms Hann window, 10ms hop, 128 mel bins (0-8kHz), and 16kHz sampling.
 
 \subsection{Normalization Strategies}
 
-We compared four spectrogram normalization approaches to assess their cross-domain robustness:
+We compared four spectrogram normalization approaches to assess their cross-domain robustness.
 
-\textbf{Log baseline}: $S_{\text{log}}(f,t) = \log(S(f,t) + \epsilon)$ where $\epsilon = 10^{-7}$.
+\textbf{Log baseline.} $S_{\text{log}}(f,t) = \log(S(f,t) + \epsilon)$ where $\epsilon = 10^{-7}$.
 
-\textbf{Log+median}: Log transform followed by 5-frame median filter along time axis to reduce transient artifacts.
+\textbf{Log+median.} Log transform followed by 5-frame median filter along time axis to reduce transient artifacts.
 
-\textbf{Log+background}: Log transform, then: (1) median filter; (2) estimate background from quietest 10\% of frames per frequency band; (3) identify outliers ($z>4\sigma$); (4) subtract adaptive background estimate. Details in supplement.
+\textbf{Log+background.} Log transform followed by (1) median filter, (2) background estimation from quietest 10\% of frames per frequency band, (3) outlier identification ($z>4\sigma$), and (4) adaptive background subtraction. Details in supplement.
 
-\textbf{PCEN}: Per-channel energy normalization with adaptive gain control: $\text{PCEN}(f,t) = \left(\frac{S(f,t)}{(M(f,t) + \epsilon)^{\alpha}} + \delta\right)^r - \delta^r$ where $M(f,t)$ is IIR-filtered temporal average. Parameters: $\alpha=0.8$, $\delta=10$, $r=0.25$.
+\textbf{PCEN.} Per-channel energy normalization with adaptive gain control, defined as $\text{PCEN}(f,t) = \left(\frac{S(f,t)}{(M(f,t) + \epsilon)^{\alpha}} + \delta\right)^r - \delta^r$ where $M(f,t)$ is an IIR-filtered temporal average. Parameters are $\alpha=0.8$, $\delta=10$, $r=0.25$.
 
-\textbf{Box-Cox}: Power transformation for variance stabilization.
+\textbf{Box-Cox.} Power transformation for variance stabilization.
 
 \subsection{Model Architecture and Training}
 
-BirdClef 2025-pretrained RegNetY-008 CNN~\cite{radosavovic2020designing}, fine-tuned for 9 species. AdamW optimizer (lr $10^{-4}$ backbone, $10^{-3}$ classifier), batch 16, cosine annealing, early stopping (patience 15), mixup ($\alpha=0.25$).
+We use a BirdClef 2025-pretrained RegNetY-008 CNN~\cite{radosavovic2020designing}, fine-tuned for 9 species. Training uses AdamW optimizer (learning rate $10^{-4}$ for backbone, $10^{-3}$ for classifier), batch size 16, cosine annealing, early stopping with patience 15, and mixup with $\alpha=0.25$.
 
 \subsection{Formalized Evaluation Metrics}
 
-We formalize two complementary metrics that answer distinct questions about domain shift:
+We formalize two complementary metrics that answer distinct questions about domain shift.
 
-\textbf{Domain Shift Severity (Reduction\%):} Controls for intrinsic task difficulty by measuring the causal effect of lacking domain exposure. For a target domain $D_t$ and source domain $D_s$:
+\textbf{Domain Shift Severity (Reduction\%).} Controls for intrinsic task difficulty by measuring the causal effect of lacking domain exposure. For a target domain $D_t$ and source domain $D_s$,
 
 \begin{equation}
 \text{Reduction}(D_t) = \frac{A_{\text{in}}(D_t) - A_{\text{cross}}(D_s \to D_t)}{A_{\text{in}}(D_t)} \times 100\%
@@ -67,13 +68,13 @@ We formalize two complementary metrics that answer distinct questions about doma
 
 where $A_{\text{in}}(D_t)$ is accuracy when trained and tested on $D_t$, and $A_{\text{cross}}(D_s \to D_t)$ is accuracy when trained on $D_s$ and tested on $D_t$. This isolates the effect of domain exposure from base task difficulty.
 
-\textbf{Cross-Domain Accuracy:} Absolute performance when deploying a model trained on source domain $D_s$ to target domain $D_t$. This metric guides deployment decisions:
+\textbf{Cross-Domain Accuracy.} Absolute performance when deploying a model trained on source domain $D_s$ to target domain $D_t$. This metric guides deployment decisions,
 
 \begin{equation}
 A_{\text{cross}}(D_s \to D_t) = \text{accuracy on } D_t \text{ test set}
 \end{equation}
 
-\textbf{Asymmetry Ratio:} To quantify directional bias, we compute:
+\textbf{Asymmetry Ratio.} To quantify directional bias, we compute
 
 \begin{equation}
 \text{Asymmetry} = \frac{\text{Reduction}(D_{\text{heterogeneous}})}{\text{Reduction}(D_{\text{homogeneous}})}
@@ -83,7 +84,7 @@ A ratio near 1.0 indicates symmetric shift; deviations indicate directional bias
 
 \subsection{Experimental Design}
 
-Systematic evaluation: (1) Train on AviaNZ or DOC, test on both; (2) Within-domain vs cross-domain accuracy; (3) Normalization methods: Log, Log+median, Log+background, PCEN, Box-Cox; (4) Domain adaptation: DANN with gradient reversal; (5) Noise augmentation: varying intensities/diversity. Implementation: PyTorch 2.0. Key configurations: 3 seeds (mean$\pm$std); others single-run.
+We conduct systematic evaluation by (1) training on AviaNZ or DOC and testing on both, (2) comparing within-domain versus cross-domain accuracy, (3) testing normalization methods (Log, Log+median, Log+background, PCEN, Box-Cox), (4) applying domain adaptation via DANN with gradient reversal, and (5) augmenting with noise at varying intensities and diversity. Implementation uses PyTorch 2.0. Key configurations use 3 seeds (reporting mean$\pm$std), while others use single runs.
 
 \begin{figure}[t]
 \centering
@@ -93,6 +94,8 @@ Systematic evaluation: (1) Train on AviaNZ or DOC, test on both; (2) Within-doma
 \end{figure}
 
 \section{Results}
+
+While AviaNZ exhibits lower in-domain accuracy (52.4\% vs 63.9\%), indicating a more challenging task, the asymmetry persists under the normalized Reduction\% metric, confirming that it cannot be explained solely by intrinsic task difficulty.
 
 \begin{table*}[t]
 \centering
@@ -124,61 +127,61 @@ Box-Cox           & 36.7 & 40.8 & & 27.1 & 45.1 & 1.11$\times$ \\
 
 \subsection{Baseline Domain Shift}
 
-Table~\ref{tab:results} shows standard log scaling baseline reveals strong directional asymmetry: transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) suffers 57.5$\pm$2.9\% reduction (52.4\% in-domain $\to$ 22.3\% cross-domain), while the reverse direction shows 31.1$\pm$2.1\% reduction (63.9\% $\to$ 44.0\%), yielding 1.85$\times$ asymmetry. This establishes that DOC→AviaNZ transfer is the dominant failure mode under standard preprocessing.
+Table~\ref{tab:results} shows that standard log scaling reveals strong directional asymmetry. Transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) suffers 57.5$\pm$2.9\% Reduction (52.4\% in-domain to 22.3\% cross-domain), while the reverse direction shows 31.1$\pm$2.1\% Reduction (63.9\% to 44.0\%), yielding 1.85$\times$ asymmetry. This establishes that DOC→AviaNZ transfer is the dominant failure mode under standard preprocessing.
 
 \subsection{Selective Improvement of the Hard Direction}
 
-Three preprocessing variants—Log+median, Log+background (median + statistical background subtraction), and median-only—all exhibit the same pattern: substantial improvement of DOC→AviaNZ transfer with minimal effect on the reverse direction.
+Three preprocessing variants (Log+median, Log+background, and median-only) all exhibit the same pattern of substantial improvement for DOC→AviaNZ transfer with minimal effect on the reverse direction.
 
-\textbf{Log+median}: Reduces DOC→AviaNZ loss from 57.5\% to 25.6$\pm$1.7\% (31.9pp improvement) while changing AviaNZ→DOC loss only from 31.1\% to 24.2$\pm$1.5\% (6.9pp improvement). Cross-domain accuracy: 36.7\% (AviaNZ target) and 45.2\% (DOC target). The resulting 1.06$\times$ asymmetry ratio reflects targeted improvement of the dominant failure mode rather than uniform robustness.
+\textbf{Log+median.} Reduces DOC→AviaNZ loss from 57.5\% to 25.6$\pm$1.7\% (31.9pp improvement) while changing AviaNZ→DOC loss only from 31.1\% to 24.2$\pm$1.5\% (6.9pp improvement). Cross-domain accuracy reaches 36.7\% (AviaNZ target) and 45.2\% (DOC target). The resulting 1.06$\times$ asymmetry ratio reflects targeted improvement of the dominant failure mode rather than uniform robustness.
 
-\textbf{Median-only} (without background subtraction): Shows nearly identical behavior—DOC→AviaNZ reduction 25.6\% (from 57.5\%), AviaNZ→DOC reduction 24.2\% (from 31.1\%). Cross-domain accuracy: 36.7\% and 45.2\%.
+\textbf{Median-only.} Without background subtraction, shows nearly identical behavior with DOC→AviaNZ reduction of 25.6\% (from 57.5\%) and AviaNZ→DOC reduction of 24.2\% (from 31.1\%). Cross-domain accuracy reaches 36.7\% and 45.2\%.
 
-\textbf{Log+background}: Provides negligible benefit beyond median filtering—28.0\% and 25.0\% reduction with 38.0\% and 43.4\% cross-domain accuracy. The background subtraction component adds computational complexity without meaningful performance gain.
+\textbf{Log+background.} Provides negligible benefit beyond median filtering, with 28.0\% and 25.0\% reduction and 38.0\% and 43.4\% cross-domain accuracy. The background subtraction component adds computational complexity without meaningful performance gain.
 
-\textbf{Interpretation}: Simple temporal smoothing (median filtering) removes transient artifacts that disproportionately affect DOC→AviaNZ transfer under log scaling. The near-equivalence of median-only and Log+normalize indicates that the benefit comes almost entirely from the median filter, with background subtraction contributing minimally. This represents <1\% computational overhead while addressing the primary failure mode.
+\textbf{Interpretation.} Simple temporal smoothing via median filtering removes transient artifacts that disproportionately affect DOC→AviaNZ transfer under log scaling. The near-equivalence of median-only and Log+normalize indicates that the benefit comes almost entirely from the median filter, with background subtraction contributing minimally. This represents less than 1\% computational overhead while addressing the primary failure mode.
 
 \subsection{Directional Specialization}
 
 Unlike median filtering, which mitigates asymmetry by improving the weak direction, PCEN and DANN achieve strong performance in one direction by reallocating resources away from the other.
 
-\textbf{PCEN}: Optimizes heterogeneous target deployment (AviaNZ) at the cost of homogeneous deployment (DOC). DOC→AviaNZ reduction drops to 9.3$\pm$1.2\% (achieving 41.0$\pm$1.1\% cross-domain accuracy—best for heterogeneous targets), but AviaNZ→DOC reduction increases to 39.0$\pm$2.3\% (36.7$\pm$1.5\% cross-domain). The 0.24$\times$ asymmetry ratio reflects complete reversal of baseline pattern. \textbf{Hypothesis}: Adaptive gain control suppresses amplitude variance across heterogeneous recordings but removes stable spectral cues needed for homogeneous deployment.
+\textbf{PCEN.} Optimizes heterogeneous target deployment (AviaNZ) at the cost of homogeneous deployment (DOC). DOC→AviaNZ reduction drops to 9.3$\pm$1.2\% (achieving 41.0$\pm$1.1\% cross-domain accuracy, best for heterogeneous targets), but AviaNZ→DOC reduction increases to 39.0$\pm$2.3\% (36.7$\pm$1.5\% cross-domain). The 0.24$\times$ asymmetry ratio reflects complete reversal of the baseline pattern. We hypothesize that adaptive gain control suppresses amplitude variance across heterogeneous recordings but removes stable spectral cues needed for homogeneous deployment.
 
-\textbf{DANN}: Shows opposite specialization—achieves best homogeneous target performance (AviaNZ→DOC: 48.2$\pm$0.9\%, 15.8$\pm$1.3\% reduction) but worst asymmetry (2.06$\times$). For heterogeneous targets: 36.1$\pm$1.4\% (DOC→AviaNZ)—worse than median (36.7\%), background normalization (38.0\%), and substantially worse than PCEN (41.0\%). \textbf{Interpretation}: Domain-invariant feature learning introduces directional bias when domains have asymmetric complexity—optimizing for domain-invariance helps the simpler transfer direction while removing information needed for the harder direction.
+\textbf{DANN.} Shows opposite specialization, achieving best homogeneous target performance (AviaNZ→DOC with 48.2$\pm$0.9\% accuracy, 15.8$\pm$1.3\% reduction) but worst asymmetry (2.06$\times$). For heterogeneous targets, accuracy reaches only 36.1$\pm$1.4\% (DOC→AviaNZ), worse than median (36.7\%), background normalization (38.0\%), and substantially worse than PCEN (41.0\%). Domain-invariant feature learning introduces directional bias when domains have asymmetric complexity, optimizing for domain-invariance helps the simpler transfer direction while removing information needed for the harder direction.
 
-\textbf{Critical insight}: Neither method reduces asymmetry—they reallocate it. Use PCEN when deploying to heterogeneous recordings; use DANN when deploying to homogeneous recordings. No current method optimizes both directions simultaneously.
+\textbf{Critical insight.} Neither method reduces asymmetry; they reallocate it. Use PCEN when deploying to heterogeneous recordings and DANN when deploying to homogeneous recordings. No current method optimizes both directions simultaneously.
 
 \subsection{Methods with Uniform Performance Degradation}
 
-\textbf{Box-Cox}: Shows high, symmetric reduction (40.8\% DOC, 45.1\% AviaNZ, 1.11$\times$ asymmetry ratio) with poor cross-domain performance (36.7\%, 27.1\%). While the transformation achieves symmetric behavior, both directions suffer substantial loss—power transformations normalize distribution shapes but fail to address the spectral patterns underlying domain shift.
+\textbf{Box-Cox.} Shows high, symmetric reduction (40.8\% DOC, 45.1\% AviaNZ, 1.11$\times$ asymmetry ratio) with poor cross-domain performance (36.7\%, 27.1\%). While the transformation achieves symmetric behavior, both directions suffer substantial loss. Power transformations normalize distribution shapes but fail to address the spectral patterns underlying domain shift.
 
-\textbf{Noise augmentation}: We tested varying intensities (0.0-1.0) and source diversity (1-1000 noise types). All configurations degraded performance: moderate levels (0.25-0.5) reduced cross-domain accuracy by 2-3pp; high levels (0.75-1.0) caused catastrophic collapse. Neither increasing noise intensity nor diversity approximates the structure of real domain shift. This suggests that simple noise injection fails to capture equipment-specific spectral patterns and recording environment characteristics that drive actual domain differences.
+\textbf{Noise augmentation.} We tested varying intensities (0.0-1.0) and source diversity (1-1000 noise types). All configurations degraded performance. Moderate levels (0.25-0.5) reduced cross-domain accuracy by 2-3pp, while high levels (0.75-1.0) caused catastrophic collapse. Neither increasing noise intensity nor diversity approximates the structure of real domain shift. This suggests that simple noise injection fails to capture equipment-specific spectral patterns and recording environment characteristics that drive actual domain differences.
 
 \section{Discussion}
 
 \subsection{Key Findings}
 
-\textbf{(1) Matched datasets isolate domain shift}: Controlling species distributions cleanly attributes performance differences to equipment/environment rather than class imbalance.
+\textbf{(1) Matched datasets isolate domain shift.} Controlling species distributions cleanly attributes performance differences to equipment and environment rather than class imbalance.
 
-\textbf{(2) Domain shift is fundamentally directional}: Transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) shows 1.85$\times$ greater reduction than the reverse under baseline preprocessing. This directional asymmetry reflects differences in recording complexity rather than fundamental dataset properties.
+\textbf{(2) Domain shift exhibits consistent directional asymmetry.} Transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) shows 1.85$\times$ greater Reduction\% than the reverse under baseline preprocessing. This directional asymmetry persists even after controlling for intrinsic task difficulty and reflects differences in recording complexity rather than fundamental dataset properties.
 
-\textbf{(3) Methods provide selective rather than uniform robustness}: Median filtering targets the hard direction (57\%→26\% reduction) with minimal effect on the easy direction (31\%→24\%), effectively mitigating asymmetry through targeted improvement. PCEN and DANN reallocate performance toward specific deployment scenarios rather than reducing shift universally.
+\textbf{(3) Methods provide selective rather than uniform robustness.} Median filtering targets the hard direction (57\% to 26\% reduction) with minimal effect on the easy direction (31\% to 24\%), effectively mitigating asymmetry through targeted improvement. PCEN and DANN reallocate performance toward specific deployment scenarios rather than reducing shift universally.
 
-\textbf{(4) No method optimizes both directions simultaneously}: DANN achieves 48.2\% on homogeneous targets but 2.06$\times$ asymmetry. PCEN achieves 41.0\% on heterogeneous targets but degrades homogeneous deployment (39.0\% reduction). This suggests fundamental tradeoffs in cross-domain optimization.
+\textbf{(4) No method optimizes both directions simultaneously.} DANN achieves 48.2\% on homogeneous targets but 2.06$\times$ asymmetry. PCEN achieves 41.0\% on heterogeneous targets but degrades homogeneous deployment (39.0\% reduction). This suggests fundamental tradeoffs in cross-domain optimization.
 
-\textbf{(5) Training dynamics reveal overfitting patterns}: Models trained on DOC achieve substantially higher training accuracy (85-95\%) compared to AviaNZ models (60-70\%), suggesting overfitting to homogeneous domain-specific artifacts. This explains why DOC→AviaNZ transfer is harder—models overfit to stable, low-variance patterns that fail to generalize to heterogeneous recordings. Temporal smoothing mitigates this by removing transient artifacts that facilitate overfitting.
+\textbf{(5) Training dynamics reveal overfitting patterns.} Models trained on DOC achieve substantially higher training accuracy (85-95\%) compared to AviaNZ models (60-70\%), suggesting overfitting to homogeneous domain-specific artifacts. This explains why DOC→AviaNZ transfer is harder. Models overfit to stable, low-variance patterns that fail to generalize to heterogeneous recordings. Temporal smoothing mitigates this by removing transient artifacts that facilitate overfitting.
 
-\textbf{(6) Two metrics necessary}: Reduction\% (shift severity, controlling for task difficulty) and cross-domain accuracy (deployment performance) capture complementary aspects of domain transfer.
+\textbf{(6) Two metrics necessary.} Reduction\% (shift severity, controlling for task difficulty) and cross-domain accuracy (deployment performance) capture complementary aspects of domain transfer.
 
 \subsection{Practical Recommendations}
 
-\textbf{Known homogeneous target}: DANN with median filtering (48.2\% accuracy, 15.8\% reduction).
+\textbf{Known homogeneous target.} Use DANN with median filtering (48.2\% accuracy, 15.8\% reduction).
 
-\textbf{Known heterogeneous target}: PCEN (41.0\% accuracy, 9.3\% reduction).
+\textbf{Known heterogeneous target.} Use PCEN (41.0\% accuracy, 9.3\% reduction).
 
-\textbf{Unknown target}: Median filtering (45.2\%/36.7\% accuracy, 1.06$\times$ asymmetry, <1\% computational overhead)—provides balanced performance by selectively improving the dominant failure mode.
+\textbf{Unknown target.} Use median filtering (45.2\%/36.7\% accuracy, 1.06$\times$ asymmetry, less than 1\% computational overhead). This provides balanced performance by selectively improving the dominant failure mode.
 
-\textbf{Avoid}: Box-Cox (high reduction in both directions), background subtraction without median (added complexity, minimal benefit), noise augmentation as tested (degrades both domains).
+\textbf{Avoid.} Box-Cox (high reduction in both directions), background subtraction without median (added complexity, minimal benefit), and noise augmentation as tested (degrades both domains).
 
 \subsection{Limitations}
 
@@ -188,13 +191,13 @@ Limited replication (3 seeds for key methods, single runs for others) constrains
 
 We isolate domain shift from label distribution shift via matched datasets with identical species distributions but different recording sources. Our two-metric framework separates shift severity (percentage reduction, controlling for task difficulty) from deployment performance (absolute cross-domain accuracy), revealing directional patterns in cross-domain transfer.
 
-\textbf{Key finding}: Domain shift is fundamentally directional. Under baseline preprocessing, transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) suffers 57\% reduction versus 31\% for the reverse (1.85$\times$ asymmetry). Different preprocessing methods provide selective rather than uniform robustness—median filtering targets the hard direction (reducing loss from 57\% to 26\%) with minimal effect on the easy direction (31\% to 24\%). PCEN and DANN reallocate performance toward specific deployment targets rather than reducing asymmetry universally.
+\textbf{Key finding.} Domain shift exhibits strong directional asymmetry that persists after controlling for intrinsic task difficulty. Under baseline preprocessing, transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) suffers 57\% Reduction versus 31\% for the reverse (1.85$\times$ asymmetry). Different preprocessing methods provide selective rather than uniform robustness. Median filtering targets the hard direction (reducing loss from 57\% to 26\% Reduction) with minimal effect on the easy direction (31\% to 24\%). PCEN and DANN reallocate performance toward specific deployment targets rather than reducing asymmetry universally.
 
-\textbf{Mechanism}: Training dynamics reveal systematic overfitting to homogeneous domain artifacts—DOC models achieve 85-95\% training accuracy versus 60-70\% for AviaNZ, explaining transfer asymmetry. Temporal smoothing mitigates this by removing transient artifacts that facilitate overfitting.
+\textbf{Mechanism.} Training dynamics reveal systematic overfitting to homogeneous domain artifacts. DOC models achieve 85-95\% training accuracy versus 60-70\% for AviaNZ, explaining transfer asymmetry. Temporal smoothing mitigates this by removing transient artifacts that facilitate overfitting.
 
-\textbf{Deployment tradeoffs}: No method optimizes both directions. DANN achieves 48.2\% on homogeneous targets but 2.06$\times$ asymmetry. PCEN achieves 41.0\% on heterogeneous targets but degrades homogeneous deployment. For uncertain targets, median filtering provides balanced mitigation (1.06$\times$ asymmetry, negligible overhead) by selectively addressing the dominant failure mode.
+\textbf{Deployment tradeoffs.} No method optimizes both directions. DANN achieves 48.2\% on homogeneous targets but 2.06$\times$ asymmetry. PCEN achieves 41.0\% on heterogeneous targets but degrades homogeneous deployment. For uncertain targets, median filtering provides balanced mitigation (1.06$\times$ asymmetry, negligible overhead) by selectively addressing the dominant failure mode.
 
-\textbf{Implications}: Match method to deployment scenario (Table~\ref{tab:results}). Future studies should report both severity and absolute performance metrics, and investigate whether directional asymmetries generalize across audio classification domains. Preprocessing sensitivity suggests domain adaptation should focus on method selection for specific deployment contexts rather than seeking universal solutions.
+\textbf{Implications.} Match method to deployment scenario (Table~\ref{tab:results}). Future studies should report both severity and absolute performance metrics, and investigate whether directional asymmetries generalize across audio classification domains. Preprocessing sensitivity suggests domain adaptation should focus on method selection for specific deployment contexts rather than seeking universal solutions.
 
 \section{Acknowledgments}
 We thank the New Zealand Department of Conservation for providing access to biodiversity monitoring recordings, and the AviaNZ community for field recording contributions. This research was supported by Victoria University of Wellington.
