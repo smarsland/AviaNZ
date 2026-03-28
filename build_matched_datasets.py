@@ -237,6 +237,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     missing = 0
     failed = 0
     too_short = 0
+    trimmed = 0
 
     for i, rec in enumerate(records):
         audio_path = os.path.join(
@@ -269,10 +270,13 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
 
         # Trim to fixed length if enabled
         if fixed_length:
+            original_width = sg.shape[1]
             sg = trim_spectrogram_to_length(sg, target_time_bins)
             if sg is None:
                 too_short += 1
                 continue
+            if original_width > target_time_bins:
+                trimmed += 1
 
         basename = f'file_{len(labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
@@ -287,7 +291,11 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
         if (i + 1) % 100 == 0:
             print(f'  DOC: processed {i+1}/{len(records)}, saved {len(labels)}')
 
-    print(f'DOC: saved {len(labels)} spectrograms  (missing={missing}, failed={failed}, too_short={too_short})')
+    summary = f'DOC: saved {len(labels)} spectrograms  (missing={missing}, failed={failed}, too_short={too_short}'
+    if fixed_length:
+        summary += f', trimmed={trimmed}'
+    summary += ')'
+    print(summary)
     return labels, kept_records
 
 
@@ -346,6 +354,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
     rng = random.Random(seed)
     avianz_labels = []
     matched_mask = []
+    trimmed = 0
 
     for rec in records:
         # Pool all AviaNZ candidates for any of this record's primary codes
@@ -373,10 +382,13 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
         # Trim to fixed length if enabled
         if fixed_length:
+            original_width = sg.shape[1]
             sg = trim_spectrogram_to_length(sg, target_time_bins)
             if sg is None:
                 matched_mask.append(False)
                 continue
+            if original_width > target_time_bins:
+                trimmed += 1
 
         basename = f'file_{len(avianz_labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
@@ -392,7 +404,11 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
     matched = sum(matched_mask)
     unmatched = len(records) - matched
-    print(f'AviaNZ: matched {matched} / {len(records)} records  (unmatched={unmatched})')
+    summary = f'AviaNZ: matched {matched} / {len(records)} records  (unmatched={unmatched}'
+    if fixed_length:
+        summary += f', trimmed={trimmed}'
+    summary += ')'
+    print(summary)
     return avianz_labels, matched_mask
 
 
@@ -481,7 +497,7 @@ def compute_spectrogram_stats(output_folder, dataset_name):
     
     Returns dict with:
         - num_files: number of spectrogram files
-        - shapes: list of unique shapes found
+        - freq_bins: frequency bins (height) - should be constant
         - total_time_bins: sum of all time bins (columns)
         - min_time_bins: minimum time bins
         - max_time_bins: maximum time bins
@@ -494,27 +510,26 @@ def compute_spectrogram_stats(output_folder, dataset_name):
         return {
             'dataset': dataset_name,
             'num_files': 0,
-            'shapes': [],
+            'freq_bins': 0,
             'total_time_bins': 0,
             'min_time_bins': 0,
             'max_time_bins': 0,
             'mean_time_bins': 0,
         }
     
-    shapes = []
     time_bins_list = []
+    freq_bins = None
     
     for npy_file in npy_files:
         sg = np.load(os.path.join(data_dir, npy_file))
-        shapes.append(sg.shape)
-        time_bins_list.append(sg.shape[1])  # columns
-    
-    unique_shapes = list(set(shapes))
+        if freq_bins is None:
+            freq_bins = sg.shape[0]  # height
+        time_bins_list.append(sg.shape[1])  # width (columns)
     
     stats = {
         'dataset': dataset_name,
         'num_files': len(npy_files),
-        'shapes': [list(s) for s in unique_shapes],  # Convert tuples to lists for JSON
+        'freq_bins': freq_bins,
         'total_time_bins': sum(time_bins_list),
         'min_time_bins': min(time_bins_list),
         'max_time_bins': max(time_bins_list),
@@ -601,27 +616,30 @@ def main():
     
     print(f'\nDOC dataset:')
     print(f'  Files: {doc_stats["num_files"]}')
-    print(f'  Unique shapes: {doc_stats["shapes"]}')
+    print(f'  Shape: ({doc_stats["freq_bins"]}, {doc_stats["min_time_bins"]}-{doc_stats["max_time_bins"]})')
     print(f'  Time bins: min={doc_stats["min_time_bins"]}, max={doc_stats["max_time_bins"]}, mean={doc_stats["mean_time_bins"]:.1f}')
     print(f'  Total time bins (columns): {doc_stats["total_time_bins"]}')
     
     print(f'\nAviaNZ dataset:')
     print(f'  Files: {avianz_stats["num_files"]}')
-    print(f'  Unique shapes: {avianz_stats["shapes"]}')
+    print(f'  Shape: ({avianz_stats["freq_bins"]}, {avianz_stats["min_time_bins"]}-{avianz_stats["max_time_bins"]})')
     print(f'  Time bins: min={avianz_stats["min_time_bins"]}, max={avianz_stats["max_time_bins"]}, mean={avianz_stats["mean_time_bins"]:.1f}')
     print(f'  Total time bins (columns): {avianz_stats["total_time_bins"]}')
     
     # Save stats to JSON
     stats_file = os.path.join(args.output, 'dataset_stats.json')
+    stats_output = {
+        'doc': doc_stats,
+        'avianz': avianz_stats,
+        'fixed_length': args.fixed_length,
+    }
+    if args.fixed_length:
+        stats_output['target_duration'] = target_duration
+        stats_output['min_duration'] = min_duration
+        stats_output['target_time_bins'] = target_time_bins
+    
     with open(stats_file, 'w') as f:
-        json.dump({
-            'doc': doc_stats,
-            'avianz': avianz_stats,
-            'fixed_length': args.fixed_length,
-            'target_duration': target_duration,
-            'min_duration': min_duration,
-            'target_time_bins': target_time_bins,
-        }, f, indent=2)
+        json.dump(stats_output, f, indent=2)
     print(f'\n✓ Saved statistics to: {stats_file}')
 
     print(f'\nDone.\n  {doc_out}\n  {avianz_out}')
