@@ -23,6 +23,7 @@ Usage:
 
 import argparse
 import os
+import sys
 import json
 import torch
 import torch.nn as nn
@@ -1493,22 +1494,34 @@ Examples:
             
             correct = 0
             total = 0
+            mismatches = []
             
             for _, row in df.iterrows():
                 filename = row['row_id']
                 if filename not in true_labels:
+                    print(f"  WARNING: File {filename} not in labels.json (have {len(true_labels)} labels)")
+                    continue
+                
+                true_class = true_labels[filename]
+                if not true_class:
                     continue
                 
                 pred_class = class_columns[row[class_columns].values.argmax()]
-                true_class = true_labels[filename]
                 
                 if pred_class == true_class:
                     correct += 1
+                else:
+                    if len(mismatches) < 5:  # Show first 5 mismatches
+                        mismatches.append(f"{filename}: pred={pred_class}, true={true_class}")
                 total += 1
             
             accuracy = 100.0 * correct / total if total > 0 else 0.0
             test_results[test_name] = accuracy
-            print(f"  {test_name} Accuracy: {accuracy:.2f}%")
+            print(f"  {test_name} Accuracy: {accuracy:.2f}% ({correct}/{total} correct)")
+            if mismatches:
+                print(f"  Sample mismatches:")
+                for mm in mismatches:
+                    print(f"    {mm}")
         
         print(f"\n{'='*60}")
         print(f"TEST SET COMPARISON")

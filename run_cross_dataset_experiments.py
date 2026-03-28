@@ -127,7 +127,8 @@ def run_experiment(config_dict):
     
     if result.returncode != 0:
         print(f"❌ FAILED: {name}")
-        return None
+        print(f"Stopping experiment pipeline due to failure.")
+        sys.exit(1)
     
     # Load result
     if result_file.exists():
