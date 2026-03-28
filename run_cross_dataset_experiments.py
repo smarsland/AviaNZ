@@ -34,16 +34,26 @@ def run_experiment(config_dict):
     name = config_dict['name']
     output_dir = Path(config_dict['output_folder']) / name
     
-    # Check if already run
+    # Check if already complete (has result.json)
     result_file = output_dir / 'result.json'
     if result_file.exists():
         print(f"✓ {name} - already complete (loading cached result)")
         with open(result_file) as f:
             return json.load(f)
     
-    print(f"\n{'='*70}")
-    print(f"Running: {name}")
-    print(f"{'='*70}")
+    # Check if training complete but evaluation missing
+    model_file = output_dir / 'birdclef_finetuned_best.pt'
+    history_file = output_dir / 'training_history.json'
+    eval_only = model_file.exists() and history_file.exists()
+    
+    if eval_only:
+        print(f"\n{'='*70}")
+        print(f"Running: {name} (EVAL ONLY - model exists)")
+        print(f"{'='*70}")
+    else:
+        print(f"\n{'='*70}")
+        print(f"Running: {name}")
+        print(f"{'='*70}")
     
     # Build command
     if config_dict['type'] == 'baseline':
@@ -58,6 +68,10 @@ def run_experiment(config_dict):
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
         ]
+        
+        # Add eval-only flag if model exists
+        if eval_only:
+            cmd.append('--eval-only')
         
         # Add normalization flags
         if config_dict.get('normalize'):
@@ -93,6 +107,10 @@ def run_experiment(config_dict):
             '--target-folder', config_dict['target'],
             '--lambda-domain', str(config_dict.get('lambda_domain', 0.3)),
         ]
+        
+        # Add eval-only flag if model exists
+        if eval_only:
+            cmd.append('--eval-only')
         
         # DANN always uses Log+normalize (best from normalization study)
         cmd.append('--normalize')

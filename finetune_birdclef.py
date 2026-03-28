@@ -96,13 +96,7 @@ class BirdClefFineTuneModel(nn.Module):
             sys.modules[__name__].CFG = CFG
             globals()['CFG'] = CFG
             
-            try:
-                checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
-            except Exception as e:
-                print(f"Warning: Could not load full checkpoint: {e}")
-                print("Attempting to load state_dict only...")
-                # Fallback: try loading with torch.load and extracting just state_dict
-                checkpoint = {'model_state_dict': torch.load(pretrained_path, map_location='cpu', weights_only=False)}
+            checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
             
             # Get original number of classes from checkpoint
             orig_num_classes = checkpoint['model_state_dict']['classifier.weight'].shape[0]
@@ -448,6 +442,10 @@ class BirdClefFineTuner:
         
         with open(labels_path, 'r') as f:
             labels_data = json.load(f)
+        
+        # labels.json format: {'files': [...], 'categories': [...], ...}
+        if 'files' not in labels_data:
+            raise ValueError(f"labels.json has unexpected format - missing 'files' key. Keys: {list(labels_data.keys())}")
         
         true_labels = {}
         for item in labels_data['files']:
@@ -1190,6 +1188,39 @@ class BirdClefFineTuner:
             for name, accuracy in test_results.items():
                 print(f"  {name:30s} Accuracy: {accuracy:.2f}%")
             print(f"{'='*60}")
+            
+            # Save test results to result.json for easy extraction
+            result_path = os.path.join(self.output_folder, 'result.json')
+            result_data = {
+                'name': os.path.basename(self.output_folder),
+                'output_folder': self.output_folder,
+                'train_dataset': self.data_folder,
+                'best_val_acc': float(best_val_metric),
+            }
+            
+            # Get best train acc at epoch of best val (if validation exists)
+            if history.get('val_acc') and any(v is not None for v in history['val_acc']):
+                val_accs = [v for v in history['val_acc'] if v is not None]
+                best_val_idx = history['val_acc'].index(max(val_accs))
+                result_data['best_train_acc'] = float(history['train_acc'][best_val_idx])
+            else:
+                # No validation - use max train acc
+                result_data['best_train_acc'] = float(max(history['train_acc'])) if history['train_acc'] else 0.0
+            
+            # Add test results based on number of test sets
+            if len(self.test_datasets) >= 1:
+                test1_name = self.test_datasets[0]['name'].replace('/', '_')
+                result_data['test1_name'] = test1_name
+                result_data['test1_acc'] = test_results.get(self.test_datasets[0]['name'], 0.0)
+            
+            if len(self.test_datasets) >= 2:
+                test2_name = self.test_datasets[1]['name'].replace('/', '_')
+                result_data['test2_name'] = test2_name
+                result_data['test2_acc'] = test_results.get(self.test_datasets[1]['name'], 0.0)
+            
+            with open(result_path, 'w') as f:
+                json.dump(result_data, f, indent=2)
+            print(f"\n✓ Results saved to: {result_path}")
     
     def save_model(self, filename):
         """Save model and config."""
@@ -1327,6 +1358,8 @@ Examples:
                        help="Path to test data folder 1 (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
     parser.add_argument('--test-folder2', type=str, default=None,
                        help="Path to test data folder 2 (with labels.json). Evaluated AFTER training completes (not used for early stopping).")
+    parser.add_argument('--eval-only', action='store_true',
+                       help="Skip training, only run test evaluation on existing model (requires birdclef_finetuned_best.pt and training_history.json)")
     parser.add_argument('--device', default=None,
                        help="Device to use (cuda/cpu, default: auto-detect)")
     parser.add_argument('--use-dann', action='store_true',
@@ -1340,21 +1373,191 @@ Examples:
     
     args = parser.parse_args()
     
+    # Handle eval-only mode
+    if args.eval_only:
+        print("\n" + "="*70)
+        print(" EVALUATION-ONLY MODE")
+        print("="*70)
+        print(f"  Output folder: {args.output_folder}")
+        print("="*70 + "\n")
+        
+        # Check required files exist
+        best_model_path = os.path.join(args.output_folder, 'birdclef_finetuned_best.pt')
+        best_config_path = os.path.join(args.output_folder, 'birdclef_finetuned_best_config.json')
+        history_path = os.path.join(args.output_folder, 'training_history.json')
+        
+        if not os.path.exists(best_model_path):
+            print(f"ERROR: Model not found: {best_model_path}")
+            print("Cannot run eval-only mode without trained model")
+            sys.exit(1)
+        
+        if not os.path.exists(best_config_path):
+            print(f"ERROR: Config not found: {best_config_path}")
+            print("Cannot run eval-only mode without model config")
+            sys.exit(1)
+        
+        if not os.path.exists(history_path):
+            print(f"ERROR: Training history not found: {history_path}")
+            print("Cannot run eval-only mode without training history")
+            sys.exit(1)
+        
+        if not args.test_folder and not args.test_folder2:
+            print("ERROR: Must specify at least one test folder (--test-folder or --test-folder2)")
+            sys.exit(1)
+        
+        # Load training history
+        with open(history_path, 'r') as f:
+            history = json.load(f)
+        
+        # Get best metrics from history
+        val_accs = [v for v in history.get('val_acc', []) if v is not None]
+        if val_accs:
+            best_val_acc = max(val_accs)
+            best_val_idx = history['val_acc'].index(best_val_acc)
+            best_train_acc = history['train_acc'][best_val_idx]
+        else:
+            best_val_acc = 0.0
+            best_train_acc = max(history.get('train_acc', [0.0]))
+        
+        print(f"Loaded training history:")
+        print(f"  Best val accuracy: {best_val_acc:.2f}%")
+        print(f"  Best train accuracy: {best_train_acc:.2f}%")
+        
+        # Load config to get categories
+        with open(best_config_path, 'r') as f:
+            model_config = json.load(f)
+        categories = model_config['class_names']
+        
+        # Build test dataset list
+        test_datasets = []
+        if args.test_folder:
+            test_name = f"{Path(args.test_folder).parent.name}/{Path(args.test_folder).name}"
+            test_datasets.append({
+                'name': test_name,
+                'path': args.test_folder
+            })
+        if args.test_folder2:
+            test_name2 = f"{Path(args.test_folder2).parent.name}/{Path(args.test_folder2).name}"
+            test_datasets.append({
+                'name': test_name2,
+                'path': args.test_folder2
+            })
+        
+        print(f"\nTest sets to evaluate: {len(test_datasets)}")
+        for i, td in enumerate(test_datasets, 1):
+            print(f"  {i}. {td['name']}")
+        
+        # Run test evaluation
+        device = torch.device(args.device if args.device else ('cuda' if torch.cuda.is_available() else 'cpu'))
+        print(f"\nDevice: {device}")
+        
+        print(f"\n{'='*60}")
+        print(f"Running test evaluation...")
+        print(f"{'='*60}")
+        
+        test_results = {}
+        for idx, test_data in enumerate(test_datasets, 1):
+            test_folder = test_data['path']
+            test_name = test_data['name']
+            output_csv = os.path.join(args.output_folder, f'predictions_{test_name.replace("/", "_")}.csv')
+            
+            print(f"\nTest Set {idx}: {test_name}")
+            
+            from predict import ModelPredictor
+            predictor = ModelPredictor(
+                best_model_path,
+                best_config_path,
+                test_folder,
+                output_csv,
+                batch_size=args.batch_size,
+                device=device
+            )
+            predictor.run()
+            
+            # Compute accuracy from CSV
+            import pandas as pd
+            labels_path = os.path.join(test_folder, 'labels.json')
+            
+            with open(labels_path, 'r') as f:
+                labels_data = json.load(f)
+            
+            if 'files' not in labels_data:
+                raise ValueError(f"labels.json has unexpected format - missing 'files' key")
+            
+            true_labels = {}
+            for item in labels_data['files']:
+                true_labels[item['filename']] = item.get('primary_class') or item.get('primary_species')
+            
+            df = pd.read_csv(output_csv)
+            class_columns = [col for col in df.columns if col not in ['row_id', 'File_Path']]
+            
+            correct = 0
+            total = 0
+            
+            for _, row in df.iterrows():
+                filename = row['row_id']
+                if filename not in true_labels:
+                    continue
+                
+                pred_class = class_columns[row[class_columns].values.argmax()]
+                true_class = true_labels[filename]
+                
+                if pred_class == true_class:
+                    correct += 1
+                total += 1
+            
+            accuracy = 100.0 * correct / total if total > 0 else 0.0
+            test_results[test_name] = accuracy
+            print(f"  {test_name} Accuracy: {accuracy:.2f}%")
+        
+        print(f"\n{'='*60}")
+        print(f"TEST SET COMPARISON")
+        print(f"{'='*60}")
+        for name, accuracy in test_results.items():
+            print(f"  {name:30s} Accuracy: {accuracy:.2f}%")
+        print(f"{'='*60}")
+        
+        # Save result.json
+        result_path = os.path.join(args.output_folder, 'result.json')
+        result_data = {
+            'name': os.path.basename(args.output_folder),
+            'output_folder': args.output_folder,
+            'train_dataset': args.data_folder,
+            'best_val_acc': float(best_val_acc),
+            'best_train_acc': float(best_train_acc),
+        }
+        
+        if len(test_datasets) >= 1:
+            test1_name = test_datasets[0]['name'].replace('/', '_')
+            result_data['test1_name'] = test1_name
+            result_data['test1_acc'] = test_results.get(test_datasets[0]['name'], 0.0)
+        
+        if len(test_datasets) >= 2:
+            test2_name = test_datasets[1]['name'].replace('/', '_')
+            result_data['test2_name'] = test2_name
+            result_data['test2_acc'] = test_results.get(test_datasets[1]['name'], 0.0)
+        
+        with open(result_path, 'w') as f:
+            json.dump(result_data, f, indent=2)
+        print(f"\n✓ Results saved to: {result_path}")
+        
+        sys.exit(0)
+    
     if args.use_dann and not args.target_folder:
         print("ERROR: Must specify --target-folder when using --use-dann")
-        return
+        sys.exit(1)
     
     # Check prerequisites
     if args.pretrained and not os.path.exists(args.pretrained):
         print(f"ERROR: Pretrained model not found: {args.pretrained}")
         print("Make sure you have the BirdClef checkpoint in BirdClefModels/")
         print("Or use --pretrained \"\" to train from scratch (NOT RECOMMENDED)")
-        return
+        sys.exit(1)
     
     if not os.path.exists(os.path.join(args.data_folder, 'labels.json')):
         print(f"ERROR: labels.json not found in {args.data_folder}")
         print("Data folder must contain labels.json and .npy spectrogram files")
-        return
+        sys.exit(1)
     
     # Convert empty pretrained path to None
     pretrained_path = args.pretrained if args.pretrained else None
