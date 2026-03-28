@@ -11,7 +11,18 @@ set -e
 #
 # No flags. No skip logic. Just checks file existence.
 # Want to rerun? Delete the folder.
+#
+# Usage:
+#   ./run_matched_experiments.sh              # Variable-length spectrograms
+#   ./run_matched_experiments.sh --fixed-length  # Fixed-length mode (trim to 1024 bins)
 # ============================================================
+
+# Parse arguments
+FIXED_LENGTH_FLAG=""
+if [[ "$1" == "--fixed-length" ]]; then
+    FIXED_LENGTH_FLAG="--fixed-length"
+    echo "Fixed-length mode enabled"
+fi
 
 # Paths
 AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
@@ -58,15 +69,13 @@ echo ""
 # Build matched datasets (if not exist)
 if [ ! -d "$DOC_MATCHED" ] || [ ! -d "$AVIANZ_MATCHED" ]; then
     echo "=== Building matched datasets ==="
-    # Add --fixed-length flag to ensure all files are exactly the same length (10.24s)
-    # This filters out files shorter than model input size and trims all to same length
     python3 build_matched_datasets.py \
         --reviewed-csv "$REVIEWED_CSV" \
         --doc-raw      "$DOC_RAW" \
         --avianz-raw   "$AVIANZ_RAW" \
         --output       "$MATCHED_BASE" \
-        --mapping      "$MAPPING"
-        # --fixed-length  # Uncomment to enable fixed-length mode
+        --mapping      "$MAPPING" \
+        $FIXED_LENGTH_FLAG
 else
     echo "=== Matched datasets exist, skipping build ==="
 fi
