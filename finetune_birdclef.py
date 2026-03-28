@@ -659,6 +659,15 @@ class BirdClefFineTuner:
                         target_labels = target.long()
                     loss = self.criterion(output, target_labels)
                     pred = output.argmax(dim=1)
+                    
+                    # DEBUG: Print first batch details
+                    if total == 0:
+                        print(f"DEBUG EVAL: First batch")
+                        print(f"  output shape: {output.shape}, values: {output[0]}")
+                        print(f"  pred: {pred[:5]}")
+                        print(f"  target_labels: {target_labels[:5]}")
+                        print(f"  matches: {pred.eq(target_labels)[:5]}")
+                    
                     correct += pred.eq(target_labels).sum().item()
                 
                 total_loss += loss.item()
