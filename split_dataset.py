@@ -294,6 +294,9 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     print(f"  Test: {len(test_files)} files")
     print(f"\nPer-class split:")
     for class_name in sorted(split_info.keys()):
+        # Skip metadata keys (e.g., '_meta')
+        if class_name.startswith('_'):
+            continue
         info = split_info[class_name]
         print(f"  {class_name}: {info['train']} train, {info['test']} test (total: {info['total']})")
     

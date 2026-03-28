@@ -473,7 +473,8 @@ class SpectrogramDataset(Dataset):
             # Convert (H, W, C) to (H, W) for normalization
             x_2d = x[:, :, 0] if x.shape[2] == 1 else x[:, :, 0]  # Take first channel
             use_median = getattr(self, 'normalize_median_filter', True)
-            x_2d = normalize_spectrogram(x_2d, use_median_filter=use_median)
+            median_only = getattr(self, 'median_only', False)
+            x_2d = normalize_spectrogram(x_2d, use_median_filter=use_median, median_only=median_only)
             x[:, :, 0] = x_2d  # Put back in the channel
         
         # SpecAugment (time/frequency masking) during training
