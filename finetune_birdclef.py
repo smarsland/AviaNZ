@@ -450,7 +450,11 @@ class BirdClefFineTuner:
         
         true_labels = {}
         for item in labels_data['files']:
-            true_labels[item['filename']] = item.get('primary_class') or item.get('primary_species')
+            # Store class_names as list (handles both single and multi-label)
+            if 'class_names' in item and item['class_names']:
+                true_labels[item['filename']] = item['class_names']  # Keep as list
+            else:
+                true_labels[item['filename']] = []
         
         df = pd.read_csv(csv_path)
         class_columns = [col for col in df.columns if col not in ['row_id', 'File_Path']]
@@ -459,6 +463,7 @@ class BirdClefFineTuner:
         print(f"  DEBUG: labels.json has {len(true_labels)} files")
         print(f"  DEBUG: First 3 CSV filenames: {df['row_id'].head(3).tolist()}")
         print(f"  DEBUG: First 3 label filenames: {list(true_labels.keys())[:3]}")
+        print(f"  DEBUG: First 3 label VALUES: {[true_labels[k] for k in list(true_labels.keys())[:3]]}")
         print(f"  DEBUG: Class columns: {class_columns}")
         
         correct = 0
@@ -471,10 +476,16 @@ class BirdClefFineTuner:
                 not_found.append(filename)
                 continue
             
-            pred_class = class_columns[row[class_columns].values.argmax()]
-            true_class = true_labels[filename]
+            true_class_list = true_labels[filename]
+            if not true_class_list:
+                continue
             
-            if pred_class == true_class:
+            # Multilabel exact match: all predicted classes must match all ground truth classes
+            pred_probs = row[class_columns].values
+            pred_classes = set([class_columns[i] for i, p in enumerate(pred_probs) if p > 0.5])
+            true_classes = set(true_class_list)
+            
+            if pred_classes == true_classes:
                 correct += 1
             total += 1
         
@@ -1504,7 +1515,11 @@ Examples:
             
             true_labels = {}
             for item in labels_data['files']:
-                true_labels[item['filename']] = item.get('primary_class') or item.get('primary_species')
+                # Store class_names as list (handles both single and multi-label)
+                if 'class_names' in item and item['class_names']:
+                    true_labels[item['filename']] = item['class_names']  # Keep as list
+                else:
+                    true_labels[item['filename']] = []
             
             df = pd.read_csv(output_csv)
             class_columns = [col for col in df.columns if col not in ['row_id', 'File_Path']]
@@ -1513,6 +1528,7 @@ Examples:
             print(f"  DEBUG: labels.json has {len(true_labels)} files")
             print(f"  DEBUG: First 3 CSV filenames: {df['row_id'].head(3).tolist()}")
             print(f"  DEBUG: First 3 label filenames: {list(true_labels.keys())[:3]}")
+            print(f"  DEBUG: First 3 label VALUES: {[true_labels[k] for k in list(true_labels.keys())[:3]]}")
             
             correct = 0
             total = 0
@@ -1524,17 +1540,17 @@ Examples:
                     print(f"  WARNING: File {filename} not in labels.json (have {len(true_labels)} labels)")
                     continue
                 
-                true_class = true_labels[filename]
-                if not true_class:
+                true_class_list = true_labels[filename]
+                if not true_class_list:
                     continue
                 
-                pred_class = class_columns[row[class_columns].values.argmax()]
+                # Multilabel exact match: all predicted classes must match all ground truth classes
+                pred_probs = row[class_columns].values
+                pred_classes = set([class_columns[i] for i, p in enumerate(pred_probs) if p > 0.5])
+                true_classes = set(true_class_list)
                 
-                if pred_class == true_class:
+                if pred_classes == true_classes:
                     correct += 1
-                else:
-                    if len(mismatches) < 5:  # Show first 5 mismatches
-                        mismatches.append(f"{filename}: pred={pred_class}, true={true_class}")
                 total += 1
             
             accuracy = 100.0 * correct / total if total > 0 else 0.0

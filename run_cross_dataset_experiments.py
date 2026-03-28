@@ -67,6 +67,7 @@ def run_experiment(config_dict):
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
+            '--multilabel',
         ]
         
         # Add eval-only flag if model exists
@@ -103,6 +104,7 @@ def run_experiment(config_dict):
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
+            '--multilabel',
             '--use-dann',
             '--target-folder', config_dict['target'],
             '--lambda-domain', str(config_dict.get('lambda_domain', 0.3)),
