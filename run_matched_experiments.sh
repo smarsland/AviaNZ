@@ -37,7 +37,7 @@ NOISE_FOLDER="${OUTPUT_BASE}/noise"
 RESULTS="${OUTPUT_BASE}/experiments_matched"
 
 # Training config
-EPOCHS=1
+EPOCHS=100
 BATCH_SIZE=16
 MIXUP_ALPHA=0.25
 TEST_SIZE=0.25
