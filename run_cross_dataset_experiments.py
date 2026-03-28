@@ -46,11 +46,11 @@ def run_experiment(config_dict):
     if config_dict['type'] == 'baseline':
         cmd = [
             'python3', 'finetune_birdclef.py',
-            '--train-data', config_dict['train'],
-            '--test-data', config_dict['test1'],
-            '--extra-test', config_dict['test2'],
-            '--model', config_dict['model'],
-            '--output', str(output_dir),
+            config_dict['train'],        # positional: data_folder
+            str(output_dir),             # positional: output_folder
+            '--pretrained', config_dict['model'],
+            '--test-folder', config_dict['test1'],
+            '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
@@ -67,7 +67,8 @@ def run_experiment(config_dict):
         # Add noise args
         if config_dict.get('noise') and config_dict.get('noise') > 0:
             cmd.extend(['--noise', str(config_dict['noise'])])
-            cmd.extend(['--noise-folder', config_dict['noise_folder']])
+            if config_dict.get('noise_folder'):
+                cmd.extend(['--noise-folder', config_dict['noise_folder']])
             cmd.extend(['--noise-mode', 'both'])
         
         # Add mixup if specified
@@ -77,16 +78,16 @@ def run_experiment(config_dict):
     elif config_dict['type'] == 'dann':
         cmd = [
             'python3', 'finetune_birdclef.py',
-            '--train-data', config_dict['source'],
-            '--test-data', config_dict['test1'],
-            '--extra-test', config_dict['test2'],
-            '--model', config_dict['model'],
-            '--output', str(output_dir),
+            config_dict['source'],       # positional: data_folder (source domain)
+            str(output_dir),             # positional: output_folder
+            '--pretrained', config_dict['model'],
+            '--test-folder', config_dict['test1'],
+            '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
-            '--dann',
-            '--dann-domain-data', config_dict['target'],
+            '--use-dann',
+            '--target-folder', config_dict['target'],
             '--lambda-domain', str(config_dict.get('lambda_domain', 0.3)),
         ]
         
