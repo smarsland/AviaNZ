@@ -288,7 +288,7 @@ def main():
         print(" EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP")
         print("="*70)
         print(" Goal: Test optimal noise mixing ratio")
-        print(" Using: Log+normalize (best from Suite 1)")
+        print(" Using: Log baseline (no normalization)")
         print(" Levels: 0.0, 0.25, 0.5, 0.75, 1.0")
         print(" Total: 5 levels × 2 directions = 10 experiments")
         print("="*70 + "\n")
@@ -298,7 +298,7 @@ def main():
         for noise_level in noise_levels:
             # AviaNZ → DOC
             result = run_experiment({
-                'name': f"avianz_baseline_Log+normalize_intensity{noise_level}",
+                'name': f"avianz_baseline_Log_intensity{noise_level}",
                 'type': 'baseline',
                 'train': args.avianz_train,
                 'test1': args.avianz_test,
@@ -309,7 +309,7 @@ def main():
                 'batch_size': args.batch_size,
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
-                'normalize': True,
+                'normalize': False,
                 'normalize_no_median': False,
                 'median_only': False,
                 'noise': noise_level,
@@ -320,7 +320,7 @@ def main():
             
             # DOC → AviaNZ
             result = run_experiment({
-                'name': f"doc_baseline_Log+normalize_intensity{noise_level}",
+                'name': f"doc_baseline_Log_intensity{noise_level}",
                 'type': 'baseline',
                 'train': args.doc_train,
                 'test1': args.doc_test,
@@ -331,7 +331,7 @@ def main():
                 'batch_size': args.batch_size,
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
-                'normalize': True,
+                'normalize': False,
                 'normalize_no_median': False,
                 'median_only': False,
                 'noise': noise_level,
@@ -347,7 +347,7 @@ def main():
         print(" EXPERIMENT SUITE 4: NOISE VARIETY SWEEP")
         print("="*70)
         print(" Goal: Test if more noise variety improves robustness")
-        print(" Using: Log+normalize, fixed noise ratio 0.25")
+        print(" Using: Log baseline (no normalization), fixed noise ratio 0.25")
         print(" Levels: 1, 10, 100, 1000, all available noise files")
         print(" Total: ~5 levels × 2 directions = ~10 experiments")
         print("="*70 + "\n")
@@ -392,7 +392,7 @@ def main():
                 
                 # AviaNZ → DOC
                 result = run_experiment({
-                    'name': f"avianz_baseline_Log+normalize_variety{n_noise}",
+                    'name': f"avianz_baseline_Log_variety{n_noise}",
                     'type': 'baseline',
                     'train': args.avianz_train,
                     'test1': args.avianz_test,
@@ -403,7 +403,7 @@ def main():
                     'batch_size': args.batch_size,
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
-                    'normalize': True,
+                    'normalize': False,
                     'normalize_no_median': False,
                     'median_only': False,
                     'noise': 0.25,  # Fixed ratio
@@ -414,7 +414,7 @@ def main():
                 
                 # DOC → AviaNZ
                 result = run_experiment({
-                    'name': f"doc_baseline_Log+normalize_variety{n_noise}",
+                    'name': f"doc_baseline_Log_variety{n_noise}",
                     'type': 'baseline',
                     'train': args.doc_train,
                     'test1': args.doc_test,
@@ -425,7 +425,7 @@ def main():
                     'batch_size': args.batch_size,
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
-                    'normalize': True,
+                    'normalize': False,
                     'normalize_no_median': False,
                     'median_only': False,
                     'noise': 0.25,  # Fixed ratio
