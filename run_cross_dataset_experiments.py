@@ -193,6 +193,7 @@ def main():
     for norm_config in normalization_configs:
         # AviaNZ → DOC
         result = run_experiment({
+            **norm_config,
             'name': f"avianz_baseline_{norm_config['name']}",
             'type': 'baseline',
             'train': args.avianz_train,
@@ -205,13 +206,13 @@ def main():
             'mixup': args.mixup,
             'noise': 0.0,
             'noise_folder': args.noise_folder,
-            **norm_config
         })
         if result:
             all_results.append(result)
         
         # DOC → AviaNZ
         result = run_experiment({
+            **norm_config,
             'name': f"doc_baseline_{norm_config['name']}",
             'type': 'baseline',
             'train': args.doc_train,
@@ -224,7 +225,6 @@ def main():
             'mixup': args.mixup,
             'noise': 0.0,
             'noise_folder': args.noise_folder,
-            **norm_config
         })
         if result:
             all_results.append(result)
