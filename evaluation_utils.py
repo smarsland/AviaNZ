@@ -89,6 +89,14 @@ class EvaluationManager:
         # Calculate per-class metrics
         precision, recall, f1, support = precision_recall_fscore_support(y_true, y_pred, average=None, zero_division=0)
         
+        # Calculate per-class accuracy (fraction of correct predictions for each class)
+        per_class_accuracy = []
+        for i in range(y_true.shape[1]):
+            class_correct = np.sum(y_true[:, i] == y_pred[:, i])
+            class_total = y_true.shape[0]
+            per_class_accuracy.append(class_correct / class_total if class_total > 0 else 0.0)
+        per_class_accuracy = np.array(per_class_accuracy)
+        
         # Create classification report
         class_report = {}
         for i, class_name in enumerate(self.class_names):
@@ -96,23 +104,27 @@ class EvaluationManager:
                 'precision': float(precision[i]),
                 'recall': float(recall[i]),
                 'f1-score': float(f1[i]),
+                'accuracy': float(per_class_accuracy[i]),
                 'support': int(support[i])
             }
         
         # Add macro and micro averages
         precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(y_true, y_pred, average='macro', zero_division=0)
         precision_micro, recall_micro, f1_micro, _ = precision_recall_fscore_support(y_true, y_pred, average='micro', zero_division=0)
+        accuracy_macro = float(np.mean(per_class_accuracy))
         
         class_report['macro avg'] = {
             'precision': float(precision_macro),
             'recall': float(recall_macro),
             'f1-score': float(f1_macro),
+            'accuracy': accuracy_macro,
             'support': int(np.sum(support))
         }
         class_report['micro avg'] = {
             'precision': float(precision_micro),
             'recall': float(recall_micro),
             'f1-score': float(f1_micro),
+            'accuracy': float(np.mean(y_true == y_pred)),  # Overall bit-wise accuracy
             'support': int(np.sum(support))
         }
         
@@ -213,7 +225,7 @@ class EvaluationManager:
         metrics_csv_path = os.path.join(self.outputs_folder, f"{name}_multilabel_metrics.csv")
         with open(metrics_csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['Class', 'Precision', 'Recall', 'F1-Score', 'Support'])
+            writer.writerow(['Class', 'Precision', 'Recall', 'F1-Score', 'Accuracy', 'Support'])
             
             for class_name in self.class_names:
                 if class_name in class_report:
@@ -223,6 +235,7 @@ class EvaluationManager:
                         f"{metrics['precision']:.4f}",
                         f"{metrics['recall']:.4f}",
                         f"{metrics['f1-score']:.4f}",
+                        f"{metrics['accuracy']:.4f}",
                         metrics['support']
                     ])
             
@@ -235,6 +248,7 @@ class EvaluationManager:
                         f"{metrics['precision']:.4f}",
                         f"{metrics['recall']:.4f}",
                         f"{metrics['f1-score']:.4f}",
+                        f"{metrics['accuracy']:.4f}",
                         metrics['support']
                     ])
         

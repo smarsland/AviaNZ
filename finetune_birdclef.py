@@ -438,6 +438,12 @@ class BirdClefFineTuner:
             return remapped.tolist()
     
     def _compute_accuracy_from_csv(self, csv_path, test_folder):
+        """
+        Compute overall exact-match accuracy and per-class accuracy from predictions CSV.
+        
+        Returns:
+            tuple: (overall_accuracy, per_class_accuracy_dict)
+        """
         import pandas as pd
         labels_path = os.path.join(test_folder, 'labels.json')
         
@@ -470,6 +476,10 @@ class BirdClefFineTuner:
         total = 0
         not_found = []
         
+        # Per-class accuracy tracking
+        per_class_correct = {cls: 0 for cls in class_columns}
+        per_class_total = {cls: 0 for cls in class_columns}
+        
         for _, row in df.iterrows():
             filename = row['row_id']
             if filename not in true_labels:
@@ -488,6 +498,14 @@ class BirdClefFineTuner:
             if pred_classes == true_classes:
                 correct += 1
             total += 1
+            
+            # Per-class binary accuracy (did we get this class right?)
+            for i, cls in enumerate(class_columns):
+                per_class_total[cls] += 1
+                true_has_class = cls in true_classes
+                pred_has_class = pred_probs[i] > 0.5
+                if true_has_class == pred_has_class:
+                    per_class_correct[cls] += 1
         
         if not_found and len(not_found) == len(df):
             print(f"  ERROR: NONE of the {len(df)} predictions matched any labels!")
@@ -497,7 +515,15 @@ class BirdClefFineTuner:
         elif not_found:
             print(f"  WARNING: {len(not_found)}/{len(df)} predictions had no matching labels")
         
-        return 100.0 * correct / total if total > 0 else 0.0
+        overall_accuracy = 100.0 * correct / total if total > 0 else 0.0
+        
+        # Compute per-class accuracy percentages
+        per_class_accuracy = {
+            cls: 100.0 * per_class_correct[cls] / per_class_total[cls] if per_class_total[cls] > 0 else 0.0
+            for cls in class_columns
+        }
+        
+        return overall_accuracy, per_class_accuracy
     
     def create_model(self):
         """Create model with pretrained BirdClef weights."""
@@ -1086,6 +1112,7 @@ class BirdClefFineTuner:
             best_config_path = os.path.join(self.output_folder, 'birdclef_finetuned_best_config.json')
             
             test_results = {}
+            test_per_class_results = {}
             for idx, test_data in enumerate(self.test_datasets, 1):
                 test_folder = test_data['path']
                 test_name = test_data['name']
@@ -1104,9 +1131,13 @@ class BirdClefFineTuner:
                 )
                 predictor.run()
                 
-                accuracy = self._compute_accuracy_from_csv(output_csv, test_folder)
+                accuracy, per_class_acc = self._compute_accuracy_from_csv(output_csv, test_folder)
                 test_results[test_name] = accuracy
+                test_per_class_results[test_name] = per_class_acc
                 print(f"  {test_name} Accuracy: {accuracy:.2f}%")
+                print(f"  Per-class accuracy:")
+                for cls, acc in sorted(per_class_acc.items()):
+                    print(f"    {cls:30s} {acc:.2f}%")
             
             print(f"\n{'='*60}")
             print(f"TEST SET COMPARISON")
@@ -1138,11 +1169,13 @@ class BirdClefFineTuner:
                 test1_name = self.test_datasets[0]['name'].replace('/', '_')
                 result_data['test1_name'] = test1_name
                 result_data['test1_acc'] = test_results.get(self.test_datasets[0]['name'], 0.0)
+                result_data['test1_per_class_acc'] = test_per_class_results.get(self.test_datasets[0]['name'], {})
             
             if len(self.test_datasets) >= 2:
                 test2_name = self.test_datasets[1]['name'].replace('/', '_')
                 result_data['test2_name'] = test2_name
                 result_data['test2_acc'] = test_results.get(self.test_datasets[1]['name'], 0.0)
+                result_data['test2_per_class_acc'] = test_per_class_results.get(self.test_datasets[1]['name'], {})
             
             with open(result_path, 'w') as f:
                 json.dump(result_data, f, indent=2)
@@ -1296,8 +1329,24 @@ Examples:
                        help="Domain loss weight (default: 0.3). If dacc stays >95%%, increase lambda.")
     parser.add_argument('--use-cleaner', action='store_true',
                        help="Use trainable spectrogram cleaner network for domain adaptation. Keeps backbone frozen and learns preprocessing transform.")
+    parser.add_argument('--seed', type=int, default=42,
+                       help="Random seed for reproducibility (default: 42)")
     
     args = parser.parse_args()
+    
+    # Set random seeds for reproducibility
+    import random
+    import numpy as np
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    
+    print(f"Random seed set to: {args.seed}")
     
     # Handle eval-only mode
     if args.eval_only:
@@ -1382,6 +1431,7 @@ Examples:
         print(f"{'='*60}")
         
         test_results = {}
+        test_per_class_results = {}
         for idx, test_data in enumerate(test_datasets, 1):
             test_folder = test_data['path']
             test_name = test_data['name']
@@ -1400,7 +1450,7 @@ Examples:
             )
             predictor.run()
             
-            # Compute accuracy from CSV
+            # Compute accuracy from CSV (using helper method)
             import pandas as pd
             labels_path = os.path.join(test_folder, 'labels.json')
             
@@ -1412,9 +1462,8 @@ Examples:
             
             true_labels = {}
             for item in labels_data['files']:
-                # Store class_names as list (handles both single and multi-label)
                 if 'class_names' in item and item['class_names']:
-                    true_labels[item['filename']] = item['class_names']  # Keep as list
+                    true_labels[item['filename']] = item['class_names']
                 else:
                     true_labels[item['filename']] = []
             
@@ -1429,6 +1478,8 @@ Examples:
             
             correct = 0
             total = 0
+            per_class_correct = {cls: 0 for cls in class_columns}
+            per_class_total = {cls: 0 for cls in class_columns}
             mismatches = []
             
             for _, row in df.iterrows():
@@ -1441,7 +1492,6 @@ Examples:
                 if not true_class_list:
                     continue
                 
-                # Multilabel exact match: all predicted classes must match all ground truth classes
                 pred_probs = row[class_columns].values
                 pred_classes = set([class_columns[i] for i, p in enumerate(pred_probs) if p > 0.5])
                 true_classes = set(true_class_list)
@@ -1449,10 +1499,28 @@ Examples:
                 if pred_classes == true_classes:
                     correct += 1
                 total += 1
+                
+                # Per-class binary accuracy
+                for i, cls in enumerate(class_columns):
+                    per_class_total[cls] += 1
+                    true_has_class = cls in true_classes
+                    pred_has_class = pred_probs[i] > 0.5
+                    if true_has_class == pred_has_class:
+                        per_class_correct[cls] += 1
             
             accuracy = 100.0 * correct / total if total > 0 else 0.0
+            per_class_accuracy = {
+                cls: 100.0 * per_class_correct[cls] / per_class_total[cls] if per_class_total[cls] > 0 else 0.0
+                for cls in class_columns
+            }
+            
             test_results[test_name] = accuracy
+            test_per_class_results[test_name] = per_class_accuracy
+            
             print(f"  {test_name} Accuracy: {accuracy:.2f}% ({correct}/{total} correct)")
+            print(f"  Per-class accuracy:")
+            for cls, acc in sorted(per_class_accuracy.items()):
+                print(f"    {cls:30s} {acc:.2f}%")
             if mismatches:
                 print(f"  Sample mismatches:")
                 for mm in mismatches:
@@ -1479,11 +1547,13 @@ Examples:
             test1_name = test_datasets[0]['name'].replace('/', '_')
             result_data['test1_name'] = test1_name
             result_data['test1_acc'] = test_results.get(test_datasets[0]['name'], 0.0)
+            result_data['test1_per_class_acc'] = test_per_class_results.get(test_datasets[0]['name'], {})
         
         if len(test_datasets) >= 2:
             test2_name = test_datasets[1]['name'].replace('/', '_')
             result_data['test2_name'] = test2_name
             result_data['test2_acc'] = test_results.get(test_datasets[1]['name'], 0.0)
+            result_data['test2_per_class_acc'] = test_per_class_results.get(test_datasets[1]['name'], {})
         
         with open(result_path, 'w') as f:
             json.dump(result_data, f, indent=2)

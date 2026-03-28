@@ -280,9 +280,14 @@ def split_dataset(input_folder, output_base_folder, test_ratio=0.2, random_seed=
     for class_name in sorted(files_by_class.keys()):
         print(f"  {class_name}: {len(files_by_class[class_name])} files")
 
-    # Perform simple random split (no stratification, no grouping)
-    print(f"\nPerforming simple random split...")
-    train_files, test_files, split_info = random_split(files, test_ratio, random_seed)
+    # Perform split - grouped if group_key specified, otherwise random
+    if group_key:
+        print(f"\nPerforming grouped random split (group_key='{group_key}')...")
+        print(f"  This prevents data leakage by keeping all samples from the same source file together")
+        train_files, test_files, split_info = grouped_random_split(files, test_ratio, group_key, random_seed)
+    else:
+        print(f"\nPerforming simple random split...")
+        train_files, test_files, split_info = random_split(files, test_ratio, random_seed)
     
     print(f"\nSplit results:")
     print(f"  Train: {len(train_files)} files")

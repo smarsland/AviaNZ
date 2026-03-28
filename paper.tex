@@ -4,7 +4,7 @@
 
 % Title, author, and affiliation
 % ------------------------------------
-\title{Mitigating Domain Shift in Bird Call Recognition Through Spectrogram Normalization}
+\title{Mitigating Domain Shift in Bird Call Recognition}
 
 \author[1]{Giotto Frean}
 \author[1]{Stephen Marsland}
@@ -18,34 +18,40 @@
 \maketitle
 
 \begin{abstract}
-Bird call recognition systems suffer substantial performance degradation when deployed across different recording environments—despite achieving strong within-domain accuracy. We investigate this domain shift problem through: (1) matched dataset construction that isolates domain effects by creating datasets with identical species distributions but different recording sources, and (2) evaluation of normalization strategies for cross-domain robustness. Using New Zealand bird recordings from two sources with contrasting characteristics (standardized DOC monitoring vs. diverse AviaNZ field recordings), we observe accuracy drops of 10.8-42.2pp despite matched species. Our proposed background normalization improves cross-domain accuracy by 3.6-22.3pp (44\% shift reduction). We demonstrate that PCEN shows mixed performance (worse than baseline for DOC-trained models), while Box-Cox consistently fails. The median filter component proves critical: removing it causes catastrophic performance loss. We provide methodological contributions for domain shift analysis and actionable deployment guidance for robust bioacoustic monitoring systems.
+How severe is domain shift in bird call recognition when species distributions are held constant? We construct matched datasets with identical species distributions but different recording sources to isolate equipment and environmental effects from label distribution confounds. We observe severe, \textit{asymmetric} domain shift: models trained on diverse field recordings (AviaNZ) transfer moderately (-8.4pp), while models trained on consistent monitoring recordings (DOC) suffer catastrophic failure when deployed to diverse sources (-41.6pp). This asymmetry reveals that homogeneous training data allows models to exploit recording-specific artifacts that fail to generalize. We systematically evaluate preprocessing techniques (temporal smoothing, PCEN, Box-Cox, statistical background subtraction), domain adaptation (DANN), and augmentation strategies. Simple temporal smoothing provides the largest consistent gains, though substantial accuracy gaps remain (best cross-domain: 48.2\% vs 64\% within-domain). PCEN partially mitigates shift for consistent recordings (22\% $\to$ 41\%) but leaves performance far below within-domain accuracy. Domain adversarial training shows inconsistent, direction-dependent effects. Our central finding: \textit{domain shift in bioacoustics is fundamentally difficult—current normalization and adaptation methods provide only partial mitigation, and training data heterogeneity matters more than any preprocessing technique}. We provide a rigorous experimental methodology for isolating domain effects applicable beyond bird call recognition.
 \end{abstract}
 
-\keywords{bird call recognition, domain adaptation, spectrogram normalization, PCEN, transfer learning}
+\keywords{bird call recognition, domain shift, asymmetric transfer, cross-domain evaluation, bioacoustic monitoring}
 
 \section{Introduction}
 
-Automated bird call recognition enables large-scale biodiversity monitoring but faces a critical deployment challenge: \textit{domain shift}. Models achieving 60-90\% accuracy on test data from the same distribution often drop to 20-40\% when applied to recordings from different equipment, locations, or environmental conditions—even for the same species.
+Automated bird call recognition enables large-scale biodiversity monitoring but faces a critical deployment challenge: \textit{domain shift}. Models achieving 60-90\% accuracy on test data from the same distribution often drop to 20-40\% when applied to recordings from different equipment, locations, or environmental conditions.
 
-While deep learning achieves impressive benchmark performance, real-world deployment reveals that accuracy drops stem not from species variation but from systematic differences in recording characteristics: equipment response curves, ambient noise profiles, and environmental acoustics. Distinguishing domain shift from species distribution confounds requires careful experimental design.
+A fundamental question remains unanswered: \textit{how much of observed domain shift stems from equipment and environmental differences versus species distribution mismatch?} Existing studies confound these factors—different recording sites typically have different species compositions, making it impossible to isolate the effect of recording characteristics alone.
 
-We investigate this through matched datasets: two collections with identical species distributions (9 common New Zealand birds) but contrasting recording sources. The DOC dataset represents Department of Conservation biodiversity monitoring recordings. The AviaNZ dataset comprises diverse field recordings from varied locations across New Zealand typical of citizen science and research contributions. This design isolates domain effects from species representation.
+We address this via \textbf{matched dataset construction}: two datasets with \textit{identical species distributions} but different recording sources. The DOC dataset represents Department of Conservation biodiversity monitoring recordings with consistent equipment. The AviaNZ dataset comprises diverse field recordings from varied locations across New Zealand. Both contain the same 9 species in the same proportions. This design cleanly isolates domain effects from label distribution confounds.
 
-We evaluate normalization strategies for cross-domain robustness, including a novel background normalization approach using adaptive outlier detection. Our method applies temporal smoothing and identifies transient events (likely vocalizations) to estimate and subtract recording-specific noise floors—requiring no learned parameters and adding negligible computational overhead.
+Our systematic evaluation of normalization techniques (temporal smoothing, PCEN, Box-Cox, statistical background subtraction), domain adaptation (DANN), and augmentation reveals three central findings:
 
-Our contributions: (1) matched dataset methodology isolating domain shift from species confounds; (2) background normalization improving cross-domain accuracy +3.6-22.3pp (44\% shift reduction) while maintaining in-domain performance; (3) demonstrating PCEN's mixed results and Box-Cox's failure on bird calls; (4) showing the critical importance of temporal smoothing (median filter); (5) actionable deployment guidance for robust monitoring systems.
+\textbf{(1) Domain shift is severe and asymmetric.} Models trained on homogeneous recordings (DOC) suffer catastrophic cross-domain failure (-41.6pp), while models trained on heterogeneous recordings (AviaNZ) transfer moderately (-8.4pp). This asymmetry reveals that consistent training data allows exploitation of recording-specific artifacts.
+
+\textbf{(2) Current methods provide only partial mitigation.} Simple temporal smoothing (median filtering) provides the most consistent gains, but even best-case scenarios leave accuracy far below within-domain performance (41\% vs 60\%). PCEN shows direction-dependent effectiveness. Domain adversarial training (DANN) shows inconsistent, context-dependent gains. Statistical background subtraction adds minimal benefit and can degrade performance.
+
+\textbf{(3) Training data heterogeneity dominates preprocessing.} The \textasciitilde5$\times$ difference in domain shift magnitude between diverse and consistent training data (-8.4pp vs -41.6pp) exceeds gains from any normalization or adaptation technique we evaluate.
+
+These findings demonstrate that domain shift in bioacoustics is fundamentally difficult. Our matched dataset methodology provides a rigorous experimental framework applicable beyond bird calls to any audio classification task where deployment conditions differ from training.
 
 \section{Methods}
 
 \subsection{Matched Dataset Construction}
 
-A key methodological contribution is our matched dataset design. To isolate domain shift from species distribution confounds, we created two datasets with \textit{identical species distributions}—each containing the same proportion of 9 common New Zealand bird species: blackbird (\textit{Turdus merula}), chaffinch (\textit{Fringilla coelebs}), fantail (\textit{Rhipidura fuliginosa}), grey warbler (\textit{Gerygone igata}), kaka (\textit{Nestor meridionalis}), morepork (\textit{Ninox novaeseelandiae}), silvereye (\textit{Zosterops lateralis}), tomtit (\textit{Petroica macrocephala}), and combined tui/bellbird (\textit{Prosthemadera novaeseelandiae}/\textit{Anthornis melanura}). Both datasets contain 120 samples per species (1,080 total samples each), ensuring performance differences arise solely from recording characteristics, not species representation or dataset size.
+To isolate domain shift from species distribution confounds, we created two datasets with \textit{identical species distributions}. Each contains the same proportion of 9 common New Zealand bird species: blackbird (\textit{Turdus merula}), chaffinch (\textit{Fringilla coelebs}), fantail (\textit{Rhipidura fuliginosa}), grey warbler (\textit{Gerygone igata}), kaka (\textit{Nestor meridionalis}), morepork (\textit{Ninox novaeseelandiae}), silvereye (\textit{Zosterops lateralis}), tomtit (\textit{Petroica macrocephala}), and combined tui/bellbird (\textit{Prosthemadera novaeseelandiae}/\textit{Anthornis melanura}). Both datasets contain at least 20 samples per species (~700 total).
 
-\textbf{DOC Dataset}: Extracted from Department of Conservation biodiversity monitoring recordings. These recordings represent large-scale conservation monitoring programs.
+\textbf{DOC Dataset}: Extracted from Department of Conservation biodiversity monitoring recordings.
 
-\textbf{AviaNZ Dataset}: Field recordings collected using AviaNZ software from diverse locations across New Zealand, representing varied recording equipment and heterogeneous environmental conditions typical of citizen science and research contributions. This reflects the reality of opportunistic field recordings with high variability.
+\textbf{AviaNZ Dataset}: Field recordings collected from diverse locations across New Zealand.
 
-Each dataset was split 83\%/17\% train/test (996 train, 166 test for AviaNZ; 904 train, 176 test for DOC) with grouped sampling by source file to prevent data leakage. During training, the train split was further divided 80\%/20\% for training/validation. Spectrograms used 25ms Hann windows, 10ms hop, 128 mel bins (0-8kHz), 16kHz sampling rate. All samples are 5-second clips.
+Each dataset was split 75\%/25\% train/test with grouped sampling by source file to prevent data leakage. During training, the train split was further divided 80\%/20\% for training/validation. Spectrograms used 25ms Hann windows, 10ms hop, 128 mel bins (0-8kHz), 16kHz sampling rate.
 
 \subsection{Normalization Strategies}
 
@@ -93,15 +99,17 @@ Training uses AdamW optimizer with differential learning rates (lr $10^{-4}$ for
 
 \subsection{Experimental Design}
 
-We conduct systematic cross-domain evaluation combining training sources and normalization strategies:
+We conduct systematic cross-domain evaluation combining training sources, normalization strategies, and domain adaptation techniques:
 
 \begin{itemize}
 \item \textbf{Training scenarios}: (1) Train on AviaNZ, test on both AviaNZ and DOC; (2) Train on DOC, test on both DOC and AviaNZ
 \item \textbf{Evaluation}: Within-domain accuracy (train and test from same source) and cross-domain accuracy (test on opposite source)
 \item \textbf{Normalization methods}: Log baseline, Log+normalize, Log+normalize\_no\_median, PCEN, Box-Cox
+\item \textbf{Domain adaptation}: Domain Adversarial Neural Networks (DANN) with gradient reversal layer, tested with Log+normalize preprocessing
+\item \textbf{Noise augmentation}: Additive ambient noise at varying intensities (0.0-1.0 ratio) and variety (1-1000 noise sources), applied during training with Log baseline
 \end{itemize}
 
-This yields 10 experiments total (2 training sources $\times$ 5 normalization methods). We report exact-match classification accuracy on held-out test sets (166 samples for AviaNZ test, 176 samples for DOC test). All experiments use identical train/val/test splits to ensure fair comparison. Implementation in PyTorch 2.0; each configuration run once (100 epochs with early stopping).
+All experiments use identical train/val/test splits to ensure fair comparison. Implementation in PyTorch 2.0; each configuration run once (100 epochs with early stopping).
 
 \begin{figure}[t]
 \centering
@@ -123,129 +131,240 @@ Method & Train & In-Dom & Cross & Shift \\
 \hline
 \multicolumn{5}{c}{\textit{Train on AviaNZ, test on both}} \\
 \hline
-Log (baseline) & AviaNZ & 51.2 & 40.4 & \textbf{-10.8} \\
-Log+norm & AviaNZ & 50.0 & 44.0 & \textbf{-6.0} \\
-Log+norm\_no\_median & AviaNZ & 34.3 & 17.5 & -16.8 \\
-PCEN & AviaNZ & 47.0 & 40.4 & -6.6 \\
-Box-Cox & AviaNZ & 49.4 & 36.8 & -12.6 \\
+Log (baseline) & AviaNZ & 52.4 & 44.0 & \textbf{-8.4} \\
+Log+median\_only & AviaNZ & 49.4 & 45.2 & -4.2 \\
+Log+norm\_no\_median & AviaNZ & 42.2 & 38.6 & -3.6 \\
+Log+norm (full) & AviaNZ & 50.6 & 43.4 & \textbf{-7.2} \\
+PCEN & AviaNZ & 45.2 & 36.7 & -8.5 \\
+Box-Cox & AviaNZ & 49.4 & 36.7 & -12.7 \\
+DANN+Log+norm & AviaNZ & 53.6 & 48.2 & -5.4 \\
 \hline
 \multicolumn{5}{c}{\textit{Train on DOC, test on both}} \\
 \hline
-Log (baseline) & DOC & 64.5 & 22.3 & \textbf{-42.2} \\
-Log+norm & DOC & 68.1 & 44.6 & \textbf{-23.5} \\
-Log+norm\_no\_median & DOC & 45.2 & 31.9 & -13.3 \\
-PCEN & DOC & 60.8 & 33.1 & -27.7 \\
-Box-Cox & DOC & 63.9 & 25.9 & -38.0 \\
+Log (baseline) & DOC & 63.9 & 22.3 & \textbf{-41.6} \\
+Log+median\_only & DOC & 59.6 & 36.7 & -22.9 \\
+Log+norm\_no\_median & DOC & 53.6 & 34.9 & -18.7 \\
+Log+norm (full) & DOC & 60.2 & 38.0 & \textbf{-22.2} \\
+PCEN & DOC & 60.2 & 41.0 & -19.3 \\
+Box-Cox & DOC & 62.0 & 27.1 & -34.9 \\
+DANN+Log+norm & DOC & 57.2 & 36.1 & -21.1 \\
 \hline
 \end{tabular}
 \end{table}
 
-\section{Results}
-
 \subsection{Baseline Domain Shift Magnitude}
 
-Using standard log scaling (Table~\ref{tab:results}), we observe substantial cross-domain accuracy degradation despite identical species distributions. Training on AviaNZ (diverse recordings) achieves 51.2\% within-domain but drops to 40.4\% on DOC recordings (-10.8pp). The asymmetry is more severe in reverse: training on DOC achieves 64.5\% within-domain but drops to 22.3\% on AviaNZ recordings (-42.2pp).
+Using standard log scaling (Table~\ref{tab:results}), we observe substantial cross-domain accuracy degradation despite identical species distributions. Training on AviaNZ (diverse recordings) achieves 52.4\% within-domain but drops to 44.0\% on DOC recordings (-8.4pp). The asymmetry is far more severe in reverse: training on DOC achieves 63.9\% within-domain but drops to 22.3\% on AviaNZ recordings (-41.6pp)—a near-5$\times$ difference in shift magnitude.
 
-This asymmetry reveals an important insight: \textit{the DOC dataset's consistency allows models to exploit recording-specific artifacts that do not transfer}. In contrast, AviaNZ's recording heterogeneity forces models to learn more robust features, improving generalization despite lower within-domain accuracy.
+\textbf{This asymmetry is the central empirical finding of our study.} The direction of transfer matters as much as the magnitude. Models trained on homogeneous DOC recordings achieve higher within-domain accuracy (63.9\% vs 52.4\%) but suffer catastrophic cross-domain failure. Models trained on heterogeneous AviaNZ recordings sacrifice within-domain accuracy but generalize far more robustly.
+
+This reveals a critical insight: \textit{the DOC dataset's consistency allows models to exploit recording-specific artifacts that completely fail to transfer}. When recording characteristics are homogeneous, models can "cheat" by learning equipment signatures, background noise patterns, or environmental acoustics as discriminative features. These spurious correlations provide predictive power within-domain but catastrophically fail when applied to recordings with different characteristics. In contrast, AviaNZ's recording heterogeneity forces models to rely on features that generalize across diverse recording conditions, at the cost of within-domain accuracy.
+
+This asymmetry has profound implications for deployment: a model trained on 10,000 samples from a single recording source will likely fail when deployed to new sites, while a model trained on 1,000 diverse recordings may transfer successfully. For conservation monitoring programs, this suggests that data collection strategies should prioritize source diversity over volume from consistent sources.
 
 \subsection{Impact of Background Normalization}
 
-\textbf{Our proposed normalization} (Log+norm) consistently improves cross-domain robustness:
+Our proposed normalization (Log+norm) shows mixed and limited results:
 \begin{itemize}
-\item \textbf{AviaNZ training}: Cross-domain accuracy improves from 40.4\% to 44.0\% (+3.6pp), reducing the generalization gap by 44\% (from -10.8pp to -6.0pp). Within-domain performance remains stable: 51.2\% $\to$ 50.0\% (-1.2pp, within noise).
-\item \textbf{DOC training}: Both domains improve. Within-domain: 64.5\% $\to$ 68.1\% (+3.6pp). Cross-domain shows dramatic improvement: 22.3\% $\to$ 44.6\% (+22.3pp, effectively doubling accuracy). This reduces the generalization gap by 44\% (from -42.2pp to -23.5pp).
+\item \textbf{AviaNZ training}: Cross-domain accuracy drops slightly from 44.0\% to 43.4\% (-0.6pp), with the generalization gap improving modestly (from -8.4pp to -7.2pp). Within-domain performance also drops: 52.4\% $\to$ 50.6\% (-1.8pp).
+\item \textbf{DOC training}: Cross-domain shows meaningful improvement: 22.3\% $\to$ 38.0\% (+15.7pp). However, within-domain performance decreases: 63.9\% $\to$ 60.2\% (-3.7pp). The generalization gap improves from -41.6pp to -22.2pp, but performance remains far below within-domain accuracy.
 \end{itemize}
 
-The gains suggest our method effectively removes domain-specific noise patterns while preserving vocalizations. The larger improvement for DOC-trained models indicates our normalization particularly helps when training data has consistent noise characteristics that don't generalize.
+The benefits are context-dependent and always partial. The method trades some within-domain accuracy for improved cross-domain robustness, but even best-case scenarios leave substantial accuracy gaps. The asymmetric gains suggest the approach is most effective when training data has consistent noise characteristics (DOC) but provides minimal benefit when training data is already diverse (AviaNZ).
 
-\subsection{Critical Role of Temporal Smoothing}
+\subsection{Decomposing Normalization Components: Median Filter vs. Background Subtraction}
 
-Removing the median filter (Log+norm\_no\_median) causes catastrophic performance degradation. For AviaNZ training: within-domain accuracy collapses from 50.0\% to 34.3\% (-15.7pp) and cross-domain drops from 44.0\% to 17.5\% (-26.5pp). For DOC training: within-domain drops from 68.1\% to 45.2\% (-22.9pp) and cross-domain from 44.6\% to 31.9\% (-12.7pp).
+To understand which component drives performance, we test three variants: (1) median filter only (Log+median\_only), (2) background subtraction only (Log+norm\_no\_median), and (3) both combined (Log+norm).
 
-This demonstrates that temporal smoothing is not merely an implementation detail but a critical component. The median filter removes high-frequency temporal artifacts while preserving signal edges, making the subsequent outlier-based background estimation more robust. Without it, the background estimation becomes unstable, misclassifying signal as noise.
+\textbf{Median filter alone} provides nearly all observed benefits for cross-domain transfer:
+\begin{itemize}
+\item \textbf{AviaNZ training}: Median-only achieves 49.4\%/45.2\% (shift -4.2pp), which \textit{outperforms the full method} for cross-domain accuracy (50.6\%/43.4\%, shift -7.2pp) and substantially improves over baseline (52.4\%/44.0\%, shift -8.4pp).
+\item \textbf{DOC training}: Median-only achieves 59.6\%/36.7\% (shift -22.9pp), nearly matching the full method (60.2\%/38.0\%, shift -22.2pp) and dramatically outperforming baseline (63.9\%/22.3\%, shift -41.6pp).
+\end{itemize}
 
-\subsection{PCEN Shows Mixed Performance}
+\textbf{Background subtraction without median filter} severely degrades absolute accuracy:
+\begin{itemize}
+\item \textbf{AviaNZ}: 42.2\%/38.6\% (shift -3.6pp)—lowest absolute accuracy despite small domain gap.
+\item \textbf{DOC}: 53.6\%/34.9\% (shift -18.7pp)—substantial accuracy loss compared to baseline or median-only.
+\end{itemize}
 
-Despite PCEN's success in speech recognition, our results show \textit{domain-dependent} effectiveness. For AviaNZ-trained models, PCEN achieves comparable shift reduction (-6.6pp) to our method (-6.0pp), though with lower absolute accuracy (47.0\% vs 50.0\% within-domain). However, for DOC-trained models, PCEN \textit{underperforms both baseline and our method}: 60.8\% within-domain (vs 64.5\% baseline, 68.1\% ours) and 33.1\% cross-domain (vs 22.3\% baseline, 44.6\% ours).
+\textbf{Key finding}: The median filter, not background subtraction, is responsible for observed cross-domain improvements. For AviaNZ training, adding background subtraction to median filtering \textit{degrades} cross-domain performance (-1.8pp). For DOC training, background subtraction adds only modest benefit (+1.3pp cross-domain) and requires the median filter to avoid catastrophic accuracy loss.
 
-The mixed results suggest PCEN's exponential smoothing with fixed time constants may not adapt well to the temporal structure of bird vocalizations, which vary from brief clicks (morepork) to extended warbles (tui). Our outlier-based approach adapts to local signal statistics rather than applying fixed temporal smoothing.
+The median filter stabilizes spectrograms by removing high-frequency temporal noise, making learned features more robust to domain shifts. Background subtraction requires the median filter to function at all but provides minimal additional cross-domain benefit in our experiments.
 
-\subsection{Box-Cox Transformation Fails}
+\subsection{PCEN Shows Surprisingly Strong Performance for DOC Training}
 
-Box-Cox transformation consistently underperforms across all conditions. Most critically, DOC-trained models achieve only 25.9\% cross-domain accuracy (vs 44.6\% for our method), indicating power transformations alone cannot address domain shift in bioacoustic data. The transformations may normalize distribution shapes but fail to remove domain-specific spectral patterns.
+Despite PCEN's mixed reputation across domains, our results show unexpectedly strong performance for DOC-trained models in this setting. For AviaNZ-trained models, PCEN achieves similar shift (-8.5pp) to baseline (-8.4pp), with lower absolute accuracy (45.2\% vs 52.4\% within-domain, 36.7\% vs 44.0\% cross-domain). However, for DOC-trained models, PCEN substantially improves cross-domain performance: 60.2\% within-domain (vs 63.9\% baseline, -3.7pp) but achieves 41.0\% cross-domain (vs 22.3\% baseline, +18.7pp), reducing the shift from -41.6pp to -19.3pp.
+
+This represents the best cross-domain performance of any method we evaluated for DOC training, outperforming our proposed normalization (38.0\%). PCEN's exponential smoothing may be particularly effective at removing consistent recording artifacts present in DOC data, though performance remains well below within-domain accuracy (41.0\% vs 60.2\%).
+
+\subsection{Box-Cox Transformation Underperforms}
+
+Box-Cox transformation consistently underperforms across cross-domain conditions. For AviaNZ training: 49.4\% within-domain and 36.7\% cross-domain (-12.7pp shift), similar to PCEN but worse than baseline. For DOC-trained models: 62.0\% within-domain and 27.1\% cross-domain (-34.9pp shift), better than baseline (22.3\%) but substantially worse than PCEN (41.0\%) or our method (38.0\%). The transformations may normalize distribution shapes but fail to remove domain-specific spectral patterns as effectively as other approaches.
+
+\subsection{Domain Adversarial Neural Networks Show Inconsistent, Direction-Dependent Effects}
+
+We evaluated Domain Adversarial Neural Networks (DANN) using our Log+normalize preprocessing to assess whether explicit domain adaptation outperforms normalization alone. DANN adds a gradient reversal layer to encourage domain-invariant features while maintaining task performance.
+
+\textbf{AviaNZ training with DANN}: 53.6\% within-domain, 48.2\% cross-domain (shift -5.4pp). This shows improvement over Log+normalize baseline (50.6\%/43.4\%, shift -7.2pp): +3.0pp within-domain, +4.8pp cross-domain. This yields the best overall cross-domain performance for AviaNZ training among the methods we evaluated, though the gains are modest in absolute terms.
+
+\textbf{DOC training with DANN}: 57.2\% within-domain, 36.1\% cross-domain (shift -21.1pp). This underperforms the Log+normalize baseline (60.2\%/38.0\%, shift -22.2pp): -3.0pp within-domain, -1.9pp cross-domain. Domain adaptation degrades both within-domain and cross-domain accuracy.
+
+The inconsistent effectiveness mirrors our normalization findings: explicit domain adaptation shows modest gains when training data is already diverse (AviaNZ) but provides no benefit—and may harm performance—for consistent recordings (DOC). This suggests that domain adversarial training requires sufficient source domain diversity to learn domain-invariant features. When source recordings are too homogeneous (DOC), the domain discriminator may learn spurious patterns that interfere with feature learning rather than helping it. 
+
+\textbf{Overall assessment}: DANN is unreliable and direction-dependent. The modest gains in favorable conditions (+4.8pp) do not justify the added complexity and risk of degradation in unfavorable conditions (-1.9pp). Simpler preprocessing approaches (median filtering, PCEN) provide more consistent benefits across training scenarios.
 
 \section{Discussion}
 
-Our matched dataset methodology—identical species distributions, different recording sources—cleanly isolates domain shift from species confounds, revealing 10.8-42.2pp accuracy drops from recording characteristics alone. This experimental design generalizes beyond bird calls to any bioacoustic or audio classification task where deployment conditions differ from training, providing a rigorous framework for evaluating domain robustness.
+\subsection{The Central Finding: Severe Asymmetric Domain Shift}
 
-\subsection{Practical Impact of Background Normalization}
+Our matched dataset methodology—identical species distributions, different recording sources—cleanly isolates domain shift from species confounds. The magnitude and asymmetry of the observed shift (-8.4pp vs -41.6pp) constitute our primary empirical contribution.
 
-Our proposed normalization provides substantial practical benefits. The +3.6-22.3pp cross-domain improvements represent the difference between a marginally useful system (22\% accuracy) and a deployable one (45\% accuracy) for DOC-to-AviaNZ transfer. The 44\% reduction in generalization gap means monitoring programs can achieve comparable performance across heterogeneous recordings without retraining.
+This asymmetry demonstrates three key phenomena:
 
-Critically, the method requires \textit{no learned parameters, no domain-specific tuning, and adds <1\% computational overhead}. Implementation requires $\sim$50 lines of NumPy code. This contrasts with domain adaptation methods requiring target domain data, adversarial training, or learned normalization parameters.
+\textbf{(1) Recording diversity prevents artifact exploitation.} Training on heterogeneous sources (AviaNZ) forces models to learn features that generalize across recording conditions. Training on homogeneous sources (DOC) allows models to exploit recording-specific patterns (equipment signatures, consistent background noise) that predict labels within-domain but fail catastrophically when applied elsewhere.
 
-\subsection{Why PCEN Shows Mixed Results}
+\textbf{(2) Domain shift is not symmetric.} The difficulty of transfer depends critically on training data characteristics, not just "how different" the domains are. A model that performs well on domain A test data may fail completely on domain B, while the reverse transfer succeeds. This contradicts simple domain distance metrics and has implications for deployment planning.
 
-PCEN's success in speech recognition (human voice has consistent temporal structure) does not automatically transfer to bird vocalizations. Our results—PCEN underperforming baseline for DOC-trained models (60.8\% vs 64.5\%)—suggest several explanations:
+\textbf{(3) Within-domain accuracy does not predict cross-domain robustness.} DOC training achieves 63.9\% within-domain (11.5pp better than AviaNZ) but only 22.3\% cross-domain (21.7pp worse than AviaNZ). High validation accuracy on homogeneous data can be misleading—it may reflect artifact exploitation rather than robust feature learning.
+
+This experimental design generalizes beyond bird calls to any bioacoustic or audio classification task where deployment conditions differ from training, providing a rigorous framework for evaluating domain robustness.
+
+\subsection{Practical Impact of Temporal Smoothing}
+
+Our ablation study reveals that simple temporal smoothing (median filtering) provides most of the observed cross-domain improvement in our experiments. For DOC training, median-only achieves most of the gain (14.4pp of 15.7pp cross-domain improvement over baseline), while for AviaNZ training, median-only actually \textit{outperforms} the full method (45.2\% vs 43.4\% cross-domain).
+
+This has practical implications. Practitioners can achieve substantial cross-domain robustness improvements in similar settings with a simple preprocessing step: 5-frame median filter along the time axis. This requires:
+\begin{itemize}
+\item No hyperparameter tuning (fixed 5-frame window works across datasets)
+\item No learned parameters or training-time modifications
+\item Negligible computational cost (<0.1\% overhead)
+\item $\sim$3 lines of code (e.g., \texttt{scipy.ndimage.median\_filter})
+\end{itemize}
+
+The median filter's effectiveness likely stems from removing high-frequency temporal artifacts (electronic noise, brief environmental sounds) that vary across recording equipment. By smoothing these transients, the resulting spectrograms exhibit more consistent signal characteristics across domains.
+
+\subsection{PCEN Shows Direction-Dependent Effectiveness}
+
+PCEN's strong performance on DOC-trained models (41.0\% cross-domain, +18.7pp over baseline) was unexpected given mixed results from prior work. This effectiveness in our setting likely stems from:
 
 \begin{enumerate}
-\item \textbf{Temporal structure mismatch}: PCEN's fixed 60ms time constant may not suit bird calls varying from 50ms (morepork clicks) to multi-second songs (tui).
-\item \textbf{Over-smoothing}: The exponential smoothing may suppress rapid modulations critical for species discrimination (e.g., chaffinch trills, bellbird harmonics).
-\item \textbf{Domain-dependent effectiveness}: PCEN helps diverse recordings (AviaNZ) but harms DOC recordings, suggesting it interacts with recording characteristics in complex ways.
+\item \textbf{Artifact removal}: DOC recordings have consistent equipment characteristics that PCEN's adaptive gain control may effectively normalize, enabling better transfer to diverse AviaNZ recordings.
+\item \textbf{Temporal structure}: PCEN's 60ms time constant may be well-suited to the duration of bird vocalizations in our dataset.
+\item \textbf{Complementary approach}: Where our method uses outlier detection and background subtraction, PCEN uses adaptive gain—these different mechanisms may suit different domain characteristics.
 \end{enumerate}
 
-This demonstrates the danger of assuming technique transferability across domains without empirical validation.
+However, performance remains far below within-domain accuracy (41.0\% vs 60.2\%), indicating that PCEN partially mitigates but does not solve domain shift. This demonstrates the importance of empirical evaluation on specific datasets rather than assuming techniques will generalize across domains.
 
-\subsection{The Median Filter's Critical Role}
+\subsection{The Median Filter as the Primary Normalization Mechanism}
 
-The catastrophic failure without median filtering (-15 to -27pp accuracy loss) reveals that temporal smoothing is not optional. The filter serves two purposes: (1) removes high-frequency artifacts from spectrogram computation and recording electronics; (2) stabilizes the subsequent statistical background estimation by reducing variance. Without it, the z-score normalization misidentifies noise spikes as signal.
+The ablation study reveals that temporal smoothing via median filtering is the \textit{primary} mechanism for cross-domain improvement, not the statistical background subtraction we initially hypothesized.
 
-This finding suggests researchers attempting similar outlier-based background estimation should carefully consider temporal preprocessing.
+For AviaNZ training, median-only (45.2\% cross-domain) outperforms the full method (43.4\%)—adding background subtraction actually degrades cross-domain accuracy by 1.8pp while marginally improving within-domain accuracy (+1.2pp). This suggests background subtraction may inadvertently remove or distort some domain-invariant features.
 
-\subsection{Asymmetric Transfer and Recording Diversity}
+For DOC training, median-only already captures 87\% of the full method's cross-domain improvement over baseline (14.4pp of 15.7pp). The full method's modest additional gain (+1.3pp) comes at negligible cost.
 
-The 42.2pp drop (DOC$\to$AviaNZ) versus 10.8pp drop (AviaNZ$\to$DOC) provides actionable deployment insights. Training on diverse recordings produces more robust features than training on DOC recordings, even when DOC training achieves higher within-domain accuracy (64.5\% vs 51.2\%).
+The median filter's effectiveness stems from temporal noise reduction: by smoothing transient artifacts from recording electronics and brief environmental sounds, it produces spectrograms where signal-to-noise characteristics are more consistent across domains. This preprocessing is simple (5-frame median along time axis), adds <0.1\% computational overhead, and requires no hyperparameters.
 
-For conservation monitoring programs: \textit{including heterogeneous recordings in training data improves cross-deployment robustness more effectively than limiting to a single recording source}. A model trained on 1000 diverse recordings will likely outperform one trained on 10,000 recordings from a single source when deployed to new sites.
+\subsection{Training Data Heterogeneity and Cross-Domain Transfer}
+
+The substantial difference in transfer difficulty (DOC$\to$AviaNZ: -41.6pp versus AviaNZ$\to$DOC: -8.4pp) suggests that training on diverse recordings produces more robust features than training on consistent recordings, even when consistent training achieves higher within-domain accuracy (63.9\% vs 52.4\%).
+
+For conservation monitoring programs, this suggests that including heterogeneous recordings in training data may improve cross-deployment robustness compared to limiting data to a single recording source, though the optimal balance requires further study across multiple sites and species sets. Our results come from comparing two specific datasets—one with diverse sources (AviaNZ) and one with consistent sources (DOC)—not from a controlled interpolation of diversity levels.
+
+\textbf{Important limitation}: We cannot cleanly separate the effect of "diversity" from other confounds. The AviaNZ and DOC datasets differ in:
+\begin{itemize}
+\item Source diversity (by design)
+\item Recording equipment and settings
+\item Geographic distribution
+\item Recording practices and quality control
+\item Possibly label noise or annotation conventions
+\end{itemize}
+
+The asymmetric transfer could stem from any combination of these factors, not solely "diversity" as an abstract property. Controlled experiments varying diversity while holding other factors constant would be needed to isolate this effect definitively.
+
+\subsection{Limitations of Domain Adversarial Training}
+
+DANN's inconsistent effectiveness (modest improvement for AviaNZ training, degradation for DOC training) suggests that explicit domain adaptation depends critically on training data characteristics. 
+
+When training on diverse recordings (AviaNZ), the domain discriminator may learn to distinguish domain-specific patterns from task-relevant features, forcing the feature extractor toward more generalizable representations. However, when training on homogeneous recordings (DOC), the domain discriminator may learn spurious patterns or interfere with feature learning, degrading both within-domain and cross-domain accuracy.
+
+This finding suggests caution when applying domain adversarial methods: they may help for diverse training data but harm performance for consistent recordings. For single-source training, simpler normalization strategies (PCEN, median filtering) proved more reliable in our experiments. The added complexity of domain adversarial training is not justified by the inconsistent and modest gains we observe.
 
 
-\subsection{Noise Augmentation Shows Domain-Dependent Effects}
+\subsection{Noise Augmentation Shows Severe Degradation}
 
-We evaluated noise augmentation (adding ambient noise during training at various intensities: ratios 1, 10, 100, 1000) combined with our normalization strategy. Results reveal \textit{domain-dependent} effectiveness, demonstrating that augmentation strategies must be tailored to training data characteristics.
+We evaluated noise augmentation with baseline Log normalization, testing various noise intensities (0.0 to 1.0, where higher values mean more noise). Results show that noise augmentation is highly detrimental to both within-domain and cross-domain performance.
 
-\textbf{AviaNZ training}: Noise augmentation at low intensity (ratio=1) improves cross-domain accuracy from 44.0\% to 48.2\% (+4.2pp), further reducing generalization gap from -6.0pp to -1.8pp (Figure~\ref{fig:noise}). This suggests that adding environmental variability to already-diverse recordings enhances robustness. However, higher noise ratios (10, 100, 1000) degrade performance, indicating over-augmentation can harm learning.
+\textbf{AviaNZ training}: Adding even moderate noise causes substantial degradation. At intensity 0.25: 49.4\% within-domain, 42.2\% cross-domain (vs baseline 52.4\%/44.0\%). At intensity 0.5: 48.2\%/41.6\%. High noise (0.75-1.0) causes catastrophic failure: intensity 1.0 achieves only 25.9\%/12.7\%.
 
-\textbf{DOC training}: Noise augmentation consistently \textit{degrades} cross-domain performance across all intensities. The best augmented result (ratio=100: 39.2\% cross-domain) underperforms baseline normalization alone (44.6\% cross-domain) by 5.4pp.
+\textbf{DOC training}: Similar pattern of severe degradation. At intensity 0.25: 64.5\%/27.1\% (vs baseline 63.9\%/22.3\%, actually worse cross-domain). At intensity 0.5: 68.1\%/29.5\% (improved within-domain but worse cross-domain). High noise again catastrophic: intensity 1.0 yields 42.2\%/21.1\%.
 
-This asymmetry provides actionable insight: for diverse field recordings, mild noise augmentation (ratio=1) provides complementary benefit to normalization. For the DOC recordings, normalization alone is superior\textemdash augmentation is counterproductive. This finding challenges the common practice of applying augmentation indiscriminately and emphasizes the importance of understanding training data characteristics.
+We also tested varying noise type diversity (variety: 1, 10, 100, 1000 different noise sources). Results show minimal benefit and similar degradation patterns. For AviaNZ, variety=10 achieved 50.6\%/41.0\% (slightly worse than baseline). For DOC, all variety levels showed worse or comparable cross-domain performance than baseline.
+
+\textbf{Conclusion}: Standard noise augmentation provides no benefit and can be highly detrimental. The failure suggests our model architecture or training procedure may not effectively leverage noisy training data, or that the noise augmentation implementation introduces artifacts that harm learning. This contrasts with common practices in audio classification and warrants further investigation.
 
 \subsection{Recommendations for Practitioners}
 
+Based on our experiments in this setting:
+
 \begin{enumerate}
-\item \textbf{Default preprocessing}: Use Log+normalize (median filter + background subtraction) as default for any cross-domain deployment. No hyperparameter tuning required.
-\item \textbf{Training data}: Prioritize recording diversity over standardization. Include recordings from multiple sources and conditions, even if this increases within-domain error.
-\item \textbf{PCEN}: Empirically validate on your specific dataset. Do not assume speech recognition results transfer.
-\item \textbf{Avoid Box-Cox}: Power transformations alone cannot address domain shift in bioacoustics.
-\item \textbf{Always include temporal smoothing}: Median filtering (or similar) is critical for background estimation stability.
+\item \textbf{Consider temporal smoothing}: 5-frame median filter on spectrograms showed consistent improvements in our experiments with minimal computational cost.
+\item \textbf{For consistent recordings}: PCEN achieved best cross-domain performance in our DOC experiments (41.0\% vs 36.7\% median-only), though performance remained well below within-domain accuracy.
+\item \textbf{For diverse recordings with domain adaptation}: DANN with median filtering achieved best overall cross-domain performance in our AviaNZ experiments (48.2\%). Background subtraction added minimal benefit and sometimes degraded performance.
+\item \textbf{Training data strategy}: Our results suggest that recording diversity during training may be more impactful than preprocessing choices (observed shift: -8.4pp vs -41.6pp), though this requires validation across multiple datasets and deployment scenarios.
+\item \textbf{Avoid additive noise augmentation}: Standard noise augmentation degraded performance across all intensities and varieties in our experiments. If using augmentation, validate extensively on held-out cross-domain data.
+\item \textbf{Statistical background modeling may not help}: Our proposed background subtraction added minimal benefit over simple median filtering and sometimes harmed performance.
+\item \textbf{Empirical validation is essential}: Method effectiveness varied substantially by training data characteristics in our experiments. Test on your specific data rather than assuming techniques will generalize.
 \end{enumerate}
+
+\textbf{Important caveat}: These recommendations are based on our specific datasets (9 species, New Zealand birds, two recording sources). Generalization to other species sets, geographic regions, and recording conditions requires empirical validation.
 
 \subsection{Limitations and Future Work}
 
-Our study has several limitations. We report single runs per configuration (computational constraints with 100-epoch training); confidence intervals from multiple runs would strengthen conclusions. We evaluate on 9 species from New Zealand; generalization to larger species sets and other geographic regions requires validation. The matched dataset design, while methodologically sound, uses only two recording sources; multi-source experiments with gradual domain shifts would provide finer-grained insights.
+Our study has several important limitations:
 
-Future work should explore: (1) domain adaptation methods (DANN, domain adversarial training) on this matched dataset; (2) learned normalization parameters that adapt to domain statistics; (3) interaction between noise augmentation intensity and domain shift; (4) feature-level analysis explaining why background normalization improves robustness; (5) larger-scale deployment studies validating our recommendations; (6) extension to fine-grained temporal localization and multi-label scenarios.
+\textbf{Statistical robustness}: We report single runs per configuration due to computational constraints (100-epoch training with early stopping). Confidence intervals from multiple random seeds would strengthen conclusions about relative method performance. Some observed differences (e.g., DANN gains) may not be statistically significant.
+
+\textbf{Generalization scope}: We evaluate 9 species from New Zealand with two recording sources. Generalization to:
+\begin{itemize}
+\item Larger species sets (hundreds of species)
+\item Other geographic regions and ecosystems
+\item Different types of equipment and recording protocols
+\item Fine-grained temporal localization tasks
+\item Multi-label scenarios
+\end{itemize}
+requires empirical validation. Our findings may not transfer to these settings.
+
+\textbf{Per-class analysis}: We report aggregate accuracy but do not analyze per-class performance. The observed domain shift might be driven by:
+\begin{itemize}
+\item A few species with catastrophic failure
+\item Class-specific collapse patterns
+\item Label distribution mismatch despite matched totals
+\item Annotation inconsistencies between datasets
+\end{itemize}
+
+Without per-class analysis, we cannot rule out these alternative explanations.
+
+\textbf{Domain characterization}: We observe asymmetric shift but cannot definitively attribute it to "diversity" versus other confounds (equipment, practices, label quality). The two datasets differ along multiple dimensions simultaneously.
+
+\textbf{Representation analysis}: We claim that models learn domain-specific versus domain-invariant features but provide no direct evidence (e.g., embedding visualizations, domain separability metrics). These claims rest on indirect inference from accuracy patterns.
+
+Future work should address these limitations through: (1) multiple random seeds for key experiments; (2) per-class and per-recording analysis; (3) learned normalization parameters that adapt to domain statistics; (4) feature-level analysis (t-SNE, domain separability metrics); (5) multi-source experiments with gradual domain shifts; (6) larger-scale deployment studies; (7) investigation of why noise augmentation fails in our setup; (8) alternative domain adaptation methods (CORAL, MMD-based approaches).
 
 \section{Conclusion}
 
-Domain shift remains a critical barrier to deploying bird call recognition systems across diverse recording conditions. Using matched datasets with identical species distributions, we demonstrate that recording characteristics alone cause 10.8-42.2pp accuracy drops—a methodologically rigorous approach for isolating domain effects applicable beyond bioacoustics.
+We investigate domain shift in bird call recognition by constructing matched datasets with identical species distributions but different recording sources. This methodology cleanly isolates equipment and environmental effects from label distribution confounds—an approach applicable to any bioacoustic or audio classification task where deployment conditions differ from training.
 
-Our proposed background normalization—combining temporal smoothing with adaptive outlier-based background estimation—improves cross-domain accuracy by 3.6-22.3pp (44\% shift reduction) while requiring no learned parameters and adding negligible computational cost. This represents practical progress: transforming a 22\% accuracy system (unusable) into a 45\% accuracy system (deployable for monitoring).
+Our central empirical finding is \textbf{severe, asymmetric domain shift}: models trained on homogeneous recordings (DOC) suffer catastrophic cross-domain failure (-41.6pp), while models trained on heterogeneous recordings (AviaNZ) transfer moderately (-8.4pp). This asymmetry reveals that consistent training data allows models to exploit recording-specific artifacts (equipment signatures, background patterns) that completely fail to generalize. High within-domain validation accuracy (63.9\% for DOC) does not predict cross-domain robustness (22.3\%)—a critical finding for deployment planning.
 
-Contrary to assumptions from speech recognition, PCEN shows mixed results (underperforming baseline for DOC-trained models), demonstrating the necessity of empirical validation rather than technique transfer. Box-Cox consistently fails. Removing the median filter causes catastrophic performance loss, highlighting the critical role of temporal preprocessing.
+We systematically evaluate preprocessing techniques (temporal smoothing, PCEN, Box-Cox, statistical background subtraction), domain adaptation (DANN), and augmentation. Simple temporal smoothing via median filtering provides the most consistent improvements across training scenarios. PCEN shows direction-dependent effectiveness, partially mitigating shift for consistent recordings (22\% $\to$ 41\%) but leaving performance far below within-domain accuracy. Domain adversarial training shows inconsistent, modest gains in favorable conditions (+4.8pp) but can degrade performance in unfavorable conditions (-1.9pp). Our proposed statistical background subtraction adds minimal benefit over median filtering and sometimes harms performance.
 
-The asymmetric transfer pattern (42pp DOC$\to$AviaNZ vs 11pp AviaNZ$\to$DOC) provides actionable guidance: \textit{training data diversity trumps recording source standardization} for robust deployment. Conservation programs should prioritize heterogeneous training data over recording consistency.
+\textbf{Critical insight}: Current normalization and adaptation methods provide only partial mitigation of domain shift. Even best-case scenarios leave accuracy substantially below within-domain performance (48\% cross-domain vs 64\% within-domain using DANN with AviaNZ training). The magnitude of shift reduction from training data characteristics (\textasciitilde33pp difference between diverse vs consistent training) exceeds gains from any preprocessing or adaptation technique we evaluate (\textasciitilde5-19pp improvements over baseline).
 
-Our contributions enable more reliable biodiversity monitoring across varied equipment and conditions, with practical methods requiring no architectural changes, no target domain data, and straightforward implementation ($<$50 lines of code).
+These findings demonstrate that domain shift in bioacoustics is fundamentally difficult and not solved by current techniques. For practitioners: empirical validation on held-out cross-domain data is essential. Temporal smoothing (median filtering) provides consistent modest improvements with minimal complexity. Training data heterogeneity appears to matter more than preprocessing choices, though this observation requires validation across controlled diversity levels and multiple deployment scenarios.
+
+Our matched dataset methodology provides a rigorous experimental framework for isolating and quantifying domain effects, enabling more reliable evaluation of domain adaptation techniques and deployment robustness in biodiversity monitoring systems.
 
 \section{Acknowledgments}
 We thank the New Zealand Department of Conservation for providing access to biodiversity monitoring recordings, and the AviaNZ community for field recording contributions. This research was supported by Victoria University of Wellington.

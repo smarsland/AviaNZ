@@ -32,6 +32,12 @@ def run_experiment(config_dict):
     Returns: dict with results
     """
     name = config_dict['name']
+    seed = config_dict.get('seed', 42)
+    
+    # Add seed to name for multiple trials
+    if seed != 42:
+        name = f"{name}_seed{seed}"
+    
     output_dir = Path(config_dict['output_folder']) / name
     
     # Check if already complete (has result.json)
@@ -92,6 +98,10 @@ def run_experiment(config_dict):
         # Add mixup if specified
         if config_dict.get('mixup'):
             cmd.extend(['--mixup', str(config_dict['mixup'])])
+        
+        # Add seed if specified
+        if config_dict.get('seed'):
+            cmd.extend(['--seed', str(config_dict['seed'])])
     
     elif config_dict['type'] == 'dann':
         cmd = [
@@ -114,11 +124,18 @@ def run_experiment(config_dict):
         if eval_only:
             cmd.append('--eval-only')
         
-        # DANN always uses Log+normalize (best from normalization study)
-        cmd.append('--normalize')
+        # Add normalization flags if specified
+        if config_dict.get('normalize'):
+            cmd.append('--normalize')
+            if config_dict.get('normalize_no_median'):
+                cmd.append('--normalize-no-median')
         
         if config_dict.get('mixup'):
             cmd.extend(['--mixup', str(config_dict['mixup'])])
+        
+        # Add seed if specified
+        if config_dict.get('seed'):
+            cmd.extend(['--seed', str(config_dict['seed'])])
     
     else:
         raise ValueError(f"Unknown experiment type: {config_dict['type']}")
@@ -153,6 +170,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size')
     parser.add_argument('--mixup', type=float, default=0.25, help='Mixup alpha')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456], 
+                       help='Random seeds for multiple trials (default: 42 123 456 for 3 trials)')
     
     args = parser.parse_args()
     
@@ -180,7 +199,8 @@ def main():
     print(" Goal: Find which normalization reduces domain shift most")
     print(" Methods: Log, Log+normalize, Log+normalize-no-median,")
     print("          Log+median-only, PCEN, Box-Cox")
-    print(" Total: 6 methods × 2 directions = 12 experiments")
+    print(f" Seeds: {args.seeds}")
+    print(f" Total: 6 methods × 2 directions × {len(args.seeds)} seeds = {6 * 2 * len(args.seeds)} experiments")
     print("="*70 + "\n")
     
     normalization_configs = [
@@ -192,44 +212,51 @@ def main():
         {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'normalize': False, 'normalize_no_median': False, 'median_only': False},
     ]
     
-    for norm_config in normalization_configs:
-        # AviaNZ → DOC
-        result = run_experiment({
-            **norm_config,
-            'name': f"avianz_baseline_{norm_config['name']}",
-            'type': 'baseline',
-            'train': args.avianz_train,
-            'test1': args.avianz_test,
-            'test2': args.doc_test,
-            'model': args.model,
-            'output_folder': output_folder,
-            'epochs': args.epochs,
-            'batch_size': args.batch_size,
-            'mixup': args.mixup,
-            'noise': 0.0,
-            'noise_folder': args.noise_folder,
-        })
-        if result:
-            all_results.append(result)
+    for seed in args.seeds:
+        print(f"\n{'~'*70}")
+        print(f" Running with seed: {seed}")
+        print(f"{'~'*70}\n")
         
-        # DOC → AviaNZ
-        result = run_experiment({
-            **norm_config,
-            'name': f"doc_baseline_{norm_config['name']}",
-            'type': 'baseline',
-            'train': args.doc_train,
-            'test1': args.doc_test,
-            'test2': args.avianz_test,
-            'model': args.model,
-            'output_folder': output_folder,
-            'epochs': args.epochs,
-            'batch_size': args.batch_size,
-            'mixup': args.mixup,
-            'noise': 0.0,
-            'noise_folder': args.noise_folder,
-        })
-        if result:
-            all_results.append(result)
+        for norm_config in normalization_configs:
+            # AviaNZ → DOC
+            result = run_experiment({
+                **norm_config,
+                'name': f"avianz_baseline_{norm_config['name']}",
+                'type': 'baseline',
+                'train': args.avianz_train,
+                'test1': args.avianz_test,
+                'test2': args.doc_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'noise': 0.0,
+                'noise_folder': args.noise_folder,
+                'seed': seed,
+            })
+            if result:
+                all_results.append(result)
+            
+            # DOC → AviaNZ
+            result = run_experiment({
+                **norm_config,
+                'name': f"doc_baseline_{norm_config['name']}",
+                'type': 'baseline',
+                'train': args.doc_train,
+                'test1': args.doc_test,
+                'test2': args.avianz_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'noise': 0.0,
+                'noise_folder': args.noise_folder,
+                'seed': seed,
+            })
+            if result:
+                all_results.append(result)
     
     # =========================================================================
     # EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL NEURAL NETWORKS (DANN)
@@ -237,48 +264,66 @@ def main():
     print("\n" + "="*70)
     print(" EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL TRAINING (DANN)")
     print("="*70)
-    print(" Goal: Test if DANN reduces domain shift beyond normalization")
-    print(" Using: Log+normalize (best from Suite 1)")
-    print(" Total: 2 directions = 2 experiments")
+    print(" Goal: Test if DANN reduces domain shift with/without normalization")
+    print(" Variants: (1) plain Log, (2) Log+normalize")
+    print(f" Seeds: {args.seeds}")
+    print(f" Total: 2 variants × 2 directions × {len(args.seeds)} seeds = {2 * 2 * len(args.seeds)} experiments")
     print("="*70 + "\n")
     
-    # AviaNZ → DOC with DANN
-    result = run_experiment({
-        'name': 'avianz_dann_Log+normalize',
-        'type': 'dann',
-        'source': args.avianz_train,
-        'target': args.doc_train,
-        'test1': args.avianz_test,
-        'test2': args.doc_test,
-        'model': args.model,
-        'output_folder': output_folder,
-        'epochs': args.epochs,
-        'batch_size': args.batch_size,
-        'mixup': args.mixup,
-        'spec_transform': 'Log',
-        'lambda_domain': 0.3,
-    })
-    if result:
-        all_results.append(result)
+    dann_configs = [
+        {'name': 'Log', 'normalize': False, 'normalize_no_median': False},
+        {'name': 'Log+normalize', 'normalize': True, 'normalize_no_median': False},
+    ]
     
-    # DOC → AviaNZ with DANN
-    result = run_experiment({
-        'name': 'doc_dann_Log+normalize',
-        'type': 'dann',
-        'source': args.doc_train,
-        'target': args.avianz_train,
-        'test1': args.doc_test,
-        'test2': args.avianz_test,
-        'model': args.model,
-        'output_folder': output_folder,
-        'epochs': args.epochs,
-        'batch_size': args.batch_size,
-        'mixup': args.mixup,
-        'spec_transform': 'Log',
-        'lambda_domain': 0.3,
-    })
-    if result:
-        all_results.append(result)
+    for seed in args.seeds:
+        print(f"\n{'~'*70}")
+        print(f" Running DANN with seed: {seed}")
+        print(f"{'~'*70}\n")
+        
+        for dann_config in dann_configs:
+            # AviaNZ → DOC with DANN
+            result = run_experiment({
+                'name': f"avianz_dann_{dann_config['name']}",
+                'type': 'dann',
+                'source': args.avianz_train,
+                'target': args.doc_train,
+                'test1': args.avianz_test,
+                'test2': args.doc_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'spec_transform': 'Log',
+                'normalize': dann_config['normalize'],
+                'normalize_no_median': dann_config['normalize_no_median'],
+                'lambda_domain': 0.3,
+                'seed': seed,
+            })
+            if result:
+                all_results.append(result)
+            
+            # DOC → AviaNZ with DANN
+            result = run_experiment({
+                'name': f"doc_dann_{dann_config['name']}",
+                'type': 'dann',
+                'source': args.doc_train,
+                'target': args.avianz_train,
+                'test1': args.doc_test,
+                'test2': args.avianz_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'spec_transform': 'Log',
+                'normalize': dann_config['normalize'],
+                'normalize_no_median': dann_config['normalize_no_median'],
+                'lambda_domain': 0.3,
+                'seed': seed,
+            })
+            if result:
+                all_results.append(result)
     
     # =========================================================================
     # EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP
@@ -290,55 +335,63 @@ def main():
         print(" Goal: Test optimal noise mixing ratio")
         print(" Using: Log baseline (no normalization)")
         print(" Levels: 0.0, 0.25, 0.5, 0.75, 1.0")
-        print(" Total: 5 levels × 2 directions = 10 experiments")
+        print(f" Seeds: {args.seeds}")
+        print(f" Total: 5 levels × 2 directions × {len(args.seeds)} seeds = {5 * 2 * len(args.seeds)} experiments")
         print("="*70 + "\n")
         
         noise_levels = [0.0, 0.25, 0.5, 0.75, 1.0]
         
-        for noise_level in noise_levels:
-            # AviaNZ → DOC
-            result = run_experiment({
-                'name': f"avianz_baseline_Log_intensity{noise_level}",
-                'type': 'baseline',
-                'train': args.avianz_train,
-                'test1': args.avianz_test,
-                'test2': args.doc_test,
-                'model': args.model,
-                'output_folder': output_folder,
-                'epochs': args.epochs,
-                'batch_size': args.batch_size,
-                'mixup': args.mixup,
-                'spec_transform': 'Log',
-                'normalize': False,
-                'normalize_no_median': False,
-                'median_only': False,
-                'noise': noise_level,
-                'noise_folder': args.noise_folder,
-            })
-            if result:
-                all_results.append(result)
+        for seed in args.seeds:
+            print(f"\n{'~'*70}")
+            print(f" Running noise intensity sweep with seed: {seed}")
+            print(f"{'~'*70}\n")
             
-            # DOC → AviaNZ
-            result = run_experiment({
-                'name': f"doc_baseline_Log_intensity{noise_level}",
-                'type': 'baseline',
-                'train': args.doc_train,
-                'test1': args.doc_test,
-                'test2': args.avianz_test,
-                'model': args.model,
-                'output_folder': output_folder,
-                'epochs': args.epochs,
-                'batch_size': args.batch_size,
-                'mixup': args.mixup,
-                'spec_transform': 'Log',
-                'normalize': False,
-                'normalize_no_median': False,
-                'median_only': False,
-                'noise': noise_level,
-                'noise_folder': args.noise_folder,
-            })
-            if result:
-                all_results.append(result)
+            for noise_level in noise_levels:
+                # AviaNZ → DOC
+                result = run_experiment({
+                    'name': f"avianz_baseline_Log_intensity{noise_level}",
+                    'type': 'baseline',
+                    'train': args.avianz_train,
+                    'test1': args.avianz_test,
+                    'test2': args.doc_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'spec_transform': 'Log',
+                    'normalize': False,
+                    'normalize_no_median': False,
+                    'median_only': False,
+                    'noise': noise_level,
+                    'noise_folder': args.noise_folder,
+                    'seed': seed,
+                })
+                if result:
+                    all_results.append(result)
+                
+                # DOC → AviaNZ
+                result = run_experiment({
+                    'name': f"doc_baseline_Log_intensity{noise_level}",
+                    'type': 'baseline',
+                    'train': args.doc_train,
+                    'test1': args.doc_test,
+                    'test2': args.avianz_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'spec_transform': 'Log',
+                    'normalize': False,
+                    'normalize_no_median': False,
+                    'median_only': False,
+                    'noise': noise_level,
+                    'noise_folder': args.noise_folder,
+                    'seed': seed,
+                })
+                if result:
+                    all_results.append(result)
         
         # =====================================================================
         # EXPERIMENT SUITE 4: NOISE VARIETY SWEEP
@@ -349,7 +402,8 @@ def main():
         print(" Goal: Test if more noise variety improves robustness")
         print(" Using: Log baseline (no normalization), fixed noise ratio 0.25")
         print(" Levels: 1, 10, 100, 1000, all available noise files")
-        print(" Total: ~5 levels × 2 directions = ~10 experiments")
+        print(f" Seeds: {args.seeds}")
+        print(f" Total: ~5 levels × 2 directions × {len(args.seeds)} seeds = ~{5 * 2 * len(args.seeds)} experiments")
         print("="*70 + "\n")
         
         # Count available noise files
@@ -366,73 +420,80 @@ def main():
             # Filter out levels larger than available
             variety_levels = [n for n in variety_levels if n <= total_noise_files]
             
-            for n_noise in variety_levels:
-                # Create subset of noise files
-                noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
+            for seed in args.seeds:
+                print(f"\n{'~'*70}")
+                print(f" Running noise variety sweep with seed: {seed}")
+                print(f"{'~'*70}\n")
                 
-                if not noise_subset_dir.exists():
-                    print(f"Creating noise subset: {n_noise} files")
-                    noise_subset_dir.mkdir(parents=True, exist_ok=True)
-                    (noise_subset_dir / 'data').mkdir(exist_ok=True)
+                for n_noise in variety_levels:
+                    # Create subset of noise files
+                    noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
                     
-                    # Randomly sample n files
-                    import random
-                    all_noise_files = list(noise_data_dir.glob('*.npy'))
-                    selected_files = random.sample(all_noise_files, min(n_noise, len(all_noise_files)))
+                    if not noise_subset_dir.exists():
+                        print(f"Creating noise subset: {n_noise} files")
+                        noise_subset_dir.mkdir(parents=True, exist_ok=True)
+                        (noise_subset_dir / 'data').mkdir(exist_ok=True)
+                        
+                        # Randomly sample n files
+                        import random
+                        all_noise_files = list(noise_data_dir.glob('*.npy'))
+                        selected_files = random.sample(all_noise_files, min(n_noise, len(all_noise_files)))
+                        
+                        for f in selected_files:
+                            import shutil
+                            shutil.copy(f, noise_subset_dir / 'data' / f.name)
+                        
+                        # Copy labels if exists
+                        labels_file = Path(args.noise_folder) / 'labels.json'
+                        if labels_file.exists():
+                            import shutil
+                            shutil.copy(labels_file, noise_subset_dir / 'labels.json')
                     
-                    for f in selected_files:
-                        import shutil
-                        shutil.copy(f, noise_subset_dir / 'data' / f.name)
+                    # AviaNZ → DOC
+                    result = run_experiment({
+                        'name': f"avianz_baseline_Log_variety{n_noise}",
+                        'type': 'baseline',
+                        'train': args.avianz_train,
+                        'test1': args.avianz_test,
+                        'test2': args.doc_test,
+                        'model': args.model,
+                        'output_folder': output_folder,
+                        'epochs': args.epochs,
+                        'batch_size': args.batch_size,
+                        'mixup': args.mixup,
+                        'spec_transform': 'Log',
+                        'normalize': False,
+                        'normalize_no_median': False,
+                        'median_only': False,
+                        'noise': 0.25,  # Fixed ratio
+                        'noise_folder': str(noise_subset_dir),
+                        'seed': seed,
+                    })
+                    if result:
+                        all_results.append(result)
                     
-                    # Copy labels if exists
-                    labels_file = Path(args.noise_folder) / 'labels.json'
-                    if labels_file.exists():
-                        import shutil
-                        shutil.copy(labels_file, noise_subset_dir / 'labels.json')
-                
-                # AviaNZ → DOC
-                result = run_experiment({
-                    'name': f"avianz_baseline_Log_variety{n_noise}",
-                    'type': 'baseline',
-                    'train': args.avianz_train,
-                    'test1': args.avianz_test,
-                    'test2': args.doc_test,
-                    'model': args.model,
-                    'output_folder': output_folder,
-                    'epochs': args.epochs,
-                    'batch_size': args.batch_size,
-                    'mixup': args.mixup,
-                    'spec_transform': 'Log',
-                    'normalize': False,
-                    'normalize_no_median': False,
-                    'median_only': False,
-                    'noise': 0.25,  # Fixed ratio
-                    'noise_folder': str(noise_subset_dir),
-                })
-                if result:
-                    all_results.append(result)
-                
-                # DOC → AviaNZ
-                result = run_experiment({
-                    'name': f"doc_baseline_Log_variety{n_noise}",
-                    'type': 'baseline',
-                    'train': args.doc_train,
-                    'test1': args.doc_test,
-                    'test2': args.avianz_test,
-                    'model': args.model,
-                    'output_folder': output_folder,
-                    'epochs': args.epochs,
-                    'batch_size': args.batch_size,
-                    'mixup': args.mixup,
-                    'spec_transform': 'Log',
-                    'normalize': False,
-                    'normalize_no_median': False,
-                    'median_only': False,
-                    'noise': 0.25,  # Fixed ratio
-                    'noise_folder': str(noise_subset_dir),
-                })
-                if result:
-                    all_results.append(result)
+                    # DOC → AviaNZ
+                    result = run_experiment({
+                        'name': f"doc_baseline_Log_variety{n_noise}",
+                        'type': 'baseline',
+                        'train': args.doc_train,
+                        'test1': args.doc_test,
+                        'test2': args.avianz_test,
+                        'model': args.model,
+                        'output_folder': output_folder,
+                        'epochs': args.epochs,
+                        'batch_size': args.batch_size,
+                        'mixup': args.mixup,
+                        'spec_transform': 'Log',
+                        'normalize': False,
+                        'normalize_no_median': False,
+                        'median_only': False,
+                        'noise': 0.25,  # Fixed ratio
+                        'noise_folder': str(noise_subset_dir),
+                        'seed': seed,
+                    })
+                    if result:
+                        all_results.append(result)
         else:
             print(f"⚠ Noise data directory not found: {noise_data_dir}")
     else:

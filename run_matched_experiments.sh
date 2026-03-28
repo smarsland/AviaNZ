@@ -74,10 +74,12 @@ if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
     echo "=== Splitting datasets ==="
     python3 split_dataset.py "$DOC_MATCHED" "$DOC_SPLIT_BASE" \
         --test-ratio $TEST_SIZE \
+        --group-key source_file \
         --overwrite
     
     python3 split_dataset.py "$AVIANZ_MATCHED" "$AVIANZ_SPLIT_BASE" \
         --test-ratio $TEST_SIZE \
+        --group-key source_file \
         --overwrite
     
     echo ""
