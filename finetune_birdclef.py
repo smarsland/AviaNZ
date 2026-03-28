@@ -667,6 +667,8 @@ class BirdClefFineTuner:
                         print(f"  pred: {pred[:5]}")
                         print(f"  target_labels: {target_labels[:5]}")
                         print(f"  matches: {pred.eq(target_labels)[:5]}")
+                        print(f"  Model categories: {self.categories}")
+                        print(f"  Unique targets in batch: {target_labels.unique()}")
                     
                     correct += pred.eq(target_labels).sum().item()
                 
