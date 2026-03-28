@@ -455,6 +455,12 @@ class BirdClefFineTuner:
         df = pd.read_csv(csv_path)
         class_columns = [col for col in df.columns if col not in ['row_id', 'File_Path']]
         
+        print(f"  DEBUG: CSV has {len(df)} rows, {len(class_columns)} class columns")
+        print(f"  DEBUG: labels.json has {len(true_labels)} files")
+        print(f"  DEBUG: First 3 CSV filenames: {df['row_id'].head(3).tolist()}")
+        print(f"  DEBUG: First 3 label filenames: {list(true_labels.keys())[:3]}")
+        print(f"  DEBUG: Class columns: {class_columns}")
+        
         correct = 0
         total = 0
         not_found = []
