@@ -2,10 +2,13 @@
 """
 Clean cross-dataset experiment pipeline.
 
-Runs three separate experiment suites:
+Runs four separate experiment suites:
 1. Normalization comparison (6 methods × 2 directions = 12 experiments)
 2. DANN domain adaptation (2 directions = 2 experiments)
-3. Noise augmentation sweep (5 levels × 2 directions = 10 experiments)
+3. Noise intensity sweep (5 levels × 2 directions = 10 experiments)
+4. Noise variety sweep (5 levels × 2 directions = 10 experiments)
+
+Total: ~34 experiments
 
 No flags. No skip logic. Just clean experiment loops.
 """
@@ -257,13 +260,13 @@ def main():
         all_results.append(result)
     
     # =========================================================================
-    # EXPERIMENT SUITE 3: NOISE AUGMENTATION SWEEP
+    # EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP
     # =========================================================================
     if args.noise_folder and os.path.exists(args.noise_folder):
         print("\n" + "="*70)
-        print(" EXPERIMENT SUITE 3: NOISE AUGMENTATION SWEEP")
+        print(" EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP")
         print("="*70)
-        print(" Goal: Test if noise variety improves domain robustness")
+        print(" Goal: Test optimal noise mixing ratio")
         print(" Using: Log+normalize (best from Suite 1)")
         print(" Levels: 0.0, 0.25, 0.5, 0.75, 1.0")
         print(" Total: 5 levels × 2 directions = 10 experiments")
@@ -274,7 +277,7 @@ def main():
         for noise_level in noise_levels:
             # AviaNZ → DOC
             result = run_experiment({
-                'name': f"avianz_baseline_Log+normalize_noise{noise_level}",
+                'name': f"avianz_baseline_Log+normalize_intensity{noise_level}",
                 'type': 'baseline',
                 'train': args.avianz_train,
                 'test1': args.avianz_test,
@@ -296,7 +299,7 @@ def main():
             
             # DOC → AviaNZ
             result = run_experiment({
-                'name': f"doc_baseline_Log+normalize_noise{noise_level}",
+                'name': f"doc_baseline_Log+normalize_intensity{noise_level}",
                 'type': 'baseline',
                 'train': args.doc_train,
                 'test1': args.doc_test,
@@ -315,8 +318,104 @@ def main():
             })
             if result:
                 all_results.append(result)
+        
+        # =====================================================================
+        # EXPERIMENT SUITE 4: NOISE VARIETY SWEEP
+        # =====================================================================
+        print("\n" + "="*70)
+        print(" EXPERIMENT SUITE 4: NOISE VARIETY SWEEP")
+        print("="*70)
+        print(" Goal: Test if more noise variety improves robustness")
+        print(" Using: Log+normalize, fixed noise ratio 0.25")
+        print(" Levels: 1, 10, 100, 1000, all available noise files")
+        print(" Total: ~5 levels × 2 directions = ~10 experiments")
+        print("="*70 + "\n")
+        
+        # Count available noise files
+        noise_data_dir = Path(args.noise_folder) / 'data'
+        if noise_data_dir.exists():
+            total_noise_files = len(list(noise_data_dir.glob('*.npy')))
+            print(f"Total available noise files: {total_noise_files}\n")
+            
+            variety_levels = [1, 10, 100, 1000]
+            # Add total if not already in list
+            if total_noise_files not in variety_levels and total_noise_files > 0:
+                variety_levels.append(total_noise_files)
+            
+            # Filter out levels larger than available
+            variety_levels = [n for n in variety_levels if n <= total_noise_files]
+            
+            for n_noise in variety_levels:
+                # Create subset of noise files
+                noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
+                
+                if not noise_subset_dir.exists():
+                    print(f"Creating noise subset: {n_noise} files")
+                    noise_subset_dir.mkdir(parents=True, exist_ok=True)
+                    (noise_subset_dir / 'data').mkdir(exist_ok=True)
+                    
+                    # Randomly sample n files
+                    import random
+                    all_noise_files = list(noise_data_dir.glob('*.npy'))
+                    selected_files = random.sample(all_noise_files, min(n_noise, len(all_noise_files)))
+                    
+                    for f in selected_files:
+                        import shutil
+                        shutil.copy(f, noise_subset_dir / 'data' / f.name)
+                    
+                    # Copy labels if exists
+                    labels_file = Path(args.noise_folder) / 'labels.json'
+                    if labels_file.exists():
+                        import shutil
+                        shutil.copy(labels_file, noise_subset_dir / 'labels.json')
+                
+                # AviaNZ → DOC
+                result = run_experiment({
+                    'name': f"avianz_baseline_Log+normalize_variety{n_noise}",
+                    'type': 'baseline',
+                    'train': args.avianz_train,
+                    'test1': args.avianz_test,
+                    'test2': args.doc_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'spec_transform': 'Log',
+                    'normalize': True,
+                    'normalize_no_median': False,
+                    'median_only': False,
+                    'noise': 0.25,  # Fixed ratio
+                    'noise_folder': str(noise_subset_dir),
+                })
+                if result:
+                    all_results.append(result)
+                
+                # DOC → AviaNZ
+                result = run_experiment({
+                    'name': f"doc_baseline_Log+normalize_variety{n_noise}",
+                    'type': 'baseline',
+                    'train': args.doc_train,
+                    'test1': args.doc_test,
+                    'test2': args.avianz_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'spec_transform': 'Log',
+                    'normalize': True,
+                    'normalize_no_median': False,
+                    'median_only': False,
+                    'noise': 0.25,  # Fixed ratio
+                    'noise_folder': str(noise_subset_dir),
+                })
+                if result:
+                    all_results.append(result)
+        else:
+            print(f"⚠ Noise data directory not found: {noise_data_dir}")
     else:
-        print("\n⚠ Skipping noise sweep (no noise folder provided)")
+        print("\n⚠ Skipping noise experiments (no noise folder provided)")
     
     # =========================================================================
     # GENERATE SUMMARY
