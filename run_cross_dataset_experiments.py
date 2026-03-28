@@ -34,9 +34,8 @@ def run_experiment(config_dict):
     name = config_dict['name']
     seed = config_dict.get('seed', 42)
     
-    # Add seed to name for multiple trials
-    if seed != 42:
-        name = f"{name}_seed{seed}"
+    # Always add seed to name for consistency across multiple trials
+    name = f"{name}_seed{seed}"
     
     output_dir = Path(config_dict['output_folder']) / name
     

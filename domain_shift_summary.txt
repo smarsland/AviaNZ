@@ -1,0 +1,37 @@
+DOMAIN SHIFT METRICS - Percentage Reduction from Lack of Domain Exposure
+
+Baseline (Log):
+  DOC test set:    31.1% reduction (64% → 44%)
+  AviaNZ test set: 57.5% reduction (52% → 22%)
+  Asymmetry:       1.85× (deploying to AviaNZ is harder)
+
+Log+normalize (full):
+  DOC test set:    28.0% reduction (60% → 43%)
+  AviaNZ test set: 25.0% reduction (51% → 38%)
+  Asymmetry:       0.89× (nearly symmetric!)
+
+Log+median-only:
+  DOC test set:    24.2% reduction (60% → 45%)
+  AviaNZ test set: 25.6% reduction (49% → 37%)
+  Asymmetry:       1.06× (nearly symmetric)
+
+PCEN:
+  DOC test set:    39.0% reduction (60% → 37%)
+  AviaNZ test set:  9.3% reduction (45% → 41%)
+  Asymmetry:       0.24× (REVERSED - deploying to DOC is now harder!)
+
+Box-Cox:
+  DOC test set:    40.8% reduction (62% → 37%)
+  AviaNZ test set: 45.1% reduction (49% → 27%)
+  Asymmetry:       1.11× (nearly symmetric)
+
+DANN+Log+normalize:
+  DOC test set:    10.2% reduction (57% → 48%) vs baseline 28.0%
+  AviaNZ test set: 32.6% reduction (54% → 36%) vs baseline 25.0%
+  DANN makes DOC deployment EASIER but AviaNZ deployment HARDER!
+
+KEY FINDINGS:
+1. Asymmetry is NOT fundamental - it's preprocessing-dependent
+2. Temporal smoothing (median) equalizes domain shift across both directions
+3. PCEN reverses the asymmetry - makes AviaNZ deployment easier
+4. DANN has opposite effects on the two deployment directions
