@@ -216,7 +216,7 @@ def parse_reviewed_csv(csv_path, mapping_csv):
     return records
 
 
-def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_duration=None, target_time_bins=None):
+def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None):
     """
     Extract a spectrogram for each record from the raw DOC audio.
     Labels each sample with the full human_codes.
@@ -224,8 +224,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     AviaNZ matching uses only records that actually produced a spectrogram.
     
     Args:
-        fixed_length: If True, filter out files shorter than target_duration and trim to target_time_bins
-        target_duration: Minimum audio duration in seconds (only used if fixed_length=True)
+        fixed_length: If True, filter out spectrograms with fewer than target_time_bins and trim to target_time_bins
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
     """
     spec_proc = make_spec_processor()
@@ -253,16 +252,6 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
             missing += 1
             continue
 
-        # Check duration if fixed_length is enabled
-        if fixed_length:
-            duration = get_audio_duration(audio_path)
-            if duration is None:
-                failed += 1
-                continue
-            if duration < target_duration:
-                too_short += 1
-                continue
-
         sg = spec_proc.process_audio_file(audio_path)
         if sg is None:
             failed += 1
@@ -270,12 +259,14 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
 
         # Trim to fixed length if enabled
         if fixed_length:
-            original_width = sg.shape[1]
-            sg = trim_spectrogram_to_length(sg, target_time_bins)
-            if sg is None:
+            min_bins = int(target_time_bins * 0.9)  # 90% threshold
+            # Reject if too short
+            if sg.shape[1] < min_bins:
                 too_short += 1
                 continue
-            if original_width > target_time_bins:
+            # Trim if too long
+            if sg.shape[1] > target_time_bins:
+                sg = sg[:, :target_time_bins]
                 trimmed += 1
 
         basename = f'file_{len(labels):08d}'
@@ -299,7 +290,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_duration=None, target_time_bins=None):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (the human's primary/uncertain
@@ -310,8 +301,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
     record i was successfully matched.
     
     Args:
-        fixed_length: If True, filter out segments shorter than target_duration and trim to target_time_bins
-        target_duration: Minimum audio duration in seconds (only used if fixed_length=True)
+        fixed_length: If True, filter out spectrograms with fewer than target_time_bins and trim to target_time_bins
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
     """
     spec_proc = make_spec_processor()
@@ -336,11 +326,6 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
             continue
         segments = proc.load_annotation_file(data_file)
         for seg in segments:
-            # Filter by duration if fixed_length is enabled
-            seg_duration = seg.end_time - seg.start_time
-            if fixed_length and seg_duration < target_duration:
-                continue
-                
             seg_codes = [
                 proc.normalize_to_ebird(lab['species'])
                 for lab in seg.labels
@@ -382,12 +367,14 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
         # Trim to fixed length if enabled
         if fixed_length:
-            original_width = sg.shape[1]
-            sg = trim_spectrogram_to_length(sg, target_time_bins)
-            if sg is None:
+            min_bins = int(target_time_bins * 0.9)  # 90% threshold
+            # Reject if too short
+            if sg.shape[1] < min_bins:
                 matched_mask.append(False)
                 continue
-            if original_width > target_time_bins:
+            # Trim if too long
+            if sg.shape[1] > target_time_bins:
+                sg = sg[:, :target_time_bins]
                 trimmed += 1
 
         basename = f'file_{len(avianz_labels):08d}'
@@ -563,17 +550,13 @@ def main():
     target_duration = config.DEFAULT_TIME_BINS * config.DEFAULT_HOP_SECONDS
     target_time_bins = config.DEFAULT_TIME_BINS
     
-    # When fixed_length is enabled, accept files that are at least 90% of target
-    # to avoid being too strict while still ensuring reasonable consistency
-    min_duration = target_duration * 0.9 if args.fixed_length else target_duration
-    
     if args.fixed_length:
         print(f'\n=== Fixed-length mode enabled ===')
-        print(f'  Target duration: {target_duration:.2f} seconds')
-        print(f'  Minimum duration (90%): {min_duration:.2f} seconds')
         print(f'  Target time bins: {target_time_bins}')
-        print(f'  Files shorter than {min_duration:.2f}s will be filtered out')
-        print(f'  All spectrograms will be trimmed to {target_time_bins} columns')
+        print(f'  Minimum time bins (90%): {int(target_time_bins * 0.9)}')
+        print(f'  Spectrograms with fewer than {int(target_time_bins * 0.9)} bins will be filtered out')
+        print(f'  Spectrograms longer than {target_time_bins} bins will be trimmed')
+        print(f'  Spectrograms between {int(target_time_bins * 0.9)}-{target_time_bins} bins will be kept as-is')
         print('='*50 + '\n')
 
     print('=== Step 1: parse reviewed CSV ===')
@@ -583,7 +566,6 @@ def main():
     doc_labels, kept_records = build_doc_dataset(
         records, args.doc_raw, doc_out, 
         fixed_length=args.fixed_length,
-        target_duration=min_duration,
         target_time_bins=target_time_bins
     )
 
@@ -591,7 +573,6 @@ def main():
     avianz_labels, matched_mask = build_avianz_dataset(
         kept_records, args.avianz_raw, avianz_out, args.seed, args.mapping,
         fixed_length=args.fixed_length,
-        target_duration=min_duration,
         target_time_bins=target_time_bins
     )
 
@@ -634,8 +615,6 @@ def main():
         'fixed_length': args.fixed_length,
     }
     if args.fixed_length:
-        stats_output['target_duration'] = target_duration
-        stats_output['min_duration'] = min_duration
         stats_output['target_time_bins'] = target_time_bins
     
     with open(stats_file, 'w') as f:

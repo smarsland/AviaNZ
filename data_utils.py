@@ -85,11 +85,15 @@ class DataLoader:
         category_to_idx = {category: idx for idx, category in enumerate(categories)}
 
         source_files = []
+        files_checked = 0
+        files_found = 0
         for file_info in label_data['files']:
             filename = file_info['filename']
             file_path = os.path.join(data_folder, filename)
+            files_checked += 1
 
             if os.path.exists(file_path):
+                files_found += 1
                 filenames.append(file_path)
                 
                 if 'primary_class' in file_info:
@@ -117,6 +121,20 @@ class DataLoader:
         
         labels = np.array(labels, dtype=np.float32)
         mode_str = "multi-label" if use_multilabel else "single-label"
+        
+        if len(filenames) == 0:
+            raise ValueError(
+                f"No data files found in {self.data_folder}.\n"
+                f"  Labels file: {labels_file}\n"
+                f"  Data folder: {data_folder}\n"
+                f"  Files in labels.json: {files_checked}\n"
+                f"  Files found on disk: {files_found}\n"
+                f"Check that labels.json exists and that .npy files exist in data/ folder."
+            )
+        
+        if len(labels.shape) == 1 or labels.shape[0] == 0:
+            raise ValueError(f"No valid labels loaded from {self.data_folder}. Found {len(filenames)} files but labels array is empty.")
+        
         print(f"Loaded {mode_str} data: {len(filenames)} files, {labels.shape[1]} classes")
         
         # Random stratified split
