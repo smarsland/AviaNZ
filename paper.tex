@@ -1,5 +1,6 @@
 \documentclass[peer-review]{fa2026}
 \usepackage{booktabs}
+\usepackage{todonotes}
 %\documentclass[non-peer-review]{fa2026}
 % ------------------------------------
 
@@ -13,201 +14,214 @@
 
 \affil[1]{School of Mathematics and Statistics, Victoria University of Wellington, New Zealand}
 
+\addbibresource{birds.bib} % BibTeX bibliography file
+
 % Main document
 % ------------------------------------
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Automated bird call recognition systems trained on one recording environment often fail when deployed to others due to domain shift. We construct matched datasets with identical species distributions (9 New Zealand classes) but different recording sources to isolate domain shift from label distribution effects. We find that (1) domain shift is strongly asymmetric and persists after controlling for task difficulty, with 2.5$\times$ greater performance loss when transferring from homogeneous to heterogeneous recordings, (2) simple feature normalization (log + adaptive background subtraction) provides the largest improvements in cross-domain accuracy (up to 30.7pp), substantially outperforming domain adversarial training, (3) noise augmentation offers modest regularization benefits but does not eliminate asymmetry, and (4) models trained on more heterogeneous data generalize substantially better. These results suggest that preprocessing and dataset characteristics dominate architectural approaches for mitigating domain shift in bioacoustic recognition. The persistent asymmetry after intervention is consistent with conditional shift (e.g., differences in call structure or recording context) or asymmetric support mismatch, neither of which can be resolved by marginal distribution alignment alone.
+Automated bird call recognition systems trained on one recording environment often fail when deployed to others due to differences in background noise and recording equipment. To understand how to deal with this issue we construct matched datasets with identical species distributions but distinct recording characteristics, and evaluate cross-domain generalization. We find that domain shift is strongly asymmetric and models which have been trained on homogeneous recordings suffer greater performance loss when transferred to heterogeneous environments than the reverse. Simple preprocessing by log scaling with adaptive background subtraction yields the largest improvements in cross-domain accuracy, slightly outperforming PCEN, Box-Cox transforms, and domain adversarial training on its own. Noise augmentation provides modest regularization but does not reduce this asymmetry. Surprisingly the variation in noise doesn't seem particularly important. These results indicate that explicit normalization is more effective than learned adaptation strategies in low-data bioacoustic settings, and that pre-trained models remain sensitive to recording conditions. 
 \end{abstract}
 
 \keywords{bird call recognition, domain shift, asymmetric transfer, cross-domain evaluation, bioacoustic monitoring}
 
 \section{Introduction}
 
-Automated bird call recognition with deep neural networks enables large-scale biodiversity monitoring, but models often struggle in test environments due to differences in recording equipment and background noise. This problem is called \textit{domain shift} and remains a major problem in bioacoustics.
+The automated recognition of bird species from acoustic recordings has improved markedly in recent years~\cite{stowell2022computational,2018_priyadarshani}. Deep neural networks processing spectrograms of sound data are able to differentiate between the calls of many species, forming the basis for analysis tools such as AviaNZ~\cite{2019_marsland}, BirdNet~\cite{kahl2021birdnet}, and Perch~\cite{van2025perch}, amongst many others. 
 
-In this work we systematically evaluate different strategies for mitigating domain shift in bird call recognition. We construct two matched datasets with identical species distributions (9 New Zealand classes) but different recording sources to isolate domain shift from label distribution effects. The DOC dataset comprises homogeneous Department of Conservation monitoring recordings, while the AviaNZ dataset contains heterogeneous field recordings with greater acoustic variability. We show that domain shift is not only substantial but directionally biased, and this asymmetry persists after controlling for class distribution and intrinsic task difficulty.
+However, models often struggle in test environments due to differences in recording equipment (and configuration settings for recorders) and background noise. This problem is called \textit{domain shift} and remains a major problem in bioacoustics, as well as many other areas~\cite{}. It is of particular concern for biodiversity monitoring, where many different types of acoustic recorder may be used, and annotated training data may only come from a subset of these machine types~\cite{2018_priyadarshani}.
 
-We examine both the proportional drop in performance (controlling for intrinsic task difficulty) and absolute cross-domain accuracy. We find that (1) domain shift is strongly asymmetric and persistent, with 2.5$\times$ greater proportional performance loss (59\% vs 24\% Reduction) when transferring from homogeneous to heterogeneous recordings, (2) simple feature normalization (Log+normalize) achieves best absolute cross-domain performance (50.8\%/48.7\%) and provides the largest single improvement factor, (3) noise augmentation offers modest regularization benefits (improving the harder direction by 15.9pp) but does not eliminate asymmetry (residual 1.67$\times$), (4) PCEN shows higher variance than noise augmentation without performance advantages, and (5) in this low-data regime (~700 samples) with strong preprocessing already applied, domain adversarial training (DANN) provides only marginal improvements (<2pp) over preprocessing alone. The persistent asymmetry after multiple interventions is consistent with conditional shift or asymmetric support coverage, which cannot be addressed by marginal distribution alignment alone.
+\todo[inline]{Still to cite (at min)
+\cite{2016_darras} \cite{2018_stowell}}
+
+In this work we demonstrate the problem of domain shift and examine the effectiveness of different strategies for mitigating it in bird recognition. We construct two matching datasets of passive acoustic recordings with identical species distributions (nine species of birds commonly found in New Zealand) but different recording sources. As well as recorder type, the two datasets differ in specifics: the first dataset comes from nationwide baseline monitoring by Aotearoa New Zealand's Department of Conservation / Te Papa Atawhai (the DOC dataset), while the second (Wait\=akere dataset) are from a specific area of the country (see Methods for more details). 
+
+%consists of short segments (3-12 seconds, with the call of the labelled species within that segment), 
+
+%The DOC data is generally more homogenous and consistent than the Wait\=akere data. 
 
 \section{Methods}
 
 \subsection{Matched Dataset Construction}
 
-We created two datasets with identical species distributions covering 9 New Zealand bird species (blackbird, chaffinch, fantail, grey warbler, kaka, morepork, silvereye, tomtit, tui/bellbird), with at least 20 samples per species (approximately 700 total). The DOC dataset contains Department of Conservation monitoring recordings. The AviaNZ dataset contains diverse field recordings from across New Zealand. Both datasets use 75/25 train/test splits with grouped sampling by source file. Spectrograms use 25ms Hann window, 10ms hop, 128 mel bins (0-8kHz), and 16kHz sampling.
+We created two datasets with identical species distributions covering nine classes of commonly found New Zealand birds, comprising introduced European passerines (blackbird, chaffinch), native and self-introduced passerines (piwakawaka/fantail, riroriro/grey warbler, miromiro/tomtit, silvereye) a parrot (kaka) and owl (ruru/morepork). A final class combined the vocalisations of two oscine species with overlapping dialectic calls (t\=u\=i and korimako/bellbird). In each dataset there were at least 20 samples per class (approximately 700 total). \todo[inline]{Use binomial names?}
+
+The DOC dataset contains of passive acoustic monitoring data collected between 2010 and 2023 as part of the Department of Conservation (DOC) baseline biodiversity monitoring. These come from across the public conservation land of Aotearoa New Zealand, and are collected using the DOC AR4\footnote{\url{electronics@doc.govt.nz}} recorder sampling at 32 kHz. Bird calls in this dataset were manually identified by a combination of spectrogram visualisation and listening to record the species present within one minute of recording, with the calls extracted automatically from these records to make 3-12 second long recordings. The dataset is available at \url{https://www.kaggle.com/datasets/ollypowell/new-zealand-bird-sound} and has an Attribution 4.0 International (CC BY 4.0) license. We subsequently processed the data to correct some labels and ensure that the labelled species was clearly present. 
+
+Our second dataset comes from six sites in the Wait\=akere ranges, an area of national park approximately 25 km from the city of Auckland in Aotearoa New Zealand. The data were collected as part of a MSc project~\cite{JoeMsc2024} using a combination of the Frontier Labs Bar-LT\footnote{\url{https://www.frontierlabs.com.au/bar-lt}} and the DOC AR4, both recording at 32 kHz. The data were manually annotated using the AviaNZ software by expert annotators. \todo[inline]{**** How long are the recordings? }
+\todo[inline]{Check the recording params}
+
+For both datasets, all audio was resampled to 32 kHz. Spectrograms were then extracted in AviaNZ using 25 ms Hann window with a 10 ms hop between windows, and processed into 224 mel-scale frequency bins.
+
+\textbf{Data Splitting:} To prevent data leakage from recording conditions, we employed a two-stage splitting strategy. For the Wait\=akere dataset, which contains multiple annotated segments from the same source recordings, we performed file-level splitting: all segments from a given source file were assigned to either the training or test set, never both. Source files were randomly assigned to achieve an approximately 75/25 train/test ratio, though the actual segment-level ratio varies slightly due to differing numbers of annotations per file. For the DOC dataset, which has independent recordings, we performed sample-level splitting but matched the species distribution that resulted from the Wait\=akere file-level split, ensuring comparable class balance across both datasets' train and test sets. This approach balances the need to prevent temporal and acoustic leakage in the Wait\=akere data while maintaining distributional similarity between the two datasets.
 
 \subsection{Normalization Strategies}
 
-We compared four spectrogram normalization approaches to assess their cross-domain robustness.
+We compare six spectrogram normalization approaches to assess their cross-domain robustness: \textbf{Log baseline} is the standard log transform of a linear spectrogram. \textbf{Log+median} applies log transform followed by 5-frame median filter along the time axis. \textbf{Log+normalize} begins with log transform, then uses the quietest 10\% of frames per frequency band to estimate background noise. Outliers (values more than 4 standard deviations from the bottom 10\%) are replaced by sampling uniformly from the non-outlier distribution within each band. We then subtract this background estimate from the original. \textbf{Log+normalize+median} applies the 5-frame median filter before background estimation and subtraction. \textbf{PCEN} is per-channel energy normalization ~\cite{Lostanlen2019}. \textbf{Box-Cox} is a standard power transformation for variance stabilization.
 
-\textbf{Log baseline.} $S_{\text{log}}(f,t) = \log(S(f,t) + \epsilon)$ where $\epsilon = 10^{-7}$.
+\todo[inline]{*** Give equations?}
 
-\textbf{Log+median.} Log transform followed by 5-frame median filter along time axis to reduce transient artifacts.
+\subsection{Domain Adversarial Training}
 
-\textbf{Log+normalize.} Log transform followed by (1) median filter, (2) background estimation from quietest 10\% of frames per frequency band, (3) outlier identification ($z>4\sigma$), and (4) adaptive background subtraction. Details in supplement.
+We evaluate domain adversarial neural networks (DANN)~\cite{ganin2016domain} as a learned approach to domain adaptation. DANN extends standard classification networks with an auxiliary domain classifier trained adversarially via gradient reversal. During backpropagation, the feature extractor learns representations that are both discriminative for species classification and invariant to domain identity. 
 
-\textbf{PCEN.} Per-channel energy normalization with adaptive gain control, defined as $\text{PCEN}(f,t) = \left(\frac{S(f,t)}{(M(f,t) + \epsilon)^{\alpha}} + \delta\right)^r - \delta^r$ where $M(f,t)$ is an IIR-filtered temporal average. Parameters are $\alpha=0.8$, $\delta=10$, $r=0.25$.
+Our implementation adds a domain classification head to the RegNetY-008 backbone, taking features from the final convolutional layer. The domain classifier consists of three fully connected layers (512, 256, 1 units) with batch normalization, ReLU activations, and dropout (0.3), predicting binary domain labels (DOC vs Wait\=akere). A gradient reversal layer with $\lambda=0.3$ inverts gradients flowing back to the feature extractor, encouraging domain-invariant representations. The domain classifier is trained jointly with the species classifier using binary cross-entropy with logits loss.
 
-\textbf{Box-Cox.} Power transformation for variance stabilization.
+\subsection{Noise Augmentation}
+
+To investigate whether synthetic acoustic variation can improve generalization, we augment training spectrograms with background noise sampled from the FreeSound dataset. During training, noise is always applied to spectrograms (when enabled) by mixing: $S_{\text{aug}} = (1-\alpha) \cdot S_{\text{orig}} + \alpha \cdot N_{\text{scaled}}$, where $S_{\text{orig}}$ is the original spectrogram, $N_{\text{scaled}}$ is a randomly selected noise sample RMS-scaled to match the signal energy, and $\alpha$ is randomly sampled uniformly from $[0, \min(2 \times \text{intensity}, 1.0)]$ (giving expected value equal to the specified intensity parameter).
+
+We systematically vary two augmentation parameters: \textbf{intensity} ($\alpha \in \{0.0, 0.25, 0.5, 0.75, 1.0\}$) controls signal-to-noise ratio, and \textbf{variety} (1, 10, 100, or 1000 unique noise samples) controls acoustic diversity. Noise samples are preprocessed identically to bird calls. This design allows us to separate the effects of noise strength from noise diversity~\cite{kumar2024}.
 
 \subsection{Model Architecture and Training}
 
-We use a BirdClef 2025-pretrained RegNetY-008 CNN~\cite{radosavovic2020designing}, fine-tuned for 9 species. Training uses AdamW optimizer (learning rate $10^{-4}$ for backbone, $10^{-3}$ for classifier), batch size 16, cosine annealing, early stopping with patience 15, and mixup with $\alpha=0.25$.
+We use a BirdClef 2025-pretrained RegNetY-008 CNN and then apply fine-tuning to our 9 species. Training uses AdamW optimizer (learning rate $10^{-4}$ for backbone, $10^{-3}$ for classifier), batch size 16, cosine annealing, early stopping with patience 15, and mixup with $\alpha=0.25$.
 
-\subsection{Formalized Evaluation Metrics}
+\todo[inline]{Add citation}
 
-We formalize two complementary metrics that answer distinct questions about domain shift.
+\subsection{Evaluation Metrics}
 
-\textbf{Domain Shift Severity (Reduction\%).} Controls for intrinsic task difficulty by measuring the causal effect of lacking domain exposure. For a target domain $D_t$ and source domain $D_s$,
-
+Let $D_s$ and $D_t$ denote source (training) and target (test) domains, and let $A(D_s \to D_t)$ denote accuracy when training on $D_s$ and testing on $D_t$. \textbf{Reduction} is the proportional performance loss, controlling for task difficulty:
 \begin{equation}
-\text{Reduction}(D_t) = \frac{A_{\text{in}}(D_t) - A_{\text{cross}}(D_s \to D_t)}{A_{\text{in}}(D_t)} \times 100\%
+\text{Reduction}(D_t) = \frac{A(D_t \to D_t) - A(D_s \to D_t)}{A(D_t \to D_t)}
 \end{equation}
-
-where $A_{\text{in}}(D_t)$ is accuracy when trained and tested on $D_t$, and $A_{\text{cross}}(D_s \to D_t)$ is accuracy when trained on $D_s$ and tested on $D_t$. This isolates the effect of domain exposure from base task difficulty.
-
-\textbf{Cross-Domain Accuracy.} Absolute performance when deploying a model trained on source domain $D_s$ to target domain $D_t$. This metric guides deployment decisions,
-
-\begin{equation}
-A_{\text{cross}}(D_s \to D_t) = \text{accuracy on } D_t \text{ test set}
-\end{equation}
-
-\textbf{Asymmetry Ratio.} To quantify directional bias, we compute
-
-\begin{equation}
-\text{Asymmetry} = \frac{\text{Reduction}(D_{\text{heterogeneous}})}{\text{Reduction}(D_{\text{homogeneous}})}
-\end{equation}
-
-A ratio near 1.0 indicates symmetric shift; deviations indicate directional bias in domain transfer.
+\textbf{Cross-Domain Accuracy} is the absolute performance $A(D_s \to D_t)$. \textbf{Asymmetry Ratio} is the directional bias, computed as the ratio of reduction percentages for the two transfer directions (DOC→Wait\=akere vs Wait\=akere→DOC).
 
 \subsection{Experimental Design}
 
-We conduct systematic evaluation by (1) training on AviaNZ or DOC and testing on both, (2) comparing within-domain versus cross-domain accuracy, (3) testing normalization methods (Log, Log+median, Log+normalize, PCEN, Box-Cox), (4) applying domain adaptation via DANN with gradient reversal, and (5) augmenting with noise at varying intensities and diversity. Implementation uses PyTorch 2.0. Key configurations use 3 seeds (reporting mean$\pm$std), while others use single runs.
+For every test we train a model on each dataset and then test both on each dataset, comparing within-domain to cross-domain accuracy. We test our six normalization methods (Log, Log+median, Log+normalize, Log+normalize+median, PCEN, Box-Cox), domain adaptation via an added DANN ~\cite{ganin2016domain} (domain adversarial neural network) head, and finally augment with freefield noise at varying intensities and diversity. We use 3 seeds for every run (reporting mean$\pm$std).
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/spectrogram_comparison.pdf}
-\caption{Spectrogram comparison for a tui vocalization from different domains: (a) Log baseline shows persistent background noise floor characteristic of the recording equipment; (b) Log+normalize adaptively removes equipment-specific background while preserving vocalization structure; (c) PCEN applies uniform smoothing without background removal. Our method targets domain-specific artifacts.}
+\caption{Spectrogram comparison under different normalizations.}
 \label{fig:spectrograms}
 \end{figure}
 
 \section{Results}
 
-While AviaNZ exhibits lower in-domain accuracy (51.9\% vs 65.7\%), indicating a more challenging task, the asymmetry persists under the normalized Reduction\% metric, confirming that it cannot be explained solely by intrinsic task difficulty.
+\subsection{Normalization Methods}
+
+Log+normalize+median achieves the best cross-domain accuracy in both directions (Table~\ref{tab:results}). All methods retain substantial asymmetry, with ratios ranging from 1.5$\times$ to 3.6$\times$.
 
 \begin{table*}[t]
 \centering
 \small
-\caption{Domain shift analysis across preprocessing methods. \textbf{Cross-Acc}: Cross-domain accuracy when trained on source and tested on target. \textbf{Reduction (\%)}: Percentage reduction from in-domain baseline (lower is better). \textbf{Asym}: Ratio of reduction percentages (closer to 1.0 is more symmetric). In-domain baselines: DOC 65.7\%, AviaNZ 51.9\%. Mean$\pm$std over 3 seeds. \textbf{Bold}: best absolute cross-domain performance.}
+\caption{Domain shift analysis across preprocessing methods. \textbf{Cross-Acc}: Cross-domain accuracy when trained on source and tested on target. \textbf{Reduction (\%)}: Percentage reduction from in-domain baseline (lower is better). \textbf{Asym}: Ratio of reduction percentages (closer to 1.0 is more symmetric). In-domain baselines: DOC 64.3\%, Wait\=akere 46.0\%. Mean$\pm$std over 3 seeds. \textbf{Bold}: best absolute cross-domain performance.}
 \label{tab:results}
 \begin{tabular}{@{}lcccccc@{}}
 \hline
-Method & \multicolumn{3}{c}{AviaNZ→DOC} & \multicolumn{3}{c}{DOC→AviaNZ} \\
-\cline{2-4} \cline{5-7}
-       & Cross-Acc & Red\% & & Cross-Acc & Red\% & Asym \\
+Method & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC→Wait\=akere} \\
+\cline{2-4} \cline{5-7} & Cross-Acc & Red\% & & Cross-Acc & Red\% & Asym \\
 \hline
-Log baseline      & 39.7$\pm$4.5 & 23.5$\pm$13.8 & & 26.9$\pm$7.8 & 59.0$\pm$11.9 & 2.51$\times$ \\
-\textbf{Log+normalize}        & \textbf{50.8$\pm$1.7} & \textbf{9.1$\pm$4.4} & & \textbf{48.7$\pm$0.8} & \textbf{28.3$\pm$2.0} & 3.10$\times$ \\
-Log+noise 0.5    & 43.1$\pm$2.5 & 20.8$\pm$5.5 & & 42.8$\pm$4.4 & 34.7$\pm$8.5 & 1.67$\times$ \\
-Log+norm-no-median & 24.6$\pm$11.1 & 10.4$\pm$59.2 & & 33.8$\pm$2.0 & 32.6$\pm$9.0 & 3.15$\times$ \\
-PCEN              & 44.4$\pm$5.0 & 16.5$\pm$11.9 & & 46.3$\pm$7.4 & 29.7$\pm$11.2 & 1.80$\times$ \\
-Box-Cox           & 43.8$\pm$2.9 & 17.1$\pm$5.6 & & 34.3$\pm$5.1 & 46.1$\pm$7.9 & 2.70$\times$ \\
-DANN+Log+norm   & 50.2$\pm$2.8 & 11.3$\pm$5.7 & & 50.7$\pm$5.9 & 26.4$\pm$8.6 & 2.35$\times$ \\
+Log             & 34.5$\pm$4.9 & 24.9$\pm$10.7 & & 21.1$\pm$1.2 & 67.2$\pm$1.9 & 2.7$\times$ \\
+Log+median      & 6.2$\pm$4.0 & 26.2$\pm$55.1 & & 25.1$\pm$8.9 & 38.7$\pm$24.3 & 1.5$\times$ \\
+Log+normalize   & 32.9$\pm$5.4 & 10.9$\pm$17.0 & & 29.1$\pm$1.5 & 17.6$\pm$11.7 & 1.6$\times$ \\
+\textbf{Log+normalize+median} & \textbf{44.0$\pm$4.7} & \textbf{13.1$\pm$9.5} & & \textbf{36.5$\pm$2.7} & \textbf{36.4$\pm$5.8} & 2.8$\times$ \\
+PCEN              & 41.2$\pm$3.0 & 14.2$\pm$8.3 & & 31.1$\pm$8.7 & 50.6$\pm$13.9 & 3.6$\times$ \\
+Box-Cox           & 36.8$\pm$1.0 & 25.0$\pm$7.1 & & 25.9$\pm$2.1 & 57.4$\pm$5.3 & 2.3$\times$ \\
 \hline
 \end{tabular}
 \end{table*}
 
-\subsection{Baseline Domain Shift}
+\subsection{Domain Adversarial Training}
 
-Table~\ref{tab:results} shows that standard log scaling reveals strong directional asymmetry. Transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) suffers 59.0$\pm$11.9\% Reduction (51.9\% in-domain to 26.9\% cross-domain), while the reverse direction shows 23.5$\pm$13.8\% Reduction (65.7\% to 39.7\%), yielding 2.51$\times$ asymmetry. This establishes that DOC→AviaNZ transfer is the dominant failure mode under standard preprocessing.
+DANN provides modest improvements over the Log baseline but minimal gains when combined with strong preprocessing (Table~\ref{tab:dann}). With Log+normalize+median already applied, DANN adds only 1.2pp in one direction and no improvement in the other.
 
-\subsection{Preprocessing Dominates Domain Adaptation}
+\begin{table*}[t]
+\centering
+\small
+\caption{Domain adversarial training (DANN) comparison. \textbf{Cross-Acc}: Cross-domain accuracy. \textbf{Red\%}: Reduction from in-domain baseline. DANN provides marginal improvements over strong preprocessing baselines. Mean$\pm$std over 3 seeds.}
+\label{tab:dann}
+\begin{tabular}{@{}lccccccc@{}}
+\hline
+Method & Transform & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC→Wait\=akere} \\
+\cline{3-5} \cline{6-8}
+       &           & Cross-Acc & Red\% & & Cross-Acc & Red\% & Asym \\
+\hline
+Baseline & Log              & 34.5$\pm$4.9 & 24.9$\pm$10.7 & & 21.1$\pm$1.2 & 67.2$\pm$1.9 & 2.7$\times$ \\
+DANN     & Log              & 36.9$\pm$0.7 & 26.4$\pm$4.7  & & 32.5$\pm$8.3 & 50.5$\pm$12.6 & 1.9$\times$ \\
+Baseline & Log+normalize+median    & 44.0$\pm$4.7 & 13.1$\pm$9.5  & & 36.5$\pm$2.7 & 36.4$\pm$5.8 & 2.8$\times$ \\
+DANN     & Log+normalize+median    & 45.2$\pm$0.6 & 18.5$\pm$4.0  & & 36.5$\pm$0.3 & 39.3$\pm$3.4 & 2.1$\times$ \\
+\hline
+\end{tabular}
+\end{table*}
 
-Log+normalize provides the largest single improvement to cross-domain performance, substantially exceeding gains from architectural approaches.
+\subsection{Noise Augmentation}
 
-\textbf{Log+normalize.} Achieves best absolute cross-domain performance: 50.8$\pm$1.7\% (AviaNZ→DOC) and 48.7$\pm$0.8\% (DOC→AviaNZ). This reduces DOC→AviaNZ loss from 59.0\% to 28.3$\pm$2.0\% (30.7pp improvement) and AviaNZ→DOC from 23.5\% to 9.1$\pm$4.4\% (14.4pp improvement). The asymmetry ratio increases to 3.10$\times$ because the method provides larger absolute gains to the already-better direction.
+Moderate noise intensity (0.5) provides the best regularization, but asymmetry persists at all levels (Tables~\ref{tab:noise_intensity} and~\ref{tab:noise_variety}). Higher intensities degrade in-domain performance without proportional cross-domain gains. Surprisingly noise variety (1 to 1000 samples) shows minimal impact, indicating that intensity matters more than diversity.
 
-\textbf{Log+norm-no-median.} Removing the median filter component causes substantial performance degradation (33.8\% and 24.6\% cross-domain accuracy), demonstrating that both temporal smoothing and background subtraction are necessary.
+\begin{table*}[htbp]
+\centering
+\small
+\caption{Noise augmentation: intensity sweep. Models trained with Log transform and varying noise intensity (intensity=0.0 is baseline). \textbf{Cross-Acc}: Cross-domain accuracy. \textbf{Red\%}: Reduction percentage. Moderate noise (0.5) provides regularization but does not eliminate asymmetry. Mean$\pm$std over 3 seeds.}
+\label{tab:noise_intensity}
+\begin{tabular}{@{}lccccccc@{}}
+\hline
+Noise Intensity & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC→Wait\=akere} \\
+\cline{2-4} \cline{5-7}
+                & Cross-Acc & Red\% & & Cross-Acc & Red\% & Asym \\
+\hline
+0.00 (baseline)  & 34.5$\pm$4.9 & 24.9$\pm$10.7 & & 21.1$\pm$1.2 & 67.2$\pm$1.9 & 2.7$\times$ \\
+0.25             & 34.9$\pm$6.7 & 26.9$\pm$17.4 & & 21.9$\pm$2.4 & 64.6$\pm$4.3 & 2.4$\times$ \\
+0.50             & 32.9$\pm$3.9 & 17.2$\pm$20.3 & & 33.9$\pm$1.5 & 47.7$\pm$2.4 & 2.8$\times$ \\
+0.75             & 12.2$\pm$4.6 & 41.3$\pm$25.8 & & 25.9$\pm$4.5 & 54.7$\pm$8.4 & 1.3$\times$ \\
+1.00             & 19.3$\pm$5.7 & 16.5$\pm$27.3 & & 17.1$\pm$6.2 & 55.5$\pm$18.9 & 3.4$\times$ \\
+\hline
+\end{tabular}
+\end{table*}
 
-\textbf{Interpretation.} The combination of temporal smoothing and adaptive background subtraction removes equipment-specific artifacts and recording environment noise. This appears to reduce covariate shift at the spectral level, as evidenced by substantially improved cross-domain transfer. When maximum cross-domain accuracy is the primary objective, Log+normalize is the best-performing method in our experiments.
-
-\subsection{Noise Augmentation Provides Secondary Regularization}
-
-Noise augmentation offers modest improvements to the harder transfer direction but does not eliminate asymmetry or match preprocessing performance.
-
-\textbf{Noise at 0.5 intensity.} Achieves 43.1$\pm$2.5\% (AviaNZ→DOC) and 42.8$\pm$4.4\% (DOC→AviaNZ) with 1.67$\times$ residual asymmetry. This represents a 15.9pp improvement on the harder direction (26.9\% to 42.8\%) while maintaining 43.1\% on the easier direction. However, absolute performance remains 7-8pp below Log+normalize, and asymmetry persists despite the regularization effect.
-
-\textbf{Noise intensity sweep.} Lower intensities (0.25) provide modest improvements. Higher intensities (0.75-1.0) cause severe performance degradation (accuracy drops to 20-31\%), indicating that excessive noise overwhelms signal. The 0.5 intensity represents the optimal regularization-performance tradeoff before signal degradation.
-
-\textbf{Interpretation.} Moderate noise augmentation forces models to learn features robust to acoustic variability by exposing them to corrupted inputs during training. This provides implicit regularization that somewhat reduces overfitting to domain-specific characteristics. However, noise augmentation does not fundamentally address the asymmetric support coverage between domains—it merely softens specialization to the training distribution. The persistent 1.67$\times$ asymmetry and lower absolute performance compared to preprocessing indicate that noise acts as a secondary regularizer rather than a primary solution to domain shift.
-
-\subsection{Other Methods Show Inferior Tradeoffs}
-
-\textbf{PCEN.} Achieves 1.80$\times$ asymmetry with 44.4$\pm$5.0\% and 46.3$\pm$7.4\% cross-domain accuracy, but shows high variance ($\pm$11.2\% reduction std) and lower absolute performance than noise augmentation at 0.5 intensity. The adaptive gain control provides stable normalization but doesn't match noise augmentation's symmetric benefits.
-
-\textbf{DANN.} Combined with Log+normalize achieves 50.2$\pm$2.8\% and 50.7$\pm$5.9\% cross-domain accuracy with 2.35$\times$ asymmetry. This represents at most a 2pp improvement over Log+normalize alone (50.8\% and 48.7\%)—within the margin of standard deviation. Given our small dataset size (~700 samples) and the strong preprocessing already applied, the marginal gains do not justify the added architectural complexity, training instability, and computational cost of domain adversarial networks.
-
-\textbf{Why DANN provides minimal benefit.} Log+normalize appears to reduce domain-specific artifacts and improve feature alignment, as evidenced by the large performance gains. DANN operates by learning domain-invariant representations through adversarial training, which addresses covariate shift. When preprocessing has already handled much of the spectral distribution mismatch, DANN has minimal additional signal to exploit. The persistent asymmetry (2.35$\times$) after both preprocessing and DANN is consistent with conditional shift $P(Y|X)$ (e.g., systematic differences in call structure or recording context), asymmetric support coverage, or class-conditional covariate shift—mechanisms that cannot be fully addressed by domain-invariant feature learning alone. Our experimental design controls label marginals but cannot distinguish between these alternatives.
-
-\textbf{Critical insight.} Simple preprocessing (Log+normalize) achieves the best absolute performance. The marginal benefits of architectural approaches (DANN) and the persistent asymmetry after multiple interventions indicate that domain shift in this task is not primarily a modeling problem but a data representation and support coverage problem.
-
-\subsection{Methods with Inferior Performance}
-
-\textbf{Box-Cox.} Shows poor cross-domain performance (43.8\%, 34.3\%) with 2.70$\times$ asymmetry. Power transformations normalize distribution shapes but fail to capture the spectral patterns underlying domain shift, making this approach unsuitable for cross-domain deployment.
-
-\textbf{Noise diversity.} We tested varying the number of noise sources (1-1000 types) with fixed 0.25 intensity. Results showed minimal systematic effect—varying from 1 to 1000 noise sources produced no consistent improvement. This indicates that noise intensity, not diversity, is the critical factor for domain robustness.
+\begin{table*}[htbp]
+\centering
+\small
+\caption{Noise augmentation: variety sweep. Models trained with Log transform and noise intensity 0.25 with varying numbers of noise samples. \textbf{Cross-Acc}: Cross-domain accuracy. \textbf{Red\%}: Reduction percentage. Noise variety (1 to 1000 samples) shows minimal impact compared to intensity. Mean$\pm$std over 3 seeds.}
+\label{tab:noise_variety}
+\begin{tabular}{@{}lccccccc@{}}
+\hline
+Noise Variety & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC→Wait\=akere} \\
+\cline{2-4} \cline{5-7}
+                & Cross-Acc & Red\% & & Cross-Acc & Red\% & Asym \\
+\hline
+1                & 34.5$\pm$4.9 & 24.9$\pm$10.7 & & 21.1$\pm$1.2 & 67.2$\pm$1.9 & 2.7$\times$ \\
+10               & 36.5$\pm$2.8 & 25.7$\pm$6.1  & & 24.9$\pm$2.1 & 62.0$\pm$3.7 & 2.4$\times$ \\
+100              & 37.1$\pm$5.6 & 25.1$\pm$12.1 & & 23.9$\pm$3.5 & 62.7$\pm$5.6 & 2.5$\times$ \\
+1000             & 34.9$\pm$6.7 & 26.9$\pm$17.4 & & 21.9$\pm$2.4 & 64.6$\pm$4.3 & 2.4$\times$ \\
+\hline
+\end{tabular}
+\end{table*}
 
 \section{Discussion}
 
-\subsection{Key Findings}
+\subsection{Dataset variance matters}
 
-\textbf{(1) Feature normalization is the dominant factor in cross-domain performance.} Log+normalize provides the largest single improvement (up to 30.7pp on the hard direction) and achieves best absolute cross-domain accuracy (50.8\%/48.7\%). This preprocessing approach substantially outperforms architectural methods (DANN: <2pp additional gain, within noise given 3-seed replication) and demonstrates that reducing domain-specific spectral artifacts is the primary driver of improved transfer.
+Domain shift in bird call recognition is fundamentally asymmetric. Models trained on homogeneous recordings suffer substantially larger proportional loss when deployed to heterogeneous environments than the reverse. This pattern holds across all methods tested. This suggests a support mismatch where the DOC distribution forms a strict subset of the Wait\=akere acoustic space: homogeneous training provides insufficient coverage of the covariate range present in heterogeneous test data, while heterogeneous training naturally encompasses the simpler homogeneous case. Noise augmentation and domain adaptation reduce absolute performance gaps but cannot eliminate this asymmetry.
 
-\textbf{(2) Domain shift is strongly asymmetric and persistent.} Transfer from homogeneous to heterogeneous recordings (DOC→AviaNZ) shows 2.51$\times$ greater proportional loss than the reverse under baseline preprocessing. This asymmetry persists after controlling for intrinsic task difficulty and remains substantial (1.67–3.10$\times$) across all interventions, indicating fundamental differences in support coverage and variability between domains.
+\subsection{Explicit Normalization Outperforms Learned Adaptation}
 
-\textbf{(3) Dataset heterogeneity determines generalization.} Models trained on heterogeneous data (AviaNZ) achieve lower in-domain accuracy (51.9\%) but suffer smaller cross-domain drops (9-23pp) compared to models trained on homogeneous data (DOC: 65.7\% in-domain, 24-39pp drops). This reflects broader support coverage in heterogeneous training distributions—models learn more robust features when exposed to greater variability.
+Simple adaptive background subtraction achieves better cross-domain performance than domain adversarial training, despite requiring no learned parameters. With approximately 700 training samples, DANN provides minimal benefit beyond strong preprocessing. We hypothesize this occurs because explicit normalization already removes much domain-specific structure—the domain signal DANN would learn to ignore has already been eliminated, leaving insufficient information for adversarial alignment. Learned invariance also typically requires larger datasets. In this regime, removing domain variation is more effective than learning to ignore it.
 
-\textbf{(4) Noise augmentation is a secondary regularizer.} Moderate noise (0.5 intensity) improves the harder direction by 15.9pp but does not eliminate asymmetry (residual 1.67$\times$) or match preprocessing performance (7-8pp gap). High noise intensities (>0.5) cause severe degradation. Noise variety shows negligible systematic effect. These results indicate that noise provides mild regularization rather than addressing fundamental domain differences.
+\subsection{Limitations and Future Work}
 
-\textbf{(5) Domain adversarial training has marginal impact.} In this low-data regime (~700 samples) with strong preprocessing already applied, DANN combined with Log+normalize achieves at most 2pp improvement over preprocessing alone—within the margin of variability given our 3-seed replication. This adds substantial complexity and training cost without clear justification. Once domain-specific spectral artifacts are reduced through preprocessing, minimal signal appears to remain for adversarial domain adaptation to exploit.
+Our results have limited replication (3 seeds for key methods, single runs for others), which constrains statistical robustness. They are also specific to nine New Zealand species (although their calls are relatively representative of many common international species) and have only two recording sources. The two datasets differ in multiple dimensions (equipment, geography, recording practices, potential label noise), preventing causal attribution of observed effects to specific factors—controlled experiments.
 
-\textbf{(6) Persistent asymmetry is consistent with conditional shift or support mismatch.} The substantial residual asymmetry (1.67–3.10$\times$) after preprocessing, noise augmentation, and DANN is consistent with conditional shift $P(Y|X)$ (e.g., call structure varying by recording context), asymmetric support coverage (one domain's feature distribution not fully contained in the other's), class-conditional covariate shift, label noise differences, or systematic SNR variation. Our experimental design controls label marginals but cannot distinguish between these mechanisms. Marginal distribution alignment and domain-invariant feature learning cannot fully address these alternatives.
+A larger study would be needed to test generalization to bigger species sets, other regions, and different equipment. Further, systematically varying individual factors are needed for stronger causal claims.
 
-\textbf{(7) Two complementary metrics provide distinct perspectives.} Reduction\% measures the causal effect of lacking domain exposure by isolating proportional loss while controlling for task difficulty. Cross-domain accuracy measures absolute deployment performance. Together, these metrics provide complementary views of domain transfer behavior.
+It should also be noted that aggregate accuracy obscures per-class patterns and potential annotation inconsistencies. We infer mechanisms from accuracy patterns without direct feature representation analysis. 
 
-\subsection{Practical Recommendations}
+Our study focuses on 9 New Zealand species with approximately 700 total samples, making the dataset fairly small. We also evaluate only the one CNN-based architecture, though testing on an Audio Spectrogram Transformer shows similar results so far. 
 
-\textbf{For maximum absolute performance (primary recommendation).} Use Log+normalize (50.8\%/48.7\% accuracy). This achieves best cross-domain performance through efficient preprocessing without architectural modifications, training instability, or computational overhead. Accept 3.10$\times$ residual asymmetry as inherent to the domain characteristics.
+Finally, our noise augmentation uses synthetic background noise, where real environmental noise from target domains may provide more effective regularization. 
 
-\textbf{For improved robustness (hypothetical, not empirically tested).} Combine Log+normalize with noise augmentation at 0.5 intensity. This combination was not evaluated in our experiments but would likely achieve both strong absolute performance (from preprocessing) and regularization benefits (from noise). Given that Log+normalize alone achieves 50.8\%/48.7\% and noise alone achieves 43.1\%/42.8\% with better symmetry, the combination represents a promising direction for future work.
-
-\textbf{For resource-constrained deployment.} Use Log+normalize (efficient preprocessing, no training modifications, no GPU overhead during deployment, strong performance).
-
-\textbf{Avoid.} DANN (marginal benefits <2pp, within variability, do not justify added complexity in this small-data regime), PCEN (higher variance without performance advantage over preprocessing + noise), Box-Cox (poor cross-domain performance), high noise intensities >0.5 (severe signal degradation), or relying solely on architectural approaches without addressing spectral representations.
-
-\subsection{Limitations}
-
-Limited replication (3 seeds for key methods, single runs for others) constrains statistical robustness—differences below ~3pp should be interpreted cautiously given variance. Results are specific to 9 New Zealand species with two recording sources (~700 samples total); generalization to larger species sets, other regions, or different equipment requires validation. We do not evaluate multi-domain training (combining both datasets), which would directly test the heterogeneity-improves-generalization hypothesis. Aggregate accuracy obscures per-class patterns and potential annotation inconsistencies. We infer mechanisms from accuracy patterns without direct measurement of feature distribution alignment. The AviaNZ/DOC datasets differ in multiple dimensions (equipment, geography, recording practices, potential label noise), preventing causal attribution to specific factors. Our claims about conditional shift cannot be distinguished from alternatives (support mismatch, class-conditional covariate shift, label noise) without additional experiments.
-
-\section{Conclusion}
-
-Domain shift in bird call recognition is not primarily a modeling problem—it is a data representation and support coverage problem. We isolate domain shift from label distribution effects through matched datasets with identical species distributions but different recording sources. Our two-metric framework separates proportional loss (controlling for task difficulty) from absolute deployment performance, revealing that domain shift is strongly asymmetric and persistent.
-
-\textbf{Key finding.} Feature normalization dominates domain adaptation. Log+normalize provides the largest single improvement (up to 30.7pp) and achieves best absolute cross-domain performance (50.8\%/48.7\%), substantially outperforming architectural approaches. This represents a form of implicit domain adaptation—enforcing distribution alignment through preprocessing rather than learning invariance after feature extraction. Domain adversarial training (DANN) adds <2pp over preprocessing alone—within variability margins for our 3-seed replication—suggesting that in this small-data regime with strong preprocessing, minimal signal remains for adversarial adaptation. Noise augmentation provides modest regularization (15.9pp on hard direction) but does not eliminate asymmetry (residual 1.67$\times$) or match preprocessing performance. Complex methods (DANN, PCEN) do not justify their added complexity for this task.
-
-\textbf{Mechanism.} The persistent asymmetry (2.51$\times$ baseline, 1.67–3.10$\times$ after interventions) reflects differences in support coverage between domains. Models trained on heterogeneous data (AviaNZ: 51.9\% in-domain, 9-23pp drops) generalize better than those trained on homogeneous data (DOC: 65.7\% in-domain, 24-39pp drops) because broader training variability provides more robust feature representations. Log+normalize reduces domain-specific spectral artifacts, appearing to address covariate shift as evidenced by improved transfer. The substantial residual gap after preprocessing and DANN is consistent with conditional shift $P(Y|X)$ (e.g., call structure varying by context), asymmetric support mismatch, or class-conditional covariate shift—mechanisms that cannot be fully resolved by marginal distribution alignment alone. Our design cannot distinguish between these alternatives.
-
-\textbf{Deployment strategy.} Use Log+normalize for maximum performance (50.8\%/48.7\%). In small-data regimes with strong preprocessing, DANN adds minimal benefit (<2pp, within variance) at substantial cost. Consider combining Log+normalize with moderate noise augmentation (0.5 intensity) to potentially achieve both high absolute performance and regularization benefits, though this combination requires empirical validation.
-
-\textbf{Implications.} Simple, well-calibrated preprocessing outperforms complex architectural approaches for domain adaptation in bioacoustic recognition. The persistent asymmetry across multiple interventions suggests fundamental limitations of marginal alignment and invariant feature learning when mechanisms like conditional shift, support mismatch, or class-conditional covariate shift are present. Future work should (1) systematically evaluate preprocessing-augmentation combinations, (2) evaluate multi-domain training to directly test heterogeneity benefits, (3) measure feature distribution alignment directly to validate covariate shift reduction claims, and (4) design controlled experiments to distinguish conditional shift from alternative mechanisms.
+We did not examine the possibility of doing initial pseudo-labelling on a subset of the target dataset, which has been tried in the past. 
 
 \section{Acknowledgments}
-We thank the New Zealand Department of Conservation for providing access to biodiversity monitoring recordings, and the AviaNZ community for field recording contributions. This research was supported by Victoria University of Wellington.
 
-% Bibliography placeholder - add your .bib file
-%\bibliographystyle{plain}
-%\bibliography{references}
+This research was funded by a Ministry of Business, Innovation and Employment Smart Ideas Grant (RSCHTRUSTVIC2443). 
+
+We thank the New Zealand Department of Conservation and Olly Powell for making the biodiversity monitoring recordings available, and Joe Turner-Steele and Monika Nowicki for annotation of the Wait\=akere dataset. 
+
+\printbibliography
 
 \end{document}

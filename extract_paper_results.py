@@ -12,6 +12,9 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 import re
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 
 
 def extract_base_name(exp_name):
@@ -182,6 +185,109 @@ def calculate_asymmetry_ratios(df, config_pairs):
     return pd.DataFrame(rows)
 
 
+def plot_noise_experiments(df, output_dir):
+    """
+    Create visualizations for noise augmentation experiments.
+    """
+    # Set up plot style
+    plt.style.use('seaborn-v0_8-paper')
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    
+    # =========================================================================
+    # PLOT 1: Noise Intensity - Cross-Domain Accuracy
+    # =========================================================================
+    ax = axes[0, 0]
+    intensity_df = df[df['noise_intensity'].notna()].copy()
+    
+    if len(intensity_df) > 0:
+        for source in ['avianz', 'doc']:
+            subset = intensity_df[intensity_df['source_dataset'] == source].sort_values('noise_intensity')
+            label = 'Waitākere→DOC' if source == 'avianz' else 'DOC→Waitākere'
+            ax.errorbar(subset['noise_intensity'], subset['cross_domain_acc'], 
+                       yerr=subset['cross_domain_std'], marker='o', label=label, 
+                       capsize=5, capthick=2, linewidth=2, markersize=8)
+        
+        ax.set_xlabel('Noise Intensity', fontsize=12)
+        ax.set_ylabel('Cross-Domain Accuracy (%)', fontsize=12)
+        ax.set_title('Noise Intensity Effect on Cross-Domain Performance', fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+    
+    # =========================================================================
+    # PLOT 2: Noise Intensity - Reduction %
+    # =========================================================================
+    ax = axes[0, 1]
+    
+    if len(intensity_df) > 0:
+        for source in ['avianz', 'doc']:
+            subset = intensity_df[intensity_df['source_dataset'] == source].sort_values('noise_intensity')
+            label = 'Waitākere→DOC' if source == 'avianz' else 'DOC→Waitākere'
+            ax.errorbar(subset['noise_intensity'], subset['reduction_pct'], 
+                       yerr=subset['reduction_pct_std'], marker='s', label=label, 
+                       capsize=5, capthick=2, linewidth=2, markersize=8)
+        
+        ax.set_xlabel('Noise Intensity', fontsize=12)
+        ax.set_ylabel('Performance Reduction (%)', fontsize=12)
+        ax.set_title('Noise Intensity Effect on Domain Shift', fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+    
+    # =========================================================================
+    # PLOT 3: Noise Variety - Cross-Domain Accuracy
+    # =========================================================================
+    ax = axes[1, 0]
+    variety_df = df[df['noise_variety'].notna()].copy()
+    
+    if len(variety_df) > 0:
+        for source in ['avianz', 'doc']:
+            subset = variety_df[variety_df['source_dataset'] == source].sort_values('noise_variety')
+            label = 'Waitākere→DOC' if source == 'avianz' else 'DOC→Waitākere'
+            ax.errorbar(subset['noise_variety'], subset['cross_domain_acc'], 
+                       yerr=subset['cross_domain_std'], marker='o', label=label, 
+                       capsize=5, capthick=2, linewidth=2, markersize=8)
+        
+        ax.set_xlabel('Number of Noise Samples', fontsize=12)
+        ax.set_ylabel('Cross-Domain Accuracy (%)', fontsize=12)
+        ax.set_title('Noise Variety Effect on Cross-Domain Performance', fontsize=13, fontweight='bold')
+        ax.set_xscale('log')
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+    
+    # =========================================================================
+    # PLOT 4: Noise Variety - Reduction %
+    # =========================================================================
+    ax = axes[1, 1]
+    
+    if len(variety_df) > 0:
+        for source in ['avianz', 'doc']:
+            subset = variety_df[variety_df['source_dataset'] == source].sort_values('noise_variety')
+            label = 'Waitākere→DOC' if source == 'avianz' else 'DOC→Waitākere'
+            ax.errorbar(subset['noise_variety'], subset['reduction_pct'], 
+                       yerr=subset['reduction_pct_std'], marker='s', label=label, 
+                       capsize=5, capthick=2, linewidth=2, markersize=8)
+        
+        ax.set_xlabel('Number of Noise Samples', fontsize=12)
+        ax.set_ylabel('Performance Reduction (%)', fontsize=12)
+        ax.set_title('Noise Variety Effect on Domain Shift', fontsize=13, fontweight='bold')
+        ax.set_xscale('log')
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save figure
+    output_file = output_dir / 'noise_augmentation_analysis.pdf'
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"\n✓ Saved noise augmentation plots to: {output_file}")
+    
+    # Also save as PNG for easier viewing
+    output_file_png = output_dir / 'noise_augmentation_analysis.png'
+    plt.savefig(output_file_png, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved PNG version to: {output_file_png}")
+    
+    plt.close()
+
+
 def main():
     # Load results
     results_file = Path('experiments_matched/all_results.json')
@@ -267,7 +373,17 @@ def main():
         df['reduction_pct_std'] = df['reduction_pct_std'].fillna(0)
     
     # =========================================================================
-    # Create specific tables for paper
+    # GENERATE NOISE AUGMENTATION PLOTS (before tables for better flow)
+    # =========================================================================
+    print("\n" + "="*70)
+    print("GENERATING NOISE AUGMENTATION VISUALIZATIONS")
+    print("="*70)
+    
+    plot_noise_experiments(df, results_file.parent)
+    
+    # =========================================================================
+    
+    # =========================================================================    # Create specific tables for paper
     # =========================================================================
     
     # TABLE 1: Normalization comparison (baseline methods)

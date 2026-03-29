@@ -85,25 +85,29 @@ def plot_spectrogram_comparison(dataset_path, output_path='figures/spectrogram_c
         # Use central portion - wider crop for better horizontal resolution
         start_frame = S_linear.shape[1] // 2 - 100
         end_frame = start_frame + 200
-        S_cropped = S_linear[:, start_frame:end_frame]
+        S_cropped = S_linear[:-1, start_frame:end_frame]
     
     # 1. Log transform (baseline) - convert to dB
     S_log = 10 * np.log10(S_cropped + 1e-10)
     
-    # 2. Log + Background Normalization (with median filter)
-    S_normalized = normalize_spectrogram(S_log.copy(), use_median_filter=True)
+    # 2. Log + Median filter only (no background normalization)
+    from scipy.ndimage import median_filter
+    S_log_median = median_filter(S_log.copy(), size=(1, 5))
     
-    # 3. Log + Background Normalization (no median filter - ablation)
-    S_normalized_no_median = normalize_spectrogram(S_log.copy(), use_median_filter=False)
+    # 3. Log + Background Normalization only (no median)
+    S_log_normalize = normalize_spectrogram(S_log.copy(), use_median_filter=False)
     
-    # 4. PCEN (on original magnitude)
+    # 4. Log + Background Normalization + Median (BEST METHOD at 50.8%)
+    S_log_normalize_median = normalize_spectrogram(S_log.copy(), use_median_filter=True)
+    
+    # 5. PCEN (on original magnitude)
     S_pcen = compute_pcen(S_cropped)
     
-    # 5. Box-Cox
+    # 6. Box-Cox
     S_boxcox = compute_boxcox(S_cropped)
     
-    # Create figure - 5 rows, wider for better resolution
-    fig, axes = plt.subplots(5, 1, figsize=(8, 12))
+    # Create figure - 6 rows, wider for better resolution
+    fig, axes = plt.subplots(6, 1, figsize=(8, 14))
     
     # Common colormap settings
     cmap = 'viridis'
@@ -119,25 +123,30 @@ def plot_spectrogram_comparison(dataset_path, output_path='figures/spectrogram_c
     axes[0].set_title('(a) Log', fontsize=title_size, fontweight='bold', pad=8)
     axes[0].axis('off')
     
-    # Plot 2: Log + Background Normalization (default - no median)
-    axes[1].imshow(S_normalized_no_median, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
-    axes[1].set_title('(b) Log+normalize', fontsize=title_size, fontweight='bold', pad=8)
+    # Plot 2: Log + Median filter only
+    axes[1].imshow(S_log_median, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
+    axes[1].set_title('(b) Log+median', fontsize=title_size, fontweight='bold', pad=8)
     axes[1].axis('off')
     
-    # Plot 3: Log + Background Normalization (with median filter added)
-    axes[2].imshow(S_normalized, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
-    axes[2].set_title('(c) Log+normalize (with median)', fontsize=title_size, fontweight='bold', pad=8)
+    # Plot 3: Log + Background Normalization only
+    axes[2].imshow(S_log_normalize, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
+    axes[2].set_title('(c) Log+normalize', fontsize=title_size, fontweight='bold', pad=8)
     axes[2].axis('off')
     
-    # Plot 4: PCEN
-    axes[3].imshow(S_pcen, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
-    axes[3].set_title('(d) PCEN', fontsize=title_size, fontweight='bold', pad=8)
+    # Plot 4: Log + Background Normalization + Median (BEST)
+    axes[3].imshow(S_log_normalize_median, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
+    axes[3].set_title('(d) Log+normalize+median', fontsize=title_size, fontweight='bold', pad=8)
     axes[3].axis('off')
     
-    # Plot 5: Box-Cox
-    axes[4].imshow(S_boxcox, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
-    axes[4].set_title('(e) Box-Cox', fontsize=title_size, fontweight='bold', pad=8)
+    # Plot 5: PCEN
+    axes[4].imshow(S_pcen, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
+    axes[4].set_title('(e) PCEN', fontsize=title_size, fontweight='bold', pad=8)
     axes[4].axis('off')
+    
+    # Plot 6: Box-Cox
+    axes[5].imshow(S_boxcox, aspect=aspect, origin=origin, cmap=cmap, interpolation=interpolation)
+    axes[5].set_title('(f) Box-Cox', fontsize=title_size, fontweight='bold', pad=8)
+    axes[5].axis('off')
     
     plt.tight_layout()
     
@@ -199,11 +208,12 @@ if __name__ == "__main__":
     print("\\begin{figure}[t]")
     print("\\centering")
     print("\\includegraphics[width=\\columnwidth]{figures/spectrogram_comparison.pdf}")
-    print("\\caption{Comparison of all 5 spectrogram transformations tested:")
+    print("\\caption{Comparison of all 6 spectrogram transformations tested:")
     print("(a) Log baseline shows persistent background noise;")
-    print("(b) Log+normalize removes background, enhancing signal;")
-    print("(c) Log+normalize (with median) adds median filtering;")
-    print("(d) PCEN over-smooths temporal structure;")
-    print("(e) Box-Cox alternative transform.}")
+    print("(b) Log+median applies temporal smoothing only;")
+    print("(c) Log+normalize applies background subtraction only;")
+    print("(d) Log+normalize+median (best method at 50.8\\%) combines both approaches;")
+    print("(e) PCEN applies per-channel energy normalization;")
+    print("(f) Box-Cox applies power transformation.}")
     print("\\label{fig:spectrograms}")
     print("\\end{figure}")

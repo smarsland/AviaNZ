@@ -81,15 +81,22 @@ else
 fi
 
 # Split datasets (if not exist)
+# Uses file-level splitting for AviaNZ and distribution-matched splitting for DOC
+# 
+# AviaNZ: All segments from the same audio file go to train OR test (never both)
+#         This prevents data leakage from similar recording conditions
+# 
+# DOC:    Split to match the species distribution that resulted from AviaNZ split
+#         This ensures both datasets have similar class balance in train/test
 if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
     echo ""
-    echo "=== Splitting datasets ==="
-    python3 split_dataset.py "$DOC_MATCHED" "$DOC_SPLIT_BASE" \
+    echo "=== Splitting datasets (file-level + distribution-matched) ==="
+    python3 split_matched_datasets.py \
+        "$AVIANZ_MATCHED" \
+        "$DOC_MATCHED" \
+        "$MATCHED_BASE" \
         --test-ratio $TEST_SIZE \
-        --overwrite
-    
-    python3 split_dataset.py "$AVIANZ_MATCHED" "$AVIANZ_SPLIT_BASE" \
-        --test-ratio $TEST_SIZE \
+        --seed 42 \
         --overwrite
     
     echo ""

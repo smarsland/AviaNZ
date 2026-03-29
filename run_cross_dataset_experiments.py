@@ -2,13 +2,14 @@
 """
 Clean cross-dataset experiment pipeline.
 
-Runs four separate experiment suites:
-1. Normalization comparison (6 methods × 2 directions = 12 experiments)
-2. DANN domain adaptation (2 directions = 2 experiments)
-3. Noise intensity sweep (5 levels × 2 directions = 10 experiments)
-4. Noise variety sweep (5 levels × 2 directions = 10 experiments)
+Runs five separate experiment suites:
+1. Normalization comparison (6 methods × 2 directions = 12 experiments per seed)
+2. DANN domain adaptation (2 directions = 2 experiments per seed)
+3. Noise intensity sweep (5 levels × 2 directions = 10 experiments per seed)
+4. Noise variety sweep (5 levels × 2 directions = 10 experiments per seed)
+5. AST baseline (2 directions = 2 experiments per seed)
 
-Total: ~34 experiments
+Total: ~36 experiments per seed (×3 seeds = ~108 experiments by default)
 
 No flags. No skip logic. Just clean experiment loops.
 """
@@ -23,6 +24,104 @@ from datetime import datetime
 import pandas as pd
 
 import config
+
+
+def run_ast_experiment(config_dict):
+    """
+    Run AST training + evaluation experiment using train_models.py.
+    
+    Returns: dict with results
+    """
+    name = config_dict['name']
+    seed = config_dict.get('seed', 42)
+    
+    # Always add seed to name for consistency
+    name = f"{name}_seed{seed}"
+    
+    output_dir = Path(config_dict['output_folder']) / name
+    
+    # Check if already complete (has result.json)
+    result_file = output_dir / 'result.json'
+    if result_file.exists():
+        print(f"✓ {name} - already complete (loading cached result)")
+        with open(result_file) as f:
+            return json.load(f)
+    
+    # Check if training complete
+    model_file = output_dir / 'ast_model_best.pt'
+    history_file = output_dir / 'training_history.json'
+    
+    if model_file.exists() and history_file.exists():
+        print(f"\n{'='*70}")
+        print(f"Skipping: {name} (MODEL ALREADY EXISTS)")
+        print(f"{'='*70}")
+        # Create minimal result file
+        result_dict = {
+            'name': name,
+            'experiment_type': 'ast_baseline',
+            'seed': seed,
+            'output_folder': str(output_dir),
+            'status': 'completed (pre-existing)'
+        }
+        with open(result_file, 'w') as f:
+            json.dump(result_dict, f, indent=2)
+        return result_dict
+    else:
+        print(f"\n{'='*70}")
+        print(f"Running: {name}")
+        print(f"{'='*70}")
+    
+    # Build command for train_models.py
+    cmd = [
+        'python3', 'train_models.py',
+        config_dict['train'],
+        str(output_dir),
+        '--model', 'ast',
+        '--multilabel',
+        '--epochs', str(config_dict['epochs']),
+        '--batch-size', str(config_dict['batch_size']),
+        '--mixup', str(config_dict.get('mixup', 0.25)),
+        '--spec-transform', 'Log',
+    ]
+    
+    # Add test folders if specified
+    if config_dict.get('test1'):
+        cmd.extend(['--test-folder', config_dict['test1']])
+    if config_dict.get('test2'):
+        cmd.extend(['--test-folder2', config_dict['test2']])
+    
+    # Run experiment
+    print(f"Command: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=False)
+    
+    if result.returncode != 0:
+        print(f"❌ FAILED: {name}")
+        print(f"Stopping experiment pipeline due to failure.")
+        sys.exit(1)
+    
+    # After training, construct minimal result dict
+    result_dict = {
+        'name': name,
+        'experiment_type': 'ast_baseline',
+        'seed': seed,
+        'output_folder': str(output_dir),
+        'status': 'completed'
+    }
+    
+    # Try to load training history for completeness
+    if history_file.exists():
+        with open(history_file) as f:
+            history = json.load(f)
+            if 'val_acc' in history and history['val_acc']:
+                result_dict['best_val_acc'] = max([v for v in history['val_acc'] if v is not None])
+    
+    # Save minimal result file
+    with open(result_file, 'w') as f:
+        json.dump(result_dict, f, indent=2)
+    
+    print(f"\n✓ AST experiment complete: {name}")
+    
+    return result_dict
 
 
 def run_experiment(config_dict):
@@ -497,6 +596,53 @@ def main():
             print(f"⚠ Noise data directory not found: {noise_data_dir}")
     else:
         print("\n⚠ Skipping noise experiments (no noise folder provided)")
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 5: AST BASELINE (DIFFERENT ARCHITECTURE)
+    # =========================================================================
+    print("\n" + "="*70)
+    print(" EXPERIMENT SUITE 5: AST BASELINE")
+    print("="*70)
+    print(" Goal: Compare AST architecture to BirdCLEF fine-tuning")
+    print(" Using: Audio Spectrogram Transformer (AST) with Log transform")
+    print(f" Seeds: {args.seeds}")
+    print(f" Total: 2 directions × {len(args.seeds)} seeds = {2 * len(args.seeds)} experiments")
+    print("="*70 + "\n")
+    
+    for seed in args.seeds:
+        print(f"\n{'~'*70}")
+        print(f" Running AST experiments with seed: {seed}")
+        print(f"{'~'*70}\n")
+        
+        # AviaNZ → DOC (AST trained from scratch on AviaNZ)
+        result = run_ast_experiment({
+            'name': 'avianz_ast_baseline',
+            'train': args.avianz_train,
+            'test1': args.avianz_test,
+            'test2': args.doc_test,
+            'output_folder': output_folder,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'mixup': args.mixup,
+            'seed': seed,
+        })
+        if result:
+            all_results.append(result)
+        
+        # DOC → AviaNZ (AST trained from scratch on DOC)
+        result = run_ast_experiment({
+            'name': 'doc_ast_baseline',
+            'train': args.doc_train,
+            'test1': args.doc_test,
+            'test2': args.avianz_test,
+            'output_folder': output_folder,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'mixup': args.mixup,
+            'seed': seed,
+        })
+        if result:
+            all_results.append(result)
     
     # =========================================================================
     # GENERATE SUMMARY
