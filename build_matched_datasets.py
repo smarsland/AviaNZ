@@ -259,7 +259,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
 
         # Trim to fixed length if enabled
         if fixed_length:
-            min_bins = int(target_time_bins * 0.9)  # 90% threshold
+            min_bins = 500  # Minimum acceptable time bins
             # Reject if too short
             if sg.shape[1] < min_bins:
                 too_short += 1
@@ -367,7 +367,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
         # Trim to fixed length if enabled
         if fixed_length:
-            min_bins = int(target_time_bins * 0.9)  # 90% threshold
+            min_bins = 500  # Minimum acceptable time bins
             # Reject if too short
             if sg.shape[1] < min_bins:
                 matched_mask.append(False)
@@ -551,12 +551,13 @@ def main():
     target_time_bins = config.DEFAULT_TIME_BINS
     
     if args.fixed_length:
+        min_bins = 500
         print(f'\n=== Fixed-length mode enabled ===')
         print(f'  Target time bins: {target_time_bins}')
-        print(f'  Minimum time bins (90%): {int(target_time_bins * 0.9)}')
-        print(f'  Spectrograms with fewer than {int(target_time_bins * 0.9)} bins will be filtered out')
+        print(f'  Minimum time bins: {min_bins}')
+        print(f'  Spectrograms with fewer than {min_bins} bins will be filtered out')
         print(f'  Spectrograms longer than {target_time_bins} bins will be trimmed')
-        print(f'  Spectrograms between {int(target_time_bins * 0.9)}-{target_time_bins} bins will be kept as-is')
+        print(f'  Spectrograms between {min_bins}-{target_time_bins} bins will be kept as-is')
         print('='*50 + '\n')
 
     print('=== Step 1: parse reviewed CSV ===')

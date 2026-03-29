@@ -124,7 +124,7 @@ class DataLoader:
         
         if len(filenames) == 0:
             raise ValueError(
-                f"No data files found in {self.data_folder}.\n"
+                f"No data files found in {self.folder}.\n"
                 f"  Labels file: {labels_file}\n"
                 f"  Data folder: {data_folder}\n"
                 f"  Files in labels.json: {files_checked}\n"
@@ -133,7 +133,7 @@ class DataLoader:
             )
         
         if len(labels.shape) == 1 or labels.shape[0] == 0:
-            raise ValueError(f"No valid labels loaded from {self.data_folder}. Found {len(filenames)} files but labels array is empty.")
+            raise ValueError(f"No valid labels loaded from {self.folder}. Found {len(filenames)} files but labels array is empty.")
         
         print(f"Loaded {mode_str} data: {len(filenames)} files, {labels.shape[1]} classes")
         

@@ -1,0 +1,454 @@
+#!/usr/bin/env python3
+"""
+Extract results from cross-dataset experiments for paper.
+
+Processes all_results.json and groups experiments by base name,
+computing mean ± std across multiple trials (seeds).
+"""
+
+import json
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from collections import defaultdict
+import re
+
+
+def extract_base_name(exp_name):
+    """
+    Remove seed suffix from experiment name to get base name.
+    
+    Examples:
+        avianz_baseline_Log_seed123 -> avianz_baseline_Log
+        doc_dann_Log+normalize_seed456 -> doc_dann_Log+normalize
+        avianz_baseline_Log_intensity0.25_seed42 -> avianz_baseline_Log_intensity0.25
+    """
+    # Remove _seed### suffix
+    base_name = re.sub(r'_seed\d+$', '', exp_name)
+    return base_name
+
+
+def parse_experiment_name(exp_name):
+    """
+    Parse experiment name to extract key components.
+    
+    Returns: dict with keys: dataset, method, variant, etc.
+    """
+    parts = {}
+    
+    # Extract dataset (avianz or doc)
+    if exp_name.startswith('avianz_'):
+        parts['source'] = 'avianz'
+        parts['target'] = 'doc'
+    elif exp_name.startswith('doc_'):
+        parts['source'] = 'doc'
+        parts['target'] = 'avianz'
+    else:
+        parts['source'] = 'unknown'
+        parts['target'] = 'unknown'
+    
+    # Extract method (baseline or dann)
+    if '_dann_' in exp_name:
+        parts['method'] = 'DANN'
+    else:
+        parts['method'] = 'Baseline'
+    
+    # Extract spectrogram transform and normalization
+    if 'Log+normalize-no-median' in exp_name:
+        parts['transform'] = 'Log+normalize-no-median'
+    elif 'Log+normalize' in exp_name:
+        parts['transform'] = 'Log+normalize'
+    elif 'Log+median-only' in exp_name:
+        parts['transform'] = 'Log+median-only'
+    elif 'PCEN' in exp_name:
+        parts['transform'] = 'PCEN'
+    elif 'Box-Cox' in exp_name:
+        parts['transform'] = 'Box-Cox'
+    elif '_Log' in exp_name:
+        parts['transform'] = 'Log'
+    else:
+        parts['transform'] = 'unknown'
+    
+    # Extract noise intensity if present
+    intensity_match = re.search(r'intensity([\d.]+)', exp_name)
+    if intensity_match:
+        parts['noise_intensity'] = float(intensity_match.group(1))
+    else:
+        parts['noise_intensity'] = None
+    
+    # Extract noise variety if present
+    variety_match = re.search(r'variety(\d+)', exp_name)
+    if variety_match:
+        parts['noise_variety'] = int(variety_match.group(1))
+    else:
+        parts['noise_variety'] = None
+    
+    return parts
+
+
+def compute_statistics(results_list):
+    """
+    Compute mean and std for metrics across multiple trials.
+    
+    Args:
+        results_list: List of result dicts from different seeds
+    
+    Returns:
+        dict with mean and std for each metric
+    """
+    if not results_list:
+        return {}
+    
+    # Extract metrics
+    val_accs = [r['best_val_acc'] * 100 for r in results_list if 'best_val_acc' in r]
+    train_accs = [r['best_train_acc'] for r in results_list if 'best_train_acc' in r]
+    test1_accs = [r['test1_acc'] for r in results_list if 'test1_acc' in r]
+    test2_accs = [r['test2_acc'] for r in results_list if 'test2_acc' in r]
+    
+    stats = {
+        'n_trials': len(results_list),
+        'val_acc_mean': np.mean(val_accs) if val_accs else None,
+        'val_acc_std': np.std(val_accs, ddof=1) if len(val_accs) > 1 else 0,
+        'train_acc_mean': np.mean(train_accs) if train_accs else None,
+        'train_acc_std': np.std(train_accs, ddof=1) if len(train_accs) > 1 else 0,
+        'test1_acc_mean': np.mean(test1_accs) if test1_accs else None,
+        'test1_acc_std': np.std(test1_accs, ddof=1) if len(test1_accs) > 1 else 0,
+        'test2_acc_mean': np.mean(test2_accs) if test2_accs else None,
+        'test2_acc_std': np.std(test2_accs, ddof=1) if len(test2_accs) > 1 else 0,
+    }
+    
+    # Also get test names from first result
+    if results_list:
+        stats['test1_name'] = results_list[0].get('test1_name', 'unknown')
+        stats['test2_name'] = results_list[0].get('test2_name', 'unknown')
+    
+    return stats
+
+
+def calculate_asymmetry_ratios(df, config_pairs):
+    """
+    Calculate asymmetry ratios for pairs of experiments (A→B vs B→A).
+    
+    Args:
+        df: DataFrame with results
+        config_pairs: List of tuples (method, transform, noise_key)
+    
+    Returns:
+        DataFrame with asymmetry calculations
+    """
+    rows = []
+    
+    for method, transform, noise_key in config_pairs:
+        # Filter for this configuration
+        if noise_key is None:
+            mask = (df['method'] == method) & (df['transform'] == transform) & \
+                   df['noise_intensity'].isna() & df['noise_variety'].isna()
+        elif 'intensity' in noise_key:
+            intensity = float(noise_key.split('=')[1])
+            mask = (df['method'] == method) & (df['transform'] == transform) & \
+                   (df['noise_intensity'] == intensity)
+        elif 'variety' in noise_key:
+            variety = int(noise_key.split('=')[1])
+            mask = (df['method'] == method) & (df['transform'] == transform) & \
+                   (df['noise_variety'] == variety)
+        else:
+            continue
+        
+        subset = df[mask]
+        
+        # Get both directions
+        avianz_to_doc = subset[subset['source_dataset'] == 'avianz']
+        doc_to_avianz = subset[subset['source_dataset'] == 'doc']
+        
+        if len(avianz_to_doc) == 1 and len(doc_to_avianz) == 1:
+            a2d = avianz_to_doc.iloc[0]
+            d2a = doc_to_avianz.iloc[0]
+            
+            # Calculate asymmetry ratio
+            asymmetry = d2a['reduction_pct'] / a2d['reduction_pct'] if a2d['reduction_pct'] > 0 else np.inf
+            
+            row = {
+                'method': method,
+                'transform': transform,
+                'noise_config': noise_key or 'None',
+                'avianz_to_doc_cross_acc': a2d['cross_domain_acc'],
+                'avianz_to_doc_reduction': a2d['reduction_pct'],
+                'doc_to_avianz_cross_acc': d2a['cross_domain_acc'],
+                'doc_to_avianz_reduction': d2a['reduction_pct'],
+                'asymmetry_ratio': asymmetry,
+            }
+            rows.append(row)
+    
+    return pd.DataFrame(rows)
+
+
+def main():
+    # Load results
+    results_file = Path('experiments_matched/all_results.json')
+    
+    if not results_file.exists():
+        print(f"ERROR: Results file not found: {results_file}")
+        print("Looking for alternative locations...")
+        
+        # Try current directory
+        if Path('all_results.json').exists():
+            results_file = Path('all_results.json')
+            print(f"Found: {results_file}")
+        else:
+            print("No results file found. Exiting.")
+            return
+    
+    print(f"Loading results from: {results_file}")
+    with open(results_file) as f:
+        all_results = json.load(f)
+    
+    print(f"Total experiments loaded: {len(all_results)}")
+    
+    # Group by base name
+    grouped = defaultdict(list)
+    for result in all_results:
+        if not result or 'name' not in result:
+            continue
+        
+        base_name = extract_base_name(result['name'])
+        grouped[base_name].append(result)
+    
+    print(f"Unique experiment configurations: {len(grouped)}")
+    
+    # Process each group
+    rows = []
+    for base_name in sorted(grouped.keys()):
+        results_list = grouped[base_name]
+        
+        # Parse experiment name
+        exp_info = parse_experiment_name(base_name)
+        
+        # Compute statistics
+        stats = compute_statistics(results_list)
+        
+        # Combine into row
+        row = {
+            'experiment': base_name,
+            'source_dataset': exp_info['source'],
+            'target_dataset': exp_info['target'],
+            'method': exp_info['method'],
+            'transform': exp_info['transform'],
+            'noise_intensity': exp_info['noise_intensity'],
+            'noise_variety': exp_info['noise_variety'],
+            'n_trials': stats['n_trials'],
+            'val_acc': stats['val_acc_mean'],
+            'val_acc_std': stats['val_acc_std'],
+            'train_acc': stats['train_acc_mean'],
+            'train_acc_std': stats['train_acc_std'],
+            'in_domain_acc': stats['test1_acc_mean'],
+            'in_domain_std': stats['test1_acc_std'],
+            'cross_domain_acc': stats['test2_acc_mean'],
+            'cross_domain_std': stats['test2_acc_std'],
+            'test1_name': stats.get('test1_name', ''),
+            'test2_name': stats.get('test2_name', ''),
+        }
+        
+        rows.append(row)
+    
+    # Create DataFrame
+    df = pd.DataFrame(rows)
+    
+    # Calculate reduction percentage
+    # Reduction% = (in_domain_acc - cross_domain_acc) / in_domain_acc * 100
+    df['reduction_pct'] = ((df['in_domain_acc'] - df['cross_domain_acc']) / df['in_domain_acc'] * 100)
+    
+    # Calculate std for reduction using error propagation
+    # If Reduction = (A - B) / A, then std_red ≈ sqrt((std_B/A)^2 + ((B*std_A)/A^2)^2) * 100
+    with np.errstate(divide='ignore', invalid='ignore'):
+        df['reduction_pct_std'] = np.sqrt(
+            (df['cross_domain_std'] / df['in_domain_acc'])**2 + 
+            ((df['cross_domain_acc'] * df['in_domain_std']) / df['in_domain_acc']**2)**2
+        ) * 100
+        df['reduction_pct_std'] = df['reduction_pct_std'].fillna(0)
+    
+    # =========================================================================
+    # Create specific tables for paper
+    # =========================================================================
+    
+    # TABLE 1: Normalization comparison (baseline methods)
+    print("\n" + "="*70)
+    print("TABLE 1: NORMALIZATION COMPARISON")
+    print("="*70)
+    
+    norm_df = df[
+        (df['method'] == 'Baseline') & 
+        (df['noise_intensity'].isna()) & 
+        (df['noise_variety'].isna())
+    ].copy()
+    
+    if len(norm_df) > 0:
+        table1 = norm_df[[
+            'source_dataset', 'target_dataset', 'transform',
+            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std', 
+            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+        ]].sort_values(['source_dataset', 'transform'])
+        
+        print(table1.to_string(index=False))
+        
+        table1_file = results_file.parent / 'table1_normalization.csv'
+        table1.to_csv(table1_file, index=False)
+        print(f"\n✓ Saved to: {table1_file}")
+    
+    # TABLE 2: DANN vs Baseline
+    print("\n" + "="*70)
+    print("TABLE 2: DOMAIN ADAPTATION (DANN)")
+    print("="*70)
+    
+    dann_df = df[
+        (df['transform'].isin(['Log', 'Log+normalize'])) &
+        (df['noise_intensity'].isna()) & 
+        (df['noise_variety'].isna())
+    ].copy()
+    
+    if len(dann_df) > 0:
+        table2 = dann_df[[
+            'source_dataset', 'target_dataset', 'method', 'transform',
+            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+        ]].sort_values(['source_dataset', 'transform', 'method'])
+        
+        print(table2.to_string(index=False))
+        
+        table2_file = results_file.parent / 'table2_dann.csv'
+        table2.to_csv(table2_file, index=False)
+        print(f"\n✓ Saved to: {table2_file}")
+    
+    # TABLE 3: Noise intensity sweep
+    print("\n" + "="*70)
+    print("TABLE 3: NOISE INTENSITY SWEEP")
+    print("="*70)
+    
+    intensity_df = df[df['noise_intensity'].notna()].copy()
+    
+    if len(intensity_df) > 0:
+        table3 = intensity_df[[
+            'source_dataset', 'target_dataset', 'noise_intensity',
+            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+        ]].sort_values(['source_dataset', 'noise_intensity'])
+        
+        print(table3.to_string(index=False))
+        
+        table3_file = results_file.parent / 'table3_noise_intensity.csv'
+        table3.to_csv(table3_file, index=False)
+        print(f"\n✓ Saved to: {table3_file}")
+    
+    # TABLE 4: Noise variety sweep
+    print("\n" + "="*70)
+    print("TABLE 4: NOISE VARIETY SWEEP")
+    print("="*70)
+    
+    variety_df = df[df['noise_variety'].notna()].copy()
+    
+    if len(variety_df) > 0:
+        table4 = variety_df[[
+            'source_dataset', 'target_dataset', 'noise_variety',
+            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+        ]].sort_values(['source_dataset', 'noise_variety'])
+        
+        print(table4.to_string(index=False))
+        
+        table4_file = results_file.parent / 'table4_noise_variety.csv'
+        table4.to_csv(table4_file, index=False)
+        print(f"\n✓ Saved to: {table4_file}")
+    
+    # =========================================================================
+    # TABLE 5: Paper-ready summary with reduction% and asymmetry
+    # =========================================================================
+    print("\n" + "="*70)
+    print("TABLE 5: PAPER-READY RESULTS (with Reduction% and Asymmetry)")
+    print("="*70)
+    
+    # Define key configurations to compare
+    key_configs = [
+        ('Baseline', 'Log', None),
+        ('Baseline', 'Log+normalize', None),
+        ('Baseline', 'Log+normalize-no-median', None),
+        ('Baseline', 'PCEN', None),
+        ('Baseline', 'Box-Cox', None),
+        ('DANN', 'Log+normalize', None),
+    ]
+    
+    asymmetry_df = calculate_asymmetry_ratios(df, key_configs)
+    
+    if len(asymmetry_df) > 0:
+        print("\nAsymmetry Analysis:")
+        print(asymmetry_df.to_string(index=False))
+        
+        # Create a paper-ready formatted table
+        print("\n\nPAPER TABLE FORMAT:")
+        print("-" * 100)
+        print(f"{'Method':<25} {'AviaNZ→DOC':<30} {'DOC→AviaNZ':<30} {'Asym':<10}")
+        print(f"{'':25} {'Cross-Acc':<15} {'Red%':<15} {'Cross-Acc':<15} {'Red%':<15}")
+        print("-" * 100)
+        
+        for _, row in asymmetry_df.iterrows():
+            method_name = f"{row['method']}+{row['transform']}" if row['method'] == 'DANN' else row['transform']
+            a2d_acc = f"{row['avianz_to_doc_cross_acc']:.1f}"
+            a2d_red = f"{row['avianz_to_doc_reduction']:.1f}"
+            d2a_acc = f"{row['doc_to_avianz_cross_acc']:.1f}"
+            d2a_red = f"{row['doc_to_avianz_reduction']:.1f}"
+            asym = f"{row['asymmetry_ratio']:.2f}×"
+            
+            print(f"{method_name:<25} {a2d_acc:<15} {a2d_red:<15} {d2a_acc:<15} {d2a_red:<15} {asym:<10}")
+        
+        print("-" * 100)
+        
+        # Save to CSV
+        table5_file = results_file.parent / 'table5_paper_summary.csv'
+        asymmetry_df.to_csv(table5_file, index=False)
+        print(f"\n✓ Saved to: {table5_file}")
+    
+    # =========================================================================
+    # In-domain baselines
+    # =========================================================================
+    print("\n" + "="*70)
+    print("IN-DOMAIN BASELINES (for paper)")
+    print("="*70)
+    
+    # Get baseline Log experiments for in-domain accuracy
+    baseline_log = df[(df['method'] == 'Baseline') & 
+                      (df['transform'] == 'Log') & 
+                      df['noise_intensity'].isna() & 
+                      df['noise_variety'].isna()]
+    
+    if len(baseline_log) == 2:
+        avianz_baseline = baseline_log[baseline_log['source_dataset'] == 'avianz'].iloc[0]
+        doc_baseline = baseline_log[baseline_log['source_dataset'] == 'doc'].iloc[0]
+        
+        print(f"\nAviaNZ in-domain (Log baseline): {avianz_baseline['in_domain_acc']:.1f}% ± {avianz_baseline['in_domain_std']:.1f}%")
+        print(f"DOC in-domain (Log baseline): {doc_baseline['in_domain_acc']:.1f}% ± {doc_baseline['in_domain_std']:.1f}%")
+        print(f"\nDifference: {doc_baseline['in_domain_acc'] - avianz_baseline['in_domain_acc']:.1f}pp")
+        print(f"(DOC is {doc_baseline['in_domain_acc'] / avianz_baseline['in_domain_acc']:.2f}× easier)")
+    
+    # =========================================================================
+    # Summary statistics
+    # =========================================================================
+    print("\n" + "="*70)
+    print("SUMMARY STATISTICS")
+    print("="*70)
+    
+    print(f"\nTotal experiment configurations: {len(df)}")
+    print(f"Configurations with 3 trials: {len(df[df['n_trials'] == 3])}")
+    print(f"Configurations with 1 trial: {len(df[df['n_trials'] == 1])}")
+    
+    print("\nBest performing configurations by cross-domain accuracy:")
+    best_cross_domain = df.nlargest(10, 'cross_domain_acc')[[
+        'experiment', 'source_dataset', 'method', 'transform', 
+        'cross_domain_acc', 'cross_domain_std'
+    ]]
+    print(best_cross_domain.to_string(index=False))
+    
+    print("\n" + "="*70)
+    print("DONE")
+    print("="*70)
+
+
+if __name__ == '__main__':
+    main()
