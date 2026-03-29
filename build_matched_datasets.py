@@ -259,7 +259,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
 
         # Trim to fixed length if enabled
         if fixed_length:
-            min_bins = 500  # Minimum acceptable time bins
+            min_bins = 0  # Minimum acceptable time bins
             # Reject if too short
             if sg.shape[1] < min_bins:
                 too_short += 1
@@ -370,7 +370,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
             # Trim to fixed length if enabled
             if fixed_length:
-                min_bins = 500  # Minimum acceptable time bins
+                min_bins = 0  # Minimum acceptable time bins
                 # Reject if too short
                 if sg.shape[1] < min_bins:
                     continue  # Try next candidate
@@ -556,7 +556,7 @@ def main():
     target_time_bins = config.DEFAULT_TIME_BINS
     
     if args.fixed_length:
-        min_bins = 500
+        min_bins = 0
         print(f'\n=== Fixed-length mode enabled ===')
         print(f'  Target time bins: {target_time_bins}')
         print(f'  Minimum time bins: {min_bins}')
