@@ -268,8 +268,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size')
     parser.add_argument('--mixup', type=float, default=0.25, help='Mixup alpha')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456], 
-                       help='Random seeds for multiple trials (default: 42 123 456 for 3 trials)')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456, 590, 573], 
+                       help='Random seeds for multiple trials (default: 42 123 456 590 573 for 5 trials)')
     
     args = parser.parse_args()
     
