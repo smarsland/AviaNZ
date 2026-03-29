@@ -359,35 +359,40 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
             matched_mask.append(False)
             continue
 
-        wav_file, start, end, seg_codes = rng.choice(deduped)
-        sg = spec_proc.process_audio_segment(wav_file, start, end)
-        if sg is None:
-            matched_mask.append(False)
-            continue
-
-        # Trim to fixed length if enabled
-        if fixed_length:
-            min_bins = 500  # Minimum acceptable time bins
-            # Reject if too short
-            if sg.shape[1] < min_bins:
-                matched_mask.append(False)
+        # Try candidates until we find one that works
+        rng.shuffle(deduped)
+        success = False
+        
+        for wav_file, start, end, seg_codes in deduped:
+            sg = spec_proc.process_audio_segment(wav_file, start, end)
+            if sg is None:
                 continue
-            # Trim if too long
-            if sg.shape[1] > target_time_bins:
-                sg = sg[:, :target_time_bins]
-                trimmed += 1
 
-        basename = f'file_{len(avianz_labels):08d}'
-        spec_proc.save_spectrogram(sg, data_dir, basename)
-        # Use the DOC human label — both datasets must have identical class names.
-        avianz_labels.append({
-            'filename': f'{basename}.npy',
-            'class_names': rec['human_labels'],
-            'source_file': wav_file,
-            'start_time': start,
-            'end_time': end,
-        })
-        matched_mask.append(True)
+            # Trim to fixed length if enabled
+            if fixed_length:
+                min_bins = 500  # Minimum acceptable time bins
+                # Reject if too short
+                if sg.shape[1] < min_bins:
+                    continue  # Try next candidate
+                # Trim if too long
+                if sg.shape[1] > target_time_bins:
+                    sg = sg[:, :target_time_bins]
+                    trimmed += 1
+
+            basename = f'file_{len(avianz_labels):08d}'
+            spec_proc.save_spectrogram(sg, data_dir, basename)
+            # Use the DOC human label — both datasets must have identical class names.
+            avianz_labels.append({
+                'filename': f'{basename}.npy',
+                'class_names': rec['human_labels'],
+                'source_file': wav_file,
+                'start_time': start,
+                'end_time': end,
+            })
+            success = True
+            break  # Found a good one
+        
+        matched_mask.append(success)
 
     matched = sum(matched_mask)
     unmatched = len(records) - matched
