@@ -22,9 +22,9 @@
 \maketitle
 
 \begin{abstract}
-Automated bird call recognition systems trained on one recording environment often produce worse results when deployed to others due to differences in background noise and recording equipment, a problem known as domain shift. To study these domain effects, we construct matched datasets with identical species distributions across nine bird species, but different recording sources. We fine-tune a pre-trained bird recognition CNN on each dataset and find substantial domain shift in both transfer directions. When normalized by target dataset difficulty, cross-domain models experience performance loss of 40--48\% depending on transfer direction.
+Automated bird call recognition systems trained on one recording environment often produce worse results when deployed to others due to differences in background noise and recording equipment, a problem known as domain shift. To study these domain effects, we construct matched datasets with identical species distributions across nine bird species, but different recording sources. We fine-tune a pre-trained bird recognition CNN on each dataset and find substantial domain shift in both transfer directions. Using a baseline log transform, cross-domain models experience performance loss of 38--47\% when normalized by target dataset difficulty, depending on transfer direction.
 
-We test different adaptation methods and find adaptive background subtraction via log scaling with median filtering yields the best cross-domain improvements, outperforming other normalization methods and domain adversarial training. While moderate noise augmentation provides modest regularization, noise diversity shows beneficial effects in one transfer direction. These results demonstrate that substantial domain shift persists even with matched species distributions, and that the diversity of a dataset and normalization are important.
+We test different methods for addressing this problem, including normalization of the spectrogram, adding noise, and domain adversarial training. Of the methods we tested we find adaptive background subtraction helps models generalize the most, lowering performance loss to 18--32\%. We find moderate noise augmentation can help, but also hurts performance. Noise diversity shows mixed effects. 
 \end{abstract}
 
 \keywords{bird call recognition, domain shift, cross-domain evaluation, bioacoustic monitoring}
@@ -41,15 +41,15 @@ In this work we examine the extent of domain shift in bird call recognition, and
 
 \subsection{Matched Dataset Construction}
 
-We created two datasets with identical species distributions covering nine classes of commonly found New Zealand birds, comprising introduced European passerines (blackbird, \textit{Turdus merula}; chaffinch \textit{Fringilla coelebs}), native and self-introduced passerines (piwakawaka/fantail, \textit{Rhipidura fuliginosa}; riroriro/grey warbler \textit{Gerygone igata}; miromiro/tomtit, \textit{Petroica macrocephala}; silvereye,\textit{Zosterops lateralis}), a parrot (k\=ak\=a, \textit{Nestor meridionalis}), and an owl (ruru/morepork, \textit{Ninox novaeseelandiae}). A final class combined the vocalisations of two oscine species with overlapping dialectic calls (t\=u\=i, \textit{Prosthemadera novaeseelandiae}; korimako/bellbird, \textit{Anthornis melanura}). The DOC dataset contains 766 files (64 minutes total duration), while the Wait\=akere dataset contains 684 files (73 minutes total duration), providing comparable amounts of training data. Recordings in both datasets range from 1 to 10 seconds in length. 
+We created two datasets with identical species distributions covering nine classes of commonly found New Zealand birds, comprising introduced European passerines (blackbird, \textit{Turdus merula}; chaffinch \textit{Fringilla coelebs}), native and self-introduced passerines (piwakawaka/fantail, \textit{Rhipidura fuliginosa}; riroriro/grey warbler \textit{Gerygone igata}; miromiro/tomtit, \textit{Petroica macrocephala}; silvereye,\textit{Zosterops lateralis}), a parrot (k\=ak\=a, \textit{Nestor meridionalis}), and an owl (ruru/morepork, \textit{Ninox novaeseelandiae}). A final class combined the vocalisations of two oscine species with overlapping dialectic calls (t\=u\=i, \textit{Prosthemadera novaeseelandiae}; korimako/bellbird, \textit{Anthornis melanura}). The DOC dataset contains 766 files (64 minutes total duration), while the Wait\=akere dataset contains 684 files (73 minutes total duration), providing comparable amounts of training data. Recordings in both datasets were capped at 10 seconds in length, and had average length of 5.0 and 6.4 seconds respectively.
 
-The DOC dataset contains of bird call recordings collected between 2010 and 2023 as part of the New Zealand Department of Conservation (DOC) baseline biodiversity monitoring. These come from across the public conservation land of Aotearoa New Zealand, and are collected using the DOC AR4\footnote{\url{electronics@doc.govt.nz}} recorder sampling at 32 kHz. Bird calls in this dataset were manually identified by a combination of spectrogram visualisation and listening to record the species present within one minute of recording, with the calls extracted automatically from these records to make 3-12 second long recordings. The dataset is available at \url{https://www.kaggle.com/datasets/ollypowell/new-zealand-bird-sound} and has an Attribution 4.0 International (CC BY 4.0) license. We subsequently processed the data to correct some labels and ensure that the labelled species was clearly present. 
+The DOC dataset contains bird call recordings collected between 2010 and 2023 as part of the New Zealand Department of Conservation (DOC) baseline biodiversity monitoring. These come from across the public conservation land of Aotearoa New Zealand, and are collected using the DOC AR4\footnote{\url{electronics@doc.govt.nz}} recorder sampling at 32 kHz. Bird calls in this dataset were manually identified by a combination of spectrogram visualisation and listening to record the species present within one minute of recording, with the calls extracted automatically from these records to make 3-12 second long recordings. The dataset is available at \url{https://www.kaggle.com/datasets/ollypowell/new-zealand-bird-sound} and has an Attribution 4.0 International (CC BY 4.0) license. We subsequently processed the data to correct some labels and ensure that the labelled species was clearly present. 
 
 Our second dataset comes from recordings from six sites in the Wait\=akere ranges, an area of national park approximately 25 km from the city of Auckland in Aotearoa New Zealand. The data were collected as part of a MSc project~\cite{JoeMsc2024} using a combination of the Frontier Labs Bar- LT\footnote{\url{https://www.frontierlabs.com.au/bar-lt}} and the DOC AR4, both recording at 32 kHz. The data were manually annotated using the AviaNZ software by expert annotators.
 
 For both datasets, spectrograms were extracted in AviaNZ using 25 ms Hann window with a 10 ms hop between windows, and processed into 224 mel-scale frequency bins.
 
-\textbf{Data Splitting:} To prevent data leakage from recording conditions, we employed a two-stage splitting strategy. For the Wait\=akere dataset, which contains multiple annotated segments from the same source recordings, we performed file-level splitting: all segments from a given source file were assigned to either the training or test set, never both. Source files were randomly assigned to achieve an approximately 75/25 train/test ratio, though the actual segment-level ratio varies slightly due to differing numbers of annotations per file. For the DOC dataset, which has independent recordings, we performed sample-level splitting but matched the species distribution that resulted from the Wait\=akere file-level split, ensuring comparable class balance across the training and testing sets of both datasets. This approach balances the need to prevent temporal and acoustic leakage in the Wait\=akere data while maintaining distributional similarity between the two datasets.
+\textbf{Data Splitting:} To prevent data leakage from recording conditions, we employed a two-stage splitting strategy. For the Wait\=akere dataset, which contains multiple annotated segments from the same source recordings, we performed file-level splitting: all segments from a given source file were assigned to either the training or test set, never both. Source files were randomly assigned to achieve an approximately 75/25 train/test ratio, though the actual segment-level ratio varies slightly due to differing numbers of annotations per file. For the DOC dataset, which has independent recordings, we performed sample-level splitting but matched the species distribution that resulted from the Wait\=akere file-level split, ensuring comparable class balance across the training and testing sets of both datasets. This approach balances the need to prevent temporal and acoustic leakage in the Wait\=akere data while maintaining distributional similarity between the two datasets. 
 
 \subsection{Normalization Strategies}
 
@@ -63,9 +63,9 @@ Our implementation adds a domain classification head to the RegNetY-008 backbone
 
 \subsection{Noise Augmentation}
 
-To investigate whether synthetic acoustic variation can improve generalization, we augment training spectrograms with background noise sampled from the FreeSound dataset\footnote{\url{http://freesound.org}}. During training, noise is always applied to spectrograms (when enabled) by mixing: $S_{\text{aug}} = (1-\alpha) \cdot S_{\text{orig}} + \alpha \cdot N_{\text{scaled}}$, where $S_{\text{orig}}$ is the original spectrogram, $N_{\text{scaled}}$ is a randomly selected noise sample RMS-scaled to match the signal energy, and $\alpha$ is randomly sampled uniformly from $[0, \min(2 \times \text{intensity}, 1.0)]$ (giving expected value equal to the specified intensity parameter).
+To investigate whether synthetic acoustic variation can improve generalization, we augment training spectrograms with background noise sampled from the Freesound dataset\footnote{\url{http://freesound.org}}. During training, noise is always applied to spectrograms (when enabled) by mixing: $S_{\text{aug}} = (1-\alpha) \cdot S_{\text{orig}} + \alpha \cdot N_{\text{scaled}}$, where $S_{\text{orig}}$ is the original spectrogram, $N_{\text{scaled}}$ is a randomly selected noise sample RMS-scaled to match the signal energy, and $\alpha$ is randomly sampled uniformly from $[0, \text{intensity}]$.
 
-We systematically vary two augmentation parameters: \textbf{intensity} ($\alpha \in \{0.0, 0.25, 0.5, 0.75, 1.0\}$) controls signal-to-noise ratio, and \textbf{variety} (1, 10, 100, or 1000 unique noise samples) controls acoustic diversity. Noise samples are preprocessed identically to bird calls. This design allows us to separate the effects of noise strength from noise diversity~\cite{kumar2024}.
+We systematically vary two augmentation parameters: \textbf{intensity} ($\in \{0.0, 0.5, 1.0\}$) controls the maximum noise mixing ratio, and \textbf{variety} (1, 10, 100, or 1000 unique noise samples) controls acoustic diversity. Noise samples are preprocessed identically to bird calls. This design allows us to separate the effects of noise strength from noise diversity~\cite{kumar2024}.
 
 \subsection{Model Architecture and Training}
 
@@ -79,11 +79,11 @@ Let $D_s$ and $D_t$ denote source (training) and target (test) domains, and let 
 \begin{equation}
 \text{Reduction}(D_s \to D_t) = \frac{A(D_t \to D_t) - A(D_s \to D_t)}{A(D_t \to D_t)}
 \end{equation}
-This measures how much worse a model trained on $D_s$ performs on $D_t$ compared to a model trained directly on $D_t$, controlling for the intrinsic difficulty of $D_t$.
+This measures how much worse a model trained on $D_s$ performs on $D_t$ compared to a model trained directly on $D_t$, controlling for the intrinsic difficulty of $D_t$. Negative reduction values indicate cross-domain performance exceeding the in-domain baseline, typically due to degraded in-domain performance rather than genuine transfer improvement.
 
 \subsection{Experimental Design}
 
-For every test we train a model on the training data from one dataset and then test it on the test data of both datasets, comparing within-domain to cross-domain accuracy. We test six normalization methods (Log, Log+median, Log+normalize, Log+normalize+median, PCEN, Box-Cox), domain adaptation via an added DANN (domain adversarial neural network)~\cite{ganin2016domain} head, and augmentation with freefield noise at varying intensities (0.0, 0.25, 0.5, 0.75, 1.0) and diversity (1, 10, 100, 1000 noise samples). We use 5 seeds for normalization and DANN experiments, and 4-5 seeds for noise augmentation experiments (reporting mean$\pm$std).
+For every test we train a model on the training data from one dataset and then test it on the test data of both datasets, comparing within-domain to cross-domain accuracy. We test six normalization methods (Log, Log+median, Log+normalize, Log+normalize+median, PCEN, Box-Cox), domain adaptation via an added DANN (domain adversarial neural network)~\cite{ganin2016domain} head, and augmentation with Freesound noise at varying intensities (0.0, 0.25, 0.5, 0.75, 1.0) and diversity (1, 10, 100, 1000 noise samples). All experiments use 5 random seeds (reporting mean$\pm$std).
 
 \begin{figure}[t]
 \centering
@@ -96,24 +96,24 @@ For every test we train a model on the training data from one dataset and then t
 
 \subsection{Normalization Methods}
 
-Log+normalize+median achieves the best cross-domain accuracy in both directions (Table~\ref{tab:results}), retaining 68\% of the DOC baseline and 82\% of the Wait\=akere baseline. All methods show substantial domain shift, with reduction percentages ranging from 18--84\% depending on the method and transfer direction. The best preprocessing (Log+normalize+median) reduces performance loss by roughly 15--20 percentage points compared to the Log baseline, demonstrating the value of explicit normalization for cross-domain transfer.
+Log+normalize+median achieves the best cross-domain accuracy in both directions (Table~\ref{tab:results}), retaining 68\% of the DOC baseline and 82\% of the Wait\=akere baseline. All methods show substantial domain shift, with reduction percentages ranging from 18--84\% depending on the method and transfer direction. The best preprocessing (Log+normalize+median) reduces performance loss by roughly 15--20 percentage points compared to the Log baseline, suggesting the value of explicit normalization for cross-domain transfer.
 
 \begin{table*}[t]
 \centering
 \small
-\caption{Domain shift analysis across preprocessing methods. \textbf{In-Dom}: In-domain accuracy (trained and tested on same dataset). \textbf{Cross-Dom}: Cross-domain accuracy (trained on source, tested on target). \textbf{Red\%}: Percentage reduction from target domain's in-domain baseline. Mean$\pm$std over 5 seeds (4 for DOC→Wait). \textbf{Bold}: best cross-domain performance.}
+\caption{Domain shift analysis across preprocessing methods. \textbf{In-Dom}: In-domain accuracy (trained and tested on same dataset). \textbf{Cross-Dom}: Cross-domain accuracy (trained on source, tested on target). \textbf{Red\%}: Percentage reduction from target domain's in-domain baseline. Mean$\pm$std over 5 seeds. \textbf{Bold}: best cross-domain performance.}
 \label{tab:results}
 \begin{tabular}{@{}lcccccc@{}}
 \hline
 Method & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC→Wait\=akere} \\
 \cline{2-4} \cline{5-7} & In-Dom & Cross-Dom & Red\% & In-Dom & Cross-Dom & Red\% \\
 \hline
-Log             & 35.1$\pm$2.6 & 30.7$\pm$3.6 & 47.5$\pm$6.5 & 58.5$\pm$2.2 & 21.2$\pm$5.0 & 39.7$\pm$14.9 \\
+Log             & 35.1$\pm$2.6 & 30.7$\pm$3.6 & 46.9$\pm$6.7 & 57.8$\pm$2.4 & 21.7$\pm$4.5 & 38.2$\pm$13.6 \\
 Log+median      & 11.8$\pm$3.7 & 7.0$\pm$2.3 & 83.8$\pm$5.7 & 43.0$\pm$6.0 & 28.2$\pm$2.9 & -137.7$\pm$78.4 \\
 Log+normalize   & 17.1$\pm$8.1 & 20.3$\pm$8.5 & 52.2$\pm$21.7 & 42.5$\pm$7.3 & 23.4$\pm$6.2 & -36.9$\pm$74.5 \\
 \textbf{Log+normalize+median}   & \textbf{37.5$\pm$3.2} & \textbf{37.2$\pm$2.6} & \textbf{32.2$\pm$6.2} & \textbf{54.9$\pm$3.2} & \textbf{30.6$\pm$5.0} & \textbf{18.4$\pm$15.0} \\
 PCEN              & 29.1$\pm$3.2 & 32.5$\pm$3.2 & 42.6$\pm$6.6 & 56.5$\pm$3.2 & 20.3$\pm$3.1 & 30.2$\pm$13.1 \\
-Box-Cox           & 34.6$\pm$3.8 & 34.2$\pm$1.9 & 41.2$\pm$4.8 & 58.2$\pm$3.5 & 18.5$\pm$5.9 & 46.7$\pm$17.9 \\
+Box-Cox           & 34.6$\pm$3.8 & 34.2$\pm$1.9 & 40.3$\pm$5.0 & 57.2$\pm$3.7 & 18.9$\pm$5.2 & 45.3$\pm$16.1 \\
 \hline
 \end{tabular}
 \end{table*}
@@ -125,7 +125,7 @@ DANN provides minimal improvements over the Log baseline and no meaningful gains
 \begin{table*}[t]
 \centering
 \small
-\caption{Domain adversarial training (DANN) comparison. \textbf{In-Dom}: In-domain accuracy. \textbf{Cross-Dom}: Cross-domain accuracy. \textbf{Red\%}: Reduction from target in-domain baseline. Mean$\pm$std over 4-5 seeds.}
+\caption{Domain adversarial training (DANN) comparison. \textbf{In-Dom}: In-domain accuracy. \textbf{Cross-Dom}: Cross-domain accuracy. \textbf{Red\%}: Reduction from target in-domain baseline. Mean$\pm$std over 5 seeds.}
 \label{tab:dann}
 \begin{tabular}{@{}lccccccc@{}}
 \hline
@@ -133,22 +133,22 @@ Method & Transform & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{
 \cline{3-5} \cline{6-8}
        &           & In-Dom & Cross-Dom & Red\% & In-Dom & Cross-Dom & Red\% \\
 \hline
-Baseline & Log              & 35.1$\pm$2.6 & 30.7$\pm$3.6 & 47.5$\pm$6.5 & 58.5$\pm$2.2 & 21.2$\pm$5.0 & 39.7$\pm$14.9 \\
-DANN     & Log              & 40.6$\pm$2.8 & 29.3$\pm$3.8 & 51.1$\pm$7.4 & 60.0$\pm$4.7 & 21.2$\pm$4.3 & 47.7$\pm$11.2 \\
+Baseline & Log              & 35.1$\pm$2.6 & 30.7$\pm$3.6 & 46.9$\pm$6.7 & 57.8$\pm$2.4 & 21.7$\pm$4.5 & 38.2$\pm$13.6 \\
+DANN     & Log              & 41.4$\pm$3.0 & 30.1$\pm$3.8 & 49.8$\pm$7.4 & 60.0$\pm$4.7 & 21.2$\pm$4.3 & 48.7$\pm$11.0 \\
 Baseline & Log+normalize+median    & 37.5$\pm$3.2 & 37.2$\pm$2.6 & 32.2$\pm$6.2 & 54.9$\pm$3.2 & 30.6$\pm$5.0 & 18.4$\pm$15.0 \\
-DANN     & Log+normalize+median    & 35.8$\pm$3.0 & 36.8$\pm$2.0 & 40.3$\pm$4.9 & 61.6$\pm$3.7 & 30.3$\pm$2.9 & 15.3$\pm$10.8 \\
+DANN     & Log+normalize+median    & 36.9$\pm$3.6 & 37.5$\pm$2.4 & 39.1$\pm$5.4 & 61.6$\pm$3.7 & 30.3$\pm$2.9 & 17.9$\pm$11.3 \\
 \hline
 \end{tabular}
 \end{table*}
 
 \subsection{Noise Augmentation}
 
-Moderate noise intensity (0.25) provides modest regularization benefit, though results vary across transfer directions (Table~\ref{tab:noise_intensity}). Higher intensities generally degrade in-domain performance substantially (e.g., intensity 1.0 drops to 19.5\% in-domain for Wait\=akere, 39.9\% for DOC). Noise variety shows substantial improvement in the DOC→Wait\=akere direction (Table~\ref{tab:noise_variety}), with 1000 samples achieving 17\% reduction compared to 41--50\% for smaller varieties, demonstrating that greater noise diversity helps models generalize to the more challenging Wait\=akere test set, though this effect does not transfer to the Wait\=akere→DOC direction.
+Moderate noise intensity (0.5) provides modest regularization benefit, though results vary across transfer directions (Table~\ref{tab:noise_intensity}). Higher noise (intensity 1.0) shows mixed results, with some improvement in the DOC→Wait\=akere cross-domain direction but degraded in-domain performance overall. Noise variety shows substantial improvement in the DOC→Wait\=akere direction (Table~\ref{tab:noise_variety}), with 1000 samples achieving 17.6\% reduction compared to 36--46\% for smaller varieties, suggesting that greater noise diversity can improve generalization in some transfer settings, though this effect does not transfer to the Wait\=akere→DOC direction.
 
 \begin{table*}[htbp]
 \centering
 \small
-\caption{Noise augmentation: intensity sweep. Models trained with Log transform and varying noise intensity. \textbf{In-Dom}: In-domain accuracy. \textbf{Cross-Dom}: Cross-domain accuracy. \textbf{Red\%}: Reduction from target in-domain baseline. Mean$\pm$std over 4-5 seeds.}
+\caption{Noise augmentation: intensity sweep. Models trained with Log transform and varying maximum noise mixing ratio. \textbf{In-Dom}: In-domain accuracy. \textbf{Cross-Dom}: Cross-domain accuracy. \textbf{Red\%}: Reduction from target in-domain baseline. Mean$\pm$std over 5 seeds.}
 \label{tab:noise_intensity}
 \begin{tabular}{@{}lccccccc@{}}
 \hline
@@ -156,11 +156,9 @@ Noise Intensity & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC
 \cline{2-4} \cline{5-7}
                 & In-Dom & Cross-Dom & Red\% & In-Dom & Cross-Dom & Red\% \\
 \hline
-0.00 (baseline)  & 35.4$\pm$3.1 & 30.7$\pm$3.6 & 45.6$\pm$6.7 & 56.5$\pm$2.0 & 20.4$\pm$4.1 & 42.4$\pm$12.6 \\
-0.25             & 30.9$\pm$2.1 & 29.7$\pm$2.0 & 50.5$\pm$5.5 & 60.0$\pm$5.3 & 23.8$\pm$3.8 & 22.9$\pm$13.3 \\
-0.50             & 26.0$\pm$2.5 & 28.3$\pm$2.6 & 50.8$\pm$5.1 & 57.4$\pm$2.8 & 26.9$\pm$6.0 & -3.6$\pm$24.9 \\
-0.75             & 23.7$\pm$3.5 & 24.8$\pm$5.9 & 51.0$\pm$11.9 & 50.5$\pm$1.9 & 22.1$\pm$2.9 & 6.7$\pm$18.3 \\
-1.00             & 19.5$\pm$7.2 & 22.0$\pm$7.3 & 44.7$\pm$20.3 & 39.9$\pm$6.4 & 13.3$\pm$3.5 & 32.1$\pm$30.9 \\
+0.0 (baseline)   & 35.4$\pm$3.1 & 30.7$\pm$3.6 & 46.6$\pm$6.9 & 57.5$\pm$2.9 & 21.5$\pm$4.4 & 39.1$\pm$13.5 \\
+0.5              & 30.9$\pm$2.1 & 29.7$\pm$2.0 & 51.3$\pm$5.3 & 61.0$\pm$5.2 & 23.8$\pm$3.3 & 22.9$\pm$11.8 \\
+1.0              & 26.0$\pm$2.5 & 28.3$\pm$2.6 & 49.9$\pm$5.4 & 56.4$\pm$3.4 & 27.2$\pm$5.2 & -4.7$\pm$22.3 \\
 \hline
 \end{tabular}
 \end{table*}
@@ -168,7 +166,7 @@ Noise Intensity & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC
 \begin{table*}[htbp]
 \centering
 \small
-\caption{Noise augmentation: variety sweep. Models trained with Log transform and noise intensity 0.25 with varying numbers of noise samples. \textbf{In-Dom}: In-domain accuracy. \textbf{Cross-Dom}: Cross-domain accuracy. \textbf{Red\%}: Reduction from target in-domain baseline. Mean$\pm$std over 4-5 seeds.}
+\caption{Noise augmentation: variety sweep. Models trained with Log transform and noise intensity 0.5 with varying numbers of noise samples. \textbf{In-Dom}: In-domain accuracy. \textbf{Cross-Dom}: Cross-domain accuracy. \textbf{Red\%}: Reduction from target in-domain baseline. Mean$\pm$std over 5 seeds.}
 \label{tab:noise_variety}
 \begin{tabular}{@{}lccccccc@{}}
 \hline
@@ -176,10 +174,10 @@ Noise Variety & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC�
 \cline{2-4} \cline{5-7}
                 & In-Dom & Cross-Dom & Red\% & In-Dom & Cross-Dom & Red\% \\
 \hline
-1                & 35.4$\pm$3.1 & 30.7$\pm$3.6 & 46.5$\pm$7.1 & 57.4$\pm$3.3 & 20.8$\pm$4.7 & 41.3$\pm$14.1 \\
-10               & 35.1$\pm$7.3 & 33.8$\pm$3.5 & 44.4$\pm$6.0 & 60.7$\pm$1.5 & 17.7$\pm$3.3 & 49.6$\pm$14.0 \\
-100              & 33.3$\pm$4.7 & 30.1$\pm$1.9 & 47.5$\pm$7.3 & 57.2$\pm$7.1 & 21.4$\pm$2.1 & 35.7$\pm$11.1 \\
-1000             & 30.6$\pm$1.7 & 29.9$\pm$1.8 & 46.0$\pm$3.8 & 55.3$\pm$2.0 & 25.4$\pm$3.8 & 17.1$\pm$13.1 \\
+1                & 35.4$\pm$3.1 & 30.7$\pm$3.6 & 46.7$\pm$6.9 & 57.7$\pm$2.9 & 20.9$\pm$4.0 & 40.9$\pm$12.5 \\
+10               & 35.1$\pm$7.3 & 33.8$\pm$3.5 & 42.8$\pm$7.2 & 59.0$\pm$4.0 & 18.9$\pm$3.9 & 46.1$\pm$15.9 \\
+100              & 33.8$\pm$4.3 & 31.0$\pm$2.7 & 45.8$\pm$8.2 & 57.2$\pm$7.1 & 21.4$\pm$2.1 & 36.8$\pm$10.2 \\
+1000             & 30.6$\pm$1.7 & 29.9$\pm$1.8 & 46.1$\pm$3.7 & 55.4$\pm$1.7 & 25.2$\pm$3.3 & 17.6$\pm$11.6 \\
 \hline
 \end{tabular}
 \end{table*}
@@ -188,7 +186,7 @@ Noise Variety & \multicolumn{3}{c}{Wait\=akere→DOC} & \multicolumn{3}{c}{DOC�
 
 \subsection{Substantial Domain Shift Persists}
 
-Domain shift in bird call recognition remains substantial even with matched species distributions. Using the Log baseline, cross-domain models achieve 30.7\% (Wait\=akere→DOC) and 21.2\% (DOC→Wait\=akere), representing reductions of 47.5\% and 39.7\% respectively from target in-domain baselines. Both transfer directions show substantial performance loss, though neither is dramatically worse than the other.
+Domain shift in bird call recognition remains substantial even with matched species distributions. Using the Log baseline, cross-domain models achieve 30.7\% (Wait\=akere→DOC) and 21.7\% (DOC→Wait\=akere), representing reductions of 46.9\% and 38.2\% respectively from target in-domain baselines. Both transfer directions show substantial performance loss, though neither is dramatically worse than the other.
 
 Interestingly, some preprocessing methods show negative reduction percentages, where cross-domain performance exceeds the target in-domain baseline. For example, Log+median achieves 28.2\% cross-domain (DOC→Wait) while the in-domain baseline is only 11.8\%, and Log+normalize shows similar patterns. These negative reductions typically occur for methods with poor in-domain performance, suggesting they may be removing signal as well as noise, paradoxically helping on simpler cross-domain examples while hurting on the full in-domain distribution.
 
@@ -198,13 +196,13 @@ Adaptive background subtraction (Log+normalize+median) achieves better cross-dom
 
 \subsection{Dataset Independence and Generalization Gaps}
 
-An unexpected finding concerns the validation-to-test performance gap, which differs substantially between datasets. For Wait\=akere (file-level split), models achieve 60--62\% validation accuracy but drop to 35\% on the test set, a gap of 25--27 percentage points. For DOC (sample-level split), validation accuracy of 70--72\% drops to 59\% at test time, only an 11--13 percentage point gap. The Wait\=akere generalization gap is approximately twice as large as DOC's.
+An unexpected finding concerns the validation-to-test performance gap, which differs substantially between datasets. While early stopping on validation accuracy inevitably creates some optimistic bias in validation metrics for both datasets, the magnitude of this gap differs markedly. For Wait\=akere (file-level split), models achieve 60--62\% validation accuracy but drop to 35--38\% on the test set, a gap of approximately 23--25 percentage points. For DOC (sample-level split), validation accuracy of 70--72\% drops to 55--58\% at test time, a gap of only 14--16 percentage points. 
 
-This asymmetry suggests the DOC dataset may have less independence than expected. Despite samples coming from nationwide recordings across diverse locations, the smaller generalization gap implies either: (1) less acoustic diversity than anticipated, with similar recording conditions producing relatively homogeneous data, or (2) possible subtle data leakage, though this seems less likely given the geographic spread. The Wait\=akere file-level split, which ensures all segments from the same source recording are assigned to train or test (never both), produces the expected larger gap for truly independent test data. This finding highlights that geographic diversity does not automatically guarantee acoustic diversity, and raises questions about what constitutes truly independent evaluation data in bioacoustic monitoring.
+Since both datasets use identical early stopping procedures, this approximately 10 percentage point difference in generalization gaps suggests the DOC test set may have less independence than expected. Despite samples coming from nationwide recordings across diverse locations and spanning a 13-year collection period (2010--2023), the smaller generalization gap suggests either lower-than-expected acoustic diversity or shared recording characteristics across sites. The Wait\=akere file-level split, which ensures all segments from the same source recording are assigned to train or test (never both), produces the expected larger gap for truly independent test data. This finding highlights that geographic diversity does not automatically guarantee acoustic diversity, and raises questions about what constitutes truly independent evaluation data in bioacoustic monitoring.
 
 \subsection{Limitations and Future Work}
 
-Our results have limited replication (five repetitions for most experiments, three for some), which constrains statistical robustness. They are also specific to nine New Zealand species (although their calls are relatively representative of many common international species) and have only two recording sources. The two datasets differ in multiple dimensions (equipment, geography, recording practices, potential label noise), preventing causal attribution of observed effects to specific factors—controlled experiments.
+Our results have limited replication (five repetitions), which constrains statistical robustness. They are also specific to nine New Zealand species (although their calls are relatively representative of many common international species) and have only two recording sources. The two datasets differ in multiple dimensions (equipment, geography, recording practices, potential label noise), preventing causal attribution of observed effects to specific factors; controlled experiments systematically varying individual factors would be needed for stronger causal claims.
 
 A larger study would be needed to test generalization to bigger species sets, other regions, and different equipment. Further, systematically varying individual factors are needed for stronger causal claims.
 

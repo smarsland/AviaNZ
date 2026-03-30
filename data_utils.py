@@ -611,9 +611,9 @@ class SpectrogramDataset(Dataset):
     def mix_with_noise(self, bird_spectrogram):
         """Mix bird spectrogram with noise spectrogram.
         
-        Uses a random noise ratio sampled uniformly from [0, min(2×noise_ratio, 1.0)]
-        so the expected (mean) noise ratio approximates the specified parameter.
-        The ratio is clipped to [0, 1] to ensure valid mixing (prevents negative values).
+        Uses a fixed noise ratio for deterministic, interpretable augmentation:
+        - noise_ratio=0.4 means 40% noise + 60% signal on every sample
+        - noise_ratio capped at <1.0 to avoid pure noise (label-contradicting) samples
         
         Supports two modes:
         - 'full': Mix entire noise spectrogram (traditional approach)
@@ -631,10 +631,9 @@ class SpectrogramDataset(Dataset):
             use_background_mode = self.rng.rand() < 0.5
         # else: mode is 'full', keep use_background_mode = False
         
-        # Sample random noise ratio: uniform[0, 2×ratio] so E[noise] = ratio
-        # Clip to [0, 1.0] to prevent negative values in mixing formula
-        actual_noise_ratio = self.rng.uniform(0.0, 2.0 * self.noise_ratio)
-        actual_noise_ratio = np.clip(actual_noise_ratio, 0.0, 1.0)
+        # Use fixed noise ratio directly (deterministic per sample)
+        # Clamp to [0, 0.95] to prevent pure noise while allowing high-noise training
+        actual_noise_ratio = np.clip(self.noise_ratio, 0.0, 0.95)
         
         # Use cached noise data (much faster than loading from disk!)
         noise_idx = self.rng.randint(0, len(self.noise_cache))
