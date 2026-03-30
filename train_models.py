@@ -189,7 +189,6 @@ Examples:
             noise_ratio=args.noise,
             noise_folder=args.noise_folder,
             normalize=args.normalize,
-            spec_transform=args.spec_transform,
             noise_as_samples=args.noise_as_samples,
             max_noise_samples=args.max_noise_samples,
             pos_weight_cap=args.pos_weight_cap,
