@@ -692,7 +692,7 @@ def main():
         print(" EXPERIMENT SUITE 4: NOISE VARIETY SWEEP")
         print("="*70)
         print(" Goal: Test if more noise variety improves robustness")
-        print(" Using: Log baseline (no normalization), fixed noise ratio 0.25")
+        print(" Using: Log baseline (no normalization), fixed noise ratio 0.2")
         print(" Levels: 1, 10, 100, 1000, all available noise files")
         print(f" Seeds: {args.seeds}")
         print(f" Total: ~5 levels × 2 directions × {len(args.seeds)} seeds = ~{5 * 2 * len(args.seeds)} experiments")
@@ -759,10 +759,7 @@ def main():
                         'normalize': False,
                         'normalize_no_median': False,
                         'median_only': False,
-                        'noise': 0.25,  # Fixed ratio
-                        'noise_folder': str(noise_subset_dir),
-                        'seed': seed,
-                    })
+                    'noise': 0.2,  # Fixed ratio
                     
                     # DOC → AviaNZ
                     all_experiments.append({
@@ -780,7 +777,7 @@ def main():
                         'normalize': False,
                         'normalize_no_median': False,
                         'median_only': False,
-                        'noise': 0.25,  # Fixed ratio
+                        'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
                     })
