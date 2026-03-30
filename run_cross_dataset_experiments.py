@@ -169,18 +169,33 @@ def run_ast_experiment(config_dict):
     
     output_dir = Path(config_dict['output_folder']) / name
     
-    # Check if already complete (has result.json)
+    # Check if already complete or in progress (check shared results directory ONLY)
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name
+        
+        if shared_result_dir.exists():
+            print(f"✓ {name} - skipping (folder exists in shared results)")
+            shared_result_file = shared_result_dir / 'result.json'
+            if shared_result_file.exists():
+                with open(shared_result_file) as f:
+                    return json.load(f)
+            else:
+                # Folder exists but no result.json yet - experiment in progress
+                return {
+                    'name': name,
+                    'experiment_type': 'ast_baseline',
+                    'seed': seed,
+                    'status': 'in_progress'
+                }
+    
+    # If no shared directory or folder doesn't exist, check if training already complete locally
     result_file = output_dir / 'result.json'
-    if result_file.exists():
-        print(f"✓ {name} - already complete (loading cached result)")
-        with open(result_file) as f:
-            result_data = json.load(f)
-        
-        # Copy result files to shared directory if specified (in case it wasn't done before)
-        if config_dict.get('results_dir'):
-            copy_result_files(output_dir, config_dict['results_dir'], name)
-        
-        return result_data
+    
+    # Create the experiment folder in shared results immediately to claim it
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name
+        shared_result_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  → Created {shared_result_dir} (claiming experiment)")
     
     # Check if training complete
     model_file = output_dir / 'ast_model_best.pt'
@@ -282,18 +297,33 @@ def run_experiment(config_dict):
     
     output_dir = Path(config_dict['output_folder']) / name
     
-    # Check if already complete (has result.json)
+    # Check if already complete or in progress (check shared results directory ONLY)
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name
+        
+        if shared_result_dir.exists():
+            print(f"✓ {name} - skipping (folder exists in shared results)")
+            shared_result_file = shared_result_dir / 'result.json'
+            if shared_result_file.exists():
+                with open(shared_result_file) as f:
+                    return json.load(f)
+            else:
+                # Folder exists but no result.json yet - experiment in progress
+                return {
+                    'name': name,
+                    'type': config_dict.get('type', 'baseline'),
+                    'seed': seed,
+                    'status': 'in_progress'
+                }
+    
+    # If no shared directory or folder doesn't exist, check if training already complete locally
     result_file = output_dir / 'result.json'
-    if result_file.exists():
-        print(f"✓ {name} - already complete (loading cached result)")
-        with open(result_file) as f:
-            result_data = json.load(f)
-        
-        # Copy result files to shared directory if specified (in case it wasn't done before)
-        if config_dict.get('results_dir'):
-            copy_result_files(output_dir, config_dict['results_dir'], name)
-        
-        return result_data
+    
+    # Create the experiment folder in shared results immediately to claim it
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name
+        shared_result_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  → Created {shared_result_dir} (claiming experiment)")
     
     # Check if training complete but evaluation missing
     model_file = output_dir / 'birdclef_finetuned_best.pt'
