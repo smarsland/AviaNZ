@@ -234,7 +234,7 @@ def run_ast_experiment(config_dict):
         '--model', 'ast',
         '--multilabel',
         '--epochs', str(config_dict['epochs']),
-        '--batch-size', str(config_dict['batch_size']),
+        '--batch_size', str(config_dict['batch_size']),
         '--mixup', str(config_dict.get('mixup', 0.25)),
         '--spec-transform', 'Log',
     ]
@@ -797,38 +797,40 @@ def main():
     print("="*70)
     print(" Goal: Compare AST architecture to BirdCLEF fine-tuning")
     print(" Using: Audio Spectrogram Transformer (AST) with Log transform")
-    print(f" Seeds: {args.seeds}")
-    print(f" Total: 2 directions × {len(args.seeds)} seeds = {2 * len(args.seeds)} experiments")
+    print(f" Seeds: [42] (single trial only for AST)")
+    print(f" Total: 2 directions × 1 seed = 2 experiments")
     print("="*70 + "\n")
     
-    for seed in args.seeds:
-        # AviaNZ → DOC (AST trained from scratch on AviaNZ)
-        all_experiments.append({
-            'name': 'avianz_ast_baseline',
-            'train': args.avianz_train,
-            'test1': args.avianz_test,
-            'test2': args.doc_test,
-            'output_folder': output_folder,
-            'epochs': args.epochs,
-            'batch_size': args.batch_size,
-            'mixup': args.mixup,
-            'seed': seed,
-            'is_ast': True,
-        })
-        
-        # DOC → AviaNZ (AST trained from scratch on DOC)
-        all_experiments.append({
-            'name': 'doc_ast_baseline',
-            'train': args.doc_train,
-            'test1': args.doc_test,
-            'test2': args.avianz_test,
-            'output_folder': output_folder,
-            'epochs': args.epochs,
-            'batch_size': args.batch_size,
-            'mixup': args.mixup,
-            'seed': seed,
-            'is_ast': True,
-        })
+    # AST experiments: only use first seed (single trial)
+    ast_seed = args.seeds[0]
+    
+    # AviaNZ → DOC (AST trained from scratch on AviaNZ)
+    all_experiments.append({
+        'name': 'avianz_ast_baseline',
+        'train': args.avianz_train,
+        'test1': args.avianz_test,
+        'test2': args.doc_test,
+        'output_folder': output_folder,
+        'epochs': args.epochs,
+        'batch_size': args.batch_size,
+        'mixup': args.mixup,
+        'seed': ast_seed,
+        'is_ast': True,
+    })
+    
+    # DOC → AviaNZ (AST trained from scratch on DOC)
+    all_experiments.append({
+        'name': 'doc_ast_baseline',
+        'train': args.doc_train,
+        'test1': args.doc_test,
+        'test2': args.avianz_test,
+        'output_folder': output_folder,
+        'epochs': args.epochs,
+        'batch_size': args.batch_size,
+        'mixup': args.mixup,
+        'seed': ast_seed,
+        'is_ast': True,
+    })
     
     # =========================================================================
     # RUN ALL EXPERIMENTS IN PARALLEL
