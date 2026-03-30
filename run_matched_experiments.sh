@@ -13,16 +13,33 @@ set -e
 # Want to rerun? Delete the folder.
 #
 # Usage:
-#   ./run_matched_experiments.sh              # Variable-length spectrograms
-#   ./run_matched_experiments.sh --fixed-length  # Fixed-length mode (trim to 1024 bins)
+#   ./run_matched_experiments.sh                      # Variable-length spectrograms
+#   ./run_matched_experiments.sh --fixed-length       # Fixed-length mode (trim to 1024 bins)
+#   ./run_matched_experiments.sh --parallel 2         # Run 2 experiments in parallel (use GPUs)
+#   ./run_matched_experiments.sh --fixed-length --parallel 0  # Auto-detect GPUs
 # ============================================================
 
 # Parse arguments
 FIXED_LENGTH_FLAG=""
-if [[ "$1" == "--fixed-length" ]]; then
-    FIXED_LENGTH_FLAG="--fixed-length"
-    echo "Fixed-length mode enabled"
-fi
+PARALLEL_FLAG=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --fixed-length)
+            FIXED_LENGTH_FLAG="--fixed-length"
+            echo "Fixed-length mode enabled"
+            shift
+            ;;
+        --parallel)
+            PARALLEL_FLAG="--parallel $2"
+            echo "Parallel mode: $2 workers"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 # Paths
 AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
@@ -136,7 +153,8 @@ python3 run_cross_dataset_experiments.py \
     --output       "$RESULTS" \
     --epochs       $EPOCHS \
     --batch-size   $BATCH_SIZE \
-    --mixup        $MIXUP_ALPHA
+    --mixup        $MIXUP_ALPHA \
+    $PARALLEL_FLAG
 
 echo ""
 echo "============================================================"
