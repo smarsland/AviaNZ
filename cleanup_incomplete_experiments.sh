@@ -42,7 +42,8 @@ fi
 echo "============================================================"
 echo " Cleanup Incomplete Experiments"
 echo "============================================================"
-echo "  Directory: $EXPERIMENTS_DIR"
+echo "  Experiments dir: $EXPERIMENTS_DIR"
+echo "  Results dir    : $RESULTS_DIR"
 echo "============================================================"
 echo ""
 
@@ -71,8 +72,18 @@ for exp_dir in "$EXPERIMENTS_DIR"/*/ ; do
     # Check if result.json exists
     if [ ! -f "$result_file" ]; then
         echo "❌ INCOMPLETE: $exp_name"
-        echo "   → Removing: $exp_dir"
+        echo "   → Removing from experiments: $exp_dir"
         rm -rf "$exp_dir"
+        
+        # Also remove from shared results directory if it exists
+        if [ -d "$RESULTS_DIR" ]; then
+            results_exp_dir="$RESULTS_DIR/$exp_name"
+            if [ -d "$results_exp_dir" ]; then
+                echo "   → Removing from results: $results_exp_dir"
+                rm -rf "$results_exp_dir"
+            fi
+        fi
+        
         ((INCOMPLETE++))
     else
         echo "✓ Complete: $exp_name"
