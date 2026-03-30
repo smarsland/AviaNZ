@@ -12,18 +12,36 @@ set -e
 # No flags. No skip logic. Just checks file existence.
 # Want to rerun? Delete the folder.
 #
+# DEFAULTS (no arguments needed):
+#   - Fixed-length spectrograms (1024 bins)
+#   - Auto-detect GPUs and run in parallel
+#   - Save results to ~/results
+#
 # Usage:
-#   ./run_matched_experiments.sh                      # Variable-length spectrograms
-#   ./run_matched_experiments.sh --fixed-length       # Fixed-length mode (trim to 1024 bins)
-#   ./run_matched_experiments.sh --parallel 2         # Run 2 experiments in parallel (use GPUs)
-#   ./run_matched_experiments.sh --fixed-length --parallel 0  # Auto-detect GPUs
+#   ./run_matched_experiments.sh                         # Use all defaults
+#   ./run_matched_experiments.sh --no-fixed-length      # Variable-length mode
+#   ./run_matched_experiments.sh --parallel 1           # Force single-threaded
+#   ./run_matched_experiments.sh --results-dir ./output # Custom results location
+#
+# Multi-machine setup:
+#   Just run on each machine - results automatically saved to ~/results (shared)
+#   Large model files (.pt) stay in /local/scratch (machine-specific)
+#   Small result files (JSON, CSV) copied to ~/results (shared across machines)
 # ============================================================
 
-# Parse arguments
-FIXED_LENGTH_FLAG=""
-PARALLEL_FLAG=""
+# Default settings
+FIXED_LENGTH_FLAG="--fixed-length"
+PARALLEL_FLAG="--parallel 0"  # Auto-detect GPUs
+RESULTS_DIR="$HOME/results"
+
+# Parse arguments (to override defaults if needed)
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --no-fixed-length)
+            FIXED_LENGTH_FLAG=""
+            echo "Variable-length mode enabled"
+            shift
+            ;;
         --fixed-length)
             FIXED_LENGTH_FLAG="--fixed-length"
             echo "Fixed-length mode enabled"
@@ -34,12 +52,26 @@ while [[ $# -gt 0 ]]; do
             echo "Parallel mode: $2 workers"
             shift 2
             ;;
+        --results-dir)
+            RESULTS_DIR="$2"
+            echo "Shared results directory: $RESULTS_DIR"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
             ;;
     esac
 done
+
+echo "============================================================"
+echo " Configuration"
+echo "============================================================"
+echo "  Fixed-length mode: $([ -n "$FIXED_LENGTH_FLAG" ] && echo "YES" || echo "NO")"
+echo "  Parallel mode    : ${PARALLEL_FLAG#--parallel }"
+echo "  Results directory: $RESULTS_DIR"
+echo "============================================================"
+echo ""
 
 # Paths
 AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
@@ -151,6 +183,7 @@ python3 run_cross_dataset_experiments.py \
     --doc-test     "$DOC_TEST" \
     --noise-folder "$NOISE_FOLDER" \
     --output       "$RESULTS" \
+    --results-dir  "$RESULTS_DIR" \
     --epochs       $EPOCHS \
     --batch-size   $BATCH_SIZE \
     --mixup        $MIXUP_ALPHA \

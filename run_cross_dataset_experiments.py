@@ -24,8 +24,51 @@ from datetime import datetime
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
+import signal
+import shutil
 
 import config
+
+
+def copy_result_files(output_dir, results_dir, experiment_name):
+    """
+    Copy small result files (JSONs, CSVs) to shared results directory.
+    Keeps large model files (.pt) in the original output directory.
+    
+    Args:
+        output_dir: Original experiment output directory (contains model files)
+        results_dir: Shared results directory for small files
+        experiment_name: Name of the experiment (for subdirectory)
+    """
+    if results_dir is None:
+        return  # No shared directory specified, keep all files in output_dir
+    
+    output_dir = Path(output_dir)
+    results_dir = Path(results_dir)
+    
+    # Create experiment subdirectory in shared results
+    exp_results_dir = results_dir / experiment_name
+    exp_results_dir.mkdir(parents=True, exist_ok=True)
+    
+    # List of small files to copy (exclude large .pt model files)
+    small_file_patterns = [
+        'result.json',
+        'training_history.json',
+        '*_config.json',
+        'predictions_*.csv',
+        'training_curves.png',
+    ]
+    
+    copied_files = []
+    for pattern in small_file_patterns:
+        for src_file in output_dir.glob(pattern):
+            dst_file = exp_results_dir / src_file.name
+            shutil.copy2(src_file, dst_file)
+            copied_files.append(src_file.name)
+    
+    if copied_files:
+        print(f"  ✓ Copied {len(copied_files)} result files to {exp_results_dir}")
+        print(f"    Files: {', '.join(copied_files)}")
 
 
 def get_available_gpus():
@@ -49,16 +92,22 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
     if n_workers == 1:
         # Sequential execution
         results = []
-        for exp_config in experiments:
-            gpu_id = gpu_pool[0] if gpu_pool else None
-            result = run_experiment_with_gpu(exp_config, gpu_id)
-            if result:
-                results.append(result)
+        try:
+            for exp_config in experiments:
+                gpu_id = gpu_pool[0] if gpu_pool else None
+                result = run_experiment_with_gpu(exp_config, gpu_id)
+                if result:
+                    results.append(result)
+        except KeyboardInterrupt:
+            print("\n⚠️  Ctrl+C detected! Stopping...")
+            sys.exit(1)
         return results
     
     # Parallel execution
     results = []
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+    executor = ProcessPoolExecutor(max_workers=n_workers)
+    
+    try:
         # Submit all jobs with GPU assignment
         future_to_exp = {}
         for i, exp_config in enumerate(experiments):
@@ -77,6 +126,18 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                     print(f"✓ Completed: {result.get('name', 'unknown')}")
             except Exception as e:
                 print(f"❌ Failed: {exp_config.get('name', 'unknown')} - {e}")
+    
+    except KeyboardInterrupt:
+        print("\n⚠️  Ctrl+C detected! Stopping all workers...")
+        # Cancel all pending futures
+        for future in future_to_exp:
+            future.cancel()
+        # Force shutdown with wait=False to kill running workers immediately
+        executor.shutdown(wait=False, cancel_futures=True)
+        print("✓ All workers stopped.")
+        sys.exit(1)
+    finally:
+        executor.shutdown(wait=True)
     
     return results
 
@@ -113,7 +174,13 @@ def run_ast_experiment(config_dict):
     if result_file.exists():
         print(f"✓ {name} - already complete (loading cached result)")
         with open(result_file) as f:
-            return json.load(f)
+            result_data = json.load(f)
+        
+        # Copy result files to shared directory if specified (in case it wasn't done before)
+        if config_dict.get('results_dir'):
+            copy_result_files(output_dir, config_dict['results_dir'], name)
+        
+        return result_data
     
     # Check if training complete
     model_file = output_dir / 'ast_model_best.pt'
@@ -133,6 +200,11 @@ def run_ast_experiment(config_dict):
         }
         with open(result_file, 'w') as f:
             json.dump(result_dict, f, indent=2)
+        
+        # Copy result files to shared directory if specified
+        if config_dict.get('results_dir'):
+            copy_result_files(output_dir, config_dict['results_dir'], name)
+        
         return result_dict
     else:
         print(f"\n{'='*70}")
@@ -189,6 +261,10 @@ def run_ast_experiment(config_dict):
     
     print(f"\n✓ AST experiment complete: {name}")
     
+    # Copy result files to shared directory if specified
+    if config_dict.get('results_dir'):
+        copy_result_files(output_dir, config_dict['results_dir'], name)
+    
     return result_dict
 
 
@@ -211,7 +287,13 @@ def run_experiment(config_dict):
     if result_file.exists():
         print(f"✓ {name} - already complete (loading cached result)")
         with open(result_file) as f:
-            return json.load(f)
+            result_data = json.load(f)
+        
+        # Copy result files to shared directory if specified (in case it wasn't done before)
+        if config_dict.get('results_dir'):
+            copy_result_files(output_dir, config_dict['results_dir'], name)
+        
+        return result_data
     
     # Check if training complete but evaluation missing
     model_file = output_dir / 'birdclef_finetuned_best.pt'
@@ -316,12 +398,18 @@ def run_experiment(config_dict):
         sys.exit(1)
     
     # Load result
+    result_data = None
     if result_file.exists():
         with open(result_file) as f:
-            return json.load(f)
+            result_data = json.load(f)
     else:
         print(f"⚠ WARNING: No result file found for {name}")
-        return None
+    
+    # Copy result files to shared directory if specified
+    if config_dict.get('results_dir') and result_file.exists():
+        copy_result_files(output_dir, config_dict['results_dir'], name)
+    
+    return result_data
 
 
 def main():
@@ -330,7 +418,8 @@ def main():
     parser.add_argument('--avianz-test', required=True, help='AviaNZ test data folder')
     parser.add_argument('--doc-train', required=True, help='DOC training data folder')
     parser.add_argument('--doc-test', required=True, help='DOC test data folder')
-    parser.add_argument('--output', required=True, help='Output folder for all experiments')
+    parser.add_argument('--output', required=True, help='Output folder for all experiments (model files)')
+    parser.add_argument('--results-dir', default=None, help='Shared results directory for small files (JSONs, CSVs). If not specified, saves to output folder.')
     parser.add_argument('--noise-folder', default=None, help='Noise folder (optional, for noise sweep)')
     parser.add_argument('--model', default='BirdClefModels/model_fold0.pth', help='Pretrained model')
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
@@ -721,6 +810,10 @@ def main():
     print(f" Parallel workers: {n_workers}")
     print(f"{'='*70}\n")
     
+    # Add results_dir to all experiment configs
+    for exp in all_experiments:
+        exp['results_dir'] = args.results_dir
+    
     all_results = run_experiments_parallel(all_experiments, n_workers, gpu_pool)
     
     # =========================================================================
@@ -741,4 +834,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⚠️  Interrupted by user. Exiting...")
+        sys.exit(1)
