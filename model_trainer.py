@@ -221,7 +221,8 @@ class ASTTrainer:
                  normalize=False, noise_as_samples=False, max_noise_samples=None,
                  pos_weight_cap=20.0, use_adapters=False, per_chunk_norm=False,
                  use_dann=False, target_folder=None, lambda_domain=0.3,
-                 test_folder=None, test_folder2=None, use_cleaner=False):
+                 test_folder=None, test_folder2=None, use_cleaner=False,
+                 patience=0, seed=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -259,10 +260,29 @@ class ASTTrainer:
         self.test_folder = test_folder
         self.test_folder2 = test_folder2
         self.use_cleaner = use_cleaner
+        self.patience = patience
+        self.seed = seed
+        
+        # Set random seed for reproducibility
+        if self.seed is not None:
+            import random
+            import numpy as np
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(self.seed)
+                torch.cuda.manual_seed_all(self.seed)
+            # For reproducibility with cudnn
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            print(f"Random seed set to: {self.seed}")
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        if self.patience > 0:
+            print(f"Early stopping patience: {self.patience} epochs")
         if self.use_amp:
             print(f"Using Automatic Mixed Precision (AMP) for faster training")
         
@@ -486,6 +506,7 @@ class ASTTrainer:
         
         best_val_acc = 0.0
         best_epoch = -1
+        epochs_without_improvement = 0
         
         # Divergence detection
         initial_loss = None
@@ -913,7 +934,14 @@ class ASTTrainer:
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 best_epoch = epoch + 1
+                epochs_without_improvement = 0
                 self._save_model(model, best=True)
+            else:
+                epochs_without_improvement += 1
+                if self.patience > 0 and epochs_without_improvement >= self.patience:
+                    print(f"\n  Early stopping: no improvement for {self.patience} epochs")
+                    print(f"  Best {'macro-F1' if self.multilabel else 'val acc'}: {best_val_acc:.4f} at epoch {best_epoch}")
+                    break
             
             epoch_time = time.time() - start_time
             print(f'Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)')
@@ -1299,7 +1327,8 @@ class CNNTrainer:
                  pretrained_path=None, weight_decay=None,
                  noise_ratio=None, noise_folder=None, freq_bins=None, time_bins=None,
                  use_focal_loss=False, use_temporal_roll=None, use_amp=True,
-                 normalize=False, noise_as_samples=False, max_noise_samples=None):
+                 normalize=False, noise_as_samples=False, max_noise_samples=None,
+                 patience=0, seed=None):
         
         self.data_folder = data_folder
         self.output_folder = output_folder
@@ -1319,10 +1348,27 @@ class CNNTrainer:
         self.normalize = normalize
         self.noise_as_samples = noise_as_samples
         self.max_noise_samples = max_noise_samples
+        self.patience = patience
+        self.seed = seed
+        
+        # Set random seed for reproducibility
+        if self.seed is not None:
+            import random
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(self.seed)
+                torch.cuda.manual_seed_all(self.seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            print(f"Random seed set to: {self.seed}")
         
         # Setup device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print(f"Using device: {self.device}")
+        if self.patience > 0:
+            print(f"Early stopping patience: {self.patience} epochs")
         if self.use_amp:
             print(f"Using Automatic Mixed Precision (AMP) for faster training")
         
@@ -1412,6 +1458,7 @@ class CNNTrainer:
         
         best_val_acc = 0.0
         best_epoch = -1
+        epochs_without_improvement = 0
         
         for epoch in range(self.max_epochs):
             start_time = time.time()
@@ -1602,7 +1649,14 @@ class CNNTrainer:
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 best_epoch = epoch + 1
+                epochs_without_improvement = 0
                 self._save_model(model, best=True)
+            else:
+                epochs_without_improvement += 1
+                if self.patience > 0 and epochs_without_improvement >= self.patience:
+                    print(f"\n  Early stopping: no improvement for {self.patience} epochs")
+                    print(f"  Best {'macro-F1' if self.multilabel else 'val acc'}: {best_val_acc:.4f} at epoch {best_epoch}")
+                    break
             
             epoch_time = time.time() - start_time
             print(f'Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)')

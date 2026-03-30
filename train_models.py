@@ -147,6 +147,11 @@ Examples:
     parser.add_argument('--use-cleaner', action='store_true',
                        help="Use trainable spectrogram cleaner network for domain adaptation. Keeps backbone frozen and learns preprocessing transform.")
     
+    parser.add_argument('--patience', type=int, default=0,
+                       help="Early stopping patience: stop if val metric doesn't improve for N epochs (default: 0 = disabled, recommended: 15)")
+    parser.add_argument('--seed', type=int, default=None,
+                       help="Random seed for reproducibility (default: None)")
+    
     args = parser.parse_args()
     
     if args.use_dann and not args.target_folder:
@@ -213,7 +218,9 @@ Examples:
             lambda_domain=args.lambda_domain,
             test_folder=args.test_folder,
             test_folder2=args.test_folder2,
-            use_cleaner=args.use_cleaner
+            use_cleaner=args.use_cleaner,
+            patience=args.patience,
+            seed=args.seed
         )
     elif args.model == 'cnn':
         print(f"Training Convolutional Neural Network (CNN) model...")
@@ -240,7 +247,9 @@ Examples:
             freq_bins=args.freq_bins,
             time_bins=args.time_bins,
             use_focal_loss=args.focal_loss,
-            use_temporal_roll=args.temporal_roll
+            use_temporal_roll=args.temporal_roll,
+            patience=args.patience,
+            seed=args.seed
         )
     elif args.model == 'kaytoo':
         print(f"Training Kaytoo model (EfficientNet + attention pooling)...")
