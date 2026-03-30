@@ -136,10 +136,6 @@ class EvaluationManager:
         
         # Create visualizations
         self._plot_multilabel_confusion_matrices(cm_multi, name)
-        
-        # Also create primary species analysis if available
-        if 'test_primary_species' in data and data['test_primary_species'] is not None:
-            self._evaluate_primary_species(y_pred_probs, data, name)
     
     def _evaluate_singlelabel(self, y_true, y_pred_probs, name):
         """Evaluate single-label classification model."""
@@ -164,8 +160,15 @@ class EvaluationManager:
         # Create species name to index mapping
         species_to_idx = {species: idx for idx, species in enumerate(data['categories'])}
         
-        # Filter out None values (noise samples with all-zero labels have no primary species)
-        valid_mask = np.array([species is not None for species in data['test_primary_species']])
+        # Filter out None values and noise/background/empty labels (samples with no valid species)
+        # These are noise samples that should not be included in primary species evaluation
+        invalid_labels = {None, 'noise', 'background', 'empty', 'Noise', 'Background', 'Empty', 'Empty Sample'}
+        valid_mask = np.array([
+            species is not None and 
+            species not in invalid_labels and 
+            species in species_to_idx 
+            for species in data['test_primary_species']
+        ])
         
         if not valid_mask.all():
             num_noise = (~valid_mask).sum()
@@ -178,9 +181,6 @@ class EvaluationManager:
         # Filter to valid samples only
         valid_species = [data['test_primary_species'][i] for i in range(len(data['test_primary_species'])) if valid_mask[i]]
         valid_probs = y_pred_probs[valid_mask]
-        
-        # Convert primary species to indices
-        y_true_primary = np.array([species_to_idx[species] for species in valid_species])
         
         # Convert primary species to indices
         y_true_primary = np.array([species_to_idx[species] for species in valid_species])

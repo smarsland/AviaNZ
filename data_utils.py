@@ -79,7 +79,6 @@ class DataLoader:
         
         filenames = []
         labels = []
-        primary_species = []
         
         # Create category to index mapping
         category_to_idx = {category: idx for idx, category in enumerate(categories)}
@@ -95,12 +94,6 @@ class DataLoader:
             if os.path.exists(file_path):
                 files_found += 1
                 filenames.append(file_path)
-                
-                if 'primary_class' in file_info:
-                    primary_species.append(file_info['primary_class'])
-                else:
-                    primary_species.append('noise')
-                
                 source_files.append(file_info.get('source_file'))
 
                 if use_multilabel:
@@ -137,9 +130,9 @@ class DataLoader:
         
         print(f"Loaded {mode_str} data: {len(filenames)} files, {labels.shape[1]} classes")
         
-        # Random stratified split
+        # Random split (no stratification since we don't have primary species)
         split_data = self.split_data(
-            filenames, labels, primary_species, noise_filenames, validation_share
+            filenames, labels, noise_filenames, validation_share
         )
         
         # Get class names with proper mapping
@@ -151,10 +144,8 @@ class DataLoader:
             'train_labels': split_data[1],
             'test_filenames': split_data[2],
             'test_labels': split_data[3],
-            'train_primary_species': split_data[4],
-            'test_primary_species': split_data[5],
-            'train_noise_filenames': split_data[6],
-            'test_noise_filenames': split_data[7],
+            'train_noise_filenames': split_data[4],
+            'test_noise_filenames': split_data[5],
             'categories': categories,
             'class_names': class_names,
             'nclasses': len(categories)
@@ -183,48 +174,20 @@ class DataLoader:
         
         return noise_filenames
     
-    def split_data(self, filenames, labels, primary_species, noise_filenames, validation_share):
-        """Split data into training and test sets using random stratified split."""
+    def split_data(self, filenames, labels, noise_filenames, validation_share):
+        """Split data into training and test sets using random split."""
         
         # Handle case where validation is disabled (validation_share == 0)
         if validation_share == 0.0 or validation_share is None:
             print(f"Validation disabled: using all {len(filenames)} files for training")
-            return (filenames, labels, [], np.array([]), primary_species, [], 
-                    noise_filenames, [])
+            return (filenames, labels, [], np.array([]), noise_filenames, [])
         
-        # Filter out None values for stratification (noise samples have no primary species)
-        if primary_species is not None and None in primary_species:
-            # Can't use stratify with None values, do regular random split
-            print(f"Note: Using random split (not stratified) because dataset includes noise samples with no primary species")
-            train_filenames, test_filenames, train_labels, test_labels = train_test_split(
-                filenames, labels, test_size=validation_share, random_state=42
-            )
-            # Split primary_species the same way
-            train_primary_species, test_primary_species = train_test_split(
-                primary_species, test_size=validation_share, random_state=42
-            )
-        elif primary_species is not None:
-            # Check for singleton classes (only 1 member) which break stratified split
-            from collections import Counter
-            class_counts = Counter(primary_species)
-            singletons = [cls for cls, cnt in class_counts.items() if cnt < 2]
-            if singletons:
-                print(f"Warning: {len(singletons)} class(es) have only 1 sample — falling back to non-stratified split: {singletons}")
-                train_filenames, test_filenames, train_labels, test_labels, train_primary_species, test_primary_species = train_test_split(
-                    filenames, labels, primary_species, test_size=validation_share, random_state=42
-                )
-            else:
-                train_filenames, test_filenames, train_labels, test_labels, train_primary_species, test_primary_species = train_test_split(
-                    filenames, labels, primary_species, test_size=validation_share, random_state=42, stratify=primary_species
-                )
-        else:
-            train_filenames, test_filenames, train_labels, test_labels = train_test_split(
-                filenames, labels, test_size=validation_share, random_state=42
-            )
-            train_primary_species, test_primary_species = None, None
+        # Simple random split
+        train_filenames, test_filenames, train_labels, test_labels = train_test_split(
+            filenames, labels, test_size=validation_share, random_state=42
+        )
         
-        # Split noise data if available (for augmentation, not as samples)
-        # If noise_as_class was used, noise files are already in the training set with zero labels
+        # Split noise data if available (for augmentation)
         train_noise_filenames, test_noise_filenames = None, None
         if noise_filenames and len(noise_filenames) > 0:
             train_noise_size = int(len(noise_filenames) * (1 - validation_share))
@@ -233,7 +196,7 @@ class DataLoader:
             print(f"Split noise data for augmentation: {len(train_noise_filenames)} training and {len(test_noise_filenames)} validation noise files")
         
         print(f"Split data: {len(train_filenames)} training and {len(test_filenames)} validation files")
-        return train_filenames, train_labels, test_filenames, test_labels, train_primary_species, test_primary_species, train_noise_filenames, test_noise_filenames
+        return train_filenames, train_labels, test_filenames, test_labels, train_noise_filenames, test_noise_filenames
     
     def _get_class_names(self, categories, name_mapping_path="DOC_bird_naming_map.csv"):
         """Get human-readable class names."""
