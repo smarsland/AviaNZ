@@ -96,12 +96,16 @@ echo "============================================================"
 echo " Summary"
 echo "============================================================"
 echo "  Complete experiments   : $COMPLETE (kept)"
-echo "  Incomplete experiments : $INCOMPLETE (removed)"
+echo "  Incomplete experiments : $INCOMPLETE (removed from both locations)"
 echo "============================================================"
 echo ""
 
 if [ $INCOMPLETE -gt 0 ]; then
     echo "✅ Cleaned up $INCOMPLETE incomplete experiment(s)"
+    echo "   Removed from:"
+    echo "   - Experiments dir: $EXPERIMENTS_DIR"
+    echo "   - Results dir: $RESULTS_DIR"
+    echo ""
     echo "   You can now rerun run_matched_experiments.sh"
 else
     echo "✅ No cleanup needed - all experiments are complete!"
