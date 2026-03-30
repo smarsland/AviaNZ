@@ -634,12 +634,12 @@ def main():
         print("="*70)
         print(" Goal: Test optimal noise mixing ratio")
         print(" Using: Log baseline (no normalization)")
-        print(" Levels: 0.0, 0.25, 0.5, 0.75, 1.0")
+        print(" Levels: 0.0, 0.2, 0.4, 0.6, 0.8")
         print(f" Seeds: {args.seeds}")
         print(f" Total: 5 levels × 2 directions × {len(args.seeds)} seeds = {5 * 2 * len(args.seeds)} experiments")
         print("="*70 + "\n")
         
-        noise_levels = [0.0, 0.25, 0.5, 0.75, 1.0]
+        noise_levels = [0.0, 0.2, 0.4, 0.6, 0.8]
         
         for seed in args.seeds:
             for noise_level in noise_levels:

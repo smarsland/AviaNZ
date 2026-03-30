@@ -83,7 +83,7 @@ This measures how much worse a model trained on $D_s$ performs on $D_t$ compared
 
 \subsection{Experimental Design}
 
-For every test we train a model on the training data from one dataset and then test it on the test data of both datasets, comparing within-domain to cross-domain accuracy. We test six normalization methods (Log, Log+median, Log+normalize, Log+normalize+median, PCEN, Box-Cox), domain adaptation via an added DANN (domain adversarial neural network)~\cite{ganin2016domain} head, and augmentation with Freesound noise at varying intensities (0.0, 0.25, 0.5, 0.75, 1.0) and diversity (1, 10, 100, 1000 noise samples). All experiments use 5 random seeds (reporting mean$\pm$std).
+For every test we train a model on the training data from one dataset and then test it on the test data of both datasets, comparing within-domain to cross-domain accuracy. We test six normalization methods (Log, Log+median, Log+normalize, Log+normalize+median, PCEN, Box-Cox), DANN, and augmentation with Freesound noise at varying intensities (0.0, 0.5, 1.0) and diversity (1, 10, 100, 1000 noise samples). All experiments use 5 random seeds (reporting mean$\pm$std).
 
 \begin{figure}[t]
 \centering
@@ -143,7 +143,7 @@ DANN     & Log+normalize+median    & 36.9$\pm$3.6 & 37.5$\pm$2.4 & 39.1$\pm$5.4 
 
 \subsection{Noise Augmentation}
 
-Moderate noise intensity (0.5) provides modest regularization benefit, though results vary across transfer directions (Table~\ref{tab:noise_intensity}). Higher noise (intensity 1.0) shows mixed results, with some improvement in the DOC→Wait\=akere cross-domain direction but degraded in-domain performance overall. Noise variety shows substantial improvement in the DOC→Wait\=akere direction (Table~\ref{tab:noise_variety}), with 1000 samples achieving 17.6\% reduction compared to 36--46\% for smaller varieties, suggesting that greater noise diversity can improve generalization in some transfer settings, though this effect does not transfer to the Wait\=akere→DOC direction.
+Noise augmentation shows mixed results (Table~\ref{tab:noise_intensity}). At intensity 0.5, cross-domain performance on DOC→Wait\=akere improves slightly (23.8\% vs 21.5\% baseline), but in-domain performance degrades on Waitakere (30.9\% vs 35.4\%). Higher noise (intensity 1.0) further degrades in-domain performance (to 26.0\% and 56.4\%) while providing some cross-domain benefit in one direction (27.2\% for DOC→Wait\=akere). Noise variety shows substantial improvement in the DOC→Wait\=akere direction (Table~\ref{tab:noise_variety}), with 1000 samples achieving 17.6\% reduction compared to 37--46\% for smaller varieties, suggesting that greater acoustic diversity in noise can improve generalization in some settings, though this effect does not replicate in the Wait\=akere→DOC direction.
 
 \begin{table*}[htbp]
 \centering
@@ -204,13 +204,9 @@ Since both datasets use identical early stopping procedures, this approximately 
 
 Our results have limited replication (five repetitions), which constrains statistical robustness. They are also specific to nine New Zealand species (although their calls are relatively representative of many common international species) and have only two recording sources. The two datasets differ in multiple dimensions (equipment, geography, recording practices, potential label noise), preventing causal attribution of observed effects to specific factors; controlled experiments systematically varying individual factors would be needed for stronger causal claims.
 
-A larger study would be needed to test generalization to bigger species sets, other regions, and different equipment. Further, systematically varying individual factors are needed for stronger causal claims.
+A larger study would be needed to test generalization to bigger species sets, other regions, and different equipment. It should also be noted that aggregate accuracy obscures per-class patterns and potential annotation inconsistencies. We infer mechanisms from accuracy patterns without direct feature representation analysis. 
 
-It should also be noted that aggregate accuracy obscures per-class patterns and potential annotation inconsistencies. We infer mechanisms from accuracy patterns without direct feature representation analysis. 
-
-Our study focuses on 9 New Zealand species with approximately 700 total samples, making the dataset fairly small. We also evaluate only the one CNN-based architecture, though testing on an Audio Spectrogram Transformer shows similar results so far. 
-
-Finally, our noise augmentation uses synthetic background noise, where real environmental noise from target domains may provide more effective regularization. 
+Our study focuses on 9 New Zealand species with approximately 700 total samples, making the dataset fairly small. We also evaluate only one CNN-based architecture, though testing on an Audio Spectrogram Transformer shows similar results so far. Finally, our noise augmentation uses synthetic background noise, where real environmental noise from target domains may provide more effective regularization.
 
 We did not examine the possibility of doing initial pseudo-labelling on a subset of the target dataset, which has been tried in the past. 
 
