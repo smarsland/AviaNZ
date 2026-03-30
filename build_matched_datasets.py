@@ -99,7 +99,11 @@ def get_audio_duration(audio_path):
 
 def trim_spectrogram_to_length(sg, target_time_bins):
     """
-    Trim spectrogram to exactly target_time_bins columns using center cropping.
+    Trim spectrogram to exactly target_time_bins columns by selecting the region
+    with highest energy (where the actual vocalization likely is).
+    
+    This is much better than center or random cropping for long AviaNZ segments
+    where the annotation spans a long period but the actual call is shorter.
     
     Args:
         sg: Spectrogram array of shape (freq_bins, time_bins)
@@ -109,9 +113,20 @@ def trim_spectrogram_to_length(sg, target_time_bins):
         Trimmed spectrogram of shape (freq_bins, target_time_bins)
     """
     if sg.shape[1] >= target_time_bins:
-        # Center crop: take middle portion to capture the actual call
-        start_col = (sg.shape[1] - target_time_bins) // 2
-        return sg[:, start_col:start_col + target_time_bins]
+        # Calculate energy per time bin (sum over frequency axis)
+        energy_per_bin = sg.sum(axis=0)  # Shape: (time_bins,)
+        
+        # Use sliding window to find highest-energy region
+        best_energy = -1
+        best_start = 0
+        
+        for start in range(sg.shape[1] - target_time_bins + 1):
+            window_energy = energy_per_bin[start:start + target_time_bins].sum()
+            if window_energy > best_energy:
+                best_energy = window_energy
+                best_start = start
+        
+        return sg[:, best_start:best_start + target_time_bins]
     else:
         # Should not happen if we filter properly, but just in case
         return None
