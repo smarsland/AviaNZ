@@ -99,7 +99,7 @@ def get_audio_duration(audio_path):
 
 def trim_spectrogram_to_length(sg, target_time_bins):
     """
-    Trim spectrogram to exactly target_time_bins columns.
+    Trim spectrogram to exactly target_time_bins columns using center cropping.
     
     Args:
         sg: Spectrogram array of shape (freq_bins, time_bins)
@@ -109,7 +109,9 @@ def trim_spectrogram_to_length(sg, target_time_bins):
         Trimmed spectrogram of shape (freq_bins, target_time_bins)
     """
     if sg.shape[1] >= target_time_bins:
-        return sg[:, :target_time_bins]
+        # Center crop: take middle portion to capture the actual call
+        start_col = (sg.shape[1] - target_time_bins) // 2
+        return sg[:, start_col:start_col + target_time_bins]
     else:
         # Should not happen if we filter properly, but just in case
         return None

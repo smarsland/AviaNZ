@@ -360,17 +360,58 @@ def main():
     df = pd.DataFrame(rows)
     
     # Calculate reduction percentage
-    # Reduction% = (in_domain_acc - cross_domain_acc) / in_domain_acc * 100
-    df['reduction_pct'] = ((df['in_domain_acc'] - df['cross_domain_acc']) / df['in_domain_acc'] * 100)
+    # NEW: Compare cross-domain performance to in-domain baseline of the TARGET dataset
+    # This normalizes by target dataset difficulty, which is more fair
+    # For each experiment, find the matching in-domain baseline for its target dataset
     
-    # Calculate std for reduction using error propagation
-    # If Reduction = (A - B) / A, then std_red ≈ sqrt((std_B/A)^2 + ((B*std_A)/A^2)^2) * 100
-    with np.errstate(divide='ignore', invalid='ignore'):
-        df['reduction_pct_std'] = np.sqrt(
-            (df['cross_domain_std'] / df['in_domain_acc'])**2 + 
-            ((df['cross_domain_acc'] * df['in_domain_std']) / df['in_domain_acc']**2)**2
-        ) * 100
-        df['reduction_pct_std'] = df['reduction_pct_std'].fillna(0)
+    df['reduction_pct'] = np.nan
+    df['reduction_pct_std'] = np.nan
+    df['target_in_domain_acc'] = np.nan
+    df['target_in_domain_std'] = np.nan
+    
+    for idx, row in df.iterrows():
+        # Find the in-domain baseline for this experiment's target dataset
+        # This is the experiment where source_dataset == current target_dataset
+        # and has matching method, transform, and noise parameters
+        baseline_mask = (
+            (df['source_dataset'] == row['target_dataset']) &
+            (df['method'] == row['method']) &
+            (df['transform'] == row['transform'])
+        )
+        
+        # Match noise parameters
+        if pd.notna(row['noise_intensity']):
+            baseline_mask &= (df['noise_intensity'] == row['noise_intensity'])
+        else:
+            baseline_mask &= df['noise_intensity'].isna()
+            
+        if pd.notna(row['noise_variety']):
+            baseline_mask &= (df['noise_variety'] == row['noise_variety'])
+        else:
+            baseline_mask &= df['noise_variety'].isna()
+        
+        baseline = df[baseline_mask]
+        
+        if len(baseline) == 1:
+            target_in_domain = baseline.iloc[0]['in_domain_acc']
+            target_in_domain_std = baseline.iloc[0]['in_domain_std']
+            
+            # Store target in-domain baseline
+            df.at[idx, 'target_in_domain_acc'] = target_in_domain
+            df.at[idx, 'target_in_domain_std'] = target_in_domain_std
+            
+            # Calculate reduction: (target_in_domain - cross_domain) / target_in_domain * 100
+            df.at[idx, 'reduction_pct'] = (
+                (target_in_domain - row['cross_domain_acc']) / target_in_domain * 100
+            )
+            
+            # Error propagation for reduction
+            # If Reduction = (A - B) / A, then std_red ≈ sqrt((std_B/A)^2 + ((B*std_A)/A^2)^2) * 100
+            with np.errstate(divide='ignore', invalid='ignore'):
+                df.at[idx, 'reduction_pct_std'] = np.sqrt(
+                    (row['cross_domain_std'] / target_in_domain)**2 + 
+                    ((row['cross_domain_acc'] * target_in_domain_std) / target_in_domain**2)**2
+                ) * 100
     
     # =========================================================================
     # GENERATE NOISE AUGMENTATION PLOTS (before tables for better flow)
@@ -390,6 +431,8 @@ def main():
     print("\n" + "="*70)
     print("TABLE 1: NORMALIZATION COMPARISON")
     print("="*70)
+    print("\nNote: reduction_pct = (target_in_domain - cross_domain) / target_in_domain * 100")
+    print("This measures how much worse cross-domain transfer is vs. the target dataset's in-domain baseline.\n")
     
     norm_df = df[
         (df['method'] == 'Baseline') & 
@@ -400,8 +443,11 @@ def main():
     if len(norm_df) > 0:
         table1 = norm_df[[
             'source_dataset', 'target_dataset', 'transform',
-            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std', 
-            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+            'val_acc', 'val_acc_std', 
+            'in_domain_acc', 'in_domain_std',
+            'target_in_domain_acc', 'target_in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 
+            'reduction_pct', 'reduction_pct_std', 'n_trials'
         ]].sort_values(['source_dataset', 'transform'])
         
         print(table1.to_string(index=False))
@@ -424,8 +470,11 @@ def main():
     if len(dann_df) > 0:
         table2 = dann_df[[
             'source_dataset', 'target_dataset', 'method', 'transform',
-            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std',
-            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+            'val_acc', 'val_acc_std', 
+            'in_domain_acc', 'in_domain_std',
+            'target_in_domain_acc', 'target_in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 
+            'reduction_pct', 'reduction_pct_std', 'n_trials'
         ]].sort_values(['source_dataset', 'transform', 'method'])
         
         print(table2.to_string(index=False))
@@ -444,8 +493,11 @@ def main():
     if len(intensity_df) > 0:
         table3 = intensity_df[[
             'source_dataset', 'target_dataset', 'noise_intensity',
-            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std',
-            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+            'val_acc', 'val_acc_std', 
+            'in_domain_acc', 'in_domain_std',
+            'target_in_domain_acc', 'target_in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 
+            'reduction_pct', 'reduction_pct_std', 'n_trials'
         ]].sort_values(['source_dataset', 'noise_intensity'])
         
         print(table3.to_string(index=False))
@@ -464,8 +516,11 @@ def main():
     if len(variety_df) > 0:
         table4 = variety_df[[
             'source_dataset', 'target_dataset', 'noise_variety',
-            'val_acc', 'val_acc_std', 'in_domain_acc', 'in_domain_std',
-            'cross_domain_acc', 'cross_domain_std', 'reduction_pct', 'reduction_pct_std', 'n_trials'
+            'val_acc', 'val_acc_std', 
+            'in_domain_acc', 'in_domain_std',
+            'target_in_domain_acc', 'target_in_domain_std',
+            'cross_domain_acc', 'cross_domain_std', 
+            'reduction_pct', 'reduction_pct_std', 'n_trials'
         ]].sort_values(['source_dataset', 'noise_variety'])
         
         print(table4.to_string(index=False))
