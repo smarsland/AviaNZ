@@ -7,27 +7,35 @@
 #          This prevents re-running since the script thinks
 #          those experiments already exist.
 #
-# Solution: Delete experiment folders without result.json
+# Solution: Delete experiment folders without result.json from
+#           both the main experiments directory AND the shared
+#           results directory.
 #
 # Usage:
-#   ./cleanup_incomplete_experiments.sh [EXPERIMENTS_DIR]
+#   ./cleanup_incomplete_experiments.sh [EXPERIMENTS_DIR] [RESULTS_DIR]
 #
-# If no directory specified, uses default:
-#   /local/scratch/$USER/experiments_matched
+# If no directories specified, uses defaults:
+#   EXPERIMENTS_DIR: /local/scratch/$USER/experiments_matched
+#   RESULTS_DIR: $HOME/results
 # ============================================================
 
 set -e
 
-# Default path (matches run_matched_experiments.sh)
+# Default paths (matches run_matched_experiments.sh)
 DEFAULT_EXPERIMENTS_DIR="/local/scratch/$USER/experiments_matched"
-EXPERIMENTS_DIR="${1:-$DEFAULT_EXPERIMENTS_DIR}"
+DEFAULT_RESULTS_DIR="$HOME/results"
 
-# Check if directory exists
+EXPERIMENTS_DIR="${1:-$DEFAULT_EXPERIMENTS_DIR}"
+RESULTS_DIR="${2:-$DEFAULT_RESULTS_DIR}"
+
+# Check if experiments directory exists
 if [ ! -d "$EXPERIMENTS_DIR" ]; then
-    echo "Error: Directory does not exist: $EXPERIMENTS_DIR"
+    echo "Error: Experiments directory does not exist: $EXPERIMENTS_DIR"
     echo ""
-    echo "Usage: $0 [EXPERIMENTS_DIR]"
-    echo "  Default: $DEFAULT_EXPERIMENTS_DIR"
+    echo "Usage: $0 [EXPERIMENTS_DIR] [RESULTS_DIR]"
+    echo "  Defaults:"
+    echo "    EXPERIMENTS_DIR: $DEFAULT_EXPERIMENTS_DIR"
+    echo "    RESULTS_DIR: $DEFAULT_RESULTS_DIR"
     exit 1
 fi
 
