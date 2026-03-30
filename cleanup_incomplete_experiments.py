@@ -52,40 +52,56 @@ def main():
     print()
     
     # Remove main all_results.json if it exists (will be regenerated)
-    all_results = experiments_dir / "all_results.json"
-    if all_results.exists():
-        print(f"🗑️  Removing main results file: {all_results}")
-        all_results.unlink()
-        print()
+    all_results_exp = experiments_dir / "all_results.json"
+    if all_results_exp.exists():
+        print(f"🗑️  Removing experiments all_results.json: {all_results_exp}")
+        all_results_exp.unlink()
+    
+    if results_dir.exists():
+        all_results_res = results_dir / "all_results.json"
+        if all_results_res.exists():
+            print(f"🗑️  Removing results all_results.json: {all_results_res}")
+            all_results_res.unlink()
+    
+    print()
     
     # Count complete and incomplete experiments
     incomplete = []
     complete = []
     
-    # Find all subdirectories in experiments folder
+    # Collect all experiment names from both directories
+    exp_names = set()
+    
+    if experiments_dir.exists():
+        exp_names.update(d.name for d in experiments_dir.iterdir() if d.is_dir())
+    
+    if results_dir.exists():
+        exp_names.update(d.name for d in results_dir.iterdir() if d.is_dir())
+    
+    # Find incomplete experiments (missing result.json in shared results)
     print("Scanning for incomplete experiments...")
+    print("(Source of truth: shared results directory)")
     print()
     
-    for exp_dir in sorted(experiments_dir.iterdir()):
-        # Skip if not a directory
-        if not exp_dir.is_dir():
-            continue
+    for exp_name in sorted(exp_names):
+        exp_dir = experiments_dir / exp_name
+        results_exp_dir = results_dir / exp_name if results_dir.exists() else None
         
-        exp_name = exp_dir.name
-        result_file = exp_dir / "result.json"
+        # Check if result.json exists in shared results directory (source of truth)
+        has_result = results_exp_dir is not None and (results_exp_dir / "result.json").exists()
         
-        # Check if result.json exists
-        if not result_file.exists():
+        if not has_result:
             print(f"❌ INCOMPLETE: {exp_name}")
-            print(f"   → Removing from experiments: {exp_dir}")
-            shutil.rmtree(exp_dir)
             
-            # Also remove from shared results directory if it exists
-            if results_dir.exists():
-                results_exp_dir = results_dir / exp_name
-                if results_exp_dir.exists():
-                    print(f"   → Removing from results: {results_exp_dir}")
-                    shutil.rmtree(results_exp_dir)
+            # Remove from experiments directory
+            if exp_dir.exists():
+                print(f"   → Removing from experiments: {exp_dir}")
+                shutil.rmtree(exp_dir)
+            
+            # Remove from shared results directory
+            if results_exp_dir is not None and results_exp_dir.exists():
+                print(f"   → Removing from results: {results_exp_dir}")
+                shutil.rmtree(results_exp_dir)
             
             incomplete.append(exp_name)
         else:
