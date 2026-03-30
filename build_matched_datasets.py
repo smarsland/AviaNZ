@@ -281,9 +281,12 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
             if sg.shape[1] < min_bins:
                 too_short += 1
                 continue
-            # Trim if too long
+            # Trim if too long using energy-based selection
             if sg.shape[1] > target_time_bins:
-                sg = sg[:, :target_time_bins]
+                sg = trim_spectrogram_to_length(sg, target_time_bins)
+                if sg is None:
+                    failed += 1
+                    continue
                 trimmed += 1
 
         basename = f'file_{len(labels):08d}'
@@ -391,9 +394,11 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
                 # Reject if too short
                 if sg.shape[1] < min_bins:
                     continue  # Try next candidate
-                # Trim if too long
+                # Trim if too long using energy-based selection
                 if sg.shape[1] > target_time_bins:
-                    sg = sg[:, :target_time_bins]
+                    sg = trim_spectrogram_to_length(sg, target_time_bins)
+                    if sg is None:
+                        continue  # Try next candidate
                     trimmed += 1
 
             basename = f'file_{len(avianz_labels):08d}'
