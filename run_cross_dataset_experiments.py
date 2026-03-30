@@ -33,9 +33,14 @@ def get_available_gpus():
     try:
         import torch
         if torch.cuda.is_available():
-            return list(range(torch.cuda.device_count()))
-        return []
-    except:
+            gpu_list = list(range(torch.cuda.device_count()))
+            print(f"DEBUG: Detected {len(gpu_list)} GPUs: {gpu_list}")
+            return gpu_list
+        else:
+            print("DEBUG: torch.cuda.is_available() returned False")
+            return []
+    except Exception as e:
+        print(f"DEBUG: GPU detection failed with error: {e}")
         return []
 
 
@@ -354,16 +359,23 @@ def main():
     output_folder.mkdir(parents=True, exist_ok=True)
     
     # Setup GPU pool for parallel execution
+    print(f"\nDEBUG: args.parallel = {args.parallel}")
+    print(f"DEBUG: args.gpu_ids = {args.gpu_ids}")
+    
     if args.gpu_ids is not None:
         gpu_pool = args.gpu_ids
+        print(f"DEBUG: Using user-specified GPU IDs: {gpu_pool}")
     else:
         gpu_pool = get_available_gpus()
+        print(f"DEBUG: Auto-detected GPU pool: {gpu_pool}")
     
     if args.parallel == 0:
         # Auto-detect: use number of GPUs (or 1 if no GPUs)
         n_workers = len(gpu_pool) if gpu_pool else 1
+        print(f"DEBUG: Auto-detecting workers from GPU pool: {n_workers}")
     else:
         n_workers = args.parallel
+        print(f"DEBUG: Using user-specified worker count: {n_workers}")
     
     print(f"\n{'='*70}")
     print(f" PARALLEL EXECUTION SETUP")
