@@ -22,8 +22,71 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
 
 import config
+
+
+def get_available_gpus():
+    """Detect available GPUs."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return list(range(torch.cuda.device_count()))
+        return []
+    except:
+        return []
+
+
+def run_experiments_parallel(experiments, n_workers, gpu_pool):
+    """Run experiments in parallel using a worker pool."""
+    if n_workers == 1:
+        # Sequential execution
+        results = []
+        for exp_config in experiments:
+            gpu_id = gpu_pool[0] if gpu_pool else None
+            result = run_experiment_with_gpu(exp_config, gpu_id)
+            if result:
+                results.append(result)
+        return results
+    
+    # Parallel execution
+    results = []
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        # Submit all jobs with GPU assignment
+        future_to_exp = {}
+        for i, exp_config in enumerate(experiments):
+            # Round-robin GPU assignment
+            gpu_id = gpu_pool[i % len(gpu_pool)] if gpu_pool else None
+            future = executor.submit(run_experiment_with_gpu, exp_config, gpu_id)
+            future_to_exp[future] = exp_config
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_exp):
+            exp_config = future_to_exp[future]
+            try:
+                result = future.result()
+                if result:
+                    results.append(result)
+                    print(f"✓ Completed: {result.get('name', 'unknown')}")
+            except Exception as e:
+                print(f"❌ Failed: {exp_config.get('name', 'unknown')} - {e}")
+    
+    return results
+
+
+def run_experiment_with_gpu(config_dict, gpu_id=None):
+    """Wrapper to run experiment with specific GPU assignment."""
+    if gpu_id is not None:
+        config_dict = config_dict.copy()
+        config_dict['gpu_id'] = gpu_id
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    
+    if config_dict.get('is_ast'):
+        return run_ast_experiment(config_dict)
+    else:
+        return run_experiment(config_dict)
 
 
 def run_ast_experiment(config_dict):
@@ -270,6 +333,10 @@ def main():
     parser.add_argument('--mixup', type=float, default=0.25, help='Mixup alpha')
     parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456, 590, 573], 
                        help='Random seeds for multiple trials (default: 42 123 456 590 573 for 5 trials)')
+    parser.add_argument('--parallel', type=int, default=1,
+                       help='Number of experiments to run in parallel (default: 1, use 0 for auto-detect based on GPUs)')
+    parser.add_argument('--gpu-ids', type=int, nargs='+', default=None,
+                       help='Specific GPU IDs to use (e.g., --gpu-ids 0 1 2). If not specified, auto-detects all available GPUs.')
     
     args = parser.parse_args()
     
@@ -286,7 +353,27 @@ def main():
     output_folder = Path(args.output)
     output_folder.mkdir(parents=True, exist_ok=True)
     
+    # Setup GPU pool for parallel execution
+    if args.gpu_ids is not None:
+        gpu_pool = args.gpu_ids
+    else:
+        gpu_pool = get_available_gpus()
+    
+    if args.parallel == 0:
+        # Auto-detect: use number of GPUs (or 1 if no GPUs)
+        n_workers = len(gpu_pool) if gpu_pool else 1
+    else:
+        n_workers = args.parallel
+    
+    print(f"\n{'='*70}")
+    print(f" PARALLEL EXECUTION SETUP")
+    print(f"{'='*70}")
+    print(f" Workers: {n_workers}")
+    print(f" GPUs available: {gpu_pool if gpu_pool else 'None (using CPU)'}")
+    print(f"{'='*70}\n")
+    
     all_results = []
+    all_experiments = []
     
     # =========================================================================
     # EXPERIMENT SUITE 1: NORMALIZATION COMPARISON
@@ -311,13 +398,9 @@ def main():
     ]
     
     for seed in args.seeds:
-        print(f"\n{'~'*70}")
-        print(f" Running with seed: {seed}")
-        print(f"{'~'*70}\n")
-        
         for norm_config in normalization_configs:
             # AviaNZ → DOC
-            result = run_experiment({
+            all_experiments.append({
                 **norm_config,
                 'name': f"avianz_baseline_{norm_config['name']}",
                 'type': 'baseline',
@@ -333,11 +416,9 @@ def main():
                 'noise_folder': args.noise_folder,
                 'seed': seed,
             })
-            if result:
-                all_results.append(result)
             
             # DOC → AviaNZ
-            result = run_experiment({
+            all_experiments.append({
                 **norm_config,
                 'name': f"doc_baseline_{norm_config['name']}",
                 'type': 'baseline',
@@ -353,8 +434,6 @@ def main():
                 'noise_folder': args.noise_folder,
                 'seed': seed,
             })
-            if result:
-                all_results.append(result)
     
     # =========================================================================
     # EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL NEURAL NETWORKS (DANN)
@@ -374,13 +453,9 @@ def main():
     ]
     
     for seed in args.seeds:
-        print(f"\n{'~'*70}")
-        print(f" Running DANN with seed: {seed}")
-        print(f"{'~'*70}\n")
-        
         for dann_config in dann_configs:
             # AviaNZ → DOC with DANN
-            result = run_experiment({
+            all_experiments.append({
                 'name': f"avianz_dann_{dann_config['name']}",
                 'type': 'dann',
                 'source': args.avianz_train,
@@ -398,11 +473,9 @@ def main():
                 'lambda_domain': 0.3,
                 'seed': seed,
             })
-            if result:
-                all_results.append(result)
             
             # DOC → AviaNZ with DANN
-            result = run_experiment({
+            all_experiments.append({
                 'name': f"doc_dann_{dann_config['name']}",
                 'type': 'dann',
                 'source': args.doc_train,
@@ -420,8 +493,6 @@ def main():
                 'lambda_domain': 0.3,
                 'seed': seed,
             })
-            if result:
-                all_results.append(result)
     
     # =========================================================================
     # EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP
@@ -440,13 +511,9 @@ def main():
         noise_levels = [0.0, 0.25, 0.5, 0.75, 1.0]
         
         for seed in args.seeds:
-            print(f"\n{'~'*70}")
-            print(f" Running noise intensity sweep with seed: {seed}")
-            print(f"{'~'*70}\n")
-            
             for noise_level in noise_levels:
                 # AviaNZ → DOC
-                result = run_experiment({
+                all_experiments.append({
                     'name': f"avianz_baseline_Log_intensity{noise_level}",
                     'type': 'baseline',
                     'train': args.avianz_train,
@@ -465,11 +532,9 @@ def main():
                     'noise_folder': args.noise_folder,
                     'seed': seed,
                 })
-                if result:
-                    all_results.append(result)
                 
                 # DOC → AviaNZ
-                result = run_experiment({
+                all_experiments.append({
                     'name': f"doc_baseline_Log_intensity{noise_level}",
                     'type': 'baseline',
                     'train': args.doc_train,
@@ -488,8 +553,6 @@ def main():
                     'noise_folder': args.noise_folder,
                     'seed': seed,
                 })
-                if result:
-                    all_results.append(result)
         
         # =====================================================================
         # EXPERIMENT SUITE 4: NOISE VARIETY SWEEP
@@ -518,37 +581,39 @@ def main():
             # Filter out levels larger than available
             variety_levels = [n for n in variety_levels if n <= total_noise_files]
             
-            for seed in args.seeds:
-                print(f"\n{'~'*70}")
-                print(f" Running noise variety sweep with seed: {seed}")
-                print(f"{'~'*70}\n")
+            # Pre-create all noise subsets (not parallelizable)
+            print("Creating noise subsets...")
+            for n_noise in variety_levels:
+                noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
                 
+                if not noise_subset_dir.exists():
+                    print(f"  Creating noise subset: {n_noise} files")
+                    noise_subset_dir.mkdir(parents=True, exist_ok=True)
+                    (noise_subset_dir / 'data').mkdir(exist_ok=True)
+                    
+                    # Randomly sample n files
+                    import random
+                    all_noise_files = list(noise_data_dir.glob('*.npy'))
+                    selected_files = random.sample(all_noise_files, min(n_noise, len(all_noise_files)))
+                    
+                    for f in selected_files:
+                        import shutil
+                        shutil.copy(f, noise_subset_dir / 'data' / f.name)
+                    
+                    # Copy labels if exists
+                    labels_file = Path(args.noise_folder) / 'labels.json'
+                    if labels_file.exists():
+                        import shutil
+                        shutil.copy(labels_file, noise_subset_dir / 'labels.json')
+            print("✓ All noise subsets ready\n")
+            
+            # Now add all experiments to queue
+            for seed in args.seeds:
                 for n_noise in variety_levels:
-                    # Create subset of noise files
                     noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
                     
-                    if not noise_subset_dir.exists():
-                        print(f"Creating noise subset: {n_noise} files")
-                        noise_subset_dir.mkdir(parents=True, exist_ok=True)
-                        (noise_subset_dir / 'data').mkdir(exist_ok=True)
-                        
-                        # Randomly sample n files
-                        import random
-                        all_noise_files = list(noise_data_dir.glob('*.npy'))
-                        selected_files = random.sample(all_noise_files, min(n_noise, len(all_noise_files)))
-                        
-                        for f in selected_files:
-                            import shutil
-                            shutil.copy(f, noise_subset_dir / 'data' / f.name)
-                        
-                        # Copy labels if exists
-                        labels_file = Path(args.noise_folder) / 'labels.json'
-                        if labels_file.exists():
-                            import shutil
-                            shutil.copy(labels_file, noise_subset_dir / 'labels.json')
-                    
                     # AviaNZ → DOC
-                    result = run_experiment({
+                    all_experiments.append({
                         'name': f"avianz_baseline_Log_variety{n_noise}",
                         'type': 'baseline',
                         'train': args.avianz_train,
@@ -567,11 +632,9 @@ def main():
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
                     })
-                    if result:
-                        all_results.append(result)
                     
                     # DOC → AviaNZ
-                    result = run_experiment({
+                    all_experiments.append({
                         'name': f"doc_baseline_Log_variety{n_noise}",
                         'type': 'baseline',
                         'train': args.doc_train,
@@ -590,8 +653,6 @@ def main():
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
                     })
-                    if result:
-                        all_results.append(result)
         else:
             print(f"⚠ Noise data directory not found: {noise_data_dir}")
     else:
@@ -610,12 +671,8 @@ def main():
     print("="*70 + "\n")
     
     for seed in args.seeds:
-        print(f"\n{'~'*70}")
-        print(f" Running AST experiments with seed: {seed}")
-        print(f"{'~'*70}\n")
-        
         # AviaNZ → DOC (AST trained from scratch on AviaNZ)
-        result = run_ast_experiment({
+        all_experiments.append({
             'name': 'avianz_ast_baseline',
             'train': args.avianz_train,
             'test1': args.avianz_test,
@@ -625,12 +682,11 @@ def main():
             'batch_size': args.batch_size,
             'mixup': args.mixup,
             'seed': seed,
+            'is_ast': True,
         })
-        if result:
-            all_results.append(result)
         
         # DOC → AviaNZ (AST trained from scratch on DOC)
-        result = run_ast_experiment({
+        all_experiments.append({
             'name': 'doc_ast_baseline',
             'train': args.doc_train,
             'test1': args.doc_test,
@@ -640,9 +696,20 @@ def main():
             'batch_size': args.batch_size,
             'mixup': args.mixup,
             'seed': seed,
+            'is_ast': True,
         })
-        if result:
-            all_results.append(result)
+    
+    # =========================================================================
+    # RUN ALL EXPERIMENTS IN PARALLEL
+    # =========================================================================
+    print(f"\n{'='*70}")
+    print(f" RUNNING ALL EXPERIMENTS")
+    print(f"{'='*70}")
+    print(f" Total queued: {len(all_experiments)}")
+    print(f" Parallel workers: {n_workers}")
+    print(f"{'='*70}\n")
+    
+    all_results = run_experiments_parallel(all_experiments, n_workers, gpu_pool)
     
     # =========================================================================
     # GENERATE SUMMARY
