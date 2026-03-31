@@ -46,18 +46,18 @@ def get_test_folders(exp_name, base_folders):
         return None, None
 
 def main():
-    if len(sys.argv) < 5:
-        print("Usage: python reeval_ast_tests.py <experiments_folder> <avianz_test> <doc_test> <output_dir>")
+    if len(sys.argv) < 3:
+        print("Usage: python reeval_ast_tests.py <experiments_folder> <avianz_test> <doc_test>")
         print("Example: python reeval_ast_tests.py /local/scratch/freangi/experiments_matched \\")
         print("         /local/scratch/freangi/data_matched/avianz_split/test \\")
-        print("         /local/scratch/freangi/data_matched/doc_split/test \\")
-        print("         /local/scratch/freangi/experiments_matched")
+        print("         /local/scratch/freangi/data_matched/doc_split/test")
+        print()
+        print("NOTE: Run this from the AviaNZ code directory!")
         sys.exit(1)
     
     exp_folder = Path(sys.argv[1])
     avianz_test = sys.argv[2]
     doc_test = sys.argv[3]
-    output_dir = sys.argv[4]
     
     base_folders = {
         'avianz_test': avianz_test,
@@ -125,10 +125,6 @@ from pathlib import Path
 from data_utils import DataLoader, SpectrogramDataset
 from evaluation_utils import EvaluationManager
 import config
-import sys
-
-# Add current directory to path
-sys.path.insert(0, '{Path.cwd()}')
 
 # Load model
 model_path = Path('{folder}') / 'ast_model_best.pt'
