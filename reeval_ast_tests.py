@@ -166,20 +166,20 @@ for test_num, test_folder in enumerate(['{test1_folder}', '{test2_folder}'], 1):
     print(f"Saved: ast_test_{{test_name}}_multilabel_report.json")
 """
         
-        # Write temp script and run it
-        temp_script = folder / 'temp_eval.py'
+        # Write temp script and run it FROM THE AVIANZ DIRECTORY
+        temp_script = Path('temp_eval_ast.py')
         with open(temp_script, 'w') as f:
             f.write(eval_script)
         
         print(f"  Running evaluation...")
-        result = subprocess.run(['python3', str(temp_script)], cwd=Path.cwd())
+        result = subprocess.run(['python3', str(temp_script)])
         
         if result.returncode == 0:
             print(f"  ✓ Evaluation complete")
             temp_script.unlink()  # Clean up
         else:
             print(f"  ✗ Evaluation failed")
-            print(f"  Debug script saved at: {{temp_script}}")
+            print(f"  Debug script saved at: {temp_script}")
 
 if __name__ == '__main__':
     main()
