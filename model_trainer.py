@@ -1096,7 +1096,7 @@ class ASTTrainer:
             )
             
             # Evaluate and save predictions
-            test_name1 = Path(self.test_folder).name
+            test_name1 = Path(self.test_folder).parent.name
             evaluator.evaluate_model(model, test_loader_obj1, f'ast_test_{test_name1}', test_data1, device=self.device)
             
             # Save predictions to CSV
@@ -1132,7 +1132,7 @@ class ASTTrainer:
             )
             
             # Evaluate and save predictions
-            test_name2 = Path(self.test_folder2).name
+            test_name2 = Path(self.test_folder2).parent.name
             evaluator.evaluate_model(model, test_loader_obj2, f'ast_test_{test_name2}', test_data2, device=self.device)
             
             # Save predictions to CSV

@@ -218,16 +218,9 @@ def run_ast_experiment(config_dict):
                         if len(train_accs) > best_epoch:
                             result_dict['best_train_acc'] = train_accs[best_epoch] * 100
         
-        # Determine test set names
-        if name.startswith('avianz_'):
-            test1_name = 'avianz_split'
-            test2_name = 'doc_split'
-        elif name.startswith('doc_'):
-            test1_name = 'doc_split'
-            test2_name = 'avianz_split'
-        else:
-            test1_name = 'test1'
-            test2_name = 'test2'
+        # Determine test set names from actual folder paths
+        test1_name = Path(config_dict['test1']).parent.name if config_dict.get('test1') else 'test1'
+        test2_name = Path(config_dict['test2']).parent.name if config_dict.get('test2') else 'test2'
         
         result_dict['test1_name'] = test1_name
         result_dict['test2_name'] = test2_name
@@ -320,16 +313,9 @@ def run_ast_experiment(config_dict):
                             result_dict['best_train_acc'] = train_accs[best_epoch] * 100  # Convert to percentage
     
     # Load test set evaluations from JSON reports
-    # Determine test set names based on experiment name
-    if name.startswith('avianz_'):
-        test1_name = 'avianz_split'
-        test2_name = 'doc_split'
-    elif name.startswith('doc_'):
-        test1_name = 'doc_split'
-        test2_name = 'avianz_split'
-    else:
-        test1_name = 'test1'
-        test2_name = 'test2'
+    # Determine test set names from actual folder paths
+    test1_name = Path(config_dict['test1']).parent.name if config_dict.get('test1') else 'test1'
+    test2_name = Path(config_dict['test2']).parent.name if config_dict.get('test2') else 'test2'
     
     result_dict['test1_name'] = test1_name
     result_dict['test2_name'] = test2_name

@@ -133,6 +133,43 @@ def compute_statistics(results_list):
         stats['test1_name'] = results_list[0].get('test1_name', 'unknown')
         stats['test2_name'] = results_list[0].get('test2_name', 'unknown')
     
+    # Compute per-class statistics
+    # Extract all species from the first result
+    if results_list and 'test1_per_class_acc' in results_list[0]:
+        species_list = list(results_list[0]['test1_per_class_acc'].keys())
+        
+        # Compute mean and std for each species
+        test1_per_class = {}
+        test2_per_class = {}
+        
+        for species in species_list:
+            # Test1 (in-domain) per-class accuracies
+            species_test1_accs = [
+                r['test1_per_class_acc'][species] 
+                for r in results_list 
+                if 'test1_per_class_acc' in r and species in r['test1_per_class_acc']
+            ]
+            if species_test1_accs:
+                test1_per_class[species] = {
+                    'mean': np.mean(species_test1_accs),
+                    'std': np.std(species_test1_accs, ddof=1) if len(species_test1_accs) > 1 else 0
+                }
+            
+            # Test2 (cross-domain) per-class accuracies
+            species_test2_accs = [
+                r['test2_per_class_acc'][species] 
+                for r in results_list 
+                if 'test2_per_class_acc' in r and species in r['test2_per_class_acc']
+            ]
+            if species_test2_accs:
+                test2_per_class[species] = {
+                    'mean': np.mean(species_test2_accs),
+                    'std': np.std(species_test2_accs, ddof=1) if len(species_test2_accs) > 1 else 0
+                }
+        
+        stats['test1_per_class'] = test1_per_class
+        stats['test2_per_class'] = test2_per_class
+    
     return stats
 
 
@@ -296,6 +333,485 @@ def plot_noise_experiments(df, output_dir):
     plt.close()
 
 
+def generate_per_species_tables(df, grouped, output_dir):
+    """
+    Generate per-species accuracy tables for key experiments.
+    
+    Args:
+        df: DataFrame with aggregated results
+        grouped: Dict mapping base experiment names to lists of result dicts
+        output_dir: Directory to save output files
+    """
+    print("\n" + "="*70)
+    print("PER-SPECIES ACCURACY ANALYSIS")
+    print("="*70)
+    
+    # Define species list (they should all be the same across experiments)
+    species_list = [
+        'blackbird', 'chaffinch', 'fantail', 'grey warbler', 
+        'kaka', 'morepork', 'silvereye', 'tomtit', 'tui/bellbird'
+    ]
+    
+    # =========================================================================
+    # TABLE: Per-species accuracy for best normalization method
+    # =========================================================================
+    print("\n--- Per-Species Results: Log+median+normalize (Best Method) ---\n")
+    
+    best_method_df = df[
+        (df['method'] == 'Baseline') &
+        (df['transform'] == 'Log+normalize') &  # Note: in the data it's called Log+normalize
+        (df['noise_intensity'].isna()) &
+        (df['noise_variety'].isna())
+    ]
+    
+    if len(best_method_df) == 0:
+        # Try alternative names
+        best_method_df = df[
+            (df['method'] == 'Baseline') &
+            (df['transform'].str.contains('normalize', case=False, na=False)) &
+            (df['noise_intensity'].isna()) &
+            (df['noise_variety'].isna())
+        ]
+    
+    if len(best_method_df) > 0:
+        per_species_rows = []
+        
+        for idx, row in best_method_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            target = row['target_dataset']
+            
+            # Get per-class stats from the row (they were stored as JSON-like dicts)
+            # We need to re-extract from the original grouped data
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test1_per_class' in stats and 'test2_per_class' in stats:
+                    # Create a row for each species
+                    for species in species_list:
+                        if species in stats['test1_per_class'] and species in stats['test2_per_class']:
+                            per_species_rows.append({
+                                'source': source,
+                                'target': target,
+                                'species': species,
+                                'in_domain_acc': stats['test1_per_class'][species]['mean'],
+                                'in_domain_std': stats['test1_per_class'][species]['std'],
+                                'cross_domain_acc': stats['test2_per_class'][species]['mean'],
+                                'cross_domain_std': stats['test2_per_class'][species]['std'],
+                            })
+        
+        if per_species_rows:
+            per_species_df = pd.DataFrame(per_species_rows)
+            
+            # Pivot to create a nice table
+            print("\nWaitākere → DOC (trained on Waitākere, tested on DOC):")
+            waitakere_to_doc = per_species_df[per_species_df['source'] == 'avianz']
+            if len(waitakere_to_doc) > 0:
+                for _, row in waitakere_to_doc.iterrows():
+                    print(f"  {row['species']:20s}: In-domain: {row['in_domain_acc']:.1f}±{row['in_domain_std']:.1f}%  "
+                          f"Cross-domain: {row['cross_domain_acc']:.1f}±{row['cross_domain_std']:.1f}%  "
+                          f"Drop: {row['in_domain_acc'] - row['cross_domain_acc']:.1f}%")
+            
+            print("\nDOC → Waitākere (trained on DOC, tested on Waitākere):")
+            doc_to_waitakere = per_species_df[per_species_df['source'] == 'doc']
+            if len(doc_to_waitakere) > 0:
+                for _, row in doc_to_waitakere.iterrows():
+                    print(f"  {row['species']:20s}: In-domain: {row['in_domain_acc']:.1f}±{row['in_domain_std']:.1f}%  "
+                          f"Cross-domain: {row['cross_domain_acc']:.1f}±{row['cross_domain_std']:.1f}%  "
+                          f"Drop: {row['in_domain_acc'] - row['cross_domain_acc']:.1f}%")
+            
+            # Save CSV
+            per_species_file = output_dir / 'table_per_species_best_method.csv'
+            per_species_df.to_csv(per_species_file, index=False)
+            print(f"\n✓ Saved per-species results to: {per_species_file}")
+    
+    # =========================================================================
+    # TABLE: Compare Log baseline vs Log+normalize per species
+    # =========================================================================
+    print("\n" + "="*70)
+    print("Per-Species Comparison: Log vs Log+normalize")
+    print("="*70)
+    
+    comparison_df = df[
+        (df['method'] == 'Baseline') &
+        (df['transform'].isin(['Log', 'Log+normalize'])) &
+        (df['noise_intensity'].isna()) &
+        (df['noise_variety'].isna())
+    ]
+    
+    if len(comparison_df) > 0:
+        comparison_rows = []
+        
+        for idx, row in comparison_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            target = row['target_dataset']
+            transform = row['transform']
+            
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test2_per_class' in stats:  # Focus on cross-domain
+                    for species in species_list:
+                        if species in stats['test2_per_class']:
+                            comparison_rows.append({
+                                'source': source,
+                                'target': target,
+                                'transform': transform,
+                                'species': species,
+                                'cross_domain_acc': stats['test2_per_class'][species]['mean'],
+                                'cross_domain_std': stats['test2_per_class'][species]['std'],
+                            })
+        
+        if comparison_rows:
+            comparison_per_species_df = pd.DataFrame(comparison_rows)
+            
+            # Pivot to show Log vs Log+normalize side by side
+            pivot_df = comparison_per_species_df.pivot_table(
+                index=['source', 'target', 'species'],
+                columns='transform',
+                values=['cross_domain_acc', 'cross_domain_std']
+            )
+            
+            print("\nCross-Domain Accuracy by Species and Normalization:")
+            print(pivot_df.to_string())
+            
+            # Save CSV
+            comparison_file = output_dir / 'table_per_species_normalization_comparison.csv'
+            comparison_per_species_df.to_csv(comparison_file, index=False)
+            print(f"\n✓ Saved per-species normalization comparison to: {comparison_file}")
+    
+    # =========================================================================
+    # VISUALIZATION: Per-species domain shift
+    # =========================================================================
+    print("\n" + "="*70)
+    print("Generating Per-Species Domain Shift Visualization")
+    print("="*70)
+    
+    if len(best_method_df) > 0:
+        per_species_rows = []
+        
+        for idx, row in best_method_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            target = row['target_dataset']
+            
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test1_per_class' in stats and 'test2_per_class' in stats:
+                    for species in species_list:
+                        if species in stats['test1_per_class'] and species in stats['test2_per_class']:
+                            in_domain = stats['test1_per_class'][species]['mean']
+                            cross_domain = stats['test2_per_class'][species]['mean']
+                            per_species_rows.append({
+                                'source': source,
+                                'target': target,
+                                'species': species,
+                                'in_domain_acc': in_domain,
+                                'in_domain_std': stats['test1_per_class'][species]['std'],
+                                'cross_domain_acc': cross_domain,
+                                'cross_domain_std': stats['test2_per_class'][species]['std'],
+                                'drop': in_domain - cross_domain,
+                            })
+        
+        if per_species_rows:
+            per_species_df = pd.DataFrame(per_species_rows)
+            
+            # Create figure with two subplots
+            fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+            
+            # Plot 1: Waitākere → DOC
+            ax = axes[0]
+            waitakere_data = per_species_df[per_species_df['source'] == 'avianz'].sort_values('drop', ascending=False)
+            
+            x = np.arange(len(waitakere_data))
+            width = 0.35
+            
+            ax.bar(x - width/2, waitakere_data['in_domain_acc'], width, 
+                   label='In-domain (Waitākere)', alpha=0.8, color='#2E86AB')
+            ax.bar(x + width/2, waitakere_data['cross_domain_acc'], width, 
+                   label='Cross-domain (DOC)', alpha=0.8, color='#A23B72')
+            
+            ax.set_xlabel('Species', fontsize=11)
+            ax.set_ylabel('Accuracy (%)', fontsize=11)
+            ax.set_title('Waitākere → DOC\n(trained on Waitākere, tested on DOC)', 
+                        fontsize=12, fontweight='bold')
+            ax.set_xticks(x)
+            ax.set_xticklabels(waitakere_data['species'], rotation=45, ha='right', fontsize=9)
+            ax.legend(fontsize=9, loc='lower left')
+            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_ylim([0, 105])
+            
+            # Plot 2: DOC → Waitākere
+            ax = axes[1]
+            doc_data = per_species_df[per_species_df['source'] == 'doc'].sort_values('drop', ascending=False)
+            
+            x = np.arange(len(doc_data))
+            
+            ax.bar(x - width/2, doc_data['in_domain_acc'], width, 
+                   label='In-domain (DOC)', alpha=0.8, color='#2E86AB')
+            ax.bar(x + width/2, doc_data['cross_domain_acc'], width, 
+                   label='Cross-domain (Waitākere)', alpha=0.8, color='#A23B72')
+            
+            ax.set_xlabel('Species', fontsize=11)
+            ax.set_ylabel('Accuracy (%)', fontsize=11)
+            ax.set_title('DOC → Waitākere\n(trained on DOC, tested on Waitākere)', 
+                        fontsize=12, fontweight='bold')
+            ax.set_xticks(x)
+            ax.set_xticklabels(doc_data['species'], rotation=45, ha='right', fontsize=9)
+            ax.legend(fontsize=9, loc='lower left')
+            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_ylim([0, 105])
+            
+            plt.tight_layout()
+            
+            # Save figure
+            output_file = output_dir / 'per_species_domain_shift.pdf'
+            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            print(f"\n✓ Saved per-species visualization to: {output_file}")
+            
+            output_file_png = output_dir / 'per_species_domain_shift.png'
+            plt.savefig(output_file_png, dpi=300, bbox_inches='tight')
+            print(f"✓ Saved PNG version to: {output_file_png}")
+            
+            plt.close()
+    
+    # =========================================================================
+    # GENERATE LATEX TABLE
+    # =========================================================================
+    print("\n" + "="*70)
+    print("LaTeX Table for Paper")
+    print("="*70)
+    
+    if len(best_method_df) > 0:
+        per_species_rows = []
+        
+        for idx, row in best_method_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            target = row['target_dataset']
+            
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test1_per_class' in stats and 'test2_per_class' in stats:
+                    for species in species_list:
+                        if species in stats['test1_per_class'] and species in stats['test2_per_class']:
+                            per_species_rows.append({
+                                'source': source,
+                                'target': target,
+                                'species': species,
+                                'in_domain_acc': stats['test1_per_class'][species]['mean'],
+                                'in_domain_std': stats['test1_per_class'][species]['std'],
+                                'cross_domain_acc': stats['test2_per_class'][species]['mean'],
+                                'cross_domain_std': stats['test2_per_class'][species]['std'],
+                            })
+        
+        if per_species_rows:
+            per_species_df = pd.DataFrame(per_species_rows)
+            
+            # Generate LaTeX table
+            latex_lines = []
+            latex_lines.append("\\begin{table*}[t]")
+            latex_lines.append("\\centering")
+            latex_lines.append("\\small")
+            latex_lines.append("\\caption{Per-species accuracy with Log+median+normalize preprocessing. "
+                             "\\textbf{In-Dom}: In-domain accuracy (trained and tested on same dataset). "
+                             "\\textbf{Cross-Dom}: Cross-domain accuracy (trained on source, tested on target). "
+                             "Mean$\\pm$std over 5 seeds.}")
+            latex_lines.append("\\label{tab:per_species}")
+            latex_lines.append("\\begin{tabular}{@{}lcccccc@{}}")
+            latex_lines.append("\\hline")
+            latex_lines.append("Species & \\multicolumn{3}{c}{Wait\\=akere→DOC} & \\multicolumn{3}{c}{DOC→Wait\\=akere} \\\\")
+            latex_lines.append("\\cline{2-4} \\cline{5-7}")
+            latex_lines.append("        & In-Dom & Cross-Dom & Drop & In-Dom & Cross-Dom & Drop \\\\")
+            latex_lines.append("\\hline")
+            
+            # For each species, get both directions
+            for species in species_list:
+                waitakere_to_doc = per_species_df[
+                    (per_species_df['source'] == 'avianz') & 
+                    (per_species_df['species'] == species)
+                ]
+                doc_to_waitakere = per_species_df[
+                    (per_species_df['source'] == 'doc') & 
+                    (per_species_df['species'] == species)
+                ]
+                
+                if len(waitakere_to_doc) > 0 and len(doc_to_waitakere) > 0:
+                    w2d = waitakere_to_doc.iloc[0]
+                    d2w = doc_to_waitakere.iloc[0]
+                    
+                    # Format species name for LaTeX
+                    species_display = species.replace('_', ' ').title()
+                    
+                    w2d_in = f"{w2d['in_domain_acc']:.1f}$\\pm${w2d['in_domain_std']:.1f}"
+                    w2d_cross = f"{w2d['cross_domain_acc']:.1f}$\\pm${w2d['cross_domain_std']:.1f}"
+                    w2d_drop = w2d['in_domain_acc'] - w2d['cross_domain_acc']
+                    
+                    d2w_in = f"{d2w['in_domain_acc']:.1f}$\\pm${d2w['in_domain_std']:.1f}"
+                    d2w_cross = f"{d2w['cross_domain_acc']:.1f}$\\pm${d2w['cross_domain_std']:.1f}"
+                    d2w_drop = d2w['in_domain_acc'] - d2w['cross_domain_acc']
+                    
+                    line = f"{species_display:20s} & {w2d_in} & {w2d_cross} & {w2d_drop:+.1f} & {d2w_in} & {d2w_cross} & {d2w_drop:+.1f} \\\\"
+                    latex_lines.append(line)
+            
+            latex_lines.append("\\hline")
+            latex_lines.append("\\end{tabular}")
+            latex_lines.append("\\end{table*}")
+            
+            latex_output = "\n".join(latex_lines)
+            print("\n" + latex_output)
+            
+            # Save LaTeX to file
+            latex_file = output_dir / 'table_per_species.tex'
+            with open(latex_file, 'w') as f:
+                f.write(latex_output)
+            print(f"\n✓ Saved LaTeX table to: {latex_file}")
+
+
+def extract_species_distribution(output_dir):
+    """
+    Extract and display species distribution from split_report.json.
+    
+    Args:
+        output_dir: Directory containing split_report.json
+    """
+    split_report_file = output_dir / 'split_report.json'
+    
+    if not split_report_file.exists():
+        print(f"Warning: split_report.json not found at {split_report_file}")
+        return
+    
+    print("\n" + "="*70)
+    print("SPECIES DISTRIBUTION ANALYSIS")
+    print("="*70)
+    
+    with open(split_report_file) as f:
+        split_data = json.load(f)
+    
+    # Extract species distribution for both datasets
+    avianz_dist = split_data['avianz']['species_distribution']
+    doc_dist = split_data['doc']['species_distribution']
+    
+    # Create a comprehensive table
+    species_list = sorted(avianz_dist.keys())
+    
+    print("\n--- Dataset Composition Summary ---\n")
+    print(f"{'Species':<15} {'Avianz Total':<15} {'Avianz %':<12} {'DOC Total':<15} {'DOC %':<12}")
+    print("-" * 75)
+    
+    avianz_total = split_data['avianz']['total_samples']
+    doc_total = split_data['doc']['total_samples']
+    
+    rows = []
+    for species in species_list:
+        avianz_count = avianz_dist[species]['total']
+        avianz_pct = (avianz_count / avianz_total) * 100
+        
+        doc_count = doc_dist[species]['total']
+        doc_pct = (doc_count / doc_total) * 100
+        
+        print(f"{species:<15} {avianz_count:<15} {avianz_pct:>6.1f}%     {doc_count:<15} {doc_pct:>6.1f}%")
+        
+        rows.append({
+            'species': species,
+            'avianz_total': avianz_count,
+            'avianz_percentage': avianz_pct,
+            'doc_total': doc_count,
+            'doc_percentage': doc_pct,
+        })
+    
+    print("-" * 75)
+    print(f"{'TOTAL':<15} {avianz_total:<15} {100.0:>6.1f}%     {doc_total:<15} {100.0:>6.1f}%")
+    
+    # Train/test split details
+    print("\n--- Train/Test Split Details ---\n")
+    print(f"{'Species':<15} {'Avianz Train':<15} {'Avianz Test':<15} {'DOC Train':<15} {'DOC Test':<15}")
+    print("-" * 80)
+    
+    for species in species_list:
+        avianz_train = avianz_dist[species]['train']
+        avianz_test = avianz_dist[species]['test']
+        doc_train = doc_dist[species]['train']
+        doc_test = doc_dist[species]['test']
+        
+        print(f"{species:<15} {avianz_train:<15} {avianz_test:<15} {doc_train:<15} {doc_test:<15}")
+        
+        rows[-len(species_list) + species_list.index(species)].update({
+            'avianz_train': avianz_train,
+            'avianz_test': avianz_test,
+            'doc_train': doc_train,
+            'doc_test': doc_test,
+        })
+    
+    print("-" * 80)
+    print(f"{'TOTAL':<15} {split_data['avianz']['train_samples']:<15} "
+          f"{split_data['avianz']['test_samples']:<15} "
+          f"{split_data['doc']['train_samples']:<15} "
+          f"{split_data['doc']['test_samples']:<15}")
+    
+    # Save to CSV
+    species_dist_df = pd.DataFrame(rows)
+    species_dist_file = output_dir / 'species_distribution.csv'
+    species_dist_df.to_csv(species_dist_file, index=False)
+    print(f"\n✓ Saved species distribution to: {species_dist_file}")
+    
+    # Generate LaTeX table for paper
+    print("\n--- LaTeX Table for Paper ---\n")
+    
+    latex_lines = [
+        "\\begin{table}[t]",
+        "\\centering",
+        "\\small",
+        "\\caption{Species distribution across datasets. Both datasets contain identical species with matched distributions.}",
+        "\\label{tab:species_distribution}",
+        "\\begin{tabular}{@{}lrrrr@{}}",
+        "\\hline",
+        "Species & \\multicolumn{2}{c}{Wait\\=akere} & \\multicolumn{2}{c}{DOC} \\\\",
+        "\\cline{2-3} \\cline{4-5}",
+        "        & N & \\% & N & \\% \\\\",
+        "\\hline",
+    ]
+    
+    for row in rows:
+        species_display = row['species'].replace('_', ' ').title()
+        if species_display == 'Tui/Bellbird':
+            species_display = 'T\\=u\\=i/bellbird'
+        elif species_display == 'Grey Warbler':
+            species_display = 'Grey warbler'
+        elif species_display == 'Kaka':
+            species_display = 'K\\=ak\\=a'
+            
+        line = (f"{species_display:<20s} & {row['avianz_total']:>3d} & {row['avianz_percentage']:>4.1f} & "
+                f"{row['doc_total']:>3d} & {row['doc_percentage']:>4.1f} \\\\")
+        latex_lines.append(line)
+    
+    latex_lines.append("\\hline")
+    latex_lines.append(f"Total & {avianz_total} & 100.0 & {doc_total} & 100.0 \\\\")
+    latex_lines.append("\\hline")
+    latex_lines.append("\\end{tabular}")
+    latex_lines.append("\\end{table}")
+    
+    latex_output = "\n".join(latex_lines)
+    print(latex_output)
+    
+    # Save LaTeX table
+    latex_file = output_dir / 'table_species_distribution.tex'
+    with open(latex_file, 'w') as f:
+        f.write(latex_output)
+    print(f"\n✓ Saved LaTeX table to: {latex_file}")
+
+
 def main():
     # Load results
     results_file = Path('experiments_matched/all_results.json')
@@ -315,6 +831,9 @@ def main():
     print(f"Loading results from: {results_file}")
     with open(results_file) as f:
         all_results = json.load(f)
+    
+    # Extract species distribution first
+    extract_species_distribution(results_file.parent)
     
     print(f"Total experiments loaded: {len(all_results)}")
     
@@ -432,6 +951,9 @@ def main():
     plot_noise_experiments(df, results_file.parent)
     
     # =========================================================================
+    # GENERATE PER-SPECIES TABLES
+    # =========================================================================
+    generate_per_species_tables(df, grouped, results_file.parent)
     
     # =========================================================================    # Create specific tables for paper
     # =========================================================================
