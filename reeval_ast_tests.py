@@ -124,11 +124,30 @@ import json
 from pathlib import Path
 from data_utils import DataLoader, SpectrogramDataset
 from evaluation_utils import EvaluationManager
+from models import ASTModel
 import config
 
-# Load model
+# Load model config
+config_path = Path('{folder}') / 'ast_model_config.json'
+with open(config_path) as f:
+    model_config = json.load(f)
+
+# Create model
+num_classes = model_config['num_classes']
+model = ASTModel(
+    label_dim=num_classes,
+    fstride=10, tstride=10,
+    input_fdim=128, input_tdim=1024,
+    imagenet_pretrain=False,
+    audioset_pretrain=False,
+    model_size='base384'
+)
+
+# Load weights
 model_path = Path('{folder}') / 'ast_model_best.pt'
-model = torch.load(model_path, map_location='cpu')
+state_dict = torch.load(model_path, map_location='cpu')
+model.load_state_dict(state_dict)
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = model.to(device)
 model.eval()
