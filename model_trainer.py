@@ -497,8 +497,6 @@ class ASTTrainer:
         val_losses = []
         train_accs = []
         val_accs = []
-        train_primary_accs = []  # Primary-class accuracy for multi-label
-        val_primary_accs = []    # Primary-class accuracy for multi-label
         
         print(f"Starting training for {self.max_epochs} epochs...")
         
@@ -534,8 +532,6 @@ class ASTTrainer:
             train_loss = 0.0
             train_correct = 0
             train_total = 0
-            train_primary_correct = 0
-            train_primary_total = 0
             
             # For multi-label F1 calculation
             all_train_preds = []
@@ -790,12 +786,6 @@ class ASTTrainer:
                         pred = (torch.sigmoid(output) > 0.5).float()
                         all_train_preds.append(pred.cpu().numpy())
                         all_train_targets.append(target_hard.cpu().numpy())
-                        # Primary-class accuracy: only meaningful when there are 2+ classes.
-                        if output.size(1) > 1:
-                            primary_pred = output.argmax(dim=1)
-                            primary_target = target_hard.argmax(dim=1)
-                            train_primary_correct += (primary_pred == primary_target).sum().item()
-                            train_primary_total += target_hard.size(0)
                     else:
                         pred = output.argmax(dim=1)
                         target_labels = target_hard.argmax(dim=1)
@@ -823,8 +813,6 @@ class ASTTrainer:
             val_loss = 0.0
             val_correct = 0
             val_total = 0
-            val_primary_correct = 0
-            val_primary_total = 0
             
             # For multi-label F1 calculation
             all_val_preds = []
@@ -861,12 +849,6 @@ class ASTTrainer:
                         pred = (torch.sigmoid(output) > 0.5).float()
                         all_val_preds.append(pred.cpu().numpy())
                         all_val_targets.append(target.cpu().numpy())
-                        # Primary-class accuracy (only meaningful when there are 2+ classes)
-                        if output.size(1) > 1:
-                            primary_pred = output.argmax(dim=1)
-                            primary_target = target.argmax(dim=1)
-                            val_primary_correct += (primary_pred == primary_target).sum().item()
-                            val_primary_total += target.size(0)
                     else:
                         target_idx = target.argmax(dim=1)
                         val_loss += criterion(output, target_idx).item()
@@ -902,21 +884,6 @@ class ASTTrainer:
             val_losses.append(val_loss)
             train_accs.append(train_acc)
             val_accs.append(val_acc)
-            
-            if self.multilabel:
-                if train_primary_total > 0:
-                    train_primary_acc = train_primary_correct / train_primary_total
-                else:
-                    train_primary_acc = 0.0
-                if val_primary_total > 0:
-                    val_primary_acc = val_primary_correct / val_primary_total
-                else:
-                    val_primary_acc = 0.0
-                train_primary_accs.append(train_primary_acc)
-                val_primary_accs.append(val_primary_acc)
-            else:
-                train_primary_accs.append(train_acc)
-                val_primary_accs.append(val_acc)
             
             # ABORT if model weights contain NaN
             if any(torch.isnan(p).any() for p in model.parameters()):
@@ -958,8 +925,6 @@ class ASTTrainer:
                     f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
                     f"Exact: {val_metrics['exact_match']:.4f}"
                 )
-                if self.num_classes > 1:
-                    print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
             else:
                 print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
                 print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
@@ -976,8 +941,8 @@ class ASTTrainer:
         
         # Save final model
         self._save_model(model)
-        self._save_history(train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs)
-        self._plot_history(train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs)
+        self._save_history(train_losses, val_losses, train_accs, val_accs)
+        self._plot_history(train_losses, val_losses, train_accs, val_accs)
         
         # Apply weight averaging (AST paper technique for +1-2% accuracy boost)
         if len(model_states_for_averaging) > 0:
@@ -1234,23 +1199,18 @@ class ASTTrainer:
             print(f"Saved best model and configuration")
             print(f"Classes ({model.num_classes}): {', '.join(self.data['class_names'])}")
     
-    def _save_history(self, train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs):
+    def _save_history(self, train_losses, val_losses, train_accs, val_accs):
         history = {
             'train_loss': train_losses,
             'val_loss': val_losses,
             'train_accuracy': train_accs,
-            'val_accuracy': val_accs,
-            'train_primary_accuracy': train_primary_accs,
-            'val_primary_accuracy': val_primary_accs
+            'val_accuracy': val_accs
         }
         with open(os.path.join(self.output_folder, 'training_history.json'), 'w') as f:
             json.dump(history, f, indent=2)
     
-    def _plot_history(self, train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs):
-        if self.multilabel:
-            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 4))
-        else:
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    def _plot_history(self, train_losses, val_losses, train_accs, val_accs):
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         
         ax1.plot(train_losses, label='Train Loss')
         ax1.plot(val_losses, label='Val Loss')
@@ -1261,12 +1221,6 @@ class ASTTrainer:
         ax2.plot(val_accs, label='Val Acc') 
         ax2.set_title('Multi-Label Accuracy' if self.multilabel else 'Accuracy')
         ax2.legend()
-        
-        if self.multilabel:
-            ax3.plot(train_primary_accs, label='Train Primary Acc')
-            ax3.plot(val_primary_accs, label='Val Primary Acc')
-            ax3.set_title('Primary-Class Accuracy')
-            ax3.legend()
         
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
@@ -1447,8 +1401,6 @@ class CNNTrainer:
         val_losses = []
         train_accs = []
         val_accs = []
-        train_primary_accs = []  # Primary-class accuracy for multi-label
-        val_primary_accs = []    # Primary-class accuracy for multi-label
         
         print(f"Starting training for {self.max_epochs} epochs...")
         
@@ -1464,8 +1416,6 @@ class CNNTrainer:
             train_loss = 0.0
             train_correct = 0
             train_total = 0
-            train_primary_correct = 0
-            train_primary_total = 0
             
             # For multi-label F1 calculation
             all_train_preds = []
@@ -1546,12 +1496,6 @@ class CNNTrainer:
                     pred = (torch.sigmoid(output) > 0.5).float()
                     all_train_preds.append(pred.cpu().numpy())
                     all_train_targets.append(target_hard.cpu().numpy())
-                    # Primary-class accuracy: only meaningful when there are 2+ classes.
-                    if output.size(1) > 1:
-                        primary_pred = output.argmax(dim=1)
-                        primary_target = target_hard.argmax(dim=1)
-                        train_primary_correct += (primary_pred == primary_target).sum().item()
-                        train_primary_total += target_hard.size(0)
                 else:
                     pred = output.argmax(dim=1)
                     target_labels = target_hard.argmax(dim=1)
@@ -1570,8 +1514,6 @@ class CNNTrainer:
             val_loss = 0.0
             val_correct = 0
             val_total = 0
-            val_primary_correct = 0
-            val_primary_total = 0
             
             # For multi-label F1 calculation
             all_val_preds = []
@@ -1588,12 +1530,6 @@ class CNNTrainer:
                         pred = (torch.sigmoid(output) > 0.5).float()
                         all_val_preds.append(pred.cpu().numpy())
                         all_val_targets.append(target.cpu().numpy())
-                        # Primary-class accuracy (only meaningful when there are 2+ classes)
-                        if output.size(1) > 1:
-                            primary_pred = output.argmax(dim=1)
-                            primary_target = target.argmax(dim=1)
-                            val_primary_correct += (primary_pred == primary_target).sum().item()
-                            val_primary_total += target.size(0)
                     else:
                         target_idx = target.argmax(dim=1)
                         val_loss += criterion(output, target_idx).item()
@@ -1619,21 +1555,6 @@ class CNNTrainer:
             val_losses.append(val_loss)
             train_accs.append(train_acc)
             val_accs.append(val_acc)
-            
-            if self.multilabel:
-                if train_primary_total > 0:
-                    train_primary_acc = train_primary_correct / train_primary_total
-                else:
-                    train_primary_acc = 0.0
-                if val_primary_total > 0:
-                    val_primary_acc = val_primary_correct / val_primary_total
-                else:
-                    val_primary_acc = 0.0
-                train_primary_accs.append(train_primary_acc)
-                val_primary_accs.append(val_primary_acc)
-            else:
-                train_primary_accs.append(train_acc)
-                val_primary_accs.append(val_acc)
             
             # ABORT if model weights contain NaN
             if any(torch.isnan(p).any() for p in model.parameters()):
@@ -1671,8 +1592,6 @@ class CNNTrainer:
                     f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
                     f"Exact: {val_metrics['exact_match']:.4f}"
                 )
-                if self.num_classes > 1:
-                    print(f'  Val Primary-Class Acc: {val_primary_acc:.4f}')
             else:
                 print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
                 print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
@@ -1680,8 +1599,8 @@ class CNNTrainer:
         
         # Save final model
         self._save_model(model)
-        self._save_history(train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs)
-        self._plot_history(train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs)
+        self._save_history(train_losses, val_losses, train_accs, val_accs)
+        self._plot_history(train_losses, val_losses, train_accs, val_accs)
         
         # Evaluate on validation set (using best checkpoint)
         best_path = os.path.join(self.output_folder, 'cnn_model_best.pt')
@@ -1750,23 +1669,18 @@ class CNNTrainer:
             print(f"Saved model configuration to cnn_model_config.json")
             print(f"Classes ({self.num_classes}): {', '.join(self.data['class_names'])}")
     
-    def _save_history(self, train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs):
+    def _save_history(self, train_losses, val_losses, train_accs, val_accs):
         history = {
             'train_loss': train_losses,
             'val_loss': val_losses,
             'train_accuracy': train_accs,
-            'val_accuracy': val_accs,
-            'train_primary_accuracy': train_primary_accs,
-            'val_primary_accuracy': val_primary_accs
+            'val_accuracy': val_accs
         }
         with open(os.path.join(self.output_folder, 'training_history.json'), 'w') as f:
             json.dump(history, f, indent=2)
     
-    def _plot_history(self, train_losses, val_losses, train_accs, val_accs, train_primary_accs, val_primary_accs):
-        if self.multilabel:
-            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 4))
-        else:
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    def _plot_history(self, train_losses, val_losses, train_accs, val_accs):
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         
         ax1.plot(train_losses, label='Train Loss')
         ax1.plot(val_losses, label='Val Loss')
@@ -1777,12 +1691,6 @@ class CNNTrainer:
         ax2.plot(val_accs, label='Val Acc') 
         ax2.set_title('Multi-Label Accuracy' if self.multilabel else 'Accuracy')
         ax2.legend()
-        
-        if self.multilabel:
-            ax3.plot(train_primary_accs, label='Train Primary Acc')
-            ax3.plot(val_primary_accs, label='Val Primary Acc')
-            ax3.set_title('Primary-Class Accuracy')
-            ax3.legend()
         
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
@@ -1905,8 +1813,6 @@ class KaytooTrainer:
         val_losses = []
         train_accs = []
         val_accs = []
-        train_primary_accs = []
-        val_primary_accs = []
         
         print(f"Starting training for {self.max_epochs} epochs...")
         
@@ -1920,8 +1826,6 @@ class KaytooTrainer:
             train_loss = 0.0
             train_correct = 0
             train_total = 0
-            train_primary_correct = 0
-            train_primary_total = 0
             train_bit_correct = 0
             train_bit_total = 0
             
@@ -1992,13 +1896,6 @@ class KaytooTrainer:
 
                     train_bit_correct += (pred_binary == target_hard).sum().item()
                     train_bit_total += target_hard.numel()
-
-                    has_label = target_hard.sum(dim=1) > 0
-                    if has_label.any():
-                        primary_pred = probs.argmax(dim=1)
-                        primary_true = target_hard.argmax(dim=1)
-                        train_primary_correct += (primary_pred[has_label] == primary_true[has_label]).sum().item()
-                        train_primary_total += has_label.sum().item()
                 else:
                     _, predicted = torch.max(output, 1)
                     _, target_labels = torch.max(target, 1)
@@ -2007,7 +1904,6 @@ class KaytooTrainer:
             
             train_loss /= len(self.train_loader)
             train_exact_match = 100.0 * train_correct / train_total if train_total > 0 else 0.0
-            train_primary_acc = 100.0 * train_primary_correct / train_primary_total if train_primary_total > 0 else 0.0
             train_bit_acc = train_bit_correct / train_bit_total if train_bit_total > 0 else 0.0
             
             train_f1_macro = 0.0
@@ -2019,8 +1915,6 @@ class KaytooTrainer:
             val_loss = 0.0
             val_correct = 0
             val_total = 0
-            val_primary_correct = 0
-            val_primary_total = 0
             val_bit_correct = 0
             val_bit_total = 0
             
@@ -2073,13 +1967,6 @@ class KaytooTrainer:
 
                         val_bit_correct += (pred_binary == target_hard).sum().item()
                         val_bit_total += target_hard.numel()
-
-                        has_label = target_hard.sum(dim=1) > 0
-                        if has_label.any():
-                            primary_pred = probs.argmax(dim=1)
-                            primary_true = target_hard.argmax(dim=1)
-                            val_primary_correct += (primary_pred[has_label] == primary_true[has_label]).sum().item()
-                            val_primary_total += has_label.sum().item()
                     else:
                         _, predicted = torch.max(output, 1)
                         _, target_labels = torch.max(target, 1)
@@ -2088,8 +1975,6 @@ class KaytooTrainer:
             
             val_loss /= len(self.val_loader)
             val_exact_match = 100.0 * val_correct / val_total if val_total > 0 else 0.0
-            val_primary_acc = 100.0 * val_primary_correct / val_primary_total if val_primary_total > 0 else 0.0
-
             val_bit_acc = val_bit_correct / val_bit_total if val_bit_total > 0 else 0.0
             
             val_f1_macro = 0.0
@@ -2104,8 +1989,6 @@ class KaytooTrainer:
             # For multilabel, track Macro-F1 as the main learning curve metric.
             train_accs.append(train_f1_macro if self.multilabel else (100.0 * train_correct / train_total if train_total > 0 else 0.0))
             val_accs.append(val_f1_macro if self.multilabel else (100.0 * val_correct / val_total if val_total > 0 else 0.0))
-            train_primary_accs.append(train_primary_acc)
-            val_primary_accs.append(val_primary_acc)
             
             epoch_time = time.time() - start_time
             
@@ -2116,9 +1999,6 @@ class KaytooTrainer:
             else:
                 print(f"Train Loss: {train_loss:.4f}")
                 print(f"Val Loss: {val_loss:.4f}")
-            if self.multilabel:
-                print(f"Val Primary-Class Acc: {val_primary_acc:.4f}")
-            else:
                 print(f"Val Acc: {100.0 * val_correct / val_total if val_total > 0 else 0.0:.2f}%")
 
             current_metric = val_f1_macro if self.multilabel else (100.0 * val_correct / val_total if val_total > 0 else 0.0)
@@ -2143,7 +2023,7 @@ class KaytooTrainer:
         
         torch.save(model.state_dict(), os.path.join(self.output_folder, 'kaytoo_model_final.pt'))
         
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         
         ax1.plot(train_losses, label='Train Loss')
         ax1.plot(val_losses, label='Val Loss')
@@ -2154,12 +2034,6 @@ class KaytooTrainer:
         ax2.plot(val_accs, label='Val Acc') 
         ax2.set_title('Multi-Label Accuracy' if self.multilabel else 'Accuracy')
         ax2.legend()
-        
-        if self.multilabel:
-            ax3.plot(train_primary_accs, label='Train Primary Acc')
-            ax3.plot(val_primary_accs, label='Val Primary Acc')
-            ax3.set_title('Primary-Class Accuracy')
-            ax3.legend()
         
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
