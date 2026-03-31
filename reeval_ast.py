@@ -23,7 +23,7 @@ print(f"Evaluating: {exp.name}")
 cfg = json.load(open(exp/'ast_model_config.json'))
 model = AST(cfg['num_classes'], True, (cfg.get('freq_bins',128), cfg.get('time_bins',1024)))
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model.load_state_dict(torch.load(exp/'ast_model_best.pt', map_location=device))
+model.load_state_dict(torch.load(exp/'ast_model_best.pt', map_location=device), strict=False)
 model.to(device).eval()
 
 # Evaluate test1
