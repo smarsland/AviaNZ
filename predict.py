@@ -232,14 +232,6 @@ class ModelPredictor:
                         label_idx = self.categories.index(class_name)
                         label_vec[label_idx] = 1
                 labels.append(label_vec)
-            elif 'primary_class' in file_info:
-                # Single-class format: primary_class is a string
-                label_vec = [0] * len(self.categories)
-                class_name = file_info['primary_class']
-                if class_name in self.categories:
-                    label_idx = self.categories.index(class_name)
-                    label_vec[label_idx] = 1
-                labels.append(label_vec)
             else:
                 # No label provided: dummy label
                 labels.append([0] * len(self.categories))
@@ -256,7 +248,7 @@ class ModelPredictor:
         if len(filenames) > 0:
             print(f"Sample label extraction:")
             for i in range(min(3, len(filenames))):
-                print(f"  File {i}: {files[i].get('class_names', files[i].get('primary_class', '???'))} → {labels[i]}")
+                print(f"  File {i}: {files[i].get('class_names', '???')} → {labels[i]}")
         
         # Use spec_transform from model config (NOT default - critical for PCEN/Box-Cox/etc!)
         with open(self.model_config, 'r') as f:

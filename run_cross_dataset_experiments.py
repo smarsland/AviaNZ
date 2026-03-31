@@ -1,17 +1,6 @@
 #!/usr/bin/env python3
 """
 Clean cross-dataset experiment pipeline.
-
-Runs five separate experiment suites:
-1. Normalization comparison (6 methods × 2 directions = 12 experiments per seed)
-2. DANN domain adaptation (2 directions = 2 experiments per seed)
-3. Noise intensity sweep (5 levels × 2 directions = 10 experiments per seed)
-4. Noise variety sweep (5 levels × 2 directions = 10 experiments per seed)
-5. AST baseline (2 directions = 2 experiments per seed)
-
-Total: ~36 experiments per seed (×3 seeds = ~108 experiments by default)
-
-No flags. No skip logic. Just clean experiment loops.
 """
 
 import argparse
@@ -205,7 +194,8 @@ def run_ast_experiment(config_dict):
         print(f"\n{'='*70}")
         print(f"Skipping: {name} (MODEL ALREADY EXISTS)")
         print(f"{'='*70}")
-        # Create minimal result file
+        
+        # Load complete results from existing files
         result_dict = {
             'name': name,
             'experiment_type': 'ast_baseline',
@@ -213,6 +203,51 @@ def run_ast_experiment(config_dict):
             'output_folder': str(output_dir),
             'status': 'completed (pre-existing)'
         }
+        
+        # Load training history
+        with open(history_file) as f:
+            history = json.load(f)
+            if 'val_acc' in history and history['val_acc']:
+                val_accs = [v for v in history['val_acc'] if v is not None]
+                if val_accs:
+                    best_epoch = val_accs.index(max(val_accs))
+                    result_dict['best_val_acc'] = max(val_accs) * 100
+                    
+                    if 'train_acc' in history and history['train_acc']:
+                        train_accs = [v for v in history['train_acc'] if v is not None]
+                        if len(train_accs) > best_epoch:
+                            result_dict['best_train_acc'] = train_accs[best_epoch] * 100
+        
+        # Determine test set names
+        if name.startswith('avianz_'):
+            test1_name = 'avianz_split'
+            test2_name = 'doc_split'
+        elif name.startswith('doc_'):
+            test1_name = 'doc_split'
+            test2_name = 'avianz_split'
+        else:
+            test1_name = 'test1'
+            test2_name = 'test2'
+        
+        result_dict['test1_name'] = test1_name
+        result_dict['test2_name'] = test2_name
+        
+        # Load test results from evaluation reports
+        test1_report = output_dir / f'ast_test_{test1_name}_multilabel_report.json'
+        if test1_report.exists():
+            with open(test1_report) as f:
+                report = json.load(f)
+                if 'macro avg' in report and 'accuracy' in report['macro avg']:
+                    result_dict['test1_acc'] = report['macro avg']['accuracy'] * 100
+        
+        test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
+        if test2_report.exists():
+            with open(test2_report) as f:
+                report = json.load(f)
+                if 'macro avg' in report and 'accuracy' in report['macro avg']:
+                    result_dict['test2_acc'] = report['macro avg']['accuracy'] * 100
+        
+        # Save/update result file
         with open(result_file, 'w') as f:
             json.dump(result_dict, f, indent=2)
         
@@ -259,7 +294,7 @@ def run_ast_experiment(config_dict):
         print(f"Stopping experiment pipeline due to failure.")
         sys.exit(1)
     
-    # After training, construct minimal result dict
+    # After training, load results from training history and evaluation reports
     result_dict = {
         'name': name,
         'experiment_type': 'ast_baseline',
@@ -268,18 +303,62 @@ def run_ast_experiment(config_dict):
         'status': 'completed'
     }
     
-    # Try to load training history for completeness
+    # Load training history for train/val accuracies
     if history_file.exists():
         with open(history_file) as f:
             history = json.load(f)
             if 'val_acc' in history and history['val_acc']:
-                result_dict['best_val_acc'] = max([v for v in history['val_acc'] if v is not None])
+                val_accs = [v for v in history['val_acc'] if v is not None]
+                if val_accs:
+                    best_epoch = val_accs.index(max(val_accs))
+                    result_dict['best_val_acc'] = max(val_accs) * 100  # Convert to percentage
+                    
+                    # Get corresponding train accuracy
+                    if 'train_acc' in history and history['train_acc']:
+                        train_accs = [v for v in history['train_acc'] if v is not None]
+                        if len(train_accs) > best_epoch:
+                            result_dict['best_train_acc'] = train_accs[best_epoch] * 100  # Convert to percentage
     
-    # Save minimal result file
+    # Load test set evaluations from JSON reports
+    # Determine test set names based on experiment name
+    if name.startswith('avianz_'):
+        test1_name = 'avianz_split'
+        test2_name = 'doc_split'
+    elif name.startswith('doc_'):
+        test1_name = 'doc_split'
+        test2_name = 'avianz_split'
+    else:
+        test1_name = 'test1'
+        test2_name = 'test2'
+    
+    result_dict['test1_name'] = test1_name
+    result_dict['test2_name'] = test2_name
+    
+    # Try to load test1 results
+    test1_report = output_dir / f'ast_test_{test1_name}_multilabel_report.json'
+    if test1_report.exists():
+        with open(test1_report) as f:
+            report = json.load(f)
+            if 'macro avg' in report and 'accuracy' in report['macro avg']:
+                result_dict['test1_acc'] = report['macro avg']['accuracy'] * 100
+    
+    # Try to load test2 results
+    test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
+    if test2_report.exists():
+        with open(test2_report) as f:
+            report = json.load(f)
+            if 'macro avg' in report and 'accuracy' in report['macro avg']:
+                result_dict['test2_acc'] = report['macro avg']['accuracy'] * 100
+    
+    # Save complete result file
     with open(result_file, 'w') as f:
         json.dump(result_dict, f, indent=2)
     
     print(f"\n✓ AST experiment complete: {name}")
+    if 'test1_acc' in result_dict:
+        print(f"  Test1 ({test1_name}): {result_dict['test1_acc']:.1f}%")
+    if 'test2_acc' in result_dict:
+        print(f"  Test2 ({test2_name}): {result_dict['test2_acc']:.1f}%")
     
     # Copy result files to shared directory if specified
     if config_dict.get('results_dir'):

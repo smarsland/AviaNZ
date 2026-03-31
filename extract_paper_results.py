@@ -50,14 +50,22 @@ def parse_experiment_name(exp_name):
         parts['source'] = 'unknown'
         parts['target'] = 'unknown'
     
-    # Extract method (baseline or dann)
-    if '_dann_' in exp_name:
+    # Extract method (baseline, dann, or AST)
+    if '_ast_' in exp_name:
+        parts['method'] = 'AST'
+        parts['model_architecture'] = 'AST'
+    elif '_dann_' in exp_name:
         parts['method'] = 'DANN'
+        parts['model_architecture'] = 'CNN'
     else:
         parts['method'] = 'Baseline'
+        parts['model_architecture'] = 'CNN'
     
     # Extract spectrogram transform and normalization
-    if 'Log+normalize-no-median' in exp_name:
+    # AST experiments always use Log transform
+    if '_ast_' in exp_name:
+        parts['transform'] = 'Log'
+    elif 'Log+normalize-no-median' in exp_name:
         parts['transform'] = 'Log+normalize-no-median'
     elif 'Log+normalize' in exp_name:
         parts['transform'] = 'Log+normalize'
@@ -338,6 +346,7 @@ def main():
             'source_dataset': exp_info['source'],
             'target_dataset': exp_info['target'],
             'method': exp_info['method'],
+            'model_architecture': exp_info.get('model_architecture', 'CNN'),
             'transform': exp_info['transform'],
             'noise_intensity': exp_info['noise_intensity'],
             'noise_variety': exp_info['noise_variety'],
@@ -456,9 +465,9 @@ def main():
         table1.to_csv(table1_file, index=False)
         print(f"\n✓ Saved to: {table1_file}")
     
-    # TABLE 2: DANN vs Baseline
+    # TABLE 2: DANN vs Baseline vs AST
     print("\n" + "="*70)
-    print("TABLE 2: DOMAIN ADAPTATION (DANN)")
+    print("TABLE 2: MODEL COMPARISON (DANN vs Baseline vs AST)")
     print("="*70)
     
     dann_df = df[
@@ -469,7 +478,7 @@ def main():
     
     if len(dann_df) > 0:
         table2 = dann_df[[
-            'source_dataset', 'target_dataset', 'method', 'transform',
+            'source_dataset', 'target_dataset', 'method', 'model_architecture', 'transform',
             'val_acc', 'val_acc_std', 
             'in_domain_acc', 'in_domain_std',
             'target_in_domain_acc', 'target_in_domain_std',
@@ -544,6 +553,7 @@ def main():
         ('Baseline', 'PCEN', None),
         ('Baseline', 'Box-Cox', None),
         ('DANN', 'Log+normalize', None),
+        ('AST', 'Log', None),
     ]
     
     asymmetry_df = calculate_asymmetry_ratios(df, key_configs)
@@ -611,10 +621,66 @@ def main():
     
     print("\nBest performing configurations by cross-domain accuracy:")
     best_cross_domain = df.nlargest(10, 'cross_domain_acc')[[
-        'experiment', 'source_dataset', 'method', 'transform', 
+        'experiment', 'source_dataset', 'method', 'model_architecture', 'transform', 
         'cross_domain_acc', 'cross_domain_std'
     ]]
     print(best_cross_domain.to_string(index=False))
+    
+    # =========================================================================
+    # AST-specific analysis
+    # =========================================================================
+    print("\n" + "="*70)
+    print("AST vs CNN BASELINE COMPARISON")
+    print("="*70)
+    
+    ast_comparison = df[
+        (df['method'].isin(['Baseline', 'AST'])) &
+        (df['transform'] == 'Log') &
+        df['noise_intensity'].isna() &
+        df['noise_variety'].isna()
+    ][[
+        'source_dataset', 'target_dataset', 'method', 'model_architecture',
+        'in_domain_acc', 'in_domain_std',
+        'cross_domain_acc', 'cross_domain_std',
+        'reduction_pct', 'reduction_pct_std', 'n_trials'
+    ]].sort_values(['source_dataset', 'method'])
+    
+    if len(ast_comparison) > 0:
+        print("\nDirect comparison of CNN vs AST architectures (both using Log transform):")
+        print(ast_comparison.to_string(index=False))
+        
+        # Calculate improvement/difference
+        print("\n--- AST vs CNN Baseline Differences ---")
+        for source in ['avianz', 'doc']:
+            ast_row = ast_comparison[(ast_comparison['source_dataset'] == source) & 
+                                     (ast_comparison['method'] == 'AST')]
+            cnn_row = ast_comparison[(ast_comparison['source_dataset'] == source) & 
+                                     (ast_comparison['method'] == 'Baseline')]
+            
+            if len(ast_row) == 1 and len(cnn_row) == 1:
+                ast = ast_row.iloc[0]
+                cnn = cnn_row.iloc[0]
+                
+                in_domain_diff = ast['in_domain_acc'] - cnn['in_domain_acc']
+                cross_domain_diff = ast['cross_domain_acc'] - cnn['cross_domain_acc']
+                reduction_diff = ast['reduction_pct'] - cnn['reduction_pct']
+                
+                direction = f"{source}→{ast['target_dataset']}"
+                print(f"\n{direction}:")
+                print(f"  In-domain: AST {ast['in_domain_acc']:.1f}% vs CNN {cnn['in_domain_acc']:.1f}% (diff: {in_domain_diff:+.1f}pp)")
+                print(f"  Cross-domain: AST {ast['cross_domain_acc']:.1f}% vs CNN {cnn['cross_domain_acc']:.1f}% (diff: {cross_domain_diff:+.1f}pp)")
+                print(f"  Reduction: AST {ast['reduction_pct']:.1f}% vs CNN {cnn['reduction_pct']:.1f}% (diff: {reduction_diff:+.1f}pp)")
+                
+                if abs(reduction_diff) > 2:
+                    if reduction_diff < 0:
+                        print(f"  → AST shows BETTER cross-dataset transfer (less reduction)")
+                    else:
+                        print(f"  → CNN shows BETTER cross-dataset transfer (less reduction)")
+        
+        # Save comparison table
+        ast_table_file = results_file.parent / 'table_ast_comparison.csv'
+        ast_comparison.to_csv(ast_table_file, index=False)
+        print(f"\n✓ Saved AST comparison to: {ast_table_file}")
     
     print("\n" + "="*70)
     print("DONE")

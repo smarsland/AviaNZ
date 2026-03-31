@@ -305,8 +305,6 @@ class ASTTrainer:
                 zeros = np.zeros((len(noise_files), self.num_classes), dtype=np.float32)
                 self.data['train_filenames'] = list(self.data['train_filenames']) + noise_files
                 self.data['train_labels'] = np.vstack([np.array(self.data['train_labels'], dtype=np.float32), zeros])
-                if self.data.get('train_primary_species') is not None:
-                    self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
                 print(f"Added {len(noise_files)} noise samples as all-zero training examples")
 
         # Load target domain data for DANN
@@ -1098,7 +1096,7 @@ class ASTTrainer:
             )
             
             # Evaluate and save predictions
-            test_name1 = Path(self.test_folder).parent.name
+            test_name1 = Path(self.test_folder).name
             evaluator.evaluate_model(model, test_loader_obj1, f'ast_test_{test_name1}', test_data1, device=self.device)
             
             # Save predictions to CSV
@@ -1134,7 +1132,7 @@ class ASTTrainer:
             )
             
             # Evaluate and save predictions
-            test_name2 = Path(self.test_folder2).parent.name
+            test_name2 = Path(self.test_folder2).name
             evaluator.evaluate_model(model, test_loader_obj2, f'ast_test_{test_name2}', test_data2, device=self.device)
             
             # Save predictions to CSV
@@ -1388,8 +1386,6 @@ class CNNTrainer:
                 zeros = np.zeros((len(noise_files), self.num_classes), dtype=np.float32)
                 self.data['train_filenames'] = list(self.data['train_filenames']) + noise_files
                 self.data['train_labels'] = np.vstack([np.array(self.data['train_labels'], dtype=np.float32), zeros])
-                if self.data.get('train_primary_species') is not None:
-                    self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
                 print(f"Added {len(noise_files)} noise samples as all-zero training examples")
 
         # Use dimensions from spectrogram params (single source of truth)
@@ -1843,8 +1839,6 @@ class KaytooTrainer:
                 zeros = np.zeros((len(noise_files), self.num_classes), dtype=np.float32)
                 self.data['train_filenames'] = list(self.data['train_filenames']) + noise_files
                 self.data['train_labels'] = np.vstack([np.array(self.data['train_labels'], dtype=np.float32), zeros])
-                if self.data.get('train_primary_species') is not None:
-                    self.data['train_primary_species'] = list(self.data['train_primary_species']) + [None] * len(noise_files)
                 print(f"Added {len(noise_files)} noise samples as all-zero training examples")
 
         self.img_height = freq_bins if freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']

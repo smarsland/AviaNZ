@@ -36,7 +36,7 @@ class EvaluationManager:
             model: Trained PyTorch model
             test_loader: PyTorch DataLoader for test data
             name: Model name for saving files
-            data: Dictionary containing all data (for primary species analysis)
+            data: Dictionary containing all data
             device: Device to run evaluation on
         """
         print(f"Generating evaluation metrics for {name}...")
@@ -154,64 +154,6 @@ class EvaluationManager:
         # Save and visualize results
         self._save_confusion_matrix(cm, class_report, name)
         self._plot_confusion_matrix(cm, name)
-    
-    def _evaluate_primary_species(self, y_pred_probs, data, name):
-        """Evaluate primary species predictions for multi-label models."""
-        # Create species name to index mapping
-        species_to_idx = {species: idx for idx, species in enumerate(data['categories'])}
-        
-        # Filter out None values and noise/background/empty labels (samples with no valid species)
-        # These are noise samples that should not be included in primary species evaluation
-        invalid_labels = {None, 'noise', 'background', 'empty', 'Noise', 'Background', 'Empty', 'Empty Sample'}
-        valid_mask = np.array([
-            species is not None and 
-            species not in invalid_labels and 
-            species in species_to_idx 
-            for species in data['test_primary_species']
-        ])
-        
-        if not valid_mask.all():
-            num_noise = (~valid_mask).sum()
-            print(f"Note: Excluding {num_noise} noise/background samples from primary species evaluation (they have no primary species)")
-        
-        if not valid_mask.any():
-            print("Warning: No samples with primary species in test set (all noise/background), skipping primary species evaluation")
-            return
-        
-        # Filter to valid samples only
-        valid_species = [data['test_primary_species'][i] for i in range(len(data['test_primary_species'])) if valid_mask[i]]
-        valid_probs = y_pred_probs[valid_mask]
-        
-        # Convert primary species to indices
-        y_true_primary = np.array([species_to_idx[species] for species in valid_species])
-        
-        # For predictions, use the class with highest probability as primary prediction
-        y_pred_primary = np.argmax(valid_probs, axis=1)
-        
-        # Get unique classes that actually appear in the data
-        unique_classes = np.unique(np.concatenate([y_true_primary, y_pred_primary]))
-        
-        # Generate confusion matrix for primary species (labels parameter ensures correct size)
-        cm_primary = confusion_matrix(y_true_primary, y_pred_primary, labels=unique_classes)
-        
-        # Create class names for only the classes that appear
-        present_class_names = [self.class_names[i] for i in unique_classes]
-        
-        # Temporarily save the original class names and replace with present ones for plotting
-        original_class_names = self.class_names
-        self.class_names = present_class_names
-        self._plot_confusion_matrix(cm_primary, f"{name}_primary_species")
-        self.class_names = original_class_names
-        
-        # Generate classification report for primary species (with labels parameter)
-        primary_report = classification_report(y_true_primary, y_pred_primary, 
-                                             labels=unique_classes,
-                                             target_names=present_class_names, 
-                                             output_dict=True, zero_division=0)
-        
-        # Save primary species metrics
-        with open(os.path.join(self.outputs_folder, f"{name}_primary_species_report.json"), "w") as f:
-            json.dump(primary_report, f, indent=2)
     
     def _save_multilabel_metrics(self, y_true, y_pred, y_pred_probs, class_report, name, cm_multi):
         """Save multi-label specific metrics."""

@@ -282,7 +282,6 @@ class BirdClefFineTuner:
                 'path': self.test_folder,
                 'filenames': test_data['train_filenames'],
                 'labels': test_labels,
-                'primary_species': test_data['train_primary_species'],
                 'noise_filenames': test_data['train_noise_filenames']
             })
         
@@ -304,7 +303,6 @@ class BirdClefFineTuner:
                 'path': self.test_folder2,
                 'filenames': test_data2['train_filenames'],
                 'labels': test_labels2,
-                'primary_species': test_data2['train_primary_species'],
                 'noise_filenames': test_data2['train_noise_filenames']
             })
         

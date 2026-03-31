@@ -103,11 +103,6 @@ class DataLoader:
                             if class_name in category_to_idx:
                                 label_vector[category_to_idx[class_name]] = 1.0
                     labels.append(label_vector)
-                else:
-                    label_vector = [0.0] * len(categories)
-                    if 'primary_class' in file_info and file_info['primary_class'] in category_to_idx:
-                        label_vector[category_to_idx[file_info['primary_class']]] = 1.0
-                    labels.append(label_vector)
         
         # Load noise data if available
         noise_filenames = self._load_noise_data()
