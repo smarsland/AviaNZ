@@ -198,10 +198,21 @@ class EvaluationManager:
         from sklearn.metrics import hamming_loss, jaccard_score
         
         hamming = hamming_loss(y_true, y_pred)
-        jaccard = jaccard_score(y_true, y_pred, average='macro', zero_division=0)
+        jaccard = jaccard_score(y_true, y_pred, average='samples', zero_division=0)
         
         # Exact match ratio (all labels must match exactly)
-        exact_match = np.mean(np.all(y_true == y_pred, axis=1))
+        exact_matches = np.all(y_true == y_pred, axis=1)
+        exact_match = np.mean(exact_matches)
+        
+        # DEBUG: Print prediction statistics
+        print(f"DEBUG: y_pred shape: {y_pred.shape}, y_true shape: {y_true.shape}")
+        print(f"DEBUG: y_pred sum per sample (first 10): {y_pred.sum(axis=1)[:10]}")
+        print(f"DEBUG: y_true sum per sample (first 10): {y_true.sum(axis=1)[:10]}")
+        print(f"DEBUG: Exact matches (first 20): {exact_matches[:20]}")
+        print(f"DEBUG: Number of exact matches: {exact_matches.sum()} / {len(exact_matches)}")
+        
+        # ADD exact match to the classification report for downstream use
+        class_report['exact_match_accuracy'] = float(exact_match)
         
         print(f"Multi-label metrics - Hamming Loss: {hamming:.4f}, Jaccard Score: {jaccard:.4f}, Exact Match: {exact_match:.4f}")
     

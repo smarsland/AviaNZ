@@ -939,89 +939,89 @@ class ASTTrainer:
                     print(f"Trial pruned at epoch {epoch+1}")
                     raise optuna.TrialPruned()
         
-        # Save final model
-        self._save_model(model)
-        self._save_history(train_losses, val_losses, train_accs, val_accs)
-        self._plot_history(train_losses, val_losses, train_accs, val_accs)
+        # Save final model (only if we actually trained)
+        if self.max_epochs > 0:
+            self._save_model(model)
+            self._save_history(train_losses, val_losses, train_accs, val_accs)
+            self._plot_history(train_losses, val_losses, train_accs, val_accs)
         
-        # Apply weight averaging (AST paper technique for +1-2% accuracy boost)
-        if len(model_states_for_averaging) > 0:
-            print(f"\nApplying weight averaging over {len(model_states_for_averaging)} checkpoints...")
-            averaged_state = {}
-            for key in model_states_for_averaging[0].keys():
-                try:
-                    stacked_params = torch.stack([state[key] for state in model_states_for_averaging])
-                    if stacked_params.dtype in [torch.float32, torch.float16, torch.float64]:
-                        averaged_state[key] = stacked_params.mean(dim=0)
-                    else:
+            # Apply weight averaging (AST paper technique for +1-2% accuracy boost)
+            if len(model_states_for_averaging) > 0:
+                print(f"\nApplying weight averaging over {len(model_states_for_averaging)} checkpoints...")
+                averaged_state = {}
+                for key in model_states_for_averaging[0].keys():
+                    try:
+                        stacked_params = torch.stack([state[key] for state in model_states_for_averaging])
+                        if stacked_params.dtype in [torch.float32, torch.float16, torch.float64]:
+                            averaged_state[key] = stacked_params.mean(dim=0)
+                        else:
+                            averaged_state[key] = model_states_for_averaging[-1][key]
+                    except (RuntimeError, TypeError):
+                        # Skip parameters that can't be stacked (e.g., different shapes across checkpoints)
                         averaged_state[key] = model_states_for_averaging[-1][key]
-                except (RuntimeError, TypeError):
-                    # Skip parameters that can't be stacked (e.g., different shapes across checkpoints)
-                    averaged_state[key] = model_states_for_averaging[-1][key]
-            model.load_state_dict(averaged_state)
-            
-            # Evaluate weight-averaged model
-            model.eval()
-            val_loss = 0.0
-            val_correct = 0
-            val_total = 0
-            criterion = nn.BCEWithLogitsLoss() if self.multilabel else nn.CrossEntropyLoss(label_smoothing=0.1)
-            
-            # For multi-label F1 calculation
-            all_val_preds = []
-            all_val_targets = []
-            
-            with torch.no_grad():
-                for batch in self.val_loader:
-                    if self.use_sparse_patches:
-                        patches = batch['patches'].to(self.device)
-                        positions = batch['positions'].to(self.device)
-                        mask = batch['mask'].to(self.device)
-                        target = batch['label'].to(self.device)
+                model.load_state_dict(averaged_state)
+                
+                # Evaluate weight-averaged model
+                model.eval()
+                val_loss = 0.0
+                val_correct = 0
+                val_total = 0
+                criterion = nn.BCEWithLogitsLoss() if self.multilabel else nn.CrossEntropyLoss(label_smoothing=0.1)
+                
+                # For multi-label F1 calculation
+                all_val_preds = []
+                all_val_targets = []
+                
+                with torch.no_grad():
+                    for batch in self.val_loader:
+                        if self.use_sparse_patches:
+                            patches = batch['patches'].to(self.device)
+                            positions = batch['positions'].to(self.device)
+                            mask = batch['mask'].to(self.device)
+                            target = batch['label'].to(self.device)
+                            
+                            with torch.amp.autocast('cuda', enabled=self.use_amp):
+                                if self.use_reconstruction:
+                                    output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                                else:
+                                    output = model(patches, sparse_mode=True, positions=positions, mask=mask)
+                        else:
+                            data, target = batch
+                            data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                            
+                            with torch.amp.autocast('cuda', enabled=self.use_amp):
+                                if self.use_reconstruction:
+                                    output, _ = model(data)
+                                else:
+                                    output = model(data)
                         
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_reconstruction:
-                                output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                            else:
-                                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                    else:
-                        data, target = batch
-                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                        
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_reconstruction:
-                                output, _ = model(data)
-                            else:
-                                output = model(data)
-                    
-                    if self.multilabel:
-                        val_loss += criterion(output, target).item()
-                        pred = (torch.sigmoid(output) > 0.5).float()
-                        all_val_preds.append(pred.cpu().numpy())
-                        all_val_targets.append(target.cpu().numpy())
-                    else:
-                        target_idx = target.argmax(dim=1)
-                        val_loss += criterion(output, target_idx).item()
+                        if self.multilabel:
+                            val_loss += criterion(output, target).item()
+                            pred = (torch.sigmoid(output) > 0.5).float()
+                            all_val_preds.append(pred.cpu().numpy())
+                            all_val_targets.append(target.cpu().numpy())
+                        else:
+                            target_idx = target.argmax(dim=1)
+                            val_loss += criterion(output, target_idx).item()
                         pred = output.argmax(dim=1)
                         val_correct += (pred == target_idx).sum().item()
                         val_total += target.size(0)
             
             if self.multilabel:
-                avg_val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
-                print(f"Weight-averaged model validation macro-F1: {avg_val_acc:.4f}")
-            else:
-                avg_val_acc = val_correct / val_total
-                print(f"Weight-averaged model validation accuracy: {avg_val_acc:.4f}")
-            
-            # Save weight-averaged model if it's better
-            if avg_val_acc > best_val_acc:
-                if self.multilabel:
-                    print(f"Weight averaging improved macro-F1: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
+                    avg_val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
+                    print(f"Weight-averaged model validation macro-F1: {avg_val_acc:.4f}")
                 else:
-                    print(f"Weight averaging improved accuracy: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
-                best_val_acc = avg_val_acc
-                self._save_model(model, best=True)
-        
+                    avg_val_acc = val_correct / val_total
+                    print(f"Weight-averaged model validation accuracy: {avg_val_acc:.4f}")
+                
+                # Save weight-averaged model if it's better
+                if avg_val_acc > best_val_acc:
+                    if self.multilabel:
+                        print(f"Weight averaging improved macro-F1: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
+                    else:
+                        print(f"Weight averaging improved accuracy: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
+                    best_val_acc = avg_val_acc
+                    self._save_model(model, best=True)
         # Evaluate on validation set (using best checkpoint)
         best_path = os.path.join(self.output_folder, 'ast_model_best.pt')
         if os.path.exists(best_path):

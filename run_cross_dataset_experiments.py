@@ -230,15 +230,15 @@ def run_ast_experiment(config_dict):
         if test1_report.exists():
             with open(test1_report) as f:
                 report = json.load(f)
-                if 'macro avg' in report and 'accuracy' in report['macro avg']:
-                    result_dict['test1_acc'] = report['macro avg']['accuracy'] * 100
+                if 'exact_match_accuracy' in report:
+                    result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
         
         test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
         if test2_report.exists():
             with open(test2_report) as f:
                 report = json.load(f)
-                if 'macro avg' in report and 'accuracy' in report['macro avg']:
-                    result_dict['test2_acc'] = report['macro avg']['accuracy'] * 100
+                if 'exact_match_accuracy' in report:
+                    result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
         
         # Save/update result file
         with open(result_file, 'w') as f:
@@ -325,16 +325,16 @@ def run_ast_experiment(config_dict):
     if test1_report.exists():
         with open(test1_report) as f:
             report = json.load(f)
-            if 'macro avg' in report and 'accuracy' in report['macro avg']:
-                result_dict['test1_acc'] = report['macro avg']['accuracy'] * 100
+            if 'exact_match_accuracy' in report:
+                result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
     
     # Try to load test2 results
     test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
     if test2_report.exists():
         with open(test2_report) as f:
             report = json.load(f)
-            if 'macro avg' in report and 'accuracy' in report['macro avg']:
-                result_dict['test2_acc'] = report['macro avg']['accuracy'] * 100
+            if 'exact_match_accuracy' in report:
+                result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
     
     # Save complete result file
     with open(result_file, 'w') as f:

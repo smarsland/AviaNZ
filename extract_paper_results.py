@@ -333,6 +333,87 @@ def plot_noise_experiments(df, output_dir):
     plt.close()
 
 
+def plot_noise_experiments_for_paper(df, output_dir):
+    """
+    Create a simplified figure for the paper showing in-domain test and cross-domain accuracy
+    for noise intensity and variety experiments, arranged in a row.
+    """
+    # Set up plot style
+    plt.style.use('seaborn-v0_8-paper')
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    
+    # =========================================================================
+    # PLOT 1: Noise Intensity
+    # =========================================================================
+    ax = axes[0]
+    intensity_df = df[df['noise_intensity'].notna()].copy()
+    
+    if len(intensity_df) > 0:
+        for source in ['avianz', 'doc']:
+            subset = intensity_df[intensity_df['source_dataset'] == source].sort_values('noise_intensity')
+            label_cross = 'Wait\=akere→DOC' if source == 'avianz' else 'DOC→Wait\=akere'
+            label_indomain = 'Wait\=akere test' if source == 'avianz' else 'DOC test'
+            
+            # Cross-domain (solid line)
+            ax.errorbar(subset['noise_intensity'], subset['cross_domain_acc'], 
+                       yerr=subset['cross_domain_std'], marker='o', label=label_cross, 
+                       capsize=5, capthick=2, linewidth=2, markersize=8)
+            
+            # In-domain test (dashed line)
+            ax.errorbar(subset['noise_intensity'], subset['in_domain_acc'], 
+                       yerr=subset['in_domain_std'], marker='s', label=label_indomain, 
+                       linestyle='--', capsize=5, capthick=2, linewidth=2, markersize=6, alpha=0.7)
+        
+        ax.set_xlabel('Noise Intensity', fontsize=11)
+        ax.set_ylabel('Accuracy (%)', fontsize=11)
+        ax.set_title('(a) Noise Intensity', fontsize=12, fontweight='bold')
+        ax.legend(fontsize=8, loc='best', ncol=2)
+        ax.grid(True, alpha=0.3)
+    
+    # =========================================================================
+    # PLOT 2: Noise Variety
+    # =========================================================================
+    ax = axes[1]
+    variety_df = df[df['noise_variety'].notna()].copy()
+    
+    if len(variety_df) > 0:
+        for source in ['avianz', 'doc']:
+            subset = variety_df[variety_df['source_dataset'] == source].sort_values('noise_variety')
+            label_cross = 'Wait\=akere→DOC' if source == 'avianz' else 'DOC→Wait\=akere'
+            label_indomain = 'Wait\=akere test' if source == 'avianz' else 'DOC test'
+            
+            # Cross-domain (solid line)
+            ax.errorbar(subset['noise_variety'], subset['cross_domain_acc'], 
+                       yerr=subset['cross_domain_std'], marker='o', label=label_cross, 
+                       capsize=5, capthick=2, linewidth=2, markersize=8)
+            
+            # In-domain test (dashed line)
+            ax.errorbar(subset['noise_variety'], subset['in_domain_acc'], 
+                       yerr=subset['in_domain_std'], marker='s', label=label_indomain, 
+                       linestyle='--', capsize=5, capthick=2, linewidth=2, markersize=6, alpha=0.7)
+        
+        ax.set_xlabel('Number of Noise Samples', fontsize=11)
+        ax.set_ylabel('Accuracy (%)', fontsize=11)
+        ax.set_title('(b) Noise Variety', fontsize=12, fontweight='bold')
+        ax.set_xscale('log')
+        ax.legend(fontsize=8, loc='best', ncol=2)
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save figure
+    output_file = output_dir / 'noise_augmentation_paper.pdf'
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"\n✓ Saved noise augmentation figure for paper to: {output_file}")
+    
+    # Also save as PNG for easier viewing
+    output_file_png = output_dir / 'noise_augmentation_paper.png'
+    plt.savefig(output_file_png, dpi=300, bbox_inches='tight')
+    print(f"✓ Saved PNG version to: {output_file_png}")
+    
+    plt.close()
+
+
 def generate_per_species_tables(df, grouped, output_dir):
     """
     Generate per-species accuracy tables for key experiments.
@@ -376,6 +457,29 @@ def generate_per_species_tables(df, grouped, output_dir):
     if len(best_method_df) > 0:
         per_species_rows = []
         
+        # First pass: collect in-domain baselines for each species in each dataset
+        species_baselines = {}  # {(dataset, species): {'mean': X, 'std': Y}}
+        
+        for idx, row in best_method_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            target = row['target_dataset']
+            
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test1_per_class' in stats:
+                    # Store in-domain baselines (test1 = same as source)
+                    for species in species_list:
+                        if species in stats['test1_per_class']:
+                            species_baselines[(source, species)] = {
+                                'mean': stats['test1_per_class'][species]['mean'],
+                                'std': stats['test1_per_class'][species]['std']
+                            }
+        
+        # Second pass: build rows with reduction percentages
         for idx, row in best_method_df.iterrows():
             exp_name = row['experiment']
             source = row['source_dataset']
@@ -392,14 +496,28 @@ def generate_per_species_tables(df, grouped, output_dir):
                     # Create a row for each species
                     for species in species_list:
                         if species in stats['test1_per_class'] and species in stats['test2_per_class']:
+                            in_domain = stats['test1_per_class'][species]['mean']
+                            cross_domain = stats['test2_per_class'][species]['mean']
+                            
+                            # Get target dataset's in-domain baseline for this species
+                            target_baseline = species_baselines.get((target, species), {}).get('mean', None)
+                            
+                            # Calculate reduction percentage (like overall analysis)
+                            if target_baseline is not None and target_baseline > 0:
+                                reduction_pct = (target_baseline - cross_domain) / target_baseline * 100
+                            else:
+                                reduction_pct = np.nan
+                            
                             per_species_rows.append({
                                 'source': source,
                                 'target': target,
                                 'species': species,
-                                'in_domain_acc': stats['test1_per_class'][species]['mean'],
+                                'in_domain_acc': in_domain,
                                 'in_domain_std': stats['test1_per_class'][species]['std'],
-                                'cross_domain_acc': stats['test2_per_class'][species]['mean'],
+                                'cross_domain_acc': cross_domain,
                                 'cross_domain_std': stats['test2_per_class'][species]['std'],
+                                'target_baseline': target_baseline,
+                                'reduction_pct': reduction_pct,
                             })
         
         if per_species_rows:
@@ -412,7 +530,8 @@ def generate_per_species_tables(df, grouped, output_dir):
                 for _, row in waitakere_to_doc.iterrows():
                     print(f"  {row['species']:20s}: In-domain: {row['in_domain_acc']:.1f}±{row['in_domain_std']:.1f}%  "
                           f"Cross-domain: {row['cross_domain_acc']:.1f}±{row['cross_domain_std']:.1f}%  "
-                          f"Drop: {row['in_domain_acc'] - row['cross_domain_acc']:.1f}%")
+                          f"Target baseline: {row['target_baseline']:.1f}%  "
+                          f"Reduction: {row['reduction_pct']:.1f}%")
             
             print("\nDOC → Waitākere (trained on DOC, tested on Waitākere):")
             doc_to_waitakere = per_species_df[per_species_df['source'] == 'doc']
@@ -420,7 +539,8 @@ def generate_per_species_tables(df, grouped, output_dir):
                 for _, row in doc_to_waitakere.iterrows():
                     print(f"  {row['species']:20s}: In-domain: {row['in_domain_acc']:.1f}±{row['in_domain_std']:.1f}%  "
                           f"Cross-domain: {row['cross_domain_acc']:.1f}±{row['cross_domain_std']:.1f}%  "
-                          f"Drop: {row['in_domain_acc'] - row['cross_domain_acc']:.1f}%")
+                          f"Target baseline: {row['target_baseline']:.1f}%  "
+                          f"Reduction: {row['reduction_pct']:.1f}%")
             
             # Save CSV
             per_species_file = output_dir / 'table_per_species_best_method.csv'
@@ -495,6 +615,24 @@ def generate_per_species_tables(df, grouped, output_dir):
     if len(best_method_df) > 0:
         per_species_rows = []
         
+        # First pass: collect in-domain baselines
+        species_baselines = {}  # {(dataset, species): mean_acc}
+        
+        for idx, row in best_method_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test1_per_class' in stats:
+                    for species in species_list:
+                        if species in stats['test1_per_class']:
+                            species_baselines[(source, species)] = stats['test1_per_class'][species]['mean']
+        
+        # Second pass: build rows with reduction percentages
         for idx, row in best_method_df.iterrows():
             exp_name = row['experiment']
             source = row['source_dataset']
@@ -510,6 +648,14 @@ def generate_per_species_tables(df, grouped, output_dir):
                         if species in stats['test1_per_class'] and species in stats['test2_per_class']:
                             in_domain = stats['test1_per_class'][species]['mean']
                             cross_domain = stats['test2_per_class'][species]['mean']
+                            
+                            # Get target dataset's baseline for reduction calculation
+                            target_baseline = species_baselines.get((target, species), None)
+                            if target_baseline is not None and target_baseline > 0:
+                                reduction_pct = (target_baseline - cross_domain) / target_baseline * 100
+                            else:
+                                reduction_pct = np.nan
+                            
                             per_species_rows.append({
                                 'source': source,
                                 'target': target,
@@ -518,7 +664,7 @@ def generate_per_species_tables(df, grouped, output_dir):
                                 'in_domain_std': stats['test1_per_class'][species]['std'],
                                 'cross_domain_acc': cross_domain,
                                 'cross_domain_std': stats['test2_per_class'][species]['std'],
-                                'drop': in_domain - cross_domain,
+                                'reduction_pct': reduction_pct,
                             })
         
         if per_species_rows:
@@ -529,7 +675,7 @@ def generate_per_species_tables(df, grouped, output_dir):
             
             # Plot 1: Waitākere → DOC
             ax = axes[0]
-            waitakere_data = per_species_df[per_species_df['source'] == 'avianz'].sort_values('drop', ascending=False)
+            waitakere_data = per_species_df[per_species_df['source'] == 'avianz'].sort_values('reduction_pct', ascending=False)
             
             x = np.arange(len(waitakere_data))
             width = 0.35
@@ -551,7 +697,7 @@ def generate_per_species_tables(df, grouped, output_dir):
             
             # Plot 2: DOC → Waitākere
             ax = axes[1]
-            doc_data = per_species_df[per_species_df['source'] == 'doc'].sort_values('drop', ascending=False)
+            doc_data = per_species_df[per_species_df['source'] == 'doc'].sort_values('reduction_pct', ascending=False)
             
             x = np.arange(len(doc_data))
             
@@ -593,6 +739,24 @@ def generate_per_species_tables(df, grouped, output_dir):
     if len(best_method_df) > 0:
         per_species_rows = []
         
+        # First pass: collect in-domain baselines
+        species_baselines = {}  # {(dataset, species): mean_acc}
+        
+        for idx, row in best_method_df.iterrows():
+            exp_name = row['experiment']
+            source = row['source_dataset']
+            
+            base_name = exp_name
+            if base_name in grouped:
+                results_list = grouped[base_name]
+                stats = compute_statistics(results_list)
+                
+                if 'test1_per_class' in stats:
+                    for species in species_list:
+                        if species in stats['test1_per_class']:
+                            species_baselines[(source, species)] = stats['test1_per_class'][species]['mean']
+        
+        # Second pass: build rows with reduction percentages
         for idx, row in best_method_df.iterrows():
             exp_name = row['experiment']
             source = row['source_dataset']
@@ -606,14 +770,25 @@ def generate_per_species_tables(df, grouped, output_dir):
                 if 'test1_per_class' in stats and 'test2_per_class' in stats:
                     for species in species_list:
                         if species in stats['test1_per_class'] and species in stats['test2_per_class']:
+                            in_domain = stats['test1_per_class'][species]['mean']
+                            cross_domain = stats['test2_per_class'][species]['mean']
+                            
+                            # Get target dataset's baseline for reduction calculation
+                            target_baseline = species_baselines.get((target, species), None)
+                            if target_baseline is not None and target_baseline > 0:
+                                reduction_pct = (target_baseline - cross_domain) / target_baseline * 100
+                            else:
+                                reduction_pct = np.nan
+                            
                             per_species_rows.append({
                                 'source': source,
                                 'target': target,
                                 'species': species,
-                                'in_domain_acc': stats['test1_per_class'][species]['mean'],
+                                'in_domain_acc': in_domain,
                                 'in_domain_std': stats['test1_per_class'][species]['std'],
-                                'cross_domain_acc': stats['test2_per_class'][species]['mean'],
+                                'cross_domain_acc': cross_domain,
                                 'cross_domain_std': stats['test2_per_class'][species]['std'],
+                                'reduction_pct': reduction_pct,
                             })
         
         if per_species_rows:
@@ -627,13 +802,14 @@ def generate_per_species_tables(df, grouped, output_dir):
             latex_lines.append("\\caption{Per-species accuracy with Log+median+normalize preprocessing. "
                              "\\textbf{In-Dom}: In-domain accuracy (trained and tested on same dataset). "
                              "\\textbf{Cross-Dom}: Cross-domain accuracy (trained on source, tested on target). "
+                             "\\textbf{Red\\%%}: Reduction percentage relative to target dataset baseline. "
                              "Mean$\\pm$std over 5 seeds.}")
             latex_lines.append("\\label{tab:per_species}")
             latex_lines.append("\\begin{tabular}{@{}lcccccc@{}}")
             latex_lines.append("\\hline")
             latex_lines.append("Species & \\multicolumn{3}{c}{Wait\\=akere→DOC} & \\multicolumn{3}{c}{DOC→Wait\\=akere} \\\\")
             latex_lines.append("\\cline{2-4} \\cline{5-7}")
-            latex_lines.append("        & In-Dom & Cross-Dom & Drop & In-Dom & Cross-Dom & Drop \\\\")
+            latex_lines.append("        & In-Dom & Cross-Dom & Red\\% & In-Dom & Cross-Dom & Red\\% \\\\")
             latex_lines.append("\\hline")
             
             # For each species, get both directions
@@ -656,13 +832,13 @@ def generate_per_species_tables(df, grouped, output_dir):
                     
                     w2d_in = f"{w2d['in_domain_acc']:.1f}$\\pm${w2d['in_domain_std']:.1f}"
                     w2d_cross = f"{w2d['cross_domain_acc']:.1f}$\\pm${w2d['cross_domain_std']:.1f}"
-                    w2d_drop = w2d['in_domain_acc'] - w2d['cross_domain_acc']
+                    w2d_reduction = w2d['reduction_pct']
                     
                     d2w_in = f"{d2w['in_domain_acc']:.1f}$\\pm${d2w['in_domain_std']:.1f}"
                     d2w_cross = f"{d2w['cross_domain_acc']:.1f}$\\pm${d2w['cross_domain_std']:.1f}"
-                    d2w_drop = d2w['in_domain_acc'] - d2w['cross_domain_acc']
+                    d2w_reduction = d2w['reduction_pct']
                     
-                    line = f"{species_display:20s} & {w2d_in} & {w2d_cross} & {w2d_drop:+.1f} & {d2w_in} & {d2w_cross} & {d2w_drop:+.1f} \\\\"
+                    line = f"{species_display:20s} & {w2d_in} & {w2d_cross} & {w2d_reduction:.1f} & {d2w_in} & {d2w_cross} & {d2w_reduction:.1f} \\\\"
                     latex_lines.append(line)
             
             latex_lines.append("\\hline")
@@ -949,6 +1125,7 @@ def main():
     print("="*70)
     
     plot_noise_experiments(df, results_file.parent)
+    plot_noise_experiments_for_paper(df, results_file.parent)
     
     # =========================================================================
     # GENERATE PER-SPECIES TABLES
