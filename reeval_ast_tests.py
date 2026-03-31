@@ -124,7 +124,7 @@ import json
 from pathlib import Path
 from data_utils import DataLoader, SpectrogramDataset
 from evaluation_utils import EvaluationManager
-from models import ASTModel
+from models import AST
 import config
 
 # Load model config
@@ -132,15 +132,16 @@ config_path = Path('{folder}') / 'ast_model_config.json'
 with open(config_path) as f:
     model_config = json.load(f)
 
-# Create model
+# Create model with same parameters as training
 num_classes = model_config['num_classes']
-model = ASTModel(
-    label_dim=num_classes,
-    fstride=10, tstride=10,
-    input_fdim=128, input_tdim=1024,
-    imagenet_pretrain=False,
-    audioset_pretrain=False,
-    model_size='base384'
+model = AST(
+    num_classes=num_classes,
+    multilabel=True,
+    input_size=(128, 1024),
+    dropout=0.1,
+    use_reconstruction=False,
+    use_adapters=False,
+    per_chunk_norm=False
 )
 
 # Load weights
