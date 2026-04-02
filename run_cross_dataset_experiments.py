@@ -431,8 +431,8 @@ def run_experiment(config_dict):
         # Add normalization flags
         if config_dict.get('normalize'):
             cmd.append('--normalize')
-        if config_dict.get('normalize_no_median'):
-            cmd.append('--normalize-no-median')
+        if config_dict.get('median_filter', False):
+            cmd.append('--median-filter')
         if config_dict.get('median_only'):
             cmd.append('--median-only')
         
@@ -475,8 +475,8 @@ def run_experiment(config_dict):
         # Add normalization flags if specified
         if config_dict.get('normalize'):
             cmd.append('--normalize')
-            if config_dict.get('normalize_no_median'):
-                cmd.append('--normalize-no-median')
+            if config_dict.get('median_filter', False):
+                cmd.append('--median-filter')
         
         if config_dict.get('mixup'):
             cmd.extend(['--mixup', str(config_dict['mixup'])])
@@ -514,10 +514,11 @@ def run_experiment(config_dict):
 
 def main():
     parser = argparse.ArgumentParser(description='Run all cross-dataset experiments')
-    parser.add_argument('--avianz-train', required=True, help='AviaNZ training data folder')
-    parser.add_argument('--avianz-test', required=True, help='AviaNZ test data folder')
+    parser.add_argument('--avianz-train', required=True, help='Waitākere training data folder')
+    parser.add_argument('--avianz-test', required=True, help='Waitākere test data folder')
     parser.add_argument('--doc-train', required=True, help='DOC training data folder')
     parser.add_argument('--doc-test', required=True, help='DOC test data folder')
+    parser.add_argument('--merged-train', default=None, help='Merged training data folder (DOC + Waitākere) - optional')
     parser.add_argument('--output', required=True, help='Output folder for all experiments (model files)')
     parser.add_argument('--results-dir', default=None, help='Shared results directory for small files (JSONs, CSVs). If not specified, saves to output folder.')
     parser.add_argument('--noise-folder', default=None, help='Noise folder (optional, for noise sweep)')
@@ -539,6 +540,10 @@ def main():
         if not os.path.exists(path):
             print(f"ERROR: Path not found: {path}")
             sys.exit(1)
+    
+    if args.merged_train and not os.path.exists(args.merged_train):
+        print(f"ERROR: Merged train path not found: {args.merged_train}")
+        sys.exit(1)
     
     if not os.path.exists(args.model):
         print(f"ERROR: Model not found: {args.model}")
@@ -583,24 +588,24 @@ def main():
     print(" EXPERIMENT SUITE 1: NORMALIZATION COMPARISON")
     print("="*70)
     print(" Goal: Find which normalization reduces domain shift most")
-    print(" Methods: Log, Log+normalize, Log+normalize-no-median,")
-    print("          Log+median-only, PCEN, Box-Cox")
+    print(" Methods: Log, Log+median+normalize, Log+normalize,")
+    print("          Log+median, PCEN, Box-Cox")
     print(f" Seeds: {args.seeds}")
     print(f" Total: 6 methods × 2 directions × {len(args.seeds)} seeds = {6 * 2 * len(args.seeds)} experiments")
     print("="*70 + "\n")
     
     normalization_configs = [
-        {'name': 'Log', 'spec_transform': 'Log', 'normalize': False, 'normalize_no_median': False, 'median_only': False},
-        {'name': 'Log+normalize', 'spec_transform': 'Log', 'normalize': True, 'normalize_no_median': False, 'median_only': False},
-        {'name': 'Log+normalize-no-median', 'spec_transform': 'Log', 'normalize': True, 'normalize_no_median': True, 'median_only': False},
-        {'name': 'Log+median-only', 'spec_transform': 'Log', 'normalize': False, 'normalize_no_median': False, 'median_only': True},
-        {'name': 'PCEN', 'spec_transform': 'PCEN', 'normalize': False, 'normalize_no_median': False, 'median_only': False},
-        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'normalize': False, 'normalize_no_median': False, 'median_only': False},
+        {'name': 'Log', 'spec_transform': 'Log', 'normalize': False, 'median_filter': False, 'median_only': False},
+        {'name': 'Log+median+normalize', 'spec_transform': 'Log', 'normalize': True, 'median_filter': True, 'median_only': False},
+        {'name': 'Log+normalize', 'spec_transform': 'Log', 'normalize': True, 'median_filter': False, 'median_only': False},
+        {'name': 'Log+median', 'spec_transform': 'Log', 'normalize': False, 'median_filter': True, 'median_only': True},
+        {'name': 'PCEN', 'spec_transform': 'PCEN', 'normalize': False, 'median_filter': False, 'median_only': False},
+        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'normalize': False, 'median_filter': False, 'median_only': False},
     ]
     
     for seed in args.seeds:
         for norm_config in normalization_configs:
-            # AviaNZ → DOC
+            # Waitākere → DOC
             all_experiments.append({
                 **norm_config,
                 'name': f"avianz_baseline_{norm_config['name']}",
@@ -618,7 +623,7 @@ def main():
                 'seed': seed,
             })
             
-            # DOC → AviaNZ
+            # DOC → Waitākere
             all_experiments.append({
                 **norm_config,
                 'name': f"doc_baseline_{norm_config['name']}",
@@ -643,19 +648,19 @@ def main():
     print(" EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL TRAINING (DANN)")
     print("="*70)
     print(" Goal: Test if DANN reduces domain shift with/without normalization")
-    print(" Variants: (1) plain Log, (2) Log+normalize")
+    print(" Variants: (1) plain Log, (2) Log+median+normalize")
     print(f" Seeds: {args.seeds}")
     print(f" Total: 2 variants × 2 directions × {len(args.seeds)} seeds = {2 * 2 * len(args.seeds)} experiments")
     print("="*70 + "\n")
     
     dann_configs = [
-        {'name': 'Log', 'normalize': False, 'normalize_no_median': False},
-        {'name': 'Log+normalize', 'normalize': True, 'normalize_no_median': False},
+        {'name': 'Log', 'normalize': False, 'median_filter': False},
+        {'name': 'Log+median+normalize', 'normalize': True, 'median_filter': True},
     ]
     
     for seed in args.seeds:
         for dann_config in dann_configs:
-            # AviaNZ → DOC with DANN
+            # Waitākere → DOC with DANN
             all_experiments.append({
                 'name': f"avianz_dann_{dann_config['name']}",
                 'type': 'dann',
@@ -670,12 +675,12 @@ def main():
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
                 'normalize': dann_config['normalize'],
-                'normalize_no_median': dann_config['normalize_no_median'],
+                'median_filter': dann_config['median_filter'],
                 'lambda_domain': 0.3,
                 'seed': seed,
             })
             
-            # DOC → AviaNZ with DANN
+            # DOC → Waitākere with DANN
             all_experiments.append({
                 'name': f"doc_dann_{dann_config['name']}",
                 'type': 'dann',
@@ -690,7 +695,7 @@ def main():
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
                 'normalize': dann_config['normalize'],
-                'normalize_no_median': dann_config['normalize_no_median'],
+                'median_filter': dann_config['median_filter'],
                 'lambda_domain': 0.3,
                 'seed': seed,
             })
@@ -713,7 +718,7 @@ def main():
         
         for seed in args.seeds:
             for noise_level in noise_levels:
-                # AviaNZ → DOC
+                # Waitākere → DOC
                 all_experiments.append({
                     'name': f"avianz_baseline_Log_intensity{noise_level}",
                     'type': 'baseline',
@@ -727,14 +732,14 @@ def main():
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
                     'normalize': False,
-                    'normalize_no_median': False,
+                    'median_filter': False,
                     'median_only': False,
                     'noise': noise_level,
                     'noise_folder': args.noise_folder,
                     'seed': seed,
                 })
                 
-                # DOC → AviaNZ
+                # DOC → Waitākere
                 all_experiments.append({
                     'name': f"doc_baseline_Log_intensity{noise_level}",
                     'type': 'baseline',
@@ -748,7 +753,7 @@ def main():
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
                     'normalize': False,
-                    'normalize_no_median': False,
+                    'median_filter': False,
                     'median_only': False,
                     'noise': noise_level,
                     'noise_folder': args.noise_folder,
@@ -813,7 +818,7 @@ def main():
                 for n_noise in variety_levels:
                     noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
                     
-                    # AviaNZ → DOC
+                    # Waitākere → DOC
                     all_experiments.append({
                         'name': f"avianz_baseline_Log_variety{n_noise}",
                         'type': 'baseline',
@@ -827,14 +832,14 @@ def main():
                         'mixup': args.mixup,
                         'spec_transform': 'Log',
                         'normalize': False,
-                        'normalize_no_median': False,
+                        'median_filter': False,
                         'median_only': False,
                         'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
                     })
                     
-                    # DOC → AviaNZ
+                    # DOC → Waitākere
                     all_experiments.append({
                         'name': f"doc_baseline_Log_variety{n_noise}",
                         'type': 'baseline',
@@ -848,7 +853,7 @@ def main():
                         'mixup': args.mixup,
                         'spec_transform': 'Log',
                         'normalize': False,
-                        'normalize_no_median': False,
+                        'median_filter': False,
                         'median_only': False,
                         'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
@@ -873,7 +878,7 @@ def main():
     
     # AST experiments: loop over all seeds (like other experiments)
     for seed in args.seeds:
-        # AviaNZ → DOC (AST trained from scratch on AviaNZ)
+        # Waitākere → DOC (AST trained from scratch on Waitākere)
         all_experiments.append({
             'name': 'avianz_ast_baseline',
             'train': args.avianz_train,
@@ -887,7 +892,7 @@ def main():
             'is_ast': True,
         })
         
-        # DOC → AviaNZ (AST trained from scratch on DOC)
+        # DOC → Waitākere (AST trained from scratch on DOC)
         all_experiments.append({
             'name': 'doc_ast_baseline',
             'train': args.doc_train,
@@ -900,6 +905,47 @@ def main():
             'seed': seed,
             'is_ast': True,
         })
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 6: MERGED DATASET TRAINING
+    # =========================================================================
+    if args.merged_train:
+        print("\n" + "="*70)
+        print(" EXPERIMENT SUITE 6: MERGED DATASET TRAINING")
+        print("="*70)
+        print(" Goal: Evaluate if training on combined DOC+Waitākere data")
+        print("       improves cross-domain performance")
+        print(" Using: Log baseline and Log+median+normalize preprocessing")
+        print(f" Seeds: {args.seeds}")
+        print(f" Total: 2 methods × {len(args.seeds)} seeds = {2 * len(args.seeds)} experiments")
+        print("="*70 + "\n")
+        
+        merged_configs = [
+            {'name': 'Log', 'spec_transform': 'Log', 'normalize': False, 'median_filter': False, 'median_only': False},
+            {'name': 'Log+median+normalize', 'spec_transform': 'Log', 'normalize': True, 'median_filter': True, 'median_only': False},
+        ]
+        
+        for seed in args.seeds:
+            for merge_config in merged_configs:
+                # Merged → both test sets
+                all_experiments.append({
+                    **merge_config,
+                    'name': f"merged_baseline_{merge_config['name']}",
+                    'type': 'baseline',
+                    'train': args.merged_train,
+                    'test1': args.doc_test,
+                    'test2': args.avianz_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'noise': 0.0,
+                    'noise_folder': args.noise_folder,
+                    'seed': seed,
+                })
+    else:
+        print("\n⚠ Skipping merged dataset experiments (no --merged-train provided)")
     
     # =========================================================================
     # RUN ALL EXPERIMENTS IN PARALLEL

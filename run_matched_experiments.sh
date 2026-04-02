@@ -7,7 +7,8 @@ set -e
 # Does:
 #   1. Build matched datasets (if not exist)
 #   2. Split datasets (if not exist)
-#   3. Run ALL experiments (Python handles caching)
+#   3. Merge train datasets (if not exist)
+#   4. Run ALL experiments (Python handles caching)
 #
 # No flags. No skip logic. Just checks file existence.
 # Want to rerun? Delete the folder.
@@ -83,15 +84,17 @@ MAPPING="DOC_bird_naming_map.csv"
 
 MATCHED_BASE="${OUTPUT_BASE}/matched"
 DOC_MATCHED="${MATCHED_BASE}/doc_matched"
-AVIANZ_MATCHED="${MATCHED_BASE}/avianz_matched"
+AVIANZ_MATCHED="${MATCHED_BASE}/avianz_matched"  # Waitākere dataset
 
 DOC_SPLIT_BASE="${MATCHED_BASE}/doc_split"
 DOC_TRAIN="${DOC_SPLIT_BASE}/train"
 DOC_TEST="${DOC_SPLIT_BASE}/test"
 
-AVIANZ_SPLIT_BASE="${MATCHED_BASE}/avianz_split"
+AVIANZ_SPLIT_BASE="${MATCHED_BASE}/avianz_split"  # Waitākere dataset splits
 AVIANZ_TRAIN="${AVIANZ_SPLIT_BASE}/train"
 AVIANZ_TEST="${AVIANZ_SPLIT_BASE}/test"
+
+MERGED_TRAIN="${MATCHED_BASE}/merged_train"  # Combined DOC + Waitākere training data
 
 NOISE_FOLDER="${OUTPUT_BASE}/noise"
 RESULTS="${OUTPUT_BASE}/experiments_matched"
@@ -105,9 +108,9 @@ TEST_SIZE=0.25
 echo "============================================================"
 echo " Domain Shift Experiments"
 echo "============================================================"
-echo "  AviaNZ raw : $AVIANZ_RAW"
-echo "  DOC raw    : $DOC_RAW"
-echo "  Output     : $OUTPUT_BASE"
+echo "  Waitākere raw : $AVIANZ_RAW"
+echo "  DOC raw       : $DOC_RAW"
+echo "  Output        : $OUTPUT_BASE"
 echo "============================================================"
 echo ""
 
@@ -130,13 +133,13 @@ else
 fi
 
 # Split datasets (if not exist)
-# Uses file-level splitting for AviaNZ and distribution-matched splitting for DOC
+# Uses file-level splitting for Waitākere and distribution-matched splitting for DOC
 # 
-# AviaNZ: All segments from the same audio file go to train OR test (never both)
-#         This prevents data leakage from similar recording conditions
+# Waitākere: All segments from the same audio file go to train OR test (never both)
+#            This prevents data leakage from similar recording conditions
 # 
-# DOC:    Split to match the species distribution that resulted from AviaNZ split
-#         This ensures both datasets have similar class balance in train/test
+# DOC:       Split to match the species distribution that resulted from Waitākere split
+#            This ensures both datasets have similar class balance in train/test
 if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
     echo ""
     echo "=== Splitting datasets (file-level + distribution-matched) ==="
@@ -155,6 +158,21 @@ else
     echo "=== Splits exist, skipping ==="
 fi
 
+# Merge train datasets (DOC + Waitākere) for combined training experiments
+if [ ! -d "$MERGED_TRAIN" ]; then
+    echo ""
+    echo "=== Merging training datasets (DOC + Waitākere) ==="
+    python3 merge_datasets.py \
+        "$DOC_TRAIN" \
+        "$AVIANZ_TRAIN" \
+        "$MERGED_TRAIN" \
+        --symlink \
+        --no-audio
+else
+    echo ""
+    echo "=== Merged training dataset exists, skipping ==="
+fi
+
 # ============================================================
 # PHASE 2: RUN ALL EXPERIMENTS
 # ============================================================
@@ -168,8 +186,9 @@ echo "   - Normalization comparison (12 experiments)"
 echo "   - DANN domain adaptation (2 experiments)"
 echo "   - Noise intensity sweep (10 experiments)"
 echo "   - Noise variety sweep (10 experiments)"
+echo "   - Merged dataset experiments (2 experiments)"
 echo ""
-echo " Total: ~34 experiments"
+echo " Total: ~36 experiments"
 echo ""
 echo " Each experiment caches results automatically."
 echo " To rerun: delete experiment folders in $RESULTS"
@@ -181,6 +200,7 @@ python3 run_cross_dataset_experiments.py \
     --avianz-test  "$AVIANZ_TEST" \
     --doc-train    "$DOC_TRAIN" \
     --doc-test     "$DOC_TEST" \
+    --merged-train "$MERGED_TRAIN" \
     --noise-folder "$NOISE_FOLDER" \
     --output       "$RESULTS" \
     --results-dir  "$RESULTS_DIR" \

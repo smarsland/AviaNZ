@@ -39,8 +39,11 @@ def parse_experiment_name(exp_name):
     """
     parts = {}
     
-    # Extract dataset (avianz or doc)
-    if exp_name.startswith('avianz_'):
+    # Extract dataset (avianz/waitākere, doc, or merged)
+    if exp_name.startswith('merged_'):
+        parts['source'] = 'merged'
+        parts['target'] = 'both'  # Merged trains on both, tests on both
+    elif exp_name.startswith('avianz_'):
         parts['source'] = 'avianz'
         parts['target'] = 'doc'
     elif exp_name.startswith('doc_'):
@@ -65,12 +68,12 @@ def parse_experiment_name(exp_name):
     # AST experiments always use Log transform
     if '_ast_' in exp_name:
         parts['transform'] = 'Log'
-    elif 'Log+normalize-no-median' in exp_name:
-        parts['transform'] = 'Log+normalize-no-median'
+    elif 'Log+median+normalize' in exp_name:
+        parts['transform'] = 'Log+median+normalize'
     elif 'Log+normalize' in exp_name:
         parts['transform'] = 'Log+normalize'
-    elif 'Log+median-only' in exp_name:
-        parts['transform'] = 'Log+median-only'
+    elif 'Log+median' in exp_name:
+        parts['transform'] = 'Log+median'
     elif 'PCEN' in exp_name:
         parts['transform'] = 'PCEN'
     elif 'Box-Cox' in exp_name:
@@ -440,7 +443,7 @@ def generate_per_species_tables(df, grouped, output_dir):
     
     best_method_df = df[
         (df['method'] == 'Baseline') &
-        (df['transform'] == 'Log+normalize') &  # Note: in the data it's called Log+normalize
+        (df['transform'] == 'Log+median+normalize') &
         (df['noise_intensity'].isna()) &
         (df['noise_variety'].isna())
     ]
@@ -550,13 +553,15 @@ def generate_per_species_tables(df, grouped, output_dir):
     # =========================================================================
     # TABLE: Compare Log baseline vs Log+normalize per species
     # =========================================================================
+    # TABLE: Compare Log baseline vs Log+median+normalize per species
+    # =========================================================================
     print("\n" + "="*70)
-    print("Per-Species Comparison: Log vs Log+normalize")
+    print("Per-Species Comparison: Log vs Log+median+normalize")
     print("="*70)
     
     comparison_df = df[
         (df['method'] == 'Baseline') &
-        (df['transform'].isin(['Log', 'Log+normalize'])) &
+        (df['transform'].isin(['Log', 'Log+median+normalize'])) &
         (df['noise_intensity'].isna()) &
         (df['noise_variety'].isna())
     ]
@@ -883,7 +888,7 @@ def extract_species_distribution(output_dir):
     species_list = sorted(avianz_dist.keys())
     
     print("\n--- Dataset Composition Summary ---\n")
-    print(f"{'Species':<15} {'Avianz Total':<15} {'Avianz %':<12} {'DOC Total':<15} {'DOC %':<12}")
+    print(f"{'Species':<15} {'Waitākere Total':<15} {'Waitākere %':<12} {'DOC Total':<15} {'DOC %':<12}")
     print("-" * 75)
     
     avianz_total = split_data['avianz']['total_samples']
@@ -912,7 +917,7 @@ def extract_species_distribution(output_dir):
     
     # Train/test split details
     print("\n--- Train/Test Split Details ---\n")
-    print(f"{'Species':<15} {'Avianz Train':<15} {'Avianz Test':<15} {'DOC Train':<15} {'DOC Test':<15}")
+    print(f"{'Species':<15} {'Waitākere Train':<15} {'Waitākere Test':<15} {'DOC Train':<15} {'DOC Test':<15}")
     print("-" * 80)
     
     for species in species_list:
@@ -1170,7 +1175,7 @@ def main():
     print("="*70)
     
     dann_df = df[
-        (df['transform'].isin(['Log', 'Log+normalize'])) &
+        (df['transform'].isin(['Log', 'Log+median+normalize'])) &
         (df['noise_intensity'].isna()) & 
         (df['noise_variety'].isna())
     ].copy()
@@ -1238,6 +1243,40 @@ def main():
         print(f"\n✓ Saved to: {table4_file}")
     
     # =========================================================================
+    # TABLE 4.5: MERGED DATASET TRAINING RESULTS
+    # =========================================================================
+    print("\n" + "="*70)
+    print("TABLE 4.5: MERGED DATASET TRAINING (DOC + Waitākere)")
+    print("="*70)
+    
+    merged_df = df[df['source_dataset'] == 'merged'].copy()
+    
+    if len(merged_df) > 0:
+        print("\nMerged dataset experiments train on combined DOC+Waitākere data,")
+        print("then test on both DOC and Waitākere test sets separately.\n")
+        
+        table_merged = merged_df[[
+            'experiment', 'transform', 'method',
+            'val_acc', 'val_acc_std',
+            'in_domain_acc', 'in_domain_std',
+            'cross_domain_acc', 'cross_domain_std',
+            'n_trials'
+        ]].sort_values(['transform'])
+        
+        print(table_merged.to_string(index=False))
+        
+        table_merged_file = results_file.parent / 'table_merged_dataset.csv'
+        table_merged.to_csv(table_merged_file, index=False)
+        print(f"\n✓ Saved to: {table_merged_file}")
+        
+        # Print summary
+        print("\nKey findings:")
+        for idx, row in merged_df.iterrows():
+            print(f"  {row['transform']}: Cross-domain acc = {row['cross_domain_acc']:.1f}±{row['cross_domain_std']:.1f}%")
+    else:
+        print("\nNo merged dataset experiments found yet.")
+    
+    # =========================================================================
     # TABLE 5: Paper-ready summary with reduction% and asymmetry
     # =========================================================================
     print("\n" + "="*70)
@@ -1247,11 +1286,12 @@ def main():
     # Define key configurations to compare
     key_configs = [
         ('Baseline', 'Log', None),
+        ('Baseline', 'Log+median+normalize', None),
         ('Baseline', 'Log+normalize', None),
-        ('Baseline', 'Log+normalize-no-median', None),
+        ('Baseline', 'Log+median', None),
         ('Baseline', 'PCEN', None),
         ('Baseline', 'Box-Cox', None),
-        ('DANN', 'Log+normalize', None),
+        ('DANN', 'Log+median+normalize', None),
         ('AST', 'Log', None),
     ]
     
@@ -1264,7 +1304,7 @@ def main():
         # Create a paper-ready formatted table
         print("\n\nPAPER TABLE FORMAT:")
         print("-" * 100)
-        print(f"{'Method':<25} {'AviaNZ→DOC':<30} {'DOC→AviaNZ':<30} {'Asym':<10}")
+        print(f"{'Method':<25} {'Waitākere→DOC':<30} {'DOC→Waitākere':<30} {'Asym':<10}")
         print(f"{'':25} {'Cross-Acc':<15} {'Red%':<15} {'Cross-Acc':<15} {'Red%':<15}")
         print("-" * 100)
         

@@ -5,6 +5,12 @@ Collect all experiment results and generate summary JSON.
 This script scans the output folder for completed experiments
 and aggregates their results into all_results.json.
 
+Supports all experiment types:
+- Normalization comparison (DOC ↔ Waitākere)
+- DANN domain adaptation
+- Noise augmentation (intensity and variety)
+- Merged dataset training (DOC + Waitākere)
+
 Usage:
     python3 collect_results.py <output_folder>
 """

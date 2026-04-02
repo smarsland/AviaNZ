@@ -1287,8 +1287,8 @@ Examples:
                        help="Optional cap for multilabel BCE pos_weight (e.g., 20). Only used with --class-weights")
     parser.add_argument('--normalize', action='store_true',
                        help="Apply background normalization to spectrograms (recommended for soundscapes)")
-    parser.add_argument('--normalize-no-median', action='store_true',
-                       help="Disable median filter in background normalization (ablation test)")
+    parser.add_argument('--median-filter', action='store_true',
+                       help="Apply median filter with normalization (Log+median+normalize, best method)")
     parser.add_argument('--median-only', action='store_true',
                        help="Apply only median filter without background subtraction (ablation test)")
     parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
@@ -1593,7 +1593,7 @@ Examples:
         use_class_weights=args.class_weights,
         pos_weight_cap=args.pos_weight_cap,
         normalize=args.normalize or args.median_only,
-        normalize_median_filter=not args.normalize_no_median,
+        normalize_median_filter=args.median_filter,
         median_only=args.median_only,
         spec_transform=args.spec_transform,
         mixup_alpha=args.mixup,
