@@ -192,9 +192,10 @@ Examples:
     if args.ebird:
         mapping_file = args.mapping
         if mapping_file is None:
-            # Try to find default mapping file
+            # Try to find default mapping file in data directory
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            mapping_file = os.path.join(script_dir, "DOC_bird_naming_map.csv")
+            project_root = os.path.dirname(script_dir)
+            mapping_file = os.path.join(project_root, "data", "DOC_bird_naming_map.csv")
         
         if not os.path.exists(mapping_file):
             print(f"Error: Mapping file not found: {mapping_file}")

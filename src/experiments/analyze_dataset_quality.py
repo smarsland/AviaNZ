@@ -526,9 +526,9 @@ def analyze_dataset_quality(review_csv, mapping_csv, output_dir):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Analyze dataset quality from human review')
-    parser.add_argument('review_csv', nargs='?', default='doc_reviewed.csv',
-                       help='Path to reviewed dataset CSV (default: doc_reviewed.csv)')
-    parser.add_argument('--mapping', default='DOC_bird_naming_map.csv',
+    parser.add_argument('review_csv', nargs='?', default='data/doc_reviewed.csv',
+                       help='Path to reviewed dataset CSV (default: data/doc_reviewed.csv)')
+    parser.add_argument('--mapping', default='data/DOC_bird_naming_map.csv',
                        help='Path to bird name mapping CSV')
     parser.add_argument('--output', default='dataset_quality_analysis',
                        help='Output directory for analysis results')

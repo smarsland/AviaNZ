@@ -555,14 +555,14 @@ def compute_spectrogram_stats(output_folder, dataset_name):
 
 def main():
     parser = argparse.ArgumentParser(description='Build matched DOC + AviaNZ datasets')
-    parser.add_argument('--reviewed-csv', default='doc_reviewed.csv')
+    parser.add_argument('--reviewed-csv', default='data/doc_reviewed.csv')
     parser.add_argument('--doc-raw', required=True,
                         help='Raw DOC dataset root (NZBirds folder)')
     parser.add_argument('--avianz-raw', required=True,
                         help='Raw AviaNZ dataset root (Joe_MoDone folder)')
     parser.add_argument('--output', required=True,
                         help='Output base; doc_matched/ and avianz_matched/ created inside')
-    parser.add_argument('--mapping', default='DOC_bird_naming_map.csv')
+    parser.add_argument('--mapping', default='data/DOC_bird_naming_map.csv')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--fixed-length', action='store_true',
                         help='Filter out files shorter than model input size and trim all to same length')

@@ -193,7 +193,7 @@ class DataLoader:
         print(f"Split data: {len(train_filenames)} training and {len(test_filenames)} validation files")
         return train_filenames, train_labels, test_filenames, test_labels, train_noise_filenames, test_noise_filenames
     
-    def _get_class_names(self, categories, name_mapping_path="DOC_bird_naming_map.csv"):
+    def _get_class_names(self, categories, name_mapping_path="data/DOC_bird_naming_map.csv"):
         """Get human-readable class names."""
         class_names = []
         name_mapping = {}

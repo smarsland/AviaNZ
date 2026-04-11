@@ -59,8 +59,8 @@ AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT_BASE="/local/scratch/freangi"
 
-REVIEWED_CSV="doc_reviewed.csv"
-MAPPING="DOC_bird_naming_map.csv"
+REVIEWED_CSV="data/doc_reviewed.csv"
+MAPPING="data/DOC_bird_naming_map.csv"
 
 MATCHED_BASE="${OUTPUT_BASE}/matched"
 DOC_MATCHED="${MATCHED_BASE}/doc_matched"

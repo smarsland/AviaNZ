@@ -1059,9 +1059,10 @@ def load_data(source_type, input_folder, output_folder, window_seconds=None, hop
         name_mapping = None
         mapping_file = kwargs.get('name_mapping')
         if mapping_file is None:
-            # Look for mapping file in script directory
+            # Look for mapping file in data directory
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            default_mapping = os.path.join(script_dir, "DOC_bird_naming_map.csv")
+            project_root = os.path.dirname(os.path.dirname(script_dir))
+            default_mapping = os.path.join(project_root, "data", "DOC_bird_naming_map.csv")
             if os.path.exists(default_mapping):
                 mapping_file = default_mapping
         
@@ -1281,7 +1282,7 @@ Examples:
         
         mapping_file = args.mapping
         if mapping_file is None:
-            default_mapping = "DOC_bird_naming_map.csv"
+            default_mapping = "data/DOC_bird_naming_map.csv"
             if os.path.exists(default_mapping):
                 mapping_file = default_mapping
                 print(f"Using default mapping file: {default_mapping}")
