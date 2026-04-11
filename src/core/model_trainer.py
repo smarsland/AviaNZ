@@ -1008,9 +1008,9 @@ class Trainer:
                         else:
                             target_idx = target.argmax(dim=1)
                             val_loss += criterion(output, target_idx).item()
-                        pred = output.argmax(dim=1)
-                        val_correct += (pred == target_idx).sum().item()
-                        val_total += target.size(0)
+                            pred = output.argmax(dim=1)
+                            val_correct += (pred == target_idx).sum().item()
+                            val_total += target.size(0)
             
             if self.multilabel:
                 avg_val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
