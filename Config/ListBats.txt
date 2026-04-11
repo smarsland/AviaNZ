@@ -1,5 +1,0 @@
-[
-  "Short-tailed bat",
-  "Long-tailed bat",
-  "Don't Know"
-]

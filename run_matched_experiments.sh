@@ -86,83 +86,14 @@ MATCHED_BASE="${OUTPUT_BASE}/matched"
 DOC_MATCHED="${MATCHED_BASE}/doc_matched"
 AVIANZ_MATCHED="${MATCHED_BASE}/avianz_matched"  # Waitākere dataset
 
-DOC_SPLIT_BASE="${MATCHED_BASE}/doc_split"
-DOC_TRAIN="${DOC_SPLIT_BASE}/train"
-DOC_TEST="${DOC_SPLIT_BASE}/test"
-
-AVIANZ_SPLIT_BASE="${MATCHED_BASE}/avianz_split"  # Waitākere dataset splits
-AVIANZ_TRAIN="${AVIANZ_SPLIT_BASE}/train"
-AVIANZ_TEST="${AVIANZ_SPLIT_BASE}/test"
-
-MERGED_TRAIN="${MATCHED_BASE}/merged_train"  # Combined DOC + Waitākere training data
-
-NOISE_FOLDER="${OUTPUT_BASE}/noise"
-RESULTS="${OUTPUT_BASE}/experiments_matched"
-
-# Training config
-EPOCHS=100
-BATCH_SIZE=16
-MIXUP_ALPHA=0.25
-TEST_SIZE=0.25
-
-echo "============================================================"
-echo " Domain Shift Experiments"
-echo "============================================================"
-echo "  Waitākere raw : $AVIANZ_RAW"
-echo "  DOC raw       : $DOC_RAW"
-echo "  Output        : $OUTPUT_BASE"
-echo "============================================================"
-echo ""
-
-# ============================================================
-# PHASE 1: DATASET PREPARATION
-# ============================================================
-
-# Build matched datasets (if not exist)
-if [ ! -d "$DOC_MATCHED" ] || [ ! -d "$AVIANZ_MATCHED" ]; then
-    echo "=== Building matched datasets ==="
-    python3 build_matched_datasets.py \
-        --reviewed-csv "$REVIEWED_CSV" \
-        --doc-raw      "$DOC_RAW" \
-        --avianz-raw   "$AVIANZ_RAW" \
-        --output       "$MATCHED_BASE" \
-        --mapping      "$MAPPING" \
-        $FIXED_LENGTH_FLAG
-else
-    echo "=== Matched datasets exist, skipping build ==="
-fi
-
-# Split datasets (if not exist)
-# Uses file-level splitting for Waitākere and distribution-matched splitting for DOC
-# 
-# Waitākere: All segments from the same audio file go to train OR test (never both)
-#            This prevents data leakage from similar recording conditions
-# 
-# DOC:       Split to match the species distribution that resulted from Waitākere split
-#            This ensures both datasets have similar class balance in train/test
-if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
-    echo ""
-    echo "=== Splitting datasets (file-level + distribution-matched) ==="
-    python3 split_matched_datasets.py \
-        "$AVIANZ_MATCHED" \
-        "$DOC_MATCHED" \
-        "$MATCHED_BASE" \
-        --test-ratio $TEST_SIZE \
-        --seed 42 \
-        --overwrite
-    
-    echo ""
-    echo "=== Validating splits ==="
-    python3 validate_splits.py "$AVIANZ_TRAIN" "$AVIANZ_TEST" "$DOC_TRAIN" "$DOC_TEST"
-else
-    echo "=== Splits exist, skipping ==="
+DOC_SPLIT_BASE="${MATCHED_BASE}/doc_split" F
 fi
 
 # Merge train datasets (DOC + Waitākere) for combined training experiments
 if [ ! -d "$MERGED_TRAIN" ]; then
     echo ""
     echo "=== Merging training datasets (DOC + Waitākere) ==="
-    python3 merge_datasets.py \
+    python3 src/experiments/merge_datasets.py \
         "$DOC_TRAIN" \
         "$AVIANZ_TRAIN" \
         "$MERGED_TRAIN" \
@@ -174,28 +105,81 @@ else
 fi
 
 # ============================================================
-# PHASE 2: RUN ALL EXPERIMENTS
+# PHASE 2: LOAD NOISE DATA (OPTIONAL)
+# ============================================================
+
+# Noise data path from shared storage
+NOISE_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/freefield"
+NUM_NOISE_SAMPLES=1000
+
+# Noise data is OPTIONAL - used for noise augmentation experiments (suites 3-4)
+if [ ! -d "$NOISE_FOLDER" ] || [ ! -f "$NOISE_FOLDER/labels.json" ]; then
+    # Check if raw noise data is available
+    if [ -d "$NOISE_RAW" ]; then
+        echo ""
+        echo "=== Loading noise data from freefield recordings ==="
+        python3 src/data/dataset_builder.py noise "$NOISE_RAW" "$NOISE_FOLDER" --samples $NUM_NOISE_SAMPLES
+        
+        if [ -f "$NOISE_FOLDER/labels.json" ]; then
+            noise_count=$(find "$NOISE_FOLDER/data" -name "*.npy" 2>/dev/null | wc -l)
+            echo "=== Noise data loaded: $noise_count files ==="
+        else
+            echo "WARNING: Noise loading failed - continuing without noise experiments"
+        fi
+    else
+        echo ""
+        echo "============================================================"
+        echo " WARNING: Noise data not available"
+        echo "============================================================"
+        echo "  Raw noise not found at: $NOISE_RAW"
+        echo "  Processed noise not found at: $NOISE_FOLDER"
+        echo ""
+        echo "  Impact: Noise augmentation experiments will be SKIPPED:"
+        echo "    - Noise intensity sweep (suite 3)"
+        echo "    - Noise variety sweep (suite 4)"
+        echo ""
+        echo "  Continuing with normalization and DANN experiments only..."
+        echo "============================================================"
+        echo ""
+    fi
+else
+    noise_count=$(find "$NOISE_FOLDER/data" -name "*.npy" 2>/dev/null | wc -l)
+    echo ""
+    echo "=== Noise data already exists: $noise_count files ==="
+fi
+
+# ============================================================
+# PHASE 3: RUN ALL EXPERIMENTS
 # ============================================================
 
 echo ""
 echo "============================================================"
 echo " Running all experiments"
 echo "============================================================"
-echo " The Python script will run:"
-echo "   - Normalization comparison (12 experiments)"
-echo "   - DANN domain adaptation (2 experiments)"
-echo "   - Noise intensity sweep (10 experiments)"
-echo "   - Noise variety sweep (10 experiments)"
-echo "   - Merged dataset experiments (2 experiments)"
-echo ""
-echo " Total: ~36 experiments"
+if [ -d "$NOISE_FOLDER" ] && [ -f "$NOISE_FOLDER/labels.json" ]; then
+    echo " The Python script will run:"
+    echo "   - Normalization comparison (12 experiments)"
+    echo "   - DANN domain adaptation (2 experiments)"
+    echo "   - Noise intensity sweep (10 experiments)"
+    echo "   - Noise variety sweep (10 experiments)"
+    echo "   - Merged dataset experiments (2 experiments)"
+    echo ""
+    echo " Total: ~36 experiments"
+else
+    echo " The Python script will run:"
+    echo "   - Normalization comparison (12 experiments)"
+    echo "   - DANN domain adaptation (2 experiments)"
+    echo "   - Merged dataset experiments (2 experiments)"
+    echo ""
+    echo " Total: ~16 experiments (noise experiments skipped)"
+fi
 echo ""
 echo " Each experiment caches results automatically."
 echo " To rerun: delete experiment folders in $RESULTS"
 echo "============================================================"
 echo ""
 
-python3 run_cross_dataset_experiments.py \
+python3 src/experiments/run_cross_dataset_experiments.py \
     --avianz-train "$AVIANZ_TRAIN" \
     --avianz-test  "$AVIANZ_TEST" \
     --doc-train    "$DOC_TRAIN" \
