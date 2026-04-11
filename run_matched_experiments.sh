@@ -10,17 +10,8 @@ set -e
 #   3. Merge train datasets (if not exist)
 #   4. Run ALL experiments (Python handles caching)
 #
-# No flags. No skip logic. Just checks file existence.
-# Want to rerun? Delete the folder.
-#
-# DEFAULTS (no arguments needed):
-#   - Fixed-length spectrograms (1024 bins)
-#   - Auto-detect GPUs and run in parallel
-#   - Save results to ~/results
-#
 # Usage:
 #   ./run_matched_experiments.sh                         # Use all defaults
-#   ./run_matched_experiments.sh --no-fixed-length      # Variable-length mode
 #   ./run_matched_experiments.sh --parallel 1           # Force single-threaded
 #   ./run_matched_experiments.sh --results-dir ./output # Custom results location
 #
@@ -31,23 +22,12 @@ set -e
 # ============================================================
 
 # Default settings
-FIXED_LENGTH_FLAG="--fixed-length"
 PARALLEL_FLAG="--parallel 0"  # Auto-detect GPUs
 RESULTS_DIR="$HOME/results"
 
 # Parse arguments (to override defaults if needed)
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --no-fixed-length)
-            FIXED_LENGTH_FLAG=""
-            echo "Variable-length mode enabled"
-            shift
-            ;;
-        --fixed-length)
-            FIXED_LENGTH_FLAG="--fixed-length"
-            echo "Fixed-length mode enabled"
-            shift
-            ;;
         --parallel)
             PARALLEL_FLAG="--parallel $2"
             echo "Parallel mode: $2 workers"
@@ -60,6 +40,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
+            echo "Valid options: --parallel N, --results-dir DIR"
             exit 1
             ;;
     esac
@@ -68,7 +49,6 @@ done
 echo "============================================================"
 echo " Configuration"
 echo "============================================================"
-echo "  Fixed-length mode: $([ -n "$FIXED_LENGTH_FLAG" ] && echo "YES" || echo "NO")"
 echo "  Parallel mode    : ${PARALLEL_FLAG#--parallel }"
 echo "  Results directory: $RESULTS_DIR"
 echo "============================================================"
@@ -120,14 +100,14 @@ echo ""
 
 # Build matched datasets (if not exist)
 if [ ! -d "$DOC_MATCHED" ] || [ ! -d "$AVIANZ_MATCHED" ]; then
-    echo "=== Building matched datasets ==="
-    python3 src/experiments/build_matched_datasets.py \
+    echo "=== Building matched datasets (fixed-length spectrograms) ==="
+    PYTHONPATH="$PWD" python3 src/experiments/build_matched_datasets.py \
         --reviewed-csv "$REVIEWED_CSV" \
         --doc-raw      "$DOC_RAW" \
         --avianz-raw   "$AVIANZ_RAW" \
         --output       "$MATCHED_BASE" \
         --mapping      "$MAPPING" \
-        $FIXED_LENGTH_FLAG
+        --fixed-length
 else
     echo "=== Matched datasets exist, skipping build ==="
 fi
@@ -143,7 +123,7 @@ fi
 if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
     echo ""
     echo "=== Splitting datasets (file-level + distribution-matched) ==="
-    python3 src/experiments/split_matched_datasets.py \
+    PYTHONPATH="$PWD" python3 src/experiments/split_matched_datasets.py \
         "$AVIANZ_MATCHED" \
         "$DOC_MATCHED" \
         "$MATCHED_BASE" \
@@ -153,7 +133,7 @@ if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
     
     echo ""
     echo "=== Validating splits ==="
-    python3 src/experiments/validate_splits.py "$AVIANZ_TRAIN" "$AVIANZ_TEST" "$DOC_TRAIN" "$DOC_TEST"
+    PYTHONPATH="$PWD" python3 src/experiments/validate_splits.py "$AVIANZ_TRAIN" "$AVIANZ_TEST" "$DOC_TRAIN" "$DOC_TEST"
 else
     echo "=== Splits exist, skipping ==="
 fi
@@ -162,7 +142,7 @@ fi
 if [ ! -d "$MERGED_TRAIN" ]; then
     echo ""
     echo "=== Merging training datasets (DOC + Waitākere) ==="
-    python3 src/experiments/merge_datasets.py \
+    PYTHONPATH="$PWD" python3 src/experiments/merge_datasets.py \
         "$DOC_TRAIN" \
         "$AVIANZ_TRAIN" \
         "$MERGED_TRAIN" \
@@ -187,7 +167,7 @@ if [ ! -d "$NOISE_FOLDER" ] || [ ! -f "$NOISE_FOLDER/labels.json" ]; then
     if [ -d "$NOISE_RAW" ]; then
         echo ""
         echo "=== Loading noise data from freefield recordings ==="
-        python3 src/data/dataset_builder.py noise "$NOISE_RAW" "$NOISE_FOLDER" --samples $NUM_NOISE_SAMPLES
+        PYTHONPATH="$PWD" python3 src/data/dataset_builder.py noise "$NOISE_RAW" "$NOISE_FOLDER" --samples $NUM_NOISE_SAMPLES
         
         if [ -f "$NOISE_FOLDER/labels.json" ]; then
             noise_count=$(find "$NOISE_FOLDER/data" -name "*.npy" 2>/dev/null | wc -l)
@@ -248,7 +228,7 @@ echo " To rerun: delete experiment folders in $RESULTS"
 echo "============================================================"
 echo ""
 
-python3 src/experiments/run_cross_dataset_experiments.py \
+PYTHONPATH="$PWD" python3 src/experiments/run_cross_dataset_experiments.py \
     --avianz-train "$AVIANZ_TRAIN" \
     --avianz-test  "$AVIANZ_TEST" \
     --doc-train    "$DOC_TRAIN" \
@@ -261,13 +241,6 @@ python3 src/experiments/run_cross_dataset_experiments.py \
     --batch-size   $BATCH_SIZE \
     --mixup        $MIXUP_ALPHA \
     $PARALLEL_FLAG
-
-echo ""
-echo "============================================================"
-echo " ALL DONE"
-echo "============================================================"
-echo " Results: $RESULTS"
-echo "============================================================"
 
 echo ""
 echo "============================================================"
