@@ -162,7 +162,23 @@ NOISE_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/freefield"
 NUM_NOISE_SAMPLES=1000
 
 # Noise data is OPTIONAL - used for noise augmentation experiments (suites 3-4)
-if [ ! -d "$NOISE_FOLDER" ] || [ ! -f "$NOISE_FOLDER/labels.json" ]; then
+# Check if noise data exists AND has actual files
+if [ ! -f "$NOISE_FOLDER/labels.json" ]; then
+    noise_exists=false
+else
+    noise_count=$(find "$NOISE_FOLDER/data" -name "*.npy" 2>/dev/null | wc -l)
+    if [ "$noise_count" -eq 0 ]; then
+        echo ""
+        echo "WARNING: Noise labels.json exists but no noise files found!"
+        echo "  Removing incomplete noise folder..."
+        rm -rf "$NOISE_FOLDER"
+        noise_exists=false
+    else
+        noise_exists=true
+    fi
+fi
+
+if [ "$noise_exists" = false ]; then
     # Check if raw noise data is available
     if [ -d "$NOISE_RAW" ]; then
         echo ""

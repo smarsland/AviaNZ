@@ -993,6 +993,10 @@ class NoiseDataProcessor(BaseDataProcessor):
                     print(f"Error processing {audio_file}: {e}")
                     continue
             
+            # Validate that we processed some files
+            if file_count == 0:
+                raise ValueError(f"No noise files were successfully processed! Check if audio files are valid.")
+            
             # Save labels
             labels_file = os.path.join(output_folder, "labels.json")
             labels_data = {

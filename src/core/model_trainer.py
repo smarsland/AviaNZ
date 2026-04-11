@@ -1186,9 +1186,13 @@ class Trainer:
         model_config['time_bins'] = self.img_width
         
         # Add model-specific information
-        model_config['model_type'] = 'MultiScaleAST' if self.use_multiscale else 'AST'
+        if self.model_type == 'regnet':
+            model_config['model_type'] = 'RegNet'
+            model_config['model_name'] = self.model_name
+        else:
+            model_config['model_type'] = 'MultiScaleAST' if self.use_multiscale else 'AST'
         model_config['num_classes'] = model.num_classes
-        model_config['multilabel'] = model.multilabel
+        model_config['multilabel'] = self.multilabel
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
         model_config['use_sparse_patches'] = self.use_sparse_patches
