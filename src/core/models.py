@@ -968,14 +968,13 @@ class RegNetModel(nn.Module):
         print(f"Loading BirdClef pretrained weights from {pretrained_path}")
         
         import sys
-        if '__main__' not in sys.modules:
-            sys.modules['__main__'] = sys.modules[__name__]
         
+        # Create dummy CFG class for unpickling BirdClef checkpoint
         class CFG:
             pass
         
-        sys.modules[__name__].CFG = CFG
-        globals()['CFG'] = CFG
+        # Add to __main__ module so unpickler can find it
+        sys.modules['__main__'].CFG = CFG
         
         checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
         
