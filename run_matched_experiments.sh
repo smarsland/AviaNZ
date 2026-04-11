@@ -183,11 +183,15 @@ if [ "$noise_exists" = false ]; then
     if [ -d "$NOISE_RAW" ]; then
         echo ""
         echo "=== Loading noise data from freefield recordings ==="
-        PYTHONPATH="$PWD" python3 -m src.data.dataset_builder noise "$NOISE_RAW" "$NOISE_FOLDER" --samples $NUM_NOISE_SAMPLES
+        PYTHONPATH="$PWD" python3 -m src.data.dataset_builder noise "$NOISE_RAW" "$NOISE_FOLDER" --samples $NUM_NOISE_SAMPLES --overwrite
         
         if [ -f "$NOISE_FOLDER/labels.json" ]; then
             noise_count=$(find "$NOISE_FOLDER/data" -name "*.npy" 2>/dev/null | wc -l)
-            echo "=== Noise data loaded: $noise_count files ==="
+            if [ "$noise_count" -gt 0 ]; then
+                echo "=== Noise data loaded: $noise_count files ==="
+            else
+                echo "WARNING: labels.json exists but no noise files found - continuing without noise experiments"
+            fi
         else
             echo "WARNING: Noise loading failed - continuing without noise experiments"
         fi
