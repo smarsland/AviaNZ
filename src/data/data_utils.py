@@ -705,7 +705,7 @@ class SpectrogramDataset(Dataset):
         
         # 1. Time stretching (with 50% probability)
         if self.rng.rand() < 0.5:
-            import config
+            from src.core import config
             from scipy.ndimage import zoom
             
             stretch_factor = self.rng.uniform(config.DEFAULT_TIME_STRETCH_RANGE[0], 
@@ -733,7 +733,7 @@ class SpectrogramDataset(Dataset):
         
         # 2. Frequency shifting (with 50% probability)
         if self.rng.rand() < 0.5:
-            import config
+            from src.core import config
             freq_shift = self.rng.randint(config.DEFAULT_FREQ_SHIFT_RANGE[0], 
                                          config.DEFAULT_FREQ_SHIFT_RANGE[1] + 1)
             if freq_shift != 0:
@@ -838,7 +838,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
     
     # Use default from config if not specified
     if spec_transform is None:
-        import config
+        from src.core import config
         spec_transform = config.DEFAULT_SPEC_TRANSFORM
     
     # Create datasets
