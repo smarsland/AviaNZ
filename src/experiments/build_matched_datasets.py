@@ -36,7 +36,7 @@ import soundfile as sf
 import numpy as np
 
 from src.core import config
-from .analyze_dataset_quality import (
+from src.experiments.analyze_dataset_quality import (
     build_group_cache,
     is_poor_quality,
     load_bird_name_mapping,
