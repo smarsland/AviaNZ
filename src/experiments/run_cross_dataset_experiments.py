@@ -133,7 +133,11 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
         print("✓ All workers stopped.")
         sys.exit(1)
     finally:
-        executor.shutdown(wait=True)
+        # Only do graceful shutdown if not already shut down
+        try:
+            executor.shutdown(wait=False)
+        except:
+            pass
     
     return results
 
@@ -515,7 +519,14 @@ def run_experiment(config_dict):
     env = config_dict.get('env', os.environ)
     print(f"Command: {' '.join(cmd)}")
     print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', 'not set')}")
-    result = subprocess.run(cmd, capture_output=False, env=env)
+    
+    try:
+        # Start process in new process group so we can kill it and all children
+        result = subprocess.run(cmd, capture_output=False, env=env, 
+                              start_new_session=True)
+    except KeyboardInterrupt:
+        # If interrupted, just re-raise to let parent handle it
+        raise
     
     if result.returncode != 0:
         print(f"❌ FAILED: {name} (exit code: {result.returncode})")
