@@ -99,7 +99,7 @@ echo ""
 # ============================================================
 
 # Build matched datasets (if not exist)
-if [ ! -d "$DOC_MATCHED" ] || [ ! -d "$AVIANZ_MATCHED" ]; then
+if [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/labels.json" ] || [ ! -d "$AVIANZ_MATCHED" ] || [ ! -f "$AVIANZ_MATCHED/labels.json" ]; then
     echo "=== Building matched datasets (fixed-length spectrograms) ==="
     PYTHONPATH="$PWD" python3 src/experiments/build_matched_datasets.py \
         --reviewed-csv "$REVIEWED_CSV" \
@@ -120,7 +120,7 @@ fi
 # 
 # DOC:       Split to match the species distribution that resulted from Waitākere split
 #            This ensures both datasets have similar class balance in train/test
-if [ ! -d "$DOC_TRAIN" ] || [ ! -d "$AVIANZ_TRAIN" ]; then
+if [ ! -d "$DOC_TRAIN" ] || [ ! -f "$DOC_TRAIN/labels.json" ] || [ ! -d "$AVIANZ_TRAIN" ] || [ ! -f "$AVIANZ_TRAIN/labels.json" ]; then
     echo ""
     echo "=== Splitting datasets (file-level + distribution-matched) ==="
     PYTHONPATH="$PWD" python3 src/experiments/split_matched_datasets.py \
@@ -139,7 +139,7 @@ else
 fi
 
 # Merge train datasets (DOC + Waitākere) for combined training experiments
-if [ ! -d "$MERGED_TRAIN" ]; then
+if [ ! -d "$MERGED_TRAIN" ] || [ ! -f "$MERGED_TRAIN/labels.json" ]; then
     echo ""
     echo "=== Merging training datasets (DOC + Waitākere) ==="
     PYTHONPATH="$PWD" python3 src/experiments/merge_datasets.py \
