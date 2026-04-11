@@ -316,8 +316,8 @@ class Trainer:
 
         # Use dimensions from spectrogram params (single source of truth)
         # Avoid duplicating DEFAULT_FREQ_BINS vs SPECTROGRAM_PARAMS['nfilters']
-        self.img_height = freq_bins if freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']  # Frequency bins (height)
-        self.img_width = time_bins if time_bins is not None else config.DEFAULT_TIME_BINS   # Time bins (width)
+        self.img_height = cfg.model.freq_bins if cfg.model.freq_bins is not None else config.SPECTROGRAM_PARAMS['nfilters']  # Frequency bins (height)
+        self.img_width = cfg.model.time_bins if cfg.model.time_bins is not None else config.DEFAULT_TIME_BINS   # Time bins (width)
         
         # Create data loaders with config defaults
         # Use more workers and prefetch for faster GPU utilization
