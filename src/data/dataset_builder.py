@@ -9,6 +9,7 @@ import numpy as np
 import subprocess
 import tempfile
 import shutil
+import zipfile
 from src.core import config
 from . import wavio
 from .spectrogram_utils import SpectrogramProcessor, AudioSetFbankProcessor, smart_overwrite_folder
@@ -888,11 +889,11 @@ class NoiseDataProcessor(BaseDataProcessor):
     """Processor for environmental noise/freefield recordings."""
     
     def process(self, input_folder, output_folder, num_samples=1000, max_segments=None, overwrite=False):
-        print(f"Loading noise data from {input_folder}")
+        print(f"Loading noise files from {input_folder}")
         
         if max_segments:
-            num_samples = max_segments
-            print(f"Using max_segments as sample limit: {num_samples}")
+            print(f"Max segments limit: {max_segments}")
+            num_samples = min(num_samples, max_segments)
         
         if os.path.exists(output_folder):
             if overwrite:
@@ -902,89 +903,115 @@ class NoiseDataProcessor(BaseDataProcessor):
                 return 0
         
         os.makedirs(output_folder, exist_ok=True)
+        data_folder = os.path.join(output_folder, "data")
+        os.makedirs(data_folder, exist_ok=True)
         self.setup_audio_dir(output_folder)
         print(f"Created output folder: {output_folder}")
         
-        # Find all audio files
-        audio_files = []
-        for root, dirs, files in os.walk(input_folder):
-            for file in files:
-                if file.lower().endswith(('.wav', '.flac', '.mp3', '.ogg')):
-                    audio_files.append(os.path.join(root, file))
+        # Check for zip files and extract if needed
+        temp_extract_dir = None
         
-        print(f"Found {len(audio_files)} audio files")
+        zip_files = [f for f in os.listdir(input_folder) if f.endswith('.zip')]
+        if zip_files:
+            print(f"Found {len(zip_files)} zip files, extracting...")
+            temp_extract_dir = tempfile.mkdtemp(prefix='noise_extract_')
+            
+            for zip_file in zip_files:
+                zip_path = os.path.join(input_folder, zip_file)
+                try:
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(temp_extract_dir)
+                    print(f"  Extracted {zip_file}")
+                except Exception as e:
+                    print(f"  Warning: Failed to extract {zip_file}: {e}")
+            
+            search_folder = temp_extract_dir
+        else:
+            search_folder = input_folder
         
-        if len(audio_files) == 0:
-            print("No audio files found!")
-            return 0
-        
-        # Randomly sample files if more than requested
-        if len(audio_files) > num_samples:
-            import random
-            random.seed(42)
-            audio_files = random.sample(audio_files, num_samples)
-            print(f"Randomly sampled {num_samples} files")
-        
-        file_labels = []
-        file_count = 0
-        
-        for audio_file in audio_files:
-            try:
-                # Read audio
-                audio_data, sr = sf.read(audio_file)
-                
-                # Convert to mono if stereo
-                if len(audio_data.shape) > 1:
-                    audio_data = np.mean(audio_data, axis=1)
-                
-                # Generate spectrogram
-                sg_raw = self.spec_processor.compute_spectrogram(audio_data, sr)
-                
-                if sg_raw is None:
+        try:
+            noise_files = [
+                os.path.join(root, f)
+                for root, _, files in os.walk(search_folder)
+                for f in files if f.lower().endswith((".wav", ".flac", ".mp3", ".ogg"))
+            ]
+            
+            print(f"Found {len(noise_files)} noise files")
+            
+            if len(noise_files) == 0:
+                print("Warning: No noise files found!")
+                return 0
+            
+            if len(noise_files) > num_samples:
+                random.seed(42)
+                noise_files = random.sample(noise_files, num_samples)
+                print(f"Randomly selected {num_samples} noise files")
+            
+            file_labels = []
+            file_count = 0
+            
+            for audio_file in noise_files:
+                try:
+                    # Read audio
+                    audio_data, sr = sf.read(audio_file)
+                    
+                    # Convert to mono if stereo
+                    if len(audio_data.shape) > 1:
+                        audio_data = np.mean(audio_data, axis=1)
+                    
+                    # Generate spectrogram
+                    sg_raw = self.spec_processor.compute_spectrogram(audio_data, sr)
+                    
+                    if sg_raw is None:
+                        continue
+                    
+                    # Save spectrogram
+                    file_basename = f"noise_{file_count:06d}"
+                    spec_path = os.path.join(data_folder, f"{file_basename}.npy")
+                    np.save(spec_path, sg_raw)
+                    
+                    # Save audio if requested
+                    audio_filename = None
+                    if self.with_audio:
+                        audio_filename = self.save_audio_segment(audio_file, 0, None, f"{file_basename}.wav")
+                    
+                    # Add to labels
+                    label_entry = {
+                        'filename': f"{file_basename}.npy",
+                        'source_file': audio_file
+                    }
+                    if audio_filename:
+                        label_entry['audio_file'] = audio_filename
+                    
+                    file_labels.append(label_entry)
+                    file_count += 1
+                    
+                    if file_count % 100 == 0:
+                        print(f"Processed {file_count} noise files...")
+                    
+                except Exception as e:
+                    print(f"Error processing {audio_file}: {e}")
                     continue
-                
-                # Save spectrogram
-                file_basename = f"noise_{file_count:06d}"
-                spec_path = os.path.join(output_folder, "data", f"{file_basename}.npy")
-                os.makedirs(os.path.dirname(spec_path), exist_ok=True)
-                np.save(spec_path, sg_raw)
-                
-                # Save audio if requested
-                audio_filename = None
-                if self.with_audio:
-                    audio_filename = self.save_audio_segment(audio_file, 0, None, f"{file_basename}.wav")
-                
-                # Add to labels (noise has no class)
-                label_entry = {
-                    'filename': f"{file_basename}.npy",
-                    'source_file': audio_file
-                }
-                if audio_filename:
-                    label_entry['audio_file'] = audio_filename
-                
-                file_labels.append(label_entry)
-                file_count += 1
-                
-                if file_count % 100 == 0:
-                    print(f"Processed {file_count} noise files...")
-                
-            except Exception as e:
-                print(f"Error processing {audio_file}: {e}")
-                continue
-        
-        # Save labels
-        labels_file = os.path.join(output_folder, "labels.json")
-        labels_data = {
-            'files': file_labels,
-            'num_files': len(file_labels),
-            'source_type': 'noise'
-        }
-        
-        with open(labels_file, 'w') as f:
-            json.dump(labels_data, f, indent=2)
-        
-        print(f"Saved {file_count} noise spectrograms to {output_folder}")
-        return file_count
+            
+            # Save labels
+            labels_file = os.path.join(output_folder, "labels.json")
+            labels_data = {
+                'files': file_labels,
+                'num_files': len(file_labels),
+                'source_type': 'noise'
+            }
+            
+            with open(labels_file, 'w') as f:
+                json.dump(labels_data, f, indent=2)
+            
+            print(f"Saved {file_count} noise spectrograms to {output_folder}")
+            return file_count
+            
+        finally:
+            # Clean up temporary extraction directory
+            if temp_extract_dir and os.path.exists(temp_extract_dir):
+                shutil.rmtree(temp_extract_dir)
+                print("Cleaned up temporary extraction directory")
 
 
 def load_data(source_type, input_folder, output_folder, window_seconds=None, hop_seconds=None,
