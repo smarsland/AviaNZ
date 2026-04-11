@@ -519,8 +519,7 @@ def run_experiment(config_dict):
     
     if result.returncode != 0:
         print(f"❌ FAILED: {name} (exit code: {result.returncode})")
-        print("STOPPING PIPELINE - Fix the error before continuing")
-        sys.exit(1)
+        raise RuntimeError(f"Training failed for {name} with exit code {result.returncode}")
     
     # Load result.json to return
     result_data = None

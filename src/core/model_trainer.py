@@ -288,8 +288,8 @@ class Trainer:
         self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Load data
-        data_loader = DataLoader(data_folder, noise_folder=noise_folder)
-        self.data = data_loader.load_data(multilabel, validation_share=0.2)
+        data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
+        self.data = data_loader.load_data(self.multilabel, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
         # Optionally include noise spectrograms as explicit all-zero training samples.
