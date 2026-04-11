@@ -183,9 +183,13 @@ def run_ast_experiment(config_dict):
                 return json.load(f)
         
         # RACE CONDITION PROTECTION: Try to atomically create a lock file
-        # If another machine is working on this, the lock file will exist
         lock_file = shared_result_dir / '.lock'
         shared_result_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Clean up stale lock files (no result.json = stale lock)
+        if lock_file.exists() and not shared_result_file.exists():
+            lock_file.unlink()
+            print(f"  ✓ Removed stale lock file: {name}")
         
         try:
             # Atomic creation - fails if exists
@@ -414,6 +418,11 @@ def run_experiment(config_dict):
         # RACE CONDITION PROTECTION: Try to atomically create a lock file
         lock_file = shared_result_dir / '.lock'
         shared_result_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Clean up stale lock files (no result.json = stale lock)
+        if lock_file.exists() and not shared_result_file.exists():
+            lock_file.unlink()
+            print(f"  ✓ Removed stale lock file: {name}")
         
         try:
             # Atomic creation - fails if exists
