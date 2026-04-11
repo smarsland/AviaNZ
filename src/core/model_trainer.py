@@ -311,7 +311,7 @@ class Trainer:
                 raise ValueError("use_dann=True requires target_folder")
             print(f"Loading target domain data from {self.target_folder} for DANN...")
             target_loader = DataLoader(self.target_folder, noise_folder=None)
-            self.target_data = target_loader.load_data(multilabel, validation_share=0.2)
+            self.target_data = target_loader.load_data(self.multilabel, validation_share=0.2)
             print(f"Loaded {len(self.target_data['train_filenames'])} target domain samples")
 
         # Use dimensions from spectrogram params (single source of truth)
@@ -323,10 +323,10 @@ class Trainer:
         # Use more workers and prefetch for faster GPU utilization
         num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader, self.val_loader = create_data_loaders(
-            self.data, batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
+            self.data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
-            num_workers=num_workers, width_downsizing=None, mixup_alpha=mixup_alpha,
+            num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
             use_class_balancing=False, normalize=self.normalize,
             use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
             use_temporal_roll=self.use_temporal_roll
@@ -335,7 +335,7 @@ class Trainer:
         # Create target domain data loader for DANN
         if self.use_dann:
             self.target_train_loader, _ = create_data_loaders(
-                self.target_data, batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
+                self.target_data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='random', noise_ratio=0.0,  # No noise augmentation for target
                 spec_transform=None,
                 num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
@@ -345,7 +345,7 @@ class Trainer:
             )
             print(f"Created target domain data loader with {len(self.target_train_loader)} batches")
         
-        os.makedirs(output_folder, exist_ok=True)
+        os.makedirs(self.output_folder, exist_ok=True)
     
     def _compute_class_weights(self):
         """Compute inverse frequency weights for each class (for multilabel BCE loss)."""
