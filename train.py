@@ -66,6 +66,8 @@ Examples:
     # Preprocessing
     parser.add_argument('--normalize', action='store_true',
                        help="Apply background normalization (recommended for soundscapes)")
+    parser.add_argument('--median-filter', action='store_true',
+                       help="Apply median filter during normalization (default: enabled if --normalize)")
     parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'None'],
                        help="Spectrogram transformation (default: Log)")
     

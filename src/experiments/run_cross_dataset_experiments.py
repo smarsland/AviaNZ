@@ -273,38 +273,45 @@ def run_ast_experiment(config_dict):
         print(f"Running: {name}")
         print(f"{'='*70}")
     
-    # Build command for train.py (multilabel always enabled)
-    cmd = [
-        'python3', 'train.py',
-        config_dict['train'],
-        str(output_dir),
-        '--epochs', str(config_dict['epochs']),
-        '--batch-size', str(config_dict['batch_size']),
-        '--mixup', str(config_dict.get('mixup', 0.25)),
-        '--spec-transform', 'Log',
-        '--patience', '15',
-    ]
+    # Build TrainerConfig directly instead of command-line args
+    cfg = TrainerConfig(
+        training=TrainingConfig(
+            data_folder=config_dict['train'],
+            output_folder=str(output_dir),
+            max_epochs=config_dict['epochs'],
+            batch_size=config_dict['batch_size'],
+            learning_rate=1e-4,  # RegNet default
+            weight_decay=config.DEFAULT_WEIGHT_DECAY,
+            patience=15,
+            use_amp=True,
+            seed=config_dict.get('seed')
+        ),
+        model=ModelConfig(
+            multilabel=True,
+            model_type='ast',
+            pretrained_path=None
+        ),
+        augmentation=AugmentationConfig(
+            mixup_alpha=config_dict.get('mixup', 0.25),
+            spec_transform='Log'
+        ),
+        loss=LossConfig(),
+        domain_adaptation=DomainAdaptationConfig(),
+        evaluation=EvaluationConfig(
+            test_folder=config_dict.get('test1'),
+            test_folder2=config_dict.get('test2')
+        )
+    )
     
-    # Add test folders if specified
-    if config_dict.get('test1'):
-        cmd.extend(['--test-folder', config_dict['test1']])
-    if config_dict.get('test2'):
-        cmd.extend(['--test-folder2', config_dict['test2']])
+    # Set GPU environment before training
+    env = config_dict.get('env', os.environ.copy())
+    if 'CUDA_VISIBLE_DEVICES' in env:
+        os.environ['CUDA_VISIBLE_DEVICES'] = env['CUDA_VISIBLE_DEVICES']
+        print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env['CUDA_VISIBLE_DEVICES']}")
     
-    # Add seed if specified
-    if config_dict.get('seed'):
-        cmd.extend(['--seed', str(config_dict['seed'])])
-    
-    # Run experiment with proper GPU environment
-    env = config_dict.get('env', os.environ)
-    print(f"Command: {' '.join(cmd)}")
-    print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', 'not set')}")
-    result = subprocess.run(cmd, capture_output=False, env=env)
-    
-    if result.returncode != 0:
-        print(f"❌ FAILED: {name} (exit code: {result.returncode})")
-        print("STOPPING PIPELINE - Fix the error before continuing")
-        sys.exit(1)
+    # Run training directly
+    trainer = Trainer(cfg)
+    trainer.train()
     
     # After training, load results from training history and evaluation reports
     result_dict = {
@@ -440,84 +447,62 @@ def run_experiment(config_dict):
         print(f"Running: {name}")
         print(f"{'='*70}")
     
-    # Build command
+    # Build command - use train.py with config
     if config_dict['type'] == 'baseline':
         cmd = [
-            'python3', 'finetune.py',
-            config_dict['train'],        # positional: data_folder
-            str(output_dir),             # positional: output_folder
+            'python3', 'train.py',
+            config_dict['train'],
+            str(output_dir),
+            '--model-type', 'regnet',
             '--pretrained', config_dict['model'],
             '--test-folder', config_dict['test1'],
             '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
+            '--mixup', str(config_dict.get('mixup', 0.25)),
         ]
         
-        # Add eval-only flag if model exists
-        if eval_only:
-            cmd.append('--eval-only')
-        
-        # Add normalization flags
         if config_dict.get('normalize'):
             cmd.append('--normalize')
-        if config_dict.get('median_filter', False):
+        if config_dict.get('median_filter'):
             cmd.append('--median-filter')
-        if config_dict.get('median_only'):
-            cmd.append('--median-only')
-        
-        # Add noise args
-        if config_dict.get('noise') and config_dict.get('noise') > 0:
+        if config_dict.get('noise', 0) > 0:
             cmd.extend(['--noise', str(config_dict['noise'])])
             if config_dict.get('noise_folder'):
                 cmd.extend(['--noise-folder', config_dict['noise_folder']])
-            cmd.extend(['--noise-mode', 'both'])
-        
-        # Add mixup if specified
-        if config_dict.get('mixup'):
-            cmd.extend(['--mixup', str(config_dict['mixup'])])
-        
-        # Add seed if specified
         if config_dict.get('seed'):
             cmd.extend(['--seed', str(config_dict['seed'])])
     
     elif config_dict['type'] == 'dann':
         cmd = [
-            'python3', 'finetune.py',
-            config_dict['source'],       # positional: data_folder (source domain)
-            str(output_dir),             # positional: output_folder
+            'python3', 'train.py',
+            config_dict['source'],
+            str(output_dir),
+            '--model-type', 'regnet',
             '--pretrained', config_dict['model'],
             '--test-folder', config_dict['test1'],
             '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
             '--spec-transform', config_dict['spec_transform'],
+            '--mixup', str(config_dict.get('mixup', 0.25)),
             '--use-dann',
             '--target-folder', config_dict['target'],
             '--lambda-domain', str(config_dict.get('lambda_domain', 0.3)),
         ]
         
-        # Add eval-only flag if model exists
-        if eval_only:
-            cmd.append('--eval-only')
-        
-        # Add normalization flags if specified
         if config_dict.get('normalize'):
             cmd.append('--normalize')
-            if config_dict.get('median_filter', False):
-                cmd.append('--median-filter')
-        
-        if config_dict.get('mixup'):
-            cmd.extend(['--mixup', str(config_dict['mixup'])])
-        
-        # Add seed if specified
+        if config_dict.get('median_filter'):
+            cmd.append('--median-filter')
         if config_dict.get('seed'):
             cmd.extend(['--seed', str(config_dict['seed'])])
     
     else:
         raise ValueError(f"Unknown experiment type: {config_dict['type']}")
     
-    # Run experiment with proper GPU environment
+    # Run with GPU environment (MUST use subprocess for proper CUDA_VISIBLE_DEVICES isolation)
     env = config_dict.get('env', os.environ)
     print(f"Command: {' '.join(cmd)}")
     print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', 'not set')}")

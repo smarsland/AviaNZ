@@ -111,13 +111,15 @@ class TrainerConfig:
                 max_epochs=args.epochs,
                 batch_size=args.batch_size,
                 learning_rate=args.lr,
-                weight_decay=args.weight_decay,
+                weight_decay=getattr(args, 'weight_decay', config.DEFAULT_WEIGHT_DECAY),
                 patience=args.patience,
                 use_amp=True,
                 seed=getattr(args, 'seed', None)
             ),
             model=ModelConfig(
                 multilabel=args.multilabel,
+                model_type=getattr(args, 'model_type', 'ast'),
+                model_name=getattr(args, 'model_name', None),
                 freq_bins=getattr(args, 'freq_bins', None),
                 time_bins=getattr(args, 'time_bins', None),
                 dropout=getattr(args, 'dropout', config.DEFAULT_DROPOUT),
@@ -128,7 +130,9 @@ class TrainerConfig:
                 recon_weight=getattr(args, 'recon_weight', 0.1),
                 use_adapters=getattr(args, 'adapters', False),
                 freeze_layers=getattr(args, 'freeze_layers', None),
-                pretrained_path=getattr(args, 'pretrained', None)
+                pretrained_path=getattr(args, 'pretrained', None),
+                freeze_backbone=getattr(args, 'freeze_backbone', False),
+                freeze_stages=getattr(args, 'freeze_stages', 0)
             ),
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,
@@ -138,7 +142,9 @@ class TrainerConfig:
                 max_noise_samples=getattr(args, 'max_noise_samples', None),
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
                 normalize=getattr(args, 'normalize', False),
-                per_chunk_norm=getattr(args, 'per_chunk_norm', False)
+                per_chunk_norm=getattr(args, 'per_chunk_norm', False),
+                normalize_median_filter=getattr(args, 'median_filter', False) or getattr(args, 'normalize', False),
+                spec_transform=getattr(args, 'spec_transform', 'Log')
             ),
             loss=LossConfig(
                 use_focal_loss=getattr(args, 'focal_loss', False),
