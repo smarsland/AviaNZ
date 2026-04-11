@@ -952,15 +952,8 @@ class NoiseDataProcessor(BaseDataProcessor):
             
             for audio_file in noise_files:
                 try:
-                    # Read audio
-                    audio_data, sr = sf.read(audio_file)
-                    
-                    # Convert to mono if stereo
-                    if len(audio_data.shape) > 1:
-                        audio_data = np.mean(audio_data, axis=1)
-                    
-                    # Generate spectrogram
-                    sg_raw = self.spec_processor.compute_spectrogram(audio_data, sr)
+                    # Generate spectrogram using SpectrogramProcessor
+                    sg_raw = self.spec_processor.process_audio_file(audio_file)
                     
                     if sg_raw is None:
                         continue
