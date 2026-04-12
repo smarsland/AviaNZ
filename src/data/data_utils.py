@@ -510,11 +510,11 @@ class SpectrogramDataset(Dataset):
             return pcen
         
         elif self.spec_transform == "Box-Cox":
-            from scipy.special import boxcox as boxcox_transform
+            # boxcox already imported from scipy.stats at top of file
             size = sg.shape
             sg_flat = np.maximum(sg.flatten() + LOG_OFFSET, 1e-10)
             lam = 0.5
-            sg_transformed = boxcox_transform(sg_flat, lam)
+            sg_transformed = boxcox(sg_flat, lam)
             return np.reshape(sg_transformed, size)
         
         else:

@@ -117,8 +117,16 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                     print(f"✓ Completed: {result.get('name', 'unknown')}")
             except Exception as e:
                 exp_name = exp_config.get('name', 'unknown')
-                print(f"❌ EXCEPTION in {exp_name}: {type(e).__name__}: {e}")
-                print("STOPPING PIPELINE - Fix the error before continuing")
+                output_folder = exp_config.get('output_folder', 'unknown')
+                error_log = Path(output_folder) / exp_name / 'experiment_error.log'
+                
+                print("\n" + "="*70)
+                print(f"❌ EXPERIMENT FAILED: {exp_name}")
+                print(f"❌ Exception: {type(e).__name__}: {e}")
+                print(f"📄 Error log: {error_log}")
+                print("="*70)
+                print("\n⛔ STOPPING ALL EXPERIMENTS - Fix the error before continuing")
+                
                 # Cancel remaining futures
                 for f in future_to_exp:
                     f.cancel()
@@ -138,8 +146,9 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
         # Only do graceful shutdown if not already shut down
         try:
             executor.shutdown(wait=False)
-        except:
-            pass
+        except Exception as e:
+            # Don't silence - log what went wrong
+            print(f"Warning: Executor shutdown issue: {e}")
     
     return results
 
@@ -532,17 +541,56 @@ def run_experiment(config_dict):
     print(f"Command: {' '.join(cmd)}")
     print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', 'not set')}")
     
+    # Create error log file in output directory
+    error_log = output_dir / 'experiment_error.log'
+    
     try:
-        # Start process in new process group so we can kill it and all children
-        result = subprocess.run(cmd, capture_output=False, env=env, 
-                              start_new_session=True)
+        # Stream output to BOTH terminal AND log file in real-time
+        with open(error_log, 'w') as log_f:
+            log_f.write(f"=== EXPERIMENT LOG: {name} ===\n")
+            log_f.write(f"Command: {' '.join(cmd)}\n")
+            log_f.write(f"GPU: {env.get('CUDA_VISIBLE_DEVICES', 'not set')}\n")
+            log_f.write(f"Started: {datetime.now()}\n\n")
+            log_f.flush()
+            
+            # Run subprocess with output going to BOTH terminal and log file
+            # Use Popen for real-time streaming
+            import subprocess as sp
+            process = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.STDOUT, text=True, 
+                             env=env, bufsize=1, start_new_session=True)
+            
+            # Read and forward output line-by-line in real-time
+            for line in process.stdout:
+                print(line, end='')  # Print to terminal
+                log_f.write(line)    # Write to log
+                log_f.flush()
+            
+            # Wait for process to complete
+            returncode = process.wait()
+            log_f.write(f"\n=== EXIT CODE: {returncode} ===\n")
+            
     except KeyboardInterrupt:
-        # If interrupted, just re-raise to let parent handle it
+        print(f"\n⚠️  Interrupted experiment: {name}")
+        if 'process' in locals():
+            process.terminate()
+            process.wait(timeout=5)
+        with open(error_log, 'a') as log_f:
+            log_f.write(f"\n=== INTERRUPTED BY USER ===\n")
         raise
     
-    if result.returncode != 0:
-        print(f"❌ FAILED: {name} (exit code: {result.returncode})")
-        raise RuntimeError(f"Training failed for {name} with exit code {result.returncode}")
+    if returncode != 0:
+        error_msg = f"Training failed for {name} with exit code {returncode}"
+        print(f"\n{'='*70}")
+        print(f"❌ FAILED: {name} (exit code: {returncode})")
+        print(f"📄 Full log: {error_log}")
+        print(f"{'='*70}\n")
+        
+        # Write failure marker
+        with open(error_log, 'a') as log_f:
+            log_f.write(f"\n=== EXPERIMENT FAILED ===\n")
+            log_f.write(f"Error: {error_msg}\n")
+        
+        raise RuntimeError(error_msg)
     
     # Create result.json by reading training history and test reports
     result_data = {
