@@ -259,15 +259,17 @@ def run_ast_experiment(config_dict):
         if test1_report.exists():
             with open(test1_report) as f:
                 report = json.load(f)
-                if 'exact_match_accuracy' in report:
-                    result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
+                if 'exact_match_accuracy' not in report:
+                    raise KeyError(f"Missing 'exact_match_accuracy' in {test1_report.name}. Report keys: {list(report.keys())}")
+                result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
         
         test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
         if test2_report.exists():
             with open(test2_report) as f:
                 report = json.load(f)
-                if 'exact_match_accuracy' in report:
-                    result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
+                if 'exact_match_accuracy' not in report:
+                    raise KeyError(f"Missing 'exact_match_accuracy' in {test2_report.name}. Report keys: {list(report.keys())}")
+                result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
         
         # Save/update result file
         with open(result_file, 'w') as f:
@@ -361,16 +363,18 @@ def run_ast_experiment(config_dict):
     if test1_report.exists():
         with open(test1_report) as f:
             report = json.load(f)
-            if 'exact_match_accuracy' in report:
-                result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
+            if 'exact_match_accuracy' not in report:
+                raise KeyError(f"Missing 'exact_match_accuracy' in {test1_report.name}. Report keys: {list(report.keys())}")
+            result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
     
     # Try to load test2 results
     test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
     if test2_report.exists():
         with open(test2_report) as f:
             report = json.load(f)
-            if 'exact_match_accuracy' in report:
-                result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
+            if 'exact_match_accuracy' not in report:
+                raise KeyError(f"Missing 'exact_match_accuracy' in {test2_report.name}. Report keys: {list(report.keys())}")
+            result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
     
     # Save complete result file
     with open(result_file, 'w') as f:
@@ -579,7 +583,12 @@ def run_experiment(config_dict):
         
         with open(report_file) as f:
             report = json.load(f)
-            exact_acc = report.get('exact_match_accuracy', 0) * 100
+            
+            # FAIL FAST: Require exact_match_accuracy to be present
+            if 'exact_match_accuracy' not in report:
+                raise KeyError(f"Missing 'exact_match_accuracy' in {report_file.name}. Report keys: {list(report.keys())}")
+            
+            exact_acc = report['exact_match_accuracy'] * 100
             
             # Match by checking if test folder name is in the report filename
             if test1_name in report_name:
