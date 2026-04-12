@@ -44,8 +44,10 @@ def copy_result_files(output_dir, results_dir, experiment_name):
         'result.json',
         'training_history.json',
         '*_config.json',
+        '*_report.json',
+        '*_metrics.csv',
         'predictions_*.csv',
-        'training_curves.png',
+        '*.png',
     ]
     
     copied_files = []
@@ -532,14 +534,59 @@ def run_experiment(config_dict):
         print(f"❌ FAILED: {name} (exit code: {result.returncode})")
         raise RuntimeError(f"Training failed for {name} with exit code {result.returncode}")
     
-    # Load result.json to return
-    result_data = None
-    if result_file.exists():
-        with open(result_file) as f:
-            result_data = json.load(f)
+    # Create result.json by reading training history and test reports
+    result_data = {
+        'name': name,
+        'type': config_dict.get('type', 'baseline'),
+        'seed': seed,
+        'output_folder': str(output_dir),
+        'status': 'completed'
+    }
+    
+    # Load training history for train/val accuracies
+    history_file = output_dir / 'training_history.json'
+    if history_file.exists():
+        with open(history_file) as f:
+            history = json.load(f)
+            if 'val_acc' in history and history['val_acc']:
+                val_accs = [v for v in history['val_acc'] if v is not None]
+                if val_accs:
+                    best_epoch = val_accs.index(max(val_accs))
+                    result_data['best_val_acc'] = max(val_accs) * 100
+                    
+                    if 'train_acc' in history and history['train_acc']:
+                        train_accs = [v for v in history['train_acc'] if v is not None]
+                        if len(train_accs) > best_epoch:
+                            result_data['best_train_acc'] = train_accs[best_epoch] * 100
+    
+    # Determine test set names from config
+    test1_name = Path(config_dict['test1']).parent.name if config_dict.get('test1') else 'test1'
+    test2_name = Path(config_dict['test2']).parent.name if config_dict.get('test2') else 'test2'
+    
+    result_data['test1_name'] = test1_name
+    result_data['test2_name'] = test2_name
+    
+    # Load test results from evaluation reports
+    test1_report = output_dir / f'ast_test_{test1_name}_multilabel_report.json'
+    if test1_report.exists():
+        with open(test1_report) as f:
+            report = json.load(f)
+            if 'exact_match_accuracy' in report:
+                result_data['test1_acc'] = report['exact_match_accuracy'] * 100
+    
+    test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
+    if test2_report.exists():
+        with open(test2_report) as f:
+            report = json.load(f)
+            if 'exact_match_accuracy' in report:
+                result_data['test2_acc'] = report['exact_match_accuracy'] * 100
+    
+    # Save result.json
+    with open(result_file, 'w') as f:
+        json.dump(result_data, f, indent=2)
     
     # Copy result files to shared directory if specified
-    if config_dict.get('results_dir') and result_file.exists():
+    if config_dict.get('results_dir'):
         copy_result_files(output_dir, config_dict['results_dir'], name)
         
         # Remove lock file after successful completion
