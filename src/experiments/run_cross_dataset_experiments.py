@@ -474,6 +474,7 @@ def run_experiment(config_dict):
             '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
+            '--patience', '15',
             '--spec-transform', config_dict['spec_transform'],
             '--mixup', str(config_dict.get('mixup', 0.25)),
         ]
@@ -500,6 +501,7 @@ def run_experiment(config_dict):
             '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
             '--batch-size', str(config_dict['batch_size']),
+            '--patience', '15',
             '--spec-transform', config_dict['spec_transform'],
             '--mixup', str(config_dict.get('mixup', 0.25)),
             '--use-dann',
@@ -559,27 +561,31 @@ def run_experiment(config_dict):
                         if len(train_accs) > best_epoch:
                             result_data['best_train_acc'] = train_accs[best_epoch] * 100
     
-    # Determine test set names from config
-    test1_name = Path(config_dict['test1']).parent.name if config_dict.get('test1') else 'test1'
-    test2_name = Path(config_dict['test2']).parent.name if config_dict.get('test2') else 'test2'
+    # Determine test set names - use full folder name (e.g., 'avianz_split' not 'split')
+    test1_path = Path(config_dict['test1'])
+    test2_path = Path(config_dict['test2'])
+    
+    # Extract parent folder name which should match the test report filename
+    test1_name = test1_path.parent.name
+    test2_name = test2_path.parent.name
     
     result_data['test1_name'] = test1_name
     result_data['test2_name'] = test2_name
     
     # Load test results from evaluation reports
-    test1_report = output_dir / f'ast_test_{test1_name}_multilabel_report.json'
-    if test1_report.exists():
-        with open(test1_report) as f:
+    # Files are named like: ast_test_{folder_name}_multilabel_report.json
+    for report_file in output_dir.glob('*_multilabel_report.json'):
+        report_name = report_file.stem.replace('_multilabel_report', '')
+        
+        with open(report_file) as f:
             report = json.load(f)
-            if 'exact_match_accuracy' in report:
-                result_data['test1_acc'] = report['exact_match_accuracy'] * 100
-    
-    test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
-    if test2_report.exists():
-        with open(test2_report) as f:
-            report = json.load(f)
-            if 'exact_match_accuracy' in report:
-                result_data['test2_acc'] = report['exact_match_accuracy'] * 100
+            exact_acc = report.get('exact_match_accuracy', 0) * 100
+            
+            # Match by checking if test folder name is in the report filename
+            if test1_name in report_name:
+                result_data['test1_acc'] = exact_acc
+            elif test2_name in report_name:
+                result_data['test2_acc'] = exact_acc
     
     # Save result.json
     with open(result_file, 'w') as f:
