@@ -756,18 +756,18 @@ def main():
         print("   - CUDA drivers not installed")
         print("   - PyTorch not compiled with CUDA support")
         print()
-        print(" To run on CPU (NOT RECOMMENDED - extremely slow):")
-        print(" Auto-detect: {n_workers} workers for {len(gpu_pool)} GPUs")
-    else:
-        n_workers = args.parallel
-        print(f"User-specified: {n_workers} workers
+        print(" Solution: Fix GPU/CUDA setup before running experiments")
+        print("="*70)
+        sys.exit(1)
+    
+    # Determine worker count
     if args.parallel == 0:
         # Auto-detect: use number of GPUs
         n_workers = len(gpu_pool)
-        print(f"DEBUG: Auto-detecting workers from GPU pool: {n_workers}")
+        print(f"Auto-detect: {n_workers} workers for {len(gpu_pool)} GPUs")
     else:
         n_workers = args.parallel
-        print(f"DEBUG: Using user-specified worker count: {n_workers}")
+        print(f"User-specified: {n_workers} workers")
     
     print(f"\n{'='*70}")
     print(f" PARALLEL EXECUTION SETUP")
