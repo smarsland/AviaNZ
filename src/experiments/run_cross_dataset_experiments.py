@@ -123,12 +123,20 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                 output_folder = exp_config.get('output_folder', 'unknown')
                 error_log = Path(output_folder) / name_with_seed / 'experiment_error.log'
                 
-                print("\n" + "="*70)
-                print(f"❌ EXPERIMENT FAILED: {name_with_seed}")
-                print(f"❌ Exception: {type(e).__name__}: {e}")
+                # FAIL LOUDLY - Print massive error banner
+                print("\n\n" + "🔥"*35)
+                print("🔥" + " "*68 + "🔥")
+                print("🔥" + " "*15 + "!!! EXPERIMENT CRASHED !!!" + " "*27 + "🔥")
+                print("🔥" + " "*68 + "🔥")
+                print("🔥"*35)
+                print(f"\n💀 FAILED: {name_with_seed}")
+                print(f"💀 Error: {type(e).__name__}: {e}")
                 print(f"📄 Error log: {error_log}")
-                print("="*70)
-                print("\n⛔ STOPPING ALL EXPERIMENTS - Fix the error before continuing")
+                print("\n" + "🔥"*35)
+                print("🔥  STOPPING ALL EXPERIMENTS - GPU busy or other fatal error  🔥")
+                print("🔥  Fix the error above, then rerun the script                🔥")
+                print("🔥  The script will automatically retry failed experiments    🔥")
+                print("🔥"*35 + "\n\n")
                 
                 # Cancel remaining futures
                 for f in future_to_exp:
@@ -410,6 +418,19 @@ def run_ast_experiment(config_dict):
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
     
+    # CRITICAL: Clean up GPU resources before returning to worker pool
+    # This ensures CUDA context is fully released before next experiment starts on this GPU
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            import time
+            time.sleep(2)  # Give GPU time to fully release resources
+            print(f"  ✓ Released GPU resources")
+    except Exception as e:
+        print(f"  ⚠ Warning: GPU cleanup failed: {e}")
+    
     return result_dict
 
 
@@ -598,10 +619,19 @@ def run_experiment(config_dict):
     
     if returncode != 0:
         error_msg = f"Training failed for {name} with exit code {returncode}"
-        print(f"\n{'='*70}")
-        print(f"❌ FAILED: {name} (exit code: {returncode})")
-        print(f"📄 Full log: {error_log}")
-        print(f"{'='*70}\n")
+        
+        # FAIL LOUDLY - Print massive error banner
+        print("\n" + "🔥"*35)
+        print("🔥" + " "*68 + "🔥")
+        print("🔥" + " "*20 + "EXPERIMENT FAILED" + " "*31 + "🔥")
+        print("🔥" + " "*68 + "🔥")
+        print("🔥"*35)
+        print(f"\n💀 FAILED EXPERIMENT: {name}")
+        print(f"💀 Exit code: {returncode}")
+        print(f"📄 Full error log: {error_log}")
+        print("\n" + "🔥"*35)
+        print("🔥  Stopping ALL experiments - fix this error before continuing  🔥")
+        print("🔥"*35 + "\n")
         
         # Write failure marker
         with open(error_log, 'a') as log_f:
@@ -614,7 +644,6 @@ def run_experiment(config_dict):
             lock_file = shared_result_dir / '.lock'
             if lock_file.exists():
                 lock_file.unlink()
-                print(f"  ✓ Removed lock file (experiment failed)")
         
         raise RuntimeError(error_msg)
     
@@ -688,6 +717,19 @@ def run_experiment(config_dict):
         if lock_file.exists():
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
+    
+    # CRITICAL: Clean up GPU resources before returning to worker pool
+    # This ensures CUDA context is fully released before next experiment starts on this GPU
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            import time
+            time.sleep(2)  # Give GPU time to fully release resources
+            print(f"  ✓ Released GPU resources")
+    except Exception as e:
+        print(f"  ⚠ Warning: GPU cleanup failed: {e}")
     
     return result_data
 
