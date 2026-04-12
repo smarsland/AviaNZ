@@ -117,11 +117,14 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                     print(f"✓ Completed: {result.get('name', 'unknown')}")
             except Exception as e:
                 exp_name = exp_config.get('name', 'unknown')
+                seed = exp_config.get('seed', 42)
+                # Name has seed appended in run_experiment, match that here
+                name_with_seed = f"{exp_name}_seed{seed}"
                 output_folder = exp_config.get('output_folder', 'unknown')
-                error_log = Path(output_folder) / exp_name / 'experiment_error.log'
+                error_log = Path(output_folder) / name_with_seed / 'experiment_error.log'
                 
                 print("\n" + "="*70)
-                print(f"❌ EXPERIMENT FAILED: {exp_name}")
+                print(f"❌ EXPERIMENT FAILED: {name_with_seed}")
                 print(f"❌ Exception: {type(e).__name__}: {e}")
                 print(f"📄 Error log: {error_log}")
                 print("="*70)
@@ -560,9 +563,11 @@ def run_experiment(config_dict):
                              env=env, bufsize=1, start_new_session=True)
             
             # Read and forward output line-by-line in real-time
+            # Prefix each line with experiment name for parallel clarity
             for line in process.stdout:
-                print(line, end='')  # Print to terminal
-                log_f.write(line)    # Write to log
+                prefixed = f"[{name}] {line}"
+                print(prefixed, end='')  # Print to terminal with prefix
+                log_f.write(line)        # Write original to log
                 log_f.flush()
             
             # Wait for process to complete
@@ -682,8 +687,8 @@ def main():
     parser.add_argument('--mixup', type=float, default=0.25, help='Mixup alpha')
     parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456, 590, 573], 
                        help='Random seeds for multiple trials (default: 42 123 456 590 573 for 5 trials)')
-    parser.add_argument('--parallel', type=int, default=1,
-                       help='Number of experiments to run in parallel (default: 1, use 0 for auto-detect based on GPUs)')
+    parser.add_argument('--parallel', type=int, default=0,
+                       help='Number of experiments to run in parallel (default: 0 = auto-detect from GPU count)')
     parser.add_argument('--gpu-ids', type=int, nargs='+', default=None,
                        help='Specific GPU IDs to use (e.g., --gpu-ids 0 1 2). If not specified, auto-detects all available GPUs.')
     
