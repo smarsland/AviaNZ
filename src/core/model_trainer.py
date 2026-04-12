@@ -389,6 +389,35 @@ class Trainer:
     
     def train(self):
         """Train model (AST or RegNetY)."""
+        # CRITICAL: Verify CUDA is actually available before starting
+        if not torch.cuda.is_available():
+            cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
+            raise RuntimeError(
+                f"CUDA not available! Cannot train on GPU.\n"
+                f"  CUDA_VISIBLE_DEVICES = {cuda_visible}\n"
+                f"  torch.cuda.is_available() = False\n"
+                f"  Possible causes:\n"
+                f"    - CUDA_VISIBLE_DEVICES points to invalid/busy GPU\n"
+                f"    - All GPUs are already in use\n"
+                f"    - CUDA drivers not loaded\n"
+                f"  Solution: Check GPU availability with 'nvidia-smi' and adjust CUDA_VISIBLE_DEVICES"
+            )
+        
+        # Try to allocate a small tensor to verify GPU actually works
+        try:
+            test_tensor = torch.zeros(1).to(self.device)
+            del test_tensor
+        except Exception as e:
+            cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
+            raise RuntimeError(
+                f"GPU allocation failed! Device reports as available but cannot allocate memory.\n"
+                f"  CUDA_VISIBLE_DEVICES = {cuda_visible}\n"
+                f"  Device = {self.device}\n"
+                f"  Error: {e}\n"
+                f"  This usually means the GPU is busy or crashed.\n"
+                f"  Solution: Check 'nvidia-smi' for GPU processes and memory usage"
+            ) from e
+        
         input_size = (self.img_height, self.img_width)
         print(f"Model input size: {input_size}")
         

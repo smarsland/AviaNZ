@@ -162,12 +162,13 @@ def run_experiment_with_gpu(config_dict, gpu_id=None):
     env = os.environ.copy()
     if gpu_id is not None:
         env['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
-        print(f"Setting CUDA_VISIBLE_DEVICES={gpu_id} for {config_dict.get('name', 'experiment')}")
-    else:
-        print(f"No GPU assigned for {config_dict.get('name', 'experiment')} (will use all available)")
+    
+    # DO NOT print here - this happens at SUBMIT time, not execution time
+    # Printing here is misleading when using ProcessPoolExecutor
     
     config_dict = config_dict.copy()
     config_dict['env'] = env
+    config_dict['assigned_gpu'] = gpu_id  # Pass GPU ID for logging inside the actual execution
     
     if config_dict.get('is_ast'):
         return run_ast_experiment(config_dict)
@@ -461,22 +462,26 @@ def run_experiment(config_dict):
                 'status': 'locked_by_other_machine'
             }
     
-    # If no shared directory or folder doesn't exist, check if training already complete locally
+    # Check if experiment already completed successfully (result.json exists locally)
     result_file = output_dir / 'result.json'
     
-    # Check if training complete but evaluation missing
-    model_file = output_dir / 'birdclef_finetuned_best.pt'
-    history_file = output_dir / 'training_history.json'
-    eval_only = model_file.exists() and history_file.exists()
+    if result_file.exists():
+        print(f"✓ {name} - skipping (already completed successfully)")
+        with open(result_file) as f:
+            return json.load(f)
     
-    if eval_only:
-        print(f"\n{'='*70}")
-        print(f"Running: {name} (EVAL ONLY - model exists)")
-        print(f"{'='*70}")
-    else:
-        print(f"\n{'='*70}")
-        print(f"Running: {name}")
-        print(f"{'='*70}")
+    # If output directory exists but no result.json, it's a failed/partial run - clean it up
+    if output_dir.exists():
+        print(f"⚠ {name} - cleaning up partial/failed run from previous attempt")
+        shutil.rmtree(output_dir)
+        print(f"  ✓ Removed {output_dir}")
+    
+    # Create fresh output directory
+    output_dir.mkdir(parents=True)
+    
+    print(f"\n{'='*70}")
+    print(f"STARTING: {name}")
+    print(f"{'='*70}")
     
     # Build command - use train.py with config
     if config_dict['type'] == 'baseline':
@@ -541,8 +546,15 @@ def run_experiment(config_dict):
     
     # Run with GPU environment (MUST use subprocess for proper CUDA_VISIBLE_DEVICES isolation)
     env = config_dict.get('env', os.environ)
+    assigned_gpu = config_dict.get('assigned_gpu', 'not set')
+    cuda_visible = env.get('CUDA_VISIBLE_DEVICES', 'not set')
+    
+    print(f"\n{'='*70}")
+    print(f"STARTING: {name}")
+    print(f"GPU: {assigned_gpu} (CUDA_VISIBLE_DEVICES={cuda_visible})")
+    print(f"{'='*70}")
     print(f"Command: {' '.join(cmd)}")
-    print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', 'not set')}")
+    print(f"{'='*70}\n")
     
     # Create output directory and error log file
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -595,6 +607,14 @@ def run_experiment(config_dict):
         with open(error_log, 'a') as log_f:
             log_f.write(f"\n=== EXPERIMENT FAILED ===\n")
             log_f.write(f"Error: {error_msg}\n")
+        
+        # Remove lock file if experiment failed (so it can be retried)
+        if config_dict.get('results_dir'):
+            shared_result_dir = Path(config_dict['results_dir']) / name
+            lock_file = shared_result_dir / '.lock'
+            if lock_file.exists():
+                lock_file.unlink()
+                print(f"  ✓ Removed lock file (experiment failed)")
         
         raise RuntimeError(error_msg)
     
@@ -737,10 +757,10 @@ def main():
         print("   - PyTorch not compiled with CUDA support")
         print()
         print(" To run on CPU (NOT RECOMMENDED - extremely slow):")
-        print("   - Modify the code to remove this check")
-        print("="*70 + "\n")
-        sys.exit(1)
-    
+        print(" Auto-detect: {n_workers} workers for {len(gpu_pool)} GPUs")
+    else:
+        n_workers = args.parallel
+        print(f"User-specified: {n_workers} workers
     if args.parallel == 0:
         # Auto-detect: use number of GPUs
         n_workers = len(gpu_pool)
