@@ -247,7 +247,14 @@ class Trainer:
         self.max_noise_samples = cfg.augmentation.max_noise_samples
         self.use_temporal_roll = cfg.augmentation.use_temporal_roll
         self.normalize = cfg.augmentation.normalize
+        self.normalize_median_filter = cfg.augmentation.normalize_median_filter
+        self.median_only = cfg.augmentation.median_only
         self.per_chunk_norm = cfg.augmentation.per_chunk_norm
+        self.spec_transform = cfg.augmentation.spec_transform
+        self.mixup_mode = cfg.augmentation.mixup_mode
+        self.noise_mode = cfg.augmentation.noise_mode
+        self.remove_baseline = cfg.augmentation.remove_baseline
+        self.background_prob = cfg.augmentation.background_prob
         
         self.use_focal_loss = cfg.loss.use_focal_loss
         self.use_class_weights = cfg.loss.use_class_weights
@@ -325,11 +332,17 @@ class Trainer:
         self.train_loader, self.val_loader = create_data_loaders(
             self.data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
             cropping_mode='random', noise_ratio=self.noise_ratio, 
-            spec_transform=None,  # Uses config.DEFAULT_SPEC_TRANSFORM
+            spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
             use_class_balancing=False, normalize=self.normalize,
+            normalize_median_filter=self.normalize_median_filter,
+            median_only=self.median_only,
             use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
-            use_temporal_roll=self.use_temporal_roll
+            use_temporal_roll=self.use_temporal_roll,
+            remove_baseline=self.remove_baseline,
+            mixup_mode=self.mixup_mode,
+            noise_mode=self.noise_mode,
+            background_prob=self.background_prob
         )
         
         # Create target domain data loader for DANN
@@ -337,11 +350,17 @@ class Trainer:
             self.target_train_loader, _ = create_data_loaders(
                 self.target_data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
                 cropping_mode='random', noise_ratio=0.0,  # No noise augmentation for target
-                spec_transform=None,
+                spec_transform=self.spec_transform,
                 num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
                 use_class_balancing=False, normalize=self.normalize,
+                normalize_median_filter=self.normalize_median_filter,
+                median_only=self.median_only,
                 use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
-                use_temporal_roll=self.use_temporal_roll
+                use_temporal_roll=self.use_temporal_roll,
+                remove_baseline=self.remove_baseline,
+                mixup_mode='mixup',
+                noise_mode='full',
+                background_prob=0.0
             )
             print(f"Created target domain data loader with {len(self.target_train_loader)} batches")
         
@@ -1048,13 +1067,18 @@ class Trainer:
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
                 noise_filenames=None,
                 noise_ratio=0.0,
-                spec_transform=None,
+                spec_transform=self.spec_transform,
                 training=False,
                 width_downsizing=None,
                 normalize=self.normalize,
+                normalize_median_filter=self.normalize_median_filter,
+                median_only=self.median_only,
                 use_sparse_patches=self.use_sparse_patches,
                 num_sparse_patches=self.num_sparse_patches,
-                use_temporal_roll=False
+                use_temporal_roll=False,
+                remove_baseline=self.remove_baseline,
+                noise_mode='full',
+                background_prob=0.0
             )
             
             test_loader_obj1 = torch.utils.data.DataLoader(
@@ -1084,13 +1108,18 @@ class Trainer:
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
                 noise_filenames=None,
                 noise_ratio=0.0,
-                spec_transform=None,
+                spec_transform=self.spec_transform,
                 training=False,
                 width_downsizing=None,
                 normalize=self.normalize,
+                normalize_median_filter=self.normalize_median_filter,
+                median_only=self.median_only,
                 use_sparse_patches=self.use_sparse_patches,
                 num_sparse_patches=self.num_sparse_patches,
-                use_temporal_roll=False
+                use_temporal_roll=False,
+                remove_baseline=self.remove_baseline,
+                noise_mode='full',
+                background_prob=0.0
             )
             
             test_loader_obj2 = torch.utils.data.DataLoader(
@@ -1198,6 +1227,13 @@ class Trainer:
         model_config['use_sparse_patches'] = self.use_sparse_patches
         model_config['num_sparse_patches'] = self.num_sparse_patches
         model_config['use_cleaner'] = self.use_cleaner
+        
+        # Save ALL augmentation/normalization parameters for inference consistency
+        model_config['spec_transform'] = self.spec_transform
+        model_config['normalize'] = self.normalize
+        model_config['normalize_median_filter'] = self.normalize_median_filter
+        model_config['median_only'] = self.median_only
+        model_config['remove_baseline'] = self.remove_baseline
         
         # Save to JSON
         config_path = os.path.join(self.output_folder, 'ast_model_config.json')

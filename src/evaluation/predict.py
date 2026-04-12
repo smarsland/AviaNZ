@@ -254,7 +254,10 @@ class ModelPredictor:
         with open(self.model_config, 'r') as f:
             model_config = json.load(f)
         spec_transform = model_config.get('spec_transform', config.DEFAULT_SPEC_TRANSFORM)
+        normalize_median_filter = model_config.get('normalize_median_filter', True)
+        median_only = model_config.get('median_only', False)
         print(f"Using spec_transform: {spec_transform} (from model config)")
+        print(f"Using normalize_median_filter: {normalize_median_filter}, median_only: {median_only}")
         
         # Create SpectrogramDataset (EXACTLY matching validation in create_data_loaders)
         img_height = self.expected_freq_bins
@@ -273,10 +276,14 @@ class ModelPredictor:
             training=False,
             width_downsizing=None,
             normalize=self.normalize,
+            normalize_median_filter=normalize_median_filter,
+            median_only=median_only,
             use_sparse_patches=self.use_sparse_patches,
             num_sparse_patches=self.num_sparse_patches,
             use_temporal_roll=False,
-            remove_baseline=self.remove_baseline
+            remove_baseline=self.remove_baseline,
+            noise_mode='full',
+            background_prob=0.0
         )
         
         # Create DataLoader (same as validation)

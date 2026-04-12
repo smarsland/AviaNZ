@@ -144,7 +144,13 @@ class TrainerConfig:
                 normalize=getattr(args, 'normalize', False),
                 per_chunk_norm=getattr(args, 'per_chunk_norm', False),
                 normalize_median_filter=getattr(args, 'median_filter', False) or getattr(args, 'normalize', False),
-                spec_transform=getattr(args, 'spec_transform', 'Log')
+                median_only=getattr(args, 'median_only', False),
+                spec_transform=getattr(args, 'spec_transform', 'Log'),
+                mixup_mode=getattr(args, 'mixup_mode', 'mixup'),
+                noise_mode=getattr(args, 'noise_mode', 'full'),
+                validation_split=getattr(args, 'validation_split', 0.2),
+                remove_baseline=getattr(args, 'remove_baseline', False),
+                background_prob=getattr(args, 'background_prob', 0.0)
             ),
             loss=LossConfig(
                 use_focal_loss=getattr(args, 'focal_loss', False),

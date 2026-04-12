@@ -487,6 +487,8 @@ def run_experiment(config_dict):
             cmd.append('--normalize')
         if config_dict.get('median_filter'):
             cmd.append('--median-filter')
+        if config_dict.get('median_only'):
+            cmd.append('--median-only')
         if config_dict.get('noise', 0) > 0:
             cmd.extend(['--noise', str(config_dict['noise'])])
             if config_dict.get('noise_folder'):
@@ -517,6 +519,8 @@ def run_experiment(config_dict):
             cmd.append('--normalize')
         if config_dict.get('median_filter'):
             cmd.append('--median-filter')
+        if config_dict.get('median_only'):
+            cmd.append('--median-only')
         if config_dict.get('seed'):
             cmd.extend(['--seed', str(config_dict['seed'])])
     
