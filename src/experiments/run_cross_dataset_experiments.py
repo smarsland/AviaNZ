@@ -544,7 +544,8 @@ def run_experiment(config_dict):
     print(f"Command: {' '.join(cmd)}")
     print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', 'not set')}")
     
-    # Create error log file in output directory
+    # Create output directory and error log file
+    output_dir.mkdir(parents=True, exist_ok=True)
     error_log = output_dir / 'experiment_error.log'
     
     try:
