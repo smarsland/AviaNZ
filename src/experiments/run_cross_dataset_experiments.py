@@ -640,6 +640,14 @@ def run_experiment(config_dict):
             returncode = process.wait()
             log_f.write(f"\n=== EXIT CODE: {returncode} ===\n")
             
+            # CRITICAL: Wait for GPU to fully release CUDA context
+            # The subprocess has exited, but CUDA cleanup is asynchronous
+            # Without this delay, the next experiment on this GPU will fail with "device busy"
+            import time
+            print(f"[{name}] ⏳ Waiting 5 seconds for GPU to fully release...", flush=True)
+            time.sleep(5)
+            print(f"[{name}] ✓ GPU should be available now", flush=True)
+            
     except KeyboardInterrupt:
         print(f"\n⚠️  Interrupted experiment: {name}")
         if 'process' in locals():
