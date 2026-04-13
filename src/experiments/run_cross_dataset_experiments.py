@@ -63,7 +63,7 @@ def copy_result_files(output_dir, results_dir, experiment_name):
 
 
 def get_available_gpus():
-    """Detect available AND usable GPUs (not just present)."""
+    """Detect available GPUs using nvidia-smi (no CUDA initialization)."""
     try:
         import torch
         if not torch.cuda.is_available():
@@ -71,27 +71,46 @@ def get_available_gpus():
             return []
         
         total_gpus = torch.cuda.device_count()
-        print(f"Detected {total_gpus} GPUs, testing availability...")
+        print(f"Detected {total_gpus} GPUs, checking availability...")
         
-        available_gpus = []
-        for gpu_id in range(total_gpus):
-            try:
-                # Try to allocate a small tensor to verify GPU is actually usable
-                with torch.cuda.device(gpu_id):
-                    test_tensor = torch.zeros(1).cuda()
-                    del test_tensor
-                    torch.cuda.empty_cache()
-                available_gpus.append(gpu_id)
-                print(f"  ✓ GPU {gpu_id}: Available")
-            except Exception as e:
-                print(f"  ✗ GPU {gpu_id}: Busy or unavailable ({type(e).__name__})")
+        # Use nvidia-smi to check GPU memory usage (no CUDA init)
+        try:
+            import subprocess as sp
+            result = sp.run(['nvidia-smi', '--query-gpu=index,memory.used,memory.total', 
+                           '--format=csv,noheader,nounits'], 
+                          capture_output=True, text=True, timeout=5)
+            
+            if result.returncode == 0:
+                available_gpus = []
+                for line in result.stdout.strip().split('\n'):
+                    parts = line.split(', ')
+                    if len(parts) >= 3:
+                        gpu_id = int(parts[0])
+                        mem_used = int(parts[1])
+                        mem_total = int(parts[2])
+                        
+                        # Consider GPU available if <10% memory used
+                        usage_pct = (mem_used / mem_total) * 100 if mem_total > 0 else 100
+                        
+                        if usage_pct < 10:
+                            available_gpus.append(gpu_id)
+                            print(f"  ✓ GPU {gpu_id}: Available ({mem_used}/{mem_total} MiB used)")
+                        else:
+                            print(f"  ✗ GPU {gpu_id}: Busy ({mem_used}/{mem_total} MiB, {usage_pct:.0f}% used)")
+                
+                if available_gpus:
+                    print(f"Using {len(available_gpus)} GPU(s): {available_gpus}")
+                    return available_gpus
+            
+            # Fallback: nvidia-smi failed, use all GPUs
+            print("nvidia-smi check failed, using all detected GPUs")
+            return list(range(total_gpus))
+            
+        except Exception as e:
+            # Fallback: use all GPUs
+            print(f"GPU availability check failed ({e}), using all detected GPUs")
+            return list(range(total_gpus))
         
-        if available_gpus:
-            print(f"Using {len(available_gpus)} GPU(s): {available_gpus}")
-        else:
-            print("ERROR: No usable GPUs found (all busy or crashed)")
-        
-        return available_gpus
     except Exception as e:
         print(f"GPU detection failed: {e}")
         return []
