@@ -95,8 +95,13 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
         return results
     
     # Parallel execution
+    # CRITICAL: Use 'spawn' context to avoid CUDA reinitialization issues
+    # With 'fork' (default on Linux), worker processes inherit CUDA context and can't reinitialize
+    # With 'spawn', each task gets a fresh process with clean CUDA state
+    import multiprocessing as mp
+    ctx = mp.get_context('spawn')
     results = []
-    executor = ProcessPoolExecutor(max_workers=n_workers)
+    executor = ProcessPoolExecutor(max_workers=n_workers, mp_context=ctx)
     
     try:
         # Submit all jobs with GPU assignment
@@ -458,12 +463,6 @@ def run_ast_experiment(config_dict):
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
     
-    # CRITICAL: Give GPU time to fully release CUDA context before returning
-    import time
-    print(f"  ⏳ GPU cooldown (10 sec)...")
-    time.sleep(10)
-    print(f"  ✓ GPU cooldown complete")
-    
     return result_dict
 
 
@@ -754,13 +753,6 @@ def run_experiment(config_dict):
         if lock_file.exists():
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
-    
-    # CRITICAL: Give GPU time to fully release CUDA context before returning
-    # Without this, the next experiment on the same GPU may fail with "device busy"
-    import time
-    print(f"  ⏳ GPU cooldown (10 sec to ensure CUDA context fully released)...")
-    time.sleep(10)
-    print(f"  ✓ GPU cooldown complete")
     
     return result_data
 
