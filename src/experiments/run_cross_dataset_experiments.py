@@ -460,7 +460,8 @@ def run_ast_experiment(config_dict):
     
     # CRITICAL: Give GPU time to fully release CUDA context before returning
     import time
-    time.sleep(3)
+    print(f"  ⏳ GPU cooldown (10 sec)...")
+    time.sleep(10)
     print(f"  ✓ GPU cooldown complete")
     
     return result_dict
@@ -757,7 +758,8 @@ def run_experiment(config_dict):
     # CRITICAL: Give GPU time to fully release CUDA context before returning
     # Without this, the next experiment on the same GPU may fail with "device busy"
     import time
-    time.sleep(3)
+    print(f"  ⏳ GPU cooldown (10 sec to ensure CUDA context fully released)...")
+    time.sleep(10)
     print(f"  ✓ GPU cooldown complete")
     
     return result_data
