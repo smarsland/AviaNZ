@@ -852,8 +852,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size')
     parser.add_argument('--mixup', type=float, default=0.25, help='Mixup alpha')
-    parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456, 590, 573], 
-                       help='Random seeds for multiple trials (default: 42 123 456 590 573 for 5 trials)')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[42], 
+                       help='Random seeds for multiple trials')
     parser.add_argument('--parallel', type=int, default=0,
                        help='Number of experiments to run in parallel (default: 0 = auto-detect from GPU count)')
     parser.add_argument('--gpu-ids', type=int, nargs='+', default=None,
