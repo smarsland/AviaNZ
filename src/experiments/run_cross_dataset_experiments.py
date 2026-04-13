@@ -550,28 +550,42 @@ def run_experiment(config_dict):
             with open(shared_result_file) as f:
                 return json.load(f)
         
-        # RACE CONDITION PROTECTION: Try to atomically create a lock file
+        # RACE CONDITION PROTECTION: Use fcntl file locking (NFS-safe)
         lock_file = shared_result_dir / '.lock'
         shared_result_dir.mkdir(parents=True, exist_ok=True)
         
-        # Clean up stale lock files (no result.json = stale lock)
-        if lock_file.exists() and not shared_result_file.exists():
-            lock_file.unlink()
-            print(f"  ✓ Removed stale lock file: {name}")
-        
+        # Try to acquire exclusive lock
         try:
-            # Atomic creation - fails if exists
-            lock_fd = os.open(str(lock_file), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(lock_fd, f"Claimed by PID {os.getpid()} at {datetime.now()}".encode())
-            os.close(lock_fd)
-            print(f"  ✓ Claimed experiment lock: {name}")
-        except FileExistsError:
-            print(f"  ⚠ {name} - skipping (another machine is running this)")
+            import fcntl
+            lock_fd = os.open(str(lock_file), os.O_CREAT | os.O_RDWR, 0o644)
+            
+            # Try non-blocking exclusive lock
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # Got the lock! Write our PID
+                os.ftruncate(lock_fd, 0)
+                os.lseek(lock_fd, 0, os.SEEK_SET)
+                os.write(lock_fd, f"Claimed by PID {os.getpid()} at {datetime.now()}".encode())
+                os.fsync(lock_fd)
+                print(f"  ✓ Claimed experiment lock: {name}")
+                # Keep lock_fd open - will be released when process exits
+            except BlockingIOError:
+                # Lock held by another process
+                os.close(lock_fd)
+                print(f"  ⚠ {name} - skipping (locked by another machine)")
+                return {
+                    'name': name,
+                    'type': config_dict.get('type', 'baseline'),
+                    'seed': seed,
+                    'status': 'locked_by_other_machine'
+                }
+        except Exception as e:
+            print(f"  ✗ {name} - lock acquisition failed: {e}")
             return {
                 'name': name,
                 'type': config_dict.get('type', 'baseline'),
                 'seed': seed,
-                'status': 'locked_by_other_machine'
+                'status': 'lock_failed'
             }
     
     # Check if experiment already completed successfully (result.json exists locally)
