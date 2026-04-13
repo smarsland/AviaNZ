@@ -145,7 +145,43 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                 # Cancel remaining futures
                 for f in future_to_exp:
                     f.cancel()
+                
+                # CRITICAL: Forcibly terminate ALL running worker processes and their children
+                print("🔥 Terminating all running experiments...", flush=True)
+                
+                # Shutdown executor (doesn't kill running processes, just prevents new tasks)
                 executor.shutdown(wait=False, cancel_futures=True)
+                
+                # Kill all child processes (worker processes and their train.py subprocesses)
+                try:
+                    import signal
+                    import subprocess as sp
+                    my_pid = os.getpid()
+                    
+                    # Get all descendant processes using pgrep
+                    result = sp.run(['pgrep', '-P', str(my_pid)], capture_output=True, text=True)
+                    child_pids = result.stdout.strip().split('\n') if result.stdout.strip() else []
+                    
+                    # Get grandchildren (train.py processes spawned by workers)
+                    all_pids = set(child_pids)
+                    for child_pid in child_pids:
+                        result = sp.run(['pgrep', '-P', child_pid], capture_output=True, text=True)
+                        if result.stdout.strip():
+                            all_pids.update(result.stdout.strip().split('\n'))
+                    
+                    # Kill all descendant processes
+                    for pid in all_pids:
+                        try:
+                            pid_int = int(pid)
+                            print(f"   Terminating PID {pid_int}", flush=True)
+                            os.kill(pid_int, signal.SIGTERM)
+                        except (ValueError, ProcessLookupError):
+                            pass
+                    
+                    print("🔥 All child processes terminated.", flush=True)
+                except Exception as kill_err:
+                    print(f"⚠  Warning: Error during cleanup: {kill_err}", flush=True)
+                
                 sys.exit(1)
     
     except KeyboardInterrupt:
@@ -421,6 +457,11 @@ def run_ast_experiment(config_dict):
         if lock_file.exists():
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
+    
+    # CRITICAL: Give GPU time to fully release CUDA context before returning
+    import time
+    time.sleep(3)
+    print(f"  ✓ GPU cooldown complete")
     
     return result_dict
 
@@ -713,6 +754,12 @@ def run_experiment(config_dict):
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
     
+    # CRITICAL: Give GPU time to fully release CUDA context before returning
+    # Without this, the next experiment on the same GPU may fail with "device busy"
+    import time
+    time.sleep(3)
+    print(f"  ✓ GPU cooldown complete")
+    
     return result_data
 
 
@@ -827,10 +874,6 @@ def main():
     
     for seed in args.seeds:
         for norm_config in normalization_configs:
-            exp_name_avianz = f"avianz_baseline_{norm_config['name']}_seed{seed}"
-            exp_name_doc = f"doc_baseline_{norm_config['name']}_seed{seed}"
-            print(f"  Queuing: {exp_name_avianz}, {exp_name_doc}")
-            
             # Waitākere → DOC
             all_experiments.append({
                 **norm_config,
