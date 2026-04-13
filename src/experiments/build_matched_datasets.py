@@ -221,7 +221,7 @@ def parse_reviewed_csv(csv_path, mapping_csv):
             'folder': str(row[col_folder]).strip(),
             'predicted_code': str(row[col_predicted]).strip(),
             'audio_filename': str(row[col_file]).strip(),
-            'species1_raw': species1_normalized,       # primary label string (normalized)
+            'species1_raw': species1_normalized,       # DOC 'Species 1' column (normalized)
             'human_labels': human_labels,               # full label strings (normalized, no uncertain)
             'species1_codes': species1_codes,           # eBird codes for AviaNZ search only
         })
@@ -313,9 +313,10 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
 def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
-    ANY species from that record's species1_codes (the human's primary/uncertain
-    label).  If no candidate exists for any of those codes, the record is
-    skipped (and the corresponding DOC sample should be dropped too).
+    ANY species from that record's species1_codes (from DOC's 'Species 1' column,
+    which may contain uncertain '/' separated options).  If no candidate exists
+    for any of those codes, the record is skipped (and the corresponding DOC
+    sample should be dropped too).
 
     Returns (avianz_labels, matched_mask) where matched_mask[i] is True if
     record i was successfully matched.
@@ -362,7 +363,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
     trimmed = 0
 
     for rec in records:
-        # Pool all AviaNZ candidates for any of this record's primary codes
+        # Pool all AviaNZ candidates for any of this record's Species 1 codes
         pool = []
         for code in rec['species1_codes']:
             pool.extend(candidates.get(code, []))

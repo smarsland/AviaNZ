@@ -20,11 +20,6 @@ import socket
 import threading
 
 from src.core import config
-from src.core.trainer_config import (
-    TrainerConfig, TrainingConfig, ModelConfig, AugmentationConfig,
-    LossConfig, DomainAdaptationConfig, EvaluationConfig
-)
-from src.core.model_trainer import Trainer
 
 
 def copy_result_files(output_dir, results_dir, experiment_name):
@@ -382,250 +377,11 @@ def run_experiment_with_gpu(config_dict, gpu_id=None):
     if gpu_id is not None:
         env['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
     
-    # DO NOT print here - this happens at SUBMIT time, not execution time
-    # Printing here is misleading when using ProcessPoolExecutor
-    
     config_dict = config_dict.copy()
     config_dict['env'] = env
-    config_dict['assigned_gpu'] = gpu_id  # Pass GPU ID for logging inside the actual execution
+    config_dict['assigned_gpu'] = gpu_id
     
-    if config_dict.get('is_ast'):
-        return run_ast_experiment(config_dict)
-    else:
-        return run_experiment(config_dict)
-
-
-def run_ast_experiment(config_dict):
-    """
-    Run AST training + evaluation experiment using train_models.py.
-    
-    Returns: dict with results
-    """
-    name = config_dict['name']
-    seed = config_dict.get('seed', 42)
-    
-    # Always add seed to name for consistency
-    name = f"{name}_seed{seed}"
-    
-    output_dir = Path(config_dict['output_folder']) / name
-    
-    # Check if already complete or in progress (check shared results directory ONLY)
-    if config_dict.get('results_dir'):
-        shared_result_dir = Path(config_dict['results_dir']) / name
-        shared_result_file = shared_result_dir / 'result.json'
-        
-        # ATOMIC CHECK: Only result.json presence matters, not directory
-        if shared_result_file.exists():
-            print(f"✓ {name} - skipping (result.json exists in shared results)")
-            with open(shared_result_file) as f:
-                return json.load(f)
-        
-        # LOCKING: Use heartbeat-based distributed lock
-        shared_result_dir.mkdir(parents=True, exist_ok=True)
-        lock = ExperimentLock(shared_result_dir / '.lock')
-        
-        if not lock.acquire():
-            print(f"  ⚠ {name} - skipping (locked by another machine)")
-            return {
-                'name': name,
-                'experiment_type': 'ast_baseline',
-                'seed': seed,
-                'status': 'locked_by_other_machine'
-            }
-        
-        print(f"  ✓ Claimed lock: {name}")
-    else:
-        lock = None
-    
-    # If no shared directory or folder doesn't exist, check if training already complete locally
-    result_file = output_dir / 'result.json'
-    
-    # Check if training complete
-    model_file = output_dir / 'ast_model_best.pt'
-    history_file = output_dir / 'training_history.json'
-    
-    if model_file.exists() and history_file.exists():
-        print(f"\n{'='*70}")
-        print(f"Skipping: {name} (MODEL ALREADY EXISTS)")
-        print(f"{'='*70}")
-        
-        # Load complete results from existing files
-        result_dict = {
-            'name': name,
-            'experiment_type': 'ast_baseline',
-            'seed': seed,
-            'output_folder': str(output_dir),
-            'status': 'completed (pre-existing)'
-        }
-        
-        # Load training history
-        with open(history_file) as f:
-            history = json.load(f)
-            if 'val_acc' in history and history['val_acc']:
-                val_accs = [v for v in history['val_acc'] if v is not None]
-                if val_accs:
-                    best_epoch = val_accs.index(max(val_accs))
-                    result_dict['best_val_acc'] = max(val_accs) * 100
-                    
-                    if 'train_acc' in history and history['train_acc']:
-                        train_accs = [v for v in history['train_acc'] if v is not None]
-                        if len(train_accs) > best_epoch:
-                            result_dict['best_train_acc'] = train_accs[best_epoch] * 100
-        
-        # Determine test set names from actual folder paths
-        test1_name = Path(config_dict['test1']).parent.name if config_dict.get('test1') else 'test1'
-        test2_name = Path(config_dict['test2']).parent.name if config_dict.get('test2') else 'test2'
-        
-        result_dict['test1_name'] = test1_name
-        result_dict['test2_name'] = test2_name
-        
-        # Load test results from evaluation reports
-        test1_report = output_dir / f'ast_test_{test1_name}_multilabel_report.json'
-        if test1_report.exists():
-            with open(test1_report) as f:
-                report = json.load(f)
-                if 'exact_match_accuracy' not in report:
-                    raise KeyError(f"Missing 'exact_match_accuracy' in {test1_report.name}. Report keys: {list(report.keys())}")
-                result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
-        
-        test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
-        if test2_report.exists():
-            with open(test2_report) as f:
-                report = json.load(f)
-                if 'exact_match_accuracy' not in report:
-                    raise KeyError(f"Missing 'exact_match_accuracy' in {test2_report.name}. Report keys: {list(report.keys())}")
-                result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
-        
-        # Save/update result file
-        with open(result_file, 'w') as f:
-            json.dump(result_dict, f, indent=2)
-        
-        # Copy result files to shared directory if specified
-        if config_dict.get('results_dir'):
-            copy_result_files(output_dir, config_dict['results_dir'], name)
-        
-        # Release lock if we acquired one
-        if lock:
-            lock.release()
-            print(f"  ✓ Released experiment lock")
-        
-        return result_dict
-    else:
-        print(f"\n{'='*70}")
-        print(f"Running: {name}")
-        print(f"{'='*70}")
-    
-    # Build TrainerConfig directly instead of command-line args
-    cfg = TrainerConfig(
-        training=TrainingConfig(
-            data_folder=config_dict['train'],
-            output_folder=str(output_dir),
-            max_epochs=config_dict['epochs'],
-            batch_size=config_dict['batch_size'],
-            learning_rate=1e-4,  # RegNet default
-            weight_decay=config.DEFAULT_WEIGHT_DECAY,
-            patience=15,
-            use_amp=True,
-            seed=config_dict.get('seed')
-        ),
-        model=ModelConfig(
-            multilabel=True,
-            model_type='ast',
-            pretrained_path=None
-        ),
-        augmentation=AugmentationConfig(
-            mixup_alpha=config_dict.get('mixup', 0.25),
-            spec_transform='Log'
-        ),
-        loss=LossConfig(),
-        domain_adaptation=DomainAdaptationConfig(),
-        evaluation=EvaluationConfig(
-            test_folder=config_dict.get('test1'),
-            test_folder2=config_dict.get('test2')
-        )
-    )
-    
-    # Set GPU environment before training
-    env = config_dict.get('env', os.environ.copy())
-    if 'CUDA_VISIBLE_DEVICES' in env:
-        os.environ['CUDA_VISIBLE_DEVICES'] = env['CUDA_VISIBLE_DEVICES']
-        print(f"GPU Environment: CUDA_VISIBLE_DEVICES={env['CUDA_VISIBLE_DEVICES']}")
-    
-    # Run training directly
-    trainer = Trainer(cfg)
-    trainer.train()
-    
-    # After training, load results from training history and evaluation reports
-    result_dict = {
-        'name': name,
-        'experiment_type': 'ast_baseline',
-        'seed': seed,
-        'output_folder': str(output_dir),
-        'status': 'completed'
-    }
-    
-    # Load training history for train/val accuracies
-    if history_file.exists():
-        with open(history_file) as f:
-            history = json.load(f)
-            if 'val_acc' in history and history['val_acc']:
-                val_accs = [v for v in history['val_acc'] if v is not None]
-                if val_accs:
-                    best_epoch = val_accs.index(max(val_accs))
-                    result_dict['best_val_acc'] = max(val_accs) * 100  # Convert to percentage
-                    
-                    # Get corresponding train accuracy
-                    if 'train_acc' in history and history['train_acc']:
-                        train_accs = [v for v in history['train_acc'] if v is not None]
-                        if len(train_accs) > best_epoch:
-                            result_dict['best_train_acc'] = train_accs[best_epoch] * 100  # Convert to percentage
-    
-    # Load test set evaluations from JSON reports
-    # Determine test set names from actual folder paths
-    test1_name = Path(config_dict['test1']).parent.name if config_dict.get('test1') else 'test1'
-    test2_name = Path(config_dict['test2']).parent.name if config_dict.get('test2') else 'test2'
-    
-    result_dict['test1_name'] = test1_name
-    result_dict['test2_name'] = test2_name
-    
-    # Try to load test1 results
-    test1_report = output_dir / f'ast_test_{test1_name}_multilabel_report.json'
-    if test1_report.exists():
-        with open(test1_report) as f:
-            report = json.load(f)
-            if 'exact_match_accuracy' not in report:
-                raise KeyError(f"Missing 'exact_match_accuracy' in {test1_report.name}. Report keys: {list(report.keys())}")
-            result_dict['test1_acc'] = report['exact_match_accuracy'] * 100
-    
-    # Try to load test2 results
-    test2_report = output_dir / f'ast_test_{test2_name}_multilabel_report.json'
-    if test2_report.exists():
-        with open(test2_report) as f:
-            report = json.load(f)
-            if 'exact_match_accuracy' not in report:
-                raise KeyError(f"Missing 'exact_match_accuracy' in {test2_report.name}. Report keys: {list(report.keys())}")
-            result_dict['test2_acc'] = report['exact_match_accuracy'] * 100
-    
-    # Save complete result file
-    with open(result_file, 'w') as f:
-        json.dump(result_dict, f, indent=2)
-    
-    print(f"\n✓ AST experiment complete: {name}")
-    if 'test1_acc' in result_dict:
-        print(f"  Test1 ({test1_name}): {result_dict['test1_acc']:.1f}%")
-    if 'test2_acc' in result_dict:
-        print(f"  Test2 ({test2_name}): {result_dict['test2_acc']:.1f}%")
-    
-    # Copy result files to shared directory if specified
-    if config_dict.get('results_dir'):
-        copy_result_files(output_dir, config_dict['results_dir'], name)
-    
-    # Release lock if we acquired one
-    if lock:
-        lock.release()
-        print(f"  ✓ Released experiment lock")
-    
-    return result_dict
+    return run_experiment(config_dict)
 
 
 def run_experiment(config_dict):
@@ -693,7 +449,31 @@ def run_experiment(config_dict):
     output_dir.mkdir(parents=True)
     
     # Build command - use train.py with config
-    if config_dict['type'] == 'baseline':
+    if config_dict.get('is_ast'):
+        # AST model with pretrained weights (AudioSet or ImageNet)
+        cmd = [
+            'python3', 'train.py',
+            config_dict['train'],
+            str(output_dir),
+            '--model-type', 'ast',
+            '--test-folder', config_dict['test1'],
+            '--test-folder2', config_dict['test2'],
+            '--epochs', str(config_dict['epochs']),
+            '--batch-size', str(config_dict['batch_size']),
+            '--patience', '15',
+            '--spec-transform', 'Log',
+            '--mixup', str(config_dict.get('mixup', 0.25)),
+            '--seed', str(config_dict.get('seed', 42))
+        ]
+        # Add pretrained weights if specified
+        if config_dict.get('model'):
+            cmd.extend(['--pretrained', config_dict['model']])
+        # Add DANN if requested
+        if config_dict.get('use_dann'):
+            cmd.append('--use-dann')
+            cmd.extend(['--target-folder', config_dict['target']])
+            cmd.extend(['--lambda-domain', str(config_dict.get('lambda_domain', 0.3))])
+    elif config_dict['type'] == 'baseline':
         cmd = [
             'python3', 'train.py',
             config_dict['train'],
@@ -722,6 +502,7 @@ def run_experiment(config_dict):
         if config_dict.get('seed'):
             cmd.extend(['--seed', str(config_dict['seed'])])
     
+    
     elif config_dict['type'] == 'dann':
         cmd = [
             'python3', 'train.py',
@@ -732,7 +513,7 @@ def run_experiment(config_dict):
             '--test-folder', config_dict['test1'],
             '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
-            '--batch-size', str(config_dict['batch_size']),
+            '--batch-size', str(config_dict['batch-size']),
             '--patience', '15',
             '--spec-transform', config_dict['spec_transform'],
             '--mixup', str(config_dict.get('mixup', 0.25)),

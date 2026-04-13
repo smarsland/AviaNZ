@@ -229,8 +229,6 @@ class Trainer:
         self.multilabel = cfg.model.multilabel
         self.dropout = cfg.model.dropout
         self.use_multiscale = cfg.model.use_multiscale
-        self.use_sparse_patches = cfg.model.use_sparse_patches
-        self.num_sparse_patches = cfg.model.num_sparse_patches
         self.use_reconstruction = cfg.model.use_reconstruction
         self.recon_weight = cfg.model.recon_weight
         self.use_adapters = cfg.model.use_adapters
@@ -337,7 +335,6 @@ class Trainer:
             use_class_balancing=False, normalize=self.normalize,
             normalize_median_filter=self.normalize_median_filter,
             median_only=self.median_only,
-            use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
             use_temporal_roll=self.use_temporal_roll,
             remove_baseline=self.remove_baseline,
             mixup_mode=self.mixup_mode,
@@ -355,7 +352,6 @@ class Trainer:
                 use_class_balancing=False, normalize=self.normalize,
                 normalize_median_filter=self.normalize_median_filter,
                 median_only=self.median_only,
-                use_sparse_patches=self.use_sparse_patches, num_sparse_patches=self.num_sparse_patches,
                 use_temporal_roll=self.use_temporal_roll,
                 remove_baseline=self.remove_baseline,
                 mixup_mode='mixup',
@@ -402,21 +398,6 @@ class Trainer:
                 f"    - CUDA drivers not loaded\n"
                 f"  Solution: Check GPU availability with 'nvidia-smi' and adjust CUDA_VISIBLE_DEVICES"
             )
-        
-        # Try to allocate a small tensor to verify GPU actually works
-        try:
-            test_tensor = torch.zeros(1).to(self.device)
-            del test_tensor
-        except Exception as e:
-            cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
-            raise RuntimeError(
-                f"GPU allocation failed! Device reports as available but cannot allocate memory.\n"
-                f"  CUDA_VISIBLE_DEVICES = {cuda_visible}\n"
-                f"  Device = {self.device}\n"
-                f"  Error: {e}\n"
-                f"  This usually means the GPU is busy or crashed.\n"
-                f"  Solution: Check 'nvidia-smi' for GPU processes and memory usage"
-            ) from e
         
         input_size = (self.img_height, self.img_width)
         print(f"Model input size: {input_size}")
@@ -623,23 +604,13 @@ class Trainer:
                         target_iter = iter(self.target_train_loader)
                         target_batch = next(target_iter)
                     
-                    # Extract data from batches (handle sparse mode if needed)
-                    if self.use_sparse_patches:
-                        source_data = source_batch['patches'].to(self.device)
-                        source_target = source_batch['label'].to(self.device)
-                        source_positions = source_batch['positions'].to(self.device)
-                        source_mask = source_batch['mask'].to(self.device)
-                        
-                        target_data = target_batch['patches'].to(self.device)
-                        target_positions = target_batch['positions'].to(self.device)
-                        target_mask = target_batch['mask'].to(self.device)
-                    else:
-                        source_data, source_target = source_batch
-                        source_data = source_data.to(self.device, non_blocking=True)
-                        source_target = source_target.to(self.device, non_blocking=True)
-                        
-                        target_data, _ = target_batch
-                        target_data = target_data.to(self.device, non_blocking=True)
+                    # Extract data from batches
+                    source_data, source_target = source_batch
+                    source_data = source_data.to(self.device, non_blocking=True)
+                    source_target = source_target.to(self.device, non_blocking=True)
+                    
+                    target_data, _ = target_batch
+                    target_data = target_data.to(self.device, non_blocking=True)
                     
                     batch_size_s = source_data.size(0)
                     batch_size_t = target_data.size(0)
@@ -648,14 +619,9 @@ class Trainer:
                     
                     # Forward pass for source (for classification)
                     with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        if self.use_sparse_patches:
-                            source_output = model(source_data, sparse_mode=True, positions=source_positions, mask=source_mask)
-                            source_features = model.get_features(source_data, sparse_mode=True, positions=source_positions, mask=source_mask)
-                            target_features = model.get_features(target_data, sparse_mode=True, positions=target_positions, mask=target_mask)
-                        else:
-                            source_output = model(source_data)
-                            source_features = model.get_features(source_data)
-                            target_features = model.get_features(target_data)
+                        source_output = model(source_data)
+                        source_features = model.get_features(source_data)
+                        target_features = model.get_features(target_data)
                         
                         # Classification loss (only on source domain with labels)
                         if self.multilabel:
@@ -723,52 +689,20 @@ class Trainer:
                     # Standard training (no DANN)
                     batch_idx, batch = batch_idx
                     
-                    # Handle both sparse and standard data formats
-                    if self.use_sparse_patches:
-                        # Sparse mode: batch is a dict
-                        patches = batch['patches'].to(self.device)  # (B, K, 1, 16, 16)
-                        positions = batch['positions'].to(self.device)  # (B, K, 2)
-                        mask = batch['mask'].to(self.device)  # (B, K)
-                        target = batch['label'].to(self.device)  # (B, num_classes)
+                    # Standard data format
+                    data, target = batch
+                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                    
+                    optimizer.zero_grad()
+                    
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
+                        if self.use_cleaner:
+                            data = self.cleaner(data)
                         
-                        # Apply mixup at embedding level if enabled
-                        if self.mixup_alpha > 0:
-                            # Generate mixup lambda
-                            lam = np.random.beta(self.mixup_alpha, self.mixup_alpha)
-                            batch_size = patches.size(0)
-                            index = torch.randperm(batch_size).to(self.device)
-                            
-                            # Mix patches, positions, masks, and targets
-                            mixed_patches = lam * patches + (1 - lam) * patches[index]
-                            mixed_target = lam * target + (1 - lam) * target[index]
-                            
-                            # For positions and masks, use the primary sample's (no mixing makes sense here)
-                            patches = mixed_patches
-                            target = mixed_target
-                        
-                        optimizer.zero_grad()
-                        
-                        # Forward with sparse patches
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_reconstruction:
-                                output, recon = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                            else:
-                                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                    else:
-                        # Standard mode: batch is (data, target) tuple
-                        data, target = batch
-                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                        
-                        optimizer.zero_grad()
-                        
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_cleaner:
-                                data = self.cleaner(data)
-                            
-                            if self.use_reconstruction:
-                                output, recon = model(data)
-                            else:
-                                output = model(data)
+                        if self.use_reconstruction:
+                            output, recon = model(data)
+                        else:
+                            output = model(data)
                     
                     with torch.amp.autocast('cuda', enabled=self.use_amp):
                         if self.multilabel:
@@ -872,25 +806,13 @@ class Trainer:
             all_val_targets = []
             with torch.no_grad():
                 for batch in self.val_loader:
-                    # Handle both sparse and standard data formats
-                    if self.use_sparse_patches:
-                        patches = batch['patches'].to(self.device)
-                        positions = batch['positions'].to(self.device)
-                        mask = batch['mask'].to(self.device)
-                        target = batch['label'].to(self.device)
-                        
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_reconstruction:
-                                output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                            else:
-                                output = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                    else:
-                        data, target = batch
-                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                        
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_cleaner:
-                                data = self.cleaner(data)
+                    # Standard data format
+                    data, target = batch
+                    data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                    
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
+                        if self.use_cleaner:
+                            data = self.cleaner(data)
                             
                             if self.use_reconstruction:
                                 output, _ = model(data)
@@ -1027,26 +949,14 @@ class Trainer:
                 
                 with torch.no_grad():
                     for batch in self.val_loader:
-                        if self.use_sparse_patches:
-                            patches = batch['patches'].to(self.device)
-                            positions = batch['positions'].to(self.device)
-                            mask = batch['mask'].to(self.device)
-                            target = batch['label'].to(self.device)
-                            
-                            with torch.amp.autocast('cuda', enabled=self.use_amp):
-                                if self.use_reconstruction:
-                                    output, _ = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                                else:
-                                    output = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                        else:
-                            data, target = batch
-                            data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                            
-                            with torch.amp.autocast('cuda', enabled=self.use_amp):
-                                if self.use_reconstruction:
-                                    output, _ = model(data)
-                                else:
-                                    output = model(data)
+                        data, target = batch
+                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
+                        
+                        with torch.amp.autocast('cuda', enabled=self.use_amp):
+                            if self.use_reconstruction:
+                                output, _ = model(data)
+                            else:
+                                output = model(data)
                         
                         if self.multilabel:
                             val_loss += criterion(output, target).item()
@@ -1102,8 +1012,6 @@ class Trainer:
                 normalize=self.normalize,
                 normalize_median_filter=self.normalize_median_filter,
                 median_only=self.median_only,
-                use_sparse_patches=self.use_sparse_patches,
-                num_sparse_patches=self.num_sparse_patches,
                 use_temporal_roll=False,
                 remove_baseline=self.remove_baseline,
                 noise_mode='full',
@@ -1143,8 +1051,6 @@ class Trainer:
                 normalize=self.normalize,
                 normalize_median_filter=self.normalize_median_filter,
                 median_only=self.median_only,
-                use_sparse_patches=self.use_sparse_patches,
-                num_sparse_patches=self.num_sparse_patches,
                 use_temporal_roll=False,
                 remove_baseline=self.remove_baseline,
                 noise_mode='full',
@@ -1253,8 +1159,6 @@ class Trainer:
         model_config['multilabel'] = self.multilabel
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
-        model_config['use_sparse_patches'] = self.use_sparse_patches
-        model_config['num_sparse_patches'] = self.num_sparse_patches
         model_config['use_cleaner'] = self.use_cleaner
         
         # Save ALL augmentation/normalization parameters for inference consistency
@@ -1308,19 +1212,11 @@ class Trainer:
         
         with torch.no_grad():
             for batch in test_loader:
-                if self.use_sparse_patches:
-                    patches = batch['patches'].to(self.device)
-                    positions = batch['positions'].to(self.device)
-                    mask = batch['mask'].to(self.device)
-                    filenames = batch['filename']
-                    
-                    output = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                else:
-                    data, target = batch
-                    data = data.to(self.device)
-                    filenames = [test_data['train_filenames'][i] for i in range(len(data))]
-                    
-                    output = model(data)
+                data, target = batch
+                data = data.to(self.device)
+                filenames = [test_data['train_filenames'][i] for i in range(len(data))]
+                
+                output = model(data)
                 
                 if self.multilabel:
                     preds = (torch.sigmoid(output) > 0.5).cpu().numpy()

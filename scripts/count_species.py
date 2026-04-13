@@ -116,6 +116,7 @@ def count_species_from_labels(labels_file, name_mapping=None):
             if 'class_names' in file_info and file_info['class_names']:
                 species_list = file_info['class_names']
             elif 'primary_class' in file_info:
+                # Legacy format compatibility
                 species_list = [file_info['primary_class']]
             
             is_single_label = (len(species_list) == 1)

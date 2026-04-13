@@ -157,13 +157,15 @@ def split_doc_by_distribution(files, target_distribution, random_state=42):
     """
     random.seed(random_state)
     
-    # Group DOC files by their primary class
+    # Group DOC files by their first class (for splitting purposes only)
+    # Note: This is a simplified approach for multi-label data
     files_by_class = defaultdict(list)
     for entry in files:
         class_names = entry.get('class_names', [])
         if class_names:
-            primary_class = class_names[0]
-            files_by_class[primary_class].append(entry)
+            # Use first class for grouping/splitting only
+            first_class = class_names[0]
+            files_by_class[first_class].append(entry)
     
     train_files = []
     test_files = []

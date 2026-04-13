@@ -32,8 +32,6 @@ class ModelConfig:
     time_bins: Optional[int] = None
     dropout: float = config.DEFAULT_DROPOUT
     use_multiscale: bool = False
-    use_sparse_patches: bool = False
-    num_sparse_patches: int = 20
     use_reconstruction: bool = False
     recon_weight: float = 0.1
     use_adapters: bool = False
@@ -124,8 +122,6 @@ class TrainerConfig:
                 time_bins=getattr(args, 'time_bins', None),
                 dropout=getattr(args, 'dropout', config.DEFAULT_DROPOUT),
                 use_multiscale=getattr(args, 'multiscale', False),
-                use_sparse_patches=getattr(args, 'sparse_patches', False),
-                num_sparse_patches=getattr(args, 'num_sparse_patches', 20),
                 use_reconstruction=getattr(args, 'reconstruct', False),
                 recon_weight=getattr(args, 'recon_weight', 0.1),
                 use_adapters=getattr(args, 'adapters', False),

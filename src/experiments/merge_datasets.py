@@ -136,28 +136,18 @@ class DatasetMerger:
         
         merged_files = []
         
-        # Detect if multilabel or single-label
-        is_multilabel = 'primary_class' not in self.labels1['files'][0]
-        
         # Add files from dataset 1
         for entry in self.labels1['files']:
-            if is_multilabel:
-                # Multilabel: just copy entry, no primary_class validation
-                new_entry = {
-                    'filename': entry['filename'],
-                    'class_names': entry['class_names']
-                }
-            else:
-                # Single-label: validate primary_class
-                if entry['primary_class'] not in merged_categories:
-                    print(f"  WARNING: Skipping {entry['filename']} - primary_class '{entry['primary_class']}' not in merged categories")
-                    continue
-                
-                new_entry = {
-                    'filename': entry['filename'],
-                    'primary_class': entry['primary_class'],
-                    'class_names': entry['class_names']
-                }
+            # Validate that at least one class is in merged categories
+            valid_classes = [c for c in entry['class_names'] if c in merged_categories]
+            if not valid_classes:
+                print(f"  WARNING: Skipping {entry['filename']} - no classes in merged categories")
+                continue
+            
+            new_entry = {
+                'filename': entry['filename'],
+                'class_names': entry['class_names']
+            }
             
             # Preserve optional fields
             if 'source_file' in entry:
@@ -172,11 +162,11 @@ class DatasetMerger:
         existing_names = {entry['filename'] for entry in merged_files}
         
         for entry in self.labels2['files']:
-            if not is_multilabel:
-                # Single-label: validate primary_class
-                if entry['primary_class'] not in merged_categories:
-                    print(f"  WARNING: Skipping {entry['filename']} - primary_class '{entry['primary_class']}' not in merged categories")
-                    continue
+            # Validate that at least one class is in merged categories
+            valid_classes = [c for c in entry['class_names'] if c in merged_categories]
+            if not valid_classes:
+                print(f"  WARNING: Skipping {entry['filename']} - no classes in merged categories")
+                continue
             
             # Handle duplicates
             original_name = entry['filename']
@@ -196,17 +186,10 @@ class DatasetMerger:
             files2_map[original_name] = new_name
             existing_names.add(new_name)
             
-            if is_multilabel:
-                new_entry = {
-                    'filename': new_name,
-                    'class_names': entry['class_names']
-                }
-            else:
-                new_entry = {
-                    'filename': new_name,
-                    'primary_class': entry['primary_class'],
-                    'class_names': entry['class_names']
-                }
+            new_entry = {
+                'filename': new_name,
+                'class_names': entry['class_names']
+            }
             
             # Preserve optional fields
             if 'source_file' in entry:

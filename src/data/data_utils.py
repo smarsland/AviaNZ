@@ -125,7 +125,6 @@ class DataLoader:
         
         print(f"Loaded {mode_str} data: {len(filenames)} files, {labels.shape[1]} classes")
         
-        # Random split (no stratification since we don't have primary species)
         split_data = self.split_data(
             filenames, labels, noise_filenames, validation_share
         )
@@ -236,7 +235,7 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1, 
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
-                 normalize_median_filter=True, median_only=False, use_sparse_patches=False, num_sparse_patches=20, 
+                 normalize_median_filter=True, median_only=False, 
                  use_temporal_roll=True, remove_baseline=True, noise_mode='full', background_prob=0.0):
         """
         Initialize SpectrogramDataset.
@@ -254,8 +253,6 @@ class SpectrogramDataset(Dataset):
             training: Whether this is training data (affects augmentation)
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
             normalize: Whether to apply background normalization
-            use_sparse_patches: If True, only extract patches with signal (sparse attention)
-            num_sparse_patches: Number of patches to extract in sparse mode (K)
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             remove_baseline: If True, subtract 10th percentile to remove DC offset/noise floor differences
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
@@ -279,8 +276,6 @@ class SpectrogramDataset(Dataset):
         self.normalize = normalize
         self.normalize_median_filter = normalize_median_filter
         self.median_only = median_only
-        self.use_sparse_patches = use_sparse_patches
-        self.num_sparse_patches = num_sparse_patches
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.remove_baseline = remove_baseline
         self.noise_mode = noise_mode
@@ -323,12 +318,8 @@ class SpectrogramDataset(Dataset):
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
         print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
-        if use_sparse_patches:
-            print(f"⚡ Sparse patch mode: extracting top {num_sparse_patches} patches by signal density")
-            print(f"   Standard mode would use {total_patches} patches, sparse uses {num_sparse_patches} ({100*num_sparse_patches/total_patches:.1f}%)")
-        else:
-            print(f"Final image size: {img_height}x{final_width}")
-            print(f"AST patches (16x16): {height_patches}x{width_patches} = {total_patches} total patches")
+        print(f"Final image size: {img_height}x{final_width}")
+        print(f"AST patches (16x16): {height_patches}x{width_patches} = {total_patches} total patches")
     
     def __len__(self):
         return len(self.filenames)
@@ -362,51 +353,6 @@ class SpectrogramDataset(Dataset):
             data = get_background_spectrogram(data)
             replace_with_background = True
         
-        # Sparse patch mode: extract signal-rich patches only
-        if self.use_sparse_patches:
-            # Keep original linear data for signal extraction
-            data_linear = data.copy()
-            
-            # Extract signal regions using the same method as shape_extract_sequences.py
-            spec_normalized, labeled_regions = extract_signal_regions(data_linear)
-            
-            # Resize to target dimensions
-            from scipy.ndimage import zoom
-            if spec_normalized.shape != (self.img_height, self.img_width):
-                h_ratio = self.img_height / spec_normalized.shape[0]
-                w_ratio = self.img_width / spec_normalized.shape[1]
-                spec_normalized = zoom(spec_normalized, (h_ratio, w_ratio), order=1)
-                labeled_regions = zoom(labeled_regions, (h_ratio, w_ratio), order=0)  # Nearest neighbor for labels
-            
-            # Extract sparse patches (top-K by signal density)
-            patches, positions, mask = extract_sparse_patches(
-                spec_normalized, labeled_regions, 
-                num_patches=self.num_sparse_patches, 
-                patch_size=16
-            )
-            
-            # patches: (K, 16, 16), positions: (K, 2), mask: (K,)
-            # Convert to tensors - keep patches as (K, 16, 16) for now
-            # Channel dimension will be added during batching
-            patches_tensor = torch.FloatTensor(patches)  # (K, 16, 16)
-            positions_tensor = torch.LongTensor(positions)  # (K, 2)
-            mask_tensor = torch.BoolTensor(mask)  # (K,)
-            
-            # Get label
-            y = self.labels[idx]
-            if replace_with_background:
-                y = torch.zeros_like(y)
-            
-            # Return patches, positions, mask, and label
-            # Custom collate function will handle batching
-            return {
-                'patches': patches_tensor,  # (K, 16, 16)
-                'positions': positions_tensor,  # (K, 2)
-                'mask': mask_tensor,  # (K,)
-                'label': y
-            }
-        
-        # Standard mode: process full spectrogram
         # Process the spectrogram
         x = self.apply_padding_and_add_channels(data)
         assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
@@ -803,7 +749,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None, 
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False, normalize_median_filter=True,
-                       median_only=False, use_sparse_patches=False, num_sparse_patches=20, use_temporal_roll=True,
+                       median_only=False, use_temporal_roll=True,
                        remove_baseline=False, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
@@ -824,8 +770,6 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         normalize: If True, apply background normalization to spectrograms
         normalize_median_filter: If True (default), use median filter during normalization
         median_only: If True, apply only median filter without background subtraction
-        use_sparse_patches: If True, only extract patches with signal (sparse attention)
-        num_sparse_patches: Number of patches to extract in sparse mode (K)
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
@@ -853,8 +797,6 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         normalize=normalize,
         normalize_median_filter=normalize_median_filter,
         median_only=median_only,
-        use_sparse_patches=use_sparse_patches,
-        num_sparse_patches=num_sparse_patches,
         use_temporal_roll=use_temporal_roll,
         remove_baseline=remove_baseline,
         noise_mode=noise_mode,
@@ -874,8 +816,6 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             normalize=normalize,
             normalize_median_filter=normalize_median_filter,
             median_only=median_only,
-            use_sparse_patches=use_sparse_patches,
-            num_sparse_patches=num_sparse_patches,
             use_temporal_roll=False,  # Never roll validation data
             remove_baseline=remove_baseline,
             noise_mode='full',  # Not used (no noise in validation)
@@ -894,7 +834,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         
         # For single-label: get class indices
         if train_labels_array.ndim == 2 and not np.all((train_labels_array == 0) | (train_labels_array == 1)):
-            # Multi-hot or soft labels - use primary class
+            # Multi-hot or soft labels - use argmax for balancing
             class_indices = np.argmax(train_labels_array, axis=1)
         else:
             class_indices = np.argmax(train_labels_array, axis=1)
@@ -952,13 +892,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
     
     # Create data loaders
     # Determine collate function based on mode
-    if use_sparse_patches:
-        # Sparse patches with optional mixup at embedding level
-        if mixup_alpha > 0:
-            print(f"Sparse mode: mixup will be applied at embedding level (alpha={mixup_alpha})")
-        train_collate_fn = sparse_collate_fn
-        val_collate_fn = sparse_collate_fn
-    elif mixup_alpha > 0:
+    if mixup_alpha > 0:
         # Standard mode with mixup/cutmix
         if mixup_mode == 'mixup':
             print(f"Mixup enabled with alpha={mixup_alpha}")
@@ -1226,92 +1160,4 @@ def extract_signal_regions(spec_linear, log_offset=1e-7, eps=1e-6, thresh_percen
     labeled_regions = np.where(keep_component[labels_array], labels_array, 0)
     
     return spec_normalized, labeled_regions
-
-
-def extract_sparse_patches(spec, labeled_regions, num_patches=20, patch_size=16):
-    """
-    Extract top-K patches by signal density for sparse attention.
-    
-    Args:
-        spec: Spectrogram (H, W) - can be log-transformed or normalized
-        labeled_regions: Binary or labeled mask indicating signal regions (H, W)
-        num_patches: Number of patches to extract (K)
-        patch_size: Size of each patch (default 16 for AST)
-    
-    Returns:
-        patches: Selected patches (K, patch_size, patch_size)
-        positions: Grid positions (row, col) for each patch (K, 2)
-        mask: Boolean mask indicating which patches are real vs padding (K,)
-    """
-    H, W = spec.shape
-    
-    # Create binary signal mask
-    signal_mask = (labeled_regions > 0).astype(np.float32)
-    
-    # Calculate patch grid dimensions
-    num_rows = H // patch_size
-    num_cols = W // patch_size
-    
-    # Calculate signal density for each patch
-    patch_scores = []
-    patch_positions = []
-    
-    for i in range(num_rows):
-        for j in range(num_cols):
-            y_start = i * patch_size
-            x_start = j * patch_size
-            y_end = y_start + patch_size
-            x_end = x_start + patch_size
-            
-            # Count signal pixels in this patch
-            signal_count = signal_mask[y_start:y_end, x_start:x_end].sum()
-            patch_scores.append(signal_count)
-            patch_positions.append((i, j))
-    
-    patch_scores = np.array(patch_scores)
-    patch_positions = np.array(patch_positions)
-    
-    # Select top-K patches
-    if len(patch_scores) <= num_patches:
-        # If we have fewer patches than requested, take all
-        top_indices = np.arange(len(patch_scores))
-        actual_num_patches = len(patch_scores)
-    else:
-        # Select top K by signal density
-        top_indices = np.argsort(patch_scores)[::-1][:num_patches]
-        actual_num_patches = num_patches
-    
-    # Extract patches and positions
-    selected_patches = []
-    selected_positions = []
-    
-    for idx in top_indices:
-        i, j = patch_positions[idx]
-        y_start = i * patch_size
-        x_start = j * patch_size
-        y_end = y_start + patch_size
-        x_end = x_start + patch_size
-        
-        patch = spec[y_start:y_end, x_start:x_end]
-        selected_patches.append(patch)
-        selected_positions.append([i, j])
-    
-    # Pad if necessary
-    mask = np.ones(actual_num_patches, dtype=bool)
-    if actual_num_patches < num_patches:
-        # Pad with zeros
-        padding_needed = num_patches - actual_num_patches
-        zero_patch = np.zeros((patch_size, patch_size))
-        for _ in range(padding_needed):
-            selected_patches.append(zero_patch)
-            selected_positions.append([0, 0])  # Dummy position
-        
-        # Update mask
-        mask = np.concatenate([mask, np.zeros(padding_needed, dtype=bool)])
-    
-    patches = np.stack(selected_patches, axis=0)  # (K, patch_size, patch_size)
-    positions = np.array(selected_positions)  # (K, 2)
-    
-    return patches, positions, mask
-
 

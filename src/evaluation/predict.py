@@ -76,9 +76,6 @@ class ModelPredictor:
         if inference_time_bins != training_time_bins:
             print(f"⚡ Resizing model input: {training_time_bins} → {inference_time_bins} time bins")
         
-        self.use_sparse_patches = model_config.get('use_sparse_patches', False)
-        self.num_sparse_patches = model_config.get('num_sparse_patches', 20)
-        
         if model_config.get('normalize', False) and not self.normalize:
             print(f"⚠️  Model was trained with normalization but --normalize flag not set")
             print(f"   Auto-enabling normalization for consistency")
@@ -278,8 +275,6 @@ class ModelPredictor:
             normalize=self.normalize,
             normalize_median_filter=normalize_median_filter,
             median_only=median_only,
-            use_sparse_patches=self.use_sparse_patches,
-            num_sparse_patches=self.num_sparse_patches,
             use_temporal_roll=False,
             remove_baseline=self.remove_baseline,
             noise_mode='full',

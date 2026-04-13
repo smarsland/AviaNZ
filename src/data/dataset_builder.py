@@ -483,12 +483,10 @@ class AviaNZDataProcessor(BaseDataProcessor):
                     if ignore_multilabel and len(normalized_labels) > 1:
                         continue
                     
-                    primary_species = normalized_labels[0]
-                    
-                    # Check max_samples AFTER collecting valid labels (check primary species)
+                    # Check max_samples AFTER collecting valid labels (check all species)
                     if max_samples:
-                        species_count = species_file_counts.get(primary_species, 0)
-                        if species_count >= max_samples:
+                        # Skip if ANY species in this sample has reached the limit
+                        if any(species_file_counts.get(sp, 0) >= max_samples for sp in normalized_labels):
                             continue
                 
                     if self.output_format == 'wav':
@@ -505,7 +503,6 @@ class AviaNZDataProcessor(BaseDataProcessor):
                         if success:
                             labels.append({
                                 'filename': f"{file_basename}.wav",
-                                'primary_class': primary_species,
                                 'class_names': normalized_labels,
                                 'source_file': wav_file,
                                 'start_time': seg.start_time,
@@ -519,9 +516,10 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             for species in normalized_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
                             
-                            # Track count for the primary species (for max_samples limit)
+                            # Track count for all species (for max_samples limit)
                             if max_samples:
-                                species_file_counts[primary_species] = species_file_counts.get(primary_species, 0) + 1
+                                for species in normalized_labels:
+                                    species_file_counts[species] = species_file_counts.get(species, 0) + 1
                     else:
                         sg_raw = self.spec_processor.process_audio_segment(
                             wav_file, 
@@ -540,7 +538,6 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             
                             label_entry = {
                                 'filename': f"{file_basename}.npy",
-                                'primary_class': primary_species,
                                 'class_names': normalized_labels,
                                 'source_file': wav_file,
                                 'start_time': seg.start_time,
@@ -558,15 +555,19 @@ class AviaNZDataProcessor(BaseDataProcessor):
                             for species in normalized_labels:
                                 species_counts[species] = species_counts.get(species, 0) + 1
                             
-                            # Track count for the primary species (for max_samples limit)
+                            # Track count for all species (for max_samples limit)
                             if max_samples:
-                                species_file_counts[primary_species] = species_file_counts.get(primary_species, 0) + 1
+                                for species in normalized_labels:
+                                    species_file_counts[species] = species_file_counts.get(species, 0) + 1
                             
-                            if primary_species not in species_example_saved:
-                                safe_name = primary_species.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_').replace('\\', '_').replace(':', '_')
-                                example_name = f"example_{safe_name}"
-                                self.spec_processor.save_example_image(sg_raw, output_folder, example_name)
-                                species_example_saved.add(primary_species)
+                            # Save example images for any new species (use first label for example)
+                            for species in normalized_labels:
+                                if species not in species_example_saved:
+                                    safe_name = species.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_').replace('\\', '_').replace(':', '_')
+                                    example_name = f"example_{safe_name}"
+                                    self.spec_processor.save_example_image(sg_raw, output_folder, example_name)
+                                    species_example_saved.add(species)
+                                    break  # Only save one example per file
                 
                 if segment_count % 50 == 0 or segment_count in [1, 10]:
                     output_type = "WAV files" if self.output_format == 'wav' else "spectrograms"
@@ -611,18 +612,21 @@ class DOCDataProcessor(BaseDataProcessor):
             reader = csv.DictReader(f)
             for row in reader:
                 filename = row['filename']
-                primary_label = row['primary_label']
                 
-                secondary_labels = []
-                if row['secondary_labels'] and row['secondary_labels'] != '[]':
+                # BirdCLEF source CSV format has separate columns, combine them
+                all_labels = []
+                if 'primary_label' in row and row['primary_label']:
+                    all_labels.append(row['primary_label'])
+                
+                if 'secondary_labels' in row and row['secondary_labels'] and row['secondary_labels'] != '[]':
                     secondary_labels = ast.literal_eval(row['secondary_labels'])
-                    if not isinstance(secondary_labels, list):
-                        secondary_labels = [secondary_labels]
+                    if isinstance(secondary_labels, list):
+                        all_labels.extend(secondary_labels)
+                    else:
+                        all_labels.append(secondary_labels)
                 
                 metadata[filename] = {
-                    'primary_label': primary_label,
-                    'secondary_labels': secondary_labels,
-                    'all_labels': [primary_label] + secondary_labels
+                    'all_labels': all_labels
                 }
         print(f"Loaded metadata for {len(metadata)} files from {metadata_path}")
         
@@ -833,7 +837,6 @@ class DOCDataProcessor(BaseDataProcessor):
                         file_labels.append({
                             'filename': f"{file_basename}.wav",
                             'class_names': file_metadata['all_labels'] if file_metadata else [species],
-                            'primary_class': species,
                             'source_file': sound_file
                         })
                         
@@ -853,7 +856,6 @@ class DOCDataProcessor(BaseDataProcessor):
                         label_entry = {
                             'filename': f"{file_basename}.npy",
                             'class_names': file_metadata['all_labels'] if file_metadata else [species],
-                            'primary_class': species,
                             'source_file': sound_file
                         }
                         if audio_filename:
