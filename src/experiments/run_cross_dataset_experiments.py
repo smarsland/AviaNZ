@@ -63,18 +63,37 @@ def copy_result_files(output_dir, results_dir, experiment_name):
 
 
 def get_available_gpus():
-    """Detect available GPUs."""
+    """Detect available AND usable GPUs (not just present)."""
     try:
         import torch
-        if torch.cuda.is_available():
-            gpu_list = list(range(torch.cuda.device_count()))
-            print(f"DEBUG: Detected {len(gpu_list)} GPUs: {gpu_list}")
-            return gpu_list
-        else:
-            print("DEBUG: torch.cuda.is_available() returned False")
+        if not torch.cuda.is_available():
+            print("No CUDA support detected")
             return []
+        
+        total_gpus = torch.cuda.device_count()
+        print(f"Detected {total_gpus} GPUs, testing availability...")
+        
+        available_gpus = []
+        for gpu_id in range(total_gpus):
+            try:
+                # Try to allocate a small tensor to verify GPU is actually usable
+                with torch.cuda.device(gpu_id):
+                    test_tensor = torch.zeros(1).cuda()
+                    del test_tensor
+                    torch.cuda.empty_cache()
+                available_gpus.append(gpu_id)
+                print(f"  ✓ GPU {gpu_id}: Available")
+            except Exception as e:
+                print(f"  ✗ GPU {gpu_id}: Busy or unavailable ({type(e).__name__})")
+        
+        if available_gpus:
+            print(f"Using {len(available_gpus)} GPU(s): {available_gpus}")
+        else:
+            print("ERROR: No usable GPUs found (all busy or crashed)")
+        
+        return available_gpus
     except Exception as e:
-        print(f"DEBUG: GPU detection failed with error: {e}")
+        print(f"GPU detection failed: {e}")
         return []
 
 
@@ -813,30 +832,32 @@ def main():
     output_folder.mkdir(parents=True, exist_ok=True)
     
     # Setup GPU pool for parallel execution
-    print(f"\nDEBUG: args.parallel = {args.parallel}")
-    print(f"DEBUG: args.gpu_ids = {args.gpu_ids}")
+    print(f"\n{'='*70}")
+    print(f" GPU SETUP")
+    print(f"{'='*70}")
     
     if args.gpu_ids is not None:
         gpu_pool = args.gpu_ids
-        print(f"DEBUG: Using user-specified GPU IDs: {gpu_pool}")
+        print(f"Using user-specified GPU IDs: {gpu_pool}")
     else:
         gpu_pool = get_available_gpus()
-        print(f"DEBUG: Auto-detected GPU pool: {gpu_pool}")
     
     # CRITICAL: Require at least one GPU for training
     if not gpu_pool:
         print("\n" + "="*70)
-        print(" ERROR: NO GPUs DETECTED")
+        print(" ERROR: NO USABLE GPUs DETECTED")
         print("="*70)
         print(" This pipeline requires GPU for training.")
-        print(" Detected: torch.cuda.is_available() = False")
         print()
         print(" Possible causes:")
+        print("   - All GPUs are busy (check 'nvidia-smi')")
         print("   - No NVIDIA GPU in this machine")
         print("   - CUDA drivers not installed")
         print("   - PyTorch not compiled with CUDA support")
         print()
-        print(" Solution: Fix GPU/CUDA setup before running experiments")
+        print(" Solution:")
+        print("   - Free up a GPU, or")
+        print("   - Specify a free GPU with --gpu-ids N")
         print("="*70)
         sys.exit(1)
     
