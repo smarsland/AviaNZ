@@ -15,6 +15,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
 import signal
 import shutil
+import time
+import socket
+import threading
 
 from src.core import config
 
@@ -60,6 +63,119 @@ def copy_result_files(output_dir, results_dir, experiment_name):
     if copied_files:
         print(f"  ✓ Copied {len(copied_files)} result files to {exp_results_dir}")
         print(f"    Files: {', '.join(copied_files)}")
+
+
+# ============================================================================
+# DISTRIBUTED LOCKING WITH HEARTBEAT
+# ============================================================================
+
+class ExperimentLock:
+    """
+    Distributed lock with heartbeat for multi-machine coordination.
+    
+    Uses atomic directory creation + heartbeat file to distinguish
+    "running" from "crashed and safe to reclaim".
+    """
+    
+    HEARTBEAT_INTERVAL = 30  # Update every 30 seconds
+    STALE_THRESHOLD = 90     # Consider stale after 90 seconds of no heartbeat
+    
+    def __init__(self, lock_dir):
+        self.lock_dir = Path(lock_dir)
+        self.host_file = self.lock_dir / 'host.txt'
+        self.pid_file = self.lock_dir / 'pid.txt'
+        self.heartbeat_file = self.lock_dir / 'heartbeat.txt'
+        self.heartbeat_thread = None
+        self.stop_heartbeat = threading.Event()
+    
+    def acquire(self):
+        """
+        Try to acquire lock. Returns True if successful, False if locked by another process.
+        Automatically reclaims stale locks (heartbeat > 90s old).
+        """
+        try:
+            # Try atomic directory creation
+            self.lock_dir.mkdir(parents=False, exist_ok=False)
+            
+            # Success! Write lock metadata
+            self.host_file.write_text(socket.gethostname())
+            self.pid_file.write_text(str(os.getpid()))
+            self._update_heartbeat()
+            
+            # Start heartbeat thread
+            self._start_heartbeat()
+            return True
+            
+        except FileExistsError:
+            # Lock exists - check if stale
+            if self.heartbeat_file.exists():
+                try:
+                    heartbeat_age = time.time() - self.heartbeat_file.stat().st_mtime
+                    
+                    if heartbeat_age > self.STALE_THRESHOLD:
+                        # Stale lock - reclaim it
+                        host = self.host_file.read_text().strip() if self.host_file.exists() else "unknown"
+                        pid = self.pid_file.read_text().strip() if self.pid_file.exists() else "unknown"
+                        print(f"    Reclaiming stale lock (host={host}, pid={pid}, age={heartbeat_age:.0f}s)")
+                        
+                        shutil.rmtree(self.lock_dir, ignore_errors=True)
+                        
+                        # Retry acquisition
+                        self.lock_dir.mkdir(parents=False, exist_ok=False)
+                        self.host_file.write_text(socket.gethostname())
+                        self.pid_file.write_text(str(os.getpid()))
+                        self._update_heartbeat()
+                        self._start_heartbeat()
+                        return True
+                    else:
+                        # Fresh lock - another machine is actively running
+                        return False
+                        
+                except Exception as e:
+                    print(f"    Warning: Error checking heartbeat: {e}")
+                    return False
+            else:
+                # No heartbeat file - corrupted lock, reclaim it
+                print(f"    Reclaiming corrupted lock (no heartbeat)")
+                shutil.rmtree(self.lock_dir, ignore_errors=True)
+                
+                # Retry acquisition
+                self.lock_dir.mkdir(parents=False, exist_ok=False)
+                self.host_file.write_text(socket.gethostname())
+                self.pid_file.write_text(str(os.getpid()))
+                self._update_heartbeat()
+                self._start_heartbeat()
+                return True
+    
+    def release(self):
+        """Release the lock."""
+        self._stop_heartbeat()
+        if self.lock_dir.exists():
+            shutil.rmtree(self.lock_dir, ignore_errors=True)
+    
+    def _update_heartbeat(self):
+        """Write current timestamp to heartbeat file."""
+        self.heartbeat_file.write_text(str(time.time()))
+    
+    def _start_heartbeat(self):
+        """Start background thread that updates heartbeat."""
+        self.stop_heartbeat.clear()
+        self.heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+        self.heartbeat_thread.start()
+    
+    def _stop_heartbeat(self):
+        """Stop heartbeat thread."""
+        if self.heartbeat_thread:
+            self.stop_heartbeat.set()
+            self.heartbeat_thread.join(timeout=1)
+    
+    def _heartbeat_loop(self):
+        """Background loop that updates heartbeat every HEARTBEAT_INTERVAL seconds."""
+        while not self.stop_heartbeat.wait(self.HEARTBEAT_INTERVAL):
+            try:
+                self._update_heartbeat()
+            except Exception:
+                pass  # Ignore errors, lock will become stale if we can't write
 
 
 def get_available_gpus():
@@ -299,43 +415,22 @@ def run_ast_experiment(config_dict):
             with open(shared_result_file) as f:
                 return json.load(f)
         
-        # RACE CONDITION PROTECTION: Use fcntl file locking (NFS-safe)
-        lock_file = shared_result_dir / '.lock'
+        # LOCKING: Use heartbeat-based distributed lock
         shared_result_dir.mkdir(parents=True, exist_ok=True)
+        lock = ExperimentLock(shared_result_dir / '.lock')
         
-        # Try to acquire exclusive lock
-        try:
-            import fcntl
-            lock_fd = os.open(str(lock_file), os.O_CREAT | os.O_RDWR, 0o644)
-            
-            # Try non-blocking exclusive lock
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                # Got the lock! Write our PID
-                os.ftruncate(lock_fd, 0)
-                os.lseek(lock_fd, 0, os.SEEK_SET)
-                os.write(lock_fd, f"Claimed by PID {os.getpid()} at {datetime.now()}".encode())
-                os.fsync(lock_fd)
-                print(f"  ✓ Claimed experiment lock: {name}")
-                # Keep lock_fd open - it will be released when process exits or we explicitly close it
-            except BlockingIOError:
-                # Lock held by another process
-                os.close(lock_fd)
-                print(f"  ⚠ {name} - skipping (locked by another machine)")
-                return {
-                    'name': name,
-                    'experiment_type': 'ast_baseline',
-                    'seed': seed,
-                    'status': 'locked_by_other_machine'
-                }
-        except Exception as e:
-            print(f"  ✗ {name} - lock acquisition failed: {e}")
+        if not lock.acquire():
+            print(f"  ⚠ {name} - skipping (locked by another machine)")
             return {
                 'name': name,
                 'experiment_type': 'ast_baseline',
                 'seed': seed,
-                'status': 'lock_failed'
+                'status': 'locked_by_other_machine'
             }
+        
+        print(f"  ✓ Claimed lock: {name}")
+    else:
+        lock = None
     
     # If no shared directory or folder doesn't exist, check if training already complete locally
     result_file = output_dir / 'result.json'
@@ -403,6 +498,11 @@ def run_ast_experiment(config_dict):
         # Copy result files to shared directory if specified
         if config_dict.get('results_dir'):
             copy_result_files(output_dir, config_dict['results_dir'], name)
+        
+        # Release lock if we acquired one
+        if lock:
+            lock.release()
+            print(f"  ✓ Released experiment lock")
         
         return result_dict
     else:
@@ -514,13 +614,11 @@ def run_ast_experiment(config_dict):
     # Copy result files to shared directory if specified
     if config_dict.get('results_dir'):
         copy_result_files(output_dir, config_dict['results_dir'], name)
-        
-        # Remove lock file after successful completion
-        shared_result_dir = Path(config_dict['results_dir']) / name
-        lock_file = shared_result_dir / '.lock'
-        if lock_file.exists():
-            lock_file.unlink()
-            print(f"  ✓ Released experiment lock")
+    
+    # Release lock if we acquired one
+    if lock:
+        lock.release()
+        print(f"  ✓ Released experiment lock")
     
     return result_dict
 
@@ -550,43 +648,22 @@ def run_experiment(config_dict):
             with open(shared_result_file) as f:
                 return json.load(f)
         
-        # RACE CONDITION PROTECTION: Use fcntl file locking (NFS-safe)
-        lock_file = shared_result_dir / '.lock'
+        # LOCKING: Use heartbeat-based distributed lock
         shared_result_dir.mkdir(parents=True, exist_ok=True)
+        lock = ExperimentLock(shared_result_dir / '.lock')
         
-        # Try to acquire exclusive lock
-        try:
-            import fcntl
-            lock_fd = os.open(str(lock_file), os.O_CREAT | os.O_RDWR, 0o644)
-            
-            # Try non-blocking exclusive lock
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                # Got the lock! Write our PID
-                os.ftruncate(lock_fd, 0)
-                os.lseek(lock_fd, 0, os.SEEK_SET)
-                os.write(lock_fd, f"Claimed by PID {os.getpid()} at {datetime.now()}".encode())
-                os.fsync(lock_fd)
-                print(f"  ✓ Claimed experiment lock: {name}")
-                # Keep lock_fd open - will be released when process exits
-            except BlockingIOError:
-                # Lock held by another process
-                os.close(lock_fd)
-                print(f"  ⚠ {name} - skipping (locked by another machine)")
-                return {
-                    'name': name,
-                    'type': config_dict.get('type', 'baseline'),
-                    'seed': seed,
-                    'status': 'locked_by_other_machine'
-                }
-        except Exception as e:
-            print(f"  ✗ {name} - lock acquisition failed: {e}")
+        if not lock.acquire():
+            print(f"  ⚠ {name} - skipping (locked by another machine)")
             return {
                 'name': name,
                 'type': config_dict.get('type', 'baseline'),
                 'seed': seed,
-                'status': 'lock_failed'
+                'status': 'locked_by_other_machine'
             }
+        
+        print(f"  ✓ Claimed lock: {name}")
+    else:
+        lock = None
     
     # Check if experiment already completed successfully (result.json exists locally)
     result_file = output_dir / 'result.json'
@@ -594,7 +671,12 @@ def run_experiment(config_dict):
     if result_file.exists():
         print(f"✓ {name} - skipping (already completed successfully)")
         with open(result_file) as f:
-            return json.load(f)
+            result = json.load(f)
+        # Release lock if we acquired one
+        if lock:
+            lock.release()
+            print(f"  ✓ Released experiment lock")
+        return result
     
     # If output directory exists but no result.json, it's a failed/partial run - clean it up
     if output_dir.exists():
@@ -604,10 +686,6 @@ def run_experiment(config_dict):
     
     # Create fresh output directory
     output_dir.mkdir(parents=True)
-    
-    print(f"\n{'='*70}")
-    print(f"STARTING: {name}")
-    print(f"{'='*70}")
     
     # Build command - use train.py with config
     if config_dict['type'] == 'baseline':
@@ -827,13 +905,11 @@ def run_experiment(config_dict):
     # Copy result files to shared directory if specified
     if config_dict.get('results_dir'):
         copy_result_files(output_dir, config_dict['results_dir'], name)
-        
-        # Remove lock file after successful completion
-        shared_result_dir = Path(config_dict['results_dir']) / name
-        lock_file = shared_result_dir / '.lock'
-        if lock_file.exists():
-            lock_file.unlink()
-            print(f"  ✓ Released experiment lock")
+    
+    # Release lock if we acquired one
+    if lock:
+        lock.release()
+        print(f"  ✓ Released experiment lock")
     
     return result_data
 
