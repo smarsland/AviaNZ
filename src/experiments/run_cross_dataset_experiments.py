@@ -123,20 +123,24 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                 output_folder = exp_config.get('output_folder', 'unknown')
                 error_log = Path(output_folder) / name_with_seed / 'experiment_error.log'
                 
-                # FAIL LOUDLY - Print massive error banner
-                print("\n\n" + "🔥"*35)
-                print("🔥" + " "*68 + "🔥")
-                print("🔥" + " "*15 + "!!! EXPERIMENT CRASHED !!!" + " "*27 + "🔥")
-                print("🔥" + " "*68 + "🔥")
-                print("🔥"*35)
-                print(f"\n💀 FAILED: {name_with_seed}")
-                print(f"💀 Error: {type(e).__name__}: {e}")
-                print(f"📄 Error log: {error_log}")
-                print("\n" + "🔥"*35)
-                print("🔥  STOPPING ALL EXPERIMENTS - GPU busy or other fatal error  🔥")
-                print("🔥  Fix the error above, then rerun the script                🔥")
-                print("🔥  The script will automatically retry failed experiments    🔥")
-                print("🔥"*35 + "\n\n")
+                # FAIL LOUDLY - Print massive error banner WITH FLUSH
+                sys.stdout.flush()
+                sys.stderr.flush()
+                print("\n\n" + "🔥"*35, flush=True)
+                print("🔥" + " "*68 + "🔥", flush=True)
+                print("🔥" + " "*15 + "!!! EXPERIMENT CRASHED !!!" + " "*27 + "🔥", flush=True)
+                print("🔥" + " "*68 + "🔥", flush=True)
+                print("🔥"*35, flush=True)
+                print(f"\n💀 FAILED: {name_with_seed}", flush=True)
+                print(f"💀 Error: {type(e).__name__}: {e}", flush=True)
+                print(f"📄 Error log: {error_log}", flush=True)
+                print("\n" + "🔥"*35, flush=True)
+                print("🔥  STOPPING ALL EXPERIMENTS - GPU busy or other fatal error  🔥", flush=True)
+                print("🔥  Fix the error above, then rerun the script                🔥", flush=True)
+                print("🔥  The script will automatically retry failed experiments    🔥", flush=True)
+                print("🔥"*35 + "\n\n", flush=True)
+                sys.stdout.flush()
+                sys.stderr.flush()
                 
                 # Cancel remaining futures
                 for f in future_to_exp:
@@ -418,19 +422,6 @@ def run_ast_experiment(config_dict):
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
     
-    # CRITICAL: Clean up GPU resources before returning to worker pool
-    # This ensures CUDA context is fully released before next experiment starts on this GPU
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            import time
-            time.sleep(2)  # Give GPU time to fully release resources
-            print(f"  ✓ Released GPU resources")
-    except Exception as e:
-        print(f"  ⚠ Warning: GPU cleanup failed: {e}")
-    
     return result_dict
 
 
@@ -620,18 +611,22 @@ def run_experiment(config_dict):
     if returncode != 0:
         error_msg = f"Training failed for {name} with exit code {returncode}"
         
-        # FAIL LOUDLY - Print massive error banner
-        print("\n" + "🔥"*35)
-        print("🔥" + " "*68 + "🔥")
-        print("🔥" + " "*20 + "EXPERIMENT FAILED" + " "*31 + "🔥")
-        print("🔥" + " "*68 + "🔥")
-        print("🔥"*35)
-        print(f"\n💀 FAILED EXPERIMENT: {name}")
-        print(f"💀 Exit code: {returncode}")
-        print(f"📄 Full error log: {error_log}")
-        print("\n" + "🔥"*35)
-        print("🔥  Stopping ALL experiments - fix this error before continuing  🔥")
-        print("🔥"*35 + "\n")
+        # FAIL LOUDLY - Print massive error banner WITH FLUSH
+        sys.stdout.flush()
+        sys.stderr.flush()
+        print("\n" + "🔥"*35, flush=True)
+        print("🔥" + " "*68 + "🔥", flush=True)
+        print("🔥" + " "*20 + "EXPERIMENT FAILED" + " "*31 + "🔥", flush=True)
+        print("🔥" + " "*68 + "🔥", flush=True)
+        print("🔥"*35, flush=True)
+        print(f"\n💀 FAILED EXPERIMENT: {name}", flush=True)
+        print(f"💀 Exit code: {returncode}", flush=True)
+        print(f"📄 Full error log: {error_log}", flush=True)
+        print("\n" + "🔥"*35, flush=True)
+        print("🔥  Stopping ALL experiments - fix this error before continuing  🔥", flush=True)
+        print("🔥"*35 + "\n", flush=True)
+        sys.stdout.flush()
+        sys.stderr.flush()
         
         # Write failure marker
         with open(error_log, 'a') as log_f:
@@ -717,19 +712,6 @@ def run_experiment(config_dict):
         if lock_file.exists():
             lock_file.unlink()
             print(f"  ✓ Released experiment lock")
-    
-    # CRITICAL: Clean up GPU resources before returning to worker pool
-    # This ensures CUDA context is fully released before next experiment starts on this GPU
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            import time
-            time.sleep(2)  # Give GPU time to fully release resources
-            print(f"  ✓ Released GPU resources")
-    except Exception as e:
-        print(f"  ⚠ Warning: GPU cleanup failed: {e}")
     
     return result_data
 
@@ -845,6 +827,10 @@ def main():
     
     for seed in args.seeds:
         for norm_config in normalization_configs:
+            exp_name_avianz = f"avianz_baseline_{norm_config['name']}_seed{seed}"
+            exp_name_doc = f"doc_baseline_{norm_config['name']}_seed{seed}"
+            print(f"  Queuing: {exp_name_avianz}, {exp_name_doc}")
+            
             # Waitākere → DOC
             all_experiments.append({
                 **norm_config,
