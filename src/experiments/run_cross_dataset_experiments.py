@@ -79,7 +79,7 @@ def get_available_gpus():
 
 
 def run_experiments_parallel(experiments, n_workers, gpu_pool):
-    """Run experiments in parallel using a worker pool."""
+    """Run experiments in parallel using one worker per GPU."""
     if n_workers == 1:
         # Sequential execution
         results = []
@@ -94,41 +94,44 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
             sys.exit(1)
         return results
     
-    # Parallel execution
-    # CRITICAL: Use 'spawn' context to avoid CUDA reinitialization issues
-    # With 'fork' (default on Linux), worker processes inherit CUDA context and can't reinitialize
-    # With 'spawn', each task gets a fresh process with clean CUDA state
+    # Parallel execution - ONE WORKER PER GPU
+    # Group experiments by assigned GPU to ensure no GPU conflicts
     import multiprocessing as mp
-    ctx = mp.get_context('spawn')
-    results = []
-    executor = ProcessPoolExecutor(max_workers=n_workers, mp_context=ctx)
+    from collections import defaultdict
     
-    try:
-        # Submit all jobs with GPU assignment
-        future_to_exp = {}
-        for i, exp_config in enumerate(experiments):
-            # Round-robin GPU assignment
-            gpu_id = gpu_pool[i % len(gpu_pool)] if gpu_pool else None
-            future = executor.submit(run_experiment_with_gpu, exp_config, gpu_id)
-            future_to_exp[future] = exp_config
-        
-        # Collect results as they complete
-        for future in as_completed(future_to_exp):
-            exp_config = future_to_exp[future]
+    gpu_to_experiments = defaultdict(list)
+    for i, exp_config in enumerate(experiments):
+        gpu_id = gpu_pool[i % len(gpu_pool)] if gpu_pool else None
+        gpu_to_experiments[gpu_id].append(exp_config)
+    
+    print(f"Experiments per GPU:")
+    for gpu_id, exps in gpu_to_experiments.items():
+        print(f"  GPU {gpu_id}: {len(exps)} experiments")
+    
+    # Create one executor per GPU with max_workers=1 to serialize GPU usage
+    results = []
+    ctx = mp.get_context('spawn')
+    
+    # Use ThreadPoolExecutor to manage per-GPU workers
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def run_gpu_queue(gpu_id, exp_list):
+        """Run all experiments for a single GPU sequentially."""
+        gpu_results = []
+        for exp_config in exp_list:
             try:
-                result = future.result()
+                result = run_experiment_with_gpu(exp_config, gpu_id)
                 if result:
-                    results.append(result)
+                    gpu_results.append(result)
                     print(f"✓ Completed: {result.get('name', 'unknown')}")
             except Exception as e:
                 exp_name = exp_config.get('name', 'unknown')
                 seed = exp_config.get('seed', 42)
-                # Name has seed appended in run_experiment, match that here
                 name_with_seed = f"{exp_name}_seed{seed}"
                 output_folder = exp_config.get('output_folder', 'unknown')
                 error_log = Path(output_folder) / name_with_seed / 'experiment_error.log'
                 
-                # FAIL LOUDLY - Print massive error banner WITH FLUSH
+                # FAIL LOUDLY
                 sys.stdout.flush()
                 sys.stderr.flush()
                 print("\n\n" + "🔥"*35, flush=True)
@@ -146,49 +149,53 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                 print("🔥"*35 + "\n\n", flush=True)
                 sys.stdout.flush()
                 sys.stderr.flush()
-                
-                # Cancel remaining futures
-                for f in future_to_exp:
-                    f.cancel()
-                
-                # CRITICAL: Forcibly terminate ALL running worker processes and their children
-                print("🔥 Terminating all running experiments...", flush=True)
-                
-                # Shutdown executor (doesn't kill running processes, just prevents new tasks)
-                executor.shutdown(wait=False, cancel_futures=True)
-                
-                # Kill all child processes (worker processes and their train.py subprocesses)
-                try:
-                    import signal
-                    import subprocess as sp
-                    my_pid = os.getpid()
-                    
-                    # Get all descendant processes using pgrep
-                    result = sp.run(['pgrep', '-P', str(my_pid)], capture_output=True, text=True)
-                    child_pids = result.stdout.strip().split('\n') if result.stdout.strip() else []
-                    
-                    # Get grandchildren (train.py processes spawned by workers)
-                    all_pids = set(child_pids)
-                    for child_pid in child_pids:
-                        result = sp.run(['pgrep', '-P', child_pid], capture_output=True, text=True)
-                        if result.stdout.strip():
-                            all_pids.update(result.stdout.strip().split('\n'))
-                    
-                    # Kill all descendant processes
-                    for pid in all_pids:
-                        try:
-                            pid_int = int(pid)
-                            print(f"   Terminating PID {pid_int}", flush=True)
-                            os.kill(pid_int, signal.SIGTERM)
-                        except (ValueError, ProcessLookupError):
-                            pass
-                    
-                    print("🔥 All child processes terminated.", flush=True)
-                except Exception as kill_err:
-                    print(f"⚠  Warning: Error during cleanup: {kill_err}", flush=True)
-                
-                sys.exit(1)
+                raise  # Re-raise to stop this GPU's queue
+        return gpu_results
     
+    try:
+        # Run one thread per GPU, each processing its queue sequentially
+        with ThreadPoolExecutor(max_workers=len(gpu_pool)) as executor:
+            futures = {}
+            for gpu_id, exp_list in gpu_to_experiments.items():
+                future = executor.submit(run_gpu_queue, gpu_id, exp_list)
+                futures[future] = gpu_id
+            
+            # Wait for all GPU queues to complete
+            for future in futures:
+                try:
+                    gpu_results = future.result()
+                    results.extend(gpu_results)
+                except Exception as e:
+                    print(f"\n🔥 GPU {futures[future]} queue failed: {e}", flush=True)
+                    
+                    # Kill all running processes
+                    print("🔥 Terminating all running experiments...", flush=True)
+                    try:
+                        import subprocess as sp
+                        my_pid = os.getpid()
+                        
+                        result = sp.run(['pgrep', '-P', str(my_pid)], capture_output=True, text=True)
+                        child_pids = result.stdout.strip().split('\n') if result.stdout.strip() else []
+                        
+                        all_pids = set(child_pids)
+                        for child_pid in child_pids:
+                            result = sp.run(['pgrep', '-P', child_pid], capture_output=True, text=True)
+                            if result.stdout.strip():
+                                all_pids.update(result.stdout.strip().split('\n'))
+                        
+                        for pid in all_pids:
+                            try:
+                                pid_int = int(pid)
+                                print(f"   Terminating PID {pid_int}", flush=True)
+                                os.kill(pid_int, signal.SIGTERM)
+                            except (ValueError, ProcessLookupError):
+                                pass
+                        
+                        print("🔥 All child processes terminated.", flush=True)
+                    except Exception as kill_err:
+                        print(f"⚠  Warning: Error during cleanup: {kill_err}", flush=True)
+                    
+                    sys.exit(1)
     except KeyboardInterrupt:
         print("\n⚠️  Ctrl+C detected! Stopping all workers...")
         # Cancel all pending futures
