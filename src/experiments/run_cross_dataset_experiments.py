@@ -20,6 +20,11 @@ import socket
 import threading
 
 from src.core import config
+from src.core.trainer_config import (
+    TrainerConfig, TrainingConfig, ModelConfig, AugmentationConfig,
+    LossConfig, DomainAdaptationConfig, EvaluationConfig
+)
+from src.core.model_trainer import Trainer
 
 
 def copy_result_files(output_dir, results_dir, experiment_name):
@@ -353,7 +358,7 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
     except KeyboardInterrupt:
         print("\n⚠️  Ctrl+C detected! Stopping all workers...")
         # Cancel all pending futures
-        for future in future_to_exp:
+        for future in futures:
             future.cancel()
         # Force shutdown with wait=False to kill running workers immediately
         executor.shutdown(wait=False, cancel_futures=True)
