@@ -415,7 +415,21 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
 
 def run_experiment_with_gpu(config_dict, gpu_id=None):
     """Wrapper to run experiment with specific GPU assignment."""
-    # Verify GPU is actually available before starting
+    # Quick check if experiment is already complete (before GPU verification)
+    name = config_dict['name']
+    seed = config_dict.get('seed', 42)
+    name_with_seed = f"{name}_seed{seed}"
+    
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name_with_seed
+        shared_result_file = shared_result_dir / 'result.json'
+        
+        if shared_result_file.exists():
+            print(f"✓ {name_with_seed} - skipping (result.json exists in shared results)")
+            with open(shared_result_file) as f:
+                return json.load(f)
+    
+    # Not complete - verify GPU is available before starting
     if gpu_id is not None:
         max_retries = 3
         for attempt in range(max_retries):
@@ -443,7 +457,8 @@ def run_experiment_with_gpu(config_dict, gpu_id=None):
                                     print(f"❌ GPU {gpu_id} still busy after {max_retries} attempts ({usage_pct:.1f}% used)")
                                     raise RuntimeError(f"GPU {gpu_id} unavailable after {max_retries} retries")
                             else:
-                                print(f"✓ GPU {gpu_id} available ({mem_used}/{mem_total} MiB, {usage_pct:.1f}% used)")
+                                # Only print if we're actually running (not skipping)
+                                # Suppress the verbose "available" message for cleaner logs
                                 break
                 break
             except Exception as e:
@@ -486,8 +501,9 @@ def run_experiment(config_dict):
         shared_result_file = shared_result_dir / 'result.json'
         
         # ATOMIC CHECK: Only result.json presence matters, not directory
+        # (This is a duplicate check - already done in run_experiment_with_gpu)
+        # But we keep it for safety in case run_experiment is called directly
         if shared_result_file.exists():
-            print(f"✓ {name} - skipping (result.json exists in shared results)")
             with open(shared_result_file) as f:
                 return json.load(f)
         
