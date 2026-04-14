@@ -205,18 +205,24 @@ def get_available_gpus():
                         mem_used = int(parts[1])
                         mem_total = int(parts[2])
                         
-                        # Consider GPU available if <10% memory used
-                        usage_pct = (mem_used / mem_total) * 100 if mem_total > 0 else 100
-                        
-                        if usage_pct < 10:
+                        # Consider GPU available if <100 MiB memory used (nearly idle)
+                        # Old threshold was 10% which passes GPU with crashed CUDA contexts
+                        if mem_used < 100:
                             available_gpus.append(gpu_id)
                             print(f"  ✓ GPU {gpu_id}: Available ({mem_used}/{mem_total} MiB used)")
                         else:
+                            usage_pct = (mem_used / mem_total) * 100 if mem_total > 0 else 100
                             print(f"  ✗ GPU {gpu_id}: Busy ({mem_used}/{mem_total} MiB, {usage_pct:.0f}% used)")
                 
                 if available_gpus:
                     print(f"Using {len(available_gpus)} GPU(s): {available_gpus}")
                     return available_gpus
+                else:
+                    print("❌ No available GPUs found (all busy)")
+                    print("   Waiting 30 seconds for GPUs to free up...")
+                    time.sleep(30)
+                    # Retry once
+                    return get_available_gpus()
             
             # Fallback: nvidia-smi failed, use all GPUs
             print("nvidia-smi check failed, using all detected GPUs")
@@ -285,25 +291,45 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                 output_folder = exp_config.get('output_folder', 'unknown')
                 error_log = Path(output_folder) / name_with_seed / 'experiment_error.log'
                 
-                # FAIL LOUDLY
-                sys.stdout.flush()
-                sys.stderr.flush()
-                print("\n\n" + "🔥"*35, flush=True)
-                print("🔥" + " "*68 + "🔥", flush=True)
-                print("🔥" + " "*15 + "!!! EXPERIMENT CRASHED !!!" + " "*27 + "🔥", flush=True)
-                print("🔥" + " "*68 + "🔥", flush=True)
-                print("🔥"*35, flush=True)
-                print(f"\n💀 FAILED: {name_with_seed}", flush=True)
-                print(f"💀 Error: {type(e).__name__}: {e}", flush=True)
-                print(f"📄 Error log: {error_log}", flush=True)
-                print("\n" + "🔥"*35, flush=True)
-                print("🔥  STOPPING ALL EXPERIMENTS - GPU busy or other fatal error  🔥", flush=True)
-                print("🔥  Fix the error above, then rerun the script                🔥", flush=True)
-                print("🔥  The script will automatically retry failed experiments    🔥", flush=True)
-                print("🔥"*35 + "\n\n", flush=True)
-                sys.stdout.flush()
-                sys.stderr.flush()
-                raise  # Re-raise to stop this GPU's queue
+                # Check if this is a CUDA device error (GPU busy/unavailable)
+                error_str = str(e).lower()
+                is_cuda_device_error = (
+                    'cuda-capable device' in error_str or 
+                    'device unavailable' in error_str or
+                    'cudaerrorsdevicesunavailable' in error_str.replace(' ', '') or
+                    'cuda device unavailable' in error_str
+                )
+                
+                if is_cuda_device_error:
+                    # CUDA device error - GPU is messed up, but other GPUs might work
+                    print("\n\n" + "⚠️ "*35, flush=True)
+                    print(f"⚠️  GPU {gpu_id} UNAVAILABLE - skipping remaining experiments on this GPU", flush=True)
+                    print(f"⚠️  Failed experiment: {name_with_seed}", flush=True)
+                    print(f"⚠️  Error: {type(e).__name__}: {e}", flush=True)
+                    print(f"⚠️  Other GPUs will continue running", flush=True)
+                    print("⚠️ "*35 + "\n", flush=True)
+                    # Don't raise - just skip this GPU's remaining experiments
+                    break
+                else:
+                    # Real training error - stop everything
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    print("\n\n" + "🔥"*35, flush=True)
+                    print("🔥" + " "*68 + "🔥", flush=True)
+                    print("🔥" + " "*15 + "!!! EXPERIMENT CRASHED !!!" + " "*27 + "🔥", flush=True)
+                    print("🔥" + " "*68 + "🔥", flush=True)
+                    print("🔥"*35, flush=True)
+                    print(f"\n💀 FAILED: {name_with_seed}", flush=True)
+                    print(f"💀 Error: {type(e).__name__}: {e}", flush=True)
+                    print(f"📄 Error log: {error_log}", flush=True)
+                    print("\n" + "🔥"*35, flush=True)
+                    print("🔥  STOPPING ALL EXPERIMENTS - GPU busy or other fatal error  🔥", flush=True)
+                    print("🔥  Fix the error above, then rerun the script                🔥", flush=True)
+                    print("🔥  The script will automatically retry failed experiments    🔥", flush=True)
+                    print("🔥"*35 + "\n\n", flush=True)
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    raise  # Re-raise to stop this GPU's queue
         return gpu_results
     
     try:
@@ -320,7 +346,24 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
                     gpu_results = future.result()
                     results.extend(gpu_results)
                 except Exception as e:
-                    print(f"\n🔥 GPU {futures[future]} queue failed: {e}", flush=True)
+                    gpu_id = futures[future]
+                    
+                    # Check if this is a CUDA device error
+                    error_str = str(e).lower()
+                    is_cuda_device_error = (
+                        'cuda-capable device' in error_str or 
+                        'device unavailable' in error_str or
+                        'cudaerrorsdevicesunavailable' in error_str.replace(' ', '') or
+                        'cuda device unavailable' in error_str
+                    )
+                    
+                    if is_cuda_device_error:
+                        # GPU failed but others can continue
+                        print(f"\n⚠️  GPU {gpu_id} queue failed with CUDA error, continuing with other GPUs", flush=True)
+                        continue
+                    
+                    # Real error - stop everything
+                    print(f"\n🔥 GPU {gpu_id} queue failed: {e}", flush=True)
                     
                     # Kill all running processes
                     print("🔥 Terminating all running experiments...", flush=True)
