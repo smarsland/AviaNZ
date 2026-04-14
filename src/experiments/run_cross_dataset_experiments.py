@@ -611,7 +611,7 @@ def run_experiment(config_dict):
             '--test-folder', config_dict['test1'],
             '--test-folder2', config_dict['test2'],
             '--epochs', str(config_dict['epochs']),
-            '--batch-size', str(config_dict['batch-size']),
+            '--batch-size', str(config_dict['batch_size']),
             '--patience', '15',
             '--spec-transform', config_dict['spec_transform'],
             '--mixup', str(config_dict.get('mixup', 0.25)),

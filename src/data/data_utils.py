@@ -236,7 +236,7 @@ class SpectrogramDataset(Dataset):
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
                  spec_transform="Log", training=True, width_downsizing=None, normalize=False,
                  normalize_median_filter=True, median_only=False, 
-                 use_temporal_roll=True, remove_baseline=True, noise_mode='full', background_prob=0.0):
+                 use_temporal_roll=True, noise_mode='full', background_prob=0.0):
         """
         Initialize SpectrogramDataset.
         
@@ -254,7 +254,6 @@ class SpectrogramDataset(Dataset):
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
             normalize: Whether to apply background normalization
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
-            remove_baseline: If True, subtract 10th percentile to remove DC offset/noise floor differences
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
             background_prob: Probability of replacing sample with its background spectrogram (zeros labels)
         
@@ -277,7 +276,6 @@ class SpectrogramDataset(Dataset):
         self.normalize_median_filter = normalize_median_filter
         self.median_only = median_only
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
-        self.remove_baseline = remove_baseline
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
         self.rng = np.random.RandomState(21390)
@@ -313,8 +311,6 @@ class SpectrogramDataset(Dataset):
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
         if normalize:
             print(f"Background normalization: enabled")
-        if remove_baseline:
-            print(f"⚡ Baseline removal: enabled (subtracts 10th percentile to remove DC offset/noise floor)")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
         print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
@@ -369,14 +365,6 @@ class SpectrogramDataset(Dataset):
         if self.width_downsizing and self.width_downsizing > 1:
             x = x[:, ::self.width_downsizing, :]
             assert x.ndim == 3, f"After downsampling should be 3D (H,W,C), got {x.shape}"
-        
-        # Remove baseline offset (DC bias / noise floor difference)
-        # DOC has 2-3x higher baseline (p10=0.10) vs Joe_Mo (p10=0.05)
-        # This causes log(signal+high_baseline) vs log(signal+low_baseline) → different features
-        # Subtract per-sample 10th percentile to equalize baseline before log transform
-        if self.remove_baseline:
-            baseline = np.percentile(x, 10)
-            x = np.maximum(x - baseline, 0)  # Remove baseline, clip to zero
         
         # Apply noise mixing if training
         # Do not noise-mix explicit background/noise samples (all-zero labels)
@@ -750,7 +738,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, normalize=False, normalize_median_filter=True,
                        median_only=False, use_temporal_roll=True,
-                       remove_baseline=False, mixup_mode='mixup', noise_mode='full', background_prob=0.0):
+                       mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -771,7 +759,6 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         normalize_median_filter: If True (default), use median filter during normalization
         median_only: If True, apply only median filter without background subtraction
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
-        remove_baseline: If True, subtract 10th percentile to remove baseline offset before log transform
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
         noise_mode: Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
         background_prob: Probability of replacing sample with background spectrogram and zeroing labels
@@ -798,7 +785,6 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         normalize_median_filter=normalize_median_filter,
         median_only=median_only,
         use_temporal_roll=use_temporal_roll,
-        remove_baseline=remove_baseline,
         noise_mode=noise_mode,
         background_prob=background_prob
     )
@@ -817,7 +803,6 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             normalize_median_filter=normalize_median_filter,
             median_only=median_only,
             use_temporal_roll=False,  # Never roll validation data
-            remove_baseline=remove_baseline,
             noise_mode='full',  # Not used (no noise in validation)
             background_prob=0.0  # No background replacement for validation
         )

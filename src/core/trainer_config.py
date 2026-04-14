@@ -59,7 +59,6 @@ class AugmentationConfig:
     mixup_mode: str = 'mixup'
     noise_mode: str = 'full'
     validation_split: float = 0.2
-    remove_baseline: bool = False
     background_prob: float = 0.0
 
 
@@ -145,7 +144,6 @@ class TrainerConfig:
                 mixup_mode=getattr(args, 'mixup_mode', 'mixup'),
                 noise_mode=getattr(args, 'noise_mode', 'full'),
                 validation_split=getattr(args, 'validation_split', 0.2),
-                remove_baseline=getattr(args, 'remove_baseline', False),
                 background_prob=getattr(args, 'background_prob', 0.0)
             ),
             loss=LossConfig(

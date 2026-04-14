@@ -251,7 +251,6 @@ class Trainer:
         self.spec_transform = cfg.augmentation.spec_transform
         self.mixup_mode = cfg.augmentation.mixup_mode
         self.noise_mode = cfg.augmentation.noise_mode
-        self.remove_baseline = cfg.augmentation.remove_baseline
         self.background_prob = cfg.augmentation.background_prob
         
         self.use_focal_loss = cfg.loss.use_focal_loss
@@ -368,7 +367,6 @@ class Trainer:
             normalize_median_filter=self.normalize_median_filter,
             median_only=self.median_only,
             use_temporal_roll=self.use_temporal_roll,
-            remove_baseline=self.remove_baseline,
             mixup_mode=self.mixup_mode,
             noise_mode=self.noise_mode,
             background_prob=self.background_prob
@@ -385,7 +383,6 @@ class Trainer:
                 normalize_median_filter=self.normalize_median_filter,
                 median_only=self.median_only,
                 use_temporal_roll=self.use_temporal_roll,
-                remove_baseline=self.remove_baseline,
                 mixup_mode='mixup',
                 noise_mode='full',
                 background_prob=0.0
@@ -1018,7 +1015,7 @@ class Trainer:
                 best_val_acc = avg_val_acc
                 self._save_model(model, best=True)
         # Evaluate on validation set (using best checkpoint)
-        best_path = os.path.join(self.output_folder, 'ast_model_best.pt')
+        best_path = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
         print(f"\nDEBUG: Loading best model from: {best_path}")
         print(f"DEBUG: File exists: {os.path.exists(best_path)}")
         if os.path.exists(best_path):
@@ -1029,7 +1026,7 @@ class Trainer:
             state_dict = torch.load(best_path, map_location=self.device)
             model.load_state_dict(state_dict)
         evaluator = EvaluationManager(self.output_folder, self.data['class_names'], self.multilabel)
-        evaluator.evaluate_model(model, self.val_loader, 'ast_model', self.data, device=self.device)
+        evaluator.evaluate_model(model, self.val_loader, f'{self.model_type}_model', self.data, device=self.device)
 
         # Evaluate on test sets if provided (for DANN experiments)
         if self.test_folder:
@@ -1068,7 +1065,7 @@ class Trainer:
             test_name1 = Path(self.test_folder).parent.name
             print(f"DEBUG TEST1: folder={self.test_folder}, name={test_name1}, samples={len(test_dataset1)}, first_file={test_dataset1.filenames[0] if len(test_dataset1.filenames) > 0 else 'NONE'}")
             print(f"DEBUG TEST1 CONFIG: normalize={self.normalize}, median_filter={self.normalize_median_filter}, median_only={self.median_only}")
-            evaluator.evaluate_model(model, test_loader_obj1, f'ast_test_{test_name1}', test_data1, device=self.device)
+            evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', test_data1, device=self.device)
             
             # Save predictions to CSV
             self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1)
@@ -1109,7 +1106,7 @@ class Trainer:
             test_name2 = Path(self.test_folder2).parent.name
             print(f"DEBUG TEST2: folder={self.test_folder2}, name={test_name2}, samples={len(test_dataset2)}, first_file={test_dataset2.filenames[0] if len(test_dataset2.filenames) > 0 else 'NONE'}")
             print(f"DEBUG TEST2 CONFIG: normalize={self.normalize}, median_filter={self.normalize_median_filter}, median_only={self.median_only}")
-            evaluator.evaluate_model(model, test_loader_obj2, f'ast_test_{test_name2}', test_data2, device=self.device)
+            evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', test_data2, device=self.device)
             
             # Save predictions to CSV
             self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
@@ -1177,7 +1174,7 @@ class Trainer:
 
     
     def _save_model(self, model, best=False):
-        filename = 'ast_model_best.pt' if best else 'ast_model.pt'
+        filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
         
         if self.use_cleaner:
@@ -1211,7 +1208,7 @@ class Trainer:
         model_config['remove_baseline'] = self.remove_baseline
         
         # Save to JSON
-        config_path = os.path.join(self.output_folder, 'ast_model_config.json')
+        config_path = os.path.join(self.output_folder, f'{self.model_type}_model_config.json')
         with open(config_path, 'w') as f:
             json.dump(model_config, f, indent=2)
         
