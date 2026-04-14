@@ -139,7 +139,7 @@ class TrainerConfig:
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
                 normalize=getattr(args, 'normalize', False),
                 per_chunk_norm=getattr(args, 'per_chunk_norm', False),
-                normalize_median_filter=getattr(args, 'median_filter', False) or getattr(args, 'normalize', False),
+                normalize_median_filter=getattr(args, 'median_filter', False),
                 median_only=getattr(args, 'median_only', False),
                 spec_transform=getattr(args, 'spec_transform', 'Log'),
                 mixup_mode=getattr(args, 'mixup_mode', 'mixup'),

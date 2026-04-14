@@ -1019,7 +1019,13 @@ class Trainer:
                 self._save_model(model, best=True)
         # Evaluate on validation set (using best checkpoint)
         best_path = os.path.join(self.output_folder, 'ast_model_best.pt')
+        print(f"\nDEBUG: Loading best model from: {best_path}")
+        print(f"DEBUG: File exists: {os.path.exists(best_path)}")
         if os.path.exists(best_path):
+            import hashlib
+            with open(best_path, 'rb') as f:
+                model_hash = hashlib.md5(f.read()).hexdigest()[:16]
+            print(f"DEBUG: Model checkpoint MD5: {model_hash}")
             state_dict = torch.load(best_path, map_location=self.device)
             model.load_state_dict(state_dict)
         evaluator = EvaluationManager(self.output_folder, self.data['class_names'], self.multilabel)
@@ -1060,6 +1066,8 @@ class Trainer:
             
             # Evaluate and save predictions
             test_name1 = Path(self.test_folder).parent.name
+            print(f"DEBUG TEST1: folder={self.test_folder}, name={test_name1}, samples={len(test_dataset1)}, first_file={test_dataset1.filenames[0] if len(test_dataset1.filenames) > 0 else 'NONE'}")
+            print(f"DEBUG TEST1 CONFIG: normalize={self.normalize}, median_filter={self.normalize_median_filter}, median_only={self.median_only}")
             evaluator.evaluate_model(model, test_loader_obj1, f'ast_test_{test_name1}', test_data1, device=self.device)
             
             # Save predictions to CSV
@@ -1099,6 +1107,8 @@ class Trainer:
             
             # Evaluate and save predictions
             test_name2 = Path(self.test_folder2).parent.name
+            print(f"DEBUG TEST2: folder={self.test_folder2}, name={test_name2}, samples={len(test_dataset2)}, first_file={test_dataset2.filenames[0] if len(test_dataset2.filenames) > 0 else 'NONE'}")
+            print(f"DEBUG TEST2 CONFIG: normalize={self.normalize}, median_filter={self.normalize_median_filter}, median_only={self.median_only}")
             evaluator.evaluate_model(model, test_loader_obj2, f'ast_test_{test_name2}', test_data2, device=self.device)
             
             # Save predictions to CSV

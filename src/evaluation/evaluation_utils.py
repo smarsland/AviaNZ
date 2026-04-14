@@ -41,6 +41,14 @@ class EvaluationManager:
         """
         print(f"Generating evaluation metrics for {name}...")
         
+        # DEBUG: Print dataset info to verify we're using the right data
+        dataset = test_loader.dataset
+        print(f"DEBUG EVAL: name={name}")
+        print(f"DEBUG EVAL: num_samples={len(dataset)}")
+        print(f"DEBUG EVAL: first_file={dataset.filenames[0] if hasattr(dataset, 'filenames') and len(dataset.filenames) > 0 else 'N/A'}")
+        print(f"DEBUG EVAL: dataset_id={id(dataset)}")
+        print(f"DEBUG EVAL: loader_id={id(test_loader)}")
+        
         model.eval()
         y_pred_probs = []
         y_true = []

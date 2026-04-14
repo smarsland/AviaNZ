@@ -38,6 +38,29 @@ Core data loading is handled by:
   python scripts/collect_results.py <output_folder>
   ```
 
+- **`analyze_results.py`** - **Comprehensive results analysis and visualization** ⭐
+  ```bash
+  # Generate all visualizations and summary tables
+  python scripts/analyze_results.py results/
+  
+  # Custom output directory
+  python scripts/analyze_results.py results/ --output analysis/
+  ```
+  
+  **Features:**
+  - Automatically aggregates across multiple trials/seeds
+  - Generates comparison plots (normalization, noise sweeps, DANN vs baseline)
+  - Creates domain shift heatmaps and overall performance rankings
+  - Exports CSV summaries and markdown reports
+  - Works with any number of trials per configuration
+  
+  **Output:**
+  - 6 visualization sets (PNG + PDF for publications)
+  - 6 CSV summary tables (overall + per-category)
+  - Comprehensive markdown report with key findings
+  
+  See `results/analysis/README.md` for detailed output documentation.
+
 ### Data Analysis & Validation
 
 - **`count_species.py`** - Analyzes species distribution in datasets

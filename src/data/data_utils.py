@@ -390,8 +390,8 @@ class SpectrogramDataset(Dataset):
         x = self.apply_spec_transform(x)
         assert x.ndim == 3, f"After transform should be 3D (H,W,C), got {x.shape}"
         
-        # Apply background normalization if enabled
-        if self.normalize:
+        # Apply background normalization if enabled (normalize OR median_only)
+        if self.normalize or getattr(self, 'median_only', False):
             # Convert (H, W, C) to (H, W) for normalization
             x_2d = x[:, :, 0] if x.shape[2] == 1 else x[:, :, 0]  # Take first channel
             use_median = getattr(self, 'normalize_median_filter', True)
