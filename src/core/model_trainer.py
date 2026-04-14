@@ -813,11 +813,11 @@ class Trainer:
                     with torch.amp.autocast('cuda', enabled=self.use_amp):
                         if self.use_cleaner:
                             data = self.cleaner(data)
-                            
-                            if self.use_reconstruction:
-                                output, _ = model(data)
-                            else:
-                                output = model(data)
+                        
+                        if self.use_reconstruction:
+                            output, _ = model(data)
+                        else:
+                            output = model(data)
                     
                     if self.multilabel:
                         val_loss += criterion(output, target).item()
