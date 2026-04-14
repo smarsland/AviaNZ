@@ -619,12 +619,12 @@ def run_experiment(config_dict):
             log_f.write(f"\n=== EXPERIMENT FAILED ===\n")
             log_f.write(f"Error: {error_msg}\n")
         
-        # Remove lock file if experiment failed (so it can be retried)
+        # Remove lock directory if experiment failed (so it can be retried)
         if config_dict.get('results_dir'):
             shared_result_dir = Path(config_dict['results_dir']) / name
-            lock_file = shared_result_dir / '.lock'
-            if lock_file.exists():
-                lock_file.unlink()
+            lock_dir = shared_result_dir / '.lock'
+            if lock_dir.exists():
+                shutil.rmtree(lock_dir, ignore_errors=True)
         
         raise RuntimeError(error_msg)
     

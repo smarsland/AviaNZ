@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import ASTModel
 import timm
+from src.core import config
 
 
 class GradientReversalLayer(nn.Module):
@@ -371,7 +372,6 @@ class MultiScaleAST(nn.Module):
         if x.dim() == 3:
             x = x.unsqueeze(1)
         
-        import config
         x = (x - config.AST_MEAN) / config.AST_STD
         
         multiscale_features = self.multiscale_frontend(x)
@@ -496,8 +496,6 @@ class AST(nn.Module):
         if x.dim() == 4 and x.shape[1] == 1:
             x = x.squeeze(1)
         
-        import config
-        
         if self.per_chunk_norm:
             B, H, W = x.shape
             chunk_width = W // self.num_chunks
@@ -541,7 +539,6 @@ class AST(nn.Module):
         
         if sparse_mode:
             # Sparse mode: get features from sparse patches
-            import config
             B, K, C, H, W = x.shape
             patches_flat = x.contiguous().view(B * K, C * H * W)
             patches_reshaped = x.view(B * K, H, W)
@@ -601,7 +598,6 @@ class AST(nn.Module):
             if x.dim() == 4 and x.shape[1] == 1:
                 x = x.squeeze(1)
             
-            import config
             if self.per_chunk_norm:
                 B, H, W = x.shape
                 chunk_width = W // self.num_chunks
@@ -642,8 +638,6 @@ class AST(nn.Module):
         Returns:
             logits: (B, num_classes)
         """
-        import config
-        
         B, K, C, H, W = patches.shape
         assert C == 1, f"Expected 1 channel, got {C}"
         assert H == 16 and W == 16, f"Expected 16x16 patches, got {H}x{W}"
