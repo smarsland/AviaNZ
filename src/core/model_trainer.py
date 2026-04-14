@@ -281,13 +281,45 @@ class Trainer:
                 torch.backends.cudnn.benchmark = False
             print(f"Random seed set to: {self.seed}")
         
-        # Setup device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"Using device: {self.device}")
+        # Setup device with proper verification
+        cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
+        if torch.cuda.is_available():
+            try:
+                # Actually test CUDA is working by creating a tensor
+                test_device = torch.device('cuda:0')  # Always use device 0 after CUDA_VISIBLE_DEVICES filtering
+                test_tensor = torch.zeros(1, device=test_device)
+                del test_tensor
+                torch.cuda.empty_cache()
+                self.device = test_device
+                gpu_name = torch.cuda.get_device_name(0)
+                print(f"Using device: cuda:0 (GPU: {gpu_name}, CUDA_VISIBLE_DEVICES={cuda_visible})")
+            except Exception as e:
+                print(f"❌ ERROR: CUDA initialization failed!")
+                print(f"   Error: {e}")
+                print(f"   CUDA_VISIBLE_DEVICES: {cuda_visible}")
+                print(f"   torch.cuda.is_available(): {torch.cuda.is_available()}")
+                print(f"   torch.cuda.device_count(): {torch.cuda.device_count()}")
+                print(f"")
+                print(f"   This usually means:")
+                print(f"     1. The assigned GPU is actually busy (check nvidia-smi)")
+                print(f"     2. CUDA drivers are in a bad state (restart may help)")
+                print(f"     3. CUDA_VISIBLE_DEVICES points to non-existent GPU")
+                print(f"")
+                print(f"   ABORTING - cannot proceed without GPU")
+                raise RuntimeError(f"CUDA device unavailable: {e}")
+        else:
+            print(f"❌ ERROR: CUDA not available (CUDA_VISIBLE_DEVICES={cuda_visible})")
+            print(f"   Cannot train without GPU")
+            raise RuntimeError("CUDA not available - training requires GPU")
+        
         if self.patience > 0:
             print(f"Early stopping patience: {self.patience} epochs")
         if self.use_amp:
-            print(f"Using Automatic Mixed Precision (AMP)")
+            if self.device.type == 'cpu':
+                print(f"⚠️  AMP disabled (requires CUDA)")
+                self.use_amp = False
+            else:
+                print(f"Using Automatic Mixed Precision (AMP)")
         
         # Initialize gradient scaler for AMP
         self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None

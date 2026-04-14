@@ -372,6 +372,45 @@ def run_experiments_parallel(experiments, n_workers, gpu_pool):
 
 def run_experiment_with_gpu(config_dict, gpu_id=None):
     """Wrapper to run experiment with specific GPU assignment."""
+    # Verify GPU is actually available before starting
+    if gpu_id is not None:
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Check GPU memory usage
+                import subprocess as sp
+                result = sp.run(['nvidia-smi', '--query-gpu=index,memory.used,memory.total', 
+                               '--format=csv,noheader,nounits'], 
+                              capture_output=True, text=True, timeout=5)
+                
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        parts = line.split(', ')
+                        if len(parts) >= 3 and int(parts[0]) == gpu_id:
+                            mem_used = int(parts[1])
+                            mem_total = int(parts[2])
+                            usage_pct = (mem_used / mem_total) * 100 if mem_total > 0 else 100
+                            
+                            if usage_pct >= 10:
+                                if attempt < max_retries - 1:
+                                    wait_time = 10 * (attempt + 1)  # 10s, 20s, 30s
+                                    print(f"⚠️  GPU {gpu_id} busy ({usage_pct:.1f}% used), waiting {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                                    time.sleep(wait_time)
+                                else:
+                                    print(f"❌ GPU {gpu_id} still busy after {max_retries} attempts ({usage_pct:.1f}% used)")
+                                    raise RuntimeError(f"GPU {gpu_id} unavailable after {max_retries} retries")
+                            else:
+                                print(f"✓ GPU {gpu_id} available ({mem_used}/{mem_total} MiB, {usage_pct:.1f}% used)")
+                                break
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠️  GPU check failed: {e}, retrying in 5s...")
+                    time.sleep(5)
+                else:
+                    print(f"⚠️  GPU verification failed: {e}, proceeding anyway...")
+                    break
+    
     # Prepare environment with GPU assignment
     env = os.environ.copy()
     if gpu_id is not None:
@@ -580,9 +619,14 @@ def run_experiment(config_dict):
             # CRITICAL: Wait for GPU to fully release CUDA context
             # The subprocess has exited, but CUDA cleanup is asynchronous
             # Without this delay, the next experiment on this GPU will fail with "device busy"
+            # After crashes or errors, CUDA contexts can linger for 10-20 seconds
             import time
-            print(f"[{name}] ⏳ Waiting 5 seconds for GPU to fully release...", flush=True)
-            time.sleep(5)
+            if returncode != 0:
+                print(f"[{name}] ⏳ Experiment failed, waiting 20 seconds for GPU cleanup...", flush=True)
+                time.sleep(20)
+            else:
+                print(f"[{name}] ⏳ Waiting 10 seconds for GPU to fully release...", flush=True)
+                time.sleep(10)
             print(f"[{name}] ✓ GPU should be available now", flush=True)
             
     except KeyboardInterrupt:
