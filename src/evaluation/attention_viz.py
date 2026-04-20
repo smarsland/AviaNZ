@@ -170,39 +170,38 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
     print(f"\nGenerating attention visualizations for {num_samples} samples...")
     print(f"Output folder: {output_folder}")
     
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(dataloader):
+    for batch_idx, (inputs, targets) in enumerate(dataloader):
+        if samples_processed >= num_samples:
+            break
+        
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+        
+        batch_size = inputs.shape[0]
+        
+        for i in range(batch_size):
             if samples_processed >= num_samples:
                 break
             
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+            input_sample = inputs[i:i+1]
+            target = targets[i]
             
-            batch_size = inputs.shape[0]
+            cam, prediction = grad_cam.generate_cam(input_sample)
             
-            for i in range(batch_size):
-                if samples_processed >= num_samples:
-                    break
-                
-                input_sample = inputs[i:i+1]
-                target = targets[i]
-                
-                cam, prediction = grad_cam.generate_cam(input_sample)
-                
-                save_attention_plot(
-                    input_sample[0].cpu(),
-                    cam,
-                    prediction[0].cpu(),
-                    target.cpu(),
-                    output_folder,
-                    sample_idx=samples_processed,
-                    class_names=class_names
-                )
-                
-                samples_processed += 1
-                
-                if samples_processed % 5 == 0:
-                    print(f"  Processed {samples_processed}/{num_samples} samples")
+            save_attention_plot(
+                input_sample[0].cpu(),
+                cam,
+                prediction[0].cpu(),
+                target.cpu(),
+                output_folder,
+                sample_idx=samples_processed,
+                class_names=class_names
+            )
+            
+            samples_processed += 1
+            
+            if samples_processed % 5 == 0:
+                print(f"  Processed {samples_processed}/{num_samples} samples")
     
     grad_cam.remove_hooks()
     print(f"\n✓ Saved {samples_processed} attention visualizations to {output_folder}")
