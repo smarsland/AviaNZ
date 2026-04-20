@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
 from pathlib import Path
+from matplotlib.axes import Axes
 
 
 class GradCAM:
@@ -447,8 +448,8 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
     
     num_classes_viz = len(cams)
     fig, axes = plt.subplots(1 + num_classes_viz, 1, figsize=(14, 4 * (1 + num_classes_viz)), constrained_layout=True)
-    
-    if num_classes_viz == 1:
+
+    if isinstance(axes, Axes):
         axes = [axes]
     
     ax = axes[0]
