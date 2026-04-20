@@ -927,22 +927,6 @@ class Trainer:
                 background_prob=0.0
             )
             
-            
-            # Generate attention visualizations if requested
-            if self.visualize_attention:
-                print(f"\n{'='*60}")
-                print(f"Generating attention visualizations for test set 2")
-                print(f"{'='*60}")
-                viz_folder = os.path.join(self.output_folder, f'attention_{test_name2}')
-                visualize_attention(
-                    model, 
-                    test_loader_obj2, 
-                    viz_folder,
-                    model_type=self.model_type,
-                    num_samples=self.viz_samples,
-                    device=self.device,
-                    class_names=self.data['class_names']
-                )
             test_loader_obj2 = torch.utils.data.DataLoader(
                 test_dataset2,
                 batch_size=self.batch_size,
@@ -959,6 +943,22 @@ class Trainer:
             
             # Save predictions to CSV
             self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
+            
+            # Generate attention visualizations if requested
+            if self.visualize_attention:
+                print(f"\n{'='*60}")
+                print(f"Generating attention visualizations for test set 2")
+                print(f"{'='*60}")
+                viz_folder = os.path.join(self.output_folder, f'attention_{test_name2}')
+                visualize_attention(
+                    model, 
+                    test_loader_obj2, 
+                    viz_folder,
+                    model_type=self.model_type,
+                    num_samples=self.viz_samples,
+                    device=self.device,
+                    class_names=self.data['class_names']
+                )
 
         print(f"Best Val Acc: {best_val_acc:.4f} at epoch {best_epoch}")
         print(f"\n{'='*60}")
