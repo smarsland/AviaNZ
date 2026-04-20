@@ -158,10 +158,4 @@ class TrainerConfig:
                 visualize_attention=getattr(args, 'visualize_attention', False),
                 viz_samples=getattr(args, 'viz_samples', 10)
             )
-                use_cleaner=getattr(args, 'use_cleaner', False)
-            ),
-            evaluation=EvaluationConfig(
-                test_folder=getattr(args, 'test_folder', None),
-                test_folder2=getattr(args, 'test_folder2', None)
-            )
         )
