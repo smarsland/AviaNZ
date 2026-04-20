@@ -126,7 +126,6 @@ class Trainer:
         self.learning_rate = cfg.training.learning_rate
         self.weight_decay = cfg.training.weight_decay
         self.patience = cfg.training.patience
-        self.use_amp = cfg.training.use_amp
         self.seed = cfg.training.seed
         
         # Model configuration
@@ -218,15 +217,6 @@ class Trainer:
         
         if self.patience > 0:
             print(f"Early stopping patience: {self.patience} epochs")
-        if self.use_amp:
-            if self.device.type == 'cpu':
-                print(f"⚠️  AMP disabled (requires CUDA)")
-                self.use_amp = False
-            else:
-                print(f"Using Automatic Mixed Precision (AMP)")
-        
-        # Initialize gradient scaler for AMP
-        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Load data (always multilabel)
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
@@ -541,9 +531,8 @@ class Trainer:
                     optimizer.zero_grad()
                     
                     # Forward pass for source (for classification)
-                    with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        source_output = model(source_data)
-                        source_features = model.get_features(source_data)
+                    source_output = model(source_data)
+                    source_features = model.get_features(source_data)
                         target_features = model.get_features(target_data)
                         
                         # Classification loss (only on source domain with labels - always multilabel)
@@ -571,18 +560,10 @@ class Trainer:
                         domain_total += domain_labels.size(0)
                     
                     # Backward pass
-                    if self.use_amp:
-                        self.scaler.scale(loss).backward()
-                        self.scaler.unscale_(optimizer)
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                        torch.nn.utils.clip_grad_norm_(self.domain_classifier.parameters(), max_norm=1.0)
-                        self.scaler.step(optimizer)
-                        self.scaler.update()
-                    else:
-                        loss.backward()
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                        torch.nn.utils.clip_grad_norm_(self.domain_classifier.parameters(), max_norm=1.0)
-                        optimizer.step()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    torch.nn.utils.clip_grad_norm_(self.domain_classifier.parameters(), max_norm=1.0)
+                    optimizer.step()
                     
                     train_loss += loss.item()
                     total_class_loss += class_loss.item()
@@ -604,26 +585,22 @@ class Trainer:
                     
                     optimizer.zero_grad()
                     
-                    with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        if self.use_cleaner:
-                            data = self.cleaner(data)
-                        
-                        if self.use_reconstruction:
-                            output, recon = model(data)
-                        else:
-                            output = model(data)
+                    if self.use_cleaner:
+                        data = self.cleaner(data)
                     
-                    with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        # Always multilabel - clamp logits to prevent numerical overflow in BCE loss
-                        # Logits beyond ±80 cause sigmoid(±80) ≈ 0/1 which creates log(0) = -inf
-                        output = torch.clamp(output, min=-80.0, max=80.0)
-                        loss = criterion(output, target)
-                        
-                        if self.use_reconstruction:
-                            target_spec = data.squeeze(1) if data.dim() == 4 else data
-                            target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
-                            recon_loss = F.mse_loss(recon, target_spec)
-                            loss = loss + self.recon_weight * recon_loss
+                    if self.use_reconstruction:
+                        output, recon = model(data)
+                    else:
+                        output = model(data)
+                    
+                    output = torch.clamp(output, min=-80.0, max=80.0)
+                    loss = criterion(output, target)
+                    
+                    if self.use_reconstruction:
+                        target_spec = data.squeeze(1) if data.dim() == 4 else data
+                        target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
+                        recon_loss = F.mse_loss(recon, target_spec)
+                        loss = loss + self.recon_weight * recon_loss
                     
                     # Check for NaN loss BEFORE backward pass
                     if torch.isnan(loss) or torch.isinf(loss):
@@ -638,28 +615,14 @@ class Trainer:
                         break  # Stop epoch, not just continue
                     
                     # Backward pass
-                    if self.use_amp:
-                        self.scaler.scale(loss).backward()
-                        self.scaler.unscale_(optimizer)
-                        # Check for NaN gradients
-                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-                            print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
-                            print(f"   Stopping epoch early...")
-                            self.scaler.update()  # Update scaler to reset state
-                            optimizer.zero_grad()  # Clear bad gradients
-                            break
-                        self.scaler.step(optimizer)
-                        self.scaler.update()
-                    else:
-                        loss.backward()
-                        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-                            print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
-                            print(f"   Stopping epoch early...")
-                            optimizer.zero_grad()  # Clear bad gradients  
-                            break
-                        optimizer.step()
+                    loss.backward()
+                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
+                        print(f"   Stopping epoch early...")
+                        optimizer.zero_grad()
+                        break
+                    optimizer.step()
                     
                     train_loss += loss.item()
                     
@@ -700,14 +663,13 @@ class Trainer:
                     data, target = batch
                     data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
                     
-                    with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        if self.use_cleaner:
-                            data = self.cleaner(data)
-                        
-                        if self.use_reconstruction:
-                            output, _ = model(data)
-                        else:
-                            output = model(data)
+                    if self.use_cleaner:
+                        data = self.cleaner(data)
+                    
+                    if self.use_reconstruction:
+                        output, _ = model(data)
+                    else:
+                        output = model(data)
                     
                     # Always multilabel
                     val_loss += criterion(output, target).item()

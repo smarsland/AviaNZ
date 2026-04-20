@@ -18,7 +18,6 @@ class TrainingConfig:
     learning_rate: float
     weight_decay: float = config.DEFAULT_WEIGHT_DECAY
     patience: int = 0
-    use_amp: bool = False
     seed: Optional[int] = None
 
 
@@ -107,7 +106,6 @@ class TrainerConfig:
                 learning_rate=args.lr,
                 weight_decay=getattr(args, 'weight_decay', config.DEFAULT_WEIGHT_DECAY),
                 patience=args.patience,
-                use_amp=True,
                 seed=getattr(args, 'seed', None)
             ),
             model=ModelConfig(

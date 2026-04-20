@@ -35,7 +35,6 @@ class BaseTrainer(ABC):
         self.learning_rate = cfg.training.learning_rate
         self.weight_decay = cfg.training.weight_decay
         self.patience = cfg.training.patience
-        self.use_amp = cfg.training.use_amp
         self.multilabel = cfg.model.multilabel
         self.use_dann = cfg.domain_adaptation.use_dann
         self.lambda_domain = cfg.domain_adaptation.lambda_domain
@@ -45,9 +44,6 @@ class BaseTrainer(ABC):
         self._setup_seed()
         
         os.makedirs(self.output_folder, exist_ok=True)
-        
-        # Initialize scaler for AMP
-        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Will be set by subclasses
         self.model = None
