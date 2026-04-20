@@ -44,7 +44,36 @@ class GradCAM:
         return self.model.ast.encoder.layer[-1]
     
     def get_regnet_target_layer(self):
-        """Get the last convolutional layer for RegNet."""
+        """Get a spatially meaningful convolutional layer for RegNet.
+
+        Using the deepest stage can be too coarse for spectrograms, so prefer the
+        last bottleneck of stage s3 when available. This usually gives a better
+        time-frequency map while remaining semantically useful.
+        """
+        backbone = getattr(self.model, 'backbone', None)
+
+        if backbone is not None and hasattr(backbone, 's3'):
+            stage = backbone.s3
+            stage_blocks = list(stage.children())
+            if stage_blocks:
+                last_block = stage_blocks[-1]
+                if hasattr(last_block, 'conv3'):
+                    conv3 = getattr(last_block, 'conv3')
+                    if hasattr(conv3, 'conv'):
+                        return conv3.conv
+                    return conv3
+
+        if backbone is not None and hasattr(backbone, 's4'):
+            stage = backbone.s4
+            stage_blocks = list(stage.children())
+            if stage_blocks:
+                last_block = stage_blocks[-1]
+                if hasattr(last_block, 'conv3'):
+                    conv3 = getattr(last_block, 'conv3')
+                    if hasattr(conv3, 'conv'):
+                        return conv3.conv
+                    return conv3
+
         for name, module in reversed(list(self.model.named_modules())):
             if isinstance(module, torch.nn.Conv2d):
                 return module
@@ -79,15 +108,15 @@ class GradCAM:
         class_score.backward()
         
         if self.model_type == 'regnet':
-            cam = self.compute_cam_regnet()
+            cam = self.compute_cam_regnet(input_tensor.shape[-2:])
         else:
             cam = self.compute_cam_ast(input_tensor.shape[-2:])
         
         self.model.zero_grad()
         
-        return cam, output.detach()
+        return cam, output.detach(), target_class
     
-    def compute_cam_regnet(self):
+    def compute_cam_regnet(self, target_size):
         """Compute CAM for RegNet (standard spatial gradients)."""
         gradients = self.gradients[0]
         activations = self.activations[0]
@@ -96,10 +125,17 @@ class GradCAM:
         cam = (weights * activations).sum(dim=0)
         
         cam = F.relu(cam)
-        
+        cam = cam.unsqueeze(0).unsqueeze(0)
+        cam = F.interpolate(
+            cam,
+            size=target_size,
+            mode='bilinear',
+            align_corners=False
+        )[0, 0]
+
         cam = cam - cam.min()
         cam = cam / (cam.max() + 1e-8)
-        
+
         return cam.cpu().numpy()
     
     def compute_cam_ast(self, target_size):
@@ -194,7 +230,17 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
             input_sample = inputs[i:i+1]
             target = targets[i]
             
-            cam, prediction = grad_cam.generate_cam(input_sample)
+            target_class, target_source = select_visualization_class(
+                model,
+                input_sample,
+                target,
+                device
+            )
+
+            cam, prediction, explained_class = grad_cam.generate_cam(
+                input_sample,
+                target_class=target_class
+            )
             
             save_attention_plot(
                 input_sample[0].detach().cpu(),
@@ -203,7 +249,9 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
                 target.detach().cpu(),
                 output_folder,
                 sample_idx=samples_processed,
-                class_names=class_names
+                class_names=class_names,
+                explained_class=explained_class,
+                explained_class_source=target_source
             )
             
             samples_processed += 1
@@ -216,7 +264,8 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
 
 
 def save_attention_plot(input_spec, cam, prediction, target, output_folder, 
-                       sample_idx=0, class_names=None):
+                       sample_idx=0, class_names=None, explained_class=None,
+                       explained_class_source=None):
     """Save a visualization with original spectrogram and attention heatmap.
     
     Args:
@@ -236,18 +285,18 @@ def save_attention_plot(input_spec, cam, prediction, target, output_folder,
     prediction_probs = torch.sigmoid(prediction).numpy()
     target = target.numpy()
     
-    fig, axes = plt.subplots(2, 1, figsize=(12, 8))
+    fig, axes = plt.subplots(2, 1, figsize=(14, 9), constrained_layout=True)
     
     ax = axes[0]
-    im = ax.imshow(input_spec, aspect='auto', origin='lower', cmap='viridis')
+    im = ax.imshow(input_spec, aspect='auto', origin='lower', cmap='viridis', interpolation='nearest')
     ax.set_title('Original Spectrogram', fontsize=14, fontweight='bold')
     ax.set_xlabel('Time')
     ax.set_ylabel('Frequency')
     plt.colorbar(im, ax=ax, label='Magnitude')
     
     ax = axes[1]
-    ax.imshow(input_spec, aspect='auto', origin='lower', cmap='gray', alpha=0.6)
-    cam_overlay = ax.imshow(cam, aspect='auto', origin='lower', cmap='jet', alpha=0.7)
+    ax.imshow(input_spec, aspect='auto', origin='lower', cmap='gray', alpha=0.55, interpolation='nearest')
+    cam_overlay = ax.imshow(cam, aspect='auto', origin='lower', cmap='jet', alpha=0.6, interpolation='bilinear')
     ax.set_title('Attention Heatmap (Grad-CAM)', fontsize=14, fontweight='bold')
     ax.set_xlabel('Time')
     ax.set_ylabel('Frequency')
@@ -265,20 +314,44 @@ def save_attention_plot(input_spec, cam, prediction, target, output_folder,
         class_names[i] if class_names else str(i)
         for i in true_classes[:5]
     ]) if len(true_classes) > 0 else "None"
+
+    explained_str = "None"
+    if explained_class is not None:
+        explained_name = class_names[explained_class] if class_names else str(explained_class)
+        explained_str = f"{explained_name} ({prediction_probs[explained_class]:.2f})"
+        if explained_class_source:
+            explained_str = f"{explained_str} via {explained_class_source}"
     
     fig.suptitle(
         f"Sample {sample_idx}\n"
+        f"Explained class: {explained_str}\n"
         f"Predicted: {pred_str}\n"
         f"True: {true_str}",
         fontsize=12,
         y=0.98
     )
-    
-    plt.tight_layout()
-    
+
     output_path = os.path.join(output_folder, f'attention_sample_{sample_idx:04d}.png')
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=250, bbox_inches='tight')
     plt.close()
+
+
+def select_visualization_class(model, input_sample, target, device):
+    """Choose a class to explain for multilabel Grad-CAM.
+
+    Prefer the highest-scoring true label when labels are available so the heatmap
+    corresponds to a relevant bird class instead of an arbitrary argmax.
+    """
+    with torch.no_grad():
+        logits = model(input_sample)
+        probs = torch.sigmoid(logits[0])
+
+    true_classes = torch.where(target > 0.5)[0]
+    if len(true_classes) > 0:
+        best_true_idx = probs[true_classes].argmax()
+        return true_classes[best_true_idx].item(), 'highest-scoring true label'
+
+    return probs.argmax().item(), 'top prediction'
 
 
 def visualize_top_predictions(model, dataloader, output_folder, model_type='ast',
@@ -319,7 +392,7 @@ def visualize_top_predictions(model, dataloader, output_folder, model_type='ast'
             
             cams = []
             for class_idx in top_classes:
-                cam, _ = grad_cam.generate_cam(input_sample, target_class=class_idx.item())
+                cam, _, _ = grad_cam.generate_cam(input_sample, target_class=class_idx.item())
                 cams.append(cam)
             
             grad_cam.remove_hooks()
@@ -349,21 +422,21 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
     input_spec = input_spec.detach().numpy() if input_spec.requires_grad else input_spec.numpy()
     
     num_classes_viz = len(cams)
-    fig, axes = plt.subplots(1 + num_classes_viz, 1, figsize=(12, 4 * (1 + num_classes_viz)))
+    fig, axes = plt.subplots(1 + num_classes_viz, 1, figsize=(14, 4 * (1 + num_classes_viz)), constrained_layout=True)
     
     if num_classes_viz == 1:
         axes = [axes]
     
     ax = axes[0]
-    im = ax.imshow(input_spec, aspect='auto', origin='lower', cmap='viridis')
+    im = ax.imshow(input_spec, aspect='auto', origin='lower', cmap='viridis', interpolation='nearest')
     ax.set_title('Original Spectrogram', fontsize=12, fontweight='bold')
     ax.set_xlabel('Time')
     ax.set_ylabel('Frequency')
     
     for idx, (cam, class_idx) in enumerate(zip(cams, top_classes)):
         ax = axes[idx + 1]
-        ax.imshow(input_spec, aspect='auto', origin='lower', cmap='gray', alpha=0.5)
-        cam_overlay = ax.imshow(cam, aspect='auto', origin='lower', cmap='jet', alpha=0.8)
+        ax.imshow(input_spec, aspect='auto', origin='lower', cmap='gray', alpha=0.5, interpolation='nearest')
+        cam_overlay = ax.imshow(cam, aspect='auto', origin='lower', cmap='jet', alpha=0.7, interpolation='bilinear')
         
         class_name = class_names[class_idx] if class_names else f"Class {class_idx}"
         prob = probs[class_idx].item()
@@ -371,8 +444,6 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
         ax.set_xlabel('Time')
         ax.set_ylabel('Frequency')
     
-    plt.tight_layout()
-    
     output_path = os.path.join(output_folder, f'multiclass_attention_{sample_idx:04d}.png')
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.savefig(output_path, dpi=250, bbox_inches='tight')
     plt.close()
