@@ -32,7 +32,6 @@ torch>=2.0.0
 torchvision>=0.15.0
 torchaudio>=2.0.0
 transformers>=4.30.0
-optuna>=3.0.0
 
 # For those without AVX2 support:
 # pip install --upgrade https://github.com/fo40225/tensorflow-windows-wheel/blob/master/2.0.0/py37/CPU/sse2/tensorflow-2.0.0-cp37-cp37m-win_amd64.whl

@@ -64,12 +64,10 @@ Examples:
                        help="Path to noise data folder (default: same as data_folder)")
     
     # Preprocessing
-    parser.add_argument('--normalize', action='store_true',
-                       help="Apply background normalization (recommended for soundscapes)")
+    parser.add_argument('--bg-subtract', action='store_true',
+                       help="Apply background subtraction normalization (works independently)")
     parser.add_argument('--median-filter', action='store_true',
-                       help="Apply median filter during normalization (default: enabled if --normalize)")
-    parser.add_argument('--median-only', action='store_true',
-                       help="Apply ONLY median filtering without background subtraction")
+                       help="Apply temporal median filtering (works independently)")
     parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
                        help="Spectrogram transformation (default: Log)")
     
@@ -87,6 +85,12 @@ Examples:
     parser.add_argument('--test-folder2', type=str, default=None,
                        help="Path to second test data folder (evaluated after training)")
     
+    # Visualization
+    parser.add_argument('--visualize-attention', action='store_true',
+                       help="Generate attention heatmaps for test samples (requires --test-folder)")
+    parser.add_argument('--viz-samples', type=int, default=10,
+                       help="Number of test samples to visualize (default: 10)")
+    
     # Domain adaptation (rarely used)
     parser.add_argument('--use-dann', action='store_true',
                        help="Enable DANN domain adaptation (AST only)")
@@ -103,6 +107,10 @@ Examples:
     
     if args.use_dann and args.model_type != 'ast':
         print("ERROR: DANN is only supported for AST models")
+        return
+    
+    if args.visualize_attention and not args.test_folder:
+        print("ERROR: Must specify --test-folder when using --visualize-attention")
         return
     
     # Set default learning rate based on model type

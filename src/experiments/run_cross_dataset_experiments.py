@@ -587,12 +587,10 @@ def run_experiment(config_dict):
             '--mixup', str(config_dict.get('mixup', 0.25)),
         ]
         
-        if config_dict.get('normalize'):
-            cmd.append('--normalize')
+        if config_dict.get('bg_subtract'):
+            cmd.append('--bg-subtract')
         if config_dict.get('median_filter'):
             cmd.append('--median-filter')
-        if config_dict.get('median_only'):
-            cmd.append('--median-only')
         if config_dict.get('noise', 0) > 0:
             cmd.extend(['--noise', str(config_dict['noise'])])
             if config_dict.get('noise_folder'):
@@ -620,12 +618,10 @@ def run_experiment(config_dict):
             '--lambda-domain', str(config_dict.get('lambda_domain', 0.3)),
         ]
         
-        if config_dict.get('normalize'):
-            cmd.append('--normalize')
+        if config_dict.get('bg_subtract'):
+            cmd.append('--bg-subtract')
         if config_dict.get('median_filter'):
             cmd.append('--median-filter')
-        if config_dict.get('median_only'):
-            cmd.append('--median-only')
         if config_dict.get('seed'):
             cmd.extend(['--seed', str(config_dict['seed'])])
     
@@ -899,19 +895,19 @@ def main():
     print(" EXPERIMENT SUITE 1: NORMALIZATION COMPARISON")
     print("="*70)
     print(" Goal: Find which normalization reduces domain shift most")
-    print(" Methods: Log, Log+median+normalize, Log+normalize,")
+    print(" Methods: Log, Log+median+bg_subtract, Log+bg_subtract,")
     print("          Log+median, PCEN, Box-Cox")
     print(f" Seeds: {args.seeds}")
     print(f" Total: 6 methods × 2 directions × {len(args.seeds)} seeds = {6 * 2 * len(args.seeds)} experiments")
     print("="*70 + "\n")
     
     normalization_configs = [
-        {'name': 'Log', 'spec_transform': 'Log', 'normalize': False, 'median_filter': False, 'median_only': False},
-        {'name': 'Log+median+normalize', 'spec_transform': 'Log', 'normalize': True, 'median_filter': True, 'median_only': False},
-        {'name': 'Log+normalize', 'spec_transform': 'Log', 'normalize': True, 'median_filter': False, 'median_only': False},
-        {'name': 'Log+median', 'spec_transform': 'Log', 'normalize': False, 'median_filter': True, 'median_only': True},
-        {'name': 'PCEN', 'spec_transform': 'PCEN', 'normalize': False, 'median_filter': False, 'median_only': False},
-        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'normalize': False, 'median_filter': False, 'median_only': False},
+        {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': True},
+        {'name': 'Log+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': False},
+        {'name': 'Log+median', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': True},
+        {'name': 'PCEN', 'spec_transform': 'PCEN', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'bg_subtract': False, 'median_filter': False},
     ]
     
     for seed in args.seeds:
@@ -959,14 +955,14 @@ def main():
     print(" EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL TRAINING (DANN)")
     print("="*70)
     print(" Goal: Test if DANN reduces domain shift with/without normalization")
-    print(" Variants: (1) plain Log, (2) Log+median+normalize")
+    print(" Variants: (1) plain Log, (2) Log+median+bg_subtract")
     print(f" Seeds: {args.seeds}")
     print(f" Total: 2 variants × 2 directions × {len(args.seeds)} seeds = {2 * 2 * len(args.seeds)} experiments")
     print("="*70 + "\n")
     
     dann_configs = [
-        {'name': 'Log', 'normalize': False, 'median_filter': False},
-        {'name': 'Log+median+normalize', 'normalize': True, 'median_filter': True},
+        {'name': 'Log', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Log+median+bg_subtract', 'bg_subtract': True, 'median_filter': True},
     ]
     
     for seed in args.seeds:
@@ -985,7 +981,7 @@ def main():
                 'batch_size': args.batch_size,
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
-                'normalize': dann_config['normalize'],
+                'bg_subtract': dann_config['bg_subtract'],
                 'median_filter': dann_config['median_filter'],
                 'lambda_domain': 0.3,
                 'seed': seed,
@@ -1005,7 +1001,7 @@ def main():
                 'batch_size': args.batch_size,
                 'mixup': args.mixup,
                 'spec_transform': 'Log',
-                'normalize': dann_config['normalize'],
+                'bg_subtract': dann_config['bg_subtract'],
                 'median_filter': dann_config['median_filter'],
                 'lambda_domain': 0.3,
                 'seed': seed,
@@ -1042,9 +1038,8 @@ def main():
                     'batch_size': args.batch_size,
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
-                    'normalize': False,
+                    'bg_subtract': False,
                     'median_filter': False,
-                    'median_only': False,
                     'noise': noise_level,
                     'noise_folder': args.noise_folder,
                     'seed': seed,
@@ -1063,9 +1058,8 @@ def main():
                     'batch_size': args.batch_size,
                     'mixup': args.mixup,
                     'spec_transform': 'Log',
-                    'normalize': False,
+                    'bg_subtract': False,
                     'median_filter': False,
-                    'median_only': False,
                     'noise': noise_level,
                     'noise_folder': args.noise_folder,
                     'seed': seed,
@@ -1142,9 +1136,8 @@ def main():
                         'batch_size': args.batch_size,
                         'mixup': args.mixup,
                         'spec_transform': 'Log',
-                        'normalize': False,
+                        'bg_subtract': False,
                         'median_filter': False,
-                        'median_only': False,
                         'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
@@ -1163,9 +1156,8 @@ def main():
                         'batch_size': args.batch_size,
                         'mixup': args.mixup,
                         'spec_transform': 'Log',
-                        'normalize': False,
+                        'bg_subtract': False,
                         'median_filter': False,
-                        'median_only': False,
                         'noise': 0.2,  # Fixed ratio
                         'noise_folder': str(noise_subset_dir),
                         'seed': seed,
@@ -1226,14 +1218,14 @@ def main():
         print("="*70)
         print(" Goal: Evaluate if training on combined DOC+Waitākere data")
         print("       improves cross-domain performance")
-        print(" Using: Log baseline and Log+median+normalize preprocessing")
+        print(" Using: Log baseline and Log+median+bg_subtract preprocessing")
         print(f" Seeds: {args.seeds}")
         print(f" Total: 2 methods × {len(args.seeds)} seeds = {2 * len(args.seeds)} experiments")
         print("="*70 + "\n")
         
         merged_configs = [
-            {'name': 'Log', 'spec_transform': 'Log', 'normalize': False, 'median_filter': False, 'median_only': False},
-            {'name': 'Log+median+normalize', 'spec_transform': 'Log', 'normalize': True, 'median_filter': True, 'median_only': False},
+            {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': False},
+            {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': True},
         ]
         
         for seed in args.seeds:

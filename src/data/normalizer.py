@@ -34,24 +34,24 @@ def get_background_spectrogram(img):
 
     return img
 
-def normalize_spectrogram(img, use_median_filter=True, median_only=False):
+def normalize_spectrogram(img, median_filter=False, bg_subtract=False):
     """
-    Apply background normalization to a spectrogram.
+    Apply preprocessing to a spectrogram.
     
     Args:
         img: Input spectrogram (2D numpy array)
-        use_median_filter: Whether to apply temporal median filtering (default: True)
-        median_only: If True, apply only median filter without background subtraction (default: False)
-   
+        median_filter: Whether to apply temporal median filtering (default: False)
+        bg_subtract: Whether to apply background subtraction (default: False)
+    
+    Both options work independently and can be combined.
     """
     # Ensure input is float
     img = np.asarray(img, dtype=np.float32)
 
-    if use_median_filter:
-        img = median_filter(img, size=(1, 5))
+    if median_filter:
+        img = median_filter_func(img, size=(1, 5))
     
-    # Skip background subtraction if median_only is True
-    if not median_only:
+    if bg_subtract:
         img = img - get_background_spectrogram(img)
 
     return img

@@ -24,8 +24,7 @@ class TrainingConfig:
 
 @dataclass
 class ModelConfig:
-    """Model architecture and optimization."""
-    multilabel: bool
+    """Model architecture and optimization. Always uses multilabel classification."""
     model_type: str = 'ast'  # 'ast' or 'regnet'
     model_name: Optional[str] = None  # e.g., 'regnety_008' for regnet
     freq_bins: Optional[int] = None
@@ -50,11 +49,9 @@ class AugmentationConfig:
     noise_as_samples: bool = False
     max_noise_samples: Optional[int] = None
     use_temporal_roll: bool = config.DEFAULT_TEMPORAL_ROLL
-    normalize: bool = False
+    bg_subtract: bool = False  # Background subtraction normalization (independent)
+    median_filter: bool = False  # Temporal median filtering (independent)
     per_chunk_norm: bool = False
-    # BirdClef-specific
-    normalize_median_filter: bool = True
-    median_only: bool = False
     spec_transform: str = 'Log'
     mixup_mode: str = 'mixup'
     noise_mode: str = 'full'
@@ -65,7 +62,6 @@ class AugmentationConfig:
 @dataclass
 class LossConfig:
     """Loss function configuration."""
-    use_focal_loss: bool = False
     use_class_weights: bool = False
     pos_weight_cap: float = 20.0
     bce_smoothing: float = config.DEFAULT_BCE_SMOOTHING
@@ -85,6 +81,8 @@ class EvaluationConfig:
     """Test/evaluation settings."""
     test_folder: Optional[str] = None
     test_folder2: Optional[str] = None
+    visualize_attention: bool = False
+    viz_samples: int = 10
 
 
 @dataclass
@@ -96,7 +94,6 @@ class TrainerConfig:
     loss: LossConfig
     domain_adaptation: DomainAdaptationConfig
     evaluation: EvaluationConfig
-    trial: Optional[object] = None  # For Optuna
     
     @classmethod
     def from_args(cls, args):
@@ -114,7 +111,6 @@ class TrainerConfig:
                 seed=getattr(args, 'seed', None)
             ),
             model=ModelConfig(
-                multilabel=args.multilabel,
                 model_type=getattr(args, 'model_type', 'ast'),
                 model_name=getattr(args, 'model_name', None),
                 freq_bins=getattr(args, 'freq_bins', None),
@@ -136,10 +132,9 @@ class TrainerConfig:
                 noise_as_samples=getattr(args, 'noise_as_samples', False),
                 max_noise_samples=getattr(args, 'max_noise_samples', None),
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
-                normalize=getattr(args, 'normalize', False),
+                bg_subtract=getattr(args, 'bg_subtract', False),
+                median_filter=getattr(args, 'median_filter', False),
                 per_chunk_norm=getattr(args, 'per_chunk_norm', False),
-                normalize_median_filter=getattr(args, 'median_filter', False),
-                median_only=getattr(args, 'median_only', False),
                 spec_transform=getattr(args, 'spec_transform', 'Log'),
                 mixup_mode=getattr(args, 'mixup_mode', 'mixup'),
                 noise_mode=getattr(args, 'noise_mode', 'full'),
@@ -147,7 +142,6 @@ class TrainerConfig:
                 background_prob=getattr(args, 'background_prob', 0.0)
             ),
             loss=LossConfig(
-                use_focal_loss=getattr(args, 'focal_loss', False),
                 use_class_weights=getattr(args, 'class_weights', False),
                 pos_weight_cap=getattr(args, 'pos_weight_cap', 20.0),
                 bce_smoothing=getattr(args, 'bce_smoothing', config.DEFAULT_BCE_SMOOTHING)
@@ -160,7 +154,14 @@ class TrainerConfig:
             ),
             evaluation=EvaluationConfig(
                 test_folder=getattr(args, 'test_folder', None),
-                test_folder2=getattr(args, 'test_folder2', None)
+                test_folder2=getattr(args, 'test_folder2', None),
+                visualize_attention=getattr(args, 'visualize_attention', False),
+                viz_samples=getattr(args, 'viz_samples', 10)
+            )
+                use_cleaner=getattr(args, 'use_cleaner', False)
             ),
-            trial=None
+            evaluation=EvaluationConfig(
+                test_folder=getattr(args, 'test_folder', None),
+                test_folder2=getattr(args, 'test_folder2', None)
+            )
         )

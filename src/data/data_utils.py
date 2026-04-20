@@ -234,9 +234,8 @@ class SpectrogramDataset(Dataset):
     
     def __init__(self, filenames, labels, img_height, img_width, channels=1, 
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
-                 spec_transform="Log", training=True, width_downsizing=None, normalize=False,
-                 normalize_median_filter=True, median_only=False, 
-                 use_temporal_roll=True, noise_mode='full', background_prob=0.0):
+                 spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
+                 median_filter=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0):
         """
         Initialize SpectrogramDataset.
         
@@ -252,7 +251,8 @@ class SpectrogramDataset(Dataset):
             spec_transform: Transform to apply ("Log", "PCEN", "Box-Cox", "Sigmoid", None)
             training: Whether this is training data (affects augmentation)
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
-            normalize: Whether to apply background normalization
+            bg_subtract: Whether to apply background subtraction (independent)
+            median_filter: Whether to apply temporal median filtering (independent)
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
             background_prob: Probability of replacing sample with its background spectrogram (zeros labels)
@@ -272,9 +272,8 @@ class SpectrogramDataset(Dataset):
         self.spec_transform = spec_transform
         self.training = training
         self.width_downsizing = width_downsizing
-        self.normalize = normalize
-        self.normalize_median_filter = normalize_median_filter
-        self.median_only = median_only
+        self.bg_subtract = bg_subtract
+        self.median_filter = median_filter
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
@@ -309,8 +308,10 @@ class SpectrogramDataset(Dataset):
             print(f"Training mode: {self.training} (noise augmentation: disabled)")
         if width_downsizing:
             print(f"Width downsampling: stride={width_downsizing} ({img_width} -> {final_width})")
-        if normalize:
-            print(f"Background normalization: enabled")
+        if self.bg_subtract:
+            print(f"Background subtraction: enabled")
+        if self.median_filter:
+            print(f"Median filtering: enabled")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
         print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
@@ -378,13 +379,11 @@ class SpectrogramDataset(Dataset):
         x = self.apply_spec_transform(x)
         assert x.ndim == 3, f"After transform should be 3D (H,W,C), got {x.shape}"
         
-        # Apply background normalization if enabled (normalize OR median_only)
-        if self.normalize or getattr(self, 'median_only', False):
+        # Apply preprocessing if enabled (both options work independently)
+        if self.bg_subtract or self.median_filter:
             # Convert (H, W, C) to (H, W) for normalization
             x_2d = x[:, :, 0] if x.shape[2] == 1 else x[:, :, 0]  # Take first channel
-            use_median = getattr(self, 'normalize_median_filter', True)
-            median_only = getattr(self, 'median_only', False)
-            x_2d = normalize_spectrogram(x_2d, use_median_filter=use_median, median_only=median_only)
+            x_2d = normalize_spectrogram(x_2d, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
             x[:, :, 0] = x_2d  # Put back in the channel
         
         # SpecAugment (time/frequency masking) during training
@@ -736,8 +735,8 @@ def sparse_collate_fn(batch):
 def create_data_loaders(data, batch_size, img_height, img_width, channels=1, 
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None, 
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
-                       use_class_balancing=False, normalize=False, normalize_median_filter=True,
-                       median_only=False, use_temporal_roll=True,
+                       use_class_balancing=False, bg_subtract=False, median_filter=False,
+                       use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0):
     """
     Create PyTorch DataLoaders for training and validation.
@@ -755,9 +754,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
         mixup_alpha: Mixup alpha parameter (0 = disabled, 0.3-0.5 recommended)
         use_class_balancing: If True, balance classes using WeightedRandomSampler
-        normalize: If True, apply background normalization to spectrograms
-        normalize_median_filter: If True (default), use median filter during normalization
-        median_only: If True, apply only median filter without background subtraction
+        bg_subtract: If True, apply background subtraction to spectrograms
+        median_filter: If True, apply temporal median filtering to spectrograms
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
         noise_mode: Noise extraction mode: 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
@@ -781,9 +779,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         spec_transform=spec_transform,
         training=True,
         width_downsizing=width_downsizing,
-        normalize=normalize,
-        normalize_median_filter=normalize_median_filter,
-        median_only=median_only,
+        bg_subtract=bg_subtract,
+        median_filter=median_filter,
         use_temporal_roll=use_temporal_roll,
         noise_mode=noise_mode,
         background_prob=background_prob
@@ -799,9 +796,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             spec_transform=spec_transform,
             training=False,
             width_downsizing=width_downsizing,
-            normalize=normalize,
-            normalize_median_filter=normalize_median_filter,
-            median_only=median_only,
+            bg_subtract=bg_subtract,
+            median_filter=median_filter,
             use_temporal_roll=False,  # Never roll validation data
             noise_mode='full',  # Not used (no noise in validation)
             background_prob=0.0  # No background replacement for validation

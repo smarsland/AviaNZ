@@ -33,7 +33,7 @@ AST_STD = 4.5689974
 # Training defaults
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_EPOCHS = 50
-DEFAULT_LEARNING_RATE = 3.073e-5  # Optuna-tuned optimal value (trial #18)
+DEFAULT_LEARNING_RATE = 3.073e-5
 DEFAULT_CNN_LEARNING_RATE = 1e-3  # CNN models need higher learning rates
 DEFAULT_CHANNELS = 1
 DEFAULT_DROPOUT = 0.30  # Increased for better regularization with longer clips

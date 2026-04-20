@@ -76,20 +76,12 @@ class ModelPredictor:
         if inference_time_bins != training_time_bins:
             print(f"⚡ Resizing model input: {training_time_bins} → {inference_time_bins} time bins")
         
-        if model_config.get('normalize', False) and not self.normalize:
-            print(f"⚠️  Model was trained with normalization but --normalize flag not set")
-            print(f"   Auto-enabling normalization for consistency")
-            self.normalize = True
-        
-        # Auto-detect baseline removal from model config if not explicitly set
-        if self.remove_baseline is None:
-            if 'remove_baseline' in model_config:
-                self.remove_baseline = model_config['remove_baseline']
-                status = "enabled" if self.remove_baseline else "disabled"
-                print(f"Baseline removal: {status} (from model config)")
-            else:
-                self.remove_baseline = False  # Default False (backwards compat)
-                print(f"Baseline removal: disabled (old model, no config found - assuming False)")
+        # Check if model was trained with background subtraction
+        if model_config.get('bg_subtract', False):
+            if not self.normalize:
+                print(f"⚠️  Model was trained with background subtraction but --normalize flag not set")
+                print(f"   Auto-enabling normalization for consistency")
+                self.normalize = True
         
         training_input_size = (self.expected_freq_bins, training_time_bins)
         
@@ -251,10 +243,13 @@ class ModelPredictor:
         with open(self.model_config, 'r') as f:
             model_config = json.load(f)
         spec_transform = model_config.get('spec_transform', config.DEFAULT_SPEC_TRANSFORM)
-        normalize_median_filter = model_config.get('normalize_median_filter', True)
-        median_only = model_config.get('median_only', False)
+        
+        # Read preprocessing config
+        bg_subtract = model_config.get('bg_subtract', False)
+        median_filter = model_config.get('median_filter', False)
+        
         print(f"Using spec_transform: {spec_transform} (from model config)")
-        print(f"Using normalize_median_filter: {normalize_median_filter}, median_only: {median_only}")
+        print(f"Using bg_subtract: {bg_subtract}, median_filter: {median_filter}")
         
         # Create SpectrogramDataset (EXACTLY matching validation in create_data_loaders)
         img_height = self.expected_freq_bins
@@ -272,11 +267,9 @@ class ModelPredictor:
             spec_transform=spec_transform,  # Use config.DEFAULT_SPEC_TRANSFORM (matches training/validation)
             training=False,
             width_downsizing=None,
-            normalize=self.normalize,
-            normalize_median_filter=normalize_median_filter,
-            median_only=median_only,
+            bg_subtract=bg_subtract,
+            median_filter=median_filter,
             use_temporal_roll=False,
-            remove_baseline=self.remove_baseline,
             noise_mode='full',
             background_prob=0.0
         )

@@ -15,6 +15,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from src.data.data_utils import DataLoader, create_data_loaders, SpectrogramDataset
 from src.core.models import AST, RegNetModel
 from src.evaluation.evaluation_utils import EvaluationManager
+from src.evaluation.attention_viz import visualize_attention
 from src.core.trainer_config import TrainerConfig, TrainingConfig, ModelConfig
 from src.core import config
 
@@ -78,104 +79,6 @@ def compute_multilabel_epoch_metrics(all_preds, all_targets):
     }
 
 
-class FocalLoss(nn.Module):
-    """
-    Focal Loss for multi-class classification.
-    
-    Focal Loss addresses class imbalance by down-weighting easy examples
-    and focusing training on hard negatives.
-    
-    Formula: FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
-    
-    Args:
-        alpha: Weighting factor for positive class (default: 0.25)
-        gamma: Focusing parameter (default: 2.0). Higher gamma focuses more on hard examples.
-        reduction: 'mean' or 'sum' (default: 'mean')
-    
-    Reference: Lin et al., "Focal Loss for Dense Object Detection" (2017)
-    """
-    def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
-        super(FocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.reduction = reduction
-    
-    def forward(self, inputs, targets):
-        """
-        Args:
-            inputs: Logits from model (N, C) where C is number of classes
-            targets: Class indices (N,) or one-hot encoded (N, C)
-        """
-        # Handle one-hot encoded targets
-        if targets.dim() == 2:
-            targets = targets.argmax(dim=1)
-        
-        # Convert to probabilities
-        ce_loss = F.cross_entropy(inputs, targets, reduction='none')
-        p_t = torch.exp(-ce_loss)
-        
-        # Focal term: (1 - p_t)^gamma
-        focal_term = (1 - p_t) ** self.gamma
-        
-        # Focal loss
-        loss = self.alpha * focal_term * ce_loss
-        
-        if self.reduction == 'mean':
-            return loss.mean()
-        elif self.reduction == 'sum':
-            return loss.sum()
-        else:
-            return loss
-
-
-class MultilabelFocalLoss(nn.Module):
-    """
-    Focal Loss for multi-label classification.
-    
-    Applies focal loss independently to each label using BCE with logits.
-    
-    Args:
-        alpha: Weighting factor for positive class (default: 0.25)
-        gamma: Focusing parameter (default: 2.0)
-        reduction: 'mean' or 'sum' (default: 'mean')
-    """
-    def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
-        super(MultilabelFocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.reduction = reduction
-    
-    def forward(self, inputs, targets):
-        """
-        Args:
-            inputs: Logits from model (N, C)
-            targets: Binary labels (N, C)
-        """
-        # Support soft targets (e.g., mixup) by using the continuous formulation:
-        # p_t = p*target + (1-p)*(1-target)
-        # alpha_t = alpha*target + (1-alpha)*(1-target)
-        targets = targets.to(dtype=inputs.dtype)
-
-        bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-
-        p = torch.sigmoid(inputs)
-        p_t = p * targets + (1.0 - p) * (1.0 - targets)
-
-        focal_term = (1.0 - p_t) ** self.gamma
-
-        alpha = torch.as_tensor(self.alpha, device=inputs.device, dtype=inputs.dtype)
-        alpha_t = alpha * targets + (1.0 - alpha) * (1.0 - targets)
-
-        loss = alpha_t * focal_term * bce_loss
-        
-        if self.reduction == 'mean':
-            return loss.mean()
-        elif self.reduction == 'sum':
-            return loss.sum()
-        else:
-            return loss
-
-
 class SmoothBCEWithLogitsLoss(nn.Module):
     """
     BCEWithLogits with target smoothing for multi-label classification.
@@ -226,7 +129,7 @@ class Trainer:
         self.use_amp = cfg.training.use_amp
         self.seed = cfg.training.seed
         
-        self.multilabel = cfg.model.multilabel
+        # Model configuration
         self.dropout = cfg.model.dropout
         self.use_multiscale = cfg.model.use_multiscale
         self.use_reconstruction = cfg.model.use_reconstruction
@@ -238,35 +141,37 @@ class Trainer:
         self.freeze_stages = cfg.model.freeze_stages
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
         
+        # Augmentation configuration
         self.mixup_alpha = cfg.augmentation.mixup_alpha
         self.noise_ratio = cfg.augmentation.noise_ratio
         self.noise_folder = cfg.augmentation.noise_folder
         self.noise_as_samples = cfg.augmentation.noise_as_samples
         self.max_noise_samples = cfg.augmentation.max_noise_samples
         self.use_temporal_roll = cfg.augmentation.use_temporal_roll
-        self.normalize = cfg.augmentation.normalize
-        self.normalize_median_filter = cfg.augmentation.normalize_median_filter
-        self.median_only = cfg.augmentation.median_only
+        self.bg_subtract = cfg.augmentation.bg_subtract
+        self.median_filter = cfg.augmentation.median_filter
         self.per_chunk_norm = cfg.augmentation.per_chunk_norm
         self.spec_transform = cfg.augmentation.spec_transform
         self.mixup_mode = cfg.augmentation.mixup_mode
         self.noise_mode = cfg.augmentation.noise_mode
         self.background_prob = cfg.augmentation.background_prob
         
-        self.use_focal_loss = cfg.loss.use_focal_loss
+        # Loss configuration
         self.use_class_weights = cfg.loss.use_class_weights
         self.pos_weight_cap = cfg.loss.pos_weight_cap
         self.bce_smoothing = cfg.loss.bce_smoothing
         
+        # Domain adaptation configuration
         self.use_dann = cfg.domain_adaptation.use_dann
         self.target_folder = cfg.domain_adaptation.target_folder
         self.lambda_domain = cfg.domain_adaptation.lambda_domain
         self.use_cleaner = cfg.domain_adaptation.use_cleaner
         
+        # Evaluation configuration
         self.test_folder = cfg.evaluation.test_folder
         self.test_folder2 = cfg.evaluation.test_folder2
-        
-        self.trial = cfg.trial
+        self.visualize_attention = cfg.evaluation.visualize_attention
+        self.viz_samples = cfg.evaluation.viz_samples
         
         # Set random seed
         if self.seed is not None:
@@ -323,9 +228,9 @@ class Trainer:
         # Initialize gradient scaler for AMP
         self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
-        # Load data
+        # Load data (always multilabel)
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-        self.data = data_loader.load_data(self.multilabel, validation_share=0.2)
+        self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
         # Optionally include noise spectrograms as explicit all-zero training samples.
@@ -347,7 +252,7 @@ class Trainer:
                 raise ValueError("use_dann=True requires target_folder")
             print(f"Loading target domain data from {self.target_folder} for DANN...")
             target_loader = DataLoader(self.target_folder, noise_folder=None)
-            self.target_data = target_loader.load_data(self.multilabel, validation_share=0.2)
+            self.target_data = target_loader.load_data(use_multilabel=True, validation_share=0.2)
             print(f"Loaded {len(self.target_data['train_filenames'])} target domain samples")
 
         # Use dimensions from spectrogram params (single source of truth)
@@ -363,9 +268,8 @@ class Trainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=False, normalize=self.normalize,
-            normalize_median_filter=self.normalize_median_filter,
-            median_only=self.median_only,
+            use_class_balancing=False, bg_subtract=self.bg_subtract,
+            median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
             noise_mode=self.noise_mode,
@@ -379,9 +283,8 @@ class Trainer:
                 cropping_mode='random', noise_ratio=0.0,  # No noise augmentation for target
                 spec_transform=self.spec_transform,
                 num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
-                use_class_balancing=False, normalize=self.normalize,
-                normalize_median_filter=self.normalize_median_filter,
-                median_only=self.median_only,
+                use_class_balancing=False, bg_subtract=self.bg_subtract,
+                median_filter=self.median_filter,
                 use_temporal_roll=self.use_temporal_roll,
                 mixup_mode='mixup',
                 noise_mode='full',
@@ -443,13 +346,13 @@ class Trainer:
             ).to(self.device)
         else:
             if self.use_multiscale:
-                print("Creating Multi-Scale AST model...")
+                print("Creating Multi-Scale AST model (multilabel)...")
                 from models import MultiScaleAST
-                model = MultiScaleAST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, 
+                model = MultiScaleAST(self.num_classes, input_size=input_size, dropout=self.dropout, 
                                      use_reconstruction=self.use_reconstruction).to(self.device)
             else:
-                print("Creating AST model...")
-                model = AST(self.num_classes, self.multilabel, input_size=input_size, dropout=self.dropout, 
+                print("Creating AST model (multilabel)...")
+                model = AST(self.num_classes, input_size=input_size, dropout=self.dropout, 
                            use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
                            per_chunk_norm=self.per_chunk_norm).to(self.device)
             
@@ -532,28 +435,17 @@ class Trainer:
         scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
         print(f"Using AdamW optimizer with Lambda LR scheduler")
         
-        # Use logits from the model and appropriate losses
-        # Stronger label smoothing for better generalization
-        if self.use_focal_loss:
-            if self.multilabel:
-                criterion = MultilabelFocalLoss(alpha=0.25, gamma=2.0)
-                print("Using Multilabel Focal Loss (alpha=0.25, gamma=2.0)")
-            else:
-                criterion = FocalLoss(alpha=0.25, gamma=2.0)
-                print("Using Focal Loss (alpha=0.25, gamma=2.0)")
-        elif self.multilabel:
-            pos_weight = None
-            if self.use_class_weights:
-                pos_weight = self._compute_class_weights()
-                print(f"Using class-weighted BCE loss")
-                print(f"  Weight range: {pos_weight.min().item():.2f} - {pos_weight.max().item():.2f}")
-            if self.bce_smoothing and self.bce_smoothing > 0.0:
-                criterion = SmoothBCEWithLogitsLoss(epsilon=self.bce_smoothing, pos_weight=pos_weight)
-                print(f"Applying BCE target smoothing (epsilon={self.bce_smoothing:.3f})")
-            else:
-                criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        # Use BCE-based loss (always multilabel)
+        pos_weight = None
+        if self.use_class_weights:
+            pos_weight = self._compute_class_weights()
+            print(f"Using class-weighted BCE loss")
+            print(f"  Weight range: {pos_weight.min().item():.2f} - {pos_weight.max().item():.2f}")
+        if self.bce_smoothing and self.bce_smoothing > 0.0:
+            criterion = SmoothBCEWithLogitsLoss(epsilon=self.bce_smoothing, pos_weight=pos_weight)
+            print(f"Applying BCE target smoothing (epsilon={self.bce_smoothing:.3f})")
         else:
-            criterion = nn.BCEWithLogitsLoss() if self.multilabel else nn.CrossEntropyLoss(label_smoothing=0.1)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         
         # Training
         train_losses = []
@@ -652,17 +544,9 @@ class Trainer:
                         source_features = model.get_features(source_data)
                         target_features = model.get_features(target_data)
                         
-                        # Classification loss (only on source domain with labels)
-                        if self.multilabel:
-                            source_output = torch.clamp(source_output, min=-80.0, max=80.0)
-                            class_loss = criterion(source_output, source_target)
-                        else:
-                            if source_target.dim() == 2 and not torch.equal(source_target, source_target.round()):
-                                log_probs = F.log_softmax(source_output, dim=1)
-                                class_loss = -(source_target * log_probs).sum(dim=1).mean()
-                            else:
-                                target_idx = source_target.argmax(dim=1)
-                                class_loss = criterion(source_output, target_idx)
+                        # Classification loss (only on source domain with labels - always multilabel)
+                        source_output = torch.clamp(source_output, min=-80.0, max=80.0)
+                        class_loss = criterion(source_output, source_target)
                         
                         # Domain adaptation loss
                         combined_features = torch.cat([source_features, target_features], dim=0)
@@ -702,17 +586,11 @@ class Trainer:
                     total_class_loss += class_loss.item()
                     total_domain_loss += domain_loss.item()
                     
-                    # Accuracy tracking (only on source labeled data)
+                    # Accuracy tracking (only on source labeled data - always multilabel)
                     with torch.no_grad():
-                        if self.multilabel:
-                            preds = (torch.sigmoid(source_output) > 0.5).float()
-                            all_train_preds.append(preds.cpu().numpy())
-                            all_train_targets.append(source_target.cpu().numpy())
-                        else:
-                            pred = source_output.argmax(dim=1)
-                            target_idx = source_target.argmax(dim=1) if source_target.dim() == 2 else source_target
-                            train_correct += pred.eq(target_idx).sum().item()
-                            train_total += source_target.size(0)
+                        preds = (torch.sigmoid(source_output) > 0.5).float()
+                        all_train_preds.append(preds.cpu().numpy())
+                        all_train_targets.append(source_target.cpu().numpy())
                 
                 else:
                     # Standard training (no DANN)
@@ -734,21 +612,10 @@ class Trainer:
                             output = model(data)
                     
                     with torch.amp.autocast('cuda', enabled=self.use_amp):
-                        if self.multilabel:
-                            # Clamp logits to prevent numerical overflow in BCE loss
-                            # Logits beyond ±80 cause sigmoid(±80) ≈ 0/1 which creates log(0) = -inf
-                            output = torch.clamp(output, min=-80.0, max=80.0)
-                            loss = criterion(output, target)
-                        else:
-                            # Detect soft (mixup) labels: if any row has fractional values (not strictly 0/1)
-                            if target.dim() == 2 and not torch.equal(target, target.round()):
-                                # Proper soft-label cross-entropy (KL to one-hot mixing)
-                                log_probs = F.log_softmax(output, dim=1)
-                                loss = -(target * log_probs).sum(dim=1).mean()
-                            else:
-                                # Hard labels path (one-hot vectors)
-                                target_idx = target.argmax(dim=1)
-                                loss = criterion(output, target_idx)
+                        # Always multilabel - clamp logits to prevent numerical overflow in BCE loss
+                        # Logits beyond ±80 cause sigmoid(±80) ≈ 0/1 which creates log(0) = -inf
+                        output = torch.clamp(output, min=-80.0, max=80.0)
+                        loss = criterion(output, target)
                         
                         if self.use_reconstruction:
                             target_spec = data.squeeze(1) if data.dim() == 4 else data
@@ -794,19 +661,11 @@ class Trainer:
                     
                     train_loss += loss.item()
                     
-                    # For metrics, convert soft (mixup) targets back to hard labels
-                    # by rounding to nearest integer (0 or 1)
+                    # For metrics (always multilabel)
                     target_hard = target.round()
-                    
-                    if self.multilabel:
-                        pred = (torch.sigmoid(output) > 0.5).float()
-                        all_train_preds.append(pred.cpu().numpy())
-                        all_train_targets.append(target_hard.cpu().numpy())
-                    else:
-                        pred = output.argmax(dim=1)
-                        target_labels = target_hard.argmax(dim=1)
-                        train_correct += (pred == target_labels).sum().item()
-                        train_total += target_hard.size(0)
+                    pred = (torch.sigmoid(output) > 0.5).float()
+                    all_train_preds.append(pred.cpu().numpy())
+                    all_train_targets.append(target_hard.cpu().numpy())
             
             # Print progress for DANN training
             if self.use_dann and batch_idx % 10 == 0:
@@ -848,18 +707,11 @@ class Trainer:
                         else:
                             output = model(data)
                     
-                    if self.multilabel:
-                        val_loss += criterion(output, target).item()
-                        pred = (torch.sigmoid(output) > 0.5).float()
-                        all_val_preds.append(pred.cpu().numpy())
-                        all_val_targets.append(target.cpu().numpy())
-                    else:
-                        target_idx = target.argmax(dim=1)
-                        val_loss += criterion(output, target_idx).item()
-                        pred = output.argmax(dim=1)
-                        target_labels = target.argmax(dim=1)
-                        val_correct += (pred == target_labels).sum().item()
-                        val_total += target.size(0)
+                    # Always multilabel
+                    val_loss += criterion(output, target).item()
+                    pred = (torch.sigmoid(output) > 0.5).float()
+                    all_val_preds.append(pred.cpu().numpy())
+                    all_val_targets.append(target.cpu().numpy())
             
             # Calculate averages
             train_loss /= max(1, len(self.train_loader))  # Avoid divide by zero if epoch stopped early
@@ -875,14 +727,11 @@ class Trainer:
                 print(f"   Recommended: --lr {self.learning_rate/2:.2e} or --lr {self.learning_rate/5:.2e}")
                 return
             
-            if self.multilabel:
-                train_metrics = compute_multilabel_epoch_metrics(all_train_preds, all_train_targets)
-                val_metrics = compute_multilabel_epoch_metrics(all_val_preds, all_val_targets)
-                train_acc = train_metrics['macro_f1']
-                val_acc = val_metrics['macro_f1']
-            else:
-                train_acc = train_correct / train_total if train_total > 0 else 0.0
-                val_acc = val_correct / val_total if val_total > 0 else 0.0
+            # Calculate metrics (always multilabel)
+            train_metrics = compute_multilabel_epoch_metrics(all_train_preds, all_train_targets)
+            val_metrics = compute_multilabel_epoch_metrics(all_val_preds, all_val_targets)
+            train_acc = train_metrics['macro_f1']
+            val_acc = val_metrics['macro_f1']
             
             train_losses.append(train_loss)
             val_losses.append(val_loss)
@@ -909,39 +758,26 @@ class Trainer:
                 epochs_without_improvement += 1
                 if self.patience > 0 and epochs_without_improvement >= self.patience:
                     print(f"\n  Early stopping: no improvement for {self.patience} epochs")
-                    print(f"  Best {'macro-F1' if self.multilabel else 'val acc'}: {best_val_acc:.4f} at epoch {best_epoch}")
+                    print(f"  Best macro-F1: {best_val_acc:.4f} at epoch {best_epoch}")
                     break
             
             epoch_time = time.time() - start_time
             print(f'Epoch {epoch+1}/{self.max_epochs} ({epoch_time:.1f}s)')
-            if self.multilabel:
-                print(
-                    f"Train Loss: {train_loss:.4f}, "
-                    f"Macro F1: {train_metrics['macro_f1']:.4f}, "
-                    f"Micro F1: {train_metrics['micro_f1']:.4f}, "
-                    f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
-                    f"Exact: {train_metrics['exact_match']:.4f}"
-                )
-                print(
-                    f"  Val Loss: {val_loss:.4f}, "
-                    f"Macro F1: {val_metrics['macro_f1']:.4f}, "
-                    f"Micro F1: {val_metrics['micro_f1']:.4f}, "
-                    f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
-                    f"Exact: {val_metrics['exact_match']:.4f}"
-                )
-            else:
-                print(f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}')
-                print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
+            print(
+                f"Train Loss: {train_loss:.4f}, "
+                f"Macro F1: {train_metrics['macro_f1']:.4f}, "
+                f"Micro F1: {train_metrics['micro_f1']:.4f}, "
+                f"Bit Acc: {train_metrics['bit_acc']:.4f}, "
+                f"Exact: {train_metrics['exact_match']:.4f}"
+            )
+            print(
+                f"  Val Loss: {val_loss:.4f}, "
+                f"Macro F1: {val_metrics['macro_f1']:.4f}, "
+                f"Micro F1: {val_metrics['micro_f1']:.4f}, "
+                f"Bit Acc: {val_metrics['bit_acc']:.4f}, "
+                f"Exact: {val_metrics['exact_match']:.4f}"
+            )
             print('-' * 60)
-            
-            if self.trial is not None:
-                import optuna
-                # Report validation loss for pruning
-                self.trial.report(val_loss, epoch)
-                # Only check for pruning if not the last epoch
-                if epoch < self.max_epochs - 1 and self.trial.should_prune():
-                    print(f"Trial pruned at epoch {epoch+1}")
-                    raise optuna.TrialPruned()
         
         # Save final model (only if we actually trained)
         if self.max_epochs > 0:
@@ -965,12 +801,10 @@ class Trainer:
                         averaged_state[key] = model_states_for_averaging[-1][key]
                 model.load_state_dict(averaged_state)
                 
-                # Evaluate weight-averaged model
+                # Evaluate weight-averaged model (always multilabel)
                 model.eval()
                 val_loss = 0.0
-                val_correct = 0
-                val_total = 0
-                criterion = nn.BCEWithLogitsLoss() if self.multilabel else nn.CrossEntropyLoss(label_smoothing=0.1)
+                criterion = nn.BCEWithLogitsLoss()
                 
                 # For multi-label F1 calculation
                 all_val_preds = []
@@ -987,31 +821,18 @@ class Trainer:
                             else:
                                 output = model(data)
                         
-                        if self.multilabel:
-                            val_loss += criterion(output, target).item()
-                            pred = (torch.sigmoid(output) > 0.5).float()
-                            all_val_preds.append(pred.cpu().numpy())
-                            all_val_targets.append(target.cpu().numpy())
-                        else:
-                            target_idx = target.argmax(dim=1)
-                            val_loss += criterion(output, target_idx).item()
-                            pred = output.argmax(dim=1)
-                            val_correct += (pred == target_idx).sum().item()
-                            val_total += target.size(0)
+                        # Always multilabel
+                        val_loss += criterion(output, target).item()
+                        pred = (torch.sigmoid(output) > 0.5).float()
+                        all_val_preds.append(pred.cpu().numpy())
+                        all_val_targets.append(target.cpu().numpy())
             
-            if self.multilabel:
-                avg_val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
-                print(f"Weight-averaged model validation macro-F1: {avg_val_acc:.4f}")
-            else:
-                avg_val_acc = val_correct / val_total
-                print(f"Weight-averaged model validation accuracy: {avg_val_acc:.4f}")
+            avg_val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
+            print(f"Weight-averaged model validation macro-F1: {avg_val_acc:.4f}")
             
             # Save weight-averaged model if it's better
             if avg_val_acc > best_val_acc:
-                if self.multilabel:
-                    print(f"Weight averaging improved macro-F1: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
-                else:
-                    print(f"Weight averaging improved accuracy: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
+                print(f"Weight averaging improved macro-F1: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
                 best_val_acc = avg_val_acc
                 self._save_model(model, best=True)
         # Evaluate on validation set (using best checkpoint)
@@ -1025,7 +846,7 @@ class Trainer:
             print(f"DEBUG: Model checkpoint MD5: {model_hash}")
             state_dict = torch.load(best_path, map_location=self.device)
             model.load_state_dict(state_dict)
-        evaluator = EvaluationManager(self.output_folder, self.data['class_names'], self.multilabel)
+        evaluator = EvaluationManager(self.output_folder, self.data['class_names'], is_multilabel=True)
         evaluator.evaluate_model(model, self.val_loader, f'{self.model_type}_model', self.data, device=self.device)
 
         # Evaluate on test sets if provided (for DANN experiments)
@@ -1034,7 +855,7 @@ class Trainer:
             print(f"Evaluating on test set 1: {self.test_folder}")
             print(f"{'='*60}")
             test_loader1 = DataLoader(self.test_folder, noise_folder=None)
-            test_data1 = test_loader1.load_data(self.multilabel, validation_share=0.0)
+            test_data1 = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
             
             test_dataset1 = SpectrogramDataset(
                 test_data1['train_filenames'], test_data1['train_labels'],
@@ -1044,11 +865,9 @@ class Trainer:
                 spec_transform=self.spec_transform,
                 training=False,
                 width_downsizing=None,
-                normalize=self.normalize,
-                normalize_median_filter=self.normalize_median_filter,
-                median_only=self.median_only,
+                bg_subtract=self.bg_subtract,
+                median_filter=self.median_filter,
                 use_temporal_roll=False,
-                remove_baseline=self.remove_baseline,
                 noise_mode='full',
                 background_prob=0.0
             )
@@ -1064,9 +883,25 @@ class Trainer:
             # Evaluate and save predictions
             test_name1 = Path(self.test_folder).parent.name
             print(f"DEBUG TEST1: folder={self.test_folder}, name={test_name1}, samples={len(test_dataset1)}, first_file={test_dataset1.filenames[0] if len(test_dataset1.filenames) > 0 else 'NONE'}")
-            print(f"DEBUG TEST1 CONFIG: normalize={self.normalize}, median_filter={self.normalize_median_filter}, median_only={self.median_only}")
+            print(f"DEBUG TEST1 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
             evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', test_data1, device=self.device)
             
+            
+            # Generate attention visualizations if requested
+            if self.visualize_attention:
+                print(f"\n{'='*60}")
+                print(f"Generating attention visualizations for test set 1")
+                print(f"{'='*60}")
+                viz_folder = os.path.join(self.output_folder, f'attention_{test_name1}')
+                visualize_attention(
+                    model, 
+                    test_loader_obj1, 
+                    viz_folder,
+                    model_type=self.model_type,
+                    num_samples=self.viz_samples,
+                    device=self.device,
+                    class_names=self.data['class_names']
+                )
             # Save predictions to CSV
             self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1)
         
@@ -1075,7 +910,7 @@ class Trainer:
             print(f"Evaluating on test set 2: {self.test_folder2}")
             print(f"{'='*60}")
             test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
-            test_data2 = test_loader2.load_data(self.multilabel, validation_share=0.0)
+            test_data2 = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
             
             test_dataset2 = SpectrogramDataset(
                 test_data2['train_filenames'], test_data2['train_labels'],
@@ -1085,15 +920,29 @@ class Trainer:
                 spec_transform=self.spec_transform,
                 training=False,
                 width_downsizing=None,
-                normalize=self.normalize,
-                normalize_median_filter=self.normalize_median_filter,
-                median_only=self.median_only,
+                bg_subtract=self.bg_subtract,
+                median_filter=self.median_filter,
                 use_temporal_roll=False,
-                remove_baseline=self.remove_baseline,
                 noise_mode='full',
                 background_prob=0.0
             )
             
+            
+            # Generate attention visualizations if requested
+            if self.visualize_attention:
+                print(f"\n{'='*60}")
+                print(f"Generating attention visualizations for test set 2")
+                print(f"{'='*60}")
+                viz_folder = os.path.join(self.output_folder, f'attention_{test_name2}')
+                visualize_attention(
+                    model, 
+                    test_loader_obj2, 
+                    viz_folder,
+                    model_type=self.model_type,
+                    num_samples=self.viz_samples,
+                    device=self.device,
+                    class_names=self.data['class_names']
+                )
             test_loader_obj2 = torch.utils.data.DataLoader(
                 test_dataset2,
                 batch_size=self.batch_size,
@@ -1105,7 +954,7 @@ class Trainer:
             # Evaluate and save predictions
             test_name2 = Path(self.test_folder2).parent.name
             print(f"DEBUG TEST2: folder={self.test_folder2}, name={test_name2}, samples={len(test_dataset2)}, first_file={test_dataset2.filenames[0] if len(test_dataset2.filenames) > 0 else 'NONE'}")
-            print(f"DEBUG TEST2 CONFIG: normalize={self.normalize}, median_filter={self.normalize_median_filter}, median_only={self.median_only}")
+            print(f"DEBUG TEST2 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
             evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', test_data2, device=self.device)
             
             # Save predictions to CSV
@@ -1115,10 +964,6 @@ class Trainer:
         print(f"Done! Saved to {self.output_folder}")
         
         best_val_loss = min(val_losses)
-        
-        if self.trial is not None:
-            # Return best validation loss for Optuna to minimize
-            return best_val_loss
         
         return {
             'model': model,
@@ -1195,17 +1040,14 @@ class Trainer:
         else:
             model_config['model_type'] = 'MultiScaleAST' if self.use_multiscale else 'AST'
         model_config['num_classes'] = model.num_classes
-        model_config['multilabel'] = self.multilabel
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
         model_config['use_cleaner'] = self.use_cleaner
         
         # Save ALL augmentation/normalization parameters for inference consistency
         model_config['spec_transform'] = self.spec_transform
-        model_config['normalize'] = self.normalize
-        model_config['normalize_median_filter'] = self.normalize_median_filter
-        model_config['median_only'] = self.median_only
-        model_config['remove_baseline'] = self.remove_baseline
+        model_config['bg_subtract'] = self.bg_subtract
+        model_config['median_filter'] = self.median_filter
         
         # Save to JSON
         config_path = os.path.join(self.output_folder, f'{self.model_type}_model_config.json')
@@ -1236,7 +1078,7 @@ class Trainer:
         
         ax2.plot(train_accs, label='Train Acc')
         ax2.plot(val_accs, label='Val Acc') 
-        ax2.set_title('Multi-Label Accuracy' if self.multilabel else 'Accuracy')
+        ax2.set_title('Multi-Label Macro F1')
         ax2.legend()
         
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
@@ -1257,18 +1099,13 @@ class Trainer:
                 
                 output = model(data)
                 
-                if self.multilabel:
-                    preds = (torch.sigmoid(output) > 0.5).cpu().numpy()
-                else:
-                    preds = output.argmax(dim=1).cpu().numpy()
+                # Always multilabel
+                preds = (torch.sigmoid(output) > 0.5).cpu().numpy()
                 
                 # Map predictions to class names
                 for i, filename in enumerate(filenames):
-                    if self.multilabel:
-                        pred_classes = [test_data['class_names'][j] for j in range(len(preds[i])) if preds[i][j]]
-                        predictions[filename] = ','.join(pred_classes) if pred_classes else 'Empty'
-                    else:
-                        predictions[filename] = test_data['class_names'][preds[i]]
+                    pred_classes = [test_data['class_names'][j] for j in range(len(preds[i])) if preds[i][j]]
+                    predictions[filename] = ','.join(pred_classes) if pred_classes else 'Empty'
         
         # Save to CSV
         csv_path = os.path.join(self.output_folder, f'predictions_{test_name}.csv')

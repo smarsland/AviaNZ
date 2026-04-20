@@ -345,11 +345,11 @@ class CNNModel(nn.Module):
 
 
 class MultiScaleAST(nn.Module):
+    """Audio Spectrogram Transformer with multi-scale frontend. Always uses multilabel classification."""
     
-    def __init__(self, num_classes, multilabel=False, input_size=None, dropout=0.1, use_reconstruction=False):
+    def __init__(self, num_classes, input_size=None, dropout=0.1, use_reconstruction=False):
         super().__init__()
         self.num_classes = num_classes
-        self.multilabel = multilabel
         self.input_size = input_size if input_size else (128, 512)
         self.use_reconstruction = use_reconstruction
         
@@ -437,12 +437,12 @@ class MultiScaleAST(nn.Module):
 
 
 class AST(nn.Module):
+    """Audio Spectrogram Transformer. Always uses multilabel classification."""
     
-    def __init__(self, num_classes, multilabel=False, input_size=None, dropout=0.1, use_reconstruction=False,
+    def __init__(self, num_classes, input_size=None, dropout=0.1, use_reconstruction=False,
                  use_adapters=False, adapter_dim=64, per_chunk_norm=False, num_chunks=2):
         super().__init__()
         self.num_classes = num_classes
-        self.multilabel = multilabel
         self.use_reconstruction = use_reconstruction
         self.use_adapters = use_adapters
         self.per_chunk_norm = per_chunk_norm
