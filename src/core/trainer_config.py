@@ -18,7 +18,7 @@ class TrainingConfig:
     learning_rate: float
     weight_decay: float = config.DEFAULT_WEIGHT_DECAY
     patience: int = 0
-    use_amp: bool = True
+    use_amp: bool = False
     seed: Optional[int] = None
 
 
@@ -64,7 +64,7 @@ class LossConfig:
     """Loss function configuration."""
     use_class_weights: bool = False
     pos_weight_cap: float = 20.0
-    bce_smoothing: float = config.DEFAULT_BCE_SMOOTHING
+    bce_smoothing: float = 0.0
 
 
 @dataclass

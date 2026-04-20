@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import CosineAnnealingLR
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -421,19 +421,25 @@ class Trainer:
 
         # Optimizer and LR schedule
         # Use AdamW (Adam with decoupled weight decay) for better regularization
-        param_groups = [{'params': model.parameters(), 'lr': self.learning_rate}]
+        # Differential LR for RegNet: pretrained backbone gets base LR, randomly-init classifier gets 10x
+        if self.model_type == 'regnet':
+            backbone_params = [p for n, p in model.named_parameters() if 'classifier' not in n and p.requires_grad]
+            classifier_params = [p for n, p in model.named_parameters() if 'classifier' in n and p.requires_grad]
+            param_groups = [
+                {'params': backbone_params, 'lr': self.learning_rate},
+                {'params': classifier_params, 'lr': self.learning_rate * 10}
+            ]
+            print(f"  Backbone LR: {self.learning_rate:.1e}, Classifier LR: {self.learning_rate * 10:.1e}")
+        else:
+            param_groups = [{'params': model.parameters(), 'lr': self.learning_rate}]
         if self.use_dann:
             param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.learning_rate * 0.1})
         if self.use_cleaner:
             param_groups.append({'params': self.cleaner.parameters(), 'lr': self.learning_rate})
         optimizer = optim.AdamW(param_groups, weight_decay=self.weight_decay)
         
-        def lr_lambda(epoch):
-            if epoch < 5:
-                return 1.0
-            return 0.85 ** (epoch - 5)
-        scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
-        print(f"Using AdamW optimizer with Lambda LR scheduler")
+        scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs, eta_min=1e-7)
+        print(f"Using AdamW optimizer with CosineAnnealingLR scheduler")
         
         # Use BCE-based loss (always multilabel)
         pos_weight = None
@@ -462,10 +468,6 @@ class Trainer:
         # Divergence detection
         initial_loss = None
         divergence_threshold = 10.0  # Stop if loss > initial_loss * threshold
-        
-        # Weight averaging: collect model states from later epochs
-        model_states_for_averaging = []
-        averaging_start_epoch = max(0, self.max_epochs - 20)  # Average last 20 epochs
         
         for epoch in range(self.max_epochs):
             start_time = time.time()
@@ -745,10 +747,6 @@ class Trainer:
 
             scheduler.step()
             
-            # Collect model state for weight averaging (after epoch 5 when LR starts decaying)
-            if epoch >= averaging_start_epoch:
-                model_states_for_averaging.append({k: v.cpu().clone() for k, v in model.state_dict().items()})
-            
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 best_epoch = epoch + 1
@@ -784,57 +782,6 @@ class Trainer:
             self._save_model(model)
             self._save_history(train_losses, val_losses, train_accs, val_accs)
             self._plot_history(train_losses, val_losses, train_accs, val_accs)
-        
-            # Apply weight averaging (AST paper technique for +1-2% accuracy boost)
-            if len(model_states_for_averaging) > 0:
-                print(f"\nApplying weight averaging over {len(model_states_for_averaging)} checkpoints...")
-                averaged_state = {}
-                for key in model_states_for_averaging[0].keys():
-                    try:
-                        stacked_params = torch.stack([state[key] for state in model_states_for_averaging])
-                        if stacked_params.dtype in [torch.float32, torch.float16, torch.float64]:
-                            averaged_state[key] = stacked_params.mean(dim=0)
-                        else:
-                            averaged_state[key] = model_states_for_averaging[-1][key]
-                    except (RuntimeError, TypeError):
-                        # Skip parameters that can't be stacked (e.g., different shapes across checkpoints)
-                        averaged_state[key] = model_states_for_averaging[-1][key]
-                model.load_state_dict(averaged_state)
-                
-                # Evaluate weight-averaged model (always multilabel)
-                model.eval()
-                val_loss = 0.0
-                criterion = nn.BCEWithLogitsLoss()
-                
-                # For multi-label F1 calculation
-                all_val_preds = []
-                all_val_targets = []
-                
-                with torch.no_grad():
-                    for batch in self.val_loader:
-                        data, target = batch
-                        data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                        
-                        with torch.amp.autocast('cuda', enabled=self.use_amp):
-                            if self.use_reconstruction:
-                                output, _ = model(data)
-                            else:
-                                output = model(data)
-                        
-                        # Always multilabel
-                        val_loss += criterion(output, target).item()
-                        pred = (torch.sigmoid(output) > 0.5).float()
-                        all_val_preds.append(pred.cpu().numpy())
-                        all_val_targets.append(target.cpu().numpy())
-            
-            avg_val_acc = compute_multilabel_f1(all_val_preds, all_val_targets)
-            print(f"Weight-averaged model validation macro-F1: {avg_val_acc:.4f}")
-            
-            # Save weight-averaged model if it's better
-            if avg_val_acc > best_val_acc:
-                print(f"Weight averaging improved macro-F1: {best_val_acc:.4f} -> {avg_val_acc:.4f}")
-                best_val_acc = avg_val_acc
-                self._save_model(model, best=True)
         # Evaluate on validation set (using best checkpoint)
         best_path = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
         print(f"\nDEBUG: Loading best model from: {best_path}")
