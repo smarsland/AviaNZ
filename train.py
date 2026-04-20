@@ -120,6 +120,13 @@ Examples:
     # Set default model name
     if args.model_name is None:
         args.model_name = 'regnety_008' if args.model_type == 'regnet' else None
+
+    # Auto-load BirdClef pretrained weights for regnet if not specified
+    if args.model_type == 'regnet' and args.pretrained is None:
+        default_pretrained = 'BirdClefModels/model_fold0.pth'
+        if os.path.exists(default_pretrained):
+            args.pretrained = default_pretrained
+            print(f"  Auto-loading pretrained weights: {default_pretrained}")
     
     print(f"\nTraining {args.model_type.upper()} model...")
     print(f"  Multilabel classification: ALWAYS ENABLED")
