@@ -452,18 +452,8 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
     if isinstance(axes, Axes):
         axes = [axes]
     
-    ax = axes[0]
-    im = ax.imshow(input_spec, aspect='auto', origin='lower', cmap='viridis', interpolation='nearest')
-    ax.set_title('Original Spectrogram', fontsize=12, fontweight='bold')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Frequency')
-    plt.colorbar(im, ax=ax, label='Magnitude')
-
     true_classes = set(np.where(target > 0.5)[0].tolist())
     predicted_classes = list(top_classes)
-    true_positive_classes = [class_idx for class_idx in predicted_classes if class_idx in true_classes]
-    false_positive_classes = [class_idx for class_idx in predicted_classes if class_idx not in true_classes]
-    missed_classes = [class_idx for class_idx in sorted(true_classes) if class_idx not in predicted_classes]
 
     pred_parts = []
     for class_idx in predicted_classes[:5]:
@@ -477,24 +467,12 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
         true_parts.append(class_name)
     true_str = ', '.join(true_parts) if true_parts else 'None'
 
-    missed_parts = []
-    for class_idx in missed_classes[:5]:
-        class_name = class_names[class_idx] if class_names else str(class_idx)
-        missed_parts.append(class_name)
-    missed_str = ', '.join(missed_parts) if missed_parts else 'None'
-
-    status_str = f"TP: {len(true_positive_classes)} | FP: {len(false_positive_classes)} | FN: {len(missed_classes)}"
-    if prediction_source:
-        status_str = f"{status_str} | {prediction_source}"
-    fig.suptitle(
-        f"Sample {sample_idx}\n"
-        f"Predicted: {pred_str}\n"
-        f"True: {true_str}\n"
-        f"Missed true classes: {missed_str}\n"
-        f"{status_str}",
-        fontsize=12,
-        y=0.995
-    )
+    ax = axes[0]
+    im = ax.imshow(input_spec, aspect='auto', origin='lower', cmap='viridis', interpolation='nearest')
+    ax.set_title(f'True: {true_str}  |  Predicted: {pred_str}', fontsize=11, fontweight='bold')
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Frequency')
+    plt.colorbar(im, ax=ax, label='Magnitude')
     
     for idx, (cam, class_idx) in enumerate(zip(cams, top_classes)):
         ax = axes[idx + 1]
