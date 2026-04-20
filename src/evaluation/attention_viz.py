@@ -229,29 +229,30 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
             
             input_sample = inputs[i:i+1]
             target = targets[i]
-            
-            target_class, target_source = select_visualization_class(
-                model,
-                input_sample,
-                target,
-                device
-            )
 
-            cam, prediction, explained_class = grad_cam.generate_cam(
-                input_sample,
-                target_class=target_class
-            )
-            
-            save_attention_plot(
+            with torch.no_grad():
+                prediction = model(input_sample)[0].detach().cpu()
+
+            predicted_classes, prediction_source = select_predicted_classes(prediction)
+
+            cams = []
+            for class_idx in predicted_classes:
+                cam, _, _ = grad_cam.generate_cam(
+                    input_sample,
+                    target_class=class_idx
+                )
+                cams.append(cam)
+
+            save_multiclass_plot(
                 input_sample[0].detach().cpu(),
-                cam,
-                prediction[0].detach().cpu(),
+                cams,
+                predicted_classes,
+                torch.sigmoid(prediction),
                 target.detach().cpu(),
                 output_folder,
                 sample_idx=samples_processed,
                 class_names=class_names,
-                explained_class=explained_class,
-                explained_class_source=target_source
+                prediction_source=prediction_source
             )
             
             samples_processed += 1
@@ -354,6 +355,26 @@ def select_visualization_class(model, input_sample, target, device):
     return probs.argmax().item(), 'top prediction'
 
 
+def select_predicted_classes(prediction, threshold=0.5, max_classes=4):
+    """Choose the predicted classes to explain.
+
+    Uses the model's actual positive predictions when available. If there are no
+    positive predictions at the chosen threshold, falls back to the top logit so
+    the user can still inspect what drove the nearest prediction.
+    """
+    prediction_probs = torch.sigmoid(prediction)
+    predicted_classes = torch.where(prediction_probs > threshold)[0]
+
+    if len(predicted_classes) > 0:
+        sorted_probs, sorted_indices = torch.sort(prediction_probs[predicted_classes], descending=True)
+        del sorted_probs
+        predicted_classes = predicted_classes[sorted_indices][:max_classes]
+        return predicted_classes.tolist(), f'predicted positives > {threshold:.2f}'
+
+    top_class = prediction_probs.argmax().item()
+    return [top_class], f'no predicted positives > {threshold:.2f}; showing top logit fallback'
+
+
 def visualize_top_predictions(model, dataloader, output_folder, model_type='ast',
                              num_samples=10, device='cuda', class_names=None):
     """Generate visualizations for top K predicted classes per sample.
@@ -400,12 +421,13 @@ def visualize_top_predictions(model, dataloader, output_folder, model_type='ast'
             save_multiclass_plot(
                 input_sample[0].cpu(),
                 cams,
-                top_classes,
+                top_classes.tolist(),
                 probs,
                 target.cpu(),
                 output_folder,
                 sample_idx=samples_processed,
-                class_names=class_names
+                class_names=class_names,
+                prediction_source='top predicted classes'
             )
             
             samples_processed += 1
@@ -414,12 +436,14 @@ def visualize_top_predictions(model, dataloader, output_folder, model_type='ast'
 
 
 def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
-                        output_folder, sample_idx=0, class_names=None):
+                        output_folder, sample_idx=0, class_names=None,
+                        prediction_source=None):
     """Save visualization with heatmaps for multiple predicted classes."""
     if input_spec.dim() == 3:
         input_spec = input_spec[0]
     
     input_spec = input_spec.detach().numpy() if input_spec.requires_grad else input_spec.numpy()
+    target = target.numpy() if torch.is_tensor(target) else target
     
     num_classes_viz = len(cams)
     fig, axes = plt.subplots(1 + num_classes_viz, 1, figsize=(14, 4 * (1 + num_classes_viz)), constrained_layout=True)
@@ -432,6 +456,44 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
     ax.set_title('Original Spectrogram', fontsize=12, fontweight='bold')
     ax.set_xlabel('Time')
     ax.set_ylabel('Frequency')
+    plt.colorbar(im, ax=ax, label='Magnitude')
+
+    true_classes = set(np.where(target > 0.5)[0].tolist())
+    predicted_classes = list(top_classes)
+    true_positive_classes = [class_idx for class_idx in predicted_classes if class_idx in true_classes]
+    false_positive_classes = [class_idx for class_idx in predicted_classes if class_idx not in true_classes]
+    missed_classes = [class_idx for class_idx in sorted(true_classes) if class_idx not in predicted_classes]
+
+    pred_parts = []
+    for class_idx in predicted_classes[:5]:
+        class_name = class_names[class_idx] if class_names else str(class_idx)
+        pred_parts.append(f"{class_name} ({probs[class_idx]:.2f})")
+    pred_str = ', '.join(pred_parts) if pred_parts else 'None'
+
+    true_parts = []
+    for class_idx in sorted(true_classes)[:5]:
+        class_name = class_names[class_idx] if class_names else str(class_idx)
+        true_parts.append(class_name)
+    true_str = ', '.join(true_parts) if true_parts else 'None'
+
+    missed_parts = []
+    for class_idx in missed_classes[:5]:
+        class_name = class_names[class_idx] if class_names else str(class_idx)
+        missed_parts.append(class_name)
+    missed_str = ', '.join(missed_parts) if missed_parts else 'None'
+
+    status_str = f"TP: {len(true_positive_classes)} | FP: {len(false_positive_classes)} | FN: {len(missed_classes)}"
+    if prediction_source:
+        status_str = f"{status_str} | {prediction_source}"
+    fig.suptitle(
+        f"Sample {sample_idx}\n"
+        f"Predicted: {pred_str}\n"
+        f"True: {true_str}\n"
+        f"Missed true classes: {missed_str}\n"
+        f"{status_str}",
+        fontsize=12,
+        y=0.995
+    )
     
     for idx, (cam, class_idx) in enumerate(zip(cams, top_classes)):
         ax = axes[idx + 1]
@@ -440,9 +502,11 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
         
         class_name = class_names[class_idx] if class_names else f"Class {class_idx}"
         prob = probs[class_idx].item()
-        ax.set_title(f'{class_name} (p={prob:.3f})', fontsize=12)
+        correctness = 'correct' if class_idx in true_classes else 'incorrect'
+        ax.set_title(f'{class_name} (p={prob:.3f}, {correctness})', fontsize=12)
         ax.set_xlabel('Time')
         ax.set_ylabel('Frequency')
+        plt.colorbar(cam_overlay, ax=ax, label='Attention Weight')
     
     output_path = os.path.join(output_folder, f'multiclass_attention_{sample_idx:04d}.png')
     plt.savefig(output_path, dpi=250, bbox_inches='tight')
