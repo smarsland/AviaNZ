@@ -533,31 +533,31 @@ class Trainer:
                     # Forward pass for source (for classification)
                     source_output = model(source_data)
                     source_features = model.get_features(source_data)
-                        target_features = model.get_features(target_data)
-                        
-                        # Classification loss (only on source domain with labels - always multilabel)
-                        source_output = torch.clamp(source_output, min=-80.0, max=80.0)
-                        class_loss = criterion(source_output, source_target)
-                        
-                        # Domain adaptation loss
-                        combined_features = torch.cat([source_features, target_features], dim=0)
-                        norm_features = F.normalize(combined_features, p=2, dim=1)
-                        reversed_features = self.grl(norm_features)
-                        domain_output = self.domain_classifier(reversed_features)
-                        
-                        domain_labels_source = torch.zeros(batch_size_s).to(self.device)
-                        domain_labels_target = torch.ones(batch_size_t).to(self.device)
-                        domain_labels = torch.cat([domain_labels_source, domain_labels_target], dim=0)
-                        
-                        domain_loss = self.domain_criterion(domain_output.squeeze(), domain_labels)
-                        
-                        # Combined loss
-                        loss = class_loss + self.grl.lambda_param * domain_loss
-                        
-                        # Domain accuracy tracking
-                        domain_pred = (torch.sigmoid(domain_output.squeeze()) > 0.5).float()
-                        domain_correct += (domain_pred == domain_labels).sum().item()
-                        domain_total += domain_labels.size(0)
+                    target_features = model.get_features(target_data)
+                    
+                    # Classification loss (only on source domain with labels - always multilabel)
+                    source_output = torch.clamp(source_output, min=-80.0, max=80.0)
+                    class_loss = criterion(source_output, source_target)
+                    
+                    # Domain adaptation loss
+                    combined_features = torch.cat([source_features, target_features], dim=0)
+                    norm_features = F.normalize(combined_features, p=2, dim=1)
+                    reversed_features = self.grl(norm_features)
+                    domain_output = self.domain_classifier(reversed_features)
+                    
+                    domain_labels_source = torch.zeros(batch_size_s).to(self.device)
+                    domain_labels_target = torch.ones(batch_size_t).to(self.device)
+                    domain_labels = torch.cat([domain_labels_source, domain_labels_target], dim=0)
+                    
+                    domain_loss = self.domain_criterion(domain_output.squeeze(), domain_labels)
+                    
+                    # Combined loss
+                    loss = class_loss + self.grl.lambda_param * domain_loss
+                    
+                    # Domain accuracy tracking
+                    domain_pred = (torch.sigmoid(domain_output.squeeze()) > 0.5).float()
+                    domain_correct += (domain_pred == domain_labels).sum().item()
+                    domain_total += domain_labels.size(0)
                     
                     # Backward pass
                     loss.backward()
