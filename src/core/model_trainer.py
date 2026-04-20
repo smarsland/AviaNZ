@@ -961,7 +961,10 @@ class Trainer:
             self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
 
         print(f"Best Val Acc: {best_val_acc:.4f} at epoch {best_epoch}")
-        print(f"Done! Saved to {self.output_folder}")
+        print(f"\n{'='*60}")
+        print(f"✓ TRAINING COMPLETE")
+        print(f"{'='*60}")
+        print(f"Model saved to: {self.output_folder}")
         
         best_val_loss = min(val_losses)
         

@@ -83,6 +83,8 @@ class GradCAM:
         else:
             cam = self.compute_cam_ast(input_tensor.shape[-2:])
         
+        self.model.zero_grad()
+        
         return cam, output.detach()
     
     def compute_cam_regnet(self):
@@ -128,18 +130,19 @@ class GradCAM:
         
         cam = cam[:grid_h * grid_w].reshape(grid_h, grid_w)
         
-        cam = F.relu(torch.tensor(cam))
-        cam = cam - cam.min()
-        cam = cam / (cam.max() + 1e-8)
+        cam_tensor = torch.from_numpy(cam) if isinstance(cam, np.ndarray) else cam
+        cam_tensor = F.relu(cam_tensor)
+        cam_tensor = cam_tensor - cam_tensor.min()
+        cam_tensor = cam_tensor / (cam_tensor.max() + 1e-8)
         
         cam_resized = F.interpolate(
-            cam.unsqueeze(0).unsqueeze(0),
+            cam_tensor.unsqueeze(0).unsqueeze(0),
             size=target_size,
             mode='bilinear',
             align_corners=False
         )[0, 0]
         
-        return cam_resized.cpu().numpy()
+        return cam_resized.detach().cpu().numpy()
     
     def remove_hooks(self):
         """Remove all registered hooks."""
@@ -167,8 +170,13 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
     
     samples_processed = 0
     
-    print(f"\nGenerating attention visualizations for {num_samples} samples...")
+    print(f"\n{'='*60}")
+    print(f"ATTENTION VISUALIZATION (Post-Training Analysis)")
+    print(f"{'='*60}")
+    print(f"Generating Grad-CAM heatmaps for {num_samples} samples...")
+    print(f"This requires forward+backward pass per sample (~1-2 sec each)")
     print(f"Output folder: {output_folder}")
+    print(f"{'='*60}\n")
     
     for batch_idx, (inputs, targets) in enumerate(dataloader):
         if samples_processed >= num_samples:
@@ -189,10 +197,10 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
             cam, prediction = grad_cam.generate_cam(input_sample)
             
             save_attention_plot(
-                input_sample[0].cpu(),
+                input_sample[0].detach().cpu(),
                 cam,
-                prediction[0].cpu(),
-                target.cpu(),
+                prediction[0].detach().cpu(),
+                target.detach().cpu(),
                 output_folder,
                 sample_idx=samples_processed,
                 class_names=class_names
@@ -200,7 +208,7 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
             
             samples_processed += 1
             
-            if samples_processed % 5 == 0:
+            if samples_processed % 1 == 0:
                 print(f"  Processed {samples_processed}/{num_samples} samples")
     
     grad_cam.remove_hooks()
@@ -223,7 +231,7 @@ def save_attention_plot(input_spec, cam, prediction, target, output_folder,
     if input_spec.dim() == 3:
         input_spec = input_spec[0]
     
-    input_spec = input_spec.numpy()
+    input_spec = input_spec.detach().numpy() if input_spec.requires_grad else input_spec.numpy()
     
     prediction_probs = torch.sigmoid(prediction).numpy()
     target = target.numpy()
@@ -338,7 +346,7 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
     if input_spec.dim() == 3:
         input_spec = input_spec[0]
     
-    input_spec = input_spec.numpy()
+    input_spec = input_spec.detach().numpy() if input_spec.requires_grad else input_spec.numpy()
     
     num_classes_viz = len(cams)
     fig, axes = plt.subplots(1 + num_classes_viz, 1, figsize=(12, 4 * (1 + num_classes_viz)))
