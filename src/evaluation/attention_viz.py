@@ -118,51 +118,53 @@ class GradCAM:
         return cam, output.detach(), target_class
 
     def generate_ast_cam(self, input_tensor, target_class=None):
-        """Generate a class-specific AST token relevance map.
+        """Generate a class-specific AST relevance map via Grad-CAM on patch tokens.
 
-        AST in this project pools transformer patch tokens with a learned
-        attention module before a linear classifier. For visualization, use the
-        model's actual token weights and per-token class evidence instead of a
-        Grad-CAM approximation on the patch projection.
+        Gradients of the target class score flow back through the attention
+        pooling and classifier into each patch token's 768-dim representation.
+        The standard Grad-CAM formula (ReLU of grad-weighted activation, summed
+        over channels) is then applied per token and reshaped to the patch grid.
         """
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(1)
 
         normalized_input = self.prepare_ast_input(input_tensor)
 
-        with torch.no_grad():
-            hidden_states = self.model.ast(normalized_input).last_hidden_state
+        self.model.zero_grad()
 
-            if self.model.use_adapters:
-                for i in range(12):
-                    adapter_output = self.model.adapters[i](hidden_states)
-                    hidden_states = hidden_states + adapter_output
+        hidden_states = self.model.ast(normalized_input).last_hidden_state
 
-            patch_tokens = hidden_states[:, 2:, :]
-            token_scores = self.model.pool.attn(patch_tokens).squeeze(-1)
-            token_weights = torch.softmax(token_scores, dim=1)
-            token_logits = F.linear(
-                patch_tokens,
-                self.model.classifier.weight,
-                self.model.classifier.bias
-            )
-            prediction = torch.sum(token_weights.unsqueeze(-1) * token_logits, dim=1)
+        if self.model.use_adapters:
+            for i in range(12):
+                hidden_states = hidden_states + self.model.adapters[i](hidden_states)
 
-            if target_class is None:
-                target_class = prediction.argmax(dim=1).item()
+        patch_tokens = hidden_states[:, 2:, :]
+        patch_tokens.retain_grad()
 
-            token_relevance = token_weights[0] * token_logits[0, :, target_class]
-            token_relevance = torch.relu(token_relevance)
+        features = self.model.pool(patch_tokens)
+        features = self.model.dropout(features)
+        logits = self.model.classifier(features)
 
-            grid_height, grid_width = self.infer_ast_patch_grid(
-                normalized_input.shape[-2:],
-                token_relevance.numel()
-            )
-            cam = token_relevance.view(grid_height, grid_width)
-            cam = cam - cam.min()
-            cam = cam / (cam.max() + 1e-8)
+        prediction = logits.detach()
+        if target_class is None:
+            target_class = prediction.argmax(dim=1).item()
 
-        return cam.cpu().numpy(), prediction.detach(), target_class
+        logits[0, target_class].backward()
+
+        token_importance = (patch_tokens.grad[0] * patch_tokens[0].detach()).sum(dim=1)
+        token_importance = torch.relu(token_importance)
+
+        grid_height, grid_width = self.infer_ast_patch_grid(
+            normalized_input.shape[-2:],
+            token_importance.numel()
+        )
+        cam = token_importance.view(grid_height, grid_width)
+        cam = cam - cam.min()
+        cam = cam / (cam.max() + 1e-8)
+
+        self.model.zero_grad()
+
+        return cam.cpu().numpy(), prediction, target_class
 
     def prepare_ast_input(self, input_tensor):
         """Match AST input normalization used during inference."""
