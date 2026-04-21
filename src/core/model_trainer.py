@@ -431,7 +431,7 @@ class Trainer:
         scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs, eta_min=1e-7)
         print(f"Using AdamW optimizer with CosineAnnealingLR scheduler")
 
-        scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
+        scaler = torch.amp.GradScaler('cuda', enabled=torch.cuda.is_available())
         
         # Use BCE-based loss (always multilabel)
         pos_weight = None
@@ -590,7 +590,7 @@ class Trainer:
                     if self.use_cleaner:
                         data = self.cleaner(data)
                     
-                    with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                    with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
                         if self.use_reconstruction:
                             output, recon = model(data)
                         else:
@@ -620,13 +620,7 @@ class Trainer:
                     # Backward pass
                     scaler.scale(loss).backward()
                     scaler.unscale_(optimizer)
-                    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                    if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-                        print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
-                        print(f"   Stopping epoch early...")
-                        optimizer.zero_grad()
-                        scaler.update()
-                        break
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     scaler.step(optimizer)
                     scaler.update()
                     
