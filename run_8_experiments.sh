@@ -15,7 +15,7 @@ DOC_TEST="${MATCHED}/doc_split/test"
 EPOCHS=100
 PATIENCE=15
 MIXUP=0.25
-VIZ_SAMPLES=30
+VIZ_SAMPLES=10
 
 run_experiment() {
     local model=$1
