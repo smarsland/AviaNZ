@@ -430,6 +430,8 @@ class Trainer:
         
         scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs, eta_min=1e-7)
         print(f"Using AdamW optimizer with CosineAnnealingLR scheduler")
+
+        scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
         
         # Use BCE-based loss (always multilabel)
         pos_weight = None
@@ -588,19 +590,20 @@ class Trainer:
                     if self.use_cleaner:
                         data = self.cleaner(data)
                     
-                    if self.use_reconstruction:
-                        output, recon = model(data)
-                    else:
-                        output = model(data)
-                    
-                    output = torch.clamp(output, min=-80.0, max=80.0)
-                    loss = criterion(output, target)
-                    
-                    if self.use_reconstruction:
-                        target_spec = data.squeeze(1) if data.dim() == 4 else data
-                        target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
-                        recon_loss = F.mse_loss(recon, target_spec)
-                        loss = loss + self.recon_weight * recon_loss
+                    with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                        if self.use_reconstruction:
+                            output, recon = model(data)
+                        else:
+                            output = model(data)
+                        
+                        output = torch.clamp(output, min=-80.0, max=80.0)
+                        loss = criterion(output, target)
+                        
+                        if self.use_reconstruction:
+                            target_spec = data.squeeze(1) if data.dim() == 4 else data
+                            target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
+                            recon_loss = F.mse_loss(recon, target_spec)
+                            loss = loss + self.recon_weight * recon_loss
                     
                     # Check for NaN loss BEFORE backward pass
                     if torch.isnan(loss) or torch.isinf(loss):
@@ -615,14 +618,17 @@ class Trainer:
                         break  # Stop epoch, not just continue
                     
                     # Backward pass
-                    loss.backward()
+                    scaler.scale(loss).backward()
+                    scaler.unscale_(optimizer)
                     grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     if torch.isnan(grad_norm) or torch.isinf(grad_norm):
                         print(f"\n❌ CRITICAL: NaN/Inf gradients at epoch {epoch+1}, batch {batch_idx}")
                         print(f"   Stopping epoch early...")
                         optimizer.zero_grad()
+                        scaler.update()
                         break
-                    optimizer.step()
+                    scaler.step(optimizer)
+                    scaler.update()
                     
                     train_loss += loss.item()
                     
