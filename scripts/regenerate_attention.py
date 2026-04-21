@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument(
         "--num-samples",
         type=int,
-        default=30,
+        default=10,
         help="Number of samples to visualize per dataset",
     )
     parser.add_argument(
