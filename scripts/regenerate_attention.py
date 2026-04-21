@@ -163,6 +163,18 @@ def build_model(model_config, model_type, args, device):
 
 def load_checkpoint(model, model_path, device):
     state_dict = torch.load(model_path, map_location=device)
+
+    # Handle position embedding shape mismatch (model was trained with adapted embeddings)
+    pos_embed_key = 'ast.embeddings.position_embeddings'
+    if hasattr(model, 'ast') and pos_embed_key in state_dict:
+        saved_pos_embed = state_dict[pos_embed_key]
+        current_pos_embed = model.ast.embeddings.position_embeddings
+        if saved_pos_embed.shape != current_pos_embed.shape:
+            print(f"Position embedding mismatch: checkpoint {saved_pos_embed.shape} vs model {current_pos_embed.shape}")
+            print(f"Using position embeddings from checkpoint (already interpolated during training)")
+            model.ast.embeddings.position_embeddings = torch.nn.Parameter(saved_pos_embed)
+            state_dict.pop(pos_embed_key)
+
     missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
 
     if missing_keys:
