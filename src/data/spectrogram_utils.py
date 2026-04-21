@@ -255,3 +255,54 @@ class AudioSetFbankProcessor:
         colored = cmap(norm(sg_raw))
         img = Image.fromarray((colored[..., :3] * 255).astype(np.uint8))
         img.save(os.path.join(examples_folder, f"{filename}.png"))
+
+
+def apply_freq_mask(sg, freq_low, freq_high, fs):
+    """
+    Zero out spectrogram rows outside the annotated frequency range.
+
+    sg is shaped (freq_bins, time_bins) where row 0 is the highest frequency
+    and row freq_bins-1 is the lowest, matching the rot90 convention used by
+    SpectrogramProcessor.  The mel-scale bin-to-Hz mapping is inverted to find
+    which rows correspond to freq_low and freq_high.
+
+    Masking is skipped when freq_high == 0 (AviaNZ convention for
+    "full-bandwidth" annotations).
+
+    Args:
+        sg:        Spectrogram array of shape (freq_bins, time_bins).
+        freq_low:  Lower frequency limit in Hz.
+        freq_high: Upper frequency limit in Hz.
+        fs:        Sample rate in Hz.
+
+    Returns:
+        A copy of sg with values outside [freq_low, freq_high] set to 0.
+    """
+    if freq_high == 0:
+        return sg
+
+    freq_bins = sg.shape[0]
+    nyquist = fs / 2.0
+
+    def hz_to_mel(f):
+        return 2595.0 * np.log10(1.0 + f / 700.0)
+
+    mel_max = hz_to_mel(nyquist)
+    mel_high = hz_to_mel(min(freq_high, nyquist))
+    mel_low = hz_to_mel(max(freq_low, 0.0))
+
+    # After rot90, row r corresponds to mel = (freq_bins-1-r) * mel_max / (freq_bins-1).
+    # Solving for the row index that matches a given mel value:
+    #   row = freq_bins - 1 - mel * (freq_bins - 1) / mel_max
+    r_top = int(np.floor(freq_bins - 1 - mel_high * (freq_bins - 1) / mel_max))
+    r_top = max(0, r_top)
+
+    r_bottom = int(np.ceil(freq_bins - 1 - mel_low * (freq_bins - 1) / mel_max))
+    r_bottom = min(freq_bins - 1, r_bottom)
+
+    masked = sg.copy()
+    if r_top > 0:
+        masked[:r_top, :] = 0
+    if r_bottom < freq_bins - 1:
+        masked[r_bottom + 1:, :] = 0
+    return masked

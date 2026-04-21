@@ -44,7 +44,7 @@ from src.experiments.analyze_dataset_quality import (
     parse_species_list_to_codes,
 )
 from src.data.dataset_builder import AviaNZDataProcessor
-from src.data.spectrogram_utils import SpectrogramProcessor
+from src.data.spectrogram_utils import SpectrogramProcessor, apply_freq_mask
 
 
 def normalize_label(label):
@@ -310,7 +310,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (from DOC's 'Species 1' column,
@@ -355,7 +355,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
             seg_codes = list(dict.fromkeys(seg_codes))
             for code in seg_codes:
                 if code in all_search_codes:
-                    candidates[code].append((wav_file, seg.start_time, seg.end_time, seg_codes))
+                    candidates[code].append((wav_file, seg.start_time, seg.end_time, seg_codes, seg.freq_low, seg.freq_high))
 
     rng = random.Random(seed)
     avianz_labels = []
@@ -384,7 +384,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
         rng.shuffle(deduped)
         success = False
         
-        for wav_file, start, end, seg_codes in deduped:
+        for wav_file, start, end, seg_codes, freq_low, freq_high in deduped:
             sg = spec_proc.process_audio_segment(wav_file, start, end)
             if sg is None:
                 continue
@@ -402,6 +402,9 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
                         continue  # Try next candidate
                     trimmed += 1
 
+            if freq_mask:
+                sg = apply_freq_mask(sg, freq_low, freq_high, config.DEFAULT_SAMPLE_RATE)
+
             basename = f'file_{len(avianz_labels):08d}'
             spec_proc.save_spectrogram(sg, data_dir, basename)
             # Use the DOC human label — both datasets must have identical class names.
@@ -411,6 +414,8 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
                 'source_file': wav_file,
                 'start_time': start,
                 'end_time': end,
+                'freq_low': freq_low,
+                'freq_high': freq_high,
             })
             success = True
             break  # Found a good one
@@ -567,6 +572,8 @@ def main():
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--fixed-length', action='store_true',
                         help='Filter out files shorter than model input size and trim all to same length')
+    parser.add_argument('--freq-mask', action='store_true',
+                        help='Zero out AviaNZ spectrogram values outside the annotated frequency limits')
     args = parser.parse_args()
 
     doc_out = os.path.join(args.output, 'doc_matched')
@@ -599,10 +606,13 @@ def main():
     )
 
     print('\n=== Step 3: find matching AviaNZ sample for each DOC record ===')
+    if args.freq_mask:
+        print('  Frequency masking enabled: zeroing spectrogram values outside annotated limits')
     avianz_labels, matched_mask = build_avianz_dataset(
         kept_records, args.avianz_raw, avianz_out, args.seed, args.mapping,
         fixed_length=args.fixed_length,
-        target_time_bins=target_time_bins
+        target_time_bins=target_time_bins,
+        freq_mask=args.freq_mask
     )
 
     # Drop DOC samples that had no AviaNZ match
@@ -642,6 +652,7 @@ def main():
         'doc': doc_stats,
         'avianz': avianz_stats,
         'fixed_length': args.fixed_length,
+        'freq_mask': args.freq_mask,
     }
     if args.fixed_length:
         stats_output['target_time_bins'] = target_time_bins

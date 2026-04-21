@@ -14,6 +14,7 @@ set -e
 #   ./run_matched_experiments.sh                         # Use all defaults
 #   ./run_matched_experiments.sh --parallel 1           # Force single-threaded
 #   ./run_matched_experiments.sh --results-dir ./output # Custom results location
+#   ./run_matched_experiments.sh --freq-mask            # Zero AviaNZ spec values outside annotated freq limits
 #
 # Multi-machine setup:
 #   Just run on each machine - results automatically saved to ~/results (shared)
@@ -24,6 +25,7 @@ set -e
 # Default settings
 PARALLEL_FLAG="--parallel 0"  # Auto-detect GPUs
 RESULTS_DIR="$HOME/results"
+FREQ_MASK_FLAG=""
 
 # Parse arguments (to override defaults if needed)
 while [[ $# -gt 0 ]]; do
@@ -38,9 +40,14 @@ while [[ $# -gt 0 ]]; do
             echo "Shared results directory: $RESULTS_DIR"
             shift 2
             ;;
+        --freq-mask)
+            FREQ_MASK_FLAG="--freq-mask"
+            echo "Frequency masking enabled for AviaNZ spectrograms"
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Valid options: --parallel N, --results-dir DIR"
+            echo "Valid options: --parallel N, --results-dir DIR, --freq-mask"
             exit 1
             ;;
     esac
@@ -107,7 +114,8 @@ if [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/labels.json" ] || [ ! -d "$AV
         --avianz-raw   "$AVIANZ_RAW" \
         --output       "$MATCHED_BASE" \
         --mapping      "$MAPPING" \
-        --fixed-length
+        --fixed-length \
+        ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG}
 else
     echo "=== Matched datasets exist, skipping build ==="
 fi
