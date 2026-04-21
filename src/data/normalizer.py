@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from scipy.ndimage import gaussian_filter1d
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter as median_filter_func
 
 
 def get_background_spectrogram(img):
