@@ -29,7 +29,6 @@ class ModelConfig:
     freq_bins: Optional[int] = None
     time_bins: Optional[int] = None
     dropout: float = config.DEFAULT_DROPOUT
-    use_multiscale: bool = False
     use_reconstruction: bool = False
     recon_weight: float = 0.1
     use_adapters: bool = False
@@ -114,7 +113,6 @@ class TrainerConfig:
                 freq_bins=getattr(args, 'freq_bins', None),
                 time_bins=getattr(args, 'time_bins', None),
                 dropout=getattr(args, 'dropout', config.DEFAULT_DROPOUT),
-                use_multiscale=getattr(args, 'multiscale', False),
                 use_reconstruction=getattr(args, 'reconstruct', False),
                 recon_weight=getattr(args, 'recon_weight', 0.1),
                 use_adapters=getattr(args, 'adapters', False),

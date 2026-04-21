@@ -95,9 +95,6 @@ class ModelPredictor:
         
         if model_type == 'ast':
             self.model = AST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
-        elif model_type == 'multiscaleast':
-            from models import MultiScaleAST
-            self.model = MultiScaleAST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
         elif model_type == 'cnn':
             if inference_time_bins != training_time_bins:
                 raise ValueError(

@@ -130,7 +130,6 @@ class Trainer:
         
         # Model configuration
         self.dropout = cfg.model.dropout
-        self.use_multiscale = cfg.model.use_multiscale
         self.use_reconstruction = cfg.model.use_reconstruction
         self.recon_weight = cfg.model.recon_weight
         self.use_adapters = cfg.model.use_adapters
@@ -335,21 +334,14 @@ class Trainer:
                 freeze_stages=self.freeze_stages
             ).to(self.device)
         else:
-            if self.use_multiscale:
-                print("Creating Multi-Scale AST model (multilabel)...")
-                from models import MultiScaleAST
-                model = MultiScaleAST(self.num_classes, input_size=input_size, dropout=self.dropout, 
-                                     use_reconstruction=self.use_reconstruction).to(self.device)
-            else:
                 print("Creating AST model (multilabel)...")
                 model = AST(self.num_classes, input_size=input_size, dropout=self.dropout, 
                            use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
                            per_chunk_norm=self.per_chunk_norm).to(self.device)
             
             # AST-specific: Interpolate positional embeddings
-            if not self.use_multiscale:
-                print(f"Interpolating positional embeddings for input size {input_size}...")
-                model.interpolate_pos_embed(input_size)
+            print(f"Interpolating positional embeddings for input size {input_size}...")
+            model.interpolate_pos_embed(input_size)
             
             # AST-specific: Load pretrained weights if provided
             if self.pretrained_path:
