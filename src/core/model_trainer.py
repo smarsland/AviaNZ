@@ -942,7 +942,7 @@ class Trainer:
             model_config['model_type'] = 'RegNet'
             model_config['model_name'] = self.model_name
         else:
-            model_config['model_type'] = 'MultiScaleAST' if self.use_multiscale else 'AST'
+            model_config['model_type'] = 'AST'
         model_config['num_classes'] = model.num_classes
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
