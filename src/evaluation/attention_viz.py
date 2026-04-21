@@ -1,6 +1,6 @@
 """
-Attention visualization using Grad-CAM for bird audio classification models.
-Generates heatmaps showing what regions the model focuses on for predictions.
+Attention visualization for bird audio classification models.
+Generates model-specific heatmaps showing what regions the model focuses on.
 """
 import torch
 import torch.nn.functional as F
@@ -10,10 +10,11 @@ import matplotlib.cm as cm
 import os
 from pathlib import Path
 from matplotlib.axes import Axes
+from src.core import config
 
 
 class GradCAM:
-    """Grad-CAM visualization for CNN and transformer models."""
+    """Model-specific relevance visualization for CNN and transformer models."""
     
     def __init__(self, model, model_type='ast'):
         self.model = model
@@ -26,10 +27,10 @@ class GradCAM:
     
     def register_hooks(self):
         """Register forward and backward hooks to capture activations and gradients."""
-        if self.model_type == 'regnet':
-            target_layer = self.get_regnet_target_layer()
-        else:
-            target_layer = self.get_ast_target_layer()
+        if self.model_type != 'regnet':
+            return
+
+        target_layer = self.get_regnet_target_layer()
         
         def forward_hook(module, input, output):
             self.activations = output.detach()
@@ -39,15 +40,6 @@ class GradCAM:
         
         self.hooks.append(target_layer.register_forward_hook(forward_hook))
         self.hooks.append(target_layer.register_full_backward_hook(backward_hook))
-    
-    def get_ast_target_layer(self):
-        """Get the patch embedding Conv2d for AST.
-
-        The patch embedding projects each spatial patch independently before any
-        self-attention mixing, so its activations and gradients retain full
-        spatial correspondence with the input spectrogram.
-        """
-        return self.model.ast.embeddings.patch_embeddings.projection
     
     def get_regnet_target_layer(self):
         """Get a spatially meaningful convolutional layer for RegNet.
@@ -97,6 +89,9 @@ class GradCAM:
             prediction: Model prediction logits
         """
         self.model.eval()
+
+        if self.model_type == 'ast':
+            return self.generate_ast_cam(input_tensor, target_class)
         
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(1)
@@ -121,6 +116,94 @@ class GradCAM:
         self.model.zero_grad()
         
         return cam, output.detach(), target_class
+
+    def generate_ast_cam(self, input_tensor, target_class=None):
+        """Generate a class-specific AST token relevance map.
+
+        AST in this project pools transformer patch tokens with a learned
+        attention module before a linear classifier. For visualization, use the
+        model's actual token weights and per-token class evidence instead of a
+        Grad-CAM approximation on the patch projection.
+        """
+        if input_tensor.dim() == 3:
+            input_tensor = input_tensor.unsqueeze(1)
+
+        normalized_input = self.prepare_ast_input(input_tensor)
+
+        with torch.no_grad():
+            hidden_states = self.model.ast(normalized_input).last_hidden_state
+
+            if self.model.use_adapters:
+                for i in range(12):
+                    adapter_output = self.model.adapters[i](hidden_states)
+                    hidden_states = hidden_states + adapter_output
+
+            patch_tokens = hidden_states[:, 2:, :]
+            token_scores = self.model.pool.attn(patch_tokens).squeeze(-1)
+            token_weights = torch.softmax(token_scores, dim=1)
+            token_logits = F.linear(
+                patch_tokens,
+                self.model.classifier.weight,
+                self.model.classifier.bias
+            )
+            prediction = torch.sum(token_weights.unsqueeze(-1) * token_logits, dim=1)
+
+            if target_class is None:
+                target_class = prediction.argmax(dim=1).item()
+
+            token_relevance = token_weights[0] * token_logits[0, :, target_class]
+            token_relevance = torch.relu(token_relevance)
+
+            grid_height, grid_width = self.infer_ast_patch_grid(
+                normalized_input.shape[-2:],
+                token_relevance.numel()
+            )
+            cam = token_relevance.view(grid_height, grid_width)
+            cam = cam - cam.min()
+            cam = cam / (cam.max() + 1e-8)
+
+        return cam.cpu().numpy(), prediction.detach(), target_class
+
+    def prepare_ast_input(self, input_tensor):
+        """Match AST input normalization used during inference."""
+        x = input_tensor.float()
+
+        if x.dim() == 4 and x.shape[1] == 1:
+            x = x.squeeze(1)
+
+        if self.model.per_chunk_norm:
+            batch_size, _, width = x.shape
+            chunk_width = width // self.model.num_chunks
+            chunks = []
+            for i in range(self.model.num_chunks):
+                start = i * chunk_width
+                end = start + chunk_width if i < self.model.num_chunks - 1 else width
+                chunk = x[:, :, start:end]
+                chunk_min = chunk.reshape(batch_size, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_max = chunk.reshape(batch_size, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunks.append((chunk - chunk_min) / (chunk_max - chunk_min + 1e-6))
+            return torch.cat(chunks, dim=2)
+
+        return (x - config.AST_MEAN) / config.AST_STD
+
+    def infer_ast_patch_grid(self, input_size, num_tokens):
+        """Infer the AST patch grid for the current input spectrogram."""
+        projection = self.model.ast.embeddings.patch_embeddings.projection
+        patch_size = projection.kernel_size
+        stride = projection.stride
+
+        grid_height = (input_size[0] - patch_size[0]) // stride[0] + 1
+        grid_width = (input_size[1] - patch_size[1]) // stride[1] + 1
+
+        if grid_height * grid_width == num_tokens:
+            return grid_height, grid_width
+
+        for height in range(int(num_tokens ** 0.5), 0, -1):
+            if num_tokens % height == 0:
+                width = num_tokens // height
+                return height, width
+
+        raise ValueError(f'Cannot infer AST patch grid for {num_tokens} tokens')
     
     def compute_cam_regnet(self, target_size):
         """Compute CAM for RegNet (standard spatial gradients)."""
@@ -182,8 +265,8 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
     print(f"\n{'='*60}")
     print(f"ATTENTION VISUALIZATION (Post-Training Analysis)")
     print(f"{'='*60}")
-    print(f"Generating Grad-CAM heatmaps for {num_samples} samples...")
-    print(f"This requires forward+backward pass per sample (~1-2 sec each)")
+    print(f"Generating relevance heatmaps for {num_samples} samples...")
+    print(f"RegNet uses Grad-CAM; AST uses token relevance from attention pooling")
     print(f"Output folder: {output_folder}")
     print(f"{'='*60}\n")
     
@@ -270,11 +353,25 @@ def save_attention_plot(input_spec, cam, prediction, target, output_folder,
     
     ax = axes[1]
     ax.imshow(input_spec, aspect='auto', origin='lower', cmap='gray', alpha=0.55, interpolation='nearest')
-    cam_overlay = ax.imshow(cam, aspect='auto', origin='lower', cmap='jet', alpha=0.6, interpolation='bilinear')
-    ax.set_title('Attention Heatmap (Grad-CAM)', fontsize=14, fontweight='bold')
+    cam_kwargs = {
+        'aspect': 'auto',
+        'origin': 'lower',
+        'cmap': 'jet',
+        'alpha': 0.6
+    }
+    if cam.shape != input_spec.shape:
+        cam_overlay = ax.imshow(
+            cam,
+            interpolation='nearest',
+            extent=(0, input_spec.shape[1], 0, input_spec.shape[0]),
+            **cam_kwargs
+        )
+    else:
+        cam_overlay = ax.imshow(cam, interpolation='bilinear', **cam_kwargs)
+    ax.set_title('Attention / Relevance Heatmap', fontsize=14, fontweight='bold')
     ax.set_xlabel('Time')
     ax.set_ylabel('Frequency')
-    plt.colorbar(cam_overlay, ax=ax, label='Attention Weight')
+    plt.colorbar(cam_overlay, ax=ax, label='Relevance')
     
     predicted_classes = np.where(prediction_probs > 0.5)[0]
     true_classes = np.where(target > 0.5)[0]
@@ -449,15 +546,33 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
     for idx, (cam, class_idx) in enumerate(zip(cams, top_classes)):
         ax = axes[idx + 1]
         ax.imshow(input_spec, aspect='auto', origin='lower', cmap='gray', alpha=0.5, interpolation='nearest')
-        cam_overlay = ax.imshow(cam, aspect='auto', origin='lower', cmap='jet', alpha=0.7, interpolation='bilinear')
+        cam_kwargs = {
+            'aspect': 'auto',
+            'origin': 'lower',
+            'cmap': 'jet',
+            'alpha': 0.7
+        }
+        if cam.shape != input_spec.shape:
+            cam_overlay = ax.imshow(
+                cam,
+                interpolation='nearest',
+                extent=(0, input_spec.shape[1], 0, input_spec.shape[0]),
+                **cam_kwargs
+            )
+        else:
+            cam_overlay = ax.imshow(cam, interpolation='bilinear', **cam_kwargs)
         
         class_name = class_names[class_idx] if class_names else f"Class {class_idx}"
         prob = probs[class_idx].item()
         correctness = 'correct' if class_idx in true_classes else 'incorrect'
-        ax.set_title(f'{class_name} (p={prob:.3f}, {correctness})', fontsize=12)
+        if cam.shape != input_spec.shape:
+            grid_label = f', AST grid {cam.shape[0]}x{cam.shape[1]}'
+        else:
+            grid_label = ''
+        ax.set_title(f'{class_name} (p={prob:.3f}, {correctness}{grid_label})', fontsize=12)
         ax.set_xlabel('Time')
         ax.set_ylabel('Frequency')
-        plt.colorbar(cam_overlay, ax=ax, label='Attention Weight')
+        plt.colorbar(cam_overlay, ax=ax, label='Relevance')
     
     output_path = os.path.join(output_folder, f'multiclass_attention_{sample_idx:04d}.png')
     plt.savefig(output_path, dpi=250, bbox_inches='tight')
