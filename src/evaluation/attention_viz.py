@@ -118,51 +118,56 @@ class GradCAM:
         return cam, output.detach(), target_class
 
     def generate_ast_cam(self, input_tensor, target_class=None):
-        """Generate a class-specific AST relevance map via Grad-CAM on patch tokens.
+        """Generate a class-specific AST relevance map.
 
-        Gradients of the target class score flow back through the attention
-        pooling and classifier into each patch token's 768-dim representation.
-        The standard Grad-CAM formula (ReLU of grad-weighted activation, summed
-        over channels) is then applied per token and reshaped to the patch grid.
+        The model predicts via: logit_c = sum_i( weight_i * W_c · token_i ) + b_c
+        where weight_i is the softmax attention pooling weight for token i.
+
+        The per-token contribution to class c is therefore:
+            relevance_i = weight_i * (W_c · token_i)
+
+        This is an exact linear decomposition (no approximation), and the softmax
+        weights ensure a smooth, spatially coherent map rather than scattered dots.
         """
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(1)
 
         normalized_input = self.prepare_ast_input(input_tensor)
 
-        self.model.zero_grad()
+        with torch.no_grad():
+            hidden_states = self.model.ast(normalized_input).last_hidden_state
 
-        hidden_states = self.model.ast(normalized_input).last_hidden_state
+            if self.model.use_adapters:
+                for i in range(12):
+                    hidden_states = hidden_states + self.model.adapters[i](hidden_states)
 
-        if self.model.use_adapters:
-            for i in range(12):
-                hidden_states = hidden_states + self.model.adapters[i](hidden_states)
+            patch_tokens = hidden_states[:, 2:, :]  # (1, N, 768)
 
-        patch_tokens = hidden_states[:, 2:, :]
-        patch_tokens.retain_grad()
+            token_scores = self.model.pool.attn(patch_tokens).squeeze(-1)  # (1, N)
+            token_weights = torch.softmax(token_scores, dim=1)[0]  # (N,)
 
-        features = self.model.pool(patch_tokens)
-        features = self.model.dropout(features)
-        logits = self.model.classifier(features)
+            pooled = (token_weights.unsqueeze(-1) * patch_tokens[0]).sum(dim=0, keepdim=True)
+            logits = self.model.classifier(pooled)
+            prediction = logits.detach()
 
-        prediction = logits.detach()
-        if target_class is None:
-            target_class = prediction.argmax(dim=1).item()
+            if target_class is None:
+                target_class = prediction.argmax(dim=1).item()
 
-        logits[0, target_class].backward()
+            W_c = self.model.classifier.weight[target_class]  # (768,)
+            token_class_dot = patch_tokens[0] @ W_c              # (N,)
 
-        token_importance = (patch_tokens.grad[0] * patch_tokens[0].detach()).sum(dim=1)
-        token_importance = torch.relu(token_importance)
+            relevance = token_weights * token_class_dot           # (N,)
 
-        grid_height, grid_width = self.infer_ast_patch_grid(
-            normalized_input.shape[-2:],
-            token_importance.numel()
-        )
-        cam = token_importance.view(grid_height, grid_width)
-        cam = cam - cam.min()
-        cam = cam / (cam.max() + 1e-8)
+            # Shift so minimum is zero, then normalize — preserves both
+            # positive and negative structure without discarding half the signal.
+            relevance = relevance - relevance.min()
+            relevance = relevance / (relevance.max() + 1e-8)
 
-        self.model.zero_grad()
+            grid_height, grid_width = self.infer_ast_patch_grid(
+                normalized_input.shape[-2:],
+                relevance.numel()
+            )
+            cam = relevance.view(grid_height, grid_width)
 
         return cam.cpu().numpy(), prediction, target_class
 
