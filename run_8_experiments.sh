@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+main() {
+
 BASE="/local/scratch/freangi"
 MATCHED="${BASE}/matched"
 VIZ_BASE="${BASE}/visualizations"
@@ -55,3 +57,6 @@ run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median
 run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
 run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+}
+
+main "$@"
