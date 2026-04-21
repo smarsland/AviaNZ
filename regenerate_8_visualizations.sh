@@ -9,7 +9,7 @@ AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TEST="${MATCHED}/doc_split/test"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
-NUM_SAMPLES="${NUM_SAMPLES:-30}"
+NUM_SAMPLES="${NUM_SAMPLES:-10}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 DEVICE="${DEVICE:-}"
 
