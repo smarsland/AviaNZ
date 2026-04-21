@@ -41,8 +41,13 @@ class GradCAM:
         self.hooks.append(target_layer.register_full_backward_hook(backward_hook))
     
     def get_ast_target_layer(self):
-        """Get the last transformer encoder layer for AST."""
-        return self.model.ast.encoder.layer[-1]
+        """Get the patch embedding Conv2d for AST.
+
+        The patch embedding projects each spatial patch independently before any
+        self-attention mixing, so its activations and gradients retain full
+        spatial correspondence with the input spectrogram.
+        """
+        return self.model.ast.embeddings.patch_embeddings.projection
     
     def get_regnet_target_layer(self):
         """Get a spatially meaningful convolutional layer for RegNet.
@@ -140,46 +145,13 @@ class GradCAM:
         return cam.cpu().numpy()
     
     def compute_cam_ast(self, target_size):
-        """Compute CAM for AST (transformer attention-based).
-        
-        For transformers, we use the gradient of the output with respect to
-        the patch token activations, then reshape to spatial dimensions.
+        """Compute CAM for AST via the patch embedding Conv2d.
+
+        The patch embedding output is (B, hidden_dim, H', W') — spatially
+        organized before any self-attention mixing — so we can apply the same
+        channel-weighted spatial Grad-CAM used for RegNet.
         """
-        gradients = self.gradients
-        activations = self.activations
-        
-        patch_tokens = activations[:, 2:, :]
-        patch_grads = gradients[:, 2:, :]
-        
-        weights = patch_grads.mean(dim=2, keepdim=True)
-        cam = (weights * patch_tokens).sum(dim=2)
-        
-        cam = cam[0]
-        
-        num_patches = cam.shape[0]
-        grid_size = int(np.sqrt(num_patches))
-        
-        if grid_size * grid_size != num_patches:
-            grid_h = int(np.sqrt(num_patches * target_size[0] / target_size[1]))
-            grid_w = num_patches // grid_h
-        else:
-            grid_h = grid_w = grid_size
-        
-        cam = cam[:grid_h * grid_w].reshape(grid_h, grid_w)
-        
-        cam_tensor = torch.from_numpy(cam) if isinstance(cam, np.ndarray) else cam
-        cam_tensor = F.relu(cam_tensor)
-        cam_tensor = cam_tensor - cam_tensor.min()
-        cam_tensor = cam_tensor / (cam_tensor.max() + 1e-8)
-        
-        cam_resized = F.interpolate(
-            cam_tensor.unsqueeze(0).unsqueeze(0),
-            size=target_size,
-            mode='bilinear',
-            align_corners=False
-        )[0, 0]
-        
-        return cam_resized.detach().cpu().numpy()
+        return self.compute_cam_regnet(target_size)
     
     def remove_hooks(self):
         """Remove all registered hooks."""
