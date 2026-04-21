@@ -118,16 +118,20 @@ class GradCAM:
         return cam, output.detach(), target_class
 
     def generate_ast_cam(self, input_tensor, target_class=None):
-        """Generate a class-specific AST relevance map.
+        """Generate an AST relevance map via attention rollout weighted by pooling.
 
-        The model predicts via: logit_c = sum_i( weight_i * W_c · token_i ) + b_c
-        where weight_i is the softmax attention pooling weight for token i.
+        After 12 self-attention layers every token is a mixture of all others,
+        so projecting tokens onto the classifier weight vector gives spatially
+        meaningless values. Instead, use attention rollout (Abnar & Zuidema 2020)
+        to trace which input patch positions actually influenced the final pooled
+        representation.
 
-        The per-token contribution to class c is therefore:
-            relevance_i = weight_i * (W_c · token_i)
-
-        This is an exact linear decomposition (no approximation), and the softmax
-        weights ensure a smooth, spatially coherent map rather than scattered dots.
+        Algorithm:
+          1. Collect per-layer attention maps (heads averaged, 0.5 residual added).
+          2. Chain-multiply them: rollout[i,j] = how much input patch j flowed
+             into output position i after all layers.
+          3. Weight each input patch j by sum_i(pooling_weight_i * rollout[i,j]),
+             i.e. how much that patch contributed to what the pooling module saw.
         """
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(1)
@@ -135,39 +139,51 @@ class GradCAM:
         normalized_input = self.prepare_ast_input(input_tensor)
 
         with torch.no_grad():
-            hidden_states = self.model.ast(normalized_input).last_hidden_state
+            outputs = self.model.ast(normalized_input, output_attentions=True)
+            hidden_states = outputs.last_hidden_state
+            attentions = outputs.attentions  # tuple of (1, heads, seq, seq)
 
             if self.model.use_adapters:
                 for i in range(12):
                     hidden_states = hidden_states + self.model.adapters[i](hidden_states)
 
-            patch_tokens = hidden_states[:, 2:, :]  # (1, N, 768)
+            patch_tokens = hidden_states[:, 2:, :]
 
-            token_scores = self.model.pool.attn(patch_tokens).squeeze(-1)  # (1, N)
-            token_weights = torch.softmax(token_scores, dim=1)[0]  # (N,)
+            token_scores = self.model.pool.attn(patch_tokens).squeeze(-1)[0]  # (N,)
+            pooling_weights = torch.softmax(token_scores, dim=0)              # (N,)
 
-            pooled = (token_weights.unsqueeze(-1) * patch_tokens[0]).sum(dim=0, keepdim=True)
-            logits = self.model.classifier(pooled)
+            features = self.model.pool(patch_tokens)
+            features = self.model.dropout(features)
+            logits = self.model.classifier(features)
             prediction = logits.detach()
 
             if target_class is None:
                 target_class = prediction.argmax(dim=1).item()
 
-            W_c = self.model.classifier.weight[target_class]  # (768,)
-            token_class_dot = patch_tokens[0] @ W_c              # (N,)
+            # Attention rollout through all transformer layers.
+            seq_len = attentions[0].shape[-1]
+            rollout = torch.eye(seq_len, device=normalized_input.device)
 
-            relevance = token_weights * token_class_dot           # (N,)
+            for attn in attentions:
+                # Average over heads, add 0.5 * identity (residual), renormalize.
+                attn_avg = attn[0].mean(dim=0)                                        # (seq, seq)
+                attn_aug = 0.5 * attn_avg + 0.5 * torch.eye(seq_len, device=attn_avg.device)
+                attn_aug = attn_aug / attn_aug.sum(dim=-1, keepdim=True)
+                rollout = attn_aug @ rollout
 
-            # Shift so minimum is zero, then normalize — preserves both
-            # positive and negative structure without discarding half the signal.
-            relevance = relevance - relevance.min()
-            relevance = relevance / (relevance.max() + 1e-8)
+            # Restrict to patch-to-patch block (skip cls token at 0, dist token at 1).
+            patch_rollout = rollout[2:, 2:]   # (N, N): row = output patch, col = input patch
+
+            # importance[j] = how much input patch j drove the pooled output.
+            importance = pooling_weights @ patch_rollout  # (N,)
+            importance = importance - importance.min()
+            importance = importance / (importance.max() + 1e-8)
 
             grid_height, grid_width = self.infer_ast_patch_grid(
                 normalized_input.shape[-2:],
-                relevance.numel()
+                importance.numel()
             )
-            cam = relevance.view(grid_height, grid_width)
+            cam = importance.view(grid_height, grid_width)
 
         return cam.cpu().numpy(), prediction, target_class
 
