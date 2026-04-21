@@ -334,10 +334,10 @@ class Trainer:
                 freeze_stages=self.freeze_stages
             ).to(self.device)
         else:
-                print("Creating AST model (multilabel)...")
-                model = AST(self.num_classes, input_size=input_size, dropout=self.dropout, 
-                           use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
-                           per_chunk_norm=self.per_chunk_norm).to(self.device)
+            print("Creating AST model (multilabel)...")
+            model = AST(self.num_classes, input_size=input_size, dropout=self.dropout, 
+                       use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
+                       per_chunk_norm=self.per_chunk_norm).to(self.device)
             
             # AST-specific: Interpolate positional embeddings
             print(f"Interpolating positional embeddings for input size {input_size}...")
