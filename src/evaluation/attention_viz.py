@@ -138,6 +138,8 @@ class GradCAM:
 
         normalized_input = self.prepare_ast_input(input_tensor)
 
+        self.model.ast.set_attn_implementation('eager')
+
         with torch.no_grad():
             outputs = self.model.ast(normalized_input, output_attentions=True)
             hidden_states = outputs.last_hidden_state
