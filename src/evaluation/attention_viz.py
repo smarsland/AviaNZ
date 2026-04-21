@@ -118,76 +118,45 @@ class GradCAM:
         return cam, output.detach(), target_class
 
     def generate_ast_cam(self, input_tensor, target_class=None):
-        """Generate an AST relevance map via attention rollout weighted by pooling.
+        """Generate a class-specific AST saliency map via gradient x input.
 
-        After 12 self-attention layers every token is a mixture of all others,
-        so projecting tokens onto the classifier weight vector gives spatially
-        meaningless values. Instead, use attention rollout (Abnar & Zuidema 2020)
-        to trace which input patch positions actually influenced the final pooled
-        representation.
-
-        Algorithm:
-          1. Collect per-layer attention maps (heads averaged, 0.5 residual added).
-          2. Chain-multiply them: rollout[i,j] = how much input patch j flowed
-             into output position i after all layers.
-          3. Weight each input patch j by sum_i(pooling_weight_i * rollout[i,j]),
-             i.e. how much that patch contributed to what the pooling module saw.
+        Backpropagates the target class logit all the way to the input
+        spectrogram. This completely bypasses the token-mixing problem: no
+        grid inference, no token reordering, no attention-rollout assumptions.
+        The result is in the same (freq x time) space as the spectrogram.
         """
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(1)
 
-        normalized_input = self.prepare_ast_input(input_tensor)
+        normalized_input = self.prepare_ast_input(input_tensor.detach())
+        normalized_input = normalized_input.requires_grad_(True)
 
-        self.model.ast.set_attn_implementation('eager')
+        hidden_states = self.model.ast(normalized_input).last_hidden_state
 
-        with torch.no_grad():
-            outputs = self.model.ast(normalized_input, output_attentions=True)
-            hidden_states = outputs.last_hidden_state
-            attentions = outputs.attentions  # tuple of (1, heads, seq, seq)
+        if self.model.use_adapters:
+            for i in range(12):
+                hidden_states = hidden_states + self.model.adapters[i](hidden_states)
 
-            if self.model.use_adapters:
-                for i in range(12):
-                    hidden_states = hidden_states + self.model.adapters[i](hidden_states)
+        patch_tokens = hidden_states[:, 2:, :]
+        features = self.model.pool(patch_tokens)
+        features = self.model.dropout(features)
+        logits = self.model.classifier(features)
 
-            patch_tokens = hidden_states[:, 2:, :]
+        prediction = logits.detach()
+        if target_class is None:
+            target_class = prediction.argmax(dim=1).item()
 
-            token_scores = self.model.pool.attn(patch_tokens).squeeze(-1)[0]  # (N,)
-            pooling_weights = torch.softmax(token_scores, dim=0)              # (N,)
+        self.model.zero_grad()
+        logits[0, target_class].backward()
 
-            features = self.model.pool(patch_tokens)
-            features = self.model.dropout(features)
-            logits = self.model.classifier(features)
-            prediction = logits.detach()
+        # gradient x input: which pixels, when present, push the score up
+        saliency = (normalized_input.grad * normalized_input.detach()).squeeze()
+        saliency = saliency.abs()
+        saliency = saliency - saliency.min()
+        saliency = saliency / (saliency.max() + 1e-8)
 
-            if target_class is None:
-                target_class = prediction.argmax(dim=1).item()
-
-            # Attention rollout through all transformer layers.
-            seq_len = attentions[0].shape[-1]
-            rollout = torch.eye(seq_len, device=normalized_input.device)
-
-            for attn in attentions:
-                # Average over heads, add 0.5 * identity (residual), renormalize.
-                attn_avg = attn[0].mean(dim=0)                                        # (seq, seq)
-                attn_aug = 0.5 * attn_avg + 0.5 * torch.eye(seq_len, device=attn_avg.device)
-                attn_aug = attn_aug / attn_aug.sum(dim=-1, keepdim=True)
-                rollout = attn_aug @ rollout
-
-            # Restrict to patch-to-patch block (skip cls token at 0, dist token at 1).
-            patch_rollout = rollout[2:, 2:]   # (N, N): row = output patch, col = input patch
-
-            # importance[j] = how much input patch j drove the pooled output.
-            importance = pooling_weights @ patch_rollout  # (N,)
-            importance = importance - importance.min()
-            importance = importance / (importance.max() + 1e-8)
-
-            grid_height, grid_width = self.infer_ast_patch_grid(
-                normalized_input.shape[-2:],
-                importance.numel()
-            )
-            cam = importance.view(grid_height, grid_width)
-
-        return cam.cpu().numpy(), prediction, target_class
+        self.model.zero_grad()
+        return saliency.cpu().numpy(), prediction, target_class
 
     def prepare_ast_input(self, input_tensor):
         """Match AST input normalization used during inference."""
