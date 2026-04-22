@@ -252,31 +252,12 @@ class AST(nn.Module):
         self.pool = AttentionPooling(embed_dim=768, hidden_dim=256)
         self.classifier = nn.Linear(768, num_classes)
         
-        self.patch_projection = nn.Linear(256, 768)
-        
         if use_reconstruction:
             self.decoder = SpectrogramDecoder(embed_dim=768, output_size=self.input_size)
         self.cnn_adapter = CnnAdapter() if use_cnn_adapter else None
 
-    def forward(self, x, sparse_mode=False, positions=None, mask=None):
-        """Forward pass with AST paper normalization.
-        
-        Input x should be log-mel spectrogram (already log-transformed).
-        Applies mean-std normalization with AudioSet statistics.
-        
-        Args:
-            x: Input tensor
-               - Standard mode: (B, 1, H, W) spectrogram
-               - Sparse mode: (B, K, 1, 16, 16) pre-extracted patches
-            sparse_mode: If True, x contains pre-extracted patches
-            positions: (B, K, 2) grid positions for sparse patches (row, col)
-            mask: (B, K) boolean mask indicating valid patches (True) vs padding (False)
-        """
+    def forward(self, x):
         x = x.float()
-
-        if sparse_mode:
-            # Sparse patch mode: x is (B, K, 1, 16, 16)
-            return self.forward_sparse(x, positions, mask)
 
         if self.cnn_adapter is not None:
             if x.dim() == 3:
@@ -321,233 +302,47 @@ class AST(nn.Module):
             return logits, recon
         return logits
     
-    def get_features(self, x, sparse_mode=False, positions=None, mask=None):
+    def get_features(self, x):
         """Extract feature representation before classification layer.
         
         Returns pooled 768-dim features for DANN domain discrimination.
         """
         x = x.float()
         
-        if sparse_mode:
-            # Sparse mode: get features from sparse patches
-            B, K, C, H, W = x.shape
-            patches_flat = x.contiguous().view(B * K, C * H * W)
-            patches_reshaped = x.view(B * K, H, W)
-            patches_normalized = (patches_reshaped - config.AST_MEAN) / config.AST_STD
-            patches_flat = patches_normalized.view(B * K, H * W)
-            patch_embeddings = self.patch_projection(patches_flat)
-            patch_embeddings = patch_embeddings.view(B, K, -1)
-            
-            # Add positional embeddings
-            embed_dim = patch_embeddings.shape[-1]
-            pos_embed = self.ast.embeddings.position_embeddings
-            spatial_pos_embed = pos_embed[:, 2:, :]
-            N = spatial_pos_embed.shape[1]
-            
-            # Calculate grid and select positions (simplified)
-            h_grid = int(N ** 0.5)
-            w_grid = N // h_grid
-            spatial_pos_embed_reshaped = spatial_pos_embed.reshape(1, h_grid, w_grid, embed_dim)
-            
-            selected_pos_embed = []
-            for b in range(B):
-                batch_pos_embeds = []
-                for k in range(K):
-                    if mask is not None and not mask[b, k]:
-                        batch_pos_embeds.append(torch.zeros(embed_dim, device=x.device))
-                    else:
-                        row, col = positions[b, k]
-                        row = torch.clamp(row, 0, h_grid - 1)
-                        col = torch.clamp(col, 0, w_grid - 1)
-                        pos_emb = spatial_pos_embed_reshaped[0, row.long(), col.long(), :]
-                        batch_pos_embeds.append(pos_emb)
-                selected_pos_embed.append(torch.stack(batch_pos_embeds))
-            selected_pos_embed = torch.stack(selected_pos_embed)
-            
-            patch_embeddings = patch_embeddings + selected_pos_embed
-            
-            cls_token = self.ast.embeddings.cls_token.expand(B, -1, -1)
-            dist_token = self.ast.embeddings.distillation_token.expand(B, -1, -1)
-            embeddings = torch.cat([cls_token, dist_token, patch_embeddings], dim=1)
-            
-            special_pos_embed = pos_embed[:, :2, :]
-            embeddings[:, :2, :] = embeddings[:, :2, :] + special_pos_embed
-            embeddings = self.ast.embeddings.dropout(embeddings)
-            
-            encoder_outputs = self.ast.encoder(embeddings)
-            hidden_states = encoder_outputs.last_hidden_state
-            patch_tokens = hidden_states[:, 2:, :]
-            
-            if mask is not None:
-                masked_patch_tokens = patch_tokens.clone()
-                masked_patch_tokens[~mask] = 0
-                features = self.pool(masked_patch_tokens)
-            else:
-                features = self.pool(patch_tokens)
-        else:
-            # Standard mode
-            if self.cnn_adapter is not None:
-                if x.dim() == 3:
-                    x = x.unsqueeze(1)
-                x = self.cnn_adapter(x)
-            if x.dim() == 4 and x.shape[1] == 1:
-                x = x.squeeze(1)
+        if self.cnn_adapter is not None:
+            if x.dim() == 3:
+                x = x.unsqueeze(1)
+            x = self.cnn_adapter(x)
+        if x.dim() == 4 and x.shape[1] == 1:
+            x = x.squeeze(1)
 
-            if self.per_chunk_norm:
-                B, H, W = x.shape
-                chunk_width = W // self.num_chunks
-                chunks = []
-                for i in range(self.num_chunks):
-                    start = i * chunk_width
-                    end = start + chunk_width if i < self.num_chunks - 1 else W
-                    chunk = x[:, :, start:end]
-                    chunk_min = chunk.reshape(B, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
-                    chunk_max = chunk.reshape(B, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
-                    chunk_normalized = (chunk - chunk_min) / (chunk_max - chunk_min + 1e-6)
-                    chunks.append(chunk_normalized)
-                x = torch.cat(chunks, dim=2)
-            else:
-                x = (x - config.AST_MEAN) / config.AST_STD
-            
-            hidden_states = self.ast(x).last_hidden_state
-            
-            if self.use_adapters:
-                for i in range(12):
-                    adapter_output = self.adapters[i](hidden_states)
-                    hidden_states = hidden_states + adapter_output
-            
-            patch_tokens = hidden_states[:, 2:, :]
-            features = self.pool(patch_tokens)
+        if self.per_chunk_norm:
+            B, H, W = x.shape
+            chunk_width = W // self.num_chunks
+            chunks = []
+            for i in range(self.num_chunks):
+                start = i * chunk_width
+                end = start + chunk_width if i < self.num_chunks - 1 else W
+                chunk = x[:, :, start:end]
+                chunk_min = chunk.reshape(B, -1).min(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_max = chunk.reshape(B, -1).max(dim=1, keepdim=True)[0].unsqueeze(2)
+                chunk_normalized = (chunk - chunk_min) / (chunk_max - chunk_min + 1e-6)
+                chunks.append(chunk_normalized)
+            x = torch.cat(chunks, dim=2)
+        else:
+            x = (x - config.AST_MEAN) / config.AST_STD
+        
+        hidden_states = self.ast(x).last_hidden_state
+        
+        if self.use_adapters:
+            for i in range(12):
+                adapter_output = self.adapters[i](hidden_states)
+                hidden_states = hidden_states + adapter_output
+        
+        patch_tokens = hidden_states[:, 2:, :]
+        features = self.pool(patch_tokens)
         
         return features
-    
-    def forward_sparse(self, patches, positions, mask):
-        """
-        Forward pass with sparse patches.
-        
-        Args:
-            patches: (B, K, 1, 16, 16) - pre-extracted patches
-            positions: (B, K, 2) - grid positions (row, col) for each patch
-            mask: (B, K) - boolean mask for valid patches
-        
-        Returns:
-            logits: (B, num_classes)
-        """
-        B, K, C, H, W = patches.shape
-        assert C == 1, f"Expected 1 channel, got {C}"
-        assert H == 16 and W == 16, f"Expected 16x16 patches, got {H}x{W}"
-        
-        # Flatten patches to (B*K, 1, 16, 16) then to (B*K, 256) for projection
-        patches_flat = patches.contiguous().view(B * K, C * H * W)  # (B*K, 256)
-        
-        # Normalize the flattened patches
-        # Note: AST normalization expects (H, W) format, but we have flattened patches
-        # Apply normalization per-patch
-        patches_reshaped = patches.view(B * K, H, W)  # (B*K, 16, 16)
-        patches_normalized = (patches_reshaped - config.AST_MEAN) / config.AST_STD
-        patches_flat = patches_normalized.view(B * K, H * W)  # (B*K, 256)
-        
-        # Project flattened patches to embedding dimension using the trained projection layer
-        patch_embeddings = self.patch_projection(patches_flat)  # (B*K, 768)
-        patch_embeddings = patch_embeddings.view(B, K, -1)  # (B, K, 768)
-        
-        # Add positional embeddings based on actual grid positions
-        embed_dim = patch_embeddings.shape[-1]
-        pos_embed = self.ast.embeddings.position_embeddings  # (1, N+2, 768) where N is original num patches
-        
-        # Extract position embeddings for spatial tokens (skip cls and dist tokens)
-        spatial_pos_embed = pos_embed[:, 2:, :]  # (1, N, 768)
-        
-        # Infer grid size from the actual positional embedding tensor
-        N = spatial_pos_embed.shape[1]
-        
-        # Common AST grids after interpolation
-        if N == 1212:
-            h_grid, w_grid = 12, 101
-        elif N == 800:
-            h_grid, w_grid = 8, 100
-        elif N == 1050:
-            h_grid, w_grid = 21, 50
-        elif N == 512:
-            h_grid, w_grid = 8, 64
-        elif N == 448:
-            h_grid, w_grid = 14, 32
-        else:
-            # Try to infer from input size
-            # Calculate what the grid should be based on AST's patch extraction
-            # AST uses 16x16 patches with stride (10, 10) typically
-            # But for our interpolated embeddings, just factor N
-            h_grid = int(N ** 0.5)
-            w_grid = N // h_grid
-            while h_grid * w_grid != N and h_grid > 1:
-                h_grid -= 1
-                if N % h_grid == 0:
-                    w_grid = N // h_grid
-                    break
-            
-            if h_grid * w_grid != N:
-                raise ValueError(f"Cannot factorize {N} positional embeddings into a grid. N={N}")
-        
-        # Reshape to grid: (1, N, 768) -> (1, h, w, 768)
-        spatial_pos_embed = spatial_pos_embed.view(1, h_grid, w_grid, embed_dim)
-        
-        # Index into positional embeddings using provided positions
-        # positions: (B, K, 2) where [..., 0] is row, [..., 1] is col
-        selected_pos_embed = []
-        for b in range(B):
-            batch_pos_embeds = []
-            for k in range(K):
-                if mask[b, k]:
-                    row = positions[b, k, 0].item()
-                    col = positions[b, k, 1].item()
-                    # Clamp to valid range
-                    row = min(row, h_grid - 1)
-                    col = min(col, w_grid - 1)
-                    pos_emb = spatial_pos_embed[0, row, col, :]
-                else:
-                    # Padding patch - use zero position embedding
-                    pos_emb = torch.zeros(embed_dim, device=patches.device)
-                batch_pos_embeds.append(pos_emb)
-            selected_pos_embed.append(torch.stack(batch_pos_embeds))
-        selected_pos_embed = torch.stack(selected_pos_embed)  # (B, K, 768)
-        
-        # Add positional embeddings
-        patch_embeddings = patch_embeddings + selected_pos_embed
-        
-        # Add special tokens (cls and dist)
-        cls_token = self.ast.embeddings.cls_token.expand(B, -1, -1)
-        dist_token = self.ast.embeddings.distillation_token.expand(B, -1, -1)
-        
-        # Concatenate: [cls, dist, patch1, patch2, ..., patchK]
-        embeddings = torch.cat([cls_token, dist_token, patch_embeddings], dim=1)  # (B, K+2, 768)
-        
-        # Add special token positional embeddings
-        special_pos_embed = pos_embed[:, :2, :]  # (1, 2, 768)
-        embeddings[:, :2, :] = embeddings[:, :2, :] + special_pos_embed
-        
-        # Apply dropout
-        embeddings = self.ast.embeddings.dropout(embeddings)
-        
-        # Pass through transformer encoder - just give it the embeddings
-        encoder_outputs = self.ast.encoder(embeddings)
-        hidden_states = encoder_outputs.last_hidden_state
-        
-        # Pool over patch tokens (excluding special tokens)
-        patch_tokens = hidden_states[:, 2:, :]
-        
-        # Mask out padding before pooling
-        masked_patch_tokens = patch_tokens.clone()
-        masked_patch_tokens[~mask] = 0
-        
-        # Use attention pooling
-        features = self.pool(masked_patch_tokens)
-        features = self.dropout(features)
-        logits = self.classifier(features)
-        
-        if self.use_reconstruction:
-            recon = self.decoder(patch_tokens)
-            return logits, recon
-        return logits
     
     def interpolate_pos_embed(self, target_size):
         """Interpolate positional embeddings to match target input size.

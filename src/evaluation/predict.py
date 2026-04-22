@@ -121,13 +121,6 @@ class ModelPredictor:
         else:
             raise ValueError(f"Unknown model type: {model_type}")
         
-        if 'patch_projection.weight' in state_dict:
-            if not hasattr(self.model, 'patch_projection'):
-                import torch.nn as nn
-                embed_dim = 768
-                patch_size = 16
-                self.model.patch_projection = nn.Linear(patch_size * patch_size, embed_dim)
-        
         if model_type == 'ast':
             pos_embed_key = 'ast.embeddings.position_embeddings'
             if pos_embed_key in state_dict:

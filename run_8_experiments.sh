@@ -11,7 +11,6 @@ AVIANZ_TRAIN="${MATCHED}/avianz_split/train"
 AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TRAIN="${MATCHED}/doc_split/train"
 DOC_TEST="${MATCHED}/doc_split/test"
-
 EPOCHS=100
 PATIENCE=15
 MIXUP=0.25

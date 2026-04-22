@@ -55,19 +55,9 @@ class EvaluationManager:
         
         with torch.no_grad():
             for batch in test_loader:
-                # Handle both sparse and standard formats
-                if isinstance(batch, dict):
-                    # Sparse patches mode
-                    patches = batch['patches'].to(device)
-                    positions = batch['positions'].to(device)
-                    mask = batch['mask'].to(device)
-                    batch_labels = batch['label']
-                    outputs = model(patches, sparse_mode=True, positions=positions, mask=mask)
-                else:
-                    # Standard mode
-                    batch_data, batch_labels = batch
-                    batch_data = batch_data.to(device)
-                    outputs = model(batch_data)
+                batch_data, batch_labels = batch
+                batch_data = batch_data.to(device)
+                outputs = model(batch_data)
                 
                 # Handle reconstruction models that return (logits, reconstruction)
                 if isinstance(outputs, tuple):
