@@ -95,101 +95,36 @@ class SpectrogramDecoder(nn.Module):
         return recon
 
 
-class SpectrogramCleaner(nn.Module):
-    """Trainable spectrogram preprocessing network.
-    
-    A lightweight U-Net-style architecture that learns to clean/enhance spectrograms
-    before they are fed to the frozen classifier. This allows the model to adapt
-    to domain shifts by learning a preprocessing transformation while keeping
-    the classifier features intact.
+class CnnAdapter(nn.Module):
+    """Lightweight trainable CNN adapter prepended to a frozen backbone.
+
+    Learns a residual correction: output = input + f(input).
+    The final 1x1 conv is zero-initialized so the adapter starts as identity.
     """
-    def __init__(self, input_size=(128, 512), channels=[32, 64, 128]):
+    def __init__(self, num_layers=2, hidden_channels=32):
         super().__init__()
-        self.input_size = input_size
-        
-        self.enc1 = nn.Sequential(
-            nn.Conv2d(1, channels[0], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[0]),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(channels[0], channels[0], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[0]),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.enc2 = nn.Sequential(
-            nn.MaxPool2d(2),
-            nn.Conv2d(channels[0], channels[1], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[1]),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(channels[1], channels[1], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[1]),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.enc3 = nn.Sequential(
-            nn.MaxPool2d(2),
-            nn.Conv2d(channels[1], channels[2], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[2]),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(channels[2], channels[2], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[2]),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.dec3 = nn.Sequential(
-            nn.ConvTranspose2d(channels[2], channels[1], kernel_size=2, stride=2),
-            nn.BatchNorm2d(channels[1]),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.dec2 = nn.Sequential(
-            nn.Conv2d(channels[1] * 2, channels[1], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[1]),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(channels[1], channels[0], kernel_size=2, stride=2),
-            nn.BatchNorm2d(channels[0]),
-            nn.ReLU(inplace=True)
-        )
-        
-        self.dec1 = nn.Sequential(
-            nn.Conv2d(channels[0] * 2, channels[0], kernel_size=3, padding=1),
-            nn.BatchNorm2d(channels[0]),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(channels[0], 1, kernel_size=1)
-        )
-        
-        self.residual_weight = nn.Parameter(torch.tensor(0.1))
-    
+        layers = []
+        in_ch = 1
+        for _ in range(num_layers):
+            layers += [
+                nn.Conv2d(in_ch, hidden_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(hidden_channels),
+                nn.ReLU(inplace=True),
+            ]
+            in_ch = hidden_channels
+        layers.append(nn.Conv2d(hidden_channels, 1, kernel_size=1))
+        self.net = nn.Sequential(*layers)
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
     def forward(self, x):
-        original_dim = x.dim()
-        
-        if x.dim() == 3:
+        squeeze = x.dim() == 3
+        if squeeze:
             x = x.unsqueeze(1)
-        
-        assert x.dim() == 4 and x.shape[1] == 1, f"Expected input (B,1,H,W), got {x.shape}"
-        
-        x_input = x
-        
-        e1 = self.enc1(x)
-        e2 = self.enc2(e1)
-        e3 = self.enc3(e2)
-        
-        d3 = self.dec3(e3)
-        d3 = torch.cat([d3, e2], dim=1)
-        
-        d2 = self.dec2(d3)
-        d2 = torch.cat([d2, e1], dim=1)
-        
-        d1 = self.dec1(d2)
-        
-        assert d1.shape[1] == 1, f"dec1 should output 1 channel, got {d1.shape}"
-        
-        output = x_input + self.residual_weight * d1
-        
-        if original_dim == 3:
-            output = output.squeeze(1)
-        
-        return output
+        out = x + self.net(x)
+        if squeeze:
+            out = out.squeeze(1)
+        return out
 
 
 class CNNModel(nn.Module):
@@ -289,7 +224,8 @@ class AST(nn.Module):
     """Audio Spectrogram Transformer. Always uses multilabel classification."""
     
     def __init__(self, num_classes, input_size=None, dropout=0.1, use_reconstruction=False,
-                 use_adapters=False, adapter_dim=64, per_chunk_norm=False, num_chunks=2):
+                 use_adapters=False, adapter_dim=64, per_chunk_norm=False, num_chunks=2,
+                 use_cnn_adapter=False):
         super().__init__()
         self.num_classes = num_classes
         self.use_reconstruction = use_reconstruction
@@ -320,6 +256,7 @@ class AST(nn.Module):
         
         if use_reconstruction:
             self.decoder = SpectrogramDecoder(embed_dim=768, output_size=self.input_size)
+        self.cnn_adapter = CnnAdapter() if use_cnn_adapter else None
 
     def forward(self, x, sparse_mode=False, positions=None, mask=None):
         """Forward pass with AST paper normalization.
@@ -336,11 +273,16 @@ class AST(nn.Module):
             mask: (B, K) boolean mask indicating valid patches (True) vs padding (False)
         """
         x = x.float()
-        
+
         if sparse_mode:
             # Sparse patch mode: x is (B, K, 1, 16, 16)
             return self.forward_sparse(x, positions, mask)
-        
+
+        if self.cnn_adapter is not None:
+            if x.dim() == 3:
+                x = x.unsqueeze(1)
+            x = self.cnn_adapter(x)
+
         # Standard mode: process full spectrogram
         if x.dim() == 4 and x.shape[1] == 1:
             x = x.squeeze(1)
@@ -444,9 +386,13 @@ class AST(nn.Module):
                 features = self.pool(patch_tokens)
         else:
             # Standard mode
+            if self.cnn_adapter is not None:
+                if x.dim() == 3:
+                    x = x.unsqueeze(1)
+                x = self.cnn_adapter(x)
             if x.dim() == 4 and x.shape[1] == 1:
                 x = x.squeeze(1)
-            
+
             if self.per_chunk_norm:
                 B, H, W = x.shape
                 chunk_width = W // self.num_chunks
@@ -775,7 +721,7 @@ class DANNModel(nn.Module):
 class RegNetModel(nn.Module):
     """RegNetY model for bird audio classification (BirdClef fine-tuning)."""
     
-    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0):
+    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False):
         super().__init__()
         self.num_classes = num_classes
         
@@ -803,7 +749,8 @@ class RegNetModel(nn.Module):
         self.pooling = nn.AdaptiveAvgPool2d(1)
         self.feature_dim = backbone_out
         self.classifier = nn.Linear(backbone_out, num_classes)
-        
+        self.cnn_adapter = CnnAdapter() if use_cnn_adapter else None
+
         if pretrained_path:
             self._load_pretrained_weights(pretrained_path, freeze_backbone, freeze_stages)
     
@@ -865,6 +812,8 @@ class RegNetModel(nn.Module):
         print(f"  Trainable params: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
     
     def forward(self, x):
+        if self.cnn_adapter is not None:
+            x = self.cnn_adapter(x)
         features = self.backbone(x)
         if isinstance(features, dict):
             features = features['features']

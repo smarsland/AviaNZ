@@ -221,15 +221,6 @@ class GradCAM:
 
         return cam.cpu().numpy()
     
-    def compute_cam_ast(self, target_size):
-        """Compute CAM for AST via the patch embedding Conv2d.
-
-        The patch embedding output is (B, hidden_dim, H', W') — spatially
-        organized before any self-attention mixing — so we can apply the same
-        channel-weighted spatial Grad-CAM used for RegNet.
-        """
-        return self.compute_cam_regnet(target_size)
-    
     def remove_hooks(self):
         """Remove all registered hooks."""
         for hook in self.hooks:

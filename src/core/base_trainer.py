@@ -38,8 +38,6 @@ class BaseTrainer(ABC):
         self.multilabel = cfg.model.multilabel
         self.use_dann = cfg.domain_adaptation.use_dann
         self.lambda_domain = cfg.domain_adaptation.lambda_domain
-        self.use_cleaner = cfg.domain_adaptation.use_cleaner
-        
         self._setup_device()
         self._setup_seed()
         
@@ -60,9 +58,6 @@ class BaseTrainer(ABC):
         self.domain_criterion = None
         self.target_train_loader = None
         
-        # Cleaner component (if used)
-        self.cleaner = None
-    
     def _setup_device(self):
         """Setup compute device."""
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -141,8 +136,6 @@ class BaseTrainer(ABC):
         if self.use_dann:
             self.grl.train()
             self.domain_classifier.train()
-        if self.use_cleaner:
-            self.cleaner.train()
         
         total_loss = 0
         total_class_loss = 0
@@ -246,8 +239,6 @@ class BaseTrainer(ABC):
     def train_epoch_standard(self, epoch):
         """Train one epoch without DANN."""
         self.model.train()
-        if self.use_cleaner:
-            self.cleaner.train()
         
         total_loss = 0
         correct = 0
@@ -357,9 +348,6 @@ class BaseTrainer(ABC):
         
         if self.use_dann:
             checkpoint['domain_classifier_state_dict'] = self.domain_classifier.state_dict()
-        
-        if self.use_cleaner and self.cleaner:
-            checkpoint['cleaner_state_dict'] = self.cleaner.state_dict()
         
         torch.save(checkpoint, path)
     

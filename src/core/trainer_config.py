@@ -36,6 +36,7 @@ class ModelConfig:
     pretrained_path: Optional[str] = None
     freeze_backbone: bool = False
     freeze_stages: int = 0
+    use_cnn_adapter: bool = False
 
 
 @dataclass
@@ -71,7 +72,6 @@ class DomainAdaptationConfig:
     use_dann: bool = False
     target_folder: Optional[str] = None
     lambda_domain: float = 0.3
-    use_cleaner: bool = False
 
 
 @dataclass
@@ -119,7 +119,8 @@ class TrainerConfig:
                 freeze_layers=getattr(args, 'freeze_layers', None),
                 pretrained_path=getattr(args, 'pretrained', None),
                 freeze_backbone=getattr(args, 'freeze_backbone', False),
-                freeze_stages=getattr(args, 'freeze_stages', 0)
+                freeze_stages=getattr(args, 'freeze_stages', 0),
+                use_cnn_adapter=getattr(args, 'cnn_adapter', False)
             ),
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,
@@ -145,8 +146,7 @@ class TrainerConfig:
             domain_adaptation=DomainAdaptationConfig(
                 use_dann=getattr(args, 'use_dann', False),
                 target_folder=getattr(args, 'target_folder', None),
-                lambda_domain=getattr(args, 'lambda_domain', 0.3),
-                use_cleaner=getattr(args, 'use_cleaner', False)
+                lambda_domain=getattr(args, 'lambda_domain', 0.3)
             ),
             evaluation=EvaluationConfig(
                 test_folder=getattr(args, 'test_folder', None),

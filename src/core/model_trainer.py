@@ -137,6 +137,7 @@ class Trainer:
         self.pretrained_path = cfg.model.pretrained_path
         self.freeze_backbone = cfg.model.freeze_backbone
         self.freeze_stages = cfg.model.freeze_stages
+        self.use_cnn_adapter = getattr(cfg.model, 'use_cnn_adapter', False)
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
         
         # Augmentation configuration
@@ -163,7 +164,6 @@ class Trainer:
         self.use_dann = cfg.domain_adaptation.use_dann
         self.target_folder = cfg.domain_adaptation.target_folder
         self.lambda_domain = cfg.domain_adaptation.lambda_domain
-        self.use_cleaner = cfg.domain_adaptation.use_cleaner
         
         # Evaluation configuration
         self.test_folder = cfg.evaluation.test_folder
@@ -331,13 +331,15 @@ class Trainer:
                 pretrained_path=self.pretrained_path,
                 model_name=self.model_name,
                 freeze_backbone=self.freeze_backbone,
-                freeze_stages=self.freeze_stages
+                freeze_stages=self.freeze_stages,
+                use_cnn_adapter=self.use_cnn_adapter
             ).to(self.device)
         else:
             print("Creating AST model (multilabel)...")
             model = AST(self.num_classes, input_size=input_size, dropout=self.dropout, 
                        use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
-                       per_chunk_norm=self.per_chunk_norm).to(self.device)
+                       per_chunk_norm=self.per_chunk_norm,
+                       use_cnn_adapter=self.use_cnn_adapter).to(self.device)
             
             # AST-specific: Interpolate positional embeddings
             print(f"Interpolating positional embeddings for input size {input_size}...")
@@ -382,42 +384,32 @@ class Trainer:
             self.domain_criterion = nn.BCEWithLogitsLoss()
             print(f"  DANN lambda_domain: {self.lambda_domain}")
         
-        # Add spectrogram cleaner if requested
-        if self.use_cleaner:
-            print("  Adding trainable spectrogram cleaner...")
-            from models import SpectrogramCleaner
-            
-            self.cleaner = SpectrogramCleaner(input_size=input_size).to(self.device)
-            
-            for param in model.parameters():
-                param.requires_grad = False
-            
-            print(f"  Backbone frozen - training only spectrogram cleaner + classifier")
-            
-            for param in model.classifier.parameters():
-                param.requires_grad = True
-            
-            trainable_params = sum(p.numel() for p in self.cleaner.parameters()) + sum(p.numel() for p in model.classifier.parameters() if p.requires_grad)
-            total_params = sum(p.numel() for p in model.parameters()) + sum(p.numel() for p in self.cleaner.parameters())
-            print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
-
         # Optimizer and LR schedule
         # Use AdamW (Adam with decoupled weight decay) for better regularization
         # Differential LR for RegNet: pretrained backbone gets base LR, randomly-init classifier gets 10x
         if self.model_type == 'regnet':
-            backbone_params = [p for n, p in model.named_parameters() if 'classifier' not in n and p.requires_grad]
+            backbone_params = [p for n, p in model.named_parameters() if 'classifier' not in n and 'cnn_adapter' not in n and p.requires_grad]
             classifier_params = [p for n, p in model.named_parameters() if 'classifier' in n and p.requires_grad]
+            adapter_params = [p for n, p in model.named_parameters() if 'cnn_adapter' in n and p.requires_grad]
             param_groups = [
                 {'params': backbone_params, 'lr': self.learning_rate},
                 {'params': classifier_params, 'lr': self.learning_rate * 10}
             ]
+            if adapter_params:
+                param_groups.append({'params': adapter_params, 'lr': self.learning_rate * 10})
             print(f"  Backbone LR: {self.learning_rate:.1e}, Classifier LR: {self.learning_rate * 10:.1e}")
         else:
-            param_groups = [{'params': model.parameters(), 'lr': self.learning_rate}]
+            adapter_params = [p for n, p in model.named_parameters() if 'cnn_adapter' in n]
+            other_params = [p for n, p in model.named_parameters() if 'cnn_adapter' not in n]
+            if adapter_params:
+                param_groups = [
+                    {'params': other_params, 'lr': self.learning_rate},
+                    {'params': adapter_params, 'lr': self.learning_rate * 10}
+                ]
+            else:
+                param_groups = [{'params': model.parameters(), 'lr': self.learning_rate}]
         if self.use_dann:
             param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.learning_rate * 0.1})
-        if self.use_cleaner:
-            param_groups.append({'params': self.cleaner.parameters(), 'lr': self.learning_rate})
         optimizer = optim.AdamW(param_groups, weight_decay=self.weight_decay)
         
         scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs, eta_min=1e-7)
@@ -467,8 +459,6 @@ class Trainer:
             if self.use_dann:
                 self.grl.train()
                 self.domain_classifier.train()
-            if self.use_cleaner:
-                self.cleaner.train()
                 
             train_loss = 0.0
             train_correct = 0
@@ -579,9 +569,6 @@ class Trainer:
                     
                     optimizer.zero_grad()
                     
-                    if self.use_cleaner:
-                        data = self.cleaner(data)
-                    
                     with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
                         if self.use_reconstruction:
                             output, recon = model(data)
@@ -640,8 +627,6 @@ class Trainer:
             
             # Validate
             model.eval()
-            if self.use_cleaner:
-                self.cleaner.eval()
             val_loss = 0.0
             val_correct = 0
             val_total = 0
@@ -654,9 +639,6 @@ class Trainer:
                     # Standard data format
                     data, target = batch
                     data, target = data.to(self.device, non_blocking=True), target.to(self.device, non_blocking=True)
-                    
-                    if self.use_cleaner:
-                        data = self.cleaner(data)
                     
                     if self.use_reconstruction:
                         output, _ = model(data)
@@ -926,10 +908,6 @@ class Trainer:
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
         
-        if self.use_cleaner:
-            cleaner_filename = 'cleaner_best.pt' if best else 'cleaner.pt'
-            torch.save(self.cleaner.state_dict(), os.path.join(self.output_folder, cleaner_filename))
-        
         # Always save configuration for model deployment
         model_config = config.get_model_config()
         
@@ -946,7 +924,7 @@ class Trainer:
         model_config['num_classes'] = model.num_classes
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
-        model_config['use_cleaner'] = self.use_cleaner
+        model_config['use_cnn_adapter'] = self.use_cnn_adapter
         
         # Save ALL augmentation/normalization parameters for inference consistency
         model_config['spec_transform'] = self.spec_transform
