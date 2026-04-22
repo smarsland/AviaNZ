@@ -31,6 +31,14 @@ run_experiment() {
     echo " Output: $out_dir"
     echo "============================================================"
 
+    # Freeze most of the backbone, leaving the last few layers trainable
+    local freeze_flags=()
+    if [ "$model" = "ast" ]; then
+        freeze_flags=(--freeze-layers 8)
+    elif [ "$model" = "regnet" ]; then
+        freeze_flags=(--freeze-stages 3)
+    fi
+
     python train.py \
         "$train_dir" \
         "$out_dir" \
@@ -42,6 +50,7 @@ run_experiment() {
         --patience $PATIENCE \
         --mixup $MIXUP \
         --model-type "$model" \
+        "${freeze_flags[@]}" \
         "${extra_flags[@]}"
 }
 

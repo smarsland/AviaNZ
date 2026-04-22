@@ -78,6 +78,8 @@ Examples:
                        help="Freeze backbone, only train classifier (RegNet only)")
     parser.add_argument('--freeze-stages', type=int, default=0,
                        help="Freeze first N stages of backbone (RegNet only, 0-4)")
+    parser.add_argument('--freeze-layers', type=int, default=None,
+                       help="Freeze first N transformer encoder layers (AST only)")
     parser.add_argument('--cnn-adapter', action='store_true',
                        help="Prepend two trainable CNN layers to the backbone (trained at 10x LR)")
     
