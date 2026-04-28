@@ -55,8 +55,8 @@ run_experiment() {
 }
 
 # Default log transform
-# run_experiment ast    doc    "$DOC_TRAIN"    log
-# run_experiment ast    avianz "$AVIANZ_TRAIN" log
+run_experiment ast    doc    "$DOC_TRAIN"    log
+run_experiment ast    avianz "$AVIANZ_TRAIN" log
 run_experiment regnet doc    "$DOC_TRAIN"    log
 run_experiment regnet avianz "$AVIANZ_TRAIN" log
 
