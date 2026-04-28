@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 OUTPUT_BASE="/local/scratch/freangi"
-KAYTOO_ROOT="${OUTPUT_BASE}/../Kaytoo"
+KAYTOO_ROOT="$(pwd)/../Kaytoo"
 KAYTOO_PYTHON="${KAYTOO_ROOT}/venv_kay/bin/python"
 
 MATCHED_BASE="${OUTPUT_BASE}/matched"

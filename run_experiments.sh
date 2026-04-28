@@ -80,3 +80,7 @@ run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --me
 }
 
 main "$@"
+
+echo ""
+echo "To run Kaytoo baseline evaluation on the same test sets:"
+echo "  ./run_kaytoo_eval.sh"
