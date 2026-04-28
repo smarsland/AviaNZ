@@ -2,6 +2,7 @@
 set -e
 
 # Run Kaytoo inference on both test sets and produce accuracy results.
+# Run this after build_dataset.sh and run_experiments.sh.
 # Must be run from the AviaNZ project root.
 #
 # Usage:
