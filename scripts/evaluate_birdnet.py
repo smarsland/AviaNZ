@@ -42,22 +42,44 @@ except ImportError:
     sys.exit(1)
 
 
+# Keys match the common-name labels used in labels.json (lowercased)
 SPECIES_MAPPING = {
-    'nezfan1': 'Fantail',
-    'silver3': 'Silvereye',
-    'comcha': 'Chaffinch',
-    'nezbel1': 'Bellbird',
-    'eurbla': 'Blackbird',
-    'morepo2': 'Morepork'
+    'nezfan1':      'Fantail',
+    'silver3':      'Silvereye',
+    'comcha':       'Chaffinch',
+    'tui/bellbird': 'Tui/Bellbird',  # combined class in the dataset
+    'eurbla':       'Blackbird',
+    'morepo2':      'Morepork',
+    'gryger1':      'Grey Warbler',
+    'nezkak1':      'Kaka',
+    'tomtit1':      'Tomtit',
 }
 
 SPECIES_SCIENTIFIC = {
-    'nezfan1': 'Rhipidura fuliginosa',
-    'silver3': 'Zosterops lateralis',
-    'comcha': 'Fringilla coelebs',
-    'nezbel1': 'Anthornis melanura',
-    'eurbla': 'Turdus merula',
-    'morepo2': 'Ninox novaeseelandiae'
+    'nezfan1':      'Rhipidura fuliginosa',
+    'silver3':      'Zosterops lateralis',
+    'comcha':       'Fringilla coelebs',
+    'tui/bellbird': 'Prosthemadera novaeseelandiae / Anthornis melanura',
+    'eurbla':       'Turdus merula',
+    'morepo2':      'Ninox novaeseelandiae',
+    'gryger1':      'Gerygone igata',
+    'nezkak1':      'Nestor meridionalis',
+    'tomtit1':      'Petroica macrocephala',
+}
+
+# BirdNET scientific name → dataset species code.
+# Both Tui and Bellbird map to the combined 'tui/bellbird' class.
+SCIENTIFIC_TO_CODE = {
+    'Rhipidura fuliginosa':          'nezfan1',
+    'Zosterops lateralis':           'silver3',
+    'Fringilla coelebs':             'comcha',
+    'Prosthemadera novaeseelandiae': 'tui/bellbird',
+    'Anthornis melanura':            'tui/bellbird',
+    'Turdus merula':                 'eurbla',
+    'Ninox novaeseelandiae':         'morepo2',
+    'Gerygone igata':                'gryger1',
+    'Nestor meridionalis':           'nezkak1',
+    'Petroica macrocephala':         'tomtit1',
 }
 
 # Reverse map: lowercase common name → species code (e.g. 'silvereye' → 'silver3')
@@ -122,11 +144,7 @@ class BirdNETEvaluator:
         return best['scientific_name'], best['confidence']
     
     def find_matching_species(self, scientific_name):
-        for code, sci_name in SPECIES_SCIENTIFIC.items():
-            if sci_name.lower() == scientific_name.lower():
-                return code
-        
-        return None
+        return SCIENTIFIC_TO_CODE.get(scientific_name, None)
     
     def evaluate_folder(self, test_folder, dataset_name):
         print(f"\n{'='*60}")
