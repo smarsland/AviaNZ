@@ -62,9 +62,25 @@ run_experiment() {
 # run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
 # run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 
-# Merged with log + background subtraction + median filter
-run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
-run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+# # Merged with log + background subtraction + median filter
+# run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+# run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+
+# CNN adapter: learnable CNN front-end prepended to backbone (trained at 10x LR)
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
+run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
+run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
+
+# Target-domain noise: real acoustic noise from the other domain (0.2 mixing ratio)
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_tgt_noise --bg-subtract --median-filter --noise 0.2 --noise-folder "$AVIANZ_TRAIN"
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_tgt_noise --bg-subtract --median-filter --noise 0.2 --noise-folder "$DOC_TRAIN"
+
+# Partial backbone freezing: keep pretrained early stages fixed, fine-tune upper stages only
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_freeze2 --bg-subtract --median-filter --freeze-stages 2
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_freeze2 --bg-subtract --median-filter --freeze-stages 2
+run_experiment ast    doc    "$DOC_TRAIN"    log_freeze6 --freeze-layers 6
+run_experiment ast    avianz "$AVIANZ_TRAIN" log_freeze6 --freeze-layers 6
 
 }
 
