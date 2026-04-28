@@ -31,14 +31,6 @@ run_experiment() {
     echo " Output: $out_dir"
     echo "============================================================"
 
-    # Freeze most of the backbone, leaving the last few layers trainable
-    local freeze_flags=()
-    if [ "$model" = "ast" ]; then
-        freeze_flags=(--freeze-layers 8)
-    elif [ "$model" = "regnet" ]; then
-        freeze_flags=(--freeze-stages 3)
-    fi
-
     python train.py \
         "$train_dir" \
         "$out_dir" \
@@ -50,7 +42,6 @@ run_experiment() {
         --patience $PATIENCE \
         --mixup $MIXUP \
         --model-type "$model" \
-        "${freeze_flags[@]}" \
         "${extra_flags[@]}"
 }
 
@@ -60,23 +51,20 @@ run_experiment ast    avianz "$AVIANZ_TRAIN" log
 run_experiment regnet doc    "$DOC_TRAIN"    log
 run_experiment regnet avianz "$AVIANZ_TRAIN" log
 
-# # Log + background subtraction + median filter
-# run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-# run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
-# run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-# run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+# Per-clip normalization: replaces global AudioSet stats (tests normalization hypothesis)
+run_experiment ast    doc    "$DOC_TRAIN"    log_clip_norm --per-chunk-norm
+run_experiment ast    avianz "$AVIANZ_TRAIN" log_clip_norm --per-chunk-norm
 
-# # With CNN adapter: default log transform
-# run_experiment ast    doc    "$DOC_TRAIN"    log_cnn    --cnn-adapter
-# run_experiment ast    avianz "$AVIANZ_TRAIN" log_cnn    --cnn-adapter
-# run_experiment regnet doc    "$DOC_TRAIN"    log_cnn    --cnn-adapter
-# run_experiment regnet avianz "$AVIANZ_TRAIN" log_cnn    --cnn-adapter
+# Log + background subtraction + median filter
+run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 
-# # With CNN adapter: log + background subtraction + median filter
-# run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
-# run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
-# run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
-# run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
+# Merged with log + background subtraction + median filter
+run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+
 
 }
 

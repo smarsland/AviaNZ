@@ -82,6 +82,8 @@ Examples:
                        help="Freeze first N transformer encoder layers (AST only)")
     parser.add_argument('--cnn-adapter', action='store_true',
                        help="Prepend two trainable CNN layers to the backbone (trained at 10x LR)")
+    parser.add_argument('--per-chunk-norm', action='store_true', dest='per_chunk_norm',
+                       help="Per-clip min-max normalization (replaces global AudioSet stats). AST only.")
     
     # Evaluation
     parser.add_argument('--test-folder', type=str, default=None,
