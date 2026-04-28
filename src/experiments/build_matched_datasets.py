@@ -233,7 +233,7 @@ def parse_reviewed_csv(csv_path, mapping_csv):
     return records
 
 
-def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None):
+def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None, with_audio=False):
     """
     Extract a spectrogram for each record from the raw DOC audio.
     Labels each sample with the full human_codes.
@@ -243,10 +243,14 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     Args:
         fixed_length: If True, filter out spectrograms with fewer than target_time_bins and trim to target_time_bins
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
+        with_audio: If True, also save the source audio as a .wav file alongside the spectrogram
     """
     spec_proc = make_spec_processor()
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
+    if with_audio:
+        audio_dir = os.path.join(output_folder, 'audio')
+        os.makedirs(audio_dir, exist_ok=True)
 
     labels = []
     kept_records = []
@@ -292,6 +296,10 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
         basename = f'file_{len(labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
 
+        if with_audio:
+            audio_data, audio_sr = sf.read(audio_path)
+            sf.write(os.path.join(audio_dir, f'{basename}.wav'), audio_data, audio_sr)
+
         labels.append({
             'filename': f'{basename}.npy',
             'class_names': rec['human_labels'],
@@ -310,7 +318,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False, with_audio=False):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (from DOC's 'Species 1' column,
@@ -324,6 +332,7 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
     Args:
         fixed_length: If True, filter out spectrograms with fewer than target_time_bins and trim to target_time_bins
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
+        with_audio: If True, also save the matched audio segment as a .wav file alongside the spectrogram
     """
     spec_proc = make_spec_processor()
     name_mapping = load_avianz_name_mapping(mapping_csv)
@@ -331,6 +340,9 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
+    if with_audio:
+        audio_dir = os.path.join(output_folder, 'audio')
+        os.makedirs(audio_dir, exist_ok=True)
 
     # Collect all species codes we'll ever need to search for
     all_search_codes = set()
@@ -407,6 +419,14 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
 
             basename = f'file_{len(avianz_labels):08d}'
             spec_proc.save_spectrogram(sg, data_dir, basename)
+
+            if with_audio:
+                info = sf.info(wav_file)
+                start_frame = int(start * info.samplerate)
+                stop_frame = int(end * info.samplerate)
+                seg_data, seg_sr = sf.read(wav_file, start=start_frame, stop=stop_frame)
+                sf.write(os.path.join(audio_dir, f'{basename}.wav'), seg_data, seg_sr)
+
             # Use the DOC human label — both datasets must have identical class names.
             avianz_labels.append({
                 'filename': f'{basename}.npy',
@@ -574,6 +594,8 @@ def main():
                         help='Filter out files shorter than model input size and trim all to same length')
     parser.add_argument('--freq-mask', action='store_true',
                         help='Zero out AviaNZ spectrogram values outside the annotated frequency limits')
+    parser.add_argument('--with-audio', action='store_true',
+                        help='Also save audio files alongside spectrograms (required for Kaytoo and BirdNET evaluation)')
     args = parser.parse_args()
 
     doc_out = os.path.join(args.output, 'doc_matched')
@@ -598,11 +620,15 @@ def main():
     print('=== Step 1: parse reviewed CSV ===')
     records = parse_reviewed_csv(args.reviewed_csv, args.mapping)
 
+    if args.with_audio:
+        print('\n=== Audio saving enabled: .wav files will be saved alongside spectrograms ===')
+
     print('\n=== Step 2: build DOC dataset (human labels, raw audio) ===')
     doc_labels, kept_records = build_doc_dataset(
         records, args.doc_raw, doc_out, 
         fixed_length=args.fixed_length,
-        target_time_bins=target_time_bins
+        target_time_bins=target_time_bins,
+        with_audio=args.with_audio
     )
 
     print('\n=== Step 3: find matching AviaNZ sample for each DOC record ===')
@@ -612,7 +638,8 @@ def main():
         kept_records, args.avianz_raw, avianz_out, args.seed, args.mapping,
         fixed_length=args.fixed_length,
         target_time_bins=target_time_bins,
-        freq_mask=args.freq_mask
+        freq_mask=args.freq_mask,
+        with_audio=args.with_audio
     )
 
     # Drop DOC samples that had no AviaNZ match

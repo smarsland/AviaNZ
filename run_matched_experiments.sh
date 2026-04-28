@@ -115,6 +115,7 @@ if [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/labels.json" ] || [ ! -d "$AV
         --output       "$MATCHED_BASE" \
         --mapping      "$MAPPING" \
         --fixed-length \
+        --with-audio \
         ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG}
 else
     echo "=== Matched datasets exist, skipping build ==="
@@ -276,3 +277,36 @@ echo " ALL DONE"
 echo "============================================================"
 echo " Results: $RESULTS"
 echo "============================================================"
+
+# ============================================================
+# PHASE 4: KAYTOO BASELINE EVALUATION (optional)
+# ============================================================
+
+KAYTOO_ROOT="${OUTPUT_BASE}/Kaytoo"
+KAYTOO_RESULTS="${RESULTS_DIR}/kaytoo_eval"
+
+if [ -d "$KAYTOO_ROOT" ] && [ -d "$KAYTOO_ROOT/models" ]; then
+    echo ""
+    echo "============================================================"
+    echo " Kaytoo baseline evaluation"
+    echo "============================================================"
+    echo "  Kaytoo root : $KAYTOO_ROOT"
+    echo "  Output      : $KAYTOO_RESULTS"
+    echo "============================================================"
+    PYTHONPATH="$PWD" python3 scripts/evaluate_kaytoo.py \
+        "$AVIANZ_TEST" \
+        "$DOC_TEST" \
+        --kaytoo-root "$KAYTOO_ROOT" \
+        --mapping     "$MAPPING" \
+        --output      "$KAYTOO_RESULTS"
+    echo ""
+    echo "=== Kaytoo evaluation complete: $KAYTOO_RESULTS ==="
+else
+    echo ""
+    echo "============================================================"
+    echo " Kaytoo evaluation SKIPPED"
+    echo "============================================================"
+    echo "  No Kaytoo installation found at: $KAYTOO_ROOT"
+    echo "  Set KAYTOO_ROOT in this script to enable Kaytoo evaluation."
+    echo "============================================================"
+fi

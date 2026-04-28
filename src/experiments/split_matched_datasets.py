@@ -251,6 +251,23 @@ def save_split(files, output_folder, split_name, original_metadata, split_info):
         
         if (i + 1) % 100 == 0 or (i + 1) == len(files):
             print(f"  Copied {i + 1}/{len(files)} files")
+
+    # Copy audio files if present (saved by build_matched_datasets.py --with-audio)
+    src_audio_folder = None
+    if original_metadata.get('data_folder'):
+        src_audio_folder = os.path.join(os.path.dirname(original_metadata['data_folder']), 'audio')
+    if src_audio_folder and os.path.exists(src_audio_folder):
+        audio_folder = os.path.join(output_folder, split_name, 'audio')
+        os.makedirs(audio_folder, exist_ok=True)
+        print(f"\nCopying audio files to {audio_folder}...")
+        copied = 0
+        for entry in files:
+            wav_name = entry['filename'].replace('.npy', '.wav')
+            src = os.path.join(src_audio_folder, wav_name)
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(audio_folder, wav_name))
+                copied += 1
+        print(f"  Copied {copied}/{len(files)} audio files")
     
     # Save labels
     metadata = original_metadata.copy()
