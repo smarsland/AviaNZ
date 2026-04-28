@@ -60,6 +60,9 @@ SPECIES_SCIENTIFIC = {
     'morepo2': 'Ninox novaeseelandiae'
 }
 
+# Reverse map: lowercase common name → species code (e.g. 'silvereye' → 'silver3')
+COMMON_NAME_TO_CODE = {v.lower(): k for k, v in SPECIES_MAPPING.items()}
+
 
 class BirdNETEvaluator:
     def __init__(self, output_folder, min_confidence=0.1, latitude=-41.2865, longitude=174.7762):
@@ -184,7 +187,12 @@ class BirdNETEvaluator:
             if label is None:
                 print(f"  [{i}/{len(files)}] SKIP: {npy_filename} (empty label)")
                 continue
-            
+
+            # Normalize GT labels: convert common names to species codes if needed
+            # (labels.json may store 'silvereye' instead of 'silver3')
+            gt_labels = [COMMON_NAME_TO_CODE.get(l.lower(), l) for l in gt_labels]
+            label = gt_labels[0]
+
             # Convert .npy filename to .wav filename
             wav_filename = npy_filename.replace('.npy', '.wav')
             wav_file = audio_path / wav_filename
