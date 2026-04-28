@@ -2,13 +2,15 @@
 """
 Show ALL experimental results clearly and sensibly.
 
-This script:
-- Shows every single experiment you ran
-- Makes clear comparisons
-- Doesn't filter or hide anything
-- Works with whatever data you have
+Reads from two folder layouts:
+1. run_matched_experiments.sh / Kaytoo → {results_dir}/*/result.json
+   Name format: {dataset}_{method}_{config}_seed{N}  or  kaytoo_pretrained_seed0
+2. run_experiments.sh → {viz_dir}/{model}_on_{dataset}_{transform}/
+   Reads *_multilabel_report.json files directly (no result.json written there)
 
-Usage: python3 scripts/analyze_all_results.py results/
+Usage:
+    python3 scripts/analyze_all_results.py ~/results
+    python3 scripts/analyze_all_results.py ~/results --viz-dir /local/scratch/freangi/visualizations
 """
 
 import argparse
@@ -21,65 +23,131 @@ import pandas as pd
 import seaborn as sns
 
 
-def load_all_results(results_dir):
-    """Load everything"""
+def load_from_result_json(results_dir):
+    """Load experiments written by run_matched_experiments.sh and evaluate_kaytoo.py."""
     results = []
-    
     for result_file in sorted(Path(results_dir).glob('*/result.json')):
-        try:
-            with open(result_file) as f:
-                data = json.load(f)
-            
-            # Parse name
-            name = result_file.parent.name
-            parts = name.split('_')
-            
-            # Extract components
-            train_dataset = parts[0]  # avianz, doc, merged
-            method_type = parts[1]  # baseline, dann, ast
-            
-            # Config is everything between method and seed
-            config_parts = []
-            for i in range(2, len(parts)):
-                if parts[i].startswith('seed'):
-                    seed = int(parts[i].replace('seed', ''))
-                    break
-                config_parts.append(parts[i])
-            config = '_'.join(config_parts)
-            
-            # Categorize
-            if 'ast' in method_type:
-                category = 'AST'
-                method = 'ast'
-            elif method_type == 'dann':
-                category = 'DANN'
-                method = 'dann'
-            elif 'intensity' in config:
-                category = 'Noise Intensity'
-                method = 'baseline'
-            elif 'variety' in config:
-                category = 'Noise Variety'
-                method = 'baseline'
-            else:
-                category = 'Normalization'
-                method = 'baseline'
-            
+        with open(result_file) as f:
+            data = json.load(f)
+
+        name = result_file.parent.name
+        parts = name.split('_')
+
+        if data.get('type') == 'pretrained':
             results.append({
                 'name': name,
-                'train_dataset': train_dataset,
-                'method': method,
-                'config': config,
-                'category': category,
-                'seed': seed,
+                'train_dataset': 'pretrained',
+                'method': 'pretrained',
+                'config': 'kaytoo',
+                'category': 'Kaytoo (Pretrained)',
+                'seed': data.get('seed', 0),
                 'test1_name': data.get('test1_name', 'unknown'),
                 'test2_name': data.get('test2_name', 'unknown'),
                 'test1_acc': data.get('test1_acc', np.nan),
                 'test2_acc': data.get('test2_acc', np.nan),
                 'status': data.get('status', 'unknown'),
             })
-        except Exception as e:
-            print(f"Warning: Failed to load {result_file}: {e}")
-    
+            continue
+
+        train_dataset = parts[0]
+        method_type = parts[1]
+        config_parts = []
+        seed = 0
+        for i in range(2, len(parts)):
+            if parts[i].startswith('seed'):
+                seed = int(parts[i].replace('seed', ''))
+                break
+            config_parts.append(parts[i])
+        config = '_'.join(config_parts)
+
+        if 'ast' in method_type:
+            category = 'AST'
+            method = 'ast'
+        elif method_type == 'dann':
+            category = 'DANN'
+            method = 'dann'
+        elif 'intensity' in config:
+            category = 'Noise Intensity'
+            method = 'baseline'
+        elif 'variety' in config:
+            category = 'Noise Variety'
+            method = 'baseline'
+        else:
+            category = 'Normalization'
+            method = 'baseline'
+
+        results.append({
+            'name': name,
+            'train_dataset': train_dataset,
+            'method': method,
+            'config': config,
+            'category': category,
+            'seed': seed,
+            'test1_name': data.get('test1_name', 'unknown'),
+            'test2_name': data.get('test2_name', 'unknown'),
+            'test1_acc': data.get('test1_acc', np.nan),
+            'test2_acc': data.get('test2_acc', np.nan),
+            'status': data.get('status', 'unknown'),
+        })
+    return results
+
+
+def load_from_viz_dir(viz_dir):
+    """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
+    results = []
+    pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
+    for exp_dir in sorted(Path(viz_dir).iterdir()):
+        if not exp_dir.is_dir():
+            continue
+        m = pattern.match(exp_dir.name)
+        if not m:
+            continue
+        model, train_dataset, transform = m.groups()
+
+        row = {
+            'name': exp_dir.name,
+            'train_dataset': train_dataset,
+            'method': model,
+            'config': transform,
+            'category': model.upper(),
+            'seed': 0,
+            'test1_name': np.nan,
+            'test2_name': np.nan,
+            'test1_acc': np.nan,
+            'test2_acc': np.nan,
+            'status': 'unknown',
+        }
+
+        for report_file in exp_dir.glob('*_multilabel_report.json'):
+            with open(report_file) as f:
+                report = json.load(f)
+            acc = report.get('exact_match_accuracy', np.nan)
+            if acc is not np.nan:
+                acc = acc * 100
+            stem = report_file.stem.replace('_multilabel_report', '')
+            # stem is like: ast_test_avianz_split or ast_model
+            if '_model' in stem:
+                continue  # validation set, skip
+            # extract dataset name from stem: {model}_test_{dataset_name}
+            dataset_name = re.sub(rf'^{model}_test_', '', stem)
+            if row['test1_name'] is np.nan or row['test1_name'] == np.nan:
+                row['test1_name'] = dataset_name
+                row['test1_acc'] = acc
+            else:
+                row['test2_name'] = dataset_name
+                row['test2_acc'] = acc
+
+        row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
+        results.append(row)
+    return results
+
+
+def load_all_results(results_dir, viz_dir=None):
+    results = []
+    if Path(results_dir).exists():
+        results.extend(load_from_result_json(results_dir))
+    if viz_dir and Path(viz_dir).exists():
+        results.extend(load_from_viz_dir(viz_dir))
     return pd.DataFrame(results)
 
 
@@ -304,24 +372,26 @@ def create_report(df, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze all experimental results')
-    parser.add_argument('results_dir', help='Results directory')
-    parser.add_argument('--output', '-o', default=None, help='Output directory')
+    parser.add_argument('results_dir',
+                        help='Output directory (e.g. /local/scratch/freangi/visualizations). '
+                             'Scans for both result.json and *_multilabel_report.json automatically.')
+    parser.add_argument('--output', '-o', default=None, help='Output directory for analysis files')
     args = parser.parse_args()
-    
+
     results_dir = Path(args.results_dir)
     output_dir = Path(args.output) if args.output else results_dir / 'analysis'
     output_dir.mkdir(exist_ok=True, parents=True)
-    
+
     print("="*70)
     print(" ANALYZING ALL RESULTS")
     print("="*70)
     print(f"Results: {results_dir}")
     print(f"Output:  {output_dir}\n")
-    
+
     sns.set_style("whitegrid")
-    
+
     print("Loading all results...")
-    df = load_all_results(results_dir)
+    df = load_all_results(results_dir, viz_dir=results_dir)
     print(f"  {len(df)} experiments loaded")
     print(f"  {len(df.dropna(subset=['test1_acc', 'test2_acc'], how='all'))} with valid accuracies")
     print(f"  Categories: {', '.join(sorted(df['category'].unique()))}\n")

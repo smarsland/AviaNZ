@@ -26,8 +26,7 @@ AVIANZ_TEST="${MATCHED_BASE}/avianz_split/test"
 DOC_TEST="${MATCHED_BASE}/doc_split/test"
 
 MAPPING="data/DOC_bird_naming_map.csv"
-RESULTS_DIR="$HOME/results"
-OUTPUT="${RESULTS_DIR}/kaytoo_eval"
+OUTPUT="${OUTPUT_BASE}/tests/kaytoo_pretrained_seed0"
 
 echo "============================================================"
 echo " Kaytoo evaluation"

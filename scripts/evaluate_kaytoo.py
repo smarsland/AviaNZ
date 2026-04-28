@@ -31,7 +31,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pathlib import Path
-from datetime import datetime
 from collections import defaultdict
 import pandas as pd
 
@@ -87,8 +86,13 @@ def aggregate_to_file(pred_df):
     return per_file, species_cols
 
 
-def evaluate_folder(test_folder, dataset_name, models, label_to_ebird):
-    """Run Kaytoo inference on one test folder and return accuracy statistics."""
+def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold=0.5):
+    """Run Kaytoo inference on one test folder and return accuracy statistics.
+    
+    Predictions are thresholded at `threshold` per class (multi-label), then
+    exact-match accuracy is computed — identical to how our trained models are
+    evaluated in evaluation_utils.py.
+    """
     from kaytoo_infer import inference as kaytoo_inference
 
     labels_data = load_labels(test_folder)
@@ -99,6 +103,20 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird):
         for item in labels_data.get('files', [])
     }
 
+    # Build the ordered list of eBird codes present in this test set.
+    # We only score over these classes — same constraint as our trained models.
+    test_ebird_codes_ordered = []
+    seen = set()
+    for item in labels_data.get('files', []):
+        for l in item.get('class_names', []):
+            for part in l.split('/'):
+                code = label_to_ebird.get(part.strip())
+                if code and code not in seen:
+                    seen.add(code)
+                    test_ebird_codes_ordered.append(code)
+    test_ebird_codes_ordered = sorted(test_ebird_codes_ordered)
+    print(f"  Test set species ({len(test_ebird_codes_ordered)} eBird codes): {test_ebird_codes_ordered}")
+
     print(f"  {len(audio_files)} audio files")
     if not audio_files:
         print("  No audio files found, skipping.")
@@ -106,6 +124,15 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird):
 
     pred_df = kaytoo_inference(audio_files, models, model_idx=0, cores=1)
     per_file_df, species_cols = aggregate_to_file(pred_df)
+
+    valid_cols = [c for c in test_ebird_codes_ordered if c in species_cols]
+    missing = set(test_ebird_codes_ordered) - set(species_cols)
+    if missing:
+        print(f"  WARNING: {len(missing)} test-set species not in Kaytoo vocab: {sorted(missing)}")
+    if not valid_cols:
+        print("  ERROR: no overlap between test-set species and Kaytoo vocab")
+        return None
+    print(f"  Scoring over {len(valid_cols)} species (threshold={threshold})")
 
     results = []
     for _, row in per_file_df.iterrows():
@@ -116,20 +143,27 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird):
 
         gt_labels = meta.get('class_names', [meta.get('label')])
         gt_labels = [l for l in gt_labels if l]
-        gt_codes = {label_to_ebird.get(l) for l in gt_labels}
-        gt_codes.discard(None)
+        gt_codes = set()
+        for l in gt_labels:
+            for part in l.split('/'):
+                code = label_to_ebird.get(part.strip())
+                if code and code in set(valid_cols):
+                    gt_codes.add(code)
 
-        scores = row[species_cols]
-        pred_code = species_cols[int(np.argmax(scores.values))]
-        pred_score = float(scores[pred_code])
-        correct = pred_code in gt_codes
+        # Multi-label: threshold each class score independently
+        scores = row[valid_cols].values
+        pred_codes = {valid_cols[i] for i, s in enumerate(scores) if s > threshold}
+        # If nothing clears the threshold, take the top-scoring class
+        if not pred_codes:
+            pred_codes = {valid_cols[int(np.argmax(scores))]}
+
+        # Exact match: predicted set must equal ground-truth set exactly
+        correct = pred_codes == gt_codes
 
         results.append({
             'wav_file': wav_name,
-            'gt_labels': gt_labels,
             'gt_codes': sorted(gt_codes),
-            'pred_code': pred_code,
-            'pred_score': pred_score,
+            'pred_codes': sorted(pred_codes),
             'correct': correct,
         })
 
@@ -227,6 +261,8 @@ def main():
                         help='DOC bird naming map CSV (default: data/DOC_bird_naming_map.csv)')
     parser.add_argument('--output', required=True, help='Folder for results and plots')
     parser.add_argument('--cpu', action='store_true', help='Force CPU inference')
+    parser.add_argument('--threshold', type=float, default=0.5,
+                        help='Score threshold for multi-label prediction (default: 0.5)')
     args = parser.parse_args()
 
     output_path = Path(args.output)
@@ -257,11 +293,14 @@ def main():
 
     all_results = []
     for folder in args.test_folders:
-        name = Path(folder).name
+        # Use parent folder name (e.g. "avianz_split") to match the convention
+        # used by run_cross_dataset_experiments.py: test1_name = test1_path.parent.name
+        p = Path(folder).resolve()
+        name = p.parent.name
         print(f"\n{'='*60}")
         print(f"Dataset: {name}")
         print(f"{'='*60}")
-        result = evaluate_folder(folder, name, models, label_to_ebird)
+        result = evaluate_folder(folder, name, models, label_to_ebird, threshold=args.threshold)
         if result:
             all_results.append(result)
 
@@ -269,15 +308,28 @@ def main():
         print("No results to report.")
         return
 
-    out_json = output_path / 'kaytoo_results.json'
-    with open(out_json, 'w') as f:
-        json.dump({
-            'timestamp': datetime.now().isoformat(),
-            'kaytoo_root': str(args.kaytoo_root),
-            'results': [{k: v for k, v in r.items() if k != 'results'} for r in all_results],
-            'per_file': {r['dataset_name']: r['results'] for r in all_results},
-        }, f, indent=2, default=str)
-    print(f"\nSaved detailed results to {out_json}")
+    # Write standard result.json — same format as trained-model experiments so
+    # analyze_all_results.py picks this up alongside all other results.
+    result_json = {
+        'name': output_path.name,
+        'type': 'pretrained',
+        'seed': 0,
+        'status': 'completed',
+    }
+    if len(all_results) >= 1:
+        result_json['test1_name'] = all_results[0]['dataset_name']
+        result_json['test1_acc'] = all_results[0]['accuracy']
+    if len(all_results) >= 2:
+        result_json['test2_name'] = all_results[1]['dataset_name']
+        result_json['test2_acc'] = all_results[1]['accuracy']
+
+    with open(output_path / 'result.json', 'w') as f:
+        json.dump(result_json, f, indent=2)
+    print(f"\nSaved result.json to {output_path / 'result.json'}")
+
+    # Detailed per-file predictions in a separate file
+    with open(output_path / 'predictions.json', 'w') as f:
+        json.dump({r['dataset_name']: r['results'] for r in all_results}, f, indent=2, default=str)
 
     print("\nGenerating plots...")
     plot_per_species(all_results, output_path)

@@ -5,7 +5,7 @@ main() {
 
 BASE="/local/scratch/freangi"
 MATCHED="${BASE}/matched"
-VIZ_BASE="${BASE}/visualizations"
+OUTPUT="${BASE}/tests"
 
 AVIANZ_TRAIN="${MATCHED}/avianz_split/train"
 AVIANZ_TEST="${MATCHED}/avianz_split/test"
@@ -24,7 +24,7 @@ run_experiment() {
     shift 4
     local extra_flags=("$@")
 
-    local out_dir="${VIZ_BASE}/${model}_on_${train_name}_${transform_name}"
+    local out_dir="${OUTPUT}/${model}_on_${train_name}_${transform_name}"
 
     echo "============================================================"
     echo " Model: $model | Train: $train_name | Transform: $transform_name"
