@@ -46,21 +46,21 @@ run_experiment() {
         "${extra_flags[@]}"
 }
 
-# Default log transform
-run_experiment ast    doc    "$DOC_TRAIN"    log
-run_experiment ast    avianz "$AVIANZ_TRAIN" log
-run_experiment regnet doc    "$DOC_TRAIN"    log
-run_experiment regnet avianz "$AVIANZ_TRAIN" log
+# # Default log transform
+# run_experiment ast    doc    "$DOC_TRAIN"    log
+# run_experiment ast    avianz "$AVIANZ_TRAIN" log
+# run_experiment regnet doc    "$DOC_TRAIN"    log
+# run_experiment regnet avianz "$AVIANZ_TRAIN" log
 
-# Per-clip normalization: replaces global AudioSet stats (tests normalization hypothesis)
-run_experiment ast    doc    "$DOC_TRAIN"    log_clip_norm --per-chunk-norm
-run_experiment ast    avianz "$AVIANZ_TRAIN" log_clip_norm --per-chunk-norm
+# # Per-clip normalization: replaces global AudioSet stats (tests normalization hypothesis)
+# run_experiment ast    doc    "$DOC_TRAIN"    log_clip_norm --per-chunk-norm
+# run_experiment ast    avianz "$AVIANZ_TRAIN" log_clip_norm --per-chunk-norm
 
-# Log + background subtraction + median filter
-run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
-run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+# # Log + background subtraction + median filter
+# run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+# run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+# run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+# run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 
 # Merged with log + background subtraction + median filter
 run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
