@@ -77,7 +77,8 @@ run_experiment regnet avianz "$AVIANZ_TRAIN" log
 # run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
 # run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
 # run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
-# }
+
+}
 
 main "$@"
 
