@@ -65,7 +65,6 @@ run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median
 run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
 run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
 
-
 }
 
 main "$@"
