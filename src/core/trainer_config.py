@@ -37,6 +37,7 @@ class ModelConfig:
     freeze_backbone: bool = False
     freeze_stages: int = 0
     use_cnn_adapter: bool = False
+    use_sed_head: bool = False
 
 
 @dataclass
@@ -120,7 +121,8 @@ class TrainerConfig:
                 pretrained_path=getattr(args, 'pretrained', None),
                 freeze_backbone=getattr(args, 'freeze_backbone', False),
                 freeze_stages=getattr(args, 'freeze_stages', 0),
-                use_cnn_adapter=getattr(args, 'cnn_adapter', False)
+                use_cnn_adapter=getattr(args, 'cnn_adapter', False),
+                use_sed_head=getattr(args, 'sed_head', False)
             ),
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,

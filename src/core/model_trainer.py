@@ -138,6 +138,7 @@ class Trainer:
         self.freeze_backbone = cfg.model.freeze_backbone
         self.freeze_stages = cfg.model.freeze_stages
         self.use_cnn_adapter = getattr(cfg.model, 'use_cnn_adapter', False)
+        self.use_sed_head = getattr(cfg.model, 'use_sed_head', False)
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
         
         # Augmentation configuration
@@ -332,14 +333,16 @@ class Trainer:
                 model_name=self.model_name,
                 freeze_backbone=self.freeze_backbone,
                 freeze_stages=self.freeze_stages,
-                use_cnn_adapter=self.use_cnn_adapter
+                use_cnn_adapter=self.use_cnn_adapter,
+                use_sed_head=self.use_sed_head
             ).to(self.device)
         else:
             print("Creating AST model (multilabel)...")
             model = AST(self.num_classes, input_size=input_size, dropout=self.dropout, 
                        use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
                        per_chunk_norm=self.per_chunk_norm,
-                       use_cnn_adapter=self.use_cnn_adapter).to(self.device)
+                       use_cnn_adapter=self.use_cnn_adapter,
+                       use_sed_head=self.use_sed_head).to(self.device)
             
             # AST-specific: Interpolate positional embeddings
             print(f"Interpolating positional embeddings for input size {input_size}...")

@@ -95,6 +95,37 @@ class SpectrogramDecoder(nn.Module):
         return recon
 
 
+class TemporalAttentionHead(nn.Module):
+    """Per-class temporal attention head for SED-style classification.
+
+    Collapses the frequency axis of a 2D feature map, then computes independent
+    attention weights over the time axis for each output class.  This lets each
+    class focus on the time windows where its evidence actually lives, rather than
+    averaging over the whole clip (which mixes signal with background noise).
+
+    Forward input:  (B, C, F', T')   — spatial backbone output, NOT globally pooled
+    Forward output: (B, num_classes) — logits
+    """
+    def __init__(self, in_channels, num_classes, proj_dim=None):
+        super().__init__()
+        if proj_dim is None:
+            proj_dim = in_channels
+        self.proj = nn.Conv1d(in_channels, proj_dim, kernel_size=1)
+        self.attn_conv = nn.Conv1d(proj_dim, num_classes, kernel_size=1)
+        self.cls_conv = nn.Conv1d(proj_dim, num_classes, kernel_size=1)
+        nn.init.zeros_(self.cls_conv.bias)
+        nn.init.zeros_(self.attn_conv.bias)
+
+    def forward(self, x):
+        # x: (B, C, F', T')
+        x = x.mean(dim=2)                                  # collapse freq → (B, C, T')
+        x = F.relu(self.proj(x))                           # (B, proj_dim, T')
+        attn = torch.softmax(self.attn_conv(x), dim=-1)    # (B, K, T')
+        cls = self.cls_conv(x)                              # (B, K, T')
+        logits = (attn * cls).sum(dim=-1)                  # (B, K)
+        return logits
+
+
 class CnnAdapter(nn.Module):
     """Lightweight trainable CNN adapter prepended to a frozen backbone.
 
@@ -225,7 +256,7 @@ class AST(nn.Module):
     
     def __init__(self, num_classes, input_size=None, dropout=0.1, use_reconstruction=False,
                  use_adapters=False, adapter_dim=64, per_chunk_norm=False, num_chunks=2,
-                 use_cnn_adapter=False):
+                 use_cnn_adapter=False, use_sed_head=False):
         super().__init__()
         self.num_classes = num_classes
         self.use_reconstruction = use_reconstruction
@@ -233,9 +264,10 @@ class AST(nn.Module):
         self.per_chunk_norm = per_chunk_norm
         self.num_chunks = num_chunks
         self.input_size = input_size if input_size else (128, 512)
-        
+        self.use_sed_head = use_sed_head
+
         self.ast = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-        
+
         if use_adapters:
             self.adapters = nn.ModuleList([
                 nn.Sequential(
@@ -247,11 +279,20 @@ class AST(nn.Module):
             for adapter in self.adapters:
                 nn.init.zeros_(adapter[2].weight)
                 nn.init.zeros_(adapter[2].bias)
-        
+
         self.dropout = nn.Dropout(dropout)
+        # pool + classifier always present (used by get_features / DANN)
         self.pool = AttentionPooling(embed_dim=768, hidden_dim=256)
         self.classifier = nn.Linear(768, num_classes)
-        
+
+        if use_sed_head:
+            # Per-class attention over tokens: each class gets its own
+            # attention distribution over the N patch tokens.
+            self.attn_proj = nn.Linear(768, num_classes)
+            self.val_proj = nn.Linear(768, num_classes)
+            nn.init.zeros_(self.attn_proj.bias)
+            nn.init.zeros_(self.val_proj.bias)
+
         if use_reconstruction:
             self.decoder = SpectrogramDecoder(embed_dim=768, output_size=self.input_size)
         self.cnn_adapter = CnnAdapter() if use_cnn_adapter else None
@@ -293,10 +334,17 @@ class AST(nn.Module):
         
         # Exclude special tokens (cls + dist) for pooling
         patch_tokens = hidden_states[:, 2:, :]
-        features = self.pool(patch_tokens)
-        features = self.dropout(features)
-        logits = self.classifier(features)
-        
+
+        if self.use_sed_head:
+            # Per-class attention: each class attends independently over N tokens
+            attn = torch.softmax(self.attn_proj(patch_tokens), dim=1)   # (B, N, K)
+            vals = self.val_proj(patch_tokens)                            # (B, N, K)
+            logits = (attn * vals).sum(dim=1)                            # (B, K)
+        else:
+            features = self.pool(patch_tokens)
+            features = self.dropout(features)
+            logits = self.classifier(features)
+
         if self.use_reconstruction:
             recon = self.decoder(patch_tokens)
             return logits, recon
@@ -516,10 +564,11 @@ class DANNModel(nn.Module):
 class RegNetModel(nn.Module):
     """RegNetY model for bird audio classification (BirdClef fine-tuning)."""
     
-    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False):
+    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False):
         super().__init__()
         self.num_classes = num_classes
-        
+        self.use_sed_head = use_sed_head
+
         self.backbone = timm.create_model(
             model_name,
             pretrained=False,
@@ -527,7 +576,7 @@ class RegNetModel(nn.Module):
             drop_rate=0.0,
             drop_path_rate=0.0
         )
-        
+
         if 'efficientnet' in model_name:
             backbone_out = self.backbone.classifier.in_features
             self.backbone.classifier = nn.Identity()
@@ -540,10 +589,15 @@ class RegNetModel(nn.Module):
         else:
             backbone_out = self.backbone.get_classifier().in_features
             self.backbone.reset_classifier(0, '')
-        
-        self.pooling = nn.AdaptiveAvgPool2d(1)
+
         self.feature_dim = backbone_out
-        self.classifier = nn.Linear(backbone_out, num_classes)
+
+        if use_sed_head:
+            self.sed_head = TemporalAttentionHead(backbone_out, num_classes)
+        else:
+            self.pooling = nn.AdaptiveAvgPool2d(1)
+            self.classifier = nn.Linear(backbone_out, num_classes)
+
         self.cnn_adapter = CnnAdapter() if use_cnn_adapter else None
 
         if pretrained_path:
@@ -609,11 +663,15 @@ class RegNetModel(nn.Module):
     def forward(self, x):
         if self.cnn_adapter is not None:
             x = self.cnn_adapter(x)
-        features = self.backbone(x)
-        if isinstance(features, dict):
-            features = features['features']
-        if len(features.shape) == 4:
-            features = self.pooling(features)
-            features = features.view(features.size(0), -1)
-        logits = self.classifier(features)
+        if self.use_sed_head:
+            features = self.backbone.forward_features(x)   # (B, C, F', T')
+            logits = self.sed_head(features)
+        else:
+            features = self.backbone(x)
+            if isinstance(features, dict):
+                features = features['features']
+            if len(features.shape) == 4:
+                features = self.pooling(features)
+                features = features.view(features.size(0), -1)
+            logits = self.classifier(features)
         return logits
