@@ -92,53 +92,80 @@ def load_from_result_json(results_dir):
     return results
 
 
+def _read_reports_from_dir(report_dir, model, row):
+    """Read *_multilabel_report.json files from report_dir into row (mutates in place)."""
+    for report_file in sorted(report_dir.glob('*_multilabel_report.json')):
+        with open(report_file) as f:
+            report = json.load(f)
+        acc = report.get('exact_match_accuracy', np.nan)
+        if acc is not np.nan:
+            acc = acc * 100
+        stem = report_file.stem.replace('_multilabel_report', '')
+        if '_model' in stem:
+            continue  # validation set, skip
+        dataset_name = re.sub(rf'^{model}_test_', '', stem)
+        if row['test1_name'] is np.nan or row['test1_name'] == np.nan:
+            row['test1_name'] = dataset_name
+            row['test1_acc'] = acc
+        else:
+            row['test2_name'] = dataset_name
+            row['test2_acc'] = acc
+
+
 def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
-    pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
+    pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_(\w+)_to_(\w+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
             continue
-        m = pattern.match(exp_dir.name)
-        if not m:
+
+        m = standard_pattern.match(exp_dir.name)
+        if m:
+            model, train_dataset, transform = m.groups()
+            row = {
+                'name': exp_dir.name,
+                'train_dataset': train_dataset,
+                'method': model,
+                'config': transform,
+                'category': model.upper(),
+                'seed': 0,
+                'test1_name': np.nan,
+                'test2_name': np.nan,
+                'test1_acc': np.nan,
+                'test2_acc': np.nan,
+                'status': 'unknown',
+            }
+            _read_reports_from_dir(exp_dir, model, row)
+            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
+            results.append(row)
             continue
-        model, train_dataset, transform = m.groups()
 
-        row = {
-            'name': exp_dir.name,
-            'train_dataset': train_dataset,
-            'method': model,
-            'config': transform,
-            'category': model.upper(),
-            'seed': 0,
-            'test1_name': np.nan,
-            'test2_name': np.nan,
-            'test1_acc': np.nan,
-            'test2_acc': np.nan,
-            'status': 'unknown',
-        }
+        m = pseudo_pattern.match(exp_dir.name)
+        if m:
+            model, source_dataset, target_dataset, transform, pct_int = m.groups()
+            # Final results live in the phase3 subfolder
+            final_dir = exp_dir / 'phase3_pseudo_target'
+            if not final_dir.is_dir():
+                continue
+            row = {
+                'name': exp_dir.name,
+                'train_dataset': f'pseudo_{source_dataset}_to_{target_dataset}_pct{pct_int}',
+                'method': model,
+                'config': transform,
+                'category': f'{model.upper()} Pseudo',
+                'seed': 0,
+                'test1_name': np.nan,
+                'test2_name': np.nan,
+                'test1_acc': np.nan,
+                'test2_acc': np.nan,
+                'status': 'unknown',
+            }
+            _read_reports_from_dir(final_dir, model, row)
+            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
+            results.append(row)
 
-        for report_file in exp_dir.glob('*_multilabel_report.json'):
-            with open(report_file) as f:
-                report = json.load(f)
-            acc = report.get('exact_match_accuracy', np.nan)
-            if acc is not np.nan:
-                acc = acc * 100
-            stem = report_file.stem.replace('_multilabel_report', '')
-            # stem is like: ast_test_avianz_split or ast_model
-            if '_model' in stem:
-                continue  # validation set, skip
-            # extract dataset name from stem: {model}_test_{dataset_name}
-            dataset_name = re.sub(rf'^{model}_test_', '', stem)
-            if row['test1_name'] is np.nan or row['test1_name'] == np.nan:
-                row['test1_name'] = dataset_name
-                row['test1_acc'] = acc
-            else:
-                row['test2_name'] = dataset_name
-                row['test2_acc'] = acc
-
-        row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
-        results.append(row)
     return results
 
 

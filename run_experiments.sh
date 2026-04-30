@@ -126,9 +126,12 @@ run_pseudo_experiment() {
 
 # Pseudo-label training: train on doc, adapt to avianz via pseudo labels
 # Three subset sizes: 25%, 50%, 100% of avianz used in phase 2 (real labels before pseudo generation)
-# run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 0.25 --bg-subtract --median-filter
-# run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 0.50 --bg-subtract --median-filter
-# run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 1.00 --bg-subtract --median-filter
+run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 0.25 --bg-subtract --median-filter
+run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 0.50 --bg-subtract --median-filter
+run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 1.00 --bg-subtract --median-filter
+run_pseudo_experiment regnet avianz "$AVIANZ_TRAIN" doc "$DOC_TRAIN" log_norm_med 0.25 --bg-subtract --median-filter
+run_pseudo_experiment regnet avianz "$AVIANZ_TRAIN" doc "$DOC_TRAIN" log_norm_med 0.50 --bg-subtract --median-filter
+run_pseudo_experiment regnet avianz "$AVIANZ_TRAIN" doc "$DOC_TRAIN" log_norm_med 1.00 --bg-subtract --median-filter
 
 }
 
