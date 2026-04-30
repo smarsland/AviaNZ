@@ -116,7 +116,7 @@ def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
     standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
-    pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_(\w+)_to_(\w+)_(.+)_pct(\d+)$')
+        pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
             continue

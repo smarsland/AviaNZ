@@ -214,6 +214,31 @@ def generate_pseudo_labels(model_path, target_folder, pseudo_dir, model_type, ar
     print(f"Pseudo labels: {n_labeled}/{len(pseudo_files)} files have ≥1 predicted class → {pseudo_dir}")
 
 
+def make_combined_dir(source_folder, target_labels_dir, combined_dir):
+    """Merge source (real labels) + target labels dir into a single labels.json."""
+    with open(os.path.join(source_folder, 'labels.json')) as f:
+        source_data = json.load(f)
+    with open(os.path.join(target_labels_dir, 'labels.json')) as f:
+        target_data = json.load(f)
+
+    categories = source_data.get('categories') or source_data.get('species_list')
+    source_data_dir = os.path.join(source_folder, 'data')
+
+    source_files = []
+    for fi in source_data['files']:
+        fpath = os.path.join(source_data_dir, fi['filename'])
+        if os.path.exists(fpath):
+            source_files.append({'filename': fpath, 'class_names': fi.get('class_names', [])})
+
+    combined_files = source_files + target_data['files']
+
+    os.makedirs(combined_dir, exist_ok=True)
+    with open(os.path.join(combined_dir, 'labels.json'), 'w') as f:
+        json.dump({'categories': categories, 'files': combined_files}, f, indent=2)
+
+    print(f"Combined: {len(source_files)} source + {len(target_data['files'])} target = {len(combined_files)} total → {combined_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Pseudo-label training: source train → target subset fine-tune → pseudo label → full-target fine-tune"
@@ -261,7 +286,9 @@ def main():
     phase2_dir = os.path.join(args.output_folder, 'phase2_target_subset')
     phase3_dir = os.path.join(args.output_folder, 'phase3_pseudo_target')
     subset_dir = os.path.join(args.output_folder, 'target_subset_labels')
+    subset_combined_dir = os.path.join(args.output_folder, 'subset_combined_labels')
     pseudo_dir = os.path.join(args.output_folder, 'pseudo_labels')
+    combined_dir = os.path.join(args.output_folder, 'combined_labels')
 
     pct_display = f"{args.pseudo_pct*100:.0f}%"
 
@@ -279,15 +306,16 @@ def main():
     phase1_ckpt = os.path.join(phase1_dir, f'{args.model_type}_model_best.pt')
 
     # ------------------------------------------------------------------
-    # Phase 2: fine-tune on pseudo_pct% of target with real labels
+    # Phase 2: fine-tune on source + pseudo_pct% of target with real labels
     # ------------------------------------------------------------------
     print(f"\n{'='*60}")
-    print(f"PHASE 2: Fine-tune on {pct_display} of target  [{args.target_folder}]")
+    print(f"PHASE 2: Fine-tune on source + {pct_display} of target  [{args.target_folder}]")
     print(f"{'='*60}\n")
 
     make_subset_dir(args.target_folder, args.pseudo_pct, args.seed, subset_dir)
+    make_combined_dir(args.source_folder, subset_dir, subset_combined_dir)
 
-    cfg2 = build_cfg(args, subset_dir, phase2_dir,
+    cfg2 = build_cfg(args, subset_combined_dir, phase2_dir,
                      resume_checkpoint=phase1_ckpt,
                      test_folder=args.test_folder, test_folder2=args.test_folder2)
     Trainer(cfg2).train()
@@ -305,13 +333,15 @@ def main():
                            args.model_type, args, device)
 
     # ------------------------------------------------------------------
-    # Phase 4: fine-tune on pseudo-labeled full target
+    # Phase 4: fine-tune on source (real) + pseudo-labeled full target
     # ------------------------------------------------------------------
     print(f"\n{'='*60}")
-    print(f"PHASE 4: Fine-tune on pseudo-labeled full target")
+    print(f"PHASE 4: Fine-tune on source + pseudo-labeled full target")
     print(f"{'='*60}\n")
 
-    cfg4 = build_cfg(args, pseudo_dir, phase3_dir,
+    make_combined_dir(args.source_folder, pseudo_dir, combined_dir)
+
+    cfg4 = build_cfg(args, combined_dir, phase3_dir,
                      resume_checkpoint=phase2_ckpt,
                      test_folder=args.test_folder, test_folder2=args.test_folder2)
     Trainer(cfg4).train()
