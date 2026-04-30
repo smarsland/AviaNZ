@@ -19,6 +19,7 @@ class TrainingConfig:
     weight_decay: float = config.DEFAULT_WEIGHT_DECAY
     patience: int = 0
     seed: Optional[int] = None
+    resume_checkpoint: Optional[str] = None
 
 
 @dataclass
@@ -106,7 +107,8 @@ class TrainerConfig:
                 learning_rate=args.lr,
                 weight_decay=getattr(args, 'weight_decay', config.DEFAULT_WEIGHT_DECAY),
                 patience=args.patience,
-                seed=getattr(args, 'seed', None)
+                seed=getattr(args, 'seed', None),
+                resume_checkpoint=getattr(args, 'resume_checkpoint', None)
             ),
             model=ModelConfig(
                 model_type=getattr(args, 'model_type', 'ast'),

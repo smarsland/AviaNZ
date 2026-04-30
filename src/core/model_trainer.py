@@ -364,6 +364,13 @@ class Trainer:
                 total_params = sum(p.numel() for p in model.parameters())
                 print(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
 
+        # Resume from a prior checkpoint (full state_dict load, overrides any pretrained init)
+        resume_checkpoint = getattr(self.cfg.training, 'resume_checkpoint', None)
+        if resume_checkpoint:
+            state = torch.load(resume_checkpoint, map_location=self.device, weights_only=True)
+            model.load_state_dict(state)
+            print(f"Resumed from checkpoint: {resume_checkpoint}")
+
         # Add DANN components if requested
         if self.use_dann:
             print("  Adding DANN domain discriminator for AST...")
