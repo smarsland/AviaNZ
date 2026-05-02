@@ -56,15 +56,15 @@ run_experiment() {
 # run_experiment ast    doc    "$DOC_TRAIN"    log_clip_norm --per-chunk-norm
 # run_experiment ast    avianz "$AVIANZ_TRAIN" log_clip_norm --per-chunk-norm
 
-# # Log + background subtraction + median filter
-# run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-# run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
-# run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-# run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+# Log + background subtraction + median filter
+run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 
-# # Merged with log + background subtraction + median filter
-# run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
-# run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+# Merged with log + background subtraction + median filter
+run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
+run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
 
 # # CNN adapter: learnable CNN front-end prepended to backbone (trained at 10x LR)
 # run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_cnn --bg-subtract --median-filter --cnn-adapter
