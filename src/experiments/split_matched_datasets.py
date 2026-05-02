@@ -54,53 +54,89 @@ def split_avianz_by_file(files, test_ratio, random_state=42):
     Split AviaNZ data at the file level to prevent data leakage.
     
     All segments from the same source file go to either train or test, never both.
-    Uses simple random assignment of files to train/test.
-    
+    Uses stratified file-level assignment so that each species with more than one
+    source file is guaranteed to appear in both splits.
+
     Returns:
         train_files, test_files, species_distribution
             where species_distribution = {class_name: {'train': count, 'test': count}}
     """
-    random.seed(random_state)
-    
+    rng = random.Random(random_state)
+
     # Group by source file
     file_groups = get_file_level_groups(files)
     source_files = list(file_groups.keys())
-    
+
     if len(source_files) < 2:
         print("Warning: Only one source file found, all data going to train")
         return files, [], {}
-    
-    # Randomly assign files to train or test
-    random.shuffle(source_files)
-    n_test_files = max(1, int(len(source_files) * test_ratio))
-    if n_test_files >= len(source_files):
-        n_test_files = len(source_files) - 1
-    
-    test_source_files = set(source_files[:n_test_files])
-    train_source_files = set(source_files[n_test_files:])
-    
+
+    n_test_target = max(1, int(len(source_files) * test_ratio))
+    if n_test_target >= len(source_files):
+        n_test_target = len(source_files) - 1
+
+    # Build species -> source files mapping (ignore background entries with [])
+    species_to_files = defaultdict(set)
+    for source_file, entries in file_groups.items():
+        for entry in entries:
+            for cls in entry.get('class_names', []):
+                if cls:
+                    species_to_files[cls].add(source_file)
+
+    test_source_files = set()
+
+    # Stratification pass: for each species that has >1 source file, ensure at
+    # least one of its files ends up in test (picking randomly among candidates
+    # not yet assigned).
+    all_source_shuffled = list(source_files)
+    rng.shuffle(all_source_shuffled)
+
+    for species in sorted(species_to_files):          # sorted for reproducibility
+        species_files = species_to_files[species]
+        if len(species_files) < 2:
+            continue                                   # only 1 file — can't split
+        if any(f in test_source_files for f in species_files):
+            continue                                   # already covered
+        # Pick a random file for this species to go to test
+        candidates = [f for f in all_source_shuffled if f in species_files]
+        if candidates:
+            test_source_files.add(candidates[0])
+
+    # Fill remaining test slots randomly until we reach the target count
+    for f in all_source_shuffled:
+        if len(test_source_files) >= n_test_target:
+            break
+        test_source_files.add(f)
+
+    train_source_files = set(source_files) - test_source_files
+
     # Build train and test sets
     train_files = []
     test_files = []
-    
+
     for source_file, entries in file_groups.items():
         if source_file in test_source_files:
             test_files.extend(entries)
         else:
             train_files.extend(entries)
-    
+
     # Shuffle within train/test
-    random.shuffle(train_files)
-    random.shuffle(test_files)
-    
+    rng.shuffle(train_files)
+    rng.shuffle(test_files)
+
     # Compute species distribution
     species_dist = compute_species_distribution(train_files, test_files)
-    
-    print(f"\nAviaNZ file-level split:")
+
+    print(f"\nAviaNZ file-level split (stratified):")
     print(f"  Total source files: {len(source_files)}")
     print(f"  Train files: {len(train_source_files)} ({len(train_files)} segments)")
     print(f"  Test files: {len(test_source_files)} ({len(test_files)} segments)")
-    
+
+    # Warn about species that still have no test samples (only 1 source file)
+    for species, sfiles in species_to_files.items():
+        if len(sfiles) == 1 and list(sfiles)[0] not in test_source_files:
+            print(f"  Note: '{species}' has only 1 source file — all samples go to train")
+
     return train_files, test_files, species_dist
 
 
@@ -183,9 +219,13 @@ def split_doc_by_distribution(files, target_distribution, random_state=42):
         # Shuffle and split
         random.shuffle(class_files)
         n_train = max(1, int(len(class_files) * target_train_ratio))
-        
-        # Ensure at least one in test if possible
-        if n_train >= len(class_files) and len(class_files) > 1:
+
+        # Ensure at least one in test if possible — but only when AviaNZ also
+        # has test samples for this class.  Forcing DOC into test when AviaNZ
+        # has none would produce a class that exists only in DOC test, which
+        # causes a validation failure.
+        avianz_has_test = target_distribution[class_name].get('test', 0) > 0
+        if avianz_has_test and n_train >= len(class_files) and len(class_files) > 1:
             n_train = len(class_files) - 1
         
         class_train = class_files[:n_train]
