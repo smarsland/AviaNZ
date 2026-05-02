@@ -138,11 +138,13 @@ class DatasetMerger:
         
         # Add files from dataset 1
         for entry in self.labels1['files']:
-            # Validate that at least one class is in merged categories
-            valid_classes = [c for c in entry['class_names'] if c in merged_categories]
-            if not valid_classes:
-                print(f"  WARNING: Skipping {entry['filename']} - no classes in merged categories")
-                continue
+            # Allow background entries (empty class_names); only skip entries
+            # that have classes but none of them match the merged category list.
+            if entry['class_names']:
+                valid_classes = [c for c in entry['class_names'] if c in merged_categories]
+                if not valid_classes:
+                    print(f"  WARNING: Skipping {entry['filename']} - no classes in merged categories")
+                    continue
             
             new_entry = {
                 'filename': entry['filename'],
@@ -162,11 +164,13 @@ class DatasetMerger:
         existing_names = {entry['filename'] for entry in merged_files}
         
         for entry in self.labels2['files']:
-            # Validate that at least one class is in merged categories
-            valid_classes = [c for c in entry['class_names'] if c in merged_categories]
-            if not valid_classes:
-                print(f"  WARNING: Skipping {entry['filename']} - no classes in merged categories")
-                continue
+            # Allow background entries (empty class_names); only skip entries
+            # that have classes but none of them match the merged category list.
+            if entry['class_names']:
+                valid_classes = [c for c in entry['class_names'] if c in merged_categories]
+                if not valid_classes:
+                    print(f"  WARNING: Skipping {entry['filename']} - no classes in merged categories")
+                    continue
             
             # Handle duplicates
             original_name = entry['filename']
