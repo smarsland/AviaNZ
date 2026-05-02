@@ -509,6 +509,180 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
     return doc_filtered, avianz_filtered
 
 
+def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=42,
+                               fixed_length=False, target_time_bins=None, with_audio=False):
+    """
+    Add up to n background (no positive class) samples from DOC audio files that were
+    not included in the matched dataset.  Each sample gets class_names=[].
+
+    Scans doc_raw recursively for all audio files, skips those already used,
+    then processes a random subset.
+    """
+    if n == 0:
+        return []
+
+    spec_proc = make_spec_processor()
+    data_dir = os.path.join(doc_out, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    if with_audio:
+        audio_dir = os.path.join(doc_out, 'audio')
+        os.makedirs(audio_dir, exist_ok=True)
+
+    used_files = {e['source_file'] for e in doc_labels_final}
+
+    all_audio = []
+    for root, _, files in os.walk(doc_raw):
+        for fname in files:
+            if fname.lower().endswith(('.wav', '.mp3', '.flac')):
+                path = os.path.join(root, fname)
+                if path not in used_files:
+                    all_audio.append(path)
+
+    rng = random.Random(seed + 1)
+    rng.shuffle(all_audio)
+
+    # Offset so filenames don't clash with existing files on disk
+    existing = len([f for f in os.listdir(data_dir) if f.endswith('.npy')])
+    offset = existing
+
+    extra_labels = []
+    failed = 0
+    for audio_path in all_audio:
+        if len(extra_labels) >= n:
+            break
+
+        sg = spec_proc.process_audio_file(audio_path)
+        if sg is None:
+            failed += 1
+            continue
+
+        if fixed_length and sg.shape[1] > target_time_bins:
+            sg = trim_spectrogram_to_length(sg, target_time_bins)
+            if sg is None:
+                failed += 1
+                continue
+
+        basename = f'file_{offset + len(extra_labels):08d}'
+        spec_proc.save_spectrogram(sg, data_dir, basename)
+
+        if with_audio:
+            audio_data, audio_sr = sf.read(audio_path)
+            sf.write(os.path.join(audio_dir, f'{basename}.wav'), audio_data, audio_sr)
+
+        extra_labels.append({
+            'filename': f'{basename}.npy',
+            'class_names': [],
+            'source_file': audio_path,
+        })
+
+    print(f'DOC background: added {len(extra_labels)} samples  '
+          f'(candidates={len(all_audio)}, failed={failed})')
+    return extra_labels
+
+
+def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_search_codes,
+                                   mapping_csv, n=1000, seed=42, fixed_length=False,
+                                   target_time_bins=None, freq_mask=False, with_audio=False):
+    """
+    Add up to n background (no positive class) samples from AviaNZ segments that were
+    not included in the matched dataset AND do not contain any matched-species annotation.
+    Each sample gets class_names=[].
+    """
+    if n == 0:
+        return []
+
+    spec_proc = make_spec_processor()
+    name_mapping = load_avianz_name_mapping(mapping_csv)
+    proc = AviaNZDataProcessor(name_mapping=name_mapping)
+
+    data_dir = os.path.join(avianz_out, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    if with_audio:
+        audio_dir = os.path.join(avianz_out, 'audio')
+        os.makedirs(audio_dir, exist_ok=True)
+
+    # Keys of segments already used in the matched dataset
+    used_segments = {(e['source_file'], e.get('start_time')) for e in avianz_labels}
+
+    # Collect candidate segments: annotated, not already used, no matched-species overlap
+    background_candidates = []
+    wav_files = proc.find_wav_files(avianz_raw)
+    print(f'AviaNZ background: scanning {len(wav_files)} wav files...')
+
+    for wav_file in wav_files:
+        data_file = wav_file + '.data'
+        if not os.path.exists(data_file):
+            continue
+        try:
+            segments = proc.load_annotation_file(data_file)
+        except Exception:
+            continue
+        for seg in segments:
+            if (wav_file, seg.start_time) in used_segments:
+                continue
+            seg_codes = [
+                proc.normalize_to_ebird(lab['species'])
+                for lab in seg.labels
+                if lab['certainty'] >= 50
+            ]
+            # Skip if the segment contains any species from the matched set
+            if any(c in all_search_codes for c in seg_codes):
+                continue
+            background_candidates.append(
+                (wav_file, seg.start_time, seg.end_time, seg.freq_low, seg.freq_high)
+            )
+
+    rng = random.Random(seed + 2)
+    rng.shuffle(background_candidates)
+
+    existing = len([f for f in os.listdir(data_dir) if f.endswith('.npy')])
+    offset = existing
+
+    extra_labels = []
+    failed = 0
+    for wav_file, start, end, freq_low, freq_high in background_candidates:
+        if len(extra_labels) >= n:
+            break
+
+        sg = spec_proc.process_audio_segment(wav_file, start, end)
+        if sg is None:
+            failed += 1
+            continue
+
+        if fixed_length and sg.shape[1] > target_time_bins:
+            sg = trim_spectrogram_to_length(sg, target_time_bins)
+            if sg is None:
+                failed += 1
+                continue
+
+        if freq_mask and freq_low is not None and freq_high is not None:
+            sg = apply_freq_mask(sg, freq_low, freq_high, config.DEFAULT_SAMPLE_RATE)
+
+        basename = f'file_{offset + len(extra_labels):08d}'
+        spec_proc.save_spectrogram(sg, data_dir, basename)
+
+        if with_audio:
+            info = sf.info(wav_file)
+            start_frame = int(start * info.samplerate)
+            stop_frame = int(end * info.samplerate)
+            seg_data, seg_sr = sf.read(wav_file, start=start_frame, stop=stop_frame)
+            sf.write(os.path.join(audio_dir, f'{basename}.wav'), seg_data, seg_sr)
+
+        extra_labels.append({
+            'filename': f'{basename}.npy',
+            'class_names': [],
+            'source_file': wav_file,
+            'start_time': start,
+            'end_time': end,
+            'freq_low': freq_low,
+            'freq_high': freq_high,
+        })
+
+    print(f'AviaNZ background: added {len(extra_labels)} samples  '
+          f'(candidates={len(background_candidates)}, failed={failed})')
+    return extra_labels
+
+
 def write_labels_json(output_folder, labels, dataset_name):
     species_counts = defaultdict(int)
     all_codes = set()
@@ -596,6 +770,9 @@ def main():
                         help='Zero out AviaNZ spectrogram values outside the annotated frequency limits')
     parser.add_argument('--with-audio', action='store_true',
                         help='Also save audio files alongside spectrograms (required for Kaytoo and BirdNET evaluation)')
+    parser.add_argument('--background-n', type=int, default=1000,
+                        help='Number of background (no positive class) samples to add to each dataset '
+                             'from rejected/unmatched files. Set to 0 to disable. (default: 1000)')
     args = parser.parse_args()
 
     doc_out = os.path.join(args.output, 'doc_matched')
@@ -651,6 +828,35 @@ def main():
     # With test_ratio=0.25, min=20 gives ~15 train, ~5 test per class
     # This ensures robust splits even with multilabel (where splitting by first class may miss some labels)
     doc_labels_final, avianz_labels = filter_to_common_classes(doc_labels_final, avianz_labels, min_samples_per_class=20)
+
+    # Add background (no positive class) samples from rejected/unmatched files
+    if args.background_n > 0:
+        # Compute all species codes that were searched for (needed to exclude matched-species segments)
+        all_search_codes = set()
+        for rec in kept_records:
+            all_search_codes.update(rec['species1_codes'])
+
+        print(f'\n=== Step 4b: adding background samples (n={args.background_n} per dataset) ===')
+        doc_background = add_background_samples_doc(
+            doc_labels_final, args.doc_raw, doc_out,
+            n=args.background_n, seed=args.seed,
+            fixed_length=args.fixed_length,
+            target_time_bins=target_time_bins,
+            with_audio=args.with_audio,
+        )
+        doc_labels_final = doc_labels_final + doc_background
+
+        avianz_background = add_background_samples_avianz(
+            avianz_labels, args.avianz_raw, avianz_out,
+            all_search_codes=all_search_codes,
+            mapping_csv=args.mapping,
+            n=args.background_n, seed=args.seed,
+            fixed_length=args.fixed_length,
+            target_time_bins=target_time_bins,
+            freq_mask=args.freq_mask,
+            with_audio=args.with_audio,
+        )
+        avianz_labels = avianz_labels + avianz_background
 
     print('\n=== Step 4: write labels.json ===')
     write_labels_json(doc_out, doc_labels_final, 'DOC_matched')

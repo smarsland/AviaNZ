@@ -8,15 +8,20 @@ set -e
 #   ./build_dataset.sh
 #   ./build_dataset.sh --freq-mask
 #   ./build_dataset.sh --overwrite     # re-build even if datasets exist
+#   ./build_dataset.sh --background-n 500  # add 500 background samples (default: 1000)
+#   ./build_dataset.sh --no-background     # skip background samples entirely
 
 FREQ_MASK_FLAG=""
 OVERWRITE=false
+BACKGROUND_N_FLAG=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --freq-mask) FREQ_MASK_FLAG="--freq-mask"; shift ;;
         --overwrite) OVERWRITE=true; shift ;;
-        *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite"; exit 1 ;;
+        --background-n) BACKGROUND_N_FLAG="--background-n $2"; shift 2 ;;
+        --no-background) BACKGROUND_N_FLAG="--background-n 0"; shift ;;
+        *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite, --background-n N, --no-background"; exit 1 ;;
     esac
 done
 
@@ -61,7 +66,8 @@ if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/la
         --mapping      "$MAPPING" \
         --fixed-length \
         --with-audio \
-        ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG}
+        ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG} \
+        ${BACKGROUND_N_FLAG:+$BACKGROUND_N_FLAG}
 else
     echo "=== Step 1: matched datasets already exist, skipping (use --overwrite to force) ==="
 fi

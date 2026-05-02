@@ -91,48 +91,6 @@ run_experiment() {
 # run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med_sed --bg-subtract --median-filter --sed-head
 # run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med_sed --bg-subtract --median-filter --sed-head
 
-run_pseudo_experiment() {
-    local model=$1
-    local source_name=$2
-    local source_dir=$3
-    local target_name=$4
-    local target_dir=$5
-    local transform_name=$6
-    local pseudo_pct=$7
-    shift 7
-    local extra_flags=("$@")
-
-    local pct_int=$(python3 -c "print(int($pseudo_pct * 100))")
-    local out_dir="${OUTPUT}/${model}_pseudo_${source_name}_to_${target_name}_${transform_name}_pct${pct_int}"
-
-    echo "============================================================"
-    echo " Pseudo: $model | Source: $source_name | Target: $target_name | Subset: ${pct_int}%"
-    echo " Output: $out_dir"
-    echo "============================================================"
-
-    python pseudo_train.py \
-        "$source_dir" \
-        "$target_dir" \
-        "$out_dir" \
-        --test-folder "$AVIANZ_TEST" \
-        --test-folder2 "$DOC_TEST" \
-        --epochs $EPOCHS \
-        --patience $PATIENCE \
-        --mixup $MIXUP \
-        --model-type "$model" \
-        --pseudo-pct "$pseudo_pct" \
-        "${extra_flags[@]}"
-}
-
-# Pseudo-label training: train on doc, adapt to avianz via pseudo labels
-# Three subset sizes: 25%, 50%, 100% of avianz used in phase 2 (real labels before pseudo generation)
-run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 0.25 --bg-subtract --median-filter
-run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 0.50 --bg-subtract --median-filter
-run_pseudo_experiment regnet doc "$DOC_TRAIN" avianz "$AVIANZ_TRAIN" log_norm_med 1.00 --bg-subtract --median-filter
-run_pseudo_experiment regnet avianz "$AVIANZ_TRAIN" doc "$DOC_TRAIN" log_norm_med 0.25 --bg-subtract --median-filter
-run_pseudo_experiment regnet avianz "$AVIANZ_TRAIN" doc "$DOC_TRAIN" log_norm_med 0.50 --bg-subtract --median-filter
-run_pseudo_experiment regnet avianz "$AVIANZ_TRAIN" doc "$DOC_TRAIN" log_norm_med 1.00 --bg-subtract --median-filter
-
 }
 
 main "$@"
