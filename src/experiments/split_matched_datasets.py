@@ -192,20 +192,22 @@ def split_doc_by_distribution(files, target_distribution, random_state=42):
         train_files, test_files, achieved_distribution
     """
     random.seed(random_state)
-    
-    # Group DOC files by their first class (for splitting purposes only)
+
+    # Separate background (no positive class) entries — they need to be split
+    # proportionally but cannot be grouped by species.
+    background_entries = [e for e in files if not e.get('class_names')]
+    labelled_entries   = [e for e in files if     e.get('class_names')]
+
+    # Group labelled DOC files by their first class (for splitting purposes only)
     # Note: This is a simplified approach for multi-label data
     files_by_class = defaultdict(list)
-    for entry in files:
-        class_names = entry.get('class_names', [])
-        if class_names:
-            # Use first class for grouping/splitting only
-            first_class = class_names[0]
-            files_by_class[first_class].append(entry)
-    
+    for entry in labelled_entries:
+        first_class = entry['class_names'][0]
+        files_by_class[first_class].append(entry)
+
     train_files = []
     test_files = []
-    
+
     # For each class, split according to target distribution
     for class_name, class_files in files_by_class.items():
         if class_name not in target_distribution:
@@ -234,6 +236,21 @@ def split_doc_by_distribution(files, target_distribution, random_state=42):
         train_files.extend(class_train)
         test_files.extend(class_test)
     
+    # Distribute background entries proportionally using the overall train ratio
+    if background_entries:
+        random.shuffle(background_entries)
+        total_labelled = len(train_files) + len(test_files)
+        if total_labelled > 0:
+            overall_train_ratio = len(train_files) / total_labelled
+        else:
+            overall_train_ratio = 1.0 - target_distribution.get(
+                next(iter(target_distribution)), {}
+            ).get('train_ratio', 0.75) if target_distribution else 0.75
+        n_bg_train = max(0, round(len(background_entries) * overall_train_ratio))
+        train_files.extend(background_entries[:n_bg_train])
+        test_files.extend(background_entries[n_bg_train:])
+        print(f"  Background samples: {n_bg_train} train / {len(background_entries) - n_bg_train} test")
+
     # Final shuffle
     random.shuffle(train_files)
     random.shuffle(test_files)
