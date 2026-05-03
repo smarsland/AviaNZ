@@ -166,13 +166,23 @@ class EvaluationManager:
         # Exact match ratio (all labels must match exactly)
         exact_matches = np.all(y_true == y_pred, axis=1)
         exact_match = np.mean(exact_matches)
-        
+
+        # Exact match restricted to samples that have at least one positive class
+        # (ignores pure-background / no-label samples)
+        labelled_mask = y_true.sum(axis=1) > 0
+        if labelled_mask.any():
+            exact_match_labelled = float(np.mean(exact_matches[labelled_mask]))
+        else:
+            exact_match_labelled = float('nan')
+
         # ADD exact match to the classification report for downstream use
         class_report['exact_match_accuracy'] = float(exact_match)
+        class_report['exact_match_accuracy_labelled'] = exact_match_labelled
         class_report['hamming_loss'] = float(hamming)
         class_report['jaccard_score'] = float(jaccard)
-        
-        print(f"Multi-label metrics - Hamming Loss: {hamming:.4f}, Jaccard Score: {jaccard:.4f}, Exact Match: {exact_match:.4f}")
+
+        print(f"Multi-label metrics - Hamming Loss: {hamming:.4f}, Jaccard Score: {jaccard:.4f}, "
+              f"Exact Match: {exact_match:.4f}, Exact Match (labelled only): {exact_match_labelled:.4f}")
         
         # NOW save classification report as JSON with all metrics included
         with open(os.path.join(self.outputs_folder, f"{name}_multilabel_report.json"), "w") as f:

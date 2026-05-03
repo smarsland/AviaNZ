@@ -61,4 +61,4 @@ MoreporkResults/*
 test/*all_results.json
 
 vis_*
-tests/*
+tests*

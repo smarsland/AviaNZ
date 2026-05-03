@@ -100,6 +100,9 @@ def _read_reports_from_dir(report_dir, model, row):
         acc = report.get('exact_match_accuracy', np.nan)
         if acc is not np.nan:
             acc = acc * 100
+        acc_lab = report.get('exact_match_accuracy_labelled', np.nan)
+        if acc_lab is not np.nan:
+            acc_lab = acc_lab * 100
         stem = report_file.stem.replace('_multilabel_report', '')
         if '_model' in stem:
             continue  # validation set, skip
@@ -107,9 +110,11 @@ def _read_reports_from_dir(report_dir, model, row):
         if row['test1_name'] is np.nan or row['test1_name'] == np.nan:
             row['test1_name'] = dataset_name
             row['test1_acc'] = acc
+            row['test1_acc_labelled'] = acc_lab
         else:
             row['test2_name'] = dataset_name
             row['test2_acc'] = acc
+            row['test2_acc_labelled'] = acc_lab
 
 
 def load_from_viz_dir(viz_dir):
@@ -134,7 +139,9 @@ def load_from_viz_dir(viz_dir):
                 'test1_name': np.nan,
                 'test2_name': np.nan,
                 'test1_acc': np.nan,
+                'test1_acc_labelled': np.nan,
                 'test2_acc': np.nan,
+                'test2_acc_labelled': np.nan,
                 'status': 'unknown',
             }
             _read_reports_from_dir(exp_dir, model, row)
@@ -159,7 +166,9 @@ def load_from_viz_dir(viz_dir):
                 'test1_name': np.nan,
                 'test2_name': np.nan,
                 'test1_acc': np.nan,
+                'test1_acc_labelled': np.nan,
                 'test2_acc': np.nan,
+                'test2_acc_labelled': np.nan,
                 'status': 'unknown',
             }
             _read_reports_from_dir(final_dir, model, row)
@@ -180,8 +189,12 @@ def load_all_results(results_dir, viz_dir=None):
 
 def create_overview_table(df, output_dir):
     """Create CSV with ALL results"""
-    df_out = df[['name', 'train_dataset', 'method', 'config', 'category', 
-                 'test1_name', 'test1_acc', 'test2_name', 'test2_acc', 'status']].copy()
+    cols = ['name', 'train_dataset', 'method', 'config', 'category',
+            'test1_name', 'test1_acc', 'test1_acc_labelled',
+            'test2_name', 'test2_acc', 'test2_acc_labelled', 'status']
+    # Only include columns that actually exist (older result.json rows won't have _labelled)
+    cols = [c for c in cols if c in df.columns]
+    df_out = df[cols].copy()
     df_out = df_out.sort_values(['category', 'train_dataset', 'config'])
     df_out.to_csv(output_dir / 'all_results.csv', index=False, float_format='%.2f')
     print(f"✓ all_results.csv ({len(df_out)} experiments)")
