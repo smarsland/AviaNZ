@@ -63,7 +63,7 @@ class AugmentationConfig:
 @dataclass
 class LossConfig:
     """Loss function configuration."""
-    use_class_weights: bool = False
+    use_class_weights: bool = True
     pos_weight_cap: float = 20.0
     bce_smoothing: float = 0.0
 

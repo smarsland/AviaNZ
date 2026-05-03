@@ -123,6 +123,19 @@ class DataLoader:
         if len(labels.shape) == 1 or labels.shape[0] == 0:
             raise ValueError(f"No valid labels loaded from {self.folder}. Found {len(filenames)} files but labels array is empty.")
         
+        # If background (all-zero) samples are present, add an explicit "background"
+        # class so the model has a positive target to predict rather than all zeros.
+        # This prevents training collapse on imbalanced datasets with many no-bird samples.
+        if use_multilabel:
+            background_mask = labels.sum(axis=1) == 0
+            if background_mask.any():
+                categories = list(categories) + ['background']
+                bg_col = np.zeros((len(labels), 1), dtype=np.float32)
+                bg_col[background_mask, 0] = 1.0
+                labels = np.concatenate([labels, bg_col], axis=1)
+                n_bg = int(background_mask.sum())
+                print(f"  Added 'background' class: {n_bg}/{len(labels)} samples are background ({100*n_bg/len(labels):.1f}%)")
+
         print(f"Loaded {mode_str} data: {len(filenames)} files, {labels.shape[1]} classes")
         
         split_data = self.split_data(
