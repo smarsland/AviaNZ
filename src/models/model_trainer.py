@@ -27,6 +27,7 @@ import json, os
 
 from src.core import config_loader
 from src.models import architectures
+from src.utils.device import get_device
 
 
 class ModelTrainer:
@@ -42,7 +43,7 @@ class ModelTrainer:
         self.calltypes = calltypes
         self.fs = fs
         self.modelArchitecture = modelArchitecture
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = get_device()
 
         cl = config_loader.ConfigLoader()
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
