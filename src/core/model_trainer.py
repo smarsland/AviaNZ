@@ -79,6 +79,72 @@ def compute_multilabel_epoch_metrics(all_preds, all_targets):
     }
 
 
+class AsymmetricLoss(nn.Module):
+    """
+    Asymmetric Loss for multi-label classification.
+    Reference: Ben-Baruch et al. "Asymmetric Loss For Multi-Label Classification" (ICCV 2021)
+
+    Separates focusing strength for positives and negatives:
+      - Negatives: (sigma(x))^gamma_neg * log(1 - sigma(x - margin))
+        When the model is already confident a class is absent (sigma(x) near 0),
+        the gamma_neg exponent drives the contribution toward zero.
+        The probability margin shifts the negative probability distribution to
+        completely ignore very easy negatives (sigma(x) < margin).
+      - Positives: (1 - sigma(x))^gamma_pos * log(sigma(x))
+        gamma_pos=0 gives standard CE for positives (no down-weighting).
+
+    This prevents background samples (all-zero targets) from dominating training.
+    Background samples the model correctly identifies contribute ~zero gradient;
+    only wrong predictions (false positives on background) get penalised.
+
+    Args:
+        gamma_neg: Focusing power for negatives (default: 4)
+        gamma_pos: Focusing power for positives (default: 0 = standard CE)
+        margin:    Probability margin to shift/zero easy negatives (default: 0.05)
+        pos_weight: Optional [C] tensor of per-class weights for positives
+        eps:       Numerical stability constant
+    """
+    def __init__(self, gamma_neg=4.0, gamma_pos=0.0, margin=0.05,
+                 pos_weight=None, eps=1e-8):
+        super().__init__()
+        self.gamma_neg = gamma_neg
+        self.gamma_pos = gamma_pos
+        self.margin = margin
+        self.pos_weight = pos_weight
+        self.eps = eps
+
+    def forward(self, x, y):
+        # Probabilities
+        xs_pos = torch.sigmoid(x)
+        xs_neg = 1.0 - xs_pos
+
+        # Asymmetric margin: shift negative probability down so that
+        # very confident negative predictions clip to zero
+        if self.margin > 0:
+            xs_neg = (xs_neg + self.margin).clamp(max=1.0)
+
+        # Log probabilities
+        los_pos = torch.log(xs_pos.clamp(min=self.eps))
+        los_neg = torch.log(xs_neg.clamp(min=self.eps))
+
+        # Base BCE loss (margin applied to negatives)
+        loss = y * los_pos + (1.0 - y) * los_neg
+
+        # Per-class positive weighting (handles inter-class imbalance: tui vs kaka etc.)
+        if self.pos_weight is not None:
+            pw = self.pos_weight.unsqueeze(0)          # [1, C]
+            loss = loss * (y * (pw - 1.0) + 1.0)      # pw where y=1, 1 where y=0
+
+        # Asymmetric focusing: down-weight easy negatives, standard for positives
+        if self.gamma_neg > 0 or self.gamma_pos > 0:
+            pt0 = xs_pos * (1.0 - y)    # sigma(x) where y=0  (p_t for negatives)
+            pt1 = (1.0 - xs_pos) * y    # (1-sigma(x)) where y=1  (p_t for positives)
+            focusing = pt0 ** self.gamma_neg + pt1 ** self.gamma_pos
+            loss = focusing * loss
+
+        return -loss.mean()
+
+
 class SmoothBCEWithLogitsLoss(nn.Module):
     """
     BCEWithLogits with target smoothing for multi-label classification.
@@ -160,6 +226,10 @@ class Trainer:
         self.use_class_weights = cfg.loss.use_class_weights
         self.pos_weight_cap = cfg.loss.pos_weight_cap
         self.bce_smoothing = cfg.loss.bce_smoothing
+        self.use_asl = cfg.loss.use_asl
+        self.asl_gamma_neg = cfg.loss.asl_gamma_neg
+        self.asl_gamma_pos = cfg.loss.asl_gamma_pos
+        self.asl_margin = cfg.loss.asl_margin
         
         # Domain adaptation configuration
         self.use_dann = cfg.domain_adaptation.use_dann
@@ -258,7 +328,7 @@ class Trainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=True, bg_subtract=self.bg_subtract,
+            use_class_balancing=False, bg_subtract=self.bg_subtract,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
@@ -273,7 +343,7 @@ class Trainer:
                 cropping_mode='random', noise_ratio=0.0,  # No noise augmentation for target
                 spec_transform=self.spec_transform,
                 num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
-                use_class_balancing=True, bg_subtract=self.bg_subtract,
+                use_class_balancing=False, bg_subtract=self.bg_subtract,
                 median_filter=self.median_filter,
                 use_temporal_roll=self.use_temporal_roll,
                 mixup_mode='mixup',
@@ -431,9 +501,17 @@ class Trainer:
         pos_weight = None
         if self.use_class_weights:
             pos_weight = self._compute_class_weights()
-            print(f"Using class-weighted BCE loss")
+            print(f"Using class-weighted loss")
             print(f"  Weight range: {pos_weight.min().item():.2f} - {pos_weight.max().item():.2f}")
-        if self.bce_smoothing and self.bce_smoothing > 0.0:
+        if self.use_asl:
+            criterion = AsymmetricLoss(
+                gamma_neg=self.asl_gamma_neg,
+                gamma_pos=self.asl_gamma_pos,
+                margin=self.asl_margin,
+                pos_weight=pos_weight,
+            )
+            print(f"Using Asymmetric Loss (gamma_neg={self.asl_gamma_neg}, gamma_pos={self.asl_gamma_pos}, margin={self.asl_margin})")
+        elif self.bce_smoothing and self.bce_smoothing > 0.0:
             criterion = SmoothBCEWithLogitsLoss(epsilon=self.bce_smoothing, pos_weight=pos_weight)
             print(f"Applying BCE target smoothing (epsilon={self.bce_smoothing:.3f})")
         else:

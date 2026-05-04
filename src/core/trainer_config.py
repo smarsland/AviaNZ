@@ -66,6 +66,10 @@ class LossConfig:
     use_class_weights: bool = True
     pos_weight_cap: float = 20.0
     bce_smoothing: float = 0.0
+    use_asl: bool = True
+    asl_gamma_neg: float = 4.0
+    asl_gamma_pos: float = 0.0
+    asl_margin: float = 0.05
 
 
 @dataclass
@@ -143,9 +147,13 @@ class TrainerConfig:
                 background_prob=getattr(args, 'background_prob', 0.0)
             ),
             loss=LossConfig(
-                use_class_weights=getattr(args, 'class_weights', False),
+                use_class_weights=getattr(args, 'class_weights', True),
                 pos_weight_cap=getattr(args, 'pos_weight_cap', 20.0),
-                bce_smoothing=getattr(args, 'bce_smoothing', config.DEFAULT_BCE_SMOOTHING)
+                bce_smoothing=getattr(args, 'bce_smoothing', config.DEFAULT_BCE_SMOOTHING),
+                use_asl=getattr(args, 'use_asl', True),
+                asl_gamma_neg=getattr(args, 'asl_gamma_neg', 4.0),
+                asl_gamma_pos=getattr(args, 'asl_gamma_pos', 0.0),
+                asl_margin=getattr(args, 'asl_margin', 0.05),
             ),
             domain_adaptation=DomainAdaptationConfig(
                 use_dann=getattr(args, 'use_dann', False),

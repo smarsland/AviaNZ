@@ -836,7 +836,7 @@ def main():
         for rec in kept_records:
             all_search_codes.update(rec['species1_codes'])
 
-        print(f'\n=== Step 4b: adding background samples (n={args.background_n} per dataset) ===')
+        print(f'\n=== Step 4b: adding background samples (doc={args.background_n}, avianz={args.background_n}) ===')
         doc_background = add_background_samples_doc(
             doc_labels_final, args.doc_raw, doc_out,
             n=args.background_n, seed=args.seed,
