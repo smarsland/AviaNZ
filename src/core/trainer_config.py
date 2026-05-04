@@ -66,7 +66,7 @@ class LossConfig:
     use_class_weights: bool = False
     pos_weight_cap: float = 20.0
     bce_smoothing: float = 0.0
-    use_asl: bool = True
+    use_asl: bool = False
     asl_gamma_neg: float = 4.0
     asl_gamma_pos: float = 0.0
     asl_margin: float = 0.05
@@ -150,7 +150,7 @@ class TrainerConfig:
                 use_class_weights=getattr(args, 'class_weights', False),
                 pos_weight_cap=getattr(args, 'pos_weight_cap', 20.0),
                 bce_smoothing=getattr(args, 'bce_smoothing', config.DEFAULT_BCE_SMOOTHING),
-                use_asl=getattr(args, 'use_asl', True),
+                use_asl=getattr(args, 'use_asl', False),
                 asl_gamma_neg=getattr(args, 'asl_gamma_neg', 4.0),
                 asl_gamma_pos=getattr(args, 'asl_gamma_pos', 0.0),
                 asl_margin=getattr(args, 'asl_margin', 0.05),

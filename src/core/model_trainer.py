@@ -341,7 +341,7 @@ class Trainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=False, bg_subtract=self.bg_subtract,
+            use_class_balancing=True, bg_subtract=self.bg_subtract,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
