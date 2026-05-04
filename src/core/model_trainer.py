@@ -135,11 +135,24 @@ class AsymmetricLoss(nn.Module):
             pw = self.pos_weight.unsqueeze(0)          # [1, C]
             loss = loss * (y * (pw - 1.0) + 1.0)      # pw where y=1, 1 where y=0
 
-        # Asymmetric focusing: down-weight easy negatives, standard for positives
+        # Asymmetric focusing: down-weight easy negatives, standard for positives.
+        # IMPORTANT: Never compute x**0 through autograd — the gradient is
+        # gamma * x^(gamma-1) which becomes 0 * 0^(-1) = NaN when x=0.
+        # For gamma=0 (no focusing) use a constant instead.
         if self.gamma_neg > 0 or self.gamma_pos > 0:
-            pt0 = xs_pos * (1.0 - y)    # sigma(x) where y=0  (p_t for negatives)
-            pt1 = (1.0 - xs_pos) * y    # (1-sigma(x)) where y=1  (p_t for positives)
-            focusing = pt0 ** self.gamma_neg + pt1 ** self.gamma_pos
+            # Negative focusing: sigma(x)^gamma_neg for negatives, 0 for positives
+            if self.gamma_neg > 0:
+                neg_focus = (xs_pos * (1.0 - y)) ** self.gamma_neg
+            else:
+                neg_focus = (1.0 - y)   # 1 where y=0, 0 where y=1 — no exponent
+
+            # Positive focusing: (1-sigma(x))^gamma_pos for positives, 0 for negatives
+            if self.gamma_pos > 0:
+                pos_focus = ((1.0 - xs_pos) * y) ** self.gamma_pos
+            else:
+                pos_focus = y           # 1 where y=1, 0 where y=0 — no exponent
+
+            focusing = neg_focus + pos_focus
             loss = focusing * loss
 
         return -loss.mean()
