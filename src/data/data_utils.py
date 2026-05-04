@@ -123,19 +123,6 @@ class DataLoader:
         if len(labels.shape) == 1 or labels.shape[0] == 0:
             raise ValueError(f"No valid labels loaded from {self.folder}. Found {len(filenames)} files but labels array is empty.")
         
-        # If background (all-zero) samples are present, add an explicit "background"
-        # class so the model has a positive target to predict rather than all zeros.
-        # This prevents training collapse on imbalanced datasets with many no-bird samples.
-        if use_multilabel:
-            background_mask = labels.sum(axis=1) == 0
-            if background_mask.any():
-                categories = list(categories) + ['background']
-                bg_col = np.zeros((len(labels), 1), dtype=np.float32)
-                bg_col[background_mask, 0] = 1.0
-                labels = np.concatenate([labels, bg_col], axis=1)
-                n_bg = int(background_mask.sum())
-                print(f"  Added 'background' class: {n_bg}/{len(labels)} samples are background ({100*n_bg/len(labels):.1f}%)")
-
         print(f"Loaded {mode_str} data: {len(filenames)} files, {labels.shape[1]} classes")
         
         split_data = self.split_data(
@@ -823,66 +810,37 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
     shuffle_train = True
     
     if use_class_balancing:
-        # Calculate class weights for balanced sampling
+        # Multi-label aware sampling: give each sample a weight based on whether it
+        # has any bird label or not.  This directly counteracts the imbalance
+        # introduced by background (all-zero) samples without requiring argmax
+        # (which is meaningless for multi-label data).
         train_labels_array = np.array(data['train_labels'])
-        
-        # For single-label: get class indices
-        if train_labels_array.ndim == 2 and not np.all((train_labels_array == 0) | (train_labels_array == 1)):
-            # Multi-hot or soft labels - use argmax for balancing
-            class_indices = np.argmax(train_labels_array, axis=1)
+        is_labelled = train_labels_array.sum(axis=1) > 0  # True = has ≥1 bird class
+
+        n_labelled = int(is_labelled.sum())
+        n_background = int((~is_labelled).sum())
+        n_total = len(is_labelled)
+
+        if n_background == 0 or n_labelled == 0:
+            # Nothing to balance — fall through to ordinary shuffle
+            print(f"Class balancing: all samples are {'labelled' if n_background == 0 else 'background'}, skipping sampler")
         else:
-            class_indices = np.argmax(train_labels_array, axis=1)
-        
-        # Count samples per class
-        unique_classes, class_counts = np.unique(class_indices, return_counts=True)
-        
-        # Check if any classes are missing
-        total_classes = train_labels_array.shape[1] if train_labels_array.ndim == 2 else max(class_indices) + 1
-        missing_classes = set(range(total_classes)) - set(unique_classes)
-        if missing_classes:
-            print(f"⚠️  WARNING: {len(missing_classes)} classes have no samples in training set!")
-            print(f"  Missing class indices: {sorted(missing_classes)}")
-            if 'class_names' in data:
-                missing_names = [data['class_names'][i] for i in sorted(missing_classes)]
-                print(f"  Missing class names: {missing_names[:5]}{'...' if len(missing_names) > 5 else ''}")
-            print(f"  These classes will be ignored during training.")
-        
-        # Calculate class weights (inverse frequency)
-        class_weights = 1.0 / class_counts
-        
-        # Cap extreme weights to prevent NaN issues (max 10x the median)
-        median_weight = np.median(class_weights)
-        max_weight = 10.0 * median_weight
-        num_capped = (class_weights > max_weight).sum()
-        if num_capped > 0:
-            print(f"  ⚠️  Capping {num_capped} extreme class weights (>{max_weight:.2f}) to prevent instability")
-            class_weights = np.clip(class_weights, None, max_weight)
-        
-        # Normalize so the sum equals number of classes (keeps relative importance)
-        class_weights = class_weights * len(unique_classes) / class_weights.sum()
-        
-        # Create sample weights
-        sample_weights = np.zeros(len(class_indices))
-        for cls_idx, cls_weight in zip(unique_classes, class_weights):
-            sample_weights[class_indices == cls_idx] = cls_weight
-        
-        # Create WeightedRandomSampler
-        sampler = WeightedRandomSampler(
-            weights=sample_weights,
-            num_samples=len(sample_weights),
-            replacement=True  # Allow sampling with replacement
-        )
-        shuffle_train = False  # Can't use shuffle with sampler
-        
-        print(f"Class balancing enabled:")
-        print(f"  Classes found: {len(unique_classes)}/{total_classes} total")
-        print(f"  Sample counts: min={class_counts.min()}, max={class_counts.max()}, mean={class_counts.mean():.1f}")
-        print(f"  Class weights: min={class_weights.min():.3f}, max={class_weights.max():.3f}")
-        
-        # Extra warning for very imbalanced datasets
-        if class_counts.max() / class_counts.min() > 100:
-            print(f"  ⚠️  Highly imbalanced dataset! Max/min ratio: {class_counts.max() / class_counts.min():.1f}x")
-            print(f"      Consider using --confusion-sampling instead of --balance for better stability")
+            # Each group gets weight = 1 / group_size, so both groups are drawn
+            # equally often on average (each epoch sees ~n_total/2 of each).
+            w_labelled   = 1.0 / n_labelled
+            w_background = 1.0 / n_background
+            sample_weights = np.where(is_labelled, w_labelled, w_background).astype(np.float32)
+
+            sampler = WeightedRandomSampler(
+                weights=sample_weights,
+                num_samples=n_total,
+                replacement=True
+            )
+            shuffle_train = False  # Can't use shuffle with a sampler
+
+            print(f"Class balancing enabled (multi-label aware):")
+            print(f"  Labelled samples : {n_labelled} (weight/sample={w_labelled:.5f})")
+            print(f"  Background samples: {n_background} (weight/sample={w_background:.5f})")
     
     # Create data loaders
     # Determine collate function based on mode

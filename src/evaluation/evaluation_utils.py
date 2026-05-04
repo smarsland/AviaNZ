@@ -167,15 +167,9 @@ class EvaluationManager:
         exact_matches = np.all(y_true == y_pred, axis=1)
         exact_match = np.mean(exact_matches)
 
-        # Exact match restricted to samples that have at least one BIRD class positive.
-        # If a "background" class was added by the data loader, exclude it from this
-        # check so that background-only samples remain outside the "labelled" set.
-        if 'background' in self.class_names:
-            bg_idx = self.class_names.index('background')
-            bird_indices = [i for i in range(len(self.class_names)) if i != bg_idx]
-            labelled_mask = y_true[:, bird_indices].sum(axis=1) > 0
-        else:
-            labelled_mask = y_true.sum(axis=1) > 0
+        # Exact match restricted to samples that have at least one positive class
+        # (ignores pure-background / no-label samples)
+        labelled_mask = y_true.sum(axis=1) > 0
         if labelled_mask.any():
             exact_match_labelled = float(np.mean(exact_matches[labelled_mask]))
         else:
