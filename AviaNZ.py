@@ -214,8 +214,10 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             if (cheatsheet or zooniverse) and isinstance(infile, str):
                 from PyQt6.QtWidgets import QApplication
                 from src.ui import AviaNZ_manual_GUI
+                #from src.ui import manual_interface
                 app = QApplication(sys.argv)
                 avianz = AviaNZ_manual_GUI.AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
+                #avianz = manual_interface.ManualInterface(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input file (-f) is needed")
