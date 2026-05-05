@@ -31,8 +31,8 @@ def summarize(viz_folder):
 
     header = (
         f"{'Experiment':<{col_exp}}  "
-        f"{'AviaNZ Acc':>10}  {'AviaNZ Acc+':>11}  {'AviaNZ F1':>10}  {'AviaNZ Jaccard':>14}  "
-        f"{'DOC Acc':>7}  {'DOC Acc+':>8}  {'DOC F1':>7}  {'DOC Jaccard':>11}"
+        f"{'AviaNZ All':>10}  {'AviaNZ Lab':>10}  {'AviaNZ Bg':>9}  {'AviaNZ F1':>10}  {'AviaNZ Jaccard':>14}  "
+        f"{'DOC All':>7}  {'DOC Lab':>7}  {'DOC Bg':>7}  {'DOC F1':>7}  {'DOC Jaccard':>11}"
     )
     print(header)
     print("-" * len(header))
@@ -50,11 +50,12 @@ def summarize(viz_folder):
                 vals[key] = {
                     "acc": data.get("exact_match_accuracy"),
                     "acc_lab": data.get("exact_match_accuracy_labelled"),
+                    "acc_bg": data.get("exact_match_accuracy_background"),
                     "f1": data.get("micro avg", {}).get("f1-score"),
                     "jaccard": data.get("jaccard_score"),
                 }
             else:
-                vals[key] = {"acc": None, "acc_lab": None, "f1": None, "jaccard": None}
+                vals[key] = {"acc": None, "acc_lab": None, "acc_bg": None, "f1": None, "jaccard": None}
 
         def fmt(val):
             return f"{val:.4f}" if val is not None else "N/A"
@@ -62,8 +63,8 @@ def summarize(viz_folder):
         a, d = vals["avianz"], vals["doc"]
         print(
             f"{exp:<{col_exp}}  "
-            f"{fmt(a['acc']):>10}  {fmt(a['acc_lab']):>11}  {fmt(a['f1']):>10}  {fmt(a['jaccard']):>14}  "
-            f"{fmt(d['acc']):>7}  {fmt(d['acc_lab']):>8}  {fmt(d['f1']):>7}  {fmt(d['jaccard']):>11}"
+            f"{fmt(a['acc']):>10}  {fmt(a['acc_lab']):>10}  {fmt(a['acc_bg']):>9}  {fmt(a['f1']):>10}  {fmt(a['jaccard']):>14}  "
+            f"{fmt(d['acc']):>7}  {fmt(d['acc_lab']):>7}  {fmt(d['acc_bg']):>7}  {fmt(d['f1']):>7}  {fmt(d['jaccard']):>11}"
         )
 
 

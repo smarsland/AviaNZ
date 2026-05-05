@@ -86,6 +86,22 @@ SCIENTIFIC_TO_CODE = {
 COMMON_NAME_TO_CODE = {v.lower(): k for k, v in SPECIES_MAPPING.items()}
 
 
+def label_to_codes(label):
+    label = label.strip().lower()
+    label = label.replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+
+    code = COMMON_NAME_TO_CODE.get(label)
+    if code:
+        return {code}
+
+    codes = set()
+    for part in label.split('/'):
+        code = COMMON_NAME_TO_CODE.get(part.strip())
+        if code:
+            codes.add(code)
+    return codes
+
+
 class BirdNETEvaluator:
     def __init__(self, output_folder, min_confidence=0.1, latitude=-41.2865, longitude=174.7762):
         self.output_folder = Path(output_folder)
@@ -181,10 +197,7 @@ class BirdNETEvaluator:
         test_codes = set()
         for item in files:
             for label in item.get('class_names', []):
-                for part in label.split('/'):
-                    code = COMMON_NAME_TO_CODE.get(part.strip().lower())
-                    if code:
-                        test_codes.add(code)
+                test_codes.update(label_to_codes(label))
         test_codes = sorted(test_codes)
 
         # Only score over codes that BirdNET can actually predict
@@ -212,9 +225,8 @@ class BirdNETEvaluator:
             # Ground truth: set of valid codes from this sample's class_names
             gt_codes = set()
             for label in file_info.get('class_names', []):
-                for part in label.split('/'):
-                    code = COMMON_NAME_TO_CODE.get(part.strip().lower())
-                    if code and code in valid_codes:
+                for code in label_to_codes(label):
+                    if code in valid_codes:
                         gt_codes.add(code)
 
             detections = self.predict_file(wav_file)
@@ -254,8 +266,14 @@ class BirdNETEvaluator:
         n_labelled_correct = sum(r['correct'] for r in labelled)
         accuracy_labelled = 100.0 * n_labelled_correct / n_labelled if n_labelled else float('nan')
 
+        background = [r for r in file_results if not r['gt_codes']]
+        n_background = len(background)
+        n_background_correct = sum(r['correct'] for r in background)
+        accuracy_background = 100.0 * n_background_correct / n_background if n_background else float('nan')
+
         print(f"\n  Accuracy (all):      {n_correct}/{n} = {accuracy:.1f}%")
         print(f"  Accuracy (labelled): {n_labelled_correct}/{n_labelled} = {accuracy_labelled:.1f}%")
+        print(f"  Accuracy (background): {n_background_correct}/{n_background} = {accuracy_background:.1f}%")
         print(f"  BirdNET detected {len(birdnet_species_seen)} unique species")
         print(f"{'='*60}")
 
@@ -274,6 +292,9 @@ class BirdNETEvaluator:
             'num_correct': n_correct,
             'accuracy': accuracy,
             'accuracy_labelled': accuracy_labelled,
+            'accuracy_background': accuracy_background,
+            'num_labelled': n_labelled,
+            'num_background': n_background,
             'file_results': file_results,
             'species_stats': {k: dict(v) for k, v in species_stats.items()},
             'birdnet_species': sorted(birdnet_species_seen),
@@ -559,10 +580,12 @@ class BirdNETEvaluator:
                 result_json['test1_name'] = self.results[0]['dataset_name']
                 result_json['test1_acc'] = self.results[0]['accuracy']
                 result_json['test1_acc_labelled'] = self.results[0].get('accuracy_labelled', float('nan'))
+                result_json['test1_acc_background'] = self.results[0].get('accuracy_background', float('nan'))
             if len(self.results) >= 2:
                 result_json['test2_name'] = self.results[1]['dataset_name']
                 result_json['test2_acc'] = self.results[1]['accuracy']
                 result_json['test2_acc_labelled'] = self.results[1].get('accuracy_labelled', float('nan'))
+                result_json['test2_acc_background'] = self.results[1].get('accuracy_background', float('nan'))
             with open(self.output_folder / 'result.json', 'w') as f:
                 json.dump(result_json, f, indent=2)
             print(f"\nSaved result.json to {self.output_folder / 'result.json'}")

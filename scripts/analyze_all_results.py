@@ -50,8 +50,10 @@ def load_from_result_json(results_dir):
                 'test2_name': data.get('test2_name', 'unknown'),
                 'test1_acc': data.get('test1_acc', np.nan),
                 'test1_acc_labelled': data.get('test1_acc_labelled', np.nan),
+                'test1_acc_background': data.get('test1_acc_background', np.nan),
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
+                'test2_acc_background': data.get('test2_acc_background', np.nan),
                 'status': data.get('status', 'unknown'),
             })
             continue
@@ -93,7 +95,11 @@ def load_from_result_json(results_dir):
             'test1_name': data.get('test1_name', 'unknown'),
             'test2_name': data.get('test2_name', 'unknown'),
             'test1_acc': data.get('test1_acc', np.nan),
+            'test1_acc_labelled': data.get('test1_acc_labelled', np.nan),
+            'test1_acc_background': data.get('test1_acc_background', np.nan),
             'test2_acc': data.get('test2_acc', np.nan),
+            'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
+            'test2_acc_background': data.get('test2_acc_background', np.nan),
             'status': data.get('status', 'unknown'),
         })
     return results
@@ -110,6 +116,9 @@ def _read_reports_from_dir(report_dir, model, row):
         acc_lab = report.get('exact_match_accuracy_labelled', np.nan)
         if acc_lab is not np.nan:
             acc_lab = acc_lab * 100
+        acc_bg = report.get('exact_match_accuracy_background', np.nan)
+        if acc_bg is not np.nan:
+            acc_bg = acc_bg * 100
         stem = report_file.stem.replace('_multilabel_report', '')
         if '_model' in stem:
             continue  # validation set, skip
@@ -118,10 +127,12 @@ def _read_reports_from_dir(report_dir, model, row):
             row['test1_name'] = dataset_name
             row['test1_acc'] = acc
             row['test1_acc_labelled'] = acc_lab
+            row['test1_acc_background'] = acc_bg
         else:
             row['test2_name'] = dataset_name
             row['test2_acc'] = acc
             row['test2_acc_labelled'] = acc_lab
+            row['test2_acc_background'] = acc_bg
 
 
 def load_from_viz_dir(viz_dir):
@@ -147,8 +158,10 @@ def load_from_viz_dir(viz_dir):
                 'test2_name': np.nan,
                 'test1_acc': np.nan,
                 'test1_acc_labelled': np.nan,
+                'test1_acc_background': np.nan,
                 'test2_acc': np.nan,
                 'test2_acc_labelled': np.nan,
+                'test2_acc_background': np.nan,
                 'status': 'unknown',
             }
             _read_reports_from_dir(exp_dir, model, row)
@@ -174,8 +187,10 @@ def load_from_viz_dir(viz_dir):
                 'test2_name': np.nan,
                 'test1_acc': np.nan,
                 'test1_acc_labelled': np.nan,
+                'test1_acc_background': np.nan,
                 'test2_acc': np.nan,
                 'test2_acc_labelled': np.nan,
+                'test2_acc_background': np.nan,
                 'status': 'unknown',
             }
             _read_reports_from_dir(final_dir, model, row)
@@ -197,8 +212,8 @@ def load_all_results(results_dir, viz_dir=None):
 def create_overview_table(df, output_dir):
     """Create CSV with ALL results"""
     cols = ['name', 'train_dataset', 'method', 'config', 'category',
-            'test1_name', 'test1_acc', 'test1_acc_labelled',
-            'test2_name', 'test2_acc', 'test2_acc_labelled', 'status']
+            'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
+            'test2_name', 'test2_acc', 'test2_acc_labelled', 'test2_acc_background', 'status']
     # Only include columns that actually exist (older result.json rows won't have _labelled)
     cols = [c for c in cols if c in df.columns]
     df_out = df[cols].copy()

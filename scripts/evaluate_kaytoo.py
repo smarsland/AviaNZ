@@ -35,6 +35,22 @@ from collections import defaultdict
 import pandas as pd
 
 
+def label_to_codes(label, label_to_ebird):
+    label = label.strip().lower()
+    label = label.replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+
+    code = label_to_ebird.get(label)
+    if code:
+        return {code}
+
+    codes = set()
+    for part in label.split('/'):
+        code = label_to_ebird.get(part.strip())
+        if code:
+            codes.add(code)
+    return codes
+
+
 def build_label_to_ebird(mapping_csv):
     """Build lowercase-normalized label string -> eBird code from DOC naming map."""
     df = pd.read_csv(mapping_csv)
@@ -145,17 +161,13 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
         gt_labels = [l for l in gt_labels if l]
         gt_codes = set()
         for l in gt_labels:
-            for part in l.split('/'):
-                code = label_to_ebird.get(part.strip())
+            for code in label_to_codes(l, label_to_ebird):
                 if code and code in set(valid_cols):
                     gt_codes.add(code)
 
         # Multi-label: threshold each class score independently
         scores = row[valid_cols].values
         pred_codes = {valid_cols[i] for i, s in enumerate(scores) if s > threshold}
-        # If nothing clears the threshold, take the top-scoring class
-        if not pred_codes:
-            pred_codes = {valid_cols[int(np.argmax(scores))]}
 
         # Exact match: predicted set must equal ground-truth set exactly
         correct = pred_codes == gt_codes
@@ -178,6 +190,12 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
     accuracy_labelled = 100.0 * n_labelled_correct / n_labelled if n_labelled else float('nan')
     print(f"  Accuracy (labelled): {n_labelled_correct}/{n_labelled} = {accuracy_labelled:.1f}%")
 
+    background = [r for r in results if not r['gt_codes']]
+    n_background = len(background)
+    n_background_correct = sum(r['correct'] for r in background)
+    accuracy_background = 100.0 * n_background_correct / n_background if n_background else float('nan')
+    print(f"  Accuracy (background): {n_background_correct}/{n_background} = {accuracy_background:.1f}%")
+
     species_stats = defaultdict(lambda: {'correct': 0, 'total': 0})
     for r in results:
         for code in r['gt_codes']:
@@ -191,6 +209,9 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
         'num_correct': n_correct,
         'accuracy': accuracy,
         'accuracy_labelled': accuracy_labelled,
+        'accuracy_background': accuracy_background,
+        'num_labelled': n_labelled,
+        'num_background': n_background,
         'species_stats': {k: dict(v) for k, v in species_stats.items()},
         'results': results,
     }
@@ -328,10 +349,12 @@ def main():
         result_json['test1_name'] = all_results[0]['dataset_name']
         result_json['test1_acc'] = all_results[0]['accuracy']
         result_json['test1_acc_labelled'] = all_results[0].get('accuracy_labelled', float('nan'))
+        result_json['test1_acc_background'] = all_results[0].get('accuracy_background', float('nan'))
     if len(all_results) >= 2:
         result_json['test2_name'] = all_results[1]['dataset_name']
         result_json['test2_acc'] = all_results[1]['accuracy']
         result_json['test2_acc_labelled'] = all_results[1].get('accuracy_labelled', float('nan'))
+        result_json['test2_acc_background'] = all_results[1].get('accuracy_background', float('nan'))
 
     with open(output_path / 'result.json', 'w') as f:
         json.dump(result_json, f, indent=2)
