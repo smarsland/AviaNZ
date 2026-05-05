@@ -86,7 +86,7 @@ class EvaluationConfig:
     test_folder: Optional[str] = None
     test_folder2: Optional[str] = None
     visualize_attention: bool = False
-    viz_samples: int = 10
+    viz_samples: int = 3
 
 
 @dataclass

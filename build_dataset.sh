@@ -78,7 +78,7 @@ for d in "$DOC_SPLIT_BASE/train" "$DOC_SPLIT_BASE/test" "$AVIANZ_SPLIT_BASE/trai
     [ ! -d "$d" ] || [ ! -f "$d/labels.json" ] && SPLIT_MISSING=true && break
 done
 
-if [ "$OVERWRITE" = true ] || [ "$SPLIT_MISSING" = true ]; then
+if [ "$SPLIT_MISSING" = true ]; then
     echo ""
     echo "=== Step 2: splitting datasets ==="
     PYTHONPATH="$PWD" python3 src/experiments/split_matched_datasets.py \
