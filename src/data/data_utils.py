@@ -831,9 +831,14 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             w_background = 1.0 / n_background
             sample_weights = np.where(is_labelled, w_labelled, w_background).astype(np.float32)
 
+            # num_samples = n_labelled keeps the epoch the same length as it was
+            # without the sampler (i.e. same number of optimizer steps per epoch).
+            # Each batch is drawn ~50% bird / ~50% background, but we stop after
+            # n_labelled draws — the same count as the pre-background dataset had.
+            # Using n_total would give 2-3x more batches per epoch (overfits).
             sampler = WeightedRandomSampler(
                 weights=sample_weights,
-                num_samples=n_total,
+                num_samples=n_labelled,
                 replacement=True
             )
             shuffle_train = False  # Can't use shuffle with a sampler
@@ -841,6 +846,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             print(f"Class balancing enabled (multi-label aware):")
             print(f"  Labelled samples : {n_labelled} (weight/sample={w_labelled:.5f})")
             print(f"  Background samples: {n_background} (weight/sample={w_background:.5f})")
+            print(f"  Draws per epoch  : {n_labelled} (~{n_labelled//2} bird, ~{n_labelled//2} background)")
     
     # Create data loaders
     # Determine collate function based on mode

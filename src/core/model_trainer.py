@@ -341,7 +341,7 @@ class Trainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=True, bg_subtract=self.bg_subtract,
+            use_class_balancing=False, bg_subtract=self.bg_subtract,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
@@ -770,7 +770,22 @@ class Trainer:
             train_metrics = compute_multilabel_epoch_metrics(all_train_preds, all_train_targets)
             val_metrics = compute_multilabel_epoch_metrics(all_val_preds, all_val_targets)
             train_acc = train_metrics['macro_f1']
-            val_acc = val_metrics['macro_f1']
+
+            # Early stopping uses macro F1 on LABELLED val samples only.
+            # Background samples (all-zero targets) in the val set penalise false
+            # positives and bias selection toward over-conservative models — exactly
+            # the opposite of what acc_labelled measures.  Filter them out here.
+            all_val_preds_arr  = np.vstack(all_val_preds)
+            all_val_targets_arr = np.vstack(all_val_targets)
+            labelled_mask = all_val_targets_arr.sum(axis=1) > 0
+            if labelled_mask.sum() > 0:
+                val_metrics_labelled = compute_multilabel_epoch_metrics(
+                    [all_val_preds_arr[labelled_mask]],
+                    [all_val_targets_arr[labelled_mask]]
+                )
+                val_acc = val_metrics_labelled['macro_f1']
+            else:
+                val_acc = val_metrics['macro_f1']
             
             train_losses.append(train_loss)
             val_losses.append(val_loss)
