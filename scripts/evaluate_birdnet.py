@@ -521,19 +521,18 @@ class BirdNETEvaluator:
             f.write("-"*60 + "\n")
             species_stats = defaultdict(lambda: {'correct': 0, 'total': 0})
             for result in self.results:
-                for gt, pred in zip(result['ground_truth'], result['predictions']):
-                    if gt in self.species_codes:
-                        species_stats[gt]['total'] += 1
-                        if gt == pred:
-                            species_stats[gt]['correct'] += 1
-            
-            for code in self.species_codes:
-                name = SPECIES_MAPPING[code]
+                for code, stats in result.get('species_stats', {}).items():
+                    species_stats[code]['total'] += stats['total']
+                    species_stats[code]['correct'] += stats['correct']
+
+            all_codes = sorted(species_stats.keys()) or sorted(SPECIES_MAPPING.keys())
+            for code in all_codes:
+                name = SPECIES_MAPPING.get(code, code)
                 if species_stats[code]['total'] > 0:
                     acc = 100.0 * species_stats[code]['correct'] / species_stats[code]['total']
-                    f.write(f"  {name:12s}: {acc:6.2f}% ({species_stats[code]['correct']}/{species_stats[code]['total']})\n")
+                    f.write(f"  {name:20s}: {acc:6.2f}% ({species_stats[code]['correct']}/{species_stats[code]['total']})\n")
                 else:
-                    f.write(f"  {name:12s}: No samples\n")
+                    f.write(f"  {name:20s}: No samples\n")
         
         print(f"  Saved to: {report_path}")
         
