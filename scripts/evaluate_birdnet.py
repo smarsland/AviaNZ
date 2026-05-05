@@ -151,207 +151,206 @@ class BirdNETEvaluator:
         print(f"Evaluating: {dataset_name}")
         print(f"Folder: {test_folder}")
         print(f"{'='*60}")
-        
+
         test_path = Path(test_folder)
-        
+
         if not test_path.exists():
             print(f"ERROR: Folder not found: {test_folder}")
             return None
-        
+
         labels_path = test_path / 'labels.json'
         if not labels_path.exists():
             print(f"ERROR: No labels.json found")
             return None
-        
+
         audio_path = test_path / 'audio'
         if not audio_path.exists() or not audio_path.is_dir():
             print(f"ERROR: No audio/ subfolder found")
             print(f"Make sure you used --with-audio when creating the dataset")
             return None
-        
+
         with open(labels_path, 'r') as f:
             labels_data = json.load(f)
-        
+
         files = labels_data.get('files', [])
         if not files:
             print(f"ERROR: No files found in labels.json")
             return None
-        
-        print(f"Found {len(files)} files in dataset")
-        print(f"Audio files location: {audio_path}")
-        
-        predictions = []
-        ground_truth = []
+
+        # Build test-set species codes dynamically from labels.json
+        test_codes = set()
+        for item in files:
+            for label in item.get('class_names', []):
+                for part in label.split('/'):
+                    code = COMMON_NAME_TO_CODE.get(part.strip().lower())
+                    if code:
+                        test_codes.add(code)
+        test_codes = sorted(test_codes)
+
+        # Only score over codes that BirdNET can actually predict
+        valid_codes = {code for code in test_codes
+                       if any(c == code for c in SCIENTIFIC_TO_CODE.values())}
+        missing_codes = set(test_codes) - valid_codes
+        if missing_codes:
+            print(f"  WARNING: {len(missing_codes)} test-set species have no BirdNET mapping: {sorted(missing_codes)}")
+        print(f"  Test-set species: {test_codes}")
+        print(f"  Scoring over {len(valid_codes)}/{len(test_codes)} species")
+        print(f"  {len(files)} files in dataset")
+
         file_results = []
-        
         birdnet_species_seen = set()
-        
+
         print(f"\nRunning BirdNET predictions...")
         for i, file_info in enumerate(files, 1):
             npy_filename = file_info['filename']
-            
-            # Handle both 'label' (single-label) and 'class_names' (multi-label) formats
-            if 'label' in file_info:
-                label = file_info['label']
-                gt_labels = [label]  # Single label as list for consistency
-            elif 'class_names' in file_info:
-                gt_labels = file_info['class_names']
-                # For single-label evaluation, use first label (or handle multi-label appropriately)
-                label = gt_labels[0] if gt_labels else None
-            else:
-                print(f"  [{i}/{len(files)}] SKIP: {npy_filename} (no label or class_names field)")
-                continue
-            
-            if label is None:
-                print(f"  [{i}/{len(files)}] SKIP: {npy_filename} (empty label)")
-                continue
-
-            # Normalize GT labels: convert common names to species codes if needed
-            # (labels.json may store 'silvereye' instead of 'silver3')
-            gt_labels = [COMMON_NAME_TO_CODE.get(l.lower(), l) for l in gt_labels]
-            label = gt_labels[0]
-
-            # Convert .npy filename to .wav filename
             wav_filename = npy_filename.replace('.npy', '.wav')
             wav_file = audio_path / wav_filename
-            
+
             if not wav_file.exists():
-                print(f"  [{i}/{len(files)}] SKIP: {wav_filename} (audio file not found)")
                 continue
-            
+
+            # Ground truth: set of valid codes from this sample's class_names
+            gt_codes = set()
+            for label in file_info.get('class_names', []):
+                for part in label.split('/'):
+                    code = COMMON_NAME_TO_CODE.get(part.strip().lower())
+                    if code and code in valid_codes:
+                        gt_codes.add(code)
+
             detections = self.predict_file(wav_file)
-            
-            pred_species, confidence = self.get_top_prediction(detections)
-            pred_code = self.find_matching_species(pred_species) if pred_species else None
-            
-            if detections:
-                for det in detections:
-                    birdnet_species_seen.add(det['scientific_name'])
-            
-            predictions.append(pred_code)
-            ground_truth.append(label)
-            
-            # For multi-label ground truth, prediction is correct if it matches ANY ground truth label
-            is_correct = pred_code in gt_labels if pred_code else False
-            
-            # For display, show all ground truth labels if multiple exist
-            gt_display = label if len(gt_labels) == 1 else f"{label}+{len(gt_labels)-1}"
-            
+
+            # Predicted codes: all detections at or above min_confidence that map to a valid code
+            pred_codes = set()
+            for det in detections:
+                birdnet_species_seen.add(det['scientific_name'])
+                if det['confidence'] >= self.min_confidence:
+                    code = SCIENTIFIC_TO_CODE.get(det['scientific_name'])
+                    if code and code in valid_codes:
+                        pred_codes.add(code)
+
+            correct = pred_codes == gt_codes
+
+            if i % 20 == 0 or i == len(files):
+                status = '\u2713' if correct else '\u2717'
+                print(f"  [{i}/{len(files)}] {status} GT:{sorted(gt_codes)} Pred:{sorted(pred_codes)}")
+
             file_results.append({
                 'filename': wav_filename,
-                'ground_truth': label,
-                'gt_labels': gt_labels,  # Store all ground truth labels
-                'gt_name': SPECIES_MAPPING.get(label, label),
-                'predicted_species': pred_species,
-                'predicted_code': pred_code,
-                'pred_name': SPECIES_MAPPING.get(pred_code, pred_code) if pred_code else None,
-                'confidence': confidence,
-                'num_detections': len(detections),
-                'correct': is_correct
+                'gt_codes': sorted(gt_codes),
+                'pred_codes': sorted(pred_codes),
+                'correct': correct,
             })
-            
-            status = '✓' if is_correct else '✗'
-            if i % 10 == 0 or i == len(files):
-                print(f"  [{i}/{len(files)}] {status} {wav_filename[:40]:40s} GT:{gt_display:10s} → Pred:{pred_code or 'None':10s} ({confidence:.2f})")
-        
-        n_correct = sum(1 for r in file_results if r['correct'])
-        accuracy = 100.0 * n_correct / len(file_results) if file_results else 0.0
-        
-        print(f"\n{'='*60}")
-        print(f"Results for {dataset_name}:")
-        print(f"  Total files: {len(file_results)}")
-        print(f"  Correct: {n_correct}")
-        print(f"  Accuracy: {accuracy:.2f}%")
+
+        n = len(file_results)
+        if n == 0:
+            print("  No files evaluated.")
+            return None
+
+        n_correct = sum(r['correct'] for r in file_results)
+        accuracy = 100.0 * n_correct / n
+
+        labelled = [r for r in file_results if r['gt_codes']]
+        n_labelled = len(labelled)
+        n_labelled_correct = sum(r['correct'] for r in labelled)
+        accuracy_labelled = 100.0 * n_labelled_correct / n_labelled if n_labelled else float('nan')
+
+        print(f"\n  Accuracy (all):      {n_correct}/{n} = {accuracy:.1f}%")
+        print(f"  Accuracy (labelled): {n_labelled_correct}/{n_labelled} = {accuracy_labelled:.1f}%")
         print(f"  BirdNET detected {len(birdnet_species_seen)} unique species")
         print(f"{'='*60}")
-        
+
+        # Per-species stats (for plots)
+        species_stats = defaultdict(lambda: {'correct': 0, 'total': 0})
+        for r in file_results:
+            for code in r['gt_codes']:
+                species_stats[code]['total'] += 1
+                if r['correct']:
+                    species_stats[code]['correct'] += 1
+
         result = {
             'dataset_name': dataset_name,
             'test_folder': str(test_folder),
-            'audio_folder': str(audio_path),
-            'num_files': len(file_results),
+            'num_files': n,
             'num_correct': n_correct,
             'accuracy': accuracy,
-            'predictions': predictions,
-            'ground_truth': ground_truth,
+            'accuracy_labelled': accuracy_labelled,
             'file_results': file_results,
-            'birdnet_species': sorted(birdnet_species_seen)
+            'species_stats': {k: dict(v) for k, v in species_stats.items()},
+            'birdnet_species': sorted(birdnet_species_seen),
         }
-        
+
         self.results.append(result)
         return result
-    
+
     def generate_confusion_matrix(self, result):
+        """Plot a single-label confusion matrix using only unambiguous (single-species) samples."""
         print(f"\nGenerating confusion matrix for {result['dataset_name']}...")
-        
-        gt = result['ground_truth']
-        pred = result['predictions']
-        
-        species_with_none = self.species_codes + ['None']
-        species_labels = self.species_names + ['None']
-        n_species = len(species_with_none)
-        
-        cm = np.zeros((n_species, n_species), dtype=int)
-        
-        for g, p in zip(gt, pred):
-            g_idx = species_with_none.index(g) if g in species_with_none else -1
-            p_idx = species_with_none.index(p) if p in species_with_none else species_with_none.index('None')
-            
-            if g_idx >= 0:
-                cm[g_idx, p_idx] += 1
-        
-        fig, ax = plt.subplots(figsize=(10, 8))
-        
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                    xticklabels=species_labels, yticklabels=species_labels,
+
+        # Collect all species codes seen across this result
+        all_codes = sorted({code for r in result['file_results']
+                            for code in r['gt_codes'] + r['pred_codes']})
+        if not all_codes:
+            print("  No species found, skipping confusion matrix.")
+            return
+
+        codes_with_none = all_codes + ['none']
+        n = len(codes_with_none)
+        cm = np.zeros((n, n), dtype=int)
+
+        for r in result['file_results']:
+            gt = r['gt_codes']
+            pred = r['pred_codes']
+            # Only include unambiguous single-label samples for a clean CM
+            if len(gt) != 1:
+                continue
+            g_idx = codes_with_none.index(gt[0])
+            p_idx = codes_with_none.index(pred[0]) if len(pred) == 1 and pred[0] in codes_with_none else codes_with_none.index('none')
+            cm[g_idx, p_idx] += 1
+
+        labels = [SPECIES_MAPPING.get(c, c) for c in codes_with_none]
+        fig, ax = plt.subplots(figsize=(max(8, n * 0.9), max(6, n * 0.8)))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=labels, yticklabels=labels,
                     ax=ax, cbar_kws={'label': 'Count'})
-        
         ax.set_xlabel('Predicted', fontsize=12, fontweight='bold')
         ax.set_ylabel('Ground Truth', fontsize=12, fontweight='bold')
-        ax.set_title(f'Confusion Matrix - {result["dataset_name"]}\nBirdNET Evaluation', 
-                     fontsize=14, fontweight='bold', pad=15)
-        
+        ax.set_title(f'Confusion Matrix - {result["dataset_name"]}\nBirdNET Evaluation (single-label samples only)',
+                     fontsize=13, fontweight='bold', pad=15)
         plt.tight_layout()
-        
-        # Clean dataset name for filename (replace slashes and spaces)
         clean_name = result["dataset_name"].lower().replace("/", "_").replace(" ", "_")
         plot_path = self.output_folder / f'confusion_matrix_{clean_name}.png'
-        plot_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         print(f"  Saved to: {plot_path}")
         plt.close()
-    
+
     def generate_per_species_accuracy(self):
         print(f"\nGenerating per-species accuracy plot...")
-        
+
+        # Aggregate species_stats across all evaluated datasets
         species_stats = defaultdict(lambda: {'correct': 0, 'total': 0})
-        
         for result in self.results:
-            for gt, pred in zip(result['ground_truth'], result['predictions']):
-                if gt in self.species_codes:
-                    species_stats[gt]['total'] += 1
-                    if gt == pred:
-                        species_stats[gt]['correct'] += 1
-        
-        species = []
+            for code, stats in result.get('species_stats', {}).items():
+                species_stats[code]['correct'] += stats['correct']
+                species_stats[code]['total'] += stats['total']
+
+        all_codes = sorted(species_stats.keys())
+        species = [SPECIES_MAPPING.get(c, c) for c in all_codes]
         accuracies = []
         counts = []
-        
-        for code in self.species_codes:
-            if species_stats[code]['total'] > 0:
-                species.append(SPECIES_MAPPING[code])
-                acc = 100.0 * species_stats[code]['correct'] / species_stats[code]['total']
-                accuracies.append(acc)
-                counts.append(species_stats[code]['total'])
-            else:
-                species.append(SPECIES_MAPPING[code])
-                accuracies.append(0.0)
-                counts.append(0)
-        
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
+
+        for code in all_codes:
+            total = species_stats[code]['total']
+            correct = species_stats[code]['correct']
+            accuracies.append(100.0 * correct / total if total else 0.0)
+            counts.append(total)
+
+        if not all_codes:
+            print("  No species data, skipping plot.")
+            return
+
+        fig, ax = plt.subplots(figsize=(max(10, len(all_codes) * 0.9), 6))
         bars = ax.bar(range(len(species)), accuracies, color='steelblue', alpha=0.8)
-        
+
         for i, (bar, count) in enumerate(zip(bars, counts)):
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width()/2., height + 1,
@@ -542,23 +541,45 @@ class BirdNETEvaluator:
             print(f"\n{f.read()}")
     
     def run(self, test_folders):
-        for i, test_folder in enumerate(test_folders, 1):
-            dataset_name = Path(test_folder).parent.name + "/" + Path(test_folder).name
+        for test_folder in test_folders:
+            # Use parent folder name (e.g. 'avianz_split') — same convention as evaluate_kaytoo.py
+            p = Path(test_folder).resolve()
+            dataset_name = p.parent.name
             self.evaluate_folder(test_folder, dataset_name)
-        
+
         if len(self.results) > 0:
+            # Write result.json so analyze_all_results.py picks this up
+            result_json = {
+                'name': self.output_folder.name,
+                'type': 'pretrained',
+                'model': 'birdnet',
+                'seed': 0,
+                'status': 'completed',
+            }
+            if len(self.results) >= 1:
+                result_json['test1_name'] = self.results[0]['dataset_name']
+                result_json['test1_acc'] = self.results[0]['accuracy']
+                result_json['test1_acc_labelled'] = self.results[0].get('accuracy_labelled', float('nan'))
+            if len(self.results) >= 2:
+                result_json['test2_name'] = self.results[1]['dataset_name']
+                result_json['test2_acc'] = self.results[1]['accuracy']
+                result_json['test2_acc_labelled'] = self.results[1].get('accuracy_labelled', float('nan'))
+            with open(self.output_folder / 'result.json', 'w') as f:
+                json.dump(result_json, f, indent=2)
+            print(f"\nSaved result.json to {self.output_folder / 'result.json'}")
+
             self.generate_birdnet_species_report()
-            
+
             for result in self.results:
                 self.generate_confusion_matrix(result)
-            
+
             if len(self.results) > 1:
                 self.generate_dataset_comparison()
-            
+
             self.generate_per_species_accuracy()
             self.save_results()
             self.generate_summary_report()
-            
+
             print(f"\n{'='*60}")
             print(f"✓ BirdNET evaluation complete!")
             print(f"  Results saved to: {self.output_folder}")

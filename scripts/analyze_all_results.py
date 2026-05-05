@@ -34,17 +34,24 @@ def load_from_result_json(results_dir):
         parts = name.split('_')
 
         if data.get('type') == 'pretrained':
+            model = data.get('model', 'kaytoo')
+            category_map = {
+                'kaytoo':  'Kaytoo (Pretrained)',
+                'birdnet': 'BirdNET (Pretrained)',
+            }
             results.append({
                 'name': name,
                 'train_dataset': 'pretrained',
                 'method': 'pretrained',
-                'config': 'kaytoo',
-                'category': 'Kaytoo (Pretrained)',
+                'config': model,
+                'category': category_map.get(model, f'{model} (Pretrained)'),
                 'seed': data.get('seed', 0),
                 'test1_name': data.get('test1_name', 'unknown'),
                 'test2_name': data.get('test2_name', 'unknown'),
                 'test1_acc': data.get('test1_acc', np.nan),
+                'test1_acc_labelled': data.get('test1_acc_labelled', np.nan),
                 'test2_acc': data.get('test2_acc', np.nan),
+                'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'status': data.get('status', 'unknown'),
             })
             continue

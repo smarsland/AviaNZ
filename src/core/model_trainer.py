@@ -105,13 +105,14 @@ class AsymmetricLoss(nn.Module):
         eps:       Numerical stability constant
     """
     def __init__(self, gamma_neg=4.0, gamma_pos=0.0, margin=0.05,
-                 pos_weight=None, eps=1e-8):
+                 pos_weight=None, eps=1e-8, reduction='mean'):
         super().__init__()
         self.gamma_neg = gamma_neg
         self.gamma_pos = gamma_pos
         self.margin = margin
         self.pos_weight = pos_weight
         self.eps = eps
+        self.reduction = reduction
 
     def forward(self, x, y):
         # Probabilities
@@ -241,6 +242,8 @@ class Trainer:
         self.pos_weight_cap = cfg.loss.pos_weight_cap
         self.bce_smoothing = cfg.loss.bce_smoothing
         self.use_asl = cfg.loss.use_asl
+        self.rebalance_background = getattr(cfg.loss, 'rebalance_background', True)
+        self.background_weight = 1.0  # computed after data load
         self.asl_gamma_neg = cfg.loss.asl_gamma_neg
         self.asl_gamma_pos = cfg.loss.asl_gamma_pos
         self.asl_margin = cfg.loss.asl_margin
@@ -306,6 +309,19 @@ class Trainer:
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
         self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
         self.num_classes = self.data['nclasses']
+
+        # Compute background rebalancing weight: equalise total gradient contribution
+        # of background (all-zero) vs labelled samples.
+        if self.rebalance_background:
+            train_labels = np.array(self.data['train_labels'], dtype=np.float32)
+            n_bg = int((train_labels.sum(axis=1) == 0).sum())
+            n_lab = len(train_labels) - n_bg
+            if n_bg > 0 and n_lab > 0:
+                self.background_weight = float(n_lab) / float(n_bg)
+                print(f"Background rebalancing: {n_lab} labelled, {n_bg} background, "
+                      f"bg_weight={self.background_weight:.3f}")
+            else:
+                self.background_weight = 1.0
 
         # Drop all-zero (background) training samples when --no-background is set.
         if self.no_background:
@@ -376,6 +392,22 @@ class Trainer:
         
         os.makedirs(self.output_folder, exist_ok=True)
     
+    def _background_weighted_loss(self, criterion, output, target):
+        """
+        Compute loss with background-sample rebalancing.
+
+        criterion must return per-element loss [B, C] (reduction='none').
+        Background samples (all-zero target rows) are scaled by self.background_weight
+        so their total gradient contribution equals that of labelled samples.
+        """
+        per_element = criterion(output, target)          # [B, C]
+        per_sample = per_element.mean(dim=1)             # [B]
+        if self.background_weight != 1.0:
+            is_bg = (target.sum(dim=1) == 0).float()     # [B]
+            weights = 1.0 + is_bg * (self.background_weight - 1.0)
+            return (per_sample * weights).mean()
+        return per_sample.mean()
+
     def _compute_class_weights(self):
         """Compute inverse frequency weights for each class (for multilabel BCE loss)."""
         train_labels = np.array(self.data['train_labels'])
@@ -531,13 +563,14 @@ class Trainer:
                 gamma_pos=self.asl_gamma_pos,
                 margin=self.asl_margin,
                 pos_weight=pos_weight,
+                reduction='none',
             )
             print(f"Using Asymmetric Loss (gamma_neg={self.asl_gamma_neg}, gamma_pos={self.asl_gamma_pos}, margin={self.asl_margin})")
         elif self.bce_smoothing and self.bce_smoothing > 0.0:
-            criterion = SmoothBCEWithLogitsLoss(epsilon=self.bce_smoothing, pos_weight=pos_weight)
+            criterion = SmoothBCEWithLogitsLoss(epsilon=self.bce_smoothing, pos_weight=pos_weight, reduction='none')
             print(f"Applying BCE target smoothing (epsilon={self.bce_smoothing:.3f})")
         else:
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight, reduction='none')
         
         # Training
         train_losses = []
@@ -631,7 +664,7 @@ class Trainer:
                     
                     # Classification loss (only on source domain with labels - always multilabel)
                     source_output = torch.clamp(source_output, min=-80.0, max=80.0)
-                    class_loss = criterion(source_output, source_target)
+                    class_loss = self._background_weighted_loss(criterion, source_output, source_target)
                     
                     # Domain adaptation loss
                     combined_features = torch.cat([source_features, target_features], dim=0)
@@ -686,7 +719,7 @@ class Trainer:
                             output = model(data)
                         
                         output = torch.clamp(output, min=-80.0, max=80.0)
-                        loss = criterion(output, target)
+                        loss = self._background_weighted_loss(criterion, output, target)
                         
                         if self.use_reconstruction:
                             target_spec = data.squeeze(1) if data.dim() == 4 else data
@@ -756,7 +789,7 @@ class Trainer:
                         output = model(data)
                     
                     # Always multilabel
-                    val_loss += criterion(output, target).item()
+                    val_loss += criterion(output, target).mean().item()
                     pred = (torch.sigmoid(output) > 0.5).float()
                     all_val_preds.append(pred.cpu().numpy())
                     all_val_targets.append(target.cpu().numpy())

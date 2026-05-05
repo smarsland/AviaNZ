@@ -170,7 +170,13 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
     n = len(results)
     n_correct = sum(r['correct'] for r in results)
     accuracy = 100.0 * n_correct / n if n else 0.0
-    print(f"  Accuracy: {n_correct}/{n} = {accuracy:.1f}%")
+    print(f"  Accuracy (all):      {n_correct}/{n} = {accuracy:.1f}%")
+
+    labelled = [r for r in results if r['gt_codes']]
+    n_labelled = len(labelled)
+    n_labelled_correct = sum(r['correct'] for r in labelled)
+    accuracy_labelled = 100.0 * n_labelled_correct / n_labelled if n_labelled else float('nan')
+    print(f"  Accuracy (labelled): {n_labelled_correct}/{n_labelled} = {accuracy_labelled:.1f}%")
 
     species_stats = defaultdict(lambda: {'correct': 0, 'total': 0})
     for r in results:
@@ -184,6 +190,7 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
         'num_files': n,
         'num_correct': n_correct,
         'accuracy': accuracy,
+        'accuracy_labelled': accuracy_labelled,
         'species_stats': {k: dict(v) for k, v in species_stats.items()},
         'results': results,
     }
@@ -313,15 +320,18 @@ def main():
     result_json = {
         'name': output_path.name,
         'type': 'pretrained',
+        'model': 'kaytoo',
         'seed': 0,
         'status': 'completed',
     }
     if len(all_results) >= 1:
         result_json['test1_name'] = all_results[0]['dataset_name']
         result_json['test1_acc'] = all_results[0]['accuracy']
+        result_json['test1_acc_labelled'] = all_results[0].get('accuracy_labelled', float('nan'))
     if len(all_results) >= 2:
         result_json['test2_name'] = all_results[1]['dataset_name']
         result_json['test2_acc'] = all_results[1]['accuracy']
+        result_json['test2_acc_labelled'] = all_results[1].get('accuracy_labelled', float('nan'))
 
     with open(output_path / 'result.json', 'w') as f:
         json.dump(result_json, f, indent=2)

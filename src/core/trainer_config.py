@@ -71,6 +71,7 @@ class LossConfig:
     asl_gamma_neg: float = 4.0
     asl_gamma_pos: float = 0.0
     asl_margin: float = 0.05
+    rebalance_background: bool = True  # Down-weight background samples so they equal labelled contribution
 
 
 @dataclass
@@ -156,6 +157,7 @@ class TrainerConfig:
                 asl_gamma_neg=getattr(args, 'asl_gamma_neg', 4.0),
                 asl_gamma_pos=getattr(args, 'asl_gamma_pos', 0.0),
                 asl_margin=getattr(args, 'asl_margin', 0.05),
+                rebalance_background=getattr(args, 'rebalance_background', True),
             ),
             domain_adaptation=DomainAdaptationConfig(
                 use_dann=getattr(args, 'use_dann', False),
