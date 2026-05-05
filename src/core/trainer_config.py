@@ -52,6 +52,7 @@ class AugmentationConfig:
     use_temporal_roll: bool = config.DEFAULT_TEMPORAL_ROLL
     bg_subtract: bool = False  # Background subtraction normalization (independent)
     median_filter: bool = False  # Temporal median filtering (independent)
+    no_background: bool = False  # Drop all-zero (background) training samples
     per_chunk_norm: bool = False
     spec_transform: str = 'Log'
     mixup_mode: str = 'mixup'
@@ -139,6 +140,7 @@ class TrainerConfig:
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
                 bg_subtract=getattr(args, 'bg_subtract', False),
                 median_filter=getattr(args, 'median_filter', False),
+                no_background=getattr(args, 'no_background', False),
                 per_chunk_norm=getattr(args, 'per_chunk_norm', False),
                 spec_transform=getattr(args, 'spec_transform', 'Log'),
                 mixup_mode=getattr(args, 'mixup_mode', 'mixup'),

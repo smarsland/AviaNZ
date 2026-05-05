@@ -229,6 +229,7 @@ class Trainer:
         self.use_temporal_roll = cfg.augmentation.use_temporal_roll
         self.bg_subtract = cfg.augmentation.bg_subtract
         self.median_filter = cfg.augmentation.median_filter
+        self.no_background = getattr(cfg.augmentation, 'no_background', False)
         self.per_chunk_norm = cfg.augmentation.per_chunk_norm
         self.spec_transform = cfg.augmentation.spec_transform
         self.mixup_mode = cfg.augmentation.mixup_mode
@@ -306,6 +307,14 @@ class Trainer:
         self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
         self.num_classes = self.data['nclasses']
 
+        # Drop all-zero (background) training samples when --no-background is set.
+        if self.no_background:
+            train_labels = np.array(self.data['train_labels'], dtype=np.float32)
+            keep = train_labels.sum(axis=1) > 0
+            self.data['train_filenames'] = [f for f, k in zip(self.data['train_filenames'], keep) if k]
+            self.data['train_labels'] = train_labels[keep]
+            print(f"--no-background: kept {keep.sum()} / {len(keep)} training samples (dropped {(~keep).sum()} background)")
+
         # Optionally include noise spectrograms as explicit all-zero training samples.
         # This is useful for soundscape-style inference even if you evaluate with --birds-only,
         # because it improves calibration and reduces false positives on weak/ambiguous bird activity.
@@ -341,7 +350,7 @@ class Trainer:
             cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=False, bg_subtract=self.bg_subtract,
+            use_class_balancing=True, bg_subtract=self.bg_subtract,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,

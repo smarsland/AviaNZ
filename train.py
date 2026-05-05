@@ -68,6 +68,8 @@ Examples:
                        help="Apply background subtraction normalization (works independently)")
     parser.add_argument('--median-filter', action='store_true',
                        help="Apply temporal median filtering (works independently)")
+    parser.add_argument('--no-background', action='store_true', dest='no_background',
+                       help="Ignore all-zero (background/no-bird) training samples")
     parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
                        help="Spectrogram transformation (default: Log)")
     
