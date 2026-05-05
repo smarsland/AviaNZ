@@ -266,6 +266,7 @@ class DatasetMerger:
             # Copy or symlink spectrogram
             if self.symlink:
                 abs_source = npy_file.resolve()
+                dest_path.unlink(missing_ok=True)
                 dest_path.symlink_to(abs_source)
             else:
                 shutil.copy2(npy_file, dest_path)
@@ -284,6 +285,7 @@ class DatasetMerger:
                         
                         if self.symlink:
                             abs_audio = audio_file.resolve()
+                            audio_dest.unlink(missing_ok=True)
                             audio_dest.symlink_to(abs_audio)
                         else:
                             shutil.copy2(audio_file, audio_dest)
