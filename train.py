@@ -86,6 +86,8 @@ Examples:
                        help="Prepend two trainable CNN layers to the backbone (trained at 10x LR)")
     parser.add_argument('--sed-head', action='store_true', dest='sed_head',
                        help="Replace global avg pool with per-class temporal attention head (SED-style)")
+    parser.add_argument('--gated-head', action='store_true', dest='gated_head',
+                       help="Two-stage bird-presence gate + species classifier: gate predicts is-any-bird, species head runs on top")
     parser.add_argument('--per-chunk-norm', action='store_true', dest='per_chunk_norm',
                        help="Per-clip min-max normalization (replaces global AudioSet stats). AST only.")
     

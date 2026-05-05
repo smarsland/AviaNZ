@@ -60,10 +60,15 @@ run_experiment() {
 # run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
 # run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 
-run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
-run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_no_bg --bg-subtract --median-filter --no-background
-run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_no_bg --bg-subtract --median-filter --no-background
+# run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+# run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+# run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_no_bg --bg-subtract --median-filter --no-background
+# run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_no_bg --bg-subtract --median-filter --no-background
+
+# Two-stage gated head: bird-presence gate + species classifier.
+# Background samples are kept so the gate can learn to distinguish them.
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_gated --bg-subtract --median-filter --gated-head
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_gated --bg-subtract --median-filter --gated-head
 
 # # Merged with log + background subtraction + median filter
 # run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter

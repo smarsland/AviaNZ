@@ -561,13 +561,38 @@ class DANNModel(nn.Module):
         return class_output, domain_output, features
 
 
+class GatedSpeciesHead(nn.Module):
+    """Two-stage bird-presence gate + species classifier head.
+
+    Takes pooled backbone features and produces:
+      - gate_logit:     [B]           binary logit — is any bird present?
+      - species_logits: [B, num_classes]  per-class multilabel logits
+
+    The gate and species branches share the same backbone representation but
+    are trained with separate objectives so they can specialise independently.
+    Gate bias is zero-initialised so it starts at p=0.5 (no prior).
+    """
+
+    def __init__(self, feature_dim, num_classes):
+        super().__init__()
+        self.gate = nn.Linear(feature_dim, 1)
+        self.classifier = nn.Linear(feature_dim, num_classes)
+        nn.init.zeros_(self.gate.bias)
+
+    def forward(self, features):
+        gate_logit = self.gate(features).squeeze(-1)   # [B]
+        species_logits = self.classifier(features)      # [B, num_classes]
+        return species_logits, gate_logit
+
+
 class RegNetModel(nn.Module):
     """RegNetY model for bird audio classification (BirdClef fine-tuning)."""
-    
-    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False):
+
+    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False, use_gated_head=False):
         super().__init__()
         self.num_classes = num_classes
         self.use_sed_head = use_sed_head
+        self.use_gated_head = use_gated_head
 
         self.backbone = timm.create_model(
             model_name,
@@ -592,7 +617,10 @@ class RegNetModel(nn.Module):
 
         self.feature_dim = backbone_out
 
-        if use_sed_head:
+        if use_gated_head:
+            self.pooling = nn.AdaptiveAvgPool2d(1)
+            self.gated_head = GatedSpeciesHead(backbone_out, num_classes)
+        elif use_sed_head:
             self.sed_head = TemporalAttentionHead(backbone_out, num_classes)
         else:
             self.pooling = nn.AdaptiveAvgPool2d(1)
@@ -666,12 +694,22 @@ class RegNetModel(nn.Module):
         if self.use_sed_head:
             features = self.backbone.forward_features(x)   # (B, C, F', T')
             logits = self.sed_head(features)
-        else:
-            features = self.backbone(x)
-            if isinstance(features, dict):
-                features = features['features']
-            if len(features.shape) == 4:
-                features = self.pooling(features)
-                features = features.view(features.size(0), -1)
-            logits = self.classifier(features)
+            return logits
+
+        features = self.backbone(x)
+        if isinstance(features, dict):
+            features = features['features']
+        if len(features.shape) == 4:
+            features = self.pooling(features)
+            features = features.view(features.size(0), -1)
+
+        if self.use_gated_head:
+            species_logits, gate_logit = self.gated_head(features)
+            if self.training:
+                return species_logits, gate_logit
+            # Eval / inference: apply hard gate so background clips predict all-zeros.
+            gate_mask = (torch.sigmoid(gate_logit) > 0.5).float().unsqueeze(1)  # [B, 1]
+            return species_logits * gate_mask - 100.0 * (1.0 - gate_mask)
+
+        logits = self.classifier(features)
         return logits

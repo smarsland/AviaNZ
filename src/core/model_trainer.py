@@ -219,6 +219,7 @@ class Trainer:
         self.freeze_stages = cfg.model.freeze_stages
         self.use_cnn_adapter = getattr(cfg.model, 'use_cnn_adapter', False)
         self.use_sed_head = getattr(cfg.model, 'use_sed_head', False)
+        self.use_gated_head = getattr(cfg.model, 'use_gated_head', False)
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
         
         # Augmentation configuration
@@ -244,6 +245,7 @@ class Trainer:
         self.use_asl = cfg.loss.use_asl
         self.rebalance_background = getattr(cfg.loss, 'rebalance_background', True)
         self.background_weight = 1.0  # computed after data load
+        self.gate_loss_weight = getattr(cfg.loss, 'gate_loss_weight', 1.0)
         self.asl_gamma_neg = cfg.loss.asl_gamma_neg
         self.asl_gamma_pos = cfg.loss.asl_gamma_pos
         self.asl_margin = cfg.loss.asl_margin
@@ -458,7 +460,8 @@ class Trainer:
                 freeze_backbone=self.freeze_backbone,
                 freeze_stages=self.freeze_stages,
                 use_cnn_adapter=self.use_cnn_adapter,
-                use_sed_head=self.use_sed_head
+                use_sed_head=self.use_sed_head,
+                use_gated_head=self.use_gated_head
             ).to(self.device)
         else:
             print("Creating AST model (multilabel)...")
@@ -522,8 +525,8 @@ class Trainer:
         # Use AdamW (Adam with decoupled weight decay) for better regularization
         # Differential LR for RegNet: pretrained backbone gets base LR, randomly-init classifier gets 10x
         if self.model_type == 'regnet':
-            backbone_params = [p for n, p in model.named_parameters() if 'classifier' not in n and 'cnn_adapter' not in n and p.requires_grad]
-            classifier_params = [p for n, p in model.named_parameters() if 'classifier' in n and p.requires_grad]
+            backbone_params = [p for n, p in model.named_parameters() if 'classifier' not in n and 'cnn_adapter' not in n and 'gated_head' not in n and p.requires_grad]
+            classifier_params = [p for n, p in model.named_parameters() if ('classifier' in n or 'gated_head' in n) and p.requires_grad]
             adapter_params = [p for n, p in model.named_parameters() if 'cnn_adapter' in n and p.requires_grad]
             param_groups = [
                 {'params': backbone_params, 'lr': self.learning_rate},
@@ -715,17 +718,24 @@ class Trainer:
                     with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
                         if self.use_reconstruction:
                             output, recon = model(data)
+                        elif self.use_gated_head:
+                            output, gate_logit = model(data)
                         else:
                             output = model(data)
-                        
+
                         output = torch.clamp(output, min=-80.0, max=80.0)
                         loss = self._background_weighted_loss(criterion, output, target)
-                        
+
                         if self.use_reconstruction:
                             target_spec = data.squeeze(1) if data.dim() == 4 else data
                             target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
                             recon_loss = F.mse_loss(recon, target_spec)
                             loss = loss + self.recon_weight * recon_loss
+
+                        if self.use_gated_head:
+                            is_bird = (target.sum(dim=1) > 0).float()
+                            gate_loss = F.binary_cross_entropy_with_logits(gate_logit, is_bird)
+                            loss = loss + self.gate_loss_weight * gate_loss
                     
                     # Check for NaN loss BEFORE backward pass
                     if torch.isnan(loss) or torch.isinf(loss):
@@ -1083,6 +1093,7 @@ class Trainer:
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
         model_config['use_cnn_adapter'] = self.use_cnn_adapter
+        model_config['use_gated_head'] = self.use_gated_head
         
         # Save ALL augmentation/normalization parameters for inference consistency
         model_config['spec_transform'] = self.spec_transform

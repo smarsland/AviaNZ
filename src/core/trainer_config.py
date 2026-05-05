@@ -39,6 +39,7 @@ class ModelConfig:
     freeze_stages: int = 0
     use_cnn_adapter: bool = False
     use_sed_head: bool = False
+    use_gated_head: bool = False
 
 
 @dataclass
@@ -72,6 +73,7 @@ class LossConfig:
     asl_gamma_pos: float = 0.0
     asl_margin: float = 0.05
     rebalance_background: bool = True  # Down-weight background samples so they equal labelled contribution
+    gate_loss_weight: float = 1.0
 
 
 @dataclass
@@ -130,7 +132,8 @@ class TrainerConfig:
                 freeze_backbone=getattr(args, 'freeze_backbone', False),
                 freeze_stages=getattr(args, 'freeze_stages', 0),
                 use_cnn_adapter=getattr(args, 'cnn_adapter', False),
-                use_sed_head=getattr(args, 'sed_head', False)
+                use_sed_head=getattr(args, 'sed_head', False),
+                use_gated_head=getattr(args, 'gated_head', False)
             ),
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,
@@ -158,6 +161,7 @@ class TrainerConfig:
                 asl_gamma_pos=getattr(args, 'asl_gamma_pos', 0.0),
                 asl_margin=getattr(args, 'asl_margin', 0.05),
                 rebalance_background=getattr(args, 'rebalance_background', True),
+                gate_loss_weight=getattr(args, 'gate_loss_weight', 1.0),
             ),
             domain_adaptation=DomainAdaptationConfig(
                 use_dann=getattr(args, 'use_dann', False),
