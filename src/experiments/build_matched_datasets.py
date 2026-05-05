@@ -510,13 +510,16 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
 
 
 def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=42,
-                               fixed_length=False, target_time_bins=None, with_audio=False):
+                               fixed_length=False, target_time_bins=None, with_audio=False,
+                               all_search_codes=None):
     """
     Add up to n background (no positive class) samples from DOC audio files that were
     not included in the matched dataset.  Each sample gets class_names=[].
 
     Scans doc_raw recursively for all audio files, skips those already used,
-    then processes a random subset.
+    and skips files whose immediate parent directory name is a known eBird code
+    (those folders contain target-species recordings and must not be labelled as
+    background — doing so produces directly contradictory training signal).
     """
     if n == 0:
         return []
@@ -529,14 +532,22 @@ def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=
         os.makedirs(audio_dir, exist_ok=True)
 
     used_files = {e['source_file'] for e in doc_labels_final}
+    species_folders = set(all_search_codes) if all_search_codes else set()
 
     all_audio = []
+    skipped_species_folder = 0
     for root, _, files in os.walk(doc_raw):
+        folder_name = os.path.basename(root)
+        if folder_name in species_folders:
+            skipped_species_folder += len([f for f in files if f.lower().endswith(('.wav', '.mp3', '.flac'))])
+            continue
         for fname in files:
             if fname.lower().endswith(('.wav', '.mp3', '.flac')):
                 path = os.path.join(root, fname)
                 if path not in used_files:
                     all_audio.append(path)
+    if species_folders:
+        print(f'DOC background: skipped {skipped_species_folder} files in target-species folders')
 
     rng = random.Random(seed + 1)
     rng.shuffle(all_audio)
@@ -843,6 +854,7 @@ def main():
             fixed_length=args.fixed_length,
             target_time_bins=target_time_bins,
             with_audio=args.with_audio,
+            all_search_codes=all_search_codes,
         )
         doc_labels_final = doc_labels_final + doc_background
 
