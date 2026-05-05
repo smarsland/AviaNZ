@@ -15,7 +15,7 @@ MERGED_TRAIN="${MATCHED}/merged_train"
 EPOCHS=100
 PATIENCE=15
 MIXUP=0.25
-VIZ_SAMPLES=10
+VIZ_SAMPLES=3
 
 run_experiment() {
     local model=$1

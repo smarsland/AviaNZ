@@ -101,7 +101,7 @@ Examples:
     parser.add_argument('--visualize-attention', action='store_true',
                        help="Generate attention heatmaps for test samples (requires --test-folder)")
     parser.add_argument('--viz-samples', type=int, default=3,
-                       help="Number of test samples to visualize (default: 10)")
+                       help="Number of test samples to visualize (default: 3)")
     
     # Domain adaptation (rarely used)
     parser.add_argument('--use-dann', action='store_true',

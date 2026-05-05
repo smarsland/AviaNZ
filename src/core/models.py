@@ -707,9 +707,12 @@ class RegNetModel(nn.Module):
             species_logits, gate_logit = self.gated_head(features)
             if self.training:
                 return species_logits, gate_logit
-            # Eval / inference: apply hard gate so background clips predict all-zeros.
-            gate_mask = (torch.sigmoid(gate_logit) > 0.5).float().unsqueeze(1)  # [B, 1]
-            return species_logits * gate_mask - 100.0 * (1.0 - gate_mask)
+            # Eval / inference: soft gate — add log P(bird present) to each species logit.
+            # Equivalent to P(species_k) = P(bird present) * P(species_k | bird present).
+            # When gate is confident of silence, species probs approach 0.
+            # When uncertain, they are scaled down but not hard-zeroed.
+            gate_log_prob = F.logsigmoid(gate_logit).unsqueeze(1)  # [B, 1], always <= 0
+            return species_logits + gate_log_prob
 
         logits = self.classifier(features)
         return logits

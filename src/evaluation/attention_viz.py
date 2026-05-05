@@ -227,8 +227,8 @@ class GradCAM:
             hook.remove()
 
 
-def visualize_attention(model, dataloader, output_folder, model_type='ast', 
-                       num_samples=10, device='cuda', class_names=None):
+def visualize_attention(model, dataloader, output_folder, model_type='ast',
+                       num_samples=3, device='cuda', class_names=None):
     """Generate attention visualizations for test samples.
     
     Args:
@@ -240,8 +240,11 @@ def visualize_attention(model, dataloader, output_folder, model_type='ast',
         device: Device to run on
         class_names: List of class names for labeling
     """
-    os.makedirs(output_folder, exist_ok=True)
-    
+    import shutil
+    if os.path.exists(output_folder):
+        shutil.rmtree(output_folder)
+    os.makedirs(output_folder)
+
     model.eval()
     grad_cam = GradCAM(model, model_type=model_type)
     
@@ -436,12 +439,15 @@ def visualize_top_predictions(model, dataloader, output_folder, model_type='ast'
     
     Shows separate heatmaps for each of the top predicted classes.
     """
-    os.makedirs(output_folder, exist_ok=True)
-    
+    import shutil
+    if os.path.exists(output_folder):
+        shutil.rmtree(output_folder)
+    os.makedirs(output_folder)
+
     model.eval()
-    
+
     samples_processed = 0
-    
+
     print(f"\nGenerating per-class attention visualizations...")
     
     for batch_idx, (inputs, targets) in enumerate(dataloader):
@@ -549,7 +555,13 @@ def save_multiclass_plot(input_spec, cams, top_classes, probs, target,
         
         class_name = class_names[class_idx] if class_names else f"Class {class_idx}"
         prob = probs[class_idx].item()
-        correctness = 'correct' if class_idx in true_classes else 'incorrect'
+        is_actual_prediction = prob > 0.5
+        if not is_actual_prediction and not true_classes:
+            correctness = 'correct (no prediction, no label)'
+        elif class_idx in true_classes:
+            correctness = 'correct'
+        else:
+            correctness = 'incorrect'
         if cam.shape != input_spec.shape:
             grid_label = f', AST grid {cam.shape[0]}x{cam.shape[1]}'
         else:
