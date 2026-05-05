@@ -70,6 +70,12 @@ Examples:
                        help="Apply temporal median filtering (works independently)")
     parser.add_argument('--no-background', action='store_true', dest='no_background',
                        help="Ignore all-zero (background/no-bird) training samples")
+    parser.add_argument('--use-asl', action='store_true', dest='use_asl',
+                       help="Use Asymmetric Loss (ASL) instead of BCE — clips easy-negative gradients, "
+                            "reducing gradient suppression from all-background samples")
+    parser.add_argument('--class-weights', action='store_true', dest='class_weights',
+                       help="Weight per-class loss by inverse frequency to prevent rare species from "
+                            "being overwhelmed by the majority-class gradient")
     parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
                        help="Spectrogram transformation (default: Log)")
     

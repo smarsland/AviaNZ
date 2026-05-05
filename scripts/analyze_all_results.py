@@ -51,9 +51,17 @@ def load_from_result_json(results_dir):
                 'test1_acc': data.get('test1_acc', np.nan),
                 'test1_acc_labelled': data.get('test1_acc_labelled', np.nan),
                 'test1_acc_background': data.get('test1_acc_background', np.nan),
+                'test1_macro_precision': np.nan,
+                'test1_macro_recall': np.nan,
+                'test1_macro_f1': np.nan,
+                'test1_jaccard': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
+                'test2_macro_precision': np.nan,
+                'test2_macro_recall': np.nan,
+                'test2_macro_f1': np.nan,
+                'test2_jaccard': np.nan,
                 'status': data.get('status', 'unknown'),
             })
             continue
@@ -97,12 +105,37 @@ def load_from_result_json(results_dir):
             'test1_acc': data.get('test1_acc', np.nan),
             'test1_acc_labelled': data.get('test1_acc_labelled', np.nan),
             'test1_acc_background': data.get('test1_acc_background', np.nan),
+            'test1_macro_precision': np.nan,
+            'test1_macro_recall': np.nan,
+            'test1_macro_f1': np.nan,
+            'test1_jaccard': np.nan,
             'test2_acc': data.get('test2_acc', np.nan),
             'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
             'test2_acc_background': data.get('test2_acc_background', np.nan),
+            'test2_macro_precision': np.nan,
+            'test2_macro_recall': np.nan,
+            'test2_macro_f1': np.nan,
+            'test2_jaccard': np.nan,
             'status': data.get('status', 'unknown'),
         })
     return results
+
+
+def _extract_report_metrics(report):
+    """Pull scalar summary metrics out of one *_multilabel_report.json dict."""
+    def pct(v):
+        return v * 100 if not (v is np.nan or v != v) else np.nan
+
+    macro = report.get('macro avg', {})
+    return {
+        'acc':        pct(report.get('exact_match_accuracy', np.nan)),
+        'acc_lab':    pct(report.get('exact_match_accuracy_labelled', np.nan)),
+        'acc_bg':     pct(report.get('exact_match_accuracy_background', np.nan)),
+        'macro_p':    macro.get('precision', np.nan),
+        'macro_r':    macro.get('recall', np.nan),
+        'macro_f1':   macro.get('f1-score', np.nan),
+        'jaccard':    report.get('jaccard_score', np.nan),
+    }
 
 
 def _read_reports_from_dir(report_dir, model, row):
@@ -110,29 +143,48 @@ def _read_reports_from_dir(report_dir, model, row):
     for report_file in sorted(report_dir.glob('*_multilabel_report.json')):
         with open(report_file) as f:
             report = json.load(f)
-        acc = report.get('exact_match_accuracy', np.nan)
-        if acc is not np.nan:
-            acc = acc * 100
-        acc_lab = report.get('exact_match_accuracy_labelled', np.nan)
-        if acc_lab is not np.nan:
-            acc_lab = acc_lab * 100
-        acc_bg = report.get('exact_match_accuracy_background', np.nan)
-        if acc_bg is not np.nan:
-            acc_bg = acc_bg * 100
         stem = report_file.stem.replace('_multilabel_report', '')
         if '_model' in stem:
             continue  # validation set, skip
         dataset_name = re.sub(rf'^{model}_test_', '', stem)
+        m = _extract_report_metrics(report)
         if row['test1_name'] is np.nan or row['test1_name'] == np.nan:
             row['test1_name'] = dataset_name
-            row['test1_acc'] = acc
-            row['test1_acc_labelled'] = acc_lab
-            row['test1_acc_background'] = acc_bg
+            row['test1_acc'] = m['acc']
+            row['test1_acc_labelled'] = m['acc_lab']
+            row['test1_acc_background'] = m['acc_bg']
+            row['test1_macro_precision'] = m['macro_p']
+            row['test1_macro_recall'] = m['macro_r']
+            row['test1_macro_f1'] = m['macro_f1']
+            row['test1_jaccard'] = m['jaccard']
         else:
             row['test2_name'] = dataset_name
-            row['test2_acc'] = acc
-            row['test2_acc_labelled'] = acc_lab
-            row['test2_acc_background'] = acc_bg
+            row['test2_acc'] = m['acc']
+            row['test2_acc_labelled'] = m['acc_lab']
+            row['test2_acc_background'] = m['acc_bg']
+            row['test2_macro_precision'] = m['macro_p']
+            row['test2_macro_recall'] = m['macro_r']
+            row['test2_macro_f1'] = m['macro_f1']
+            row['test2_jaccard'] = m['jaccard']
+
+
+def _empty_row(name, train_dataset, model, transform):
+    return {
+        'name': name,
+        'train_dataset': train_dataset,
+        'method': model,
+        'config': transform,
+        'category': model.upper(),
+        'seed': 0,
+        'test1_name': np.nan, 'test2_name': np.nan,
+        'test1_acc': np.nan, 'test1_acc_labelled': np.nan, 'test1_acc_background': np.nan,
+        'test1_macro_precision': np.nan, 'test1_macro_recall': np.nan,
+        'test1_macro_f1': np.nan, 'test1_jaccard': np.nan,
+        'test2_acc': np.nan, 'test2_acc_labelled': np.nan, 'test2_acc_background': np.nan,
+        'test2_macro_precision': np.nan, 'test2_macro_recall': np.nan,
+        'test2_macro_f1': np.nan, 'test2_jaccard': np.nan,
+        'status': 'unknown',
+    }
 
 
 def load_from_viz_dir(viz_dir):
@@ -147,23 +199,7 @@ def load_from_viz_dir(viz_dir):
         m = standard_pattern.match(exp_dir.name)
         if m:
             model, train_dataset, transform = m.groups()
-            row = {
-                'name': exp_dir.name,
-                'train_dataset': train_dataset,
-                'method': model,
-                'config': transform,
-                'category': model.upper(),
-                'seed': 0,
-                'test1_name': np.nan,
-                'test2_name': np.nan,
-                'test1_acc': np.nan,
-                'test1_acc_labelled': np.nan,
-                'test1_acc_background': np.nan,
-                'test2_acc': np.nan,
-                'test2_acc_labelled': np.nan,
-                'test2_acc_background': np.nan,
-                'status': 'unknown',
-            }
+            row = _empty_row(exp_dir.name, train_dataset, model, transform)
             _read_reports_from_dir(exp_dir, model, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
             results.append(row)
@@ -172,27 +208,11 @@ def load_from_viz_dir(viz_dir):
         m = pseudo_pattern.match(exp_dir.name)
         if m:
             model, source_dataset, target_dataset, transform, pct_int = m.groups()
-            # Final results live in the phase3 subfolder
             final_dir = exp_dir / 'phase3_pseudo_target'
             if not final_dir.is_dir():
                 continue
-            row = {
-                'name': exp_dir.name,
-                'train_dataset': f'pseudo_{source_dataset}_to_{target_dataset}_pct{pct_int}',
-                'method': model,
-                'config': transform,
-                'category': f'{model.upper()} Pseudo',
-                'seed': 0,
-                'test1_name': np.nan,
-                'test2_name': np.nan,
-                'test1_acc': np.nan,
-                'test1_acc_labelled': np.nan,
-                'test1_acc_background': np.nan,
-                'test2_acc': np.nan,
-                'test2_acc_labelled': np.nan,
-                'test2_acc_background': np.nan,
-                'status': 'unknown',
-            }
+            row = _empty_row(exp_dir.name, f'pseudo_{source_dataset}_to_{target_dataset}_pct{pct_int}', model, transform)
+            row['category'] = f'{model.upper()} Pseudo'
             _read_reports_from_dir(final_dir, model, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
             results.append(row)
@@ -211,15 +231,65 @@ def load_all_results(results_dir, viz_dir=None):
 
 def create_overview_table(df, output_dir):
     """Create CSV with ALL results"""
-    cols = ['name', 'train_dataset', 'method', 'config', 'category',
-            'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
-            'test2_name', 'test2_acc', 'test2_acc_labelled', 'test2_acc_background', 'status']
-    # Only include columns that actually exist (older result.json rows won't have _labelled)
+    cols = [
+        'name', 'train_dataset', 'method', 'config', 'category',
+        'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
+        'test1_macro_precision', 'test1_macro_recall', 'test1_macro_f1', 'test1_jaccard',
+        'test2_name', 'test2_acc', 'test2_acc_labelled', 'test2_acc_background',
+        'test2_macro_precision', 'test2_macro_recall', 'test2_macro_f1', 'test2_jaccard',
+        'status',
+    ]
     cols = [c for c in cols if c in df.columns]
     df_out = df[cols].copy()
     df_out = df_out.sort_values(['category', 'train_dataset', 'config'])
-    df_out.to_csv(output_dir / 'all_results.csv', index=False, float_format='%.2f')
+    df_out.to_csv(output_dir / 'all_results.csv', index=False, float_format='%.4f')
     print(f"✓ all_results.csv ({len(df_out)} experiments)")
+
+
+def create_per_class_table(viz_dir, output_dir):
+    """Create per_class_metrics.csv: one row per (experiment, test split, class)."""
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
+    rows = []
+    for exp_dir in sorted(Path(viz_dir).iterdir()):
+        if not exp_dir.is_dir():
+            continue
+        m = standard_pattern.match(exp_dir.name)
+        if not m:
+            continue
+        model, train_dataset, _ = m.groups()
+        for report_file in sorted(exp_dir.glob('*_multilabel_report.json')):
+            stem = report_file.stem.replace('_multilabel_report', '')
+            if '_model' in stem:
+                continue
+            test_split = re.sub(rf'^{model}_test_', '', stem)
+            with open(report_file) as f:
+                report = json.load(f)
+            skip_keys = {'macro avg', 'micro avg', 'exact_match_accuracy',
+                         'exact_match_accuracy_labelled', 'exact_match_accuracy_background',
+                         'num_samples', 'num_labelled_samples', 'num_background_samples',
+                         'hamming_loss', 'jaccard_score'}
+            for class_name, metrics in report.items():
+                if class_name in skip_keys or not isinstance(metrics, dict):
+                    continue
+                rows.append({
+                    'experiment': exp_dir.name,
+                    'train_dataset': train_dataset,
+                    'test_split': test_split,
+                    'class': class_name,
+                    'tp': metrics.get('tp', np.nan),
+                    'fp': metrics.get('fp', np.nan),
+                    'tn': metrics.get('tn', np.nan),
+                    'fn': metrics.get('fn', np.nan),
+                    'precision': metrics.get('precision', np.nan),
+                    'recall': metrics.get('recall', np.nan),
+                    'f1': metrics.get('f1-score', np.nan),
+                    'support': metrics.get('support', np.nan),
+                })
+    if rows:
+        pd.DataFrame(rows).to_csv(output_dir / 'per_class_metrics.csv', index=False, float_format='%.4f')
+        print(f"✓ per_class_metrics.csv ({len(rows)} rows)")
+    else:
+        print("  (no per-class data found — re-run experiments to populate tp/fp/tn/fn)")
 
 
 def plot_by_category(df, output_dir):
@@ -460,6 +530,7 @@ def main():
     
     print("Creating outputs...")
     create_overview_table(df, output_dir)
+    create_per_class_table(results_dir, output_dir)
     plot_by_category(df, output_dir)
     create_summary_by_category(df, output_dir)
     create_report(df, output_dir)

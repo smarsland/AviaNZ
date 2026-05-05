@@ -13,7 +13,7 @@ AUDIO_FILE   = "Sound Files/kiwi_1min.wav"
 WINDOW_WIDTH = 512
 INCR         = 128
 
-N_BANDS   = 100      # total number of bandpass bands
+N_BANDS   = 300      # total number of bandpass bands
 FREQ_LOW  = 200     # Hz — lower edge of lowest band
 FREQ_HIGH = None    # Hz — upper edge of highest band; None = fs/2 - 50
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +79,9 @@ def build_bandpass_spectrogram(audio, fs, bands):
         rows.append(np.interp(t_common, t_band, env_ds))
 
     arr = np.array(rows, dtype=np.float32)
-    return np.log1p(arr / (arr.max() + 1e-9)), t_common
+    arr = np.log1p(arr)                                    # log-compress raw amplitudes
+    arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-9)   # normalise to [0, 1]
+    return arr, t_common
 
 
 def main():

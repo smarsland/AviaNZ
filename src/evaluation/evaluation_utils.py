@@ -96,14 +96,21 @@ class EvaluationManager:
         per_class_accuracy = np.array(per_class_accuracy)
         
         # Create classification report
+        cm_multi = multilabel_confusion_matrix(y_true, y_pred)
+
         class_report = {}
         for i, class_name in enumerate(self.class_names):
+            tn, fp, fn, tp = cm_multi[i].ravel()
             class_report[class_name] = {
                 'precision': float(precision[i]),
                 'recall': float(recall[i]),
                 'f1-score': float(f1[i]),
                 'accuracy': float(per_class_accuracy[i]),
-                'support': int(support[i])
+                'support': int(support[i]),
+                'tp': int(tp),
+                'fp': int(fp),
+                'tn': int(tn),
+                'fn': int(fn),
             }
         
         # Add macro and micro averages
@@ -125,9 +132,6 @@ class EvaluationManager:
             'accuracy': float(np.mean(y_true == y_pred)),  # Overall bit-wise accuracy
             'support': int(np.sum(support))
         }
-        
-        # Get per-class confusion matrices
-        cm_multi = multilabel_confusion_matrix(y_true, y_pred)
         
         # Save multi-label specific metrics
         self._save_multilabel_metrics(y_true, y_pred, y_pred_probs, class_report, name, cm_multi)

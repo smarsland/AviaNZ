@@ -70,6 +70,44 @@ run_experiment() {
 run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_gated --bg-subtract --median-filter --gated-head
 run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_gated --bg-subtract --median-filter --gated-head
 
+# ---------------------------------------------------------------------------
+# NEW EXPERIMENTS: Diagnosing why background data hurts performance
+# ---------------------------------------------------------------------------
+
+# EXP 1: Asymmetric Loss (ASL)
+# ASL clips the gradient from easy negatives (the background problem in a nutshell:
+# every background sample pushes every class logit down equally).
+# With background KEPT, ASL's margin zeros out easy-negative gradients so the
+# background samples stop suppressing rare species.
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_asl   --bg-subtract --median-filter --use-asl
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_asl   --bg-subtract --median-filter --use-asl
+
+# EXP 2: no-background + class weights
+# Removing background fixes gradient suppression; adding class weights then addresses
+# the next problem: imbalance between common and rare species in the labelled set.
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_no_bg_cw --bg-subtract --median-filter --no-background --class-weights
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_no_bg_cw --bg-subtract --median-filter --no-background --class-weights
+
+# EXP 3: no-background + SED head
+# The SED head's per-class temporal attention was previously being poisoned by background
+# samples (attending to silence). With no background, it gets a clean learning signal.
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_no_bg_sed --bg-subtract --median-filter --no-background --sed-head
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_no_bg_sed --bg-subtract --median-filter --no-background --sed-head
+
+# EXP 4: no-background + freeze early stages
+# BirdClef pretraining already gives good low-level features. Freezing stages 1-2
+# prevents the backbone from overwriting them to fit source-domain quirks, which
+# should improve cross-domain transfer to the held-out test set.
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_no_bg_freeze2 --bg-subtract --median-filter --no-background --freeze-stages 2
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_no_bg_freeze2 --bg-subtract --median-filter --no-background --freeze-stages 2
+
+# EXP 5: Cross-domain noise augmentation
+# Train on one domain, mix in 20% of the OTHER domain's audio at each step
+# (labels ignored — used as acoustic noise only). Soft domain adaptation:
+# the model hears target-domain recording conditions without DANN complexity.
+run_experiment regnet doc    "$DOC_TRAIN"    log_norm_med_xnoise --bg-subtract --median-filter --noise 0.2 --noise-folder "$AVIANZ_TRAIN"
+run_experiment regnet avianz "$AVIANZ_TRAIN" log_norm_med_xnoise --bg-subtract --median-filter --noise 0.2 --noise-folder "$DOC_TRAIN"
+
 # # Merged with log + background subtraction + median filter
 # run_experiment ast    merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
 # run_experiment regnet merged  "$MERGED_TRAIN" log_norm_med --bg-subtract --median-filter
