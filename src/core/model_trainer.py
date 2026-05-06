@@ -273,36 +273,28 @@ class Trainer:
                 torch.backends.cudnn.benchmark = False
             print(f"Random seed set to: {self.seed}")
         
-        # Setup device: try each visible GPU in order and use the first one that works.
-        # This handles Exclusive Process mode where a busy GPU causes CUDA init to fail
-        # even if other GPUs are free.
-        cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
+        # Setup device.
+        # In Exclusive Process mode, cudaErrorDevicesUnavailable is process-wide — once any
+        # device fails, the entire CUDA runtime is broken for this process.  We therefore
+        # probe GPUs via nvidia-smi (no CUDA context) BEFORE touching torch.cuda, then pin
+        # CUDA_VISIBLE_DEVICES to the first free GPU so PyTorch only ever sees one device.
+        if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+            chosen = self._pick_free_gpu()
+            if chosen is None:
+                raise RuntimeError("No usable CUDA device found (all GPUs busy or nvidia-smi unavailable)")
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
+            # Force PyTorch to re-evaluate device availability after the env-var change.
+            # importlib.reload is not needed; CUDA_VISIBLE_DEVICES is read at first CUDA init.
+
         if not torch.cuda.is_available():
-            print(f"❌ ERROR: CUDA not available (CUDA_VISIBLE_DEVICES={cuda_visible})")
-            raise RuntimeError("CUDA not available - training requires GPU")
+            raise RuntimeError(f"CUDA not available (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')})")
 
-        num_gpus = torch.cuda.device_count()
-        self.device = None
-        for i in range(num_gpus):
-            try:
-                candidate = torch.device(f'cuda:{i}')
-                test_tensor = torch.zeros(1, device=candidate)
-                del test_tensor
-                torch.cuda.empty_cache()
-                self.device = candidate
-                gpu_name = torch.cuda.get_device_name(i)
-                print(f"Using device: cuda:{i} (GPU: {gpu_name}, CUDA_VISIBLE_DEVICES={cuda_visible})")
-                if num_gpus > 1:
-                    print(f"  ({num_gpus} GPUs visible; skipped {i} busy/unavailable)")
-                break
-            except Exception as e:
-                print(f"  cuda:{i} unavailable ({e.__class__.__name__}), trying next...")
-
-        if self.device is None:
-            print(f"❌ ERROR: No usable GPU found after trying {num_gpus} device(s).")
-            print(f"   CUDA_VISIBLE_DEVICES: {cuda_visible}")
-            print(f"   Check nvidia-smi — GPUs may be in Exclusive Process mode and all busy.")
-            raise RuntimeError("No usable CUDA device found")
+        self.device = torch.device('cuda:0')
+        test_tensor = torch.zeros(1, device=self.device)
+        del test_tensor
+        torch.cuda.empty_cache()
+        gpu_name = torch.cuda.get_device_name(0)
+        print(f"Using device: cuda:0 (GPU: {gpu_name}, CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']})")
         
         if self.patience > 0:
             print(f"Early stopping patience: {self.patience} epochs")
@@ -1071,7 +1063,36 @@ class Trainer:
         # The backbone (transformer) weights are transferred
         print("Transfer learning: Using pretrained backbone, training new classification head")
 
-    
+    def _pick_free_gpu(self):
+        """Return the index of the first GPU with no running compute processes, using nvidia-smi.
+        Falls back to GPU 0 if nvidia-smi is unavailable.  Returns None only if every GPU is busy.
+        """
+        import subprocess
+        try:
+            out = subprocess.check_output(
+                ['nvidia-smi', '--query-compute-apps=gpu_index', '--format=csv,noheader'],
+                stderr=subprocess.DEVNULL, text=True
+            )
+            busy = {int(x.strip()) for x in out.splitlines() if x.strip().isdigit()}
+
+            count_out = subprocess.check_output(
+                ['nvidia-smi', '--query-gpu=index', '--format=csv,noheader'],
+                stderr=subprocess.DEVNULL, text=True
+            )
+            all_gpus = [int(x.strip()) for x in count_out.splitlines() if x.strip().isdigit()]
+
+            for idx in all_gpus:
+                if idx not in busy:
+                    print(f"Auto-selected GPU {idx} (busy GPUs: {sorted(busy) or 'none'})")
+                    return idx
+
+            print(f"All GPUs are busy: {sorted(busy)}")
+            return None
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            # nvidia-smi not available — fall back and let CUDA sort it out
+            print("nvidia-smi not found, defaulting to GPU 0")
+            return 0
+
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
