@@ -1071,13 +1071,13 @@ class Trainer:
         print("Transfer learning: Using pretrained backbone, training new classification head")
 
     def _pick_free_gpu(self):
-        """Return the index of the first GPU with no running compute processes, using nvidia-smi.
-        Returns None if every GPU is busy.  Raises RuntimeError if nvidia-smi cannot be found.
+        """Return the index of the GPU with the lowest memory usage, via nvidia-smi.
+        Raises RuntimeError if nvidia-smi cannot be found or fails.
         """
         import subprocess
         import shutil
 
-        smi = shutil.which('nvidia-smi') or '/usr/bin/nvidia-smi'
+        smi = shutil.which('nvidia-smi') or '/usr/bin/nvidia-smi' or '/bin/nvidia-smi'
         if not os.path.isfile(smi):
             raise RuntimeError(
                 "nvidia-smi not found — cannot auto-select a free GPU. "
@@ -1086,26 +1086,32 @@ class Trainer:
 
         try:
             out = subprocess.check_output(
-                [smi, '--query-compute-apps=gpu_index', '--format=csv,noheader'],
+                [smi, '--query-gpu=index,memory.used', '--format=csv,noheader,nounits'],
                 stderr=subprocess.STDOUT, text=True
             )
-            busy = {int(x.strip()) for x in out.splitlines() if x.strip().isdigit()}
-
-            count_out = subprocess.check_output(
-                [smi, '--query-gpu=index', '--format=csv,noheader'],
-                stderr=subprocess.STDOUT, text=True
-            )
-            all_gpus = [int(x.strip()) for x in count_out.splitlines() if x.strip().isdigit()]
-
-            for idx in all_gpus:
-                if idx not in busy:
-                    print(f"Auto-selected GPU {idx} (busy GPUs: {sorted(busy) or 'none'})")
-                    return idx
-
-            print(f"All GPUs are busy: {sorted(busy)}")
-            return None
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"nvidia-smi failed: {e.output}") from e
+            raise RuntimeError(f"nvidia-smi failed:\n{e.output}") from e
+
+        best_idx, best_mem = None, float('inf')
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(',')
+            if len(parts) != 2:
+                continue
+            try:
+                idx, mem = int(parts[0].strip()), int(parts[1].strip())
+            except ValueError:
+                continue
+            if mem < best_mem:
+                best_mem, best_idx = mem, idx
+
+        if best_idx is None:
+            raise RuntimeError(f"Could not parse nvidia-smi output:\n{out}")
+
+        print(f"Auto-selected GPU {best_idx} ({best_mem} MiB used)")
+        return best_idx
 
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
