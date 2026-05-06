@@ -287,11 +287,7 @@ class Trainer:
         # CUDA_VISIBLE_DEVICES to the first free GPU so PyTorch only ever sees one device.
         if 'CUDA_VISIBLE_DEVICES' not in os.environ:
             chosen = self._pick_free_gpu()
-            if chosen is None:
-                raise RuntimeError("No usable CUDA device found (all GPUs busy or nvidia-smi unavailable)")
             os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
-            # Force PyTorch to re-evaluate device availability after the env-var change.
-            # importlib.reload is not needed; CUDA_VISIBLE_DEVICES is read at first CUDA init.
 
         if not torch.cuda.is_available():
             raise RuntimeError(f"CUDA not available (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')})")
