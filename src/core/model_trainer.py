@@ -278,13 +278,21 @@ class Trainer:
         if torch.cuda.is_available():
             try:
                 # Actually test CUDA is working by creating a tensor
-                test_device = torch.device('cuda:0')  # Always use device 0 after CUDA_VISIBLE_DEVICES filtering
+                # cuda:0 is always the primary device; CUDA_VISIBLE_DEVICES remaps physical indices starting at 0
+                test_device = torch.device('cuda:0')
                 test_tensor = torch.zeros(1, device=test_device)
                 del test_tensor
                 torch.cuda.empty_cache()
                 self.device = test_device
-                gpu_name = torch.cuda.get_device_name(0)
-                print(f"Using device: cuda:0 (GPU: {gpu_name}, CUDA_VISIBLE_DEVICES={cuda_visible})")
+                self.num_gpus = torch.cuda.device_count()
+                gpu_names = [torch.cuda.get_device_name(i) for i in range(self.num_gpus)]
+                if self.num_gpus > 1:
+                    print(f"Found {self.num_gpus} GPUs (CUDA_VISIBLE_DEVICES={cuda_visible}):")
+                    for i, name in enumerate(gpu_names):
+                        print(f"  cuda:{i} -> {name}")
+                    print(f"Using DataParallel across all {self.num_gpus} GPUs")
+                else:
+                    print(f"Using device: cuda:0 (GPU: {gpu_names[0]}, CUDA_VISIBLE_DEVICES={cuda_visible})")
             except Exception as e:
                 print(f"❌ ERROR: CUDA initialization failed!")
                 print(f"   Error: {e}")
