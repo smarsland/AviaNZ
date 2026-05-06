@@ -85,12 +85,10 @@ class AsymmetricLoss(nn.Module):
     Reference: Ben-Baruch et al. "Asymmetric Loss For Multi-Label Classification" (ICCV 2021)
 
     Separates focusing strength for positives and negatives:
-      - Negatives: (sigma(x))^gamma_neg * log(1 - sigma(x - margin))
-        When the model is already confident a class is absent (sigma(x) near 0),
-        the gamma_neg exponent drives the contribution toward zero.
-        The probability margin shifts the negative probability distribution to
-        completely ignore very easy negatives (sigma(x) < margin).
-      - Positives: (1 - sigma(x))^gamma_pos * log(sigma(x))
+      - Negatives: p_m^gamma_neg * log(p_m)  where p_m = (1-sigma(x)+margin).clamp(1)
+        The margin shifts easy-negative probability toward zero before applying the
+        focal weight, so well-classified negatives are doubly suppressed.
+      - Positives: (1-sigma(x))^gamma_pos * log(sigma(x))
         gamma_pos=0 gives standard CE for positives (no down-weighting).
 
     This prevents background samples (all-zero targets) from dominating training.
@@ -141,17 +139,20 @@ class AsymmetricLoss(nn.Module):
         # gamma * x^(gamma-1) which becomes 0 * 0^(-1) = NaN when x=0.
         # For gamma=0 (no focusing) use a constant instead.
         if self.gamma_neg > 0 or self.gamma_pos > 0:
-            # Negative focusing: sigma(x)^gamma_neg for negatives, 0 for positives
+            # Negative focusing weight: p_m^gamma_neg, where p_m is the SHIFTED probability.
+            # After margin shift: xs_neg = (1 - xs_pos + margin).clamp(max=1)
+            # so the shifted positive probability = 1 - xs_neg.
             if self.gamma_neg > 0:
-                neg_focus = (xs_pos * (1.0 - y)) ** self.gamma_neg
+                xs_pos_shifted = (1.0 - xs_neg)        # p_m = sigma(x) - margin (clipped)
+                neg_focus = (xs_pos_shifted * (1.0 - y)) ** self.gamma_neg
             else:
-                neg_focus = (1.0 - y)   # 1 where y=0, 0 where y=1 — no exponent
+                neg_focus = (1.0 - y)
 
-            # Positive focusing: (1-sigma(x))^gamma_pos for positives, 0 for negatives
+            # Positive focusing weight: (1 - sigma(x))^gamma_pos on positive terms only.
             if self.gamma_pos > 0:
                 pos_focus = ((1.0 - xs_pos) * y) ** self.gamma_pos
             else:
-                pos_focus = y           # 1 where y=1, 0 where y=0 — no exponent
+                pos_focus = y
 
             loss = (neg_focus + pos_focus) * loss
 
@@ -1071,19 +1072,28 @@ class Trainer:
 
     def _pick_free_gpu(self):
         """Return the index of the first GPU with no running compute processes, using nvidia-smi.
-        Falls back to GPU 0 if nvidia-smi is unavailable.  Returns None only if every GPU is busy.
+        Returns None if every GPU is busy.  Raises RuntimeError if nvidia-smi cannot be found.
         """
         import subprocess
+        import shutil
+
+        smi = shutil.which('nvidia-smi') or '/usr/bin/nvidia-smi'
+        if not os.path.isfile(smi):
+            raise RuntimeError(
+                "nvidia-smi not found — cannot auto-select a free GPU. "
+                "Set CUDA_VISIBLE_DEVICES manually before running."
+            )
+
         try:
             out = subprocess.check_output(
-                ['nvidia-smi', '--query-compute-apps=gpu_index', '--format=csv,noheader'],
-                stderr=subprocess.DEVNULL, text=True
+                [smi, '--query-compute-apps=gpu_index', '--format=csv,noheader'],
+                stderr=subprocess.STDOUT, text=True
             )
             busy = {int(x.strip()) for x in out.splitlines() if x.strip().isdigit()}
 
             count_out = subprocess.check_output(
-                ['nvidia-smi', '--query-gpu=index', '--format=csv,noheader'],
-                stderr=subprocess.DEVNULL, text=True
+                [smi, '--query-gpu=index', '--format=csv,noheader'],
+                stderr=subprocess.STDOUT, text=True
             )
             all_gpus = [int(x.strip()) for x in count_out.splitlines() if x.strip().isdigit()]
 
@@ -1094,10 +1104,8 @@ class Trainer:
 
             print(f"All GPUs are busy: {sorted(busy)}")
             return None
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            # nvidia-smi not available — fall back and let CUDA sort it out
-            print("nvidia-smi not found, defaulting to GPU 0")
-            return 0
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"nvidia-smi failed: {e.output}") from e
 
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
