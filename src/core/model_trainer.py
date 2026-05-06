@@ -273,44 +273,36 @@ class Trainer:
                 torch.backends.cudnn.benchmark = False
             print(f"Random seed set to: {self.seed}")
         
-        # Setup device with proper verification
+        # Setup device: try each visible GPU in order and use the first one that works.
+        # This handles Exclusive Process mode where a busy GPU causes CUDA init to fail
+        # even if other GPUs are free.
         cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
-        if torch.cuda.is_available():
+        if not torch.cuda.is_available():
+            print(f"❌ ERROR: CUDA not available (CUDA_VISIBLE_DEVICES={cuda_visible})")
+            raise RuntimeError("CUDA not available - training requires GPU")
+
+        num_gpus = torch.cuda.device_count()
+        self.device = None
+        for i in range(num_gpus):
             try:
-                # Actually test CUDA is working by creating a tensor
-                # cuda:0 is always the primary device; CUDA_VISIBLE_DEVICES remaps physical indices starting at 0
-                test_device = torch.device('cuda:0')
-                test_tensor = torch.zeros(1, device=test_device)
+                candidate = torch.device(f'cuda:{i}')
+                test_tensor = torch.zeros(1, device=candidate)
                 del test_tensor
                 torch.cuda.empty_cache()
-                self.device = test_device
-                self.num_gpus = torch.cuda.device_count()
-                gpu_names = [torch.cuda.get_device_name(i) for i in range(self.num_gpus)]
-                if self.num_gpus > 1:
-                    print(f"Found {self.num_gpus} GPUs (CUDA_VISIBLE_DEVICES={cuda_visible}):")
-                    for i, name in enumerate(gpu_names):
-                        print(f"  cuda:{i} -> {name}")
-                    print(f"Using DataParallel across all {self.num_gpus} GPUs")
-                else:
-                    print(f"Using device: cuda:0 (GPU: {gpu_names[0]}, CUDA_VISIBLE_DEVICES={cuda_visible})")
+                self.device = candidate
+                gpu_name = torch.cuda.get_device_name(i)
+                print(f"Using device: cuda:{i} (GPU: {gpu_name}, CUDA_VISIBLE_DEVICES={cuda_visible})")
+                if num_gpus > 1:
+                    print(f"  ({num_gpus} GPUs visible; skipped {i} busy/unavailable)")
+                break
             except Exception as e:
-                print(f"❌ ERROR: CUDA initialization failed!")
-                print(f"   Error: {e}")
-                print(f"   CUDA_VISIBLE_DEVICES: {cuda_visible}")
-                print(f"   torch.cuda.is_available(): {torch.cuda.is_available()}")
-                print(f"   torch.cuda.device_count(): {torch.cuda.device_count()}")
-                print(f"")
-                print(f"   This usually means:")
-                print(f"     1. The assigned GPU is actually busy (check nvidia-smi)")
-                print(f"     2. CUDA drivers are in a bad state (restart may help)")
-                print(f"     3. CUDA_VISIBLE_DEVICES points to non-existent GPU")
-                print(f"")
-                print(f"   ABORTING - cannot proceed without GPU")
-                raise RuntimeError(f"CUDA device unavailable: {e}")
-        else:
-            print(f"❌ ERROR: CUDA not available (CUDA_VISIBLE_DEVICES={cuda_visible})")
-            print(f"   Cannot train without GPU")
-            raise RuntimeError("CUDA not available - training requires GPU")
+                print(f"  cuda:{i} unavailable ({e.__class__.__name__}), trying next...")
+
+        if self.device is None:
+            print(f"❌ ERROR: No usable GPU found after trying {num_gpus} device(s).")
+            print(f"   CUDA_VISIBLE_DEVICES: {cuda_visible}")
+            print(f"   Check nvidia-smi — GPUs may be in Exclusive Process mode and all busy.")
+            raise RuntimeError("No usable CUDA device found")
         
         if self.patience > 0:
             print(f"Early stopping patience: {self.patience} epochs")
