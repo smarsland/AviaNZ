@@ -14,6 +14,7 @@ set -e
 FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N_FLAG=""
+SPEC_TYPE_FLAG=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -21,7 +22,8 @@ while [[ $# -gt 0 ]]; do
         --overwrite) OVERWRITE=true; shift ;;
         --background-n) BACKGROUND_N_FLAG="--background-n $2"; shift 2 ;;
         --no-background) BACKGROUND_N_FLAG="--background-n 0"; shift ;;
-        *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite, --background-n N, --no-background"; exit 1 ;;
+        --spec-type) SPEC_TYPE_FLAG="--spec-type $2"; shift 2 ;;
+        *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite, --background-n N, --no-background, --spec-type {Standard,Multi-tapered,Reassigned}"; exit 1 ;;
     esac
 done
 
@@ -50,8 +52,7 @@ echo "  DOC raw    : $DOC_RAW"
 echo "  AviaNZ raw : $AVIANZ_RAW"
 echo "  Output     : $MATCHED_BASE"
 echo "  With audio : yes"
-echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"
-echo "  Overwrite  : $OVERWRITE"
+echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"  echo "  Spec type  : ${SPEC_TYPE_FLAG:-Standard (default)}"echo "  Overwrite  : $OVERWRITE"
 echo "============================================================"
 echo ""
 
@@ -67,7 +68,8 @@ if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/la
         --fixed-length \
         --with-audio \
         ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG} \
-        ${BACKGROUND_N_FLAG:+$BACKGROUND_N_FLAG}
+        ${BACKGROUND_N_FLAG:+$BACKGROUND_N_FLAG} \
+        ${SPEC_TYPE_FLAG:+$SPEC_TYPE_FLAG}
 else
     echo "=== Step 1: matched datasets already exist, skipping (use --overwrite to force) ==="
 fi

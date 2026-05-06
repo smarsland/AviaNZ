@@ -150,13 +150,16 @@ def load_avianz_name_mapping(mapping_csv):
     return mapping
 
 
-def make_spec_processor():
+def make_spec_processor(sg_type=None):
+    spec_params = config.SPECTROGRAM_PARAMS.copy()
+    if sg_type is not None:
+        spec_params['sgType'] = sg_type
     return SpectrogramProcessor(
         window_seconds=config.DEFAULT_WINDOW_SECONDS,
         hop_seconds=config.DEFAULT_HOP_SECONDS,
         freq_bins=config.DEFAULT_FREQ_BINS,
         fs=config.DEFAULT_SAMPLE_RATE,
-        spec_params=config.SPECTROGRAM_PARAMS,
+        spec_params=spec_params,
     )
 
 
@@ -233,7 +236,7 @@ def parse_reviewed_csv(csv_path, mapping_csv):
     return records
 
 
-def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None, with_audio=False):
+def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None, with_audio=False, sg_type=None):
     """
     Extract a spectrogram for each record from the raw DOC audio.
     Labels each sample with the full human_codes.
@@ -244,8 +247,9 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
         fixed_length: If True, filter out spectrograms with fewer than target_time_bins and trim to target_time_bins
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
         with_audio: If True, also save the source audio as a .wav file alongside the spectrogram
+        sg_type: Spectrogram type override ('Standard', 'Multi-tapered', or 'Reassigned')
     """
-    spec_proc = make_spec_processor()
+    spec_proc = make_spec_processor(sg_type)
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
     if with_audio:
@@ -318,7 +322,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False, with_audio=False):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False, with_audio=False, sg_type=None):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (from DOC's 'Species 1' column,
@@ -333,8 +337,9 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
         fixed_length: If True, filter out spectrograms with fewer than target_time_bins and trim to target_time_bins
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
         with_audio: If True, also save the matched audio segment as a .wav file alongside the spectrogram
+        sg_type: Spectrogram type override ('Standard', 'Multi-tapered', or 'Reassigned')
     """
-    spec_proc = make_spec_processor()
+    spec_proc = make_spec_processor(sg_type)
     name_mapping = load_avianz_name_mapping(mapping_csv)
     proc = AviaNZDataProcessor(name_mapping=name_mapping)
 
@@ -511,7 +516,7 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
 
 def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=42,
                                fixed_length=False, target_time_bins=None, with_audio=False,
-                               all_search_codes=None):
+                               all_search_codes=None, sg_type=None):
     """
     Add up to n background (no positive class) samples from DOC audio files that were
     not included in the matched dataset.  Each sample gets class_names=[].
@@ -524,7 +529,7 @@ def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=
     if n == 0:
         return []
 
-    spec_proc = make_spec_processor()
+    spec_proc = make_spec_processor(sg_type)
     data_dir = os.path.join(doc_out, 'data')
     os.makedirs(data_dir, exist_ok=True)
     if with_audio:
@@ -593,7 +598,8 @@ def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=
 
 def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_search_codes,
                                    mapping_csv, n=1000, seed=42, fixed_length=False,
-                                   target_time_bins=None, freq_mask=False, with_audio=False):
+                                   target_time_bins=None, freq_mask=False, with_audio=False,
+                                   sg_type=None):
     """
     Add up to n background (no positive class) samples from AviaNZ segments that were
     not included in the matched dataset AND do not contain any matched-species annotation.
@@ -602,7 +608,7 @@ def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_sea
     if n == 0:
         return []
 
-    spec_proc = make_spec_processor()
+    spec_proc = make_spec_processor(sg_type)
     name_mapping = load_avianz_name_mapping(mapping_csv)
     proc = AviaNZDataProcessor(name_mapping=name_mapping)
 
@@ -784,6 +790,9 @@ def main():
     parser.add_argument('--background-n', type=int, default=1000,
                         help='Number of background (no positive class) samples to add to each dataset '
                              'from rejected/unmatched files. Set to 0 to disable. (default: 1000)')
+    parser.add_argument('--spec-type', default=None,
+                        choices=['Standard', 'Multi-tapered', 'Reassigned'],
+                        help='Spectrogram type to use (default: Standard, from config)')
     args = parser.parse_args()
 
     doc_out = os.path.join(args.output, 'doc_matched')
@@ -810,13 +819,16 @@ def main():
 
     if args.with_audio:
         print('\n=== Audio saving enabled: .wav files will be saved alongside spectrograms ===')
+    if args.spec_type is not None:
+        print(f'\n=== Spectrogram type override: {args.spec_type} ===')
 
     print('\n=== Step 2: build DOC dataset (human labels, raw audio) ===')
     doc_labels, kept_records = build_doc_dataset(
         records, args.doc_raw, doc_out, 
         fixed_length=args.fixed_length,
         target_time_bins=target_time_bins,
-        with_audio=args.with_audio
+        with_audio=args.with_audio,
+        sg_type=args.spec_type,
     )
 
     print('\n=== Step 3: find matching AviaNZ sample for each DOC record ===')
@@ -827,7 +839,8 @@ def main():
         fixed_length=args.fixed_length,
         target_time_bins=target_time_bins,
         freq_mask=args.freq_mask,
-        with_audio=args.with_audio
+        with_audio=args.with_audio,
+        sg_type=args.spec_type,
     )
 
     # Drop DOC samples that had no AviaNZ match
@@ -855,6 +868,7 @@ def main():
             target_time_bins=target_time_bins,
             with_audio=args.with_audio,
             all_search_codes=all_search_codes,
+            sg_type=args.spec_type,
         )
         doc_labels_final = doc_labels_final + doc_background
 
@@ -867,6 +881,7 @@ def main():
             target_time_bins=target_time_bins,
             freq_mask=args.freq_mask,
             with_audio=args.with_audio,
+            sg_type=args.spec_type,
         )
         avianz_labels = avianz_labels + avianz_background
 
