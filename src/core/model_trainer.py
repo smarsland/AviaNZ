@@ -153,10 +153,16 @@ class AsymmetricLoss(nn.Module):
             else:
                 pos_focus = y           # 1 where y=1, 0 where y=0 — no exponent
 
-            focusing = neg_focus + pos_focus
-            loss = focusing * loss
+            loss = (neg_focus + pos_focus) * loss
 
-        return -loss.mean()
+        loss = -loss
+
+        if self.reduction == 'none':
+            return loss          # [B, C]
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:                    # 'mean'
+            return loss.mean()
 
 
 class SmoothBCEWithLogitsLoss(nn.Module):
