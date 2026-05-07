@@ -52,12 +52,16 @@ echo "  DOC raw    : $DOC_RAW"
 echo "  AviaNZ raw : $AVIANZ_RAW"
 echo "  Output     : $MATCHED_BASE"
 echo "  With audio : yes"
-echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"  echo "  Spec type  : ${SPEC_TYPE_FLAG:-Standard (default)}"echo "  Overwrite  : $OVERWRITE"
+echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"
+echo "  Spec type  : ${SPEC_TYPE_FLAG:-Standard (default)}"
+echo "  Overwrite  : $OVERWRITE"
 echo "============================================================"
 echo ""
 
 # Step 1: build matched datasets
+STEP1_RAN=false
 if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/labels.json" ] || [ ! -d "$AVIANZ_MATCHED" ] || [ ! -f "$AVIANZ_MATCHED/labels.json" ]; then
+    STEP1_RAN=true
     echo "=== Step 1: building matched datasets ==="
     PYTHONPATH="$PWD" python3 src/experiments/build_matched_datasets.py \
         --reviewed-csv "$REVIEWED_CSV" \
@@ -77,10 +81,10 @@ fi
 # Step 2: split into train/test
 SPLIT_MISSING=false
 for d in "$DOC_SPLIT_BASE/train" "$DOC_SPLIT_BASE/test" "$AVIANZ_SPLIT_BASE/train" "$AVIANZ_SPLIT_BASE/test"; do
-    [ ! -d "$d" ] || [ ! -f "$d/labels.json" ] && SPLIT_MISSING=true && break
+    if [ ! -d "$d" ] || [ ! -f "$d/labels.json" ]; then SPLIT_MISSING=true; break; fi
 done
 
-if [ "$SPLIT_MISSING" = true ]; then
+if [ "$SPLIT_MISSING" = true ] || [ "$STEP1_RAN" = true ]; then
     echo ""
     echo "=== Step 2: splitting datasets ==="
     PYTHONPATH="$PWD" python3 src/experiments/split_matched_datasets.py \
@@ -95,13 +99,15 @@ if [ "$SPLIT_MISSING" = true ]; then
     PYTHONPATH="$PWD" python3 src/experiments/validate_splits.py \
         "$AVIANZ_SPLIT_BASE/train" "$AVIANZ_SPLIT_BASE/test" \
         "$DOC_SPLIT_BASE/train"   "$DOC_SPLIT_BASE/test"
+    STEP2_RAN=true
 else
     echo ""
     echo "=== Step 2: splits already exist, skipping ==="
+    STEP2_RAN=false
 fi
 
 # Step 3: merge train sets (spectrograms only; audio not needed for training)
-if [ "$OVERWRITE" = true ] || [ ! -d "$MERGED_TRAIN" ] || [ ! -f "$MERGED_TRAIN/labels.json" ]; then
+if [ "$OVERWRITE" = true ] || [ "$STEP2_RAN" = true ] || [ ! -d "$MERGED_TRAIN" ] || [ ! -f "$MERGED_TRAIN/labels.json" ]; then
     echo ""
     echo "=== Step 3: merging training datasets ==="
     PYTHONPATH="$PWD" python3 src/experiments/merge_datasets.py \

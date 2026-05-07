@@ -525,7 +525,11 @@ def main():
     print("Loading all results...")
     df = load_all_results(results_dir, viz_dir=results_dir)
     print(f"  {len(df)} experiments loaded")
-    print(f"  {len(df.dropna(subset=['test1_acc', 'test2_acc'], how='all'))} with valid accuracies")
+    if df.empty:
+        print("  No experiments found — nothing to analyze.")
+        return
+    valid_acc_cols = [c for c in ['test1_acc', 'test2_acc'] if c in df.columns]
+    print(f"  {len(df.dropna(subset=valid_acc_cols, how='all')) if valid_acc_cols else 0} with valid accuracies")
     print(f"  Categories: {', '.join(sorted(df['category'].unique()))}\n")
     
     print("Creating outputs...")
