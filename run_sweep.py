@@ -42,7 +42,7 @@ SWEEP_BASE = f"{BASE}/sweep"        # one sub-dir per raw spectrogram config
 TESTS_BASE = f"{BASE}/sweep_tests"  # one sub-dir per training run
 
 # ── Training hyperparams (matching run_experiments.sh) ─────────────────────
-MODEL_TYPE  = "ast"
+MODEL_TYPE  = "regnet"
 EPOCHS      = 100
 PATIENCE    = 15
 MIXUP       = 0.25

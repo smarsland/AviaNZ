@@ -47,8 +47,8 @@ run_experiment() {
 }
 
 # Log + background subtraction + median filter
-run_experiment ast    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-run_experiment ast    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+run_experiment regnet    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
+run_experiment regnet    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
 
 }
 
