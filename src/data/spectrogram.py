@@ -467,7 +467,7 @@ class Spectrogram:
         (num_frames, window_width) to match the standard spectrogram output.
         """
         try:
-            from src.utils import dpss
+            from . import dpss
         except ImportError:
             print("dpss module not found")
             return np.array([])

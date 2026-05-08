@@ -150,10 +150,14 @@ def load_avianz_name_mapping(mapping_csv):
     return mapping
 
 
-def make_spec_processor(sg_type=None):
+def make_spec_processor(sg_type=None, window_type=None, sg_scale=None):
     spec_params = config.SPECTROGRAM_PARAMS.copy()
     if sg_type is not None:
         spec_params['sgType'] = sg_type
+    if window_type is not None:
+        spec_params['windowType'] = window_type
+    if sg_scale is not None:
+        spec_params['sgScale'] = sg_scale
     return SpectrogramProcessor(
         window_seconds=config.DEFAULT_WINDOW_SECONDS,
         hop_seconds=config.DEFAULT_HOP_SECONDS,
@@ -236,7 +240,7 @@ def parse_reviewed_csv(csv_path, mapping_csv):
     return records
 
 
-def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None, with_audio=False, sg_type=None):
+def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, target_time_bins=None, with_audio=False, sg_type=None, window_type=None, sg_scale=None):
     """
     Extract a spectrogram for each record from the raw DOC audio.
     Labels each sample with the full human_codes.
@@ -248,8 +252,10 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
         with_audio: If True, also save the source audio as a .wav file alongside the spectrogram
         sg_type: Spectrogram type override ('Standard', 'Multi-tapered', or 'Reassigned')
+        window_type: Window function override (e.g. 'Hann', 'Hamming', 'Blackman', 'BlackmanHarris')
+        sg_scale: Frequency scale override ('Mel Frequency', 'Linear', 'Bark Frequency')
     """
-    spec_proc = make_spec_processor(sg_type)
+    spec_proc = make_spec_processor(sg_type, window_type, sg_scale)
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
     if with_audio:
@@ -322,7 +328,7 @@ def build_doc_dataset(records, doc_raw, output_folder, fixed_length=False, targe
     return labels, kept_records
 
 
-def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False, with_audio=False, sg_type=None):
+def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, fixed_length=False, target_time_bins=None, freq_mask=False, with_audio=False, sg_type=None, window_type=None, sg_scale=None):
     """
     For each DOC record, find one AviaNZ segment whose annotation includes
     ANY species from that record's species1_codes (from DOC's 'Species 1' column,
@@ -338,8 +344,10 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
         target_time_bins: Target number of spectrogram time bins (only used if fixed_length=True)
         with_audio: If True, also save the matched audio segment as a .wav file alongside the spectrogram
         sg_type: Spectrogram type override ('Standard', 'Multi-tapered', or 'Reassigned')
+        window_type: Window function override (e.g. 'Hann', 'Hamming', 'Blackman', 'BlackmanHarris')
+        sg_scale: Frequency scale override ('Mel Frequency', 'Linear', 'Bark Frequency')
     """
-    spec_proc = make_spec_processor(sg_type)
+    spec_proc = make_spec_processor(sg_type, window_type, sg_scale)
     name_mapping = load_avianz_name_mapping(mapping_csv)
     proc = AviaNZDataProcessor(name_mapping=name_mapping)
 
@@ -516,7 +524,7 @@ def filter_to_common_classes(doc_labels, avianz_labels, min_samples_per_class=20
 
 def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=42,
                                fixed_length=False, target_time_bins=None, with_audio=False,
-                               all_search_codes=None, sg_type=None):
+                               all_search_codes=None, sg_type=None, window_type=None, sg_scale=None):
     """
     Add up to n background (no positive class) samples from DOC audio files that were
     not included in the matched dataset.  Each sample gets class_names=[].
@@ -529,7 +537,7 @@ def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=
     if n == 0:
         return []
 
-    spec_proc = make_spec_processor(sg_type)
+    spec_proc = make_spec_processor(sg_type, window_type, sg_scale)
     data_dir = os.path.join(doc_out, 'data')
     os.makedirs(data_dir, exist_ok=True)
     if with_audio:
@@ -599,7 +607,7 @@ def add_background_samples_doc(doc_labels_final, doc_raw, doc_out, n=1000, seed=
 def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_search_codes,
                                    mapping_csv, n=1000, seed=42, fixed_length=False,
                                    target_time_bins=None, freq_mask=False, with_audio=False,
-                                   sg_type=None):
+                                   sg_type=None, window_type=None, sg_scale=None):
     """
     Add up to n background (no positive class) samples from AviaNZ segments that were
     not included in the matched dataset AND do not contain any matched-species annotation.
@@ -608,7 +616,7 @@ def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_sea
     if n == 0:
         return []
 
-    spec_proc = make_spec_processor(sg_type)
+    spec_proc = make_spec_processor(sg_type, window_type, sg_scale)
     name_mapping = load_avianz_name_mapping(mapping_csv)
     proc = AviaNZDataProcessor(name_mapping=name_mapping)
 
@@ -793,6 +801,12 @@ def main():
     parser.add_argument('--spec-type', default=None,
                         choices=['Standard', 'Multi-tapered', 'Reassigned'],
                         help='Spectrogram type to use (default: Standard, from config)')
+    parser.add_argument('--window-type', default=None,
+                        choices=['Hann', 'Hamming', 'Blackman', 'BlackmanHarris'],
+                        help='Window function to use (default: Hann, from config)')
+    parser.add_argument('--sg-scale', default=None,
+                        choices=['Linear', 'Mel Frequency', 'Bark Frequency'],
+                        help='Frequency scale to use (default: Mel Frequency, from config)')
     args = parser.parse_args()
 
     doc_out = os.path.join(args.output, 'doc_matched')
@@ -829,6 +843,8 @@ def main():
         target_time_bins=target_time_bins,
         with_audio=args.with_audio,
         sg_type=args.spec_type,
+        window_type=args.window_type,
+        sg_scale=args.sg_scale,
     )
 
     print('\n=== Step 3: find matching AviaNZ sample for each DOC record ===')
@@ -841,6 +857,8 @@ def main():
         freq_mask=args.freq_mask,
         with_audio=args.with_audio,
         sg_type=args.spec_type,
+        window_type=args.window_type,
+        sg_scale=args.sg_scale,
     )
 
     # Drop DOC samples that had no AviaNZ match
@@ -869,6 +887,8 @@ def main():
             with_audio=args.with_audio,
             all_search_codes=all_search_codes,
             sg_type=args.spec_type,
+            window_type=args.window_type,
+            sg_scale=args.sg_scale,
         )
         doc_labels_final = doc_labels_final + doc_background
 
@@ -882,6 +902,8 @@ def main():
             freq_mask=args.freq_mask,
             with_audio=args.with_audio,
             sg_type=args.spec_type,
+            window_type=args.window_type,
+            sg_scale=args.sg_scale,
         )
         avianz_labels = avianz_labels + avianz_background
 

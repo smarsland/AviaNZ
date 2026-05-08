@@ -15,6 +15,8 @@ FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N_FLAG=""
 SPEC_TYPE_FLAG=""
+WINDOW_TYPE_FLAG=""
+SG_SCALE_FLAG=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -23,7 +25,9 @@ while [[ $# -gt 0 ]]; do
         --background-n) BACKGROUND_N_FLAG="--background-n $2"; shift 2 ;;
         --no-background) BACKGROUND_N_FLAG="--background-n 0"; shift ;;
         --spec-type) SPEC_TYPE_FLAG="--spec-type $2"; shift 2 ;;
-        *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite, --background-n N, --no-background, --spec-type {Standard,Multi-tapered,Reassigned}"; exit 1 ;;
+        --window-type) WINDOW_TYPE_FLAG="--window-type $2"; shift 2 ;;
+        --sg-scale) SG_SCALE_FLAG="--sg-scale $2"; shift 2 ;;
+        *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite, --background-n N, --no-background, --spec-type {Standard,Multi-tapered,Reassigned}, --window-type {Hann,Hamming,Blackman,BlackmanHarris}, --sg-scale {Linear,'Mel Frequency','Bark Frequency'}"; exit 1 ;;
     esac
 done
 
@@ -54,6 +58,8 @@ echo "  Output     : $MATCHED_BASE"
 echo "  With audio : yes"
 echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"
 echo "  Spec type  : ${SPEC_TYPE_FLAG:-Standard (default)}"
+echo "  Window     : ${WINDOW_TYPE_FLAG:-Hann (default)}"
+echo "  Scale      : ${SG_SCALE_FLAG:-Mel Frequency (default)}"
 echo "  Overwrite  : $OVERWRITE"
 echo "============================================================"
 echo ""
@@ -73,7 +79,9 @@ if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/la
         --with-audio \
         ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG} \
         ${BACKGROUND_N_FLAG:+$BACKGROUND_N_FLAG} \
-        ${SPEC_TYPE_FLAG:+$SPEC_TYPE_FLAG}
+        ${SPEC_TYPE_FLAG:+$SPEC_TYPE_FLAG} \
+        ${WINDOW_TYPE_FLAG:+$WINDOW_TYPE_FLAG} \
+        ${SG_SCALE_FLAG:+$SG_SCALE_FLAG}
 else
     echo "=== Step 1: matched datasets already exist, skipping (use --overwrite to force) ==="
 fi
