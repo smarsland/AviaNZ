@@ -190,9 +190,8 @@ def run_experiment(sg_type, window, scale_slug, norm_label, norm_slug,
         run_name = f"{MODEL_TYPE}_on_{train_name}_{slug}_{norm_slug}{bg_suffix}"
         out_dir  = f"{TESTS_BASE}/{run_name}"
 
-        # Skip if already trained
-        if (os.path.isfile(f"{out_dir}/model.pt") or
-                os.path.isfile(f"{out_dir}/model.pth")):
+        # Skip if already trained (trainer saves {model_type}_model.pt on completion)
+        if os.path.isfile(f"{out_dir}/{MODEL_TYPE}_model.pt"):
             print(f"  [skip] {run_name}")
             continue
 
