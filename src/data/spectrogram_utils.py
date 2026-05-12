@@ -3,6 +3,7 @@ Shared utilities for spectrogram processing.
 
 This module contains common functionality used across data loaders:
 - SpectrogramProcessor: Generate spectrograms from audio files
+- CQTProcessor: Constant-Q Transform (log-spaced multiresolution) spectrograms
 - smart_overwrite_folder: Safely overwrite output folders
 """
 
@@ -306,3 +307,118 @@ def apply_freq_mask(sg, freq_low, freq_high, fs):
     if r_bottom < freq_bins - 1:
         masked[r_bottom + 1:, :] = 0
     return masked
+
+
+class CQTProcessor:
+    """Constant-Q Transform spectrogram processor.
+
+    Equivalent to a log-spaced bandpass filterbank (like bandpass_explore.py) but
+    computed efficiently via FFT (orders of magnitude faster than time-domain FIR).
+
+    The CQT gives better time resolution at high frequencies (wide bands) and better
+    frequency resolution at low frequencies (narrow bands), which suits NZ bird
+    vocalisations well.
+
+    Output shape: (freq_bins, time_bins) with row 0 = highest frequency, matching
+    the rot90 convention used by SpectrogramProcessor.
+
+    Parameters
+    ----------
+    n_bins : int
+        Number of frequency bins (default: config.DEFAULT_FREQ_BINS = 224).
+    hop_length : int
+        Hop size in samples (default: 10 ms × fs).
+    fs : int
+        Target sample rate in Hz.
+    fmin : float
+        Lowest frequency in Hz. Default 27.5 Hz (A0) covers all NZ bird species
+        with headroom.
+    bins_per_octave : int
+        Frequency resolution per octave. 24 (= 2 per semitone) with fmin=27.5 Hz
+        and n_bins=224 covers 27.5 Hz to ~16 kHz at 32 kHz sample rate.
+    """
+
+    def __init__(self, n_bins, hop_length, fs, fmin=27.5, bins_per_octave=24):
+        self.n_bins = n_bins
+        self.hop_length = hop_length
+        self.fs = fs
+        self.fmin = fmin
+        self.bins_per_octave = bins_per_octave
+
+    def _load_audio(self, sound_file, start_time=None, end_time=None):
+        """Load (optionally sliced) audio, resample to self.fs, and RMS-normalise."""
+        file_info = sf.info(sound_file)
+        sr = int(file_info.samplerate)
+        duration = file_info.frames / sr
+
+        if start_time is None:
+            audio, _ = sf.read(sound_file, dtype='float32', always_2d=True)
+        else:
+            start_time = float(start_time)
+            end_time = float(min(end_time, duration))
+            start_sample = int(max(0.0, start_time) * sr)
+            end_sample = int(end_time * sr)
+            frames = max(0, end_sample - start_sample)
+            audio, _ = sf.read(sound_file, start=start_sample, frames=frames,
+                                dtype='float32', always_2d=True)
+
+        if audio.shape[1] > 1:
+            audio = audio.max(axis=1)
+        else:
+            audio = audio[:, 0]
+
+        if sr != self.fs:
+            import resampy
+            audio = resampy.resample(audio, sr, self.fs)
+
+        rms = np.sqrt(np.mean(audio ** 2))
+        if rms > 1e-8:
+            audio = audio / rms * 0.1
+
+        return audio
+
+    def _compute_cqt(self, audio):
+        """Return CQT magnitude array shaped (freq_bins, time_bins), row 0 = highest freq."""
+        import librosa
+        C = librosa.cqt(
+            audio,
+            sr=self.fs,
+            hop_length=self.hop_length,
+            n_bins=self.n_bins,
+            bins_per_octave=self.bins_per_octave,
+            fmin=self.fmin,
+        )
+        mag = np.abs(C).astype(np.float32)
+        # librosa CQT: row 0 = fmin (lowest). Flip so row 0 = highest, matching
+        # the rot90 convention of SpectrogramProcessor.
+        return np.flipud(mag)
+
+    def process_audio_file(self, sound_file):
+        try:
+            audio = self._load_audio(sound_file)
+            mag = self._compute_cqt(audio)
+            return mag if not np.isnan(mag).any() else None
+        except Exception as e:
+            print(f"Error processing {sound_file}: {e}")
+            return None
+
+    def process_audio_segment(self, sound_file, start_time, end_time):
+        try:
+            audio = self._load_audio(sound_file, start_time, end_time)
+            mag = self._compute_cqt(audio)
+            return mag if not np.isnan(mag).any() else None
+        except Exception as e:
+            print(f"Error processing segment [{start_time:.2f}-{end_time:.2f}] from {sound_file}: {e}")
+            return None
+
+    def save_spectrogram(self, sg_raw, output_folder, filename):
+        np.save(os.path.join(output_folder, f"{filename}.npy"), sg_raw)
+
+    def save_example_image(self, sg_raw, output_folder, filename, cmap_name='gray'):
+        examples_folder = os.path.join(output_folder, "examples")
+        os.makedirs(examples_folder, exist_ok=True)
+        cmap = plt.get_cmap(cmap_name)
+        norm = plt.Normalize(vmin=np.nanmin(sg_raw), vmax=np.nanmax(sg_raw))
+        colored = cmap(norm(sg_raw))
+        img = Image.fromarray((colored[..., :3] * 255).astype(np.uint8))
+        img.save(os.path.join(examples_folder, f"{filename}.png"))

@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
-Master sweep: build all 18 unique spectrogram-variant datasets and run all
-216 training experiments (18 × 3 norms × 2 bg options × 2 train datasets).
+Master sweep: build all 20 unique spectrogram-variant datasets and run all
+240 training experiments.
 
 Efficiency:
   Normalization (Log/PCEN/Box-Cox) and bg-subtract/median-filter are applied
-  at training time by train.py — not at dataset-build time.  Only the 18 unique
+  at training time by train.py — not at dataset-build time.  Only the unique
   (sgType × window × scale) combinations require separate dataset builds.
+
+  Standard/Reassigned: 4 windows × 2 scales = 8 configs each  → 16 configs
+  Multi-tapered:       1 (default tapers) × 2 scales           →  2 configs
+  Bandpass (CQT):      1 (log-frequency, no window/scale)       →  1 config
+  Total: 19 raw dataset builds, each with 6 training runs (3 norms × 2 bg)
+         × 2 train datasets (doc/avianz) = 228 training runs.
 
 Dataset layout:
   SWEEP_BASE/{slug}/doc_matched/
@@ -23,7 +29,7 @@ Usage:
   python run_sweep.py --build-only       # only build datasets
   python run_sweep.py --train-only       # only run training (datasets must exist)
   python run_sweep.py --dry-run          # print what would be run, no execution
-  python run_sweep.py --list             # list all 216 experiment names
+  python run_sweep.py --list             # list all experiment names
 """
 
 import os
@@ -49,7 +55,7 @@ MIXUP       = 0.25
 VIZ_SAMPLES = 3
 
 # ── Parameter grid ────────────────────────────────────────────────────────────
-SG_TYPES = ["Standard", "Reassigned", "Multi-tapered"]
+SG_TYPES = ["Standard", "Reassigned", "Multi-tapered", "Bandpass"]
 
 # Windows vary for Standard and Reassigned; Multi-tapered uses its own tapers
 WINDOWS = ["Hann", "Hamming", "Blackman", "BlackmanHarris"]
@@ -75,8 +81,16 @@ BG_OPTIONS = [
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def unique_raw_configs():
-    """Yield (sg_type, window, scale_label, scale_slug) for all 18 unique raw configs."""
+    """Yield (sg_type, window, scale_label, scale_slug) for all unique raw configs.
+
+    Bandpass (CQT) has no window or scale variants — it is inherently
+    log-frequency and parameterised only by n_bins and hop_length (fixed by config).
+    """
     for sg_type in SG_TYPES:
+        if sg_type == "Bandpass":
+            # CQT: no window variants, no scale variants
+            yield sg_type, None, "CQT", "cqt"
+            continue
         windows = WINDOWS if sg_type != "Multi-tapered" else [None]
         for window in windows:
             for scale_label, scale_slug in SG_SCALES:
@@ -132,8 +146,10 @@ def build_dataset(sg_type, window, scale_label, scale_slug, matched_base, dry_ru
             "--mapping",      MAPPING,
             "--fixed-length",
             "--spec-type",    sg_type,
-            "--sg-scale",     scale_label,
         ]
+        # Bandpass (CQT) has no window or scale — those args are irrelevant
+        if sg_type != "Bandpass":
+            cmd += ["--sg-scale", scale_label]
         if window:
             cmd += ["--window-type", window]
         run_cmd(cmd, dry_run)
@@ -249,14 +265,12 @@ def main():
                     for train_name in ("doc", "avianz"):
                         print(f"  {MODEL_TYPE}_on_{train_name}_{slug}_{norm_slug}{bg_suffix}")
         return
-
     os.makedirs(SWEEP_BASE, exist_ok=True)
     os.makedirs(TESTS_BASE, exist_ok=True)
 
     print(f"\n{'#'*60}")
     print(f"  Sweep: {n_builds} dataset builds, {n_runs} training runs")
-    if args.dry_run:
-        print("  DRY RUN — no commands will be executed")
+    if args.dry_run:        print("  DRY RUN — no commands will be executed")
     print(f"{'#'*60}")
 
     for sg_type, window, scale_label, scale_slug in raw_configs:

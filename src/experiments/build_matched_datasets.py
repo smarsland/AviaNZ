@@ -44,7 +44,7 @@ from src.experiments.analyze_dataset_quality import (
     parse_species_list_to_codes,
 )
 from src.data.dataset_builder import AviaNZDataProcessor
-from src.data.spectrogram_utils import SpectrogramProcessor, apply_freq_mask
+from src.data.spectrogram_utils import SpectrogramProcessor, CQTProcessor, apply_freq_mask
 
 
 def normalize_label(label):
@@ -151,6 +151,12 @@ def load_avianz_name_mapping(mapping_csv):
 
 
 def make_spec_processor(sg_type=None, window_type=None, sg_scale=None):
+    if sg_type == 'Bandpass':
+        return CQTProcessor(
+            n_bins=config.DEFAULT_FREQ_BINS,
+            hop_length=int(config.DEFAULT_HOP_SECONDS * config.DEFAULT_SAMPLE_RATE),
+            fs=config.DEFAULT_SAMPLE_RATE,
+        )
     spec_params = config.SPECTROGRAM_PARAMS.copy()
     if sg_type is not None:
         spec_params['sgType'] = sg_type
@@ -799,8 +805,9 @@ def main():
                         help='Number of background (no positive class) samples to add to each dataset '
                              'from rejected/unmatched files. Set to 0 to disable. (default: 1000)')
     parser.add_argument('--spec-type', default=None,
-                        choices=['Standard', 'Multi-tapered', 'Reassigned'],
-                        help='Spectrogram type to use (default: Standard, from config)')
+                        choices=['Standard', 'Multi-tapered', 'Reassigned', 'Bandpass'],
+                        help='Spectrogram type to use (default: Standard, from config). '
+                             'Bandpass uses a Constant-Q Transform (log-frequency filterbank).')
     parser.add_argument('--window-type', default=None,
                         choices=['Hann', 'Hamming', 'Blackman', 'BlackmanHarris'],
                         help='Window function to use (default: Hann, from config)')

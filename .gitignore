@@ -62,3 +62,4 @@ test/*all_results.json
 
 vis_*
 tests*
+sweep_tests*

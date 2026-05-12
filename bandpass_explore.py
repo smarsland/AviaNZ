@@ -13,7 +13,7 @@ AUDIO_FILE   = "Sound Files/kiwi_1min.wav"
 WINDOW_WIDTH = 512
 INCR         = 128
 
-N_BANDS   = 300      # total number of bandpass bands
+N_BANDS   = 30      # total number of bandpass bands
 FREQ_LOW  = 200     # Hz — lower edge of lowest band
 FREQ_HIGH = None    # Hz — upper edge of highest band; None = fs/2 - 50
 # ─────────────────────────────────────────────────────────────────────────────
