@@ -314,7 +314,62 @@ class ModelPredictor:
         print(f"Predictions shape: {all_predictions.shape}")
         
         return all_predictions
-    
+
+    def predict_logits_with_ids(self):
+        """Return raw pre-activation logits, aligned row_ids, and true labels.
+
+        Unlike ``predict()`` which converts to probabilities, this method returns
+        the model output *before* sigmoid/softmax so that logits can be averaged
+        meaningfully across models in an ensemble.
+
+        Returns
+        -------
+        row_ids : list[str]
+            Per-sample identifier matching ``row_id`` in ``labels.json``.  Use
+            this to align predictions across models that operate on different
+            spectrogram representations of the same audio clips.
+        logits : np.ndarray, shape (N, C)
+            Raw model logits (float32).
+        true_labels : np.ndarray, shape (N, C)
+            Ground-truth multi-hot labels (float32).
+        """
+        print("Generating logits (pre-activation)...")
+
+        all_logits = []
+        all_labels = []
+
+        self.model.eval()
+        with torch.no_grad():
+            for data, target in tqdm(self.test_loader, desc="Inferring logits"):
+                data = data.to(self.device)
+
+                if self.cleaner is not None:
+                    data = self.cleaner(data)
+
+                if self.model_type == 'dann':
+                    outputs = self.model.predict(data)
+                else:
+                    outputs = self.model(data)
+
+                if isinstance(outputs, tuple):
+                    outputs = outputs[0]
+
+                all_logits.append(outputs.cpu().numpy())
+                all_labels.append(target.numpy())
+
+        logits = np.vstack(all_logits)
+        true_labels = np.vstack(all_labels)
+
+        # Build row_ids in dataset order (DataLoader has shuffle=False)
+        row_ids = []
+        for file_info in self.file_metadata:
+            filename = file_info['filename']
+            row_id = file_info.get('row_id', filename)
+            row_ids.append(row_id)
+
+        print(f"Logits shape: {logits.shape}  |  unique row_ids: {len(set(row_ids))}")
+        return row_ids, logits, true_labels
+
     def save_predictions(self, predictions):
         """Save predictions to CSV in kaytoo-compatible format."""
         print(f"Saving predictions to {self.output_file}")

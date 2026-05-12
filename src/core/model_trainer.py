@@ -1173,35 +1173,44 @@ class Trainer:
         plt.close()
     
     def _save_test_predictions(self, model, test_loader, test_data, test_name):
-        """Save test predictions to CSV file for accuracy computation."""
+        """Save test predictions (per-class probabilities) to CSV."""
         import csv
-        
+
         model.eval()
-        predictions = {}
-        
+        all_probs = []
+        all_filenames = []
+
+        sample_idx = 0
+        filenames_list = test_data['train_filenames']
+
         with torch.no_grad():
             for batch in test_loader:
-                data, target = batch
+                data, _ = batch
+                batch_size = data.size(0)
                 data = data.to(self.device)
-                filenames = [test_data['train_filenames'][i] for i in range(len(data))]
-                
+
                 output = model(data)
-                
-                # Always multilabel
-                preds = (torch.sigmoid(output) > 0.5).cpu().numpy()
-                
-                # Map predictions to class names
-                for i, filename in enumerate(filenames):
-                    pred_classes = [test_data['class_names'][j] for j in range(len(preds[i])) if preds[i][j]]
-                    predictions[filename] = ','.join(pred_classes) if pred_classes else 'Empty'
-        
-        # Save to CSV
+                if isinstance(output, tuple):
+                    output = output[0]
+
+                probs = torch.sigmoid(output).cpu().numpy()
+                all_probs.append(probs)
+
+                # Correctly track which dataset samples this batch covers
+                batch_filenames = filenames_list[sample_idx: sample_idx + batch_size]
+                all_filenames.extend(batch_filenames)
+                sample_idx += batch_size
+
+        all_probs = np.vstack(all_probs)
+        class_names = test_data['class_names']
+
+        # Save per-class probabilities (same format as ModelPredictor.save_predictions)
         csv_path = os.path.join(self.output_folder, f'predictions_{test_name}.csv')
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['filename', 'predicted_class'])
-            for filename, pred_class in predictions.items():
-                writer.writerow([filename, pred_class])
-        
-        print(f"Saved test predictions to {csv_path}")
+            writer.writerow(['filename'] + class_names)
+            for filename, row_probs in zip(all_filenames, all_probs):
+                writer.writerow([filename] + [f"{p:.6f}" for p in row_probs])
+
+        print(f"Saved {len(all_filenames)} predictions to {csv_path}")
 
