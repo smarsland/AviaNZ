@@ -129,6 +129,9 @@ def run_one(exp_dir: Path, test_dir: Path, out_csv: Path,
         predictor.load_data()
         row_ids, logits, true_labels = predictor.predict_logits_with_ids()
     except Exception as e:
+        err = str(e)
+        if "CUDA error" in err or "CUDA-capable" in err or "cudaError" in err:
+            raise RuntimeError(f"CUDA unavailable — aborting: {e}") from e
         print(f"    [ERROR] inference failed: {e}")
         return False
 
