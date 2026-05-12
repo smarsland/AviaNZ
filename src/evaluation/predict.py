@@ -16,7 +16,7 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import DataLoader as TorchDataLoader
-from src.core.models import AST, CNNModel, SpectrogramCleaner
+from src.core.models import AST, CNNModel, SpectrogramDecoder
 from src.data.data_utils import SpectrogramDataset
 from src.data.normalizer import normalize_spectrogram
 from src.core import config
@@ -148,7 +148,7 @@ class ModelPredictor:
         cleaner_path = Path(self.model_path).parent / 'cleaner_best.pt'
         if cleaner_path.exists():
             print(f"Loading spectrogram cleaner from {cleaner_path}")
-            self.cleaner = SpectrogramCleaner()
+            self.cleaner = SpectrogramDecoder()
             self.cleaner.load_state_dict(torch.load(cleaner_path, map_location=self.device))
             self.cleaner = self.cleaner.to(self.device)
             self.cleaner.eval()
