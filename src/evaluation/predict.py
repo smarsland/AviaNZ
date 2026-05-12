@@ -16,7 +16,7 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import DataLoader as TorchDataLoader
-from src.core.models import AST, CNNModel, SpectrogramDecoder
+from src.core.models import AST, CNNModel, SpectrogramDecoder, RegNetModel
 from src.data.data_utils import SpectrogramDataset
 from src.data.normalizer import normalize_spectrogram
 from src.core import config
@@ -60,7 +60,7 @@ class ModelPredictor:
             model_config = json.load(f)
         
         num_classes = model_config['num_classes']
-        multilabel = model_config.get('multilabel', False)
+        multilabel = True  # always multilabel
         model_type = model_config.get('model_type', 'AST').lower()
 
         self.multilabel = multilabel
@@ -95,6 +95,15 @@ class ModelPredictor:
         
         if model_type == 'ast':
             self.model = AST(num_classes, multilabel, input_size=training_input_size, dropout=0.0, use_reconstruction=use_reconstruction)
+        elif model_type == 'regnet':
+            self.model = RegNetModel(
+                num_classes,
+                pretrained_path=None,
+                model_name=model_config.get('model_name', 'regnety_008'),
+                use_cnn_adapter=model_config.get('use_cnn_adapter', False),
+                use_sed_head=model_config.get('use_sed_head', False),
+                use_gated_head=model_config.get('use_gated_head', False),
+            )
         elif model_type == 'cnn':
             if inference_time_bins != training_time_bins:
                 raise ValueError(

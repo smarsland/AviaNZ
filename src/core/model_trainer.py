@@ -1127,6 +1127,7 @@ class Trainer:
         else:
             model_config['model_type'] = 'AST'
         model_config['num_classes'] = model.num_classes
+        model_config['multilabel'] = True
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
         model_config['use_cnn_adapter'] = self.use_cnn_adapter
