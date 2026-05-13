@@ -33,8 +33,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import torch
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.evaluation.predict import ModelPredictor
+from src.core.utils import pick_free_gpu
 
 # ---------------------------------------------------------------------------
 # Constants (must match run_sweep.py conventions)
@@ -79,6 +82,18 @@ def parse_exp_name(name: str):
     return None
 
 
+def pick_free_device():
+    """Pin CUDA_VISIBLE_DEVICES to the least-used GPU and return cuda:0, or cpu."""
+    if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+        try:
+            chosen = pick_free_gpu()
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
+        except RuntimeError as e:
+            print(f"    [warn] GPU auto-select failed ({e}); using CPU")
+            return torch.device("cpu")
+    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
 def find_checkpoint(exp_dir):
     """Return (ckpt_path, config_path, model_type). Prefers _best over _final."""
     p = Path(exp_dir)
@@ -115,25 +130,43 @@ def run_one(exp_dir: Path, test_dir: Path, out_csv: Path,
     print(f"    {mt} checkpoint: {Path(ckpt).name}")
     print(f"    test dir:       {test_dir}")
 
-    predictor = ModelPredictor(
-        model_path=ckpt,
-        model_config=cfg,
-        data_folder=str(test_dir),
-        output_file=str(out_csv),   # not used by predict_logits_with_ids, but required by constructor
-        batch_size=batch_size,
-        device=device,
-    )
+    # If no explicit device requested, pin CUDA_VISIBLE_DEVICES to the free GPU.
+    if device:
+        resolved_device = torch.device(device)
+    else:
+        resolved_device = pick_free_device()
+    print(f"    device:         {resolved_device}")
+
+    def _make_predictor(dev):
+        return ModelPredictor(
+            model_path=ckpt,
+            model_config=cfg,
+            data_folder=str(test_dir),
+            output_file=str(out_csv),
+            batch_size=batch_size,
+            device=dev,
+        )
+
+    def _try_run(dev):
+        pred = _make_predictor(dev)
+        pred.load_model()
+        pred.load_data()
+        return pred, pred.predict_logits_with_ids()
 
     try:
-        predictor.load_model()
-        predictor.load_data()
-        row_ids, logits, true_labels = predictor.predict_logits_with_ids()
+        predictor, (row_ids, logits, true_labels) = _try_run(resolved_device)
     except Exception as e:
         err = str(e)
         if "CUDA error" in err or "CUDA-capable" in err or "cudaError" in err:
-            raise RuntimeError(f"CUDA unavailable — aborting: {e}") from e
-        print(f"    [ERROR] inference failed: {e}")
-        return False
+            print(f"    [warn] CUDA error on {resolved_device}, retrying on CPU: {e}")
+            try:
+                predictor, (row_ids, logits, true_labels) = _try_run(torch.device("cpu"))
+            except Exception as e2:
+                print(f"    [ERROR] inference failed on CPU too: {e2}")
+                return False
+        else:
+            print(f"    [ERROR] inference failed: {e}")
+            return False
 
     # logits → probabilities via stable sigmoid
     probs = (1.0 / (1.0 + np.exp(-logits.astype(np.float64)))).astype(np.float32)

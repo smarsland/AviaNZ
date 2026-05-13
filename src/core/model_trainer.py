@@ -18,6 +18,7 @@ from src.evaluation.evaluation_utils import EvaluationManager
 from src.evaluation.attention_viz import visualize_attention
 from src.core.trainer_config import TrainerConfig, TrainingConfig, ModelConfig
 from src.core import config
+from src.core.utils import pick_free_gpu
 
 
 def compute_multilabel_f1(all_preds, all_targets):
@@ -1067,47 +1068,8 @@ class Trainer:
         print("Transfer learning: Using pretrained backbone, training new classification head")
 
     def _pick_free_gpu(self):
-        """Return the index of the GPU with the lowest memory usage, via nvidia-smi.
-        Raises RuntimeError if nvidia-smi cannot be found or fails.
-        """
-        import subprocess
-        import shutil
-
-        smi = shutil.which('nvidia-smi') or '/usr/bin/nvidia-smi' or '/bin/nvidia-smi'
-        if not os.path.isfile(smi):
-            raise RuntimeError(
-                "nvidia-smi not found — cannot auto-select a free GPU. "
-                "Set CUDA_VISIBLE_DEVICES manually before running."
-            )
-
-        try:
-            out = subprocess.check_output(
-                [smi, '--query-gpu=index,memory.used', '--format=csv,noheader,nounits'],
-                stderr=subprocess.STDOUT, text=True
-            )
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"nvidia-smi failed:\n{e.output}") from e
-
-        best_idx, best_mem = None, float('inf')
-        for line in out.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(',')
-            if len(parts) != 2:
-                continue
-            try:
-                idx, mem = int(parts[0].strip()), int(parts[1].strip())
-            except ValueError:
-                continue
-            if mem < best_mem:
-                best_mem, best_idx = mem, idx
-
-        if best_idx is None:
-            raise RuntimeError(f"Could not parse nvidia-smi output:\n{out}")
-
-        print(f"Auto-selected GPU {best_idx} ({best_mem} MiB used)")
-        return best_idx
+        """Return the index of the GPU with the lowest memory usage."""
+        return pick_free_gpu()
 
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'

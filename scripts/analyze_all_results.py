@@ -196,6 +196,15 @@ def load_from_viz_dir(viz_dir):
         if not exp_dir.is_dir():
             continue
 
+        # Ensemble directories: ensemble_all, ensemble_avianz, ensemble_doc, etc.
+        if exp_dir.name.startswith('ensemble'):
+            row = _empty_row(exp_dir.name, 'all', 'ensemble', exp_dir.name)
+            row['category'] = 'ENSEMBLE'
+            _read_reports_from_dir(exp_dir, 'ensemble', row)
+            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
+            results.append(row)
+            continue
+
         m = standard_pattern.match(exp_dir.name)
         if m:
             model, train_dataset, transform = m.groups()
