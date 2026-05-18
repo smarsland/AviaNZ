@@ -190,7 +190,7 @@ def _empty_row(name, train_dataset, model, transform):
 def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$')
     pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
@@ -257,7 +257,7 @@ def create_overview_table(df, output_dir):
 
 def create_per_class_table(viz_dir, output_dir):
     """Create per_class_metrics.csv: one row per (experiment, test split, class)."""
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$')
     rows = []
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
@@ -535,15 +535,30 @@ def print_model_comparison(df):
 
     rows = []
 
-    # ---- Best REGNET --------------------------------------------------------
-    regnet_df = df[df['category'] == 'REGNET'].copy()
+    # ---- Best REGNET (matched / sweep datasets) ----------------------------
+    regnet_df = df[
+        (df['category'] == 'REGNET') &
+        (~df['train_dataset'].isin(['large_doc', 'large_avianz']))
+    ].copy()
     regnet_df = regnet_df.dropna(subset=['test1_acc', 'test2_acc'])
     if not regnet_df.empty:
         regnet_df['_avg'] = (regnet_df['test1_acc'] + regnet_df['test2_acc']) / 2
         best = regnet_df.sort_values('_avg', ascending=False).iloc[0]
-        rows.append(('Best REGNET', best['name'], _collect(best)))
+        rows.append(('Best REGNET (matched)', best['name'], _collect(best)))
     else:
-        rows.append(('Best REGNET', '(no results)', {}))
+        rows.append(('Best REGNET (matched)', '(no results)', {}))
+
+    # ---- Best REGNET on large DOC dataset -----------------------------------
+    large_df = df[
+        (df['category'] == 'REGNET') &
+        (df['train_dataset'] == 'large_doc')
+    ].copy()
+    large_df = large_df.dropna(subset=['test1_acc', 'test2_acc'])
+    if not large_df.empty:
+        large_df['_avg'] = (large_df['test1_acc'] + large_df['test2_acc']) / 2
+        best_large = large_df.sort_values('_avg', ascending=False).iloc[0]
+        rows.append(('Best REGNET (large DOC)', best_large['name'], _collect(best_large)))
+    # skip silently if not yet run
 
     # ---- Kaytoo pretrained --------------------------------------------------
     k_df = df[df['category'] == 'Kaytoo (Pretrained)']
@@ -568,9 +583,7 @@ def print_model_comparison(df):
             t2n = m['t2n']
             break
 
-    W = 78
-    col_w = 22  # width of accuracy column pairs
-    hdr1 = f"  {'Model':<22s}  {'Config':<34s}"
+    W = 84
     hdr2 = f"  {t1n:>10s} acc  (labelled)   {t2n:>10s} acc  (labelled)"
 
     print("\n" + "=" * W)
@@ -582,9 +595,8 @@ def print_model_comparison(df):
         if not m:
             print(f"  {label}")
             continue
-        cfg_str = f"  [{cfg_name}]" if cfg_name else ""
         print(
-            f"  {label:<22s}"
+            f"  {label:<26s}"
             f"  {m['t1']:>7s}  ({m['t1lab']:>7s})"
             f"     {m['t2']:>7s}  ({m['t2lab']:>7s})"
         )

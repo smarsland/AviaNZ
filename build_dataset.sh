@@ -14,9 +14,9 @@ set -e
 FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N_FLAG=""
-SPEC_TYPE_FLAG=""
-WINDOW_TYPE_FLAG=""
-SG_SCALE_FLAG=""
+SPEC_TYPE_FLAG="--spec-type Reassigned"
+WINDOW_TYPE_FLAG="--window-type Hamming"
+SG_SCALE_FLAG="--sg-scale Linear"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -57,9 +57,9 @@ echo "  AviaNZ raw : $AVIANZ_RAW"
 echo "  Output     : $MATCHED_BASE"
 echo "  With audio : yes"
 echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"
-echo "  Spec type  : ${SPEC_TYPE_FLAG:-Standard (default)}"
-echo "  Window     : ${WINDOW_TYPE_FLAG:-Hann (default)}"
-echo "  Scale      : ${SG_SCALE_FLAG:-Mel Frequency (default)}"
+  echo "  Spec type  : ${SPEC_TYPE_FLAG}"
+  echo "  Window     : ${WINDOW_TYPE_FLAG}"
+  echo "  Scale      : ${SG_SCALE_FLAG}"
 echo "  Overwrite  : $OVERWRITE"
 echo "============================================================"
 echo ""

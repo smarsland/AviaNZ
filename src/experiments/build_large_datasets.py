@@ -442,6 +442,10 @@ def main():
                         help='Skip saving audio files (Kaytoo/BirdNET eval will not work)')
     parser.add_argument('--overwrite', action='store_true',
                         help='Re-build even if output folders already exist')
+    parser.add_argument('--class-filter', action='store_true',
+                        help='Filter to the intersection of DOC and AviaNZ classes '
+                             '(only keep species present in both with >= min-per-class samples). '
+                             'Default: keep ALL DOC species.')
     parser.add_argument(
         '--spec-type', default='Reassigned',
         choices=['Standard', 'Multi-tapered', 'Reassigned', 'Bandpass'],
@@ -529,24 +533,42 @@ def main():
             avianz_labels = json.load(f)['files']
 
     # -----------------------------------------------------------------------
-    # Step 3: filter to common classes
+    # Step 3: (optionally) filter to common classes
     # -----------------------------------------------------------------------
-    print(f'\n=== Step 3: filter to common classes (min {args.min_per_class}/class) ===')
-    doc_labels, avianz_labels = filter_to_common_classes(
-        doc_labels, avianz_labels,
-        min_samples_per_class=args.min_per_class,
-    )
 
-    # Collect the final shared category set
-    all_categories = set()
-    for e in doc_labels + avianz_labels:
-        all_categories.update(e.get('class_names', []))
-    categories = sorted(all_categories)
-    print(f'  Final category set ({len(categories)} classes): {categories}')
+    # Always save the FULL DOC labels before any intersection filtering so that
+    # the DOC-only training path (step 7) can use all species.
+    full_doc_cats = sorted({c for e in doc_labels for c in e.get('class_names', [])})
+    full_labels_path = os.path.join(doc_out, 'labels_all.json')
+    with open(full_labels_path, 'w') as f:
+        json.dump({
+            'files': doc_labels,
+            'categories': full_doc_cats,
+            'num_classes': len(full_doc_cats),
+            'dataset': 'DOC_large_all',
+        }, f, indent=2)
+    print(f'\nSaved full (unfiltered) DOC labels: {len(doc_labels)} samples, '
+          f'{len(full_doc_cats)} classes → {full_labels_path}')
 
-    # Write filtered labels for the raw (unsplit) datasets
-    write_labels_json(doc_out, doc_labels, 'DOC_large')
-    write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+    if args.class_filter:
+        print(f'\n=== Step 3: filter to common classes (min {args.min_per_class}/class) ===')
+        doc_labels, avianz_labels = filter_to_common_classes(
+            doc_labels, avianz_labels,
+            min_samples_per_class=args.min_per_class,
+        )
+        all_categories = set()
+        for e in doc_labels + avianz_labels:
+            all_categories.update(e.get('class_names', []))
+        categories = sorted(all_categories)
+        print(f'  Final category set ({len(categories)} classes): {categories}')
+        write_labels_json(doc_out, doc_labels, 'DOC_large')
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+    else:
+        print('\n=== Step 3: keeping all DOC classes (default — use --class-filter to restrict) ===')
+        print(f'  Keeping all {len(full_doc_cats)} DOC classes for training')
+        categories = full_doc_cats
+        write_labels_json(doc_out, doc_labels, 'DOC_large')
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
 
     # -----------------------------------------------------------------------
     # Step 4: split into train / test

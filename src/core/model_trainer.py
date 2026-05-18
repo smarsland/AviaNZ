@@ -21,6 +21,44 @@ from src.core import config
 from src.core.utils import pick_free_gpu
 
 
+def _remap_labels_to_train_space(test_data, train_data):
+    """Remap test labels from test category space to training category space.
+
+    When a model is trained on N classes but a test set has M classes (e.g.
+    training on a large 133-class dataset and testing on a 25-class matched
+    split), the label tensors would have mismatched shapes causing a crash.
+    This maps each test-set class to its position in the training vocabulary,
+    so the resulting label matrix is (N_samples, N_train_classes).  Classes
+    in the test set but not in training are silently ignored; training classes
+    absent from the test set retain ground-truth 0 (correct: they are not
+    present in those samples).
+    """
+    test_cats = test_data.get('categories', [])
+    train_cats = train_data.get('categories', [])
+    if list(test_cats) == list(train_cats):
+        return test_data  # vocabularies already match – nothing to do
+
+    n_samples = len(test_data['train_labels'])
+    n_train = len(train_cats)
+    train_cat_to_idx = {c: i for i, c in enumerate(train_cats)}
+    remapped = np.zeros((n_samples, n_train), dtype=np.float32)
+    for test_idx, cat in enumerate(test_cats):
+        if cat in train_cat_to_idx:
+            remapped[:, train_cat_to_idx[cat]] = test_data['train_labels'][:, test_idx]
+
+    result = dict(test_data)
+    result['train_labels'] = remapped
+    result['categories'] = list(train_cats)
+    result['class_names'] = train_data.get('class_names', list(train_cats))
+    result['nclasses'] = n_train
+    n_test_only = sum(1 for c in test_cats if c not in train_cat_to_idx)
+    n_train_only = sum(1 for c in train_cats if c not in set(test_cats))
+    if n_test_only or n_train_only:
+        print(f"  [label remap] test-only classes ignored: {n_test_only}, "
+              f"train-only classes (always 0 in GT): {n_train_only}")
+    return result
+
+
 def compute_multilabel_f1(all_preds, all_targets):
     """Compute macro F1 score for multi-label predictions."""
     all_preds = np.vstack(all_preds)
@@ -903,7 +941,8 @@ class Trainer:
             print(f"{'='*60}")
             test_loader1 = DataLoader(self.test_folder, noise_folder=None)
             test_data1 = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
-            
+            test_data1 = _remap_labels_to_train_space(test_data1, self.data)
+
             test_dataset1 = SpectrogramDataset(
                 test_data1['train_filenames'], test_data1['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
@@ -958,7 +997,8 @@ class Trainer:
             print(f"{'='*60}")
             test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
             test_data2 = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
-            
+            test_data2 = _remap_labels_to_train_space(test_data2, self.data)
+
             test_dataset2 = SpectrogramDataset(
                 test_data2['train_filenames'], test_data2['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
