@@ -511,6 +511,91 @@ def create_report(df, output_dir):
     print(f"✓ REPORT.md")
 
 
+def print_model_comparison(df):
+    """
+    Print a clear terminal comparison of the best REGNET model vs Kaytoo and
+    BirdNET pretrained baselines.
+
+    Shows overall accuracy and labelled-only accuracy for both test sets.
+    """
+    def _fmt(val):
+        if val is np.nan or (isinstance(val, float) and np.isnan(val)):
+            return "  N/A"
+        return f"{val:5.1f}%"
+
+    def _collect(row):
+        return {
+            't1':    _fmt(row.get('test1_acc',          np.nan)),
+            't1lab': _fmt(row.get('test1_acc_labelled', np.nan)),
+            't2':    _fmt(row.get('test2_acc',          np.nan)),
+            't2lab': _fmt(row.get('test2_acc_labelled', np.nan)),
+            't1n':   str(row.get('test1_name', '?')),
+            't2n':   str(row.get('test2_name', '?')),
+        }
+
+    rows = []
+
+    # ---- Best REGNET --------------------------------------------------------
+    regnet_df = df[df['category'] == 'REGNET'].copy()
+    regnet_df = regnet_df.dropna(subset=['test1_acc', 'test2_acc'])
+    if not regnet_df.empty:
+        regnet_df['_avg'] = (regnet_df['test1_acc'] + regnet_df['test2_acc']) / 2
+        best = regnet_df.sort_values('_avg', ascending=False).iloc[0]
+        rows.append(('Best REGNET', best['name'], _collect(best)))
+    else:
+        rows.append(('Best REGNET', '(no results)', {}))
+
+    # ---- Kaytoo pretrained --------------------------------------------------
+    k_df = df[df['category'] == 'Kaytoo (Pretrained)']
+    if not k_df.empty:
+        rows.append(('Kaytoo (Pretrained)', '', _collect(k_df.iloc[0])))
+    else:
+        rows.append(('Kaytoo (Pretrained)', '(no results)', {}))
+
+    # ---- BirdNET pretrained -------------------------------------------------
+    b_df = df[df['category'] == 'BirdNET (Pretrained)']
+    if not b_df.empty:
+        rows.append(('BirdNET (Pretrained)', '', _collect(b_df.iloc[0])))
+    else:
+        rows.append(('BirdNET (Pretrained)', '(no results)', {}))
+
+    # ---- Print --------------------------------------------------------------
+    # Determine test-set names from first row that has them
+    t1n = t2n = '?'
+    for _, _, m in rows:
+        if m:
+            t1n = m['t1n']
+            t2n = m['t2n']
+            break
+
+    W = 78
+    col_w = 22  # width of accuracy column pairs
+    hdr1 = f"  {'Model':<22s}  {'Config':<34s}"
+    hdr2 = f"  {t1n:>10s} acc  (labelled)   {t2n:>10s} acc  (labelled)"
+
+    print("\n" + "=" * W)
+    print(" BEST MODEL vs BASELINES")
+    print("=" * W)
+    print(hdr2)
+    print("-" * W)
+    for label, cfg_name, m in rows:
+        if not m:
+            print(f"  {label}")
+            continue
+        cfg_str = f"  [{cfg_name}]" if cfg_name else ""
+        print(
+            f"  {label:<22s}"
+            f"  {m['t1']:>7s}  ({m['t1lab']:>7s})"
+            f"     {m['t2']:>7s}  ({m['t2lab']:>7s})"
+        )
+        if cfg_name:
+            print(f"    {cfg_name}")
+    print()
+    print("  acc     = exact-match accuracy on all samples (incl. background)")
+    print("  labelled = exact-match accuracy on bird-call samples only")
+    print("=" * W + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze all experimental results')
     parser.add_argument('results_dir',
@@ -547,6 +632,9 @@ def main():
     plot_by_category(df, output_dir)
     create_summary_by_category(df, output_dir)
     create_report(df, output_dir)
+
+    # Print best-model comparison to terminal
+    print_model_comparison(df)
     
     print("\n" + "="*70)
     print(" DONE")
