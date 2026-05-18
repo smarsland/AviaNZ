@@ -5,13 +5,13 @@ main() {
 
 BASE="/local/scratch/freangi"
 MATCHED="${BASE}/matched"
-OUTPUT="${BASE}/tests"
+OUTPUT="${BASE}/matched_tests"
 
 AVIANZ_TRAIN="${MATCHED}/avianz_split/train"
 AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TRAIN="${MATCHED}/doc_split/train"
 DOC_TEST="${MATCHED}/doc_split/test"
-MERGED_TRAIN="${MATCHED}/merged_train"
+LARGE_DOC_TRAIN="${BASE}/large/doc_split/train"
 EPOCHS=100
 PATIENCE=15
 MIXUP=0.25
@@ -32,7 +32,7 @@ run_experiment() {
     echo " Output: $out_dir"
     echo "============================================================"
 
-    python train.py \
+    PYTHONPATH="$PWD" python train.py \
         "$train_dir" \
         "$out_dir" \
         --test-folder "$AVIANZ_TEST" \
@@ -46,9 +46,17 @@ run_experiment() {
         "${extra_flags[@]}"
 }
 
-# Log + background subtraction + median filter
-run_experiment regnet    doc    "$DOC_TRAIN"    log_norm_med --bg-subtract --median-filter
-run_experiment regnet    avianz "$AVIANZ_TRAIN" log_norm_med --bg-subtract --median-filter
+# RegNet trained on matched DOC data
+run_experiment regnet    doc       "$DOC_TRAIN"       log_norm_med --bg-subtract --median-filter
+
+# RegNet trained on matched AviaNZ data (benchmark)
+run_experiment regnet    avianz    "$AVIANZ_TRAIN"    log_norm_med --bg-subtract --median-filter
+
+# AST trained on matched DOC data
+run_experiment ast       doc       "$DOC_TRAIN"       log_norm_med --bg-subtract --median-filter --per-chunk-norm
+
+# RegNet trained on full (large) DOC data, evaluated on matched test sets
+run_experiment regnet    large_doc "$LARGE_DOC_TRAIN" log_norm_med --bg-subtract --median-filter
 
 }
 

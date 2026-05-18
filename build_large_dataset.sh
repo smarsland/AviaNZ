@@ -18,7 +18,7 @@ set -e
 #   ./build_large_dataset.sh --spec-type Standard --window-type Hann --sg-scale 'Mel Frequency'
 
 OVERWRITE_FLAG=""
-MAX_PER_SPECIES=100
+MAX_PER_SPECIES=1000
 NO_AUDIO_FLAG=""
 SPEC_TYPE="Reassigned"
 WINDOW_TYPE="Hamming"

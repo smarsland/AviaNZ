@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # run_large_experiment.sh
 #
-# Train RegNet on the large DOC dataset (built by build_large_dataset.sh) and
-# evaluate on the large dataset's own test splits (avianz_split/test and
-# doc_split/test from the same build).
+# Train RegNet on the large DOC and large AviaNZ datasets (built by
+# build_large_dataset.sh) and evaluate on the large dataset's own test splits.
 #
-# Training uses the same spectrogram config as the best-performing model:
+# Uses the same spectrogram config as the best-performing model:
 #   Reassigned spectrogram · Hamming window · Linear scale
-#   Runs all 3 normalization variants: Log / PCEN / Box-Cox
+#   Log normalization + background subtraction + median filter
 #
-# Results land in $TESTS_BASE/regnet_on_large_doc_{norm}/ and are picked up
-# automatically by scripts/analyze_all_results.py.
+# Results land in $BASE/large_tests/ and are picked up automatically by
+# scripts/analyze_all_results.py.
 #
 # Usage:
 #   bash run_large_experiment.sh
@@ -30,19 +29,15 @@ done
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE="/local/scratch/freangi"
 
-# Large dataset built by build_large_dataset.sh
 LARGE_BASE="$BASE/large"
 LARGE_DOC_TRAIN="$LARGE_BASE/doc_split/train"
+LARGE_AVIANZ_TRAIN="$LARGE_BASE/avianz_split/train"
+LARGE_AVIANZ_TEST="$LARGE_BASE/avianz_split/test"
+LARGE_DOC_TEST="$LARGE_BASE/doc_split/test"
 
-# Matched test sets built by build_dataset.sh
-MATCHED_BASE="$BASE/matched"
-AVIANZ_TEST="$MATCHED_BASE/avianz_split/test"
-DOC_TEST="$MATCHED_BASE/doc_split/test"
+TESTS_BASE="$BASE/large_tests"
 
-# Output directory for trained models (same layout as sweep_tests)
-TESTS_BASE="$BASE/sweep_tests"
-
-# ── Training hyperparameters (matching run_sweep.py) ──────────────────────────
+# ── Training hyperparameters ──────────────────────────────────────────────────
 EPOCHS=100
 PATIENCE=15
 MIXUP=0.25
@@ -59,8 +54,9 @@ check_path() {
 
 if [ "$DRY_RUN" -eq 0 ]; then
     check_path "$LARGE_DOC_TRAIN"
-    check_path "$AVIANZ_TEST"
-    check_path "$DOC_TEST"
+    check_path "$LARGE_AVIANZ_TRAIN"
+    check_path "$LARGE_AVIANZ_TEST"
+    check_path "$LARGE_DOC_TEST"
 fi
 
 run_cmd() {
@@ -70,18 +66,13 @@ run_cmd() {
     fi
 }
 
-# ── Normalization variants (same 3 as run_sweep.py) ──────────────────────────
-declare -A NORMS
-NORMS["Log"]="log"
-NORMS["PCEN"]="pcen"
-NORMS["Box-Cox"]="boxcox"
-
 echo ""
 echo "############################################################"
-echo "  Large DOC experiment"
-echo "  Training data : $LARGE_DOC_TRAIN"
-echo "  Test set 1    : $AVIANZ_TEST"
-echo "  Test set 2    : $DOC_TEST"
+echo "  Large dataset experiments"
+echo "  DOC train     : $LARGE_DOC_TRAIN"
+echo "  AviaNZ train  : $LARGE_AVIANZ_TRAIN"
+echo "  Test set 1    : $LARGE_AVIANZ_TEST"
+echo "  Test set 2    : $LARGE_DOC_TEST"
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "  DRY RUN — no commands will be executed"
 fi
@@ -90,35 +81,62 @@ echo ""
 
 mkdir -p "$TESTS_BASE"
 
-for NORM_LABEL in "Log" "PCEN" "Box-Cox"; do
-    NORM_SLUG="${NORMS[$NORM_LABEL]}"
-    RUN_NAME="${MODEL_TYPE}_on_large_doc_${NORM_SLUG}"
-    OUT_DIR="$TESTS_BASE/$RUN_NAME"
+# ── RegNet on large DOC ───────────────────────────────────────────────────────
+RUN_NAME="${MODEL_TYPE}_on_large_doc_log_norm_med"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
 
-    # Skip if already trained
-    if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
-        echo "  [skip] $RUN_NAME (already trained)"
-        continue
-    fi
-
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
     echo ""
     echo "============================================================"
     echo "  $RUN_NAME"
     echo "============================================================"
-
     run_cmd python train.py \
         "$LARGE_DOC_TRAIN" "$OUT_DIR" \
-        --test-folder  "$AVIANZ_TEST" \
-        --test-folder2 "$DOC_TEST" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
         --visualize-attention \
         --viz-samples  "$VIZ_SAMPLES" \
         --epochs       "$EPOCHS" \
         --patience     "$PATIENCE" \
         --mixup        "$MIXUP" \
         --model-type   "$MODEL_TYPE" \
-        --spec-transform "$NORM_LABEL"
+        --bg-subtract \
+        --median-filter
+fi
 
-done
+# ── RegNet on large AviaNZ ────────────────────────────────────────────────────
+RUN_NAME="${MODEL_TYPE}_on_large_avianz_log_norm_med"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
+
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
+    echo ""
+    echo "============================================================"
+    echo "  $RUN_NAME"
+    echo "============================================================"
+    run_cmd python train.py \
+        "$LARGE_AVIANZ_TRAIN" "$OUT_DIR" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
+        --visualize-attention \
+        --viz-samples  "$VIZ_SAMPLES" \
+        --epochs       "$EPOCHS" \
+        --patience     "$PATIENCE" \
+        --mixup        "$MIXUP" \
+        --model-type   "$MODEL_TYPE" \
+        --bg-subtract \
+        --median-filter
+fi
+
+echo ""
+echo "############################################################"
+echo "  All large training runs complete."
+echo "  Run  python3 scripts/analyze_all_results.py  to compare."
+echo "############################################################"
+echo ""
 
 echo ""
 echo "############################################################"
