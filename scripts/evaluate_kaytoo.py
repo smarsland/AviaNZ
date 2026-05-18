@@ -35,9 +35,23 @@ from collections import defaultdict
 import pandas as pd
 
 
+# Combined classes: a dataset label that means "any of these eBird codes counts".
+# Key = dataset label (lowercased), value = frozenset of acceptable eBird codes.
+# A sample is correct if predicted set ∩ acceptable codes is non-empty AND no
+# other (wrong) species are predicted outside the acceptable set.
+COMBINED_CLASSES = {
+    'tui/bellbird': frozenset({'tui1', 'nezbel1'}),
+}
+
+
 def label_to_codes(label, label_to_ebird):
     label = label.strip().lower()
     label = label.replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+
+    # Combined class: return a single sentinel string so callers that need
+    # a flat code can still distinguish it from "not found".
+    if label in COMBINED_CLASSES:
+        return COMBINED_CLASSES[label]
 
     code = label_to_ebird.get(label)
     if code:
@@ -121,12 +135,19 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
     # Build the ordered list of eBird codes present in this test set.
     # We only score over these classes — same constraint as our trained models.
+    # For combined classes (e.g. tui/bellbird), include all component codes.
     test_ebird_codes_ordered = []
     seen = set()
     for item in labels_data.get('files', []):
         for l in item.get('class_names', []):
-            for part in l.split('/'):
-                code = label_to_ebird.get(part.strip())
+            l_norm = l.strip().lower().replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+            if l_norm in COMBINED_CLASSES:
+                for code in COMBINED_CLASSES[l_norm]:
+                    if code not in seen:
+                        seen.add(code)
+                        test_ebird_codes_ordered.append(code)
+            else:
+                code = label_to_ebird.get(l_norm)
                 if code and code not in seen:
                     seen.add(code)
                     test_ebird_codes_ordered.append(code)
@@ -159,22 +180,46 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
         gt_labels = meta.get('class_names', [meta.get('label')])
         gt_labels = [l for l in gt_labels if l]
-        gt_codes = set()
+
+        # gt_slots: list of frozensets — each slot is satisfied if prediction
+        # contains ANY code in that slot.  Combined labels (tui/bellbird) become
+        # a two-code slot; single labels become a one-code slot.
+        gt_slots = []
+        all_acceptable_codes = set()  # union of all slots (for false-positive check)
         for l in gt_labels:
-            for code in label_to_codes(l, label_to_ebird):
-                if code and code in set(valid_cols):
-                    gt_codes.add(code)
+            l_norm = l.strip().lower().replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+            if l_norm in COMBINED_CLASSES:
+                slot = frozenset(c for c in COMBINED_CLASSES[l_norm] if c in set(valid_cols))
+            else:
+                code = label_to_ebird.get(l_norm)
+                slot = frozenset([code]) if code and code in set(valid_cols) else frozenset()
+            if slot:
+                gt_slots.append(slot)
+                all_acceptable_codes |= slot
 
         # Multi-label: threshold each class score independently
         scores = row[valid_cols].values
         pred_codes = {valid_cols[i] for i, s in enumerate(scores) if s > threshold}
 
-        # Exact match: predicted set must equal ground-truth set exactly
-        correct = pred_codes == gt_codes
+        # Correct if:
+        #   1. Every GT slot has at least one predicted code in it
+        #   2. Every predicted code belongs to at least one GT slot (no false positives)
+        if gt_slots:
+            slots_satisfied = all(pred_codes & slot for slot in gt_slots)
+            no_false_positives = all(code in all_acceptable_codes for code in pred_codes)
+            correct = slots_satisfied and no_false_positives
+        else:
+            # Background sample: correct only if nothing predicted
+            correct = len(pred_codes) == 0
+
+        # Store a flat gt_codes list for reporting.
+        # For combined slots (e.g. tui1/nezbel1) store all acceptable codes so
+        # per-species stats are attributed to the right eBird codes.
+        gt_codes_flat = sorted({code for slot in gt_slots for code in slot})
 
         results.append({
             'wav_file': wav_name,
-            'gt_codes': sorted(gt_codes),
+            'gt_codes': gt_codes_flat,
             'pred_codes': sorted(pred_codes),
             'correct': correct,
         })
