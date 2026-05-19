@@ -62,11 +62,15 @@ precompute_ast_attention() {
         --spec-transform "Box-Cox"
 }
 
-# # RegNet trained on matched DOC data  (Box-Cox = best config from sweep)
-# run_experiment regnet    doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox"
+# RegNet trained on matched DOC data  (Box-Cox = best config from sweep)
+run_experiment regnet    doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox"
 
-# # RegNet trained on matched AviaNZ data (benchmark)
-# run_experiment regnet    avianz    "$AVIANZ_TRAIN"    boxcox --spec-transform "Box-Cox"
+# RegNet trained on matched AviaNZ data (benchmark)
+run_experiment regnet    avianz    "$AVIANZ_TRAIN"    boxcox --spec-transform "Box-Cox"
+
+# RegNet on matched DOC data — Box-Cox + background subtraction + median filter
+run_experiment regnet    doc       "$DOC_TRAIN"       boxcox_bgmed \
+    --spec-transform "Box-Cox" --bg-subtract --median-filter
 
 # RegNet with softmax-4 output: each segment is treated as containing ≤~4 birds.
 # Instead of independent sigmoids, the model outputs k*softmax(logits) so
@@ -77,16 +81,16 @@ precompute_ast_attention() {
 # RegNet with raw AST attention as a second input channel.
 # Step 1: pre-compute attention maps from the frozen AudioSet-pretrained AST
 #         (run once; subsequent calls skip existing files).
-precompute_ast_attention
-# Step 2: train with 2-channel input (spectrogram + attention map)
-run_experiment regnet    doc       "$DOC_TRAIN"       boxcox_astchan \
-    --spec-transform "Box-Cox" --ast-channel-dir "$AST_ATTN_DIR"
+# precompute_ast_attention
+# # Step 2: train with 2-channel input (spectrogram + attention map)
+# run_experiment regnet    doc       "$DOC_TRAIN"       boxcox_astchan \
+#     --spec-transform "Box-Cox" --ast-channel-dir "$AST_ATTN_DIR"
 
-# # AST trained on matched DOC data
-# run_experiment ast       doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox" --per-chunk-norm
+# AST trained on matched DOC data
+run_experiment ast       doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox" --per-chunk-norm
 
-# # RegNet trained on full (large) DOC data, evaluated on matched test sets
-# run_experiment regnet    large_doc "$LARGE_DOC_TRAIN" boxcox --spec-transform "Box-Cox"
+# RegNet trained on full (large) DOC data, evaluated on matched test sets
+run_experiment regnet    large_doc "$LARGE_DOC_TRAIN" boxcox --spec-transform "Box-Cox"
 
 }
 

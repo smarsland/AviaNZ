@@ -569,6 +569,7 @@ def print_model_comparison(df, tuned_lookup=None):
     k_df = df[df['category'] == 'Kaytoo (Pretrained)']
     if not k_df.empty:
         rows.append(('Kaytoo (Pretrained)', '', _collect(k_df.iloc[0])))
+        exp_names['Kaytoo (Pretrained)'] = k_df.iloc[0]['name']
     else:
         rows.append(('Kaytoo (Pretrained)', '(no results)', {}))
 
@@ -576,6 +577,7 @@ def print_model_comparison(df, tuned_lookup=None):
     b_df = df[df['category'] == 'BirdNET (Pretrained)']
     if not b_df.empty:
         rows.append(('BirdNET (Pretrained)', '', _collect(b_df.iloc[0])))
+        exp_names['BirdNET (Pretrained)'] = b_df.iloc[0]['name']
     else:
         rows.append(('BirdNET (Pretrained)', '(no results)', {}))
 
@@ -627,13 +629,12 @@ def print_model_comparison(df, tuned_lookup=None):
                         f"  {t1_acc:>7s}  ({t1_lab:>7s})"
                         f"     {t2_acc:>7s}  ({t2_lab:>7s})"
                     )
-            elif label in ('Kaytoo (Pretrained)', 'BirdNET (Pretrained)'):
-                print(f"  {'  (tuning: needs audio)':<26s}  {'rerun evaluate_kaytoo/birdnet.py with --sweep-threshold'}")
+
     print()
     print("  acc     = exact-match accuracy on all samples (incl. background)")
     print("  labelled = exact-match accuracy on bird-call samples only")
     if tuned_lookup is not None:
-        print("  tuned   = per-species F1-optimal threshold (tuned on opposite split)")
+        print("  tuned   = per-class F1-optimal threshold (tuned on opposite split, applied independently per species)")
     print("=" * W + "\n")
 
 
@@ -712,25 +713,34 @@ def _load_predictions_with_gt(exp_dir, split, data_base=None):
     return np.array(probs), np.array(y_true, dtype=np.float32), class_names
 
 
-def _find_best_thresholds(probs, y_true, class_names, n_steps=50):
-    """Grid-search the F1-maximising threshold for each species independently."""
-    thresholds = np.linspace(0.05, 0.95, n_steps)
-    best = {}
+def _find_best_thresholds(probs, y_true, class_names, n_steps=100):
+    """Grid-search the F1-optimal threshold independently for each class.
+
+    For each class the threshold that maximises binary F1 on that class is
+    found via a grid search over [0.02, 0.98].  Classes with no positive
+    ground-truth samples default to 0.5.
+
+    Returns a dict {class: threshold} with a potentially different value for
+    every class.
+    """
+    from sklearn.metrics import f1_score as sk_f1
+    thresholds = np.linspace(0.02, 0.98, n_steps)
+    y_int = y_true.astype(int)
+    result = {}
     for i, cls in enumerate(class_names):
-        gt = y_true[:, i].astype(int)
+        gt_col   = y_int[:, i]
+        prob_col = probs[:, i]
+        if gt_col.sum() == 0:
+            result[cls] = 0.5
+            continue
         best_f1, best_t = -1.0, 0.5
         for t in thresholds:
-            pred = (probs[:, i] >= t).astype(int)
-            tp = int(np.sum((pred == 1) & (gt == 1)))
-            fp = int(np.sum((pred == 1) & (gt == 0)))
-            fn = int(np.sum((pred == 0) & (gt == 1)))
-            p  = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-            r  = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+            y_pred = (prob_col >= t).astype(int)
+            f1 = sk_f1(gt_col, y_pred, zero_division=0)
             if f1 > best_f1:
                 best_f1, best_t = f1, t
-        best[cls] = best_t
-    return best
+        result[cls] = best_t
+    return result
 
 
 def _eval_with_thresholds(probs, y_true, class_names, thresholds):
@@ -838,15 +848,13 @@ def tune_thresholds_for_experiments(results_dir, output_dir, data_base=None):
     print(f"  {'Average gain':<45s}  {'':14s}  {'':>12} {'':>12} {avg_acc_delta:>+6.1f}%  {'':>11} {'':>11} {avg_f1_delta:>+7.4f}")
     print("=" * W + "\n")
 
-    # Per-species threshold summary (averaged across experiments)
-    all_thresh = {}
+    # Per-class threshold summary across all experiments
+    all_thresh_vals = []
     for r in rows:
-        for cls, t in r['thresholds'].items():
-            all_thresh.setdefault(cls, []).append(t)
-    print("  Median tuned thresholds per species (averaged across experiments and splits):")
-    for cls in sorted(all_thresh):
-        vals = all_thresh[cls]
-        print(f"    {cls:<20s}  {np.median(vals):.3f}  (range {min(vals):.3f}–{max(vals):.3f})")
+        all_thresh_vals.extend(r['thresholds'].values())
+    if all_thresh_vals:
+        print(f"  Per-class tuned thresholds: median={np.median(all_thresh_vals):.3f}  "
+              f"(range {min(all_thresh_vals):.3f}–{max(all_thresh_vals):.3f})")
     print()
     # Build lookup: (exp_name, eval_split) -> {'acc', 'acc_lab', 'macro_f1'}
     tuned_lookup = {}

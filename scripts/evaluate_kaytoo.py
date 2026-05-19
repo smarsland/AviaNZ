@@ -243,7 +243,9 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
         # Collect raw per-class scores using dataset class names
         npy_name = wav_name.replace('.wav', '.npy')
-        raw_rec = {'filename': npy_name}
+        # Store full path so analyze_all_results.py can locate labels.json
+        npy_path = str(Path(test_folder) / 'data' / npy_name)
+        raw_rec = {'filename': npy_path}
         for cls in dataset_class_names:
             codes = cls_to_ebird_codes.get(cls, [])
             cls_scores = [float(row[c]) for c in codes if c in row.index and not pd.isna(row[c])]
