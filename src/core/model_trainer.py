@@ -605,8 +605,9 @@ class Trainer:
             # pos_weight is ignored for softmax mode (weight absorption via the scale).
             _scale = self.softmax_scale
             def criterion(out, tgt, _s=_scale):
-                p = (_s * F.softmax(out, dim=-1)).clamp(1e-7, 1.0 - 1e-7)
-                return F.binary_cross_entropy(p, tgt, reduction='none')
+                # Cast to float32: F.binary_cross_entropy is unsafe under autocast
+                p = (_s * F.softmax(out.float(), dim=-1)).clamp(1e-7, 1.0 - 1e-7)
+                return F.binary_cross_entropy(p, tgt.float(), reduction='none')
             print(f"Using Softmax-{self.softmax_scale:.1f} BCE loss (soft k-bird constraint)")
         elif self.use_asl:
             criterion = AsymmetricLoss(
