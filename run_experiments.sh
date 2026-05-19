@@ -46,17 +46,17 @@ run_experiment() {
         "${extra_flags[@]}"
 }
 
-# RegNet trained on matched DOC data
-run_experiment regnet    doc       "$DOC_TRAIN"       log_norm_med --bg-subtract --median-filter
+# RegNet trained on matched DOC data  (Box-Cox = best config from sweep)
+run_experiment regnet    doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox"
 
 # RegNet trained on matched AviaNZ data (benchmark)
-run_experiment regnet    avianz    "$AVIANZ_TRAIN"    log_norm_med --bg-subtract --median-filter
+run_experiment regnet    avianz    "$AVIANZ_TRAIN"    boxcox --spec-transform "Box-Cox"
 
 # AST trained on matched DOC data
-run_experiment ast       doc       "$DOC_TRAIN"       log_norm_med --bg-subtract --median-filter --per-chunk-norm
+run_experiment ast       doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox" --per-chunk-norm
 
 # RegNet trained on full (large) DOC data, evaluated on matched test sets
-run_experiment regnet    large_doc "$LARGE_DOC_TRAIN" log_norm_med --bg-subtract --median-filter
+run_experiment regnet    large_doc "$LARGE_DOC_TRAIN" boxcox --spec-transform "Box-Cox"
 
 }
 

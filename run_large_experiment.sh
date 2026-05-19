@@ -82,7 +82,7 @@ echo ""
 mkdir -p "$TESTS_BASE"
 
 # ── RegNet on large DOC ───────────────────────────────────────────────────────
-RUN_NAME="${MODEL_TYPE}_on_large_doc_log_norm_med"
+RUN_NAME="${MODEL_TYPE}_on_large_doc_boxcox"
 OUT_DIR="$TESTS_BASE/$RUN_NAME"
 
 if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
@@ -102,12 +102,11 @@ else
         --patience     "$PATIENCE" \
         --mixup        "$MIXUP" \
         --model-type   "$MODEL_TYPE" \
-        --bg-subtract \
-        --median-filter
+        --spec-transform "Box-Cox"
 fi
 
 # ── RegNet on large AviaNZ ────────────────────────────────────────────────────
-RUN_NAME="${MODEL_TYPE}_on_large_avianz_log_norm_med"
+RUN_NAME="${MODEL_TYPE}_on_large_avianz_boxcox"
 OUT_DIR="$TESTS_BASE/$RUN_NAME"
 
 if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
@@ -127,8 +126,7 @@ else
         --patience     "$PATIENCE" \
         --mixup        "$MIXUP" \
         --model-type   "$MODEL_TYPE" \
-        --bg-subtract \
-        --median-filter
+        --spec-transform "Box-Cox"
 fi
 
 echo ""
