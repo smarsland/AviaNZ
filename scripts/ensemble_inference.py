@@ -108,23 +108,28 @@ def get_metric_from_report(exp_dir: Path, split: str, metric: str):
 
 def load_predictions_csv(exp_dir: Path, split: str):
     """
-    Load predictions_{split}_v2.csv produced by rerun_predictions.py.
+    Load predictions_{split}.csv produced by rerun_predictions.py.
     Returns a dict with row_ids, probs, true_labels, categories — or None.
     """
-    csv_path = exp_dir / f"predictions_{split}_v2.csv"
+    csv_path = exp_dir / f"predictions_{split}.csv"
     if not csv_path.exists():
         return None
     df = pd.read_csv(csv_path)
-    if "row_id" not in df.columns:
-        print(f"  [warn] {csv_path} has no row_id column — skipping")
+    # Accept both 'row_id' (rerun_predictions.py output) and 'filename' (model_trainer output)
+    if "row_id" in df.columns:
+        id_col = "row_id"
+    elif "filename" in df.columns:
+        id_col = "filename"
+    else:
+        print(f"  [warn] {csv_path} has no row_id or filename column — skipping")
         return None
     all_cols  = df.columns.tolist()
-    pred_cols = [c for c in all_cols if c != "row_id" and not c.startswith("y_")]
+    pred_cols = [c for c in all_cols if c not in (id_col,) and not c.startswith("y_")]
     true_cols = [f"y_{c}" for c in pred_cols if f"y_{c}" in all_cols]
     if not pred_cols:
         return None
     return {
-        "row_ids":     df["row_id"].tolist(),
+        "row_ids":     df[id_col].tolist(),
         "probs":       df[pred_cols].to_numpy(np.float32),
         "true_labels": df[true_cols].to_numpy(np.float32) if true_cols else None,
         "categories":  pred_cols,
@@ -286,7 +291,7 @@ def main():
                 members.append(m)
 
         if missing:
-            print(f"\n  WARNING: {len(missing)} experiments have no predictions_{split}_v2.csv")
+            print(f"\n  WARNING: {len(missing)} experiments have no predictions_{split}.csv")
             for nm in missing[:5]:
                 print(f"    {nm}")
             if len(missing) > 5:

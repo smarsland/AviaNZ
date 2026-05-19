@@ -511,12 +511,14 @@ def create_report(df, output_dir):
     print(f"✓ REPORT.md")
 
 
-def print_model_comparison(df):
+def print_model_comparison(df, tuned_lookup=None):
     """
     Print a clear terminal comparison of the best REGNET model vs Kaytoo and
     BirdNET pretrained baselines.
 
-    Shows overall accuracy and labelled-only accuracy for both test sets.
+    If tuned_lookup is provided (from tune_thresholds_for_experiments), shows
+    a second row for each model with per-species tuned threshold results.
+    Kaytoo/BirdNET cannot be tuned post-hoc (no raw scores saved).
     """
     def _fmt(val):
         if val is np.nan or (isinstance(val, float) and np.isnan(val)):
@@ -534,6 +536,7 @@ def print_model_comparison(df):
         }
 
     rows = []
+    exp_names = {}  # label -> exp_name, for tuned lookup
 
     # ---- Best REGNET (matched / sweep datasets) ----------------------------
     regnet_df = df[
@@ -545,6 +548,7 @@ def print_model_comparison(df):
         regnet_df['_avg'] = (regnet_df['test1_acc'] + regnet_df['test2_acc']) / 2
         best = regnet_df.sort_values('_avg', ascending=False).iloc[0]
         rows.append(('Best REGNET (matched)', best['name'], _collect(best)))
+        exp_names['Best REGNET (matched)'] = best['name']
     else:
         rows.append(('Best REGNET (matched)', '(no results)', {}))
 
@@ -558,6 +562,7 @@ def print_model_comparison(df):
         large_df['_avg'] = (large_df['test1_acc'] + large_df['test2_acc']) / 2
         best_large = large_df.sort_values('_avg', ascending=False).iloc[0]
         rows.append(('Best REGNET (large DOC)', best_large['name'], _collect(best_large)))
+        exp_names['Best REGNET (large DOC)'] = best_large['name']
     # skip silently if not yet run
 
     # ---- Kaytoo pretrained --------------------------------------------------
@@ -602,18 +607,274 @@ def print_model_comparison(df):
         )
         if cfg_name:
             print(f"    {cfg_name}")
+
+        # Show tuned row if available
+        if tuned_lookup is not None:
+            exp = exp_names.get(label)
+            if exp:
+                # Cross-split: tune on t2 → eval on t1, tune on t1 → eval on t2
+                r1 = tuned_lookup.get((exp, t1n))
+                r2 = tuned_lookup.get((exp, t2n))
+                if r1 or r2:
+                    def _tf(r, key):
+                        return f"{r[key]:5.1f}%" if r else "  N/A "
+                    t1_acc = _tf(r1, 'acc') if r1 else "  N/A "
+                    t1_lab = _tf(r1, 'acc_lab') if r1 else "  N/A "
+                    t2_acc = _tf(r2, 'acc') if r2 else "  N/A "
+                    t2_lab = _tf(r2, 'acc_lab') if r2 else "  N/A "
+                    print(
+                        f"  {'  (tuned thresholds)':<26s}"
+                        f"  {t1_acc:>7s}  ({t1_lab:>7s})"
+                        f"     {t2_acc:>7s}  ({t2_lab:>7s})"
+                    )
+            elif label in ('Kaytoo (Pretrained)', 'BirdNET (Pretrained)'):
+                print(f"  {'  (tuning: needs audio)':<26s}  {'rerun evaluate_kaytoo/birdnet.py with --sweep-threshold'}")
     print()
     print("  acc     = exact-match accuracy on all samples (incl. background)")
     print("  labelled = exact-match accuracy on bird-call samples only")
+    if tuned_lookup is not None:
+        print("  tuned   = per-species F1-optimal threshold (tuned on opposite split)")
     print("=" * W + "\n")
 
+
+def _load_predictions_with_gt(exp_dir, split, data_base=None):
+    """Load predictions_{split}.csv and ground truth from labels.json.
+
+    Returns (probs, y_true, class_names) as numpy arrays, or None if unavailable.
+
+    Supported CSV formats:
+      - Training experiments: columns = filename, class1, class2, ...
+      - rerun_predictions.py (_v2): columns = row_id, class1, ..., y_class1, ...
+
+    labels.json is found by:
+      1. If data_base is given: data_base/{split}/test/labels.json
+      2. Otherwise: derived from the filename paths inside the CSV
+         (e.g. /some/path/data/file_XXX.npy → /some/path/labels.json)
+    """
+    csv_path = exp_dir / f"predictions_{split}.csv"
+    if not csv_path.exists():
+        return None
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        return None
+
+    # Detect which column holds the file identifier
+    if 'filename' in df.columns:
+        id_col = 'filename'
+    elif 'row_id' in df.columns:
+        id_col = 'row_id'
+    else:
+        return None
+
+    # Class columns: exclude the id column and any ground-truth columns (y_{class})
+    class_names = [
+        c for c in df.columns
+        if c != id_col and not c.startswith('y_')
+    ]
+    if not class_names:
+        return None
+
+    # Locate labels.json
+    if data_base is not None:
+        labels_path = Path(data_base) / split / "test" / "labels.json"
+    else:
+        first_file = Path(df[id_col].iloc[0])
+        labels_path = first_file.parent.parent / "labels.json"
+
+    if not labels_path.exists():
+        return None
+
+    with open(labels_path) as f:
+        labels_data = json.load(f)
+
+    # Map basename → multi-hot label vector
+    label_map = {}
+    for file_info in labels_data.get('files', []):
+        basename = Path(file_info['filename']).name
+        vec = [0] * len(class_names)
+        for cls in file_info.get('class_names', []):
+            if cls in class_names:
+                vec[class_names.index(cls)] = 1
+        label_map[basename] = vec
+
+    probs, y_true = [], []
+    for _, row in df.iterrows():
+        basename = Path(row[id_col]).name
+        label = label_map.get(basename)
+        if label is None:
+            continue
+        probs.append(row[class_names].values.astype(np.float32))
+        y_true.append(label)
+
+    if not probs:
+        return None
+    return np.array(probs), np.array(y_true, dtype=np.float32), class_names
+
+
+def _find_best_thresholds(probs, y_true, class_names, n_steps=50):
+    """Grid-search the F1-maximising threshold for each species independently."""
+    thresholds = np.linspace(0.05, 0.95, n_steps)
+    best = {}
+    for i, cls in enumerate(class_names):
+        gt = y_true[:, i].astype(int)
+        best_f1, best_t = -1.0, 0.5
+        for t in thresholds:
+            pred = (probs[:, i] >= t).astype(int)
+            tp = int(np.sum((pred == 1) & (gt == 1)))
+            fp = int(np.sum((pred == 1) & (gt == 0)))
+            fn = int(np.sum((pred == 0) & (gt == 1)))
+            p  = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            r  = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+            if f1 > best_f1:
+                best_f1, best_t = f1, t
+        best[cls] = best_t
+    return best
+
+
+def _eval_with_thresholds(probs, y_true, class_names, thresholds):
+    """Evaluate exact-match accuracy and macro-F1 using per-species thresholds."""
+    from sklearn.metrics import f1_score as sk_f1
+    thresh_vec = np.array([thresholds[c] for c in class_names], dtype=np.float32)
+    y_pred = (probs >= thresh_vec).astype(int)
+    exact  = np.all(y_true.astype(int) == y_pred, axis=1)
+    acc    = float(np.mean(exact)) * 100
+    labelled = y_true.sum(axis=1) > 0
+    acc_lab  = float(np.mean(exact[labelled])) * 100 if labelled.any() else float('nan')
+    macro_f1 = float(sk_f1(y_true.astype(int), y_pred, average='macro', zero_division=0))
+    return acc, acc_lab, macro_f1
+
+
+def tune_thresholds_for_experiments(results_dir, output_dir, data_base=None):
+    """
+    For every experiment directory that has predictions_{split}.csv files,
+    tune per-species thresholds on one split and evaluate on the other
+    (cross-split, so the reported numbers are honest).
+
+    Saves tuned_thresholds_results.csv and prints a summary table.
+    """
+    SPLITS = [("avianz_split", "doc_split"), ("doc_split", "avianz_split")]
+
+    standard_pattern = re.compile(
+        r'^(ast|regnet|cnn)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$'
+    )
+    pretrained_pattern = re.compile(
+        r'^(kaytoo|birdnet)_pretrained_.*$'
+    )
+
+    rows = []
+    for exp_dir in sorted(Path(results_dir).iterdir()):
+        if not exp_dir.is_dir():
+            continue
+        if not standard_pattern.match(exp_dir.name) and not pretrained_pattern.match(exp_dir.name):
+            continue
+
+        # Need predictions for both splits to do cross-split tuning
+        data = {}
+        for split in ("avianz_split", "doc_split"):
+            result = _load_predictions_with_gt(exp_dir, split, data_base=data_base)
+            if result is not None:
+                data[split] = result  # (probs, y_true, class_names)
+
+        if len(data) < 2:
+            continue  # not enough data for cross-split
+
+        for tune_split, eval_split in SPLITS:
+            tune_probs, tune_gt, class_names = data[tune_split]
+            eval_probs, eval_gt, _           = data[eval_split]
+
+            thresholds = _find_best_thresholds(tune_probs, tune_gt, class_names)
+
+            # Baseline (fixed 0.5)
+            fixed_t = {c: 0.5 for c in class_names}
+            acc_fixed,   acc_lab_fixed,   f1_fixed   = _eval_with_thresholds(eval_probs, eval_gt, class_names, fixed_t)
+            acc_tuned,   acc_lab_tuned,   f1_tuned   = _eval_with_thresholds(eval_probs, eval_gt, class_names, thresholds)
+
+            rows.append({
+                'experiment':      exp_dir.name,
+                'tune_on':         tune_split,
+                'eval_on':         eval_split,
+                'acc_fixed':       round(acc_fixed,   2),
+                'acc_lab_fixed':   round(acc_lab_fixed, 2),
+                'macro_f1_fixed':  round(f1_fixed,    4),
+                'acc_tuned':       round(acc_tuned,   2),
+                'acc_lab_tuned':   round(acc_lab_tuned, 2),
+                'macro_f1_tuned':  round(f1_tuned,    4),
+                'acc_delta':       round(acc_tuned   - acc_fixed,   2),
+                'f1_delta':        round(f1_tuned    - f1_fixed,    4),
+                'thresholds':      thresholds,
+            })
+
+    if not rows:
+        print("  No experiments with predictions_{split}.csv found — nothing to tune.")
+        return {}
+
+    # Save CSV (without the thresholds dict column)
+    df_out = pd.DataFrame([{k: v for k, v in r.items() if k != 'thresholds'} for r in rows])
+    out_csv = output_dir / 'tuned_thresholds_results.csv'
+    df_out.to_csv(out_csv, index=False, float_format='%.4f')
+    print(f"✓ tuned_thresholds_results.csv ({len(df_out)} rows)")
+
+    # Print summary table
+    W = 100
+    print("\n" + "=" * W)
+    print(" PER-SPECIES THRESHOLD TUNING  (tune on one split → evaluate on the other)")
+    print("=" * W)
+    print(f"  {'Experiment':<45s}  {'Eval on':<14s}  {'Acc(fixed)':<12} {'Acc(tuned)':<12} {'ΔAcc':>6}  {'F1(fixed)':<11} {'F1(tuned)':<11} {'ΔF1':>7}")
+    print("-" * W)
+
+    for r in sorted(rows, key=lambda x: x['experiment']):
+        print(
+            f"  {r['experiment']:<45s}  {r['eval_on']:<14s}"
+            f"  {r['acc_fixed']:>8.1f}%   {r['acc_tuned']:>8.1f}%  {r['acc_delta']:>+6.1f}%"
+            f"  {r['macro_f1_fixed']:>8.4f}   {r['macro_f1_tuned']:>8.4f}  {r['f1_delta']:>+7.4f}"
+        )
+
+    # Average gain
+    avg_acc_delta = np.nanmean([r['acc_delta'] for r in rows])
+    avg_f1_delta  = np.nanmean([r['f1_delta']  for r in rows])
+    print("-" * W)
+    print(f"  {'Average gain':<45s}  {'':14s}  {'':>12} {'':>12} {avg_acc_delta:>+6.1f}%  {'':>11} {'':>11} {avg_f1_delta:>+7.4f}")
+    print("=" * W + "\n")
+
+    # Per-species threshold summary (averaged across experiments)
+    all_thresh = {}
+    for r in rows:
+        for cls, t in r['thresholds'].items():
+            all_thresh.setdefault(cls, []).append(t)
+    print("  Median tuned thresholds per species (averaged across experiments and splits):")
+    for cls in sorted(all_thresh):
+        vals = all_thresh[cls]
+        print(f"    {cls:<20s}  {np.median(vals):.3f}  (range {min(vals):.3f}–{max(vals):.3f})")
+    print()
+    # Build lookup: (exp_name, eval_split) -> {'acc', 'acc_lab', 'macro_f1'}
+    tuned_lookup = {}
+    for r in rows:
+        tuned_lookup[(r['experiment'], r['eval_on'])] = {
+            'acc':      r['acc_tuned'],
+            'acc_lab':  r['acc_lab_tuned'],
+            'f1':       r['macro_f1_tuned'],
+        }
+    return tuned_lookup
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze all experimental results')
     parser.add_argument('results_dir',
-                        help='Output directory (e.g. /local/scratch/freangi/visualizations). '
+                        help='Output directory (e.g. /local/scratch/freangi/matched_tests). '
                              'Scans for both result.json and *_multilabel_report.json automatically.')
     parser.add_argument('--output', '-o', default=None, help='Output directory for analysis files')
+    parser.add_argument('--tune-thresholds', action='store_true',
+                        help='Tune per-species thresholds on one test split and evaluate on the other '
+                             '(cross-split). Reads existing predictions_{split}.csv files — no '
+                             'model re-run needed.')
+    parser.add_argument('--data-base', default=None, metavar='DIR',
+                        help='Root directory containing {avianz_split,doc_split}/test/labels.json. '
+                             'Required when labels.json paths in the prediction CSVs point to a '
+                             'remote server (e.g. /local/scratch/freangi/matched). '
+                             'Sync just those two files: '
+                             'rsync server:/local/scratch/freangi/matched/avianz_split/test/labels.json DATA_BASE/avianz_split/test/ '
+                             'and the same for doc_split.')
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -645,8 +906,14 @@ def main():
     create_summary_by_category(df, output_dir)
     create_report(df, output_dir)
 
-    # Print best-model comparison to terminal
-    print_model_comparison(df)
+    # Optionally tune thresholds first, then incorporate into the comparison table
+    tuned_lookup = None
+    if args.tune_thresholds:
+        print("\nTuning per-species thresholds (cross-split)...")
+        tuned_lookup = tune_thresholds_for_experiments(results_dir, output_dir, data_base=args.data_base)
+
+    # Print best-model comparison to terminal (with tuned rows if available)
+    print_model_comparison(df, tuned_lookup=tuned_lookup)
     
     print("\n" + "="*70)
     print(" DONE")

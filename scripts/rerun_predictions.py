@@ -2,14 +2,16 @@
 """
 Re-run every trained sweep model on its test data and save full prediction CSVs.
 
-This replaces the bugged 16-row CSVs that only captured the first batch.
-Run this on the server where model checkpoints and spectrogram data live.
+Loads already-trained model checkpoints — no retraining required.
+By default overwrites any existing predictions_{split}.csv files so that
+analyze_all_results.py --tune-thresholds and ensemble_inference.py always
+have up-to-date probabilities.
 
 Usage (zero required arguments — paths read from run_sweep.py):
     python scripts/rerun_predictions.py
 
 Options:
-    --force          Overwrite existing CSVs (default: skip if exists)
+    --skip-existing  Skip experiment/split pairs whose CSV already exists
     --splits S [S]   Splits to process (default: avianz_split doc_split)
     --tests-base DIR Override TESTS_BASE from run_sweep.py
     --sweep-base DIR Override SWEEP_BASE from run_sweep.py
@@ -17,12 +19,13 @@ Options:
     --device X       e.g. cuda, cpu (default: auto)
 
 Output:
-    {TESTS_BASE}/{exp_name}/predictions_{split}_v2.csv
+    {TESTS_BASE}/{exp_name}/predictions_{split}.csv
     columns: row_id, {class1}, ..., {classN}, y_{class1}, ..., y_{classN}
              where {class} columns are predicted probabilities (sigmoid output)
              and y_{class} columns are true binary labels.
 
-These CSVs are consumed by ensemble_inference.py.
+These CSVs are consumed by ensemble_inference.py and
+analyze_all_results.py --tune-thresholds.
 """
 
 import argparse
@@ -113,7 +116,7 @@ def run_one(exp_dir: Path, test_dir: Path, out_csv: Path,
     Run inference for one (experiment, split) pair and save a CSV.
     Returns True if a CSV now exists (written or already existed), False on error.
     """
-    if out_csv.exists() and not force:
+    if out_csv.exists() and force:
         print(f"    [skip] {out_csv.name} already exists")
         return True
 
@@ -207,8 +210,8 @@ def main():
     parser.add_argument("--splits", nargs="+", default=["avianz_split", "doc_split"],
                         metavar="SPLIT",
                         help="Test splits to process (default: avianz_split doc_split)")
-    parser.add_argument("--force", action="store_true",
-                        help="Overwrite existing CSVs")
+    parser.add_argument("--skip-existing", action="store_true", dest="force",
+                        help="Skip experiment/split pairs whose CSV already exists (default: overwrite)")
     parser.add_argument("--batch-size", type=int, default=32,
                         help="Inference batch size (default: 32)")
     parser.add_argument("--device", default=None,
@@ -231,7 +234,7 @@ def main():
     )
     print(f"Found {len(exp_dirs)} sweep experiments under {tests_base}")
     print(f"Splits: {args.splits}")
-    print(f"Force:  {args.force}")
+    print(f"Skip existing: {args.force}")
     print()
 
     total = written = skipped = failed = 0
@@ -245,15 +248,19 @@ def main():
         print(f"[{exp_dir.name}]")
 
         for split in args.splits:
+            # Sweep layout: sweep_base/{slug}/{split}/test
+            # Matched layout: sweep_base/{split}/test  (no slug subdirectory)
             test_dir = sweep_base / slug / split / "test"
-            out_csv  = exp_dir / f"predictions_{split}_v2.csv"
+            if not test_dir.is_dir():
+                test_dir = sweep_base / split / "test"
+            out_csv  = exp_dir / f"predictions_{split}.csv"
             total   += 1
 
             existed_before = out_csv.exists()
             success = run_one(exp_dir, test_dir, out_csv, args.batch_size, args.device, args.force)
 
             if success:
-                if existed_before and not args.force:
+                if existed_before and args.force:   # args.force == skip_existing
                     skipped += 1
                 else:
                     written += 1
@@ -267,10 +274,12 @@ def main():
     if failed:
         print(f"  {failed} failed — check that model checkpoints are synced from the server.")
     if skipped:
-        print(f"  {skipped} skipped — use --force to overwrite.")
+        print(f"  {skipped} skipped (--skip-existing was set).")
     print("=" * 60)
     print()
-    print("Next step: python scripts/ensemble_inference.py")
+    print("Next steps:")
+    print("  python scripts/ensemble_inference.py")
+    print("  python scripts/analyze_all_results.py RESULTS_DIR --tune-thresholds")
 
 
 if __name__ == "__main__":
