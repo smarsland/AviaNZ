@@ -267,6 +267,8 @@ class Trainer:
         self.use_sed_head = getattr(cfg.model, 'use_sed_head', False)
         self.use_gated_head = getattr(cfg.model, 'use_gated_head', False)
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
+        self.ast_channel_dir = getattr(cfg.model, 'ast_channel_dir', None)
+        self.in_chans = getattr(cfg.model, 'in_chans', 1)
         
         # Augmentation configuration
         self.mixup_alpha = cfg.augmentation.mixup_alpha
@@ -295,6 +297,7 @@ class Trainer:
         self.asl_gamma_neg = cfg.loss.asl_gamma_neg
         self.asl_gamma_pos = cfg.loss.asl_gamma_pos
         self.asl_margin = cfg.loss.asl_margin
+        self.softmax_scale = getattr(cfg.loss, 'softmax_scale', 0.0)
         
         # Domain adaptation configuration
         self.use_dann = cfg.domain_adaptation.use_dann
@@ -399,7 +402,7 @@ class Trainer:
         num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader, self.val_loader = create_data_loaders(
             self.data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-            cropping_mode='random', noise_ratio=self.noise_ratio, 
+            cropping_mode='random', noise_ratio=self.noise_ratio,
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
             use_class_balancing=True, bg_subtract=self.bg_subtract,
@@ -407,7 +410,8 @@ class Trainer:
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
             noise_mode=self.noise_mode,
-            background_prob=self.background_prob
+            background_prob=self.background_prob,
+            ast_channel_dir=self.ast_channel_dir,
         )
         
         # Create target domain data loader for DANN
@@ -495,7 +499,8 @@ class Trainer:
                 freeze_stages=self.freeze_stages,
                 use_cnn_adapter=self.use_cnn_adapter,
                 use_sed_head=self.use_sed_head,
-                use_gated_head=self.use_gated_head
+                use_gated_head=self.use_gated_head,
+                in_chans=self.in_chans,
             ).to(self.device)
         else:
             print("Creating AST model (multilabel)...")
@@ -594,7 +599,16 @@ class Trainer:
             pos_weight = self._compute_class_weights()
             print(f"Using class-weighted loss")
             print(f"  Weight range: {pos_weight.min().item():.2f} - {pos_weight.max().item():.2f}")
-        if self.use_asl:
+        if self.softmax_scale > 0:
+            # k*softmax activation: BCEWithLogits is wrong here; apply activation manually.
+            # Probabilities = softmax_scale * softmax(logits), clamped to (eps, 1-eps).
+            # pos_weight is ignored for softmax mode (weight absorption via the scale).
+            _scale = self.softmax_scale
+            def criterion(out, tgt, _s=_scale):
+                p = (_s * F.softmax(out, dim=-1)).clamp(1e-7, 1.0 - 1e-7)
+                return F.binary_cross_entropy(p, tgt, reduction='none')
+            print(f"Using Softmax-{self.softmax_scale:.1f} BCE loss (soft k-bird constraint)")
+        elif self.use_asl:
             criterion = AsymmetricLoss(
                 gamma_neg=self.asl_gamma_neg,
                 gamma_pos=self.asl_gamma_pos,
@@ -735,7 +749,7 @@ class Trainer:
                     
                     # Accuracy tracking (only on source labeled data - always multilabel)
                     with torch.no_grad():
-                        preds = (torch.sigmoid(source_output) > 0.5).float()
+                        preds = (self._get_probs(source_output) > 0.5).float()
                         all_train_preds.append(preds.cpu().numpy())
                         all_train_targets.append(source_target.cpu().numpy())
                 
@@ -791,10 +805,10 @@ class Trainer:
                     scaler.update()
                     
                     train_loss += loss.item()
-                    
+
                     # For metrics (always multilabel)
                     target_hard = target.round()
-                    pred = (torch.sigmoid(output) > 0.5).float()
+                    pred = (self._get_probs(output) > 0.5).float()
                     all_train_preds.append(pred.cpu().numpy())
                     all_train_targets.append(target_hard.cpu().numpy())
             
@@ -834,7 +848,7 @@ class Trainer:
                     
                     # Always multilabel
                     val_loss += criterion(output, target).mean().item()
-                    pred = (torch.sigmoid(output) > 0.5).float()
+                    pred = (self._get_probs(output) > 0.5).float()
                     all_val_preds.append(pred.cpu().numpy())
                     all_val_targets.append(target.cpu().numpy())
             
@@ -955,7 +969,8 @@ class Trainer:
                 median_filter=self.median_filter,
                 use_temporal_roll=False,
                 noise_mode='full',
-                background_prob=0.0
+                background_prob=0.0,
+                ast_channel_dir=self.ast_channel_dir,
             )
             
             test_loader_obj1 = torch.utils.data.DataLoader(
@@ -1011,7 +1026,8 @@ class Trainer:
                 median_filter=self.median_filter,
                 use_temporal_roll=False,
                 noise_mode='full',
-                background_prob=0.0
+                background_prob=0.0,
+                ast_channel_dir=self.ast_channel_dir,
             )
             
             test_loader_obj2 = torch.utils.data.DataLoader(
@@ -1111,6 +1127,17 @@ class Trainer:
         """Return the index of the GPU with the lowest memory usage."""
         return pick_free_gpu()
 
+    def _get_probs(self, output):
+        """Convert raw logits to probabilities using the configured activation.
+
+        When softmax_scale > 0 we use  k * softmax(logits)  instead of
+        sigmoid, imposing a soft constraint that at most ~k birds are predicted
+        per segment.  Otherwise falls back to the standard per-class sigmoid.
+        """
+        if self.softmax_scale > 0:
+            return (self.softmax_scale * F.softmax(output, dim=-1)).clamp(0.0, 1.0)
+        return torch.sigmoid(output)
+
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
@@ -1196,7 +1223,7 @@ class Trainer:
                 if isinstance(output, tuple):
                     output = output[0]
 
-                probs = torch.sigmoid(output).cpu().numpy()
+                probs = self._get_probs(output).cpu().numpy()
                 all_probs.append(probs)
 
                 # Correctly track which dataset samples this batch covers

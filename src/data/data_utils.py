@@ -232,10 +232,11 @@ class SpectrogramDataset(Dataset):
     are applied on-the-fly during training for maximum flexibility.
     """
     
-    def __init__(self, filenames, labels, img_height, img_width, channels=1, 
-                 cropping_mode="center", noise_filenames=None, noise_ratio=0.3, 
+    def __init__(self, filenames, labels, img_height, img_width, channels=1,
+                 cropping_mode="center", noise_filenames=None, noise_ratio=0.3,
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
-                 median_filter=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0):
+                 median_filter=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0,
+                 ast_channel_dir=None):
         """
         Initialize SpectrogramDataset.
         
@@ -277,6 +278,7 @@ class SpectrogramDataset(Dataset):
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
+        self.ast_channel_dir = ast_channel_dir
         self.rng = np.random.RandomState(21390)
         
         # Cache noise data in memory (WAY faster than loading from disk every time)
@@ -355,6 +357,8 @@ class SpectrogramDataset(Dataset):
         assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
         
         # Apply temporal roll (random circular shift along time axis) during training
+        # shift_amount is tracked so the AST attention channel can be rolled identically.
+        shift_amount = 0
         if self.use_temporal_roll and self.training:
             shift_amount = self.rng.randint(0, x.shape[1])
             x = np.roll(x, shift_amount, axis=1)
@@ -391,6 +395,30 @@ class SpectrogramDataset(Dataset):
             x = self.apply_specaugment(x)
             assert x.ndim == 3, f"After specaugment should be 3D (H,W,C), got {x.shape}"
         
+        # Append pre-computed AST attention channel if configured.
+        # The map was computed at (img_height, img_width); we apply the same temporal
+        # roll used on the spectrogram so both channels stay spatially aligned.
+        if self.ast_channel_dir is not None:
+            basename = os.path.basename(file_path)
+            attn_path = os.path.join(self.ast_channel_dir, basename)
+            if os.path.exists(attn_path):
+                attn = np.load(attn_path).astype(np.float32)  # (H, W)
+                if attn.shape != (self.img_height, self.img_width):
+                    from scipy.ndimage import zoom as _zoom
+                    attn = _zoom(attn, (self.img_height / attn.shape[0],
+                                       self.img_width / attn.shape[1]))
+                if shift_amount != 0:
+                    attn = np.roll(attn, shift_amount, axis=1)
+                if self.width_downsizing and self.width_downsizing > 1:
+                    attn = attn[:, ::self.width_downsizing]
+            else:
+                # Attention map not found for this file — use a silent zero channel
+                # so the model can still train, just without the extra signal.
+                w_final = (self.img_width // self.width_downsizing
+                           if self.width_downsizing else self.img_width)
+                attn = np.zeros((self.img_height, w_final), dtype=np.float32)
+            x = np.concatenate([x, attn[:, :, np.newaxis]], axis=2)  # (H, W, 2)
+
         # Convert to tensor and ensure correct format: (C, H, W)
         x = torch.FloatTensor(x).permute(2, 0, 1)  # (H, W, C) -> (C, H, W)
         assert x.ndim == 3, f"After permute should be 3D (C,H,W), got {x.shape}"
@@ -732,12 +760,13 @@ def sparse_collate_fn(batch):
     }
 
 
-def create_data_loaders(data, batch_size, img_height, img_width, channels=1, 
-                       cropping_mode="center", noise_ratio=0.3, spec_transform=None, 
+def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
+                       cropping_mode="center", noise_ratio=0.3, spec_transform=None,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
                        use_class_balancing=False, bg_subtract=False, median_filter=False,
                        use_temporal_roll=True,
-                       mixup_mode='mixup', noise_mode='full', background_prob=0.0):
+                       mixup_mode='mixup', noise_mode='full', background_prob=0.0,
+                       ast_channel_dir=None):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -772,9 +801,9 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
     
     # Create datasets
     train_dataset = SpectrogramDataset(
-        data['train_filenames'], data['train_labels'], 
+        data['train_filenames'], data['train_labels'],
         img_height, img_width, channels, cropping_mode,
-        noise_filenames=data['train_noise_filenames'], 
+        noise_filenames=data['train_noise_filenames'],
         noise_ratio=noise_ratio,
         spec_transform=spec_transform,
         training=True,
@@ -783,13 +812,14 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         median_filter=median_filter,
         use_temporal_roll=use_temporal_roll,
         noise_mode=noise_mode,
-        background_prob=background_prob
+        background_prob=background_prob,
+        ast_channel_dir=ast_channel_dir,
     )
-    
+
     # Only create validation dataset if validation data exists
     if len(data['test_filenames']) > 0:
         val_dataset = SpectrogramDataset(
-            data['test_filenames'], data['test_labels'], 
+            data['test_filenames'], data['test_labels'],
             img_height, img_width, channels, 'center',  # Always use center crop for validation
             noise_filenames=None,  # No noise for validation
             noise_ratio=0.0,
@@ -800,7 +830,8 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             median_filter=median_filter,
             use_temporal_roll=False,  # Never roll validation data
             noise_mode='full',  # Not used (no noise in validation)
-            background_prob=0.0  # No background replacement for validation
+            background_prob=0.0,  # No background replacement for validation
+            ast_channel_dir=ast_channel_dir,
         )
     else:
         val_dataset = None

@@ -588,16 +588,17 @@ class GatedSpeciesHead(nn.Module):
 class RegNetModel(nn.Module):
     """RegNetY model for bird audio classification (BirdClef fine-tuning)."""
 
-    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False, use_gated_head=False):
+    def __init__(self, num_classes, pretrained_path=None, model_name='regnety_008', freeze_backbone=False, freeze_stages=0, use_cnn_adapter=False, use_sed_head=False, use_gated_head=False, in_chans=1):
         super().__init__()
         self.num_classes = num_classes
         self.use_sed_head = use_sed_head
         self.use_gated_head = use_gated_head
+        self.in_chans = in_chans
 
         self.backbone = timm.create_model(
             model_name,
             pretrained=False,
-            in_chans=1,
+            in_chans=in_chans,
             drop_rate=0.0,
             drop_path_rate=0.0
         )
