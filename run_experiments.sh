@@ -52,10 +52,10 @@ run_experiment regnet    doc       "$DOC_TRAIN"       boxcox --spec-transform "B
 # RegNet trained on matched AviaNZ data (benchmark)
 run_experiment regnet    avianz    "$AVIANZ_TRAIN"    boxcox --spec-transform "Box-Cox"
 
-# AST trained on matched DOC data
-run_experiment ast       doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox" --per-chunk-norm
+# # AST trained on matched DOC data
+# run_experiment ast       doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox" --per-chunk-norm
 
-# RegNet trained on full (large) DOC data, evaluated on matched test sets
+# # RegNet trained on full (large) DOC data, evaluated on matched test sets
 # run_experiment regnet    large_doc "$LARGE_DOC_TRAIN" boxcox --spec-transform "Box-Cox"
 
 }
