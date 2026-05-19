@@ -289,6 +289,11 @@ def main():
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available() and 'CUDA_VISIBLE_DEVICES' not in os.environ:
+        from src.core.utils import pick_free_gpu
+        chosen = pick_free_gpu()
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
+        device = torch.device('cuda:0')
     print(f"Device: {device}")
 
     model = load_ast_model(device)
