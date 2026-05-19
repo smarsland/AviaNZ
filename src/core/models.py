@@ -657,6 +657,15 @@ class RegNetModel(nn.Module):
                 if 'classifier' not in new_key and 'fc' not in new_key:
                     backbone_dict[new_key] = v
         
+        # Drop any keys whose shape doesn't match the current model (e.g. stem
+        # conv when in_chans != 1); strict=False skips missing/extra keys but
+        # still raises RuntimeError on size mismatches.
+        current_shapes = {k: v.shape for k, v in self.backbone.state_dict().items()}
+        backbone_dict = {
+            k: v for k, v in backbone_dict.items()
+            if k not in current_shapes or v.shape == current_shapes[k]
+        }
+
         missing_keys, unexpected_keys = self.backbone.load_state_dict(backbone_dict, strict=False)
         missing_keys = [k for k in missing_keys if 'classifier' not in k and 'fc' not in k]
         unexpected_keys = [k for k in unexpected_keys if 'classifier' not in k and 'fc' not in k]

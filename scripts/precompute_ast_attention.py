@@ -112,7 +112,10 @@ def _interpolate_pos_embed(ast_model: ASTModel, target_size: tuple):
 
 def load_ast_model(device: torch.device) -> ASTModel:
     print("Loading MIT/ast-finetuned-audioset-10-10-0.4593 ...")
-    model = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
+    model = ASTModel.from_pretrained(
+        "MIT/ast-finetuned-audioset-10-10-0.4593",
+        attn_implementation="eager",
+    )
     model.eval()
     if device.type == 'cuda':
         try:
