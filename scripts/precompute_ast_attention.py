@@ -113,10 +113,19 @@ def _interpolate_pos_embed(ast_model: ASTModel, target_size: tuple):
 def load_ast_model(device: torch.device) -> ASTModel:
     print("Loading MIT/ast-finetuned-audioset-10-10-0.4593 ...")
     model = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
-    model.eval().to(device)
+    model.eval()
+    if device.type == 'cuda':
+        try:
+            model.to(device)
+        except Exception as e:
+            print(f"  WARNING: Could not move model to {device} ({e})")
+            print("  Falling back to CPU — precompute will be slower but correct.")
+    else:
+        model.to(device)
     _interpolate_pos_embed(model, (H, W))
+    actual_device = next(model.parameters()).device
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"  AST loaded: {n_params / 1e6:.1f}M parameters")
+    print(f"  AST loaded: {n_params / 1e6:.1f}M parameters  (device: {actual_device})")
     return model
 
 
@@ -162,16 +171,9 @@ def compute_attention_map(
     model: ASTModel,
     spec_2d: np.ndarray,
     transform: str,
-    device: torch.device,
 ) -> np.ndarray:
-    """Return a (H, W) float32 attention map in [0, 1].
-
-    Steps:
-      1. Apply spec_transform + AST normalisation.
-      2. Forward pass with output_attentions=True.
-      3. Last-layer CLS→patch attention, averaged over all heads.
-      4. Reshape to patch grid, upsample bilinearly to (H, W).
-    """
+    """Return a (H, W) float32 attention map in [0, 1]."""
+    device = next(model.parameters()).device
     x = _apply_spec_transform(spec_2d, transform)
     x = (x - config.AST_MEAN) / config.AST_STD
     x_t = torch.tensor(x, dtype=torch.float32, device=device).unsqueeze(0)  # (1, H, W)
@@ -248,7 +250,7 @@ def process_directory(
             while raw.ndim > 2:
                 raw = raw.squeeze()
             raw = _pad_to_hw(raw)
-            attn = compute_attention_map(model, raw, transform, device)
+            attn = compute_attention_map(model, raw, transform)
             np.save(out_path, attn)
         except Exception as exc:
             if not HAS_TQDM:
@@ -288,15 +290,20 @@ def main():
     )
     args = parser.parse_args()
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
     if torch.cuda.is_available() and 'CUDA_VISIBLE_DEVICES' not in os.environ:
         from src.core.utils import pick_free_gpu
         chosen = pick_free_gpu()
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
+        if chosen is not None:
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
+            device = torch.device('cuda:0')
+    elif torch.cuda.is_available():
         device = torch.device('cuda:0')
-    print(f"Device: {device}")
+    print(f"Requested device: {device}")
 
     model = load_ast_model(device)
+    # After potential CPU fallback, derive the real device from the model
+    device = next(model.parameters()).device
 
     for data_dir in args.data_dirs:
         process_directory(data_dir, args.out_dir, args.spec_transform,
