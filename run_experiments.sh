@@ -62,11 +62,11 @@ precompute_ast_attention() {
         --spec-transform "Box-Cox"
 }
 
-# RegNet trained on matched DOC data  (Box-Cox = best config from sweep)
-run_experiment regnet    doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox"
+# # RegNet trained on matched DOC data  (Box-Cox = best config from sweep)
+# run_experiment regnet    doc       "$DOC_TRAIN"       boxcox --spec-transform "Box-Cox"
 
-# RegNet trained on matched AviaNZ data (benchmark)
-run_experiment regnet    avianz    "$AVIANZ_TRAIN"    boxcox --spec-transform "Box-Cox"
+# # RegNet trained on matched AviaNZ data (benchmark)
+# run_experiment regnet    avianz    "$AVIANZ_TRAIN"    boxcox --spec-transform "Box-Cox"
 
 # RegNet with softmax-4 output: each segment is treated as containing ≤~4 birds.
 # Instead of independent sigmoids, the model outputs k*softmax(logits) so
