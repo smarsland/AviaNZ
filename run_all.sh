@@ -48,16 +48,16 @@ else
     echo "[1/8] Skipping matched dataset build (--skip-build)"
 fi
 
-# ── Step 2: Build large (full) dataset ────────────────────────────────────────
-if [ "$SKIP_BUILD" = false ]; then
-    echo ""
-    echo "============================================================"
-    echo " [2/8] Building large dataset"
-    echo "============================================================"
-    bash build_large_dataset.sh
-else
-    echo "[2/8] Skipping large dataset build (--skip-build)"
-fi
+# # ── Step 2: Build large (full) dataset ────────────────────────────────────────
+# if [ "$SKIP_BUILD" = false ]; then
+#     echo ""
+#     echo "============================================================"
+#     echo " [2/8] Building large dataset"
+#     echo "============================================================"
+#     bash build_large_dataset.sh
+# else
+#     echo "[2/8] Skipping large dataset build (--skip-build)"
+# fi
 
 # ── Step 3: Matched group — training experiments ───────────────────────────────
 echo ""
