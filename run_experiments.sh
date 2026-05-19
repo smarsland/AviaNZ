@@ -71,8 +71,8 @@ precompute_ast_attention() {
 # RegNet with softmax-4 output: each segment is treated as containing ≤~4 birds.
 # Instead of independent sigmoids, the model outputs k*softmax(logits) so
 # probabilities sum to k≈4, providing a soft upper-bound on predicted species count.
-run_experiment regnet    doc       "$DOC_TRAIN"       boxcox_softmax4 \
-    --spec-transform "Box-Cox" --softmax-scale 4.0
+# run_experiment regnet    doc       "$DOC_TRAIN"       boxcox_softmax4 \
+#     --spec-transform "Box-Cox" --softmax-scale 4.0
 
 # RegNet with raw AST attention as a second input channel.
 # Step 1: pre-compute attention maps from the frozen AudioSet-pretrained AST
