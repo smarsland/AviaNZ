@@ -41,21 +41,36 @@ def pick_free_gpu():
         return None
 
     # --- GPUs that already have an active compute process ---
-    occupied = set()
+    # --query-compute-apps only supports gpu_uuid, not gpu_index, so we
+    # cross-reference with the per-GPU UUID list.
+    uuid_to_idx = {}
     try:
         out = subprocess.check_output(
-            [smi, '--query-compute-apps=gpu_index', '--format=csv,noheader,nounits'],
+            [smi, '--query-gpu=index,gpu_uuid', '--format=csv,noheader,nounits'],
             stderr=subprocess.STDOUT, text=True,
         )
         for line in out.splitlines():
-            line = line.strip()
-            if line:
+            parts = line.strip().split(',')
+            if len(parts) == 2:
                 try:
-                    occupied.add(int(line))
+                    uuid_to_idx[parts[1].strip()] = int(parts[0].strip())
                 except ValueError:
                     pass
     except subprocess.CalledProcessError:
-        pass  # if this query fails, treat all as potentially free
+        pass
+
+    occupied = set()
+    try:
+        out = subprocess.check_output(
+            [smi, '--query-compute-apps=gpu_uuid', '--format=csv,noheader,nounits'],
+            stderr=subprocess.STDOUT, text=True,
+        )
+        for line in out.splitlines():
+            uuid = line.strip()
+            if uuid and uuid in uuid_to_idx:
+                occupied.add(uuid_to_idx[uuid])
+    except subprocess.CalledProcessError:
+        pass
 
     # Prefer GPUs with no active process; among ties prefer lowest memory
     free_gpus = {i: m for i, m in mem_by_idx.items() if i not in occupied}
