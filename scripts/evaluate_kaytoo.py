@@ -435,20 +435,25 @@ def main():
         json.dump(result_json, f, indent=2)
     print(f"\nSaved result.json to {output_path / 'result.json'}")
 
-    # Save per-split raw score CSVs (predictions_{split}.csv) so that
-    # analyze_all_results.py --tune-thresholds can threshold-tune Kaytoo.
+    # Save per-split raw score CSVs (predictions_{split}.csv) including ground-
+    # truth columns (true_CLASSNAME) so tune_thresholds.py can run locally.
     for result in all_results:
         raw_records = result.get('raw_score_records', [])
         if not raw_records:
             continue
         split_name = result['dataset_name']
         csv_path = output_path / f'predictions_{split_name}.csv'
-        class_cols = sorted(c for c in raw_records[0] if c != 'filename')
+        class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes'))
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['filename'] + class_cols)
+            writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])
             for rec in raw_records:
-                writer.writerow([rec['filename']] + [f"{rec[c]:.6f}" for c in class_cols])
+                gt_set = set(rec.get('gt_codes', []))
+                writer.writerow(
+                    [rec['filename']]
+                    + [f"{rec.get(c, 0.0):.6f}" for c in class_cols]
+                    + [int(c in gt_set) for c in class_cols]
+                )
         print(f"Saved {len(raw_records)} raw score rows → {csv_path.name}")
 
     # Detailed per-file predictions in a separate file

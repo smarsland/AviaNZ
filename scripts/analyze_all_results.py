@@ -39,7 +39,7 @@ def load_from_result_json(results_dir):
                 'kaytoo':  'Kaytoo (Pretrained)',
                 'birdnet': 'BirdNET (Pretrained)',
             }
-            results.append({
+            row = {
                 'name': name,
                 'train_dataset': 'pretrained',
                 'method': 'pretrained',
@@ -55,6 +55,7 @@ def load_from_result_json(results_dir):
                 'test1_macro_recall': np.nan,
                 'test1_macro_f1': np.nan,
                 'test1_jaccard': np.nan,
+                'test1_adaptive_f1': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -62,8 +63,11 @@ def load_from_result_json(results_dir):
                 'test2_macro_recall': np.nan,
                 'test2_macro_f1': np.nan,
                 'test2_jaccard': np.nan,
+                'test2_adaptive_f1': np.nan,
                 'status': data.get('status', 'unknown'),
-            })
+            }
+            _read_adaptive_from_dir(result_file.parent, row)
+            results.append(row)
             continue
 
         train_dataset = parts[0]
@@ -93,7 +97,7 @@ def load_from_result_json(results_dir):
             category = 'Normalization'
             method = 'baseline'
 
-        results.append({
+        row = {
             'name': name,
             'train_dataset': train_dataset,
             'method': method,
@@ -109,6 +113,7 @@ def load_from_result_json(results_dir):
             'test1_macro_recall': np.nan,
             'test1_macro_f1': np.nan,
             'test1_jaccard': np.nan,
+            'test1_adaptive_f1': np.nan,
             'test2_acc': data.get('test2_acc', np.nan),
             'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
             'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -116,8 +121,11 @@ def load_from_result_json(results_dir):
             'test2_macro_recall': np.nan,
             'test2_macro_f1': np.nan,
             'test2_jaccard': np.nan,
+            'test2_adaptive_f1': np.nan,
             'status': data.get('status', 'unknown'),
-        })
+        }
+        _read_adaptive_from_dir(result_file.parent, row)
+        results.append(row)
     return results
 
 
@@ -136,6 +144,65 @@ def _extract_report_metrics(report):
         'macro_f1':   macro.get('f1-score', np.nan),
         'jaccard':    report.get('jaccard_score', np.nan),
     }
+
+
+def _adaptive_f1_from_predictions(csv_path: Path, tune_csv: Path | None = None) -> float:
+    """Compute macro-F1 using per-class thresholds tuned to maximise it.
+
+    Thresholds are found on *tune_csv* (defaults to *csv_path* itself — oracle
+    upper bound).  Returns nan when no true_ columns are present.
+    """
+    from sklearn.metrics import f1_score as _f1
+
+    def _load(p):
+        df = pd.read_csv(p, index_col='filename')
+        class_cols = [c for c in df.columns if not c.startswith('true_')]
+        true_cols  = [c for c in df.columns if c.startswith('true_')]
+        if not true_cols:
+            return None, None, class_cols
+        return df[class_cols].values.astype(np.float32), df[true_cols].values.astype(np.int32), class_cols
+
+    probs, trues, classes = _load(csv_path)
+    if trues is None:
+        return np.nan
+
+    t_probs, t_trues, _ = _load(tune_csv) if tune_csv and tune_csv != csv_path else (probs, trues, classes)
+    if t_trues is None:
+        return np.nan
+
+    # Per-class threshold sweep
+    candidates = np.linspace(0.0, 1.0, 201)
+    thresholds = np.full(len(classes), 0.5, dtype=np.float32)
+    for c in range(len(classes)):
+        best = -1.0
+        for t in candidates:
+            preds = (t_probs[:, c] >= t).astype(int)
+            if preds.sum() == 0:
+                continue
+            f = _f1(t_trues[:, c], preds, zero_division=0)
+            if f > best:
+                best = f
+                thresholds[c] = t
+
+    preds = (probs >= thresholds[np.newaxis, :]).astype(int)
+    _, _, f1, _ = __import__('sklearn.metrics', fromlist=['precision_recall_fscore_support']).precision_recall_fscore_support(
+        trues, preds, average='macro', zero_division=0)
+    return float(f1)
+
+
+def _read_adaptive_from_dir(exp_dir: Path, row: dict):
+    """Populate test1_adaptive_f1 / test2_adaptive_f1 in *row* from predictions CSVs.
+
+    Thresholds are tuned on the same split (oracle) — good enough for a
+    diagnostic upper bound.  Returns silently when no predictions CSVs exist
+    or when they predate the true_ column addition.
+    """
+    csvs = sorted(exp_dir.glob('predictions_*.csv'))
+    if not csvs:
+        return
+    slots = ['test1_adaptive_f1', 'test2_adaptive_f1']
+    for slot, csv_path in zip(slots, csvs):
+        row[slot] = _adaptive_f1_from_predictions(csv_path)
 
 
 def _read_reports_from_dir(report_dir, model, row):
@@ -180,9 +247,11 @@ def _empty_row(name, train_dataset, model, transform):
         'test1_acc': np.nan, 'test1_acc_labelled': np.nan, 'test1_acc_background': np.nan,
         'test1_macro_precision': np.nan, 'test1_macro_recall': np.nan,
         'test1_macro_f1': np.nan, 'test1_jaccard': np.nan,
+        'test1_adaptive_f1': np.nan,
         'test2_acc': np.nan, 'test2_acc_labelled': np.nan, 'test2_acc_background': np.nan,
         'test2_macro_precision': np.nan, 'test2_macro_recall': np.nan,
         'test2_macro_f1': np.nan, 'test2_jaccard': np.nan,
+        'test2_adaptive_f1': np.nan,
         'status': 'unknown',
     }
 
@@ -210,6 +279,7 @@ def load_from_viz_dir(viz_dir):
             model, train_dataset, transform = m.groups()
             row = _empty_row(exp_dir.name, train_dataset, model, transform)
             _read_reports_from_dir(exp_dir, model, row)
+            _read_adaptive_from_dir(exp_dir, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
             results.append(row)
             continue
@@ -223,6 +293,7 @@ def load_from_viz_dir(viz_dir):
             row = _empty_row(exp_dir.name, f'pseudo_{source_dataset}_to_{target_dataset}_pct{pct_int}', model, transform)
             row['category'] = f'{model.upper()} Pseudo'
             _read_reports_from_dir(final_dir, model, row)
+            _read_adaptive_from_dir(exp_dir, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
             results.append(row)
 
@@ -244,8 +315,10 @@ def create_overview_table(df, output_dir):
         'name', 'train_dataset', 'method', 'config', 'category',
         'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
         'test1_macro_precision', 'test1_macro_recall', 'test1_macro_f1', 'test1_jaccard',
+        'test1_adaptive_f1',
         'test2_name', 'test2_acc', 'test2_acc_labelled', 'test2_acc_background',
         'test2_macro_precision', 'test2_macro_recall', 'test2_macro_f1', 'test2_jaccard',
+        'test2_adaptive_f1',
         'status',
     ]
     cols = [c for c in cols if c in df.columns]

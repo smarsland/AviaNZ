@@ -9,6 +9,7 @@ set -e
 #   2. DOC matched train — k-bird prior (max-4 normalisation; soft species-count constraint)
 #   3. DOC matched train — background subtraction + median filter
 #   4. AviaNZ matched train — normal RegNet (domain-shift comparison vs run 1)
+#   5. DOC matched train — no background samples (train on labelled-only)
 #
 # Results land in $OUTPUT and are picked up by scripts/analyze_all_results.py.
 #
@@ -107,6 +108,13 @@ run_experiment regnet doc "$DOC_TRAIN" boxcox_bgmed \
 #    run 1 (DOC) on the two test sets quantifies cross-dataset domain shift.
 run_experiment regnet avianz "$AVIANZ_TRAIN" boxcox \
     --spec-transform "Box-Cox"
+
+# ── 5. No-background: ignore all-zero (silence) training samples ──────────────
+#    Removes the background class from training entirely so the model only sees
+#    segments with at least one labelled species.  Useful to check whether the
+#    background samples are helping regularisation or just adding noise.
+run_experiment regnet doc "$DOC_TRAIN" boxcox_nobg \
+    --spec-transform "Box-Cox" --no-background
 
 echo ""
 echo "============================================================"
