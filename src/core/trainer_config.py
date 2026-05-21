@@ -76,7 +76,7 @@ class LossConfig:
     asl_margin: float = 0.05
     rebalance_background: bool = True  # Down-weight background samples so they equal labelled contribution
     gate_loss_weight: float = 1.0
-    softmax_scale: float = 0.0   # When > 0, use k*softmax instead of sigmoid (soft k-bird constraint)
+    kbird_prior: float = 0.0   # When > 0, normalise sigmoid probs so sum <= k (soft species-count constraint)
 
 
 @dataclass
@@ -167,7 +167,7 @@ class TrainerConfig:
                 asl_margin=getattr(args, 'asl_margin', 0.05),
                 rebalance_background=getattr(args, 'rebalance_background', True),
                 gate_loss_weight=getattr(args, 'gate_loss_weight', 1.0),
-                softmax_scale=getattr(args, 'softmax_scale', 0.0),
+                kbird_prior=getattr(args, 'kbird_prior', 0.0),
             ),
             domain_adaptation=DomainAdaptationConfig(
                 use_dann=getattr(args, 'use_dann', False),

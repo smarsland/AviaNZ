@@ -4,18 +4,18 @@ set -e
 # Master script: build both datasets then run all experiments.
 #
 # Matched group  → results in /local/scratch/freangi/matched_tests/
-#   - RegNet trained on matched DOC data
-#   - RegNet trained on matched AviaNZ data (benchmark)
-#   - AST trained on matched DOC data
-#   - RegNet trained on full (large) DOC data, evaluated on matched test sets
-#   - Kaytoo pretrained evaluation on matched test sets
-#   - BirdNET pretrained evaluation on matched test sets
+#   1. RegNet on matched DOC data (baseline, Box-Cox)
+#   2. RegNet on matched DOC data with k-bird prior (max-4 species constraint)
+#   3. RegNet on matched DOC data with background median subtraction
+#   4. RegNet on matched AviaNZ data (domain-shift comparison)
+#   5. Kaytoo pretrained evaluation on matched test sets
+#   6. BirdNET pretrained evaluation on matched test sets
 #
 # Large group    → results in /local/scratch/freangi/large_tests/
-#   - RegNet trained on full DOC dataset, evaluated on large test sets
-#   - RegNet trained on full AviaNZ dataset, evaluated on large test sets
-#   - Kaytoo pretrained evaluation on large test sets
-#   - BirdNET pretrained evaluation on large test sets
+#   7. RegNet on full DOC dataset, evaluated on large test sets
+#   8. RegNet on full AviaNZ dataset, evaluated on large test sets
+#   9. Kaytoo pretrained evaluation on large test sets
+#  10. BirdNET pretrained evaluation on large test sets
 #
 # Usage:
 #   ./run_all.sh
@@ -41,51 +41,51 @@ echo ""
 # ── Step 1: Build matched dataset ─────────────────────────────────────────────
 if [ "$SKIP_BUILD" = false ]; then
     echo "============================================================"
-    echo " [1/8] Building matched dataset"
+    echo " [1/10] Building matched dataset"
     echo "============================================================"
     bash build_dataset.sh
 else
-    echo "[1/8] Skipping matched dataset build (--skip-build)"
+    echo "[1/10] Skipping matched dataset build (--skip-build)"
 fi
 
 # ── Step 2: Build large (full) dataset ────────────────────────────────────────
 if [ "$SKIP_BUILD" = false ]; then
     echo ""
     echo "============================================================"
-    echo " [2/8] Building large dataset"
+    echo " [2/10] Building large dataset (≤300 per species)"
     echo "============================================================"
     bash build_large_dataset.sh
 else
-    echo "[2/8] Skipping large dataset build (--skip-build)"
+    echo "[2/10] Skipping large dataset build (--skip-build)"
 fi
 
-# ── Step 3: Matched group — training experiments ───────────────────────────────
+# ── Step 3: Matched group — training experiments ──────────────────────────────
 echo ""
 echo "============================================================"
-echo " [3/8] Matched group — training experiments"
-echo "   RegNet/matched-DOC, RegNet/matched-AviaNZ,"
-echo "   AST/matched-DOC, RegNet/large-DOC → matched test sets"
+echo " [3/10] Matched group — training experiments"
+echo "   baseline, k-bird prior, bg-median (DOC),"
+echo "   + AviaNZ domain-shift comparison"
 echo "============================================================"
 bash run_experiments.sh
 
 # ── Step 4: Matched group — Kaytoo evaluation ─────────────────────────────────
 echo ""
 echo "============================================================"
-echo " [4/8] Matched group — Kaytoo evaluation"
+echo " [4/10] Matched group — Kaytoo evaluation"
 echo "============================================================"
 bash run_kaytoo_eval.sh
 
 # ── Step 5: Matched group — BirdNET evaluation ────────────────────────────────
 echo ""
 echo "============================================================"
-echo " [5/8] Matched group — BirdNET evaluation"
+echo " [5/10] Matched group — BirdNET evaluation"
 echo "============================================================"
 bash run_birdnet_eval.sh
 
 # ── Step 6: Large group — training experiments ────────────────────────────────
 echo ""
 echo "============================================================"
-echo " [6/8] Large group — training experiments"
+echo " [6/10] Large group — training experiments"
 echo "   RegNet/large-DOC, RegNet/large-AviaNZ → large test sets"
 echo "============================================================"
 bash run_large_experiment.sh
@@ -93,14 +93,14 @@ bash run_large_experiment.sh
 # ── Step 7: Large group — Kaytoo evaluation ───────────────────────────────────
 echo ""
 echo "============================================================"
-echo " [7/8] Large group — Kaytoo evaluation"
+echo " [7/10] Large group — Kaytoo evaluation"
 echo "============================================================"
 bash run_kaytoo_eval.sh --large
 
 # ── Step 8: Large group — BirdNET evaluation ──────────────────────────────────
 echo ""
 echo "============================================================"
-echo " [8/8] Large group — BirdNET evaluation"
+echo " [8/10] Large group — BirdNET evaluation"
 echo "============================================================"
 bash run_birdnet_eval.sh --large
 

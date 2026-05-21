@@ -297,7 +297,7 @@ class Trainer:
         self.asl_gamma_neg = cfg.loss.asl_gamma_neg
         self.asl_gamma_pos = cfg.loss.asl_gamma_pos
         self.asl_margin = cfg.loss.asl_margin
-        self.softmax_scale = getattr(cfg.loss, 'softmax_scale', 0.0)
+        self.kbird_prior = getattr(cfg.loss, 'kbird_prior', 0.0)
         
         # Domain adaptation configuration
         self.use_dann = cfg.domain_adaptation.use_dann
@@ -599,18 +599,24 @@ class Trainer:
             pos_weight = self._compute_class_weights()
             print(f"Using class-weighted loss")
             print(f"  Weight range: {pos_weight.min().item():.2f} - {pos_weight.max().item():.2f}")
-        if self.softmax_scale > 0:
-            # k*softmax activation: BCEWithLogits is wrong here; apply activation manually.
-            # Probabilities = softmax_scale * softmax(logits), clamped to (eps, 1-eps).
-            # pos_weight is ignored for softmax mode (weight absorption via the scale).
-            _scale = self.softmax_scale
-            def criterion(out, tgt, _s=_scale):
+        if self.kbird_prior > 0:
+            # Max-k normalisation: compute standard sigmoid probabilities, then if
+            # their sum exceeds k scale all of them down proportionally so the total
+            # equals k.  This encodes the prior that at most ~k species are active
+            # per segment without forcing class competition (unlike k*softmax which
+            # uses a softmax and makes classes compete for probability mass).
+            # pos_weight is not used in this mode.
+            _k = self.kbird_prior
+            def criterion(out, tgt, _k=_k):
                 # Disable autocast: F.binary_cross_entropy is forbidden inside
                 # an autocast context regardless of input dtype.
                 with torch.amp.autocast('cuda', enabled=False):
-                    p = (_s * F.softmax(out.float(), dim=-1)).clamp(1e-7, 1.0 - 1e-7)
-                    return F.binary_cross_entropy(p, tgt.float(), reduction='none')
-            print(f"Using Softmax-{self.softmax_scale:.1f} BCE loss (soft k-bird constraint)")
+                    p = torch.sigmoid(out.float())                     # [B, C]
+                    total = p.sum(dim=1, keepdim=True).clamp(min=1e-7) # [B, 1]
+                    scale = (total / _k).clamp(min=1.0)  # >=1 when over-predicting
+                    p_norm = (p / scale).clamp(1e-7, 1.0 - 1e-7)
+                    return F.binary_cross_entropy(p_norm, tgt.float(), reduction='none')
+            print(f"Using k-bird prior (max-{self.kbird_prior:.1f} normalisation)")
         elif self.use_asl:
             criterion = AsymmetricLoss(
                 gamma_neg=self.asl_gamma_neg,
@@ -1133,12 +1139,15 @@ class Trainer:
     def _get_probs(self, output):
         """Convert raw logits to probabilities using the configured activation.
 
-        When softmax_scale > 0 we use  k * softmax(logits)  instead of
-        sigmoid, imposing a soft constraint that at most ~k birds are predicted
-        per segment.  Otherwise falls back to the standard per-class sigmoid.
+        When kbird_prior > 0, sigmoid probabilities are normalised so their sum
+        never exceeds k, encoding the prior that at most ~k species are active
+        per segment.  Otherwise falls back to standard per-class sigmoid.
         """
-        if self.softmax_scale > 0:
-            return (self.softmax_scale * F.softmax(output, dim=-1)).clamp(0.0, 1.0)
+        if self.kbird_prior > 0:
+            p = torch.sigmoid(output)
+            total = p.sum(dim=1, keepdim=True).clamp(min=1e-7)
+            scale = (total / self.kbird_prior).clamp(min=1.0)
+            return (p / scale).clamp(0.0, 1.0)
         return torch.sigmoid(output)
 
     def _save_model(self, model, best=False):

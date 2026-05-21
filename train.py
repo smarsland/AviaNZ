@@ -98,10 +98,10 @@ Examples:
                        help="Per-clip min-max normalization (replaces global AudioSet stats). AST only.")
 
     # Multi-label output constraint
-    parser.add_argument('--softmax-scale', type=float, default=0.0, dest='softmax_scale',
-                       help="When > 0, replace per-class sigmoid with k*softmax(logits), imposing a "
-                            "soft constraint that roughly k birds are present per segment (try 4.0). "
-                            "Loss is BCE applied to the scaled probabilities. 0 = standard sigmoid.")
+    parser.add_argument('--kbird-prior', type=float, default=0.0, dest='kbird_prior',
+                       help="When > 0, normalise sigmoid probabilities so their sum never exceeds k, "
+                            "encoding the prior that at most ~k species call simultaneously (try 4.0). "
+                            "Unlike softmax this does not cause class competition. 0 = standard sigmoid.")
 
     # Pre-computed AST attention channel
     parser.add_argument('--ast-channel-dir', type=str, default=None, dest='ast_channel_dir',

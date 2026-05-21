@@ -44,6 +44,9 @@ MIXUP=0.25
 MODEL_TYPE="regnet"
 VIZ_SAMPLES=3
 
+# Spectrogram: Reassigned / Hamming / Linear  (best from sweep)
+# Training-time normalisation: Box-Cox (best from sweep)
+
 # ── Checks ────────────────────────────────────────────────────────────────────
 check_path() {
     if [ ! -e "$1" ]; then

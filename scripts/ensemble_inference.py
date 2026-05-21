@@ -50,19 +50,18 @@ _BG_SUFFIX      = "_bgmed"
 _TRAIN_DATASETS = ["avianz", "doc"]
 _MODEL_TYPES    = ["regnet", "ast", "cnn"]
 
+# Default paths for the sweep experiments (override with --tests-base / --sweep-base)
+_DEFAULT_TESTS_BASE = "/local/scratch/freangi/sweep_tests"
+_DEFAULT_SWEEP_BASE = "/local/scratch/freangi/sweep"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _load_sweep_paths():
-    """Return (TESTS_BASE, SWEEP_BASE) from run_sweep.py."""
-    import importlib.util
-    sweep_py = Path(__file__).resolve().parents[1] / "run_sweep.py"
-    spec = importlib.util.spec_from_file_location("run_sweep", sweep_py)
-    mod  = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.TESTS_BASE, mod.SWEEP_BASE
+    """Return (TESTS_BASE, SWEEP_BASE) defaults."""
+    return _DEFAULT_TESTS_BASE, _DEFAULT_SWEEP_BASE
 
 
 def parse_exp_name(name: str):
