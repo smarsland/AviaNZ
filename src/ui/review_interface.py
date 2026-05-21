@@ -1870,39 +1870,6 @@ class ReviewInterface(QMainWindow):
                                                    seg, sp.x1nobspec, sp.x2nobspec,
                                                    guides, minFreq, maxFreq)
 
-    def saveCorrections(self):
-        """ Save corrections for the current review session.
-        For cross-file one-by-one mode, corrections are handled when saving each file.
-        This method is primarily for legacy/quick mode compatibility.
-        """
-        if hasattr(self, 'allSegmentsToReview'):
-            # In cross-file mode, corrections are handled when saving each file
-            print("Corrections tracking for cross-file review is handled during file save")
-            return
-            
-        # Original file-based correction saving (for legacy modes)
-        if not hasattr(self, 'origSeg') or not self.config['saveCorrections']:
-            return
-            
-        for i in reversed(range(len(self.segments))):
-            if self.segments[i][4] == self.origSeg[i][4]:
-                # No changes made to this segment
-                del self.origSeg[i]
-            else:
-                oldlabel = self.origSeg[i][4]
-                newlabel = self.segments[i][4]
-                if "-To Be Deleted-" in [lab["species"] for lab in newlabel]:
-                    self.origSeg[i] = [self.origSeg[i], []]
-                else:
-                    # Check for species or calltype changes
-                    if [lab["species"] for lab in oldlabel] != [lab["species"] for lab in newlabel] or \
-                       [lab.get("calltype") for lab in oldlabel] != [lab.get("calltype") for lab in newlabel]:
-                        self.origSeg[i] = [self.origSeg[i], newlabel]
-
-        if len(self.origSeg) > 0:
-            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), self.origSeg, mode=1, reviewer=self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save correction file!")
 
     def humanClassifyNextImage1(self, move_forward=True):
         # Get the next image
@@ -2230,7 +2197,7 @@ class ReviewInterface(QMainWindow):
         """
         if calltype=="":
             return
-        oldlab = self.segments[boxid][4]
+        oldlab = self.segments[boxid].labels
         if len(oldlab)==0:
             print("Warning: can't add call type to empty segment")
             return
@@ -2248,5 +2215,5 @@ class ReviewInterface(QMainWindow):
         print("Changing calltype to", calltype)
 
         # actually update the segment info
-        self.segments[boxid][4][0]["calltype"] = calltype
+        self.segments[boxid].labels[0]["calltype"] = calltype
 

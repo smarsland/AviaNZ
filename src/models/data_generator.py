@@ -161,7 +161,7 @@ class TrainingDataGenerator:
         return noiseSegments
 
     def Overlap(self, segGT, seg):
-        return seg[0]<=segGT[1] and seg[1]>=segGT[0]
+        return seg[0]<=segGT.end_time and seg[1]>=segGT.start_time
 
     def getImgCount(self, dirName, dataset, hop):
         """ Estimate the number of NN images per class from segment library. """
