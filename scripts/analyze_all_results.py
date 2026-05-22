@@ -55,7 +55,7 @@ def load_from_result_json(results_dir):
                 'test1_macro_recall': np.nan,
                 'test1_macro_f1': np.nan,
                 'test1_jaccard': np.nan,
-                'test1_adaptive_f1': np.nan,
+                'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -63,7 +63,7 @@ def load_from_result_json(results_dir):
                 'test2_macro_recall': np.nan,
                 'test2_macro_f1': np.nan,
                 'test2_jaccard': np.nan,
-                'test2_adaptive_f1': np.nan,
+                'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
                 'status': data.get('status', 'unknown'),
             }
             _read_adaptive_from_dir(result_file.parent, row)
@@ -113,7 +113,7 @@ def load_from_result_json(results_dir):
             'test1_macro_recall': np.nan,
             'test1_macro_f1': np.nan,
             'test1_jaccard': np.nan,
-            'test1_adaptive_f1': np.nan,
+            'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
             'test2_acc': data.get('test2_acc', np.nan),
             'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
             'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -121,7 +121,7 @@ def load_from_result_json(results_dir):
             'test2_macro_recall': np.nan,
             'test2_macro_f1': np.nan,
             'test2_jaccard': np.nan,
-            'test2_adaptive_f1': np.nan,
+            'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
             'status': data.get('status', 'unknown'),
         }
         _read_adaptive_from_dir(result_file.parent, row)
@@ -146,63 +146,92 @@ def _extract_report_metrics(report):
     }
 
 
-def _adaptive_f1_from_predictions(csv_path: Path, tune_csv: Path | None = None) -> float:
-    """Compute macro-F1 using per-class thresholds tuned to maximise it.
+def _metrics_from_csv(csv_path: Path) -> dict:
+    """Compute metrics at both threshold=0.5 and oracle per-class thresholds.
 
-    Thresholds are found on *tune_csv* (defaults to *csv_path* itself — oracle
-    upper bound).  Returns nan when no true_ columns are present.
+    Returns a dict with keys:
+        half_f1, half_acc, half_acc_labelled
+        oracle_f1, oracle_acc, oracle_acc_labelled
+    All NaN when no true_ columns are present.
     """
     from sklearn.metrics import f1_score as _f1
+    from sklearn.metrics import precision_recall_fscore_support as _prf
 
-    def _load(p):
-        df = pd.read_csv(p, index_col='filename')
-        class_cols = [c for c in df.columns if not c.startswith('true_')]
-        true_cols  = [c for c in df.columns if c.startswith('true_')]
-        if not true_cols:
-            return None, None, class_cols
-        return df[class_cols].values.astype(np.float32), df[true_cols].values.astype(np.int32), class_cols
+    nan_result = {k: np.nan for k in (
+        'half_f1', 'half_acc', 'half_acc_labelled',
+        'oracle_f1', 'oracle_acc', 'oracle_acc_labelled',
+    )}
 
-    probs, trues, classes = _load(csv_path)
-    if trues is None:
-        return np.nan
+    df = pd.read_csv(csv_path, index_col='filename')
+    class_cols = [c for c in df.columns if not c.startswith('true_')]
+    true_cols  = [c for c in df.columns if c.startswith('true_')]
+    if not true_cols:
+        return nan_result
 
-    t_probs, t_trues, _ = _load(tune_csv) if tune_csv and tune_csv != csv_path else (probs, trues, classes)
-    if t_trues is None:
-        return np.nan
+    probs = df[class_cols].values.astype(np.float32)
+    trues = df[true_cols].values.astype(np.int32)
+    labelled = trues.sum(axis=1) > 0
 
-    # Per-class threshold sweep
+    def _acc(preds):
+        correct = np.all(preds == trues, axis=1)
+        a = correct.mean() * 100
+        al = correct[labelled].mean() * 100 if labelled.any() else np.nan
+        return a, al
+
+    # --- threshold 0.5 ---
+    preds_half = (probs >= 0.5).astype(int)
+    _, _, f1_half, _ = _prf(trues, preds_half, average='macro', zero_division=0)
+    acc_half, acc_lab_half = _acc(preds_half)
+
+    # --- oracle per-class thresholds ---
     candidates = np.linspace(0.0, 1.0, 201)
-    thresholds = np.full(len(classes), 0.5, dtype=np.float32)
-    for c in range(len(classes)):
+    thresholds = np.full(probs.shape[1], 0.5, dtype=np.float32)
+    for c in range(probs.shape[1]):
         best = -1.0
         for t in candidates:
-            preds = (t_probs[:, c] >= t).astype(int)
-            if preds.sum() == 0:
+            p = (probs[:, c] >= t).astype(int)
+            if p.sum() == 0:
                 continue
-            f = _f1(t_trues[:, c], preds, zero_division=0)
+            f = _f1(trues[:, c], p, zero_division=0)
             if f > best:
                 best = f
                 thresholds[c] = t
+    preds_oracle = (probs >= thresholds[np.newaxis, :]).astype(int)
+    _, _, f1_oracle, _ = _prf(trues, preds_oracle, average='macro', zero_division=0)
+    acc_oracle, acc_lab_oracle = _acc(preds_oracle)
 
-    preds = (probs >= thresholds[np.newaxis, :]).astype(int)
-    _, _, f1, _ = __import__('sklearn.metrics', fromlist=['precision_recall_fscore_support']).precision_recall_fscore_support(
-        trues, preds, average='macro', zero_division=0)
-    return float(f1)
+    return {
+        'half_f1':             float(f1_half),
+        'half_acc':            float(acc_half),
+        'half_acc_labelled':   float(acc_lab_half),
+        'oracle_f1':           float(f1_oracle),
+        'oracle_acc':          float(acc_oracle),
+        'oracle_acc_labelled': float(acc_lab_oracle),
+    }
 
 
 def _read_adaptive_from_dir(exp_dir: Path, row: dict):
-    """Populate test1_adaptive_f1 / test2_adaptive_f1 in *row* from predictions CSVs.
-
-    Thresholds are tuned on the same split (oracle) — good enough for a
-    diagnostic upper bound.  Returns silently when no predictions CSVs exist
-    or when they predate the true_ column addition.
-    """
+    """Populate adaptive_* and (when missing) half_* metrics in *row* from predictions CSVs."""
     csvs = sorted(exp_dir.glob('predictions_*.csv'))
     if not csvs:
         return
-    slots = ['test1_adaptive_f1', 'test2_adaptive_f1']
-    for slot, csv_path in zip(slots, csvs):
-        row[slot] = _adaptive_f1_from_predictions(csv_path)
+    slot_pairs = [
+        ('test1_macro_f1', 'test1_acc', 'test1_acc_labelled',
+         'test1_adaptive_f1', 'test1_adaptive_acc', 'test1_adaptive_acc_labelled'),
+        ('test2_macro_f1', 'test2_acc', 'test2_acc_labelled',
+         'test2_adaptive_f1', 'test2_adaptive_acc', 'test2_adaptive_acc_labelled'),
+    ]
+    for slots, csv_path in zip(slot_pairs, csvs):
+        s_f1, s_acc, s_acl, s_af1, s_aacc, s_aacl = slots
+        m = _metrics_from_csv(csv_path)
+        # always write oracle metrics
+        row[s_af1]  = m['oracle_f1']
+        row[s_aacc] = m['oracle_acc']
+        row[s_aacl] = m['oracle_acc_labelled']
+        # fill half metrics only when missing (pretrained models lack report JSON)
+        if np.isnan(row.get(s_f1,  np.nan)): row[s_f1]  = m['half_f1']
+        if np.isnan(row.get(s_acc, np.nan)): row[s_acc] = m['half_acc']
+        if np.isnan(row.get(s_acl, np.nan)): row[s_acl] = m['half_acc_labelled']
 
 
 def _read_reports_from_dir(report_dir, model, row):
@@ -247,11 +276,11 @@ def _empty_row(name, train_dataset, model, transform):
         'test1_acc': np.nan, 'test1_acc_labelled': np.nan, 'test1_acc_background': np.nan,
         'test1_macro_precision': np.nan, 'test1_macro_recall': np.nan,
         'test1_macro_f1': np.nan, 'test1_jaccard': np.nan,
-        'test1_adaptive_f1': np.nan,
+        'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
         'test2_acc': np.nan, 'test2_acc_labelled': np.nan, 'test2_acc_background': np.nan,
         'test2_macro_precision': np.nan, 'test2_macro_recall': np.nan,
         'test2_macro_f1': np.nan, 'test2_jaccard': np.nan,
-        'test2_adaptive_f1': np.nan,
+        'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
         'status': 'unknown',
     }
 
@@ -601,16 +630,20 @@ def print_model_comparison(df):
 
     def _collect(row):
         return {
-            't1':    _fmt(row.get('test1_acc',          np.nan)),
-            't1lab': _fmt(row.get('test1_acc_labelled', np.nan)),
-            't1f1':  _fmtf(row.get('test1_macro_f1',   np.nan)),
-            't1af1': _fmtf(row.get('test1_adaptive_f1',np.nan)),
-            't2':    _fmt(row.get('test2_acc',          np.nan)),
-            't2lab': _fmt(row.get('test2_acc_labelled', np.nan)),
-            't2f1':  _fmtf(row.get('test2_macro_f1',   np.nan)),
-            't2af1': _fmtf(row.get('test2_adaptive_f1',np.nan)),
-            't1n':   str(row.get('test1_name', '?')),
-            't2n':   str(row.get('test2_name', '?')),
+            't1':     _fmt(row.get('test1_acc',                   np.nan)),
+            't1lab':  _fmt(row.get('test1_acc_labelled',           np.nan)),
+            't1f1':   _fmtf(row.get('test1_macro_f1',             np.nan)),
+            't1af1':  _fmtf(row.get('test1_adaptive_f1',          np.nan)),
+            't1a':    _fmt(row.get('test1_adaptive_acc',           np.nan)),
+            't1alab': _fmt(row.get('test1_adaptive_acc_labelled',  np.nan)),
+            't2':     _fmt(row.get('test2_acc',                   np.nan)),
+            't2lab':  _fmt(row.get('test2_acc_labelled',           np.nan)),
+            't2f1':   _fmtf(row.get('test2_macro_f1',             np.nan)),
+            't2af1':  _fmtf(row.get('test2_adaptive_f1',          np.nan)),
+            't2a':    _fmt(row.get('test2_adaptive_acc',           np.nan)),
+            't2alab': _fmt(row.get('test2_adaptive_acc_labelled',  np.nan)),
+            't1n':    str(row.get('test1_name', '?')),
+            't2n':    str(row.get('test2_name', '?')),
         }
 
     rows = []
@@ -663,32 +696,48 @@ def print_model_comparison(df):
             t2n = m['t2n']
             break
 
-    W = 104
-    hdr2 = (f"  {'':26s}  {t1n:>12s}                          {t2n:>12s}\n"
-            f"  {'':26s}  {'acc':>7s}  {'(lab)':>7s}  {'F1':>6s}  {'F1*':>6s}"
-            f"     {'acc':>7s}  {'(lab)':>7s}  {'F1':>6s}  {'F1*':>6s}")
+    W = 88
 
-    print("\n" + "=" * W)
-    print(" BEST MODEL vs BASELINES   (* = adaptive per-class thresholds, oracle)")
-    print("=" * W)
-    print(hdr2)
-    print("-" * W)
-    for label, cfg_name, m in rows:
-        if not m:
-            print(f"  {label}")
-            continue
-        print(
-            f"  {label:<26s}"
-            f"  {m['t1']:>7s}  ({m['t1lab']:>5s})  {m['t1f1']:>6s}  {m['t1af1']:>6s}"
-            f"     {m['t2']:>7s}  ({m['t2lab']:>5s})  {m['t2f1']:>6s}  {m['t2af1']:>6s}"
-        )
-        if cfg_name:
-            print(f"    {cfg_name}")
+    def _print_table(title, acc_key1, acl_key1, f1_key1, acc_key2, acl_key2, f1_key2, f1_label, note):
+        print("\n" + "=" * W)
+        print(f" {title}")
+        print("=" * W)
+        hdr = (f"  {'':26s}  {t1n:>12s}               {t2n:>12s}\n"
+               f"  {'':26s}  {'acc':>7s}  {'(lab)':>7s}  {f1_label:>6s}"
+               f"     {'acc':>7s}  {'(lab)':>7s}  {f1_label:>6s}")
+        print(hdr)
+        print("-" * W)
+        for label, cfg_name, m in rows:
+            if not m:
+                print(f"  {label}")
+                continue
+            print(
+                f"  {label:<26s}"
+                f"  {m[acc_key1]:>7s}  ({m[acl_key1]:>5s})  {m[f1_key1]:>6s}"
+                f"     {m[acc_key2]:>7s}  ({m[acl_key2]:>5s})  {m[f1_key2]:>6s}"
+            )
+            if cfg_name:
+                print(f"    {cfg_name}")
+        print()
+        print(f"  acc = exact-match accuracy (all samples)  lab = labelled samples only")
+        print(f"  {note}")
+        print("=" * W)
 
+    _print_table(
+        title="RESULTS — threshold 0.5",
+        acc_key1='t1', acl_key1='t1lab', f1_key1='t1f1',
+        acc_key2='t2', acl_key2='t2lab', f1_key2='t2f1',
+        f1_label='F1',
+        note="F1  = macro-F1 at fixed threshold 0.5",
+    )
+    _print_table(
+        title="RESULTS — oracle adaptive thresholds (upper bound)",
+        acc_key1='t1a', acl_key1='t1alab', f1_key1='t1af1',
+        acc_key2='t2a', acl_key2='t2alab', f1_key2='t2af1',
+        f1_label='F1*',
+        note="F1* = macro-F1 with per-class threshold tuned on the same split",
+    )
     print()
-    print("  acc = exact-match accuracy (all samples)  lab = labelled samples only")
-    print("  F1  = macro-F1 at threshold 0.5           F1* = oracle adaptive threshold")
-    print("=" * W + "\n")
 
 
 def main():
