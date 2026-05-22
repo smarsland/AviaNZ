@@ -2,14 +2,11 @@
 """
 Ensemble inference: average predictions across all trained sweep models.
 
-Reads prediction CSVs written by rerun_predictions.py, aligns samples by
-row_id, averages probabilities, evaluates the ensemble, and saves a JSON
-report that appears in summarize_results.py alongside individual experiments.
+Reads prediction CSVs (predictions_{split}.csv) from each experiment directory,
+aligns samples by row_id, averages probabilities, evaluates the ensemble, and
+saves a JSON report alongside individual experiments.
 
-Prerequisites:
-    Run rerun_predictions.py first to generate prediction CSVs for each model.
-
-Usage (zero required arguments — paths read from run_sweep.py):
+Usage (zero required arguments — paths read from constants below):
     python scripts/ensemble_inference.py
 
 Filter to one training dataset:
@@ -107,18 +104,18 @@ def get_metric_from_report(exp_dir: Path, split: str, metric: str):
 
 def load_predictions_csv(exp_dir: Path, split: str):
     """
-    Load predictions_{split}.csv produced by rerun_predictions.py.
+    Load predictions_{split}.csv from an experiment directory.
     Returns a dict with row_ids, probs, true_labels, categories — or None.
     """
     csv_path = exp_dir / f"predictions_{split}.csv"
     if not csv_path.exists():
         return None
     df = pd.read_csv(csv_path)
-    # Accept both 'row_id' (rerun_predictions.py output) and 'filename' (model_trainer output)
-    if "row_id" in df.columns:
-        id_col = "row_id"
-    elif "filename" in df.columns:
+    # Accept both 'filename' (model_trainer) and legacy 'row_id' column names
+    if "filename" in df.columns:
         id_col = "filename"
+    elif "row_id" in df.columns:
+        id_col = "row_id"
     else:
         print(f"  [warn] {csv_path} has no row_id or filename column — skipping")
         return None
@@ -153,8 +150,7 @@ def align(members: list) -> tuple:
     common = sorted(set.intersection(*(set(m["row_ids"]) for m in members)))
     if not common:
         raise ValueError(
-            "No common row_ids across members.\n"
-            "Run rerun_predictions.py first to generate prediction CSVs."
+            "No common row_ids across members."
         )
 
     total   = sum(len(m["row_ids"]) for m in members)
@@ -295,7 +291,7 @@ def main():
                 print(f"    {nm}")
             if len(missing) > 5:
                 print(f"    ... and {len(missing) - 5} more")
-            print(f"  Run:  python scripts/rerun_predictions.py")
+            print(f"  Re-train missing experiments to generate prediction CSVs.")
 
         if len(members) < 2:
             print(f"  Need ≥2 members with CSVs for split '{split}', got {len(members)}. Skipping.")

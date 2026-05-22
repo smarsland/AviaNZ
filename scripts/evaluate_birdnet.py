@@ -266,7 +266,10 @@ class BirdNETEvaluator:
             })
 
             # Raw score record: npy filename + per-class max confidence (0 if not detected)
-            raw_rec = {'filename': npy_filename}
+            gt_labels = [lbl for lbl in all_dataset_labels
+                         if any(c in valid_codes for c in label_to_codes(lbl)
+                                if c in gt_codes)]
+            raw_rec = {'filename': npy_filename, 'gt_classes': gt_labels}
             for lbl in all_dataset_labels:
                 raw_rec[lbl] = max_conf.get(lbl, 0.0)
             raw_score_records.append(raw_rec)
@@ -618,12 +621,12 @@ class BirdNETEvaluator:
                     continue
                 split_name = result['dataset_name']
                 csv_path = self.output_folder / f'predictions_{split_name}.csv'
-                class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes', 'pred_codes', 'correct'))
+                class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes', 'gt_classes', 'pred_codes', 'correct'))
                 with open(csv_path, 'w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])
                     for rec in raw_records:
-                        gt_set = set(rec.get('gt_codes', []))
+                        gt_set = set(rec.get('gt_classes', []))
                         writer.writerow(
                             [rec['filename']]
                             + [f"{rec.get(c, 0.0):.6f}" for c in class_cols]
