@@ -74,7 +74,7 @@ class LossConfig:
     asl_gamma_neg: float = 4.0
     asl_gamma_pos: float = 0.0
     asl_margin: float = 0.05
-    rebalance_background: bool = False  # Down-weight background samples so they equal labelled contribution
+    rebalance_background: bool = True  # Down-weight background samples so they equal labelled contribution
     gate_loss_weight: float = 1.0
     kbird_prior: float = 0.0   # When > 0, normalise sigmoid probs so sum <= k (soft species-count constraint)
 

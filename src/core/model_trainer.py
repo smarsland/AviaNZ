@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import LambdaLR
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -588,8 +588,12 @@ class Trainer:
             param_groups.append({'params': self.domain_classifier.parameters(), 'lr': self.learning_rate * 0.1})
         optimizer = optim.AdamW(param_groups, weight_decay=self.weight_decay)
         
-        scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs, eta_min=1e-7)
-        print(f"Using AdamW optimizer with CosineAnnealingLR scheduler")
+        def lr_lambda(epoch):
+            if epoch < 5:
+                return 1.0
+            return 0.85 ** (epoch - 5)
+        scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+        print(f"Using AdamW optimizer with LambdaLR scheduler (flat 5 epochs, then 0.85^epoch decay)")
 
         scaler = torch.amp.GradScaler('cuda', enabled=torch.cuda.is_available())
         
