@@ -74,7 +74,7 @@ class LossConfig:
     asl_gamma_neg: float = 4.0
     asl_gamma_pos: float = 0.0
     asl_margin: float = 0.05
-    rebalance_background: bool = False  # Down-weight background samples so they equal labelled contribution
+    rebalance_background: bool = True  # Down-weight background samples so they equal labelled contribution
     gate_loss_weight: float = 1.0
     kbird_prior: float = 0.0   # When > 0, normalise sigmoid probs so sum <= k (soft species-count constraint)
 
@@ -165,7 +165,7 @@ class TrainerConfig:
                 asl_gamma_neg=getattr(args, 'asl_gamma_neg', 4.0),
                 asl_gamma_pos=getattr(args, 'asl_gamma_pos', 0.0),
                 asl_margin=getattr(args, 'asl_margin', 0.05),
-                rebalance_background=getattr(args, 'rebalance_background', False),
+                rebalance_background=getattr(args, 'rebalance_background', True),
                 gate_loss_weight=getattr(args, 'gate_loss_weight', 1.0),
                 kbird_prior=getattr(args, 'kbird_prior', 0.0),
             ),
