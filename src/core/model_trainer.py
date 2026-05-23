@@ -21,44 +21,6 @@ from src.core import config
 from src.core.utils import pick_free_gpu
 
 
-def _remap_labels_to_train_space(test_data, train_data):
-    """Remap test labels from test category space to training category space.
-
-    When a model is trained on N classes but a test set has M classes (e.g.
-    training on a large 133-class dataset and testing on a 25-class matched
-    split), the label tensors would have mismatched shapes causing a crash.
-    This maps each test-set class to its position in the training vocabulary,
-    so the resulting label matrix is (N_samples, N_train_classes).  Classes
-    in the test set but not in training are silently ignored; training classes
-    absent from the test set retain ground-truth 0 (correct: they are not
-    present in those samples).
-    """
-    test_cats = test_data.get('categories', [])
-    train_cats = train_data.get('categories', [])
-    if list(test_cats) == list(train_cats):
-        return test_data  # vocabularies already match – nothing to do
-
-    n_samples = len(test_data['train_labels'])
-    n_train = len(train_cats)
-    train_cat_to_idx = {c: i for i, c in enumerate(train_cats)}
-    remapped = np.zeros((n_samples, n_train), dtype=np.float32)
-    for test_idx, cat in enumerate(test_cats):
-        if cat in train_cat_to_idx:
-            remapped[:, train_cat_to_idx[cat]] = test_data['train_labels'][:, test_idx]
-
-    result = dict(test_data)
-    result['train_labels'] = remapped
-    result['categories'] = list(train_cats)
-    result['class_names'] = train_data.get('class_names', list(train_cats))
-    result['nclasses'] = n_train
-    n_test_only = sum(1 for c in test_cats if c not in train_cat_to_idx)
-    n_train_only = sum(1 for c in train_cats if c not in set(test_cats))
-    if n_test_only or n_train_only:
-        print(f"  [label remap] test-only classes ignored: {n_test_only}, "
-              f"train-only classes (always 0 in GT): {n_train_only}")
-    return result
-
-
 def compute_multilabel_f1(all_preds, all_targets):
     """Compute macro F1 score for multi-label predictions."""
     all_preds = np.vstack(all_preds)
@@ -267,8 +229,6 @@ class Trainer:
         self.use_sed_head = getattr(cfg.model, 'use_sed_head', False)
         self.use_gated_head = getattr(cfg.model, 'use_gated_head', False)
         self.model_name = getattr(cfg.model, 'model_name', 'regnety_008')
-        self.ast_channel_dir = getattr(cfg.model, 'ast_channel_dir', None)
-        self.in_chans = getattr(cfg.model, 'in_chans', 1)
         
         # Augmentation configuration
         self.mixup_alpha = cfg.augmentation.mixup_alpha
@@ -297,7 +257,6 @@ class Trainer:
         self.asl_gamma_neg = cfg.loss.asl_gamma_neg
         self.asl_gamma_pos = cfg.loss.asl_gamma_pos
         self.asl_margin = cfg.loss.asl_margin
-        self.kbird_prior = getattr(cfg.loss, 'kbird_prior', 0.0)
         
         # Domain adaptation configuration
         self.use_dann = cfg.domain_adaptation.use_dann
@@ -402,16 +361,15 @@ class Trainer:
         num_workers = 4 if torch.cuda.is_available() else 2
         self.train_loader, self.val_loader = create_data_loaders(
             self.data, self.batch_size, self.img_height, self.img_width, config.DEFAULT_CHANNELS,
-            cropping_mode='random', noise_ratio=self.noise_ratio,
+            cropping_mode='random', noise_ratio=self.noise_ratio, 
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=False, bg_subtract=self.bg_subtract,
+            use_class_balancing=True, bg_subtract=self.bg_subtract,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
             noise_mode=self.noise_mode,
-            background_prob=self.background_prob,
-            ast_channel_dir=self.ast_channel_dir,
+            background_prob=self.background_prob
         )
         
         # Create target domain data loader for DANN
@@ -499,8 +457,7 @@ class Trainer:
                 freeze_stages=self.freeze_stages,
                 use_cnn_adapter=self.use_cnn_adapter,
                 use_sed_head=self.use_sed_head,
-                use_gated_head=self.use_gated_head,
-                in_chans=self.in_chans,
+                use_gated_head=self.use_gated_head
             ).to(self.device)
         else:
             print("Creating AST model (multilabel)...")
@@ -599,25 +556,7 @@ class Trainer:
             pos_weight = self._compute_class_weights()
             print(f"Using class-weighted loss")
             print(f"  Weight range: {pos_weight.min().item():.2f} - {pos_weight.max().item():.2f}")
-        if self.kbird_prior > 0:
-            # Max-k normalisation: compute standard sigmoid probabilities, then if
-            # their sum exceeds k scale all of them down proportionally so the total
-            # equals k.  This encodes the prior that at most ~k species are active
-            # per segment without forcing class competition (unlike k*softmax which
-            # uses a softmax and makes classes compete for probability mass).
-            # pos_weight is not used in this mode.
-            _k = self.kbird_prior
-            def criterion(out, tgt, _k=_k):
-                # Disable autocast: F.binary_cross_entropy is forbidden inside
-                # an autocast context regardless of input dtype.
-                with torch.amp.autocast('cuda', enabled=False):
-                    p = torch.sigmoid(out.float())                     # [B, C]
-                    total = p.sum(dim=1, keepdim=True).clamp(min=1e-7) # [B, 1]
-                    scale = (total / _k).clamp(min=1.0)  # >=1 when over-predicting
-                    p_norm = (p / scale).clamp(1e-7, 1.0 - 1e-7)
-                    return F.binary_cross_entropy(p_norm, tgt.float(), reduction='none')
-            print(f"Using k-bird prior (max-{self.kbird_prior:.1f} normalisation)")
-        elif self.use_asl:
+        if self.use_asl:
             criterion = AsymmetricLoss(
                 gamma_neg=self.asl_gamma_neg,
                 gamma_pos=self.asl_gamma_pos,
@@ -758,7 +697,7 @@ class Trainer:
                     
                     # Accuracy tracking (only on source labeled data - always multilabel)
                     with torch.no_grad():
-                        preds = (self._get_probs(source_output) > 0.5).float()
+                        preds = (torch.sigmoid(source_output) > 0.5).float()
                         all_train_preds.append(preds.cpu().numpy())
                         all_train_targets.append(source_target.cpu().numpy())
                 
@@ -814,10 +753,10 @@ class Trainer:
                     scaler.update()
                     
                     train_loss += loss.item()
-
+                    
                     # For metrics (always multilabel)
                     target_hard = target.round()
-                    pred = (self._get_probs(output) > 0.5).float()
+                    pred = (torch.sigmoid(output) > 0.5).float()
                     all_train_preds.append(pred.cpu().numpy())
                     all_train_targets.append(target_hard.cpu().numpy())
             
@@ -857,7 +796,7 @@ class Trainer:
                     
                     # Always multilabel
                     val_loss += criterion(output, target).mean().item()
-                    pred = (self._get_probs(output) > 0.5).float()
+                    pred = (torch.sigmoid(output) > 0.5).float()
                     all_val_preds.append(pred.cpu().numpy())
                     all_val_targets.append(target.cpu().numpy())
             
@@ -964,8 +903,7 @@ class Trainer:
             print(f"{'='*60}")
             test_loader1 = DataLoader(self.test_folder, noise_folder=None)
             test_data1 = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
-            test_data1 = _remap_labels_to_train_space(test_data1, self.data)
-
+            
             test_dataset1 = SpectrogramDataset(
                 test_data1['train_filenames'], test_data1['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
@@ -978,8 +916,7 @@ class Trainer:
                 median_filter=self.median_filter,
                 use_temporal_roll=False,
                 noise_mode='full',
-                background_prob=0.0,
-                ast_channel_dir=self.ast_channel_dir,
+                background_prob=0.0
             )
             
             test_loader_obj1 = torch.utils.data.DataLoader(
@@ -1021,8 +958,7 @@ class Trainer:
             print(f"{'='*60}")
             test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
             test_data2 = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
-            test_data2 = _remap_labels_to_train_space(test_data2, self.data)
-
+            
             test_dataset2 = SpectrogramDataset(
                 test_data2['train_filenames'], test_data2['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
@@ -1035,8 +971,7 @@ class Trainer:
                 median_filter=self.median_filter,
                 use_temporal_roll=False,
                 noise_mode='full',
-                background_prob=0.0,
-                ast_channel_dir=self.ast_channel_dir,
+                background_prob=0.0
             )
             
             test_loader_obj2 = torch.utils.data.DataLoader(
@@ -1136,20 +1071,6 @@ class Trainer:
         """Return the index of the GPU with the lowest memory usage."""
         return pick_free_gpu()
 
-    def _get_probs(self, output):
-        """Convert raw logits to probabilities using the configured activation.
-
-        When kbird_prior > 0, sigmoid probabilities are normalised so their sum
-        never exceeds k, encoding the prior that at most ~k species are active
-        per segment.  Otherwise falls back to standard per-class sigmoid.
-        """
-        if self.kbird_prior > 0:
-            p = torch.sigmoid(output)
-            total = p.sum(dim=1, keepdim=True).clamp(min=1e-7)
-            scale = (total / self.kbird_prior).clamp(min=1.0)
-            return (p / scale).clamp(0.0, 1.0)
-        return torch.sigmoid(output)
-
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
@@ -1215,17 +1136,11 @@ class Trainer:
         plt.close()
     
     def _save_test_predictions(self, model, test_loader, test_data, test_name):
-        """Save test predictions (per-class probabilities + ground truth) to CSV.
-
-        Ground truth is stored as true_CLASSNAME columns so that
-        scripts/tune_thresholds.py can run locally without access to the
-        original data directory.
-        """
+        """Save test predictions (per-class probabilities) to CSV."""
         import csv
 
         model.eval()
         all_probs = []
-        all_labels = []
         all_filenames = []
 
         sample_idx = 0
@@ -1233,7 +1148,7 @@ class Trainer:
 
         with torch.no_grad():
             for batch in test_loader:
-                data, targets = batch
+                data, _ = batch
                 batch_size = data.size(0)
                 data = data.to(self.device)
 
@@ -1241,28 +1156,24 @@ class Trainer:
                 if isinstance(output, tuple):
                     output = output[0]
 
-                probs = self._get_probs(output).cpu().numpy()
+                probs = torch.sigmoid(output).cpu().numpy()
                 all_probs.append(probs)
-                all_labels.append(targets.numpy())
 
+                # Correctly track which dataset samples this batch covers
                 batch_filenames = filenames_list[sample_idx: sample_idx + batch_size]
                 all_filenames.extend(batch_filenames)
                 sample_idx += batch_size
 
         all_probs = np.vstack(all_probs)
-        all_labels = np.vstack(all_labels)
         class_names = test_data['class_names']
 
+        # Save per-class probabilities (same format as ModelPredictor.save_predictions)
         csv_path = os.path.join(self.output_folder, f'predictions_{test_name}.csv')
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['filename'] + class_names + [f'true_{c}' for c in class_names])
-            for filename, row_probs, row_labels in zip(all_filenames, all_probs, all_labels):
-                writer.writerow(
-                    [filename]
-                    + [f"{p:.6f}" for p in row_probs]
-                    + [int(l) for l in row_labels]
-                )
+            writer.writerow(['filename'] + class_names)
+            for filename, row_probs in zip(all_filenames, all_probs):
+                writer.writerow([filename] + [f"{p:.6f}" for p in row_probs])
 
         print(f"Saved {len(all_filenames)} predictions to {csv_path}")
 

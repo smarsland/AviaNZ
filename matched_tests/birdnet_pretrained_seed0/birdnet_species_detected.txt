@@ -1,0 +1,69 @@
+BirdNET Species Detection Report
+============================================================
+
+Target Species (Ground Truth):
+------------------------------------------------------------
+  nezfan1      → Fantail      (Rhipidura fuliginosa)
+  silver3      → Silvereye    (Zosterops lateralis)
+  comcha       → Chaffinch    (Fringilla coelebs)
+  tui/bellbird → Tui/Bellbird (Prosthemadera novaeseelandiae / Anthornis melanura)
+  eurbla       → Blackbird    (Turdus merula)
+  morepo2      → Morepork     (Ninox novaeseelandiae)
+  gryger1      → Grey Warbler (Gerygone igata)
+  nezkak1      → Kaka         (Nestor meridionalis)
+  tomtit1      → Tomtit       (Petroica macrocephala)
+
+BirdNET Detected 39 Unique Species:
+------------------------------------------------------------
+    1. Acanthis cabaret                        
+    2. Acanthisitta chloris                    
+    3. Acridotheres tristis                    
+    4. Alauda arvensis                         
+    5. Anas gracilis                           
+    6. Anas platyrhynchos                      
+    7. Anser anser                             
+    8. Anthornis melanura                       ✓ MATCH → tui/bellbird
+    9. Athene noctua                           
+   10. Carduelis carduelis                     
+   11. Chloris chloris                         
+   12. Circus approximans                      
+   13. Emberiza citrinella                     
+   14. Eudyptula minor                         
+   15. Fringilla coelebs                        ✓ MATCH → comcha
+   16. Fulica atra                             
+   17. Gerygone igata                           ✓ MATCH → gryger1
+   18. Gymnorhina tibicen                      
+   19. Himantopus leucocephalus                
+   20. Mohoua albicilla                        
+   21. Mohoua novaeseelandiae                  
+   22. Nestor meridionalis                      ✓ MATCH → nezkak1
+   23. Ninox novaeseelandiae                    ✓ MATCH → morepo2
+   24. Passer domesticus                       
+   25. Petroica australis                      
+   26. Petroica longipes                       
+   27. Petroica macrocephala                    ✓ MATCH → tomtit1
+   28. Phasianus colchicus                     
+   29. Platycercus eximius                     
+   30. Poodytes punctatus                      
+   31. Prosthemadera novaeseelandiae            ✓ MATCH → tui/bellbird
+   32. Prunella modularis                      
+   33. Pterodroma cookii                       
+   34. Rhipidura fuliginosa                     ✓ MATCH → nezfan1
+   35. Todiramphus sanctus                     
+   36. Turdus merula                            ✓ MATCH → eurbla
+   37. Turdus philomelos                       
+   38. Vanellus miles                          
+   39. Zosterops lateralis                      ✓ MATCH → silver3
+
+Target Species Coverage:
+------------------------------------------------------------
+  ✓ nezfan1      (Rhipidura fuliginosa                    ) - DETECTED
+  ✓ silver3      (Zosterops lateralis                     ) - DETECTED
+  ✓ comcha       (Fringilla coelebs                       ) - DETECTED
+  ✗ tui/bellbird (Prosthemadera novaeseelandiae / Anthornis melanura) - NOT DETECTED
+  ✓ eurbla       (Turdus merula                           ) - DETECTED
+  ✓ morepo2      (Ninox novaeseelandiae                   ) - DETECTED
+  ✓ gryger1      (Gerygone igata                          ) - DETECTED
+  ✓ nezkak1      (Nestor meridionalis                     ) - DETECTED
+  ✓ tomtit1      (Petroica macrocephala                   ) - DETECTED
+

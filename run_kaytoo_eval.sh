@@ -6,16 +6,13 @@ set -e
 # Must be run from the AviaNZ project root.
 #
 # Usage:
-#   ./run_kaytoo_eval.sh              # evaluate on matched test sets
-#   ./run_kaytoo_eval.sh --large      # evaluate on large (full) test sets
-#   ./run_kaytoo_eval.sh --cpu        # force CPU inference
+#   ./run_kaytoo_eval.sh
+#   ./run_kaytoo_eval.sh --cpu     # force CPU inference
 
 CPU_FLAG=""
-LARGE=false
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --cpu)   CPU_FLAG="--cpu"; shift ;;
-        --large) LARGE=true; shift ;;
+        --cpu) CPU_FLAG="--cpu"; shift ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -24,17 +21,12 @@ OUTPUT_BASE="/local/scratch/freangi"
 KAYTOO_ROOT="$(pwd)/../Kaytoo"
 KAYTOO_PYTHON="${KAYTOO_ROOT}/venv_kay/bin/python"
 
-MAPPING="data/DOC_bird_naming_map.csv"
+MATCHED_BASE="${OUTPUT_BASE}/matched"
+AVIANZ_TEST="${MATCHED_BASE}/avianz_split/test"
+DOC_TEST="${MATCHED_BASE}/doc_split/test"
 
-if [ "$LARGE" = true ]; then
-    AVIANZ_TEST="${OUTPUT_BASE}/large/avianz_split/test"
-    DOC_TEST="${OUTPUT_BASE}/large/doc_split/test"
-    OUTPUT="${OUTPUT_BASE}/large_tests/kaytoo_pretrained_seed0"
-else
-    AVIANZ_TEST="${OUTPUT_BASE}/matched/avianz_split/test"
-    DOC_TEST="${OUTPUT_BASE}/matched/doc_split/test"
-    OUTPUT="${OUTPUT_BASE}/matched_tests/kaytoo_pretrained_seed0"
-fi
+MAPPING="data/DOC_bird_naming_map.csv"
+OUTPUT="${OUTPUT_BASE}/tests/kaytoo_pretrained_seed0"
 
 echo "============================================================"
 echo " Kaytoo evaluation"

@@ -40,8 +40,6 @@ class ModelConfig:
     use_cnn_adapter: bool = False
     use_sed_head: bool = False
     use_gated_head: bool = False
-    ast_channel_dir: Optional[str] = None   # Pre-computed AST attention maps directory
-    in_chans: int = 1                       # Input channels (1 = spec only, 2 = spec + AST attn)
 
 
 @dataclass
@@ -76,7 +74,6 @@ class LossConfig:
     asl_margin: float = 0.05
     rebalance_background: bool = True  # Down-weight background samples so they equal labelled contribution
     gate_loss_weight: float = 1.0
-    kbird_prior: float = 0.0   # When > 0, normalise sigmoid probs so sum <= k (soft species-count constraint)
 
 
 @dataclass
@@ -136,9 +133,7 @@ class TrainerConfig:
                 freeze_stages=getattr(args, 'freeze_stages', 0),
                 use_cnn_adapter=getattr(args, 'cnn_adapter', False),
                 use_sed_head=getattr(args, 'sed_head', False),
-                use_gated_head=getattr(args, 'gated_head', False),
-                ast_channel_dir=getattr(args, 'ast_channel_dir', None),
-                in_chans=2 if getattr(args, 'ast_channel_dir', None) else 1,
+                use_gated_head=getattr(args, 'gated_head', False)
             ),
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,
@@ -167,7 +162,6 @@ class TrainerConfig:
                 asl_margin=getattr(args, 'asl_margin', 0.05),
                 rebalance_background=getattr(args, 'rebalance_background', True),
                 gate_loss_weight=getattr(args, 'gate_loss_weight', 1.0),
-                kbird_prior=getattr(args, 'kbird_prior', 0.0),
             ),
             domain_adaptation=DomainAdaptationConfig(
                 use_dann=getattr(args, 'use_dann', False),

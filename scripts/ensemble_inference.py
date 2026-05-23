@@ -2,11 +2,14 @@
 """
 Ensemble inference: average predictions across all trained sweep models.
 
-Reads prediction CSVs (predictions_{split}.csv) from each experiment directory,
-aligns samples by row_id, averages probabilities, evaluates the ensemble, and
-saves a JSON report alongside individual experiments.
+Reads prediction CSVs written by rerun_predictions.py, aligns samples by
+row_id, averages probabilities, evaluates the ensemble, and saves a JSON
+report that appears in summarize_results.py alongside individual experiments.
 
-Usage (zero required arguments — paths read from constants below):
+Prerequisites:
+    Run rerun_predictions.py first to generate prediction CSVs for each model.
+
+Usage (zero required arguments — paths read from run_sweep.py):
     python scripts/ensemble_inference.py
 
 Filter to one training dataset:
@@ -47,18 +50,19 @@ _BG_SUFFIX      = "_bgmed"
 _TRAIN_DATASETS = ["avianz", "doc"]
 _MODEL_TYPES    = ["regnet", "ast", "cnn"]
 
-# Default paths for the sweep experiments (override with --tests-base / --sweep-base)
-_DEFAULT_TESTS_BASE = "/local/scratch/freangi/sweep_tests"
-_DEFAULT_SWEEP_BASE = "/local/scratch/freangi/sweep"
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _load_sweep_paths():
-    """Return (TESTS_BASE, SWEEP_BASE) defaults."""
-    return _DEFAULT_TESTS_BASE, _DEFAULT_SWEEP_BASE
+    """Return (TESTS_BASE, SWEEP_BASE) from run_sweep.py."""
+    import importlib.util
+    sweep_py = Path(__file__).resolve().parents[1] / "run_sweep.py"
+    spec = importlib.util.spec_from_file_location("run_sweep", sweep_py)
+    mod  = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.TESTS_BASE, mod.SWEEP_BASE
 
 
 def parse_exp_name(name: str):
@@ -104,28 +108,23 @@ def get_metric_from_report(exp_dir: Path, split: str, metric: str):
 
 def load_predictions_csv(exp_dir: Path, split: str):
     """
-    Load predictions_{split}.csv from an experiment directory.
+    Load predictions_{split}_v2.csv produced by rerun_predictions.py.
     Returns a dict with row_ids, probs, true_labels, categories — or None.
     """
-    csv_path = exp_dir / f"predictions_{split}.csv"
+    csv_path = exp_dir / f"predictions_{split}_v2.csv"
     if not csv_path.exists():
         return None
     df = pd.read_csv(csv_path)
-    # Accept both 'filename' (model_trainer) and legacy 'row_id' column names
-    if "filename" in df.columns:
-        id_col = "filename"
-    elif "row_id" in df.columns:
-        id_col = "row_id"
-    else:
-        print(f"  [warn] {csv_path} has no row_id or filename column — skipping")
+    if "row_id" not in df.columns:
+        print(f"  [warn] {csv_path} has no row_id column — skipping")
         return None
     all_cols  = df.columns.tolist()
-    pred_cols = [c for c in all_cols if c not in (id_col,) and not c.startswith("y_")]
+    pred_cols = [c for c in all_cols if c != "row_id" and not c.startswith("y_")]
     true_cols = [f"y_{c}" for c in pred_cols if f"y_{c}" in all_cols]
     if not pred_cols:
         return None
     return {
-        "row_ids":     df[id_col].tolist(),
+        "row_ids":     df["row_id"].tolist(),
         "probs":       df[pred_cols].to_numpy(np.float32),
         "true_labels": df[true_cols].to_numpy(np.float32) if true_cols else None,
         "categories":  pred_cols,
@@ -150,7 +149,8 @@ def align(members: list) -> tuple:
     common = sorted(set.intersection(*(set(m["row_ids"]) for m in members)))
     if not common:
         raise ValueError(
-            "No common row_ids across members."
+            "No common row_ids across members.\n"
+            "Run rerun_predictions.py first to generate prediction CSVs."
         )
 
     total   = sum(len(m["row_ids"]) for m in members)
@@ -286,12 +286,12 @@ def main():
                 members.append(m)
 
         if missing:
-            print(f"\n  WARNING: {len(missing)} experiments have no predictions_{split}.csv")
+            print(f"\n  WARNING: {len(missing)} experiments have no predictions_{split}_v2.csv")
             for nm in missing[:5]:
                 print(f"    {nm}")
             if len(missing) > 5:
                 print(f"    ... and {len(missing) - 5} more")
-            print(f"  Re-train missing experiments to generate prediction CSVs.")
+            print(f"  Run:  python scripts/rerun_predictions.py")
 
         if len(members) < 2:
             print(f"  Need ≥2 members with CSVs for split '{split}', got {len(members)}. Skipping.")

@@ -1,0 +1,15 @@
+{
+  "name": "birdnet_pretrained_seed0",
+  "type": "pretrained",
+  "model": "birdnet",
+  "seed": 0,
+  "status": "completed",
+  "test1_name": "avianz_split",
+  "test1_acc": 45.808383233532936,
+  "test1_acc_labelled": 20.64516129032258,
+  "test1_acc_background": 67.59776536312849,
+  "test2_name": "doc_split",
+  "test2_acc": 61.97530864197531,
+  "test2_acc_labelled": 25.766871165644172,
+  "test2_acc_background": 86.36363636363636
+}

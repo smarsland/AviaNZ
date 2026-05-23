@@ -1,0 +1,47 @@
+BirdNET Evaluation Summary
+============================================================
+Date: 2026-05-23 07:16:34
+Min Confidence: 0.1
+Location: -41.2865, 174.7762
+
+Target Species:
+------------------------------------------------------------
+  nezfan1      → Fantail      (Rhipidura fuliginosa)
+  silver3      → Silvereye    (Zosterops lateralis)
+  comcha       → Chaffinch    (Fringilla coelebs)
+  tui/bellbird → Tui/Bellbird (Prosthemadera novaeseelandiae / Anthornis melanura)
+  eurbla       → Blackbird    (Turdus merula)
+  morepo2      → Morepork     (Ninox novaeseelandiae)
+  gryger1      → Grey Warbler (Gerygone igata)
+  nezkak1      → Kaka         (Nestor meridionalis)
+  tomtit1      → Tomtit       (Petroica macrocephala)
+
+Overall Results:
+------------------------------------------------------------
+  Total files: 739
+  Total correct: 404
+  Overall accuracy: 54.67%
+
+Per-Dataset Results:
+------------------------------------------------------------
+  avianz_split:
+    Files: 334
+    Correct: 153
+    Accuracy: 45.81%
+
+  doc_split:
+    Files: 405
+    Correct: 251
+    Accuracy: 61.98%
+
+Per-Species Accuracy:
+------------------------------------------------------------
+  Chaffinch           :  26.09% (6/23)
+  Blackbird           :  19.57% (9/46)
+  Grey Warbler        :   5.26% (3/57)
+  Morepork            :  39.02% (16/41)
+  Fantail             :  18.18% (2/11)
+  Kaka                :  11.76% (2/17)
+  Silvereye           :  18.64% (11/59)
+  Tomtit              :  13.33% (4/30)
+  Tui/Bellbird        :  23.42% (26/111)

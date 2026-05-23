@@ -12,9 +12,9 @@ DEFAULT_FREQ_BINS = 224           # Final number of frequency bins (height)
 DEFAULT_TIME_BINS = 1024            # Number of time bins (width) - 1024 bins = 10.24 seconds at 10ms hop (matches AudioSet pretraining)
 
 SPECTROGRAM_PARAMS = {
-    'windowType': 'Hamming',
-    'sgType': 'Reassigned',
-    'sgScale': 'Linear',
+    'windowType': 'Hann',
+    'sgType': 'Standard', 
+    'sgScale': 'Mel Frequency',
     'mean_normalise': False,
     'equal_loudness': False,
     'nfilters': DEFAULT_FREQ_BINS  # Number of frequency bins/filters for output

@@ -39,7 +39,7 @@ def load_from_result_json(results_dir):
                 'kaytoo':  'Kaytoo (Pretrained)',
                 'birdnet': 'BirdNET (Pretrained)',
             }
-            row = {
+            results.append({
                 'name': name,
                 'train_dataset': 'pretrained',
                 'method': 'pretrained',
@@ -55,7 +55,6 @@ def load_from_result_json(results_dir):
                 'test1_macro_recall': np.nan,
                 'test1_macro_f1': np.nan,
                 'test1_jaccard': np.nan,
-                'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -63,11 +62,8 @@ def load_from_result_json(results_dir):
                 'test2_macro_recall': np.nan,
                 'test2_macro_f1': np.nan,
                 'test2_jaccard': np.nan,
-                'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
                 'status': data.get('status', 'unknown'),
-            }
-            _read_adaptive_from_dir(result_file.parent, row)
-            results.append(row)
+            })
             continue
 
         train_dataset = parts[0]
@@ -97,7 +93,7 @@ def load_from_result_json(results_dir):
             category = 'Normalization'
             method = 'baseline'
 
-        row = {
+        results.append({
             'name': name,
             'train_dataset': train_dataset,
             'method': method,
@@ -113,7 +109,6 @@ def load_from_result_json(results_dir):
             'test1_macro_recall': np.nan,
             'test1_macro_f1': np.nan,
             'test1_jaccard': np.nan,
-            'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
             'test2_acc': data.get('test2_acc', np.nan),
             'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
             'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -121,11 +116,8 @@ def load_from_result_json(results_dir):
             'test2_macro_recall': np.nan,
             'test2_macro_f1': np.nan,
             'test2_jaccard': np.nan,
-            'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
             'status': data.get('status', 'unknown'),
-        }
-        _read_adaptive_from_dir(result_file.parent, row)
-        results.append(row)
+        })
     return results
 
 
@@ -144,94 +136,6 @@ def _extract_report_metrics(report):
         'macro_f1':   macro.get('f1-score', np.nan),
         'jaccard':    report.get('jaccard_score', np.nan),
     }
-
-
-def _metrics_from_csv(csv_path: Path) -> dict:
-    """Compute metrics at both threshold=0.5 and oracle per-class thresholds.
-
-    Returns a dict with keys:
-        half_f1, half_acc, half_acc_labelled
-        oracle_f1, oracle_acc, oracle_acc_labelled
-    All NaN when no true_ columns are present.
-    """
-    from sklearn.metrics import f1_score as _f1
-    from sklearn.metrics import precision_recall_fscore_support as _prf
-
-    nan_result = {k: np.nan for k in (
-        'half_f1', 'half_acc', 'half_acc_labelled',
-        'oracle_f1', 'oracle_acc', 'oracle_acc_labelled',
-    )}
-
-    df = pd.read_csv(csv_path, index_col='filename')
-    class_cols = [c for c in df.columns if not c.startswith('true_')]
-    true_cols  = [c for c in df.columns if c.startswith('true_')]
-    if not true_cols:
-        return nan_result
-
-    probs = df[class_cols].values.astype(np.float32)
-    trues = df[true_cols].values.astype(np.int32)
-    labelled = trues.sum(axis=1) > 0
-
-    def _acc(preds):
-        correct = np.all(preds == trues, axis=1)
-        a = correct.mean() * 100
-        al = correct[labelled].mean() * 100 if labelled.any() else np.nan
-        return a, al
-
-    # --- threshold 0.5 ---
-    preds_half = (probs >= 0.5).astype(int)
-    _, _, f1_half, _ = _prf(trues, preds_half, average='macro', zero_division=0)
-    acc_half, acc_lab_half = _acc(preds_half)
-
-    # --- oracle per-class thresholds ---
-    candidates = np.linspace(0.0, 1.0, 201)
-    thresholds = np.full(probs.shape[1], 0.5, dtype=np.float32)
-    for c in range(probs.shape[1]):
-        best = -1.0
-        for t in candidates:
-            p = (probs[:, c] >= t).astype(int)
-            if p.sum() == 0:
-                continue
-            f = _f1(trues[:, c], p, zero_division=0)
-            if f > best:
-                best = f
-                thresholds[c] = t
-    preds_oracle = (probs >= thresholds[np.newaxis, :]).astype(int)
-    _, _, f1_oracle, _ = _prf(trues, preds_oracle, average='macro', zero_division=0)
-    acc_oracle, acc_lab_oracle = _acc(preds_oracle)
-
-    return {
-        'half_f1':             float(f1_half),
-        'half_acc':            float(acc_half),
-        'half_acc_labelled':   float(acc_lab_half),
-        'oracle_f1':           float(f1_oracle),
-        'oracle_acc':          float(acc_oracle),
-        'oracle_acc_labelled': float(acc_lab_oracle),
-    }
-
-
-def _read_adaptive_from_dir(exp_dir: Path, row: dict):
-    """Populate adaptive_* and (when missing) half_* metrics in *row* from predictions CSVs."""
-    csvs = sorted(exp_dir.glob('predictions_*.csv'))
-    if not csvs:
-        return
-    slot_pairs = [
-        ('test1_macro_f1', 'test1_acc', 'test1_acc_labelled',
-         'test1_adaptive_f1', 'test1_adaptive_acc', 'test1_adaptive_acc_labelled'),
-        ('test2_macro_f1', 'test2_acc', 'test2_acc_labelled',
-         'test2_adaptive_f1', 'test2_adaptive_acc', 'test2_adaptive_acc_labelled'),
-    ]
-    for slots, csv_path in zip(slot_pairs, csvs):
-        s_f1, s_acc, s_acl, s_af1, s_aacc, s_aacl = slots
-        m = _metrics_from_csv(csv_path)
-        # always write oracle metrics
-        row[s_af1]  = m['oracle_f1']
-        row[s_aacc] = m['oracle_acc']
-        row[s_aacl] = m['oracle_acc_labelled']
-        # fill half metrics only when missing (pretrained models lack report JSON)
-        if np.isnan(row.get(s_f1,  np.nan)): row[s_f1]  = m['half_f1']
-        if np.isnan(row.get(s_acc, np.nan)): row[s_acc] = m['half_acc']
-        if np.isnan(row.get(s_acl, np.nan)): row[s_acl] = m['half_acc_labelled']
 
 
 def _read_reports_from_dir(report_dir, model, row):
@@ -276,11 +180,9 @@ def _empty_row(name, train_dataset, model, transform):
         'test1_acc': np.nan, 'test1_acc_labelled': np.nan, 'test1_acc_background': np.nan,
         'test1_macro_precision': np.nan, 'test1_macro_recall': np.nan,
         'test1_macro_f1': np.nan, 'test1_jaccard': np.nan,
-        'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
         'test2_acc': np.nan, 'test2_acc_labelled': np.nan, 'test2_acc_background': np.nan,
         'test2_macro_precision': np.nan, 'test2_macro_recall': np.nan,
         'test2_macro_f1': np.nan, 'test2_jaccard': np.nan,
-        'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
         'status': 'unknown',
     }
 
@@ -288,7 +190,7 @@ def _empty_row(name, train_dataset, model, transform):
 def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
     pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
@@ -308,7 +210,6 @@ def load_from_viz_dir(viz_dir):
             model, train_dataset, transform = m.groups()
             row = _empty_row(exp_dir.name, train_dataset, model, transform)
             _read_reports_from_dir(exp_dir, model, row)
-            _read_adaptive_from_dir(exp_dir, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
             results.append(row)
             continue
@@ -322,7 +223,6 @@ def load_from_viz_dir(viz_dir):
             row = _empty_row(exp_dir.name, f'pseudo_{source_dataset}_to_{target_dataset}_pct{pct_int}', model, transform)
             row['category'] = f'{model.upper()} Pseudo'
             _read_reports_from_dir(final_dir, model, row)
-            _read_adaptive_from_dir(exp_dir, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
             results.append(row)
 
@@ -344,10 +244,8 @@ def create_overview_table(df, output_dir):
         'name', 'train_dataset', 'method', 'config', 'category',
         'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
         'test1_macro_precision', 'test1_macro_recall', 'test1_macro_f1', 'test1_jaccard',
-        'test1_adaptive_f1',
         'test2_name', 'test2_acc', 'test2_acc_labelled', 'test2_acc_background',
         'test2_macro_precision', 'test2_macro_recall', 'test2_macro_f1', 'test2_jaccard',
-        'test2_adaptive_f1',
         'status',
     ]
     cols = [c for c in cols if c in df.columns]
@@ -359,7 +257,7 @@ def create_overview_table(df, output_dir):
 
 def create_per_class_table(viz_dir, output_dir):
     """Create per_class_metrics.csv: one row per (experiment, test split, class)."""
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged)_(.+)$')
     rows = []
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
@@ -613,137 +511,10 @@ def create_report(df, output_dir):
     print(f"✓ REPORT.md")
 
 
-def print_model_comparison(df):
-    """
-    Print a clear terminal comparison of the best REGNET model vs Kaytoo and
-    BirdNET pretrained baselines.
-    """
-    def _fmt(val):
-        if val is np.nan or (isinstance(val, float) and np.isnan(val)):
-            return "  N/A"
-        return f"{val:5.1f}%"
-
-    def _fmtf(val):
-        if val is np.nan or (isinstance(val, float) and np.isnan(val)):
-            return "   N/A"
-        return f"{val:.3f}"
-
-    def _collect(row):
-        return {
-            't1':     _fmt(row.get('test1_acc',                   np.nan)),
-            't1lab':  _fmt(row.get('test1_acc_labelled',           np.nan)),
-            't1f1':   _fmtf(row.get('test1_macro_f1',             np.nan)),
-            't1af1':  _fmtf(row.get('test1_adaptive_f1',          np.nan)),
-            't1a':    _fmt(row.get('test1_adaptive_acc',           np.nan)),
-            't1alab': _fmt(row.get('test1_adaptive_acc_labelled',  np.nan)),
-            't2':     _fmt(row.get('test2_acc',                   np.nan)),
-            't2lab':  _fmt(row.get('test2_acc_labelled',           np.nan)),
-            't2f1':   _fmtf(row.get('test2_macro_f1',             np.nan)),
-            't2af1':  _fmtf(row.get('test2_adaptive_f1',          np.nan)),
-            't2a':    _fmt(row.get('test2_adaptive_acc',           np.nan)),
-            't2alab': _fmt(row.get('test2_adaptive_acc_labelled',  np.nan)),
-            't1n':    str(row.get('test1_name', '?')),
-            't2n':    str(row.get('test2_name', '?')),
-        }
-
-    rows = []
-    exp_names = {}  # label -> exp_name, for tuned lookup
-    # ---- Best REGNET (matched / sweep datasets) ----------------------------
-    regnet_df = df[
-        (df['category'] == 'REGNET') &
-        (~df['train_dataset'].isin(['large_doc', 'large_avianz']))
-    ].copy()
-    regnet_df = regnet_df.dropna(subset=['test1_acc', 'test2_acc'])
-    if not regnet_df.empty:
-        regnet_df['_avg'] = (regnet_df['test1_acc'] + regnet_df['test2_acc']) / 2
-        best = regnet_df.sort_values('_avg', ascending=False).iloc[0]
-        rows.append(('Best REGNET (matched)', best['name'], _collect(best)))
-    else:
-        rows.append(('Best REGNET (matched)', '(no results)', {}))
-
-    # ---- Best REGNET on large DOC dataset -----------------------------------
-    large_df = df[
-        (df['category'] == 'REGNET') &
-        (df['train_dataset'] == 'large_doc')
-    ].copy()
-    large_df = large_df.dropna(subset=['test1_acc', 'test2_acc'])
-    if not large_df.empty:
-        large_df['_avg'] = (large_df['test1_acc'] + large_df['test2_acc']) / 2
-        best_large = large_df.sort_values('_avg', ascending=False).iloc[0]
-        rows.append(('Best REGNET (large DOC)', best_large['name'], _collect(best_large)))
-    # skip silently if not yet run
-
-    # ---- Kaytoo pretrained --------------------------------------------------
-    k_df = df[df['category'] == 'Kaytoo (Pretrained)']
-    if not k_df.empty:
-        rows.append(('Kaytoo (Pretrained)', '', _collect(k_df.iloc[0])))
-    else:
-        rows.append(('Kaytoo (Pretrained)', '(no results)', {}))
-
-    # ---- BirdNET pretrained -------------------------------------------------
-    b_df = df[df['category'] == 'BirdNET (Pretrained)']
-    if not b_df.empty:
-        rows.append(('BirdNET (Pretrained)', '', _collect(b_df.iloc[0])))
-    else:
-        rows.append(('BirdNET (Pretrained)', '(no results)', {}))
-
-    # ---- Print --------------------------------------------------------------
-    # Determine test-set names from first row that has them
-    t1n = t2n = '?'
-    for _, _, m in rows:
-        if m:
-            t1n = m['t1n']
-            t2n = m['t2n']
-            break
-
-    W = 88
-
-    def _print_table(title, acc_key1, acl_key1, f1_key1, acc_key2, acl_key2, f1_key2, f1_label, note):
-        print("\n" + "=" * W)
-        print(f" {title}")
-        print("=" * W)
-        hdr = (f"  {'':26s}  {t1n:>12s}               {t2n:>12s}\n"
-               f"  {'':26s}  {'acc':>7s}  {'(lab)':>7s}  {f1_label:>6s}"
-               f"     {'acc':>7s}  {'(lab)':>7s}  {f1_label:>6s}")
-        print(hdr)
-        print("-" * W)
-        for label, cfg_name, m in rows:
-            if not m:
-                print(f"  {label}")
-                continue
-            print(
-                f"  {label:<26s}"
-                f"  {m[acc_key1]:>7s}  ({m[acl_key1]:>5s})  {m[f1_key1]:>6s}"
-                f"     {m[acc_key2]:>7s}  ({m[acl_key2]:>5s})  {m[f1_key2]:>6s}"
-            )
-            if cfg_name:
-                print(f"    {cfg_name}")
-        print()
-        print(f"  acc = exact-match accuracy (all samples)  lab = labelled samples only")
-        print(f"  {note}")
-        print("=" * W)
-
-    _print_table(
-        title="RESULTS — threshold 0.5",
-        acc_key1='t1', acl_key1='t1lab', f1_key1='t1f1',
-        acc_key2='t2', acl_key2='t2lab', f1_key2='t2f1',
-        f1_label='F1',
-        note="F1  = macro-F1 at fixed threshold 0.5",
-    )
-    _print_table(
-        title="RESULTS — oracle adaptive thresholds (upper bound)",
-        acc_key1='t1a', acl_key1='t1alab', f1_key1='t1af1',
-        acc_key2='t2a', acl_key2='t2alab', f1_key2='t2af1',
-        f1_label='F1*',
-        note="F1* = macro-F1 with per-class threshold tuned on the same split",
-    )
-    print()
-
-
 def main():
     parser = argparse.ArgumentParser(description='Analyze all experimental results')
     parser.add_argument('results_dir',
-                        help='Output directory (e.g. /local/scratch/freangi/matched_tests). '
+                        help='Output directory (e.g. /local/scratch/freangi/visualizations). '
                              'Scans for both result.json and *_multilabel_report.json automatically.')
     parser.add_argument('--output', '-o', default=None, help='Output directory for analysis files')
     args = parser.parse_args()
@@ -776,8 +547,6 @@ def main():
     plot_by_category(df, output_dir)
     create_summary_by_category(df, output_dir)
     create_report(df, output_dir)
-
-    print_model_comparison(df)
     
     print("\n" + "="*70)
     print(" DONE")

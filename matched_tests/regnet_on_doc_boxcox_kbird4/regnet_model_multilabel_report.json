@@ -1,0 +1,123 @@
+{
+  "blackbird": {
+    "precision": 0.6666666666666666,
+    "recall": 0.5714285714285714,
+    "f1-score": 0.6153846153846154,
+    "accuracy": 0.9803149606299213,
+    "support": 7,
+    "tp": 4,
+    "fp": 2,
+    "tn": 245,
+    "fn": 3
+  },
+  "chaffinch": {
+    "precision": 0.5,
+    "recall": 0.09090909090909091,
+    "f1-score": 0.15384615384615385,
+    "accuracy": 0.9566929133858267,
+    "support": 11,
+    "tp": 1,
+    "fp": 1,
+    "tn": 242,
+    "fn": 10
+  },
+  "fantail": {
+    "precision": 0.6,
+    "recall": 0.75,
+    "f1-score": 0.6666666666666666,
+    "accuracy": 0.9881889763779528,
+    "support": 4,
+    "tp": 3,
+    "fp": 2,
+    "tn": 248,
+    "fn": 1
+  },
+  "grey warbler": {
+    "precision": 0.625,
+    "recall": 0.5555555555555556,
+    "f1-score": 0.5882352941176471,
+    "accuracy": 0.9724409448818898,
+    "support": 9,
+    "tp": 5,
+    "fp": 3,
+    "tn": 242,
+    "fn": 4
+  },
+  "kaka": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9803149606299213,
+    "support": 1,
+    "tp": 0,
+    "fp": 4,
+    "tn": 249,
+    "fn": 1
+  },
+  "morepork": {
+    "precision": 0.7391304347826086,
+    "recall": 0.5666666666666667,
+    "f1-score": 0.6415094339622641,
+    "accuracy": 0.9251968503937008,
+    "support": 30,
+    "tp": 17,
+    "fp": 6,
+    "tn": 218,
+    "fn": 13
+  },
+  "silvereye": {
+    "precision": 0.8333333333333334,
+    "recall": 0.5555555555555556,
+    "f1-score": 0.6666666666666666,
+    "accuracy": 0.9803149606299213,
+    "support": 9,
+    "tp": 5,
+    "fp": 1,
+    "tn": 244,
+    "fn": 4
+  },
+  "tomtit": {
+    "precision": 1.0,
+    "recall": 0.2727272727272727,
+    "f1-score": 0.42857142857142855,
+    "accuracy": 0.968503937007874,
+    "support": 11,
+    "tp": 3,
+    "fp": 0,
+    "tn": 243,
+    "fn": 8
+  },
+  "tui/bellbird": {
+    "precision": 0.84,
+    "recall": 0.5121951219512195,
+    "f1-score": 0.6363636363636364,
+    "accuracy": 0.905511811023622,
+    "support": 41,
+    "tp": 21,
+    "fp": 4,
+    "tn": 209,
+    "fn": 20
+  },
+  "macro avg": {
+    "precision": 0.644903381642512,
+    "recall": 0.430559759421548,
+    "f1-score": 0.4885826550643421,
+    "accuracy": 0.9619422572178478,
+    "support": 123
+  },
+  "micro avg": {
+    "precision": 0.7195121951219512,
+    "recall": 0.4796747967479675,
+    "f1-score": 0.5756097560975609,
+    "accuracy": 0.9619422572178478,
+    "support": 123
+  },
+  "exact_match_accuracy": 0.7165354330708661,
+  "exact_match_accuracy_labelled": 0.4563106796116505,
+  "exact_match_accuracy_background": 0.8940397350993378,
+  "num_samples": 254,
+  "num_labelled_samples": 103,
+  "num_background_samples": 151,
+  "hamming_loss": 0.03805774278215223,
+  "jaccard_score": 0.20406824146981628
+}

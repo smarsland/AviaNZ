@@ -1,0 +1,8 @@
+name,train_dataset,method,config,category,test1_name,test1_acc,test1_acc_labelled,test1_acc_background,test1_macro_precision,test1_macro_recall,test1_macro_f1,test1_jaccard,test1_adaptive_f1,test2_name,test2_acc,test2_acc_labelled,test2_acc_background,test2_macro_precision,test2_macro_recall,test2_macro_f1,test2_jaccard,test2_adaptive_f1,status
+birdnet_pretrained_seed0,pretrained,pretrained,birdnet,BirdNET (Pretrained),avianz_split,45.8084,20.6452,67.5978,,,0.1468,,0.2340,doc_split,61.9753,25.7669,86.3636,,,0.2264,,0.4620,completed
+kaytoo_pretrained_seed0,pretrained,pretrained,kaytoo,Kaytoo (Pretrained),avianz_split,35.3293,31.6129,38.5475,,,0.2897,,0.4680,doc_split,52.5926,45.3988,57.4380,,,0.4899,,0.6210,completed
+regnet_on_avianz_boxcox,avianz,regnet,boxcox,REGNET,avianz_split,52.3952,17.4194,82.6816,0.4017,0.1390,0.1915,0.0918,0.3263,doc_split,47.4074,12.8834,70.6612,0.2327,0.1054,0.0886,0.0580,0.2103,completed
+regnet_on_doc_boxcox,doc,regnet,boxcox,REGNET,avianz_split,51.1976,20.0000,78.2123,0.1713,0.1960,0.1785,0.1028,0.2966,doc_split,65.9259,41.7178,82.2314,0.5414,0.4334,0.4569,0.1979,0.5738,completed
+regnet_on_doc_boxcox_bgmed,doc,regnet,boxcox_bgmed,REGNET,avianz_split,41.9162,11.6129,68.1564,0.1745,0.0936,0.0566,0.0584,0.2847,doc_split,59.5062,38.6503,73.5537,0.4038,0.3352,0.3005,0.1877,0.4616,completed
+regnet_on_doc_boxcox_kbird4,doc,regnet,boxcox_kbird4,REGNET,avianz_split,52.6946,16.7742,83.7989,0.1404,0.1271,0.1333,0.0878,0.2771,doc_split,68.8889,38.0368,89.6694,0.5571,0.3672,0.4006,0.1802,0.5699,completed
+regnet_on_doc_boxcox_nobg,doc,regnet,boxcox_nobg,REGNET,avianz_split,22.1557,21.2903,22.9050,0.0936,0.2886,0.1265,0.1445,0.2993,doc_split,31.6049,53.3742,16.9421,0.3425,0.5957,0.4000,0.2558,0.4936,completed

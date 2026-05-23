@@ -1,0 +1,123 @@
+{
+  "blackbird": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9281437125748503,
+    "support": 24,
+    "tp": 0,
+    "fp": 0,
+    "tn": 310,
+    "fn": 24
+  },
+  "chaffinch": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9640718562874252,
+    "support": 12,
+    "tp": 0,
+    "fp": 0,
+    "tn": 322,
+    "fn": 12
+  },
+  "fantail": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9850299401197605,
+    "support": 5,
+    "tp": 0,
+    "fp": 0,
+    "tn": 329,
+    "fn": 5
+  },
+  "grey warbler": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9131736526946108,
+    "support": 29,
+    "tp": 0,
+    "fp": 0,
+    "tn": 305,
+    "fn": 29
+  },
+  "kaka": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9760479041916168,
+    "support": 8,
+    "tp": 0,
+    "fp": 0,
+    "tn": 326,
+    "fn": 8
+  },
+  "morepork": {
+    "precision": 0.17073170731707318,
+    "recall": 0.7,
+    "f1-score": 0.27450980392156865,
+    "accuracy": 0.7784431137724551,
+    "support": 20,
+    "tp": 14,
+    "fp": 68,
+    "tn": 246,
+    "fn": 6
+  },
+  "silvereye": {
+    "precision": 1.0,
+    "recall": 0.03125,
+    "f1-score": 0.06060606060606061,
+    "accuracy": 0.907185628742515,
+    "support": 32,
+    "tp": 1,
+    "fp": 0,
+    "tn": 302,
+    "fn": 31
+  },
+  "tomtit": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9580838323353293,
+    "support": 14,
+    "tp": 0,
+    "fp": 0,
+    "tn": 320,
+    "fn": 14
+  },
+  "tui/bellbird": {
+    "precision": 0.4,
+    "recall": 0.1111111111111111,
+    "f1-score": 0.17391304347826086,
+    "accuracy": 0.8293413173652695,
+    "support": 54,
+    "tp": 6,
+    "fp": 9,
+    "tn": 271,
+    "fn": 48
+  },
+  "macro avg": {
+    "precision": 0.17452574525745257,
+    "recall": 0.09359567901234568,
+    "f1-score": 0.056558767556210005,
+    "accuracy": 0.9155023286759815,
+    "support": 198
+  },
+  "micro avg": {
+    "precision": 0.21428571428571427,
+    "recall": 0.10606060606060606,
+    "f1-score": 0.14189189189189189,
+    "accuracy": 0.9155023286759814,
+    "support": 198
+  },
+  "exact_match_accuracy": 0.41916167664670656,
+  "exact_match_accuracy_labelled": 0.11612903225806452,
+  "exact_match_accuracy_background": 0.6815642458100558,
+  "num_samples": 334,
+  "num_labelled_samples": 155,
+  "num_background_samples": 179,
+  "hamming_loss": 0.08449767132401863,
+  "jaccard_score": 0.058383233532934134
+}

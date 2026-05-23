@@ -1,0 +1,15 @@
+{
+  "name": "kaytoo_pretrained_seed0",
+  "type": "pretrained",
+  "model": "kaytoo",
+  "seed": 0,
+  "status": "completed",
+  "test1_name": "avianz_split",
+  "test1_acc": 35.32934131736527,
+  "test1_acc_labelled": 31.612903225806452,
+  "test1_acc_background": 38.547486033519554,
+  "test2_name": "doc_split",
+  "test2_acc": 52.592592592592595,
+  "test2_acc_labelled": 45.39877300613497,
+  "test2_acc_background": 57.43801652892562
+}
