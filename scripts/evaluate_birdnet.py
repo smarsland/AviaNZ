@@ -19,6 +19,7 @@ Usage:
     Note: Test datasets must have audio/ subfolders with .wav files
 """
 
+import csv
 import os
 import sys
 import json
@@ -211,7 +212,12 @@ class BirdNETEvaluator:
         print(f"  {len(files)} files in dataset")
 
         file_results = []
+        raw_score_records = []
         birdnet_species_seen = set()
+
+        # Mapping from BirdNET code (e.g. 'nezfan1') to dataset class name (e.g. 'fantail')
+        code_to_dataset_label = {code: name.lower() for code, name in SPECIES_MAPPING.items()}
+        all_dataset_labels = sorted(set(code_to_dataset_label.values()))
 
         print(f"\nRunning BirdNET predictions...")
         for i, file_info in enumerate(files, 1):
@@ -231,13 +237,19 @@ class BirdNETEvaluator:
 
             detections = self.predict_file(wav_file)
 
+            # Collect max confidence per dataset class label (raw scores for threshold tuning)
+            max_conf = defaultdict(float)
+
             # Predicted codes: all detections at or above min_confidence that map to a valid code
             pred_codes = set()
             for det in detections:
                 birdnet_species_seen.add(det['scientific_name'])
-                if det['confidence'] >= self.min_confidence:
-                    code = SCIENTIFIC_TO_CODE.get(det['scientific_name'])
-                    if code and code in valid_codes:
+                code = SCIENTIFIC_TO_CODE.get(det['scientific_name'])
+                if code:
+                    dataset_label = code_to_dataset_label.get(code)
+                    if dataset_label:
+                        max_conf[dataset_label] = max(max_conf[dataset_label], det['confidence'])
+                    if det['confidence'] >= self.min_confidence and code in valid_codes:
                         pred_codes.add(code)
 
             correct = pred_codes == gt_codes
@@ -252,6 +264,15 @@ class BirdNETEvaluator:
                 'pred_codes': sorted(pred_codes),
                 'correct': correct,
             })
+
+            # Raw score record: npy filename + per-class max confidence (0 if not detected)
+            gt_labels = [lbl for lbl in all_dataset_labels
+                         if any(c in valid_codes for c in label_to_codes(lbl)
+                                if c in gt_codes)]
+            raw_rec = {'filename': npy_filename, 'gt_classes': gt_labels}
+            for lbl in all_dataset_labels:
+                raw_rec[lbl] = max_conf.get(lbl, 0.0)
+            raw_score_records.append(raw_rec)
 
         n = len(file_results)
         if n == 0:
@@ -298,6 +319,8 @@ class BirdNETEvaluator:
             'file_results': file_results,
             'species_stats': {k: dict(v) for k, v in species_stats.items()},
             'birdnet_species': sorted(birdnet_species_seen),
+            'raw_score_records': raw_score_records,
+            'dataset_class_names': all_dataset_labels,
         }
 
         self.results.append(result)
@@ -589,6 +612,27 @@ class BirdNETEvaluator:
             with open(self.output_folder / 'result.json', 'w') as f:
                 json.dump(result_json, f, indent=2)
             print(f"\nSaved result.json to {self.output_folder / 'result.json'}")
+
+            # Save per-split raw score CSVs including ground-truth columns
+            # (true_CLASSNAME) so tune_thresholds.py can run locally.
+            for result in self.results:
+                raw_records = result.get('raw_score_records', [])
+                if not raw_records:
+                    continue
+                split_name = result['dataset_name']
+                csv_path = self.output_folder / f'predictions_{split_name}.csv'
+                class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes', 'gt_classes', 'pred_codes', 'correct'))
+                with open(csv_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])
+                    for rec in raw_records:
+                        gt_set = set(rec.get('gt_classes', []))
+                        writer.writerow(
+                            [rec['filename']]
+                            + [f"{rec.get(c, 0.0):.6f}" for c in class_cols]
+                            + [int(c in gt_set) for c in class_cols]
+                        )
+                print(f"Saved {len(raw_records)} raw score rows → {csv_path.name}")
 
             self.generate_birdnet_species_report()
 

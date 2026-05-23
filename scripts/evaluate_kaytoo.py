@@ -22,6 +22,7 @@ Usage:
         --output results/kaytoo_eval
 """
 
+import csv
 import os
 import sys
 import json
@@ -35,9 +36,23 @@ from collections import defaultdict
 import pandas as pd
 
 
+# Combined classes: a dataset label that means "any of these eBird codes counts".
+# Key = dataset label (lowercased), value = frozenset of acceptable eBird codes.
+# A sample is correct if predicted set ∩ acceptable codes is non-empty AND no
+# other (wrong) species are predicted outside the acceptable set.
+COMBINED_CLASSES = {
+    'tui/bellbird': frozenset({'tui1', 'nezbel1'}),
+}
+
+
 def label_to_codes(label, label_to_ebird):
     label = label.strip().lower()
     label = label.replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+
+    # Combined class: return a single sentinel string so callers that need
+    # a flat code can still distinguish it from "not found".
+    if label in COMBINED_CLASSES:
+        return COMBINED_CLASSES[label]
 
     code = label_to_ebird.get(label)
     if code:
@@ -121,12 +136,19 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
     # Build the ordered list of eBird codes present in this test set.
     # We only score over these classes — same constraint as our trained models.
+    # For combined classes (e.g. tui/bellbird), include all component codes.
     test_ebird_codes_ordered = []
     seen = set()
     for item in labels_data.get('files', []):
         for l in item.get('class_names', []):
-            for part in l.split('/'):
-                code = label_to_ebird.get(part.strip())
+            l_norm = l.strip().lower().replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+            if l_norm in COMBINED_CLASSES:
+                for code in COMBINED_CLASSES[l_norm]:
+                    if code not in seen:
+                        seen.add(code)
+                        test_ebird_codes_ordered.append(code)
+            else:
+                code = label_to_ebird.get(l_norm)
                 if code and code not in seen:
                     seen.add(code)
                     test_ebird_codes_ordered.append(code)
@@ -142,6 +164,21 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
     per_file_df, species_cols = aggregate_to_file(pred_df)
 
     valid_cols = [c for c in test_ebird_codes_ordered if c in species_cols]
+
+    # Build reverse mapping: dataset class name → list of eBird codes
+    dataset_class_names = sorted({
+        cls
+        for item in labels_data.get('files', [])
+        for cls in item.get('class_names', [])
+    })
+    cls_to_ebird_codes = {}
+    for cls in dataset_class_names:
+        cls_norm = cls.strip().lower().replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+        if cls_norm in COMBINED_CLASSES:
+            cls_to_ebird_codes[cls] = list(COMBINED_CLASSES[cls_norm])
+        else:
+            code = label_to_ebird.get(cls_norm)
+            cls_to_ebird_codes[cls] = [code] if code else []
     missing = set(test_ebird_codes_ordered) - set(species_cols)
     if missing:
         print(f"  WARNING: {len(missing)} test-set species not in Kaytoo vocab: {sorted(missing)}")
@@ -151,6 +188,7 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
     print(f"  Scoring over {len(valid_cols)} species (threshold={threshold})")
 
     results = []
+    raw_score_records = []
     for _, row in per_file_df.iterrows():
         wav_name = Path(row['File_Path']).name
         meta = name_to_meta.get(wav_name)
@@ -159,25 +197,60 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
         gt_labels = meta.get('class_names', [meta.get('label')])
         gt_labels = [l for l in gt_labels if l]
-        gt_codes = set()
+
+        # gt_slots: list of frozensets — each slot is satisfied if prediction
+        # contains ANY code in that slot.  Combined labels (tui/bellbird) become
+        # a two-code slot; single labels become a one-code slot.
+        gt_slots = []
+        all_acceptable_codes = set()  # union of all slots (for false-positive check)
         for l in gt_labels:
-            for code in label_to_codes(l, label_to_ebird):
-                if code and code in set(valid_cols):
-                    gt_codes.add(code)
+            l_norm = l.strip().lower().replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+            if l_norm in COMBINED_CLASSES:
+                slot = frozenset(c for c in COMBINED_CLASSES[l_norm] if c in set(valid_cols))
+            else:
+                code = label_to_ebird.get(l_norm)
+                slot = frozenset([code]) if code and code in set(valid_cols) else frozenset()
+            if slot:
+                gt_slots.append(slot)
+                all_acceptable_codes |= slot
 
         # Multi-label: threshold each class score independently
         scores = row[valid_cols].values
         pred_codes = {valid_cols[i] for i, s in enumerate(scores) if s > threshold}
 
-        # Exact match: predicted set must equal ground-truth set exactly
-        correct = pred_codes == gt_codes
+        # Correct if:
+        #   1. Every GT slot has at least one predicted code in it
+        #   2. Every predicted code belongs to at least one GT slot (no false positives)
+        if gt_slots:
+            slots_satisfied = all(pred_codes & slot for slot in gt_slots)
+            no_false_positives = all(code in all_acceptable_codes for code in pred_codes)
+            correct = slots_satisfied and no_false_positives
+        else:
+            # Background sample: correct only if nothing predicted
+            correct = len(pred_codes) == 0
+
+        # Store a flat gt_codes list for reporting.
+        # For combined slots (e.g. tui1/nezbel1) store all acceptable codes so
+        # per-species stats are attributed to the right eBird codes.
+        gt_codes_flat = sorted({code for slot in gt_slots for code in slot})
 
         results.append({
             'wav_file': wav_name,
-            'gt_codes': sorted(gt_codes),
+            'gt_codes': gt_codes_flat,
             'pred_codes': sorted(pred_codes),
             'correct': correct,
         })
+
+        # Collect raw per-class scores using dataset class names
+        npy_name = wav_name.replace('.wav', '.npy')
+        # Store full path so analyze_all_results.py can locate labels.json
+        npy_path = str(Path(test_folder) / 'data' / npy_name)
+        raw_rec = {'filename': npy_path, 'gt_classes': gt_labels}
+        for cls in dataset_class_names:
+            codes = cls_to_ebird_codes.get(cls, [])
+            cls_scores = [float(row[c]) for c in codes if c in row.index and not pd.isna(row[c])]
+            raw_rec[cls] = max(cls_scores) if cls_scores else 0.0
+        raw_score_records.append(raw_rec)
 
     n = len(results)
     n_correct = sum(r['correct'] for r in results)
@@ -214,6 +287,8 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
         'num_background': n_background,
         'species_stats': {k: dict(v) for k, v in species_stats.items()},
         'results': results,
+        'dataset_class_names': dataset_class_names,
+        'raw_score_records': raw_score_records,
     }
 
 
@@ -359,6 +434,27 @@ def main():
     with open(output_path / 'result.json', 'w') as f:
         json.dump(result_json, f, indent=2)
     print(f"\nSaved result.json to {output_path / 'result.json'}")
+
+    # Save per-split raw score CSVs (predictions_{split}.csv) including ground-
+    # truth columns (true_CLASSNAME) so tune_thresholds.py can run locally.
+    for result in all_results:
+        raw_records = result.get('raw_score_records', [])
+        if not raw_records:
+            continue
+        split_name = result['dataset_name']
+        csv_path = output_path / f'predictions_{split_name}.csv'
+        class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes', 'gt_classes'))
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])
+            for rec in raw_records:
+                gt_set = set(rec.get('gt_classes', []))
+                writer.writerow(
+                    [rec['filename']]
+                    + [f"{rec.get(c, 0.0):.6f}" for c in class_cols]
+                    + [int(c in gt_set) for c in class_cols]
+                )
+        print(f"Saved {len(raw_records)} raw score rows → {csv_path.name}")
 
     # Detailed per-file predictions in a separate file
     with open(output_path / 'predictions.json', 'w') as f:

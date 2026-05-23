@@ -96,6 +96,18 @@ Examples:
                        help="Two-stage bird-presence gate + species classifier: gate predicts is-any-bird, species head runs on top")
     parser.add_argument('--per-chunk-norm', action='store_true', dest='per_chunk_norm',
                        help="Per-clip min-max normalization (replaces global AudioSet stats). AST only.")
+
+    # Multi-label output constraint
+    parser.add_argument('--kbird-prior', type=float, default=0.0, dest='kbird_prior',
+                       help="When > 0, normalise sigmoid probabilities so their sum never exceeds k, "
+                            "encoding the prior that at most ~k species call simultaneously (try 4.0). "
+                            "Unlike softmax this does not cause class competition. 0 = standard sigmoid.")
+
+    # Pre-computed AST attention channel
+    parser.add_argument('--ast-channel-dir', type=str, default=None, dest='ast_channel_dir',
+                       help="Directory of pre-computed AST attention maps (see "
+                            "scripts/precompute_ast_attention.py). When set, RegNet is trained "
+                            "with 2-channel input: (spectrogram, AST attention map).")
     
     # Evaluation
     parser.add_argument('--test-folder', type=str, default=None,
