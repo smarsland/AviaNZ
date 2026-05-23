@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Master sweep: build all 20 unique spectrogram-variant datasets and run all
-240 training experiments.
+Master sweep: build all 4 unique spectrogram-variant datasets and run all
+48 training experiments.
 
 Efficiency:
   Normalization (Log/PCEN/Box-Cox) and bg-subtract/median-filter are applied
   at training time by train.py — not at dataset-build time.  Only the unique
-  (sgType × window × scale) combinations require separate dataset builds.
+  (sgType × scale) combinations require separate dataset builds.
 
-  Standard/Reassigned: 4 windows × 2 scales = 8 configs each  → 16 configs
-  Multi-tapered:       1 (default tapers) × 2 scales           →  2 configs
-  Bandpass (CQT):      1 (log-frequency, no window/scale)       →  1 config
-  Total: 19 raw dataset builds, each with 6 training runs (3 norms × 2 bg)
-         × 2 train datasets (doc/avianz) = 228 training runs.
+  Standard/Reassigned: 1 window (Hann) × 1 scale (Mel) = 1 config each  →  2 configs
+  Multi-tapered:       1 (default tapers) × 1 scale (Mel)                →  1 config
+  Bandpass (CQT):      1 (log-frequency, no window/scale)                 →  1 config
+  Total: 4 raw dataset builds, each with 6 training runs (3 norms × 2 bg)
+         × 2 train datasets (doc/avianz) = 48 training runs.
 
 Dataset layout:
   SWEEP_BASE/{slug}/doc_matched/
@@ -58,11 +58,10 @@ VIZ_SAMPLES = 3
 SG_TYPES = ["Standard", "Reassigned", "Multi-tapered", "Bandpass"]
 
 # Windows vary for Standard and Reassigned; Multi-tapered uses its own tapers
-WINDOWS = ["Hann", "Hamming", "Blackman", "BlackmanHarris"]
+WINDOWS = ["Hann"]
 
 SG_SCALES = [
     ("Mel Frequency", "mel"),
-    ("Linear",        "linear"),
 ]
 
 NORMALIZATIONS = [
@@ -238,7 +237,7 @@ def run_experiment(sg_type, window, scale_slug, norm_label, norm_slug,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run the full spectrogram sweep: 18 dataset builds × 216 training runs"
+        description="Run the full spectrogram sweep: 4 dataset builds × 48 training runs"
     )
     parser.add_argument("--build-only",  action="store_true",
                         help="Only build datasets, skip training")
@@ -251,8 +250,8 @@ def main():
     args = parser.parse_args()
 
     raw_configs = list(unique_raw_configs())
-    n_builds    = len(raw_configs)                               # 18
-    n_runs      = n_builds * len(NORMALIZATIONS) * len(BG_OPTIONS) * 2  # 216
+    n_builds    = len(raw_configs)                               # 4
+    n_runs      = n_builds * len(NORMALIZATIONS) * len(BG_OPTIONS) * 2  # 48
 
     if args.list:
         print(f"{'─'*60}")

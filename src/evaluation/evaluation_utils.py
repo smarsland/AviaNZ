@@ -28,7 +28,7 @@ class EvaluationManager:
         self.class_names = class_names
         self.is_multilabel = is_multilabel
     
-    def evaluate_model(self, model, test_loader, name, data, device='cpu'):
+    def evaluate_model(self, model, test_loader, name, device='cpu'):
         """
         Generate comprehensive evaluation metrics for the model.
         
@@ -36,18 +36,9 @@ class EvaluationManager:
             model: Trained PyTorch model
             test_loader: PyTorch DataLoader for test data
             name: Model name for saving files
-            data: Dictionary containing all data
             device: Device to run evaluation on
         """
         print(f"Generating evaluation metrics for {name}...")
-        
-        # DEBUG: Print dataset info to verify we're using the right data
-        dataset = test_loader.dataset
-        print(f"DEBUG EVAL: name={name}")
-        print(f"DEBUG EVAL: num_samples={len(dataset)}")
-        print(f"DEBUG EVAL: first_file={dataset.filenames[0] if hasattr(dataset, 'filenames') and len(dataset.filenames) > 0 else 'N/A'}")
-        print(f"DEBUG EVAL: dataset_id={id(dataset)}")
-        print(f"DEBUG EVAL: loader_id={id(test_loader)}")
         
         model.eval()
         y_pred_probs = []
@@ -76,11 +67,11 @@ class EvaluationManager:
         y_true = np.array(y_true)
         
         if self.is_multilabel:
-            self._evaluate_multilabel(y_true, y_pred_probs, name, data)
+            self._evaluate_multilabel(y_true, y_pred_probs, name)
         else:
             self._evaluate_singlelabel(y_true, y_pred_probs, name)
     
-    def _evaluate_multilabel(self, y_true, y_pred_probs, name, data):
+    def _evaluate_multilabel(self, y_true, y_pred_probs, name):
         """Evaluate multi-label classification model."""
         y_pred = (y_pred_probs > 0.5).astype(int)
         
@@ -249,7 +240,7 @@ class EvaluationManager:
     def _plot_confusion_matrix(self, cm, name):
         """Plot and save confusion matrix as an image."""
         # Calculate figure size based on number of classes and label lengths
-        max_label_length = max(len(name) for name in self.class_names)
+        max_label_length = max(len(cn) for cn in self.class_names)
         base_size = max(8, len(self.class_names) * 0.8)
         fig_width = base_size + max(3, max_label_length * 0.15)
         fig_height = base_size + 2
@@ -274,7 +265,7 @@ class EvaluationManager:
         
         # Truncate long names for display
         max_display_length = 30
-        display_names = [name[:max_display_length] + '...' if len(name) > max_display_length else name for name in self.class_names]
+        display_names = [cn[:max_display_length] + '...' if len(cn) > max_display_length else cn for cn in self.class_names]
         ax.set_xticklabels(display_names, rotation=45, ha='right')
         ax.set_yticklabels(display_names)
         

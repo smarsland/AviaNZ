@@ -955,7 +955,7 @@ class Trainer:
             state_dict = torch.load(best_path, map_location=self.device)
             model.load_state_dict(state_dict)
         evaluator = EvaluationManager(self.output_folder, self.data['class_names'], is_multilabel=True)
-        evaluator.evaluate_model(model, self.val_loader, f'{self.model_type}_model', self.data, device=self.device)
+        evaluator.evaluate_model(model, self.val_loader, f'{self.model_type}_model', device=self.device)
 
         # Evaluate on test sets if provided (for DANN experiments)
         if self.test_folder:
@@ -994,7 +994,7 @@ class Trainer:
             test_name1 = Path(self.test_folder).parent.name
             print(f"DEBUG TEST1: folder={self.test_folder}, name={test_name1}, samples={len(test_dataset1)}, first_file={test_dataset1.filenames[0] if len(test_dataset1.filenames) > 0 else 'NONE'}")
             print(f"DEBUG TEST1 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
-            evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', test_data1, device=self.device)
+            evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', device=self.device)
             
             
             # Generate attention visualizations if requested
@@ -1051,7 +1051,7 @@ class Trainer:
             test_name2 = Path(self.test_folder2).parent.name
             print(f"DEBUG TEST2: folder={self.test_folder2}, name={test_name2}, samples={len(test_dataset2)}, first_file={test_dataset2.filenames[0] if len(test_dataset2.filenames) > 0 else 'NONE'}")
             print(f"DEBUG TEST2 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
-            evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', test_data2, device=self.device)
+            evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
             
             # Save predictions to CSV
             self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
