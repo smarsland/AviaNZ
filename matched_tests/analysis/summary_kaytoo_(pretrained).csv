@@ -1,2 +1,0 @@
-name,train_dataset,config,test1_acc,test2_acc,test1_test2_diff,avg_acc
-kaytoo_pretrained_seed0,pretrained,kaytoo,35.33,52.59,-17.26,43.96

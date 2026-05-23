@@ -1,2 +1,0 @@
-name,train_dataset,config,test1_acc,test2_acc,test1_test2_diff,avg_acc
-birdnet_pretrained_seed0,pretrained,birdnet,45.81,61.98,-16.17,53.89

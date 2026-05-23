@@ -1,6 +1,0 @@
-name,train_dataset,config,test1_acc,test2_acc,test1_test2_diff,avg_acc
-regnet_on_doc_boxcox_kbird4,doc,boxcox_kbird4,52.69,68.89,-16.19,60.79
-regnet_on_doc_boxcox,doc,boxcox,51.20,65.93,-14.73,58.56
-regnet_on_doc_boxcox_bgmed,doc,boxcox_bgmed,41.92,59.51,-17.59,50.71
-regnet_on_avianz_boxcox,avianz,boxcox,52.40,47.41,4.99,49.90
-regnet_on_doc_boxcox_nobg,doc,boxcox_nobg,22.16,31.60,-9.45,26.88

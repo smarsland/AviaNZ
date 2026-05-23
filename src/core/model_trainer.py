@@ -18,7 +18,6 @@ from src.evaluation.evaluation_utils import EvaluationManager
 from src.evaluation.attention_viz import visualize_attention
 from src.core.trainer_config import TrainerConfig, TrainingConfig, ModelConfig
 from src.core import config
-from src.core.utils import pick_free_gpu
 
 
 def compute_multilabel_f1(all_preds, all_targets):
@@ -1068,8 +1067,47 @@ class Trainer:
         print("Transfer learning: Using pretrained backbone, training new classification head")
 
     def _pick_free_gpu(self):
-        """Return the index of the GPU with the lowest memory usage."""
-        return pick_free_gpu()
+        """Return the index of the GPU with the lowest memory usage, via nvidia-smi.
+        Raises RuntimeError if nvidia-smi cannot be found or fails.
+        """
+        import subprocess
+        import shutil
+
+        smi = shutil.which('nvidia-smi') or '/usr/bin/nvidia-smi' or '/bin/nvidia-smi'
+        if not os.path.isfile(smi):
+            raise RuntimeError(
+                "nvidia-smi not found — cannot auto-select a free GPU. "
+                "Set CUDA_VISIBLE_DEVICES manually before running."
+            )
+
+        try:
+            out = subprocess.check_output(
+                [smi, '--query-gpu=index,memory.used', '--format=csv,noheader,nounits'],
+                stderr=subprocess.STDOUT, text=True
+            )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"nvidia-smi failed:\n{e.output}") from e
+
+        best_idx, best_mem = None, float('inf')
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(',')
+            if len(parts) != 2:
+                continue
+            try:
+                idx, mem = int(parts[0].strip()), int(parts[1].strip())
+            except ValueError:
+                continue
+            if mem < best_mem:
+                best_mem, best_idx = mem, idx
+
+        if best_idx is None:
+            raise RuntimeError(f"Could not parse nvidia-smi output:\n{out}")
+
+        print(f"Auto-selected GPU {best_idx} ({best_mem} MiB used)")
+        return best_idx
 
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
@@ -1089,7 +1127,6 @@ class Trainer:
         else:
             model_config['model_type'] = 'AST'
         model_config['num_classes'] = model.num_classes
-        model_config['multilabel'] = True
         model_config['class_names'] = self.data['class_names']
         model_config['use_reconstruction'] = self.use_reconstruction
         model_config['use_cnn_adapter'] = self.use_cnn_adapter
@@ -1136,44 +1173,35 @@ class Trainer:
         plt.close()
     
     def _save_test_predictions(self, model, test_loader, test_data, test_name):
-        """Save test predictions (per-class probabilities) to CSV."""
+        """Save test predictions to CSV file for accuracy computation."""
         import csv
-
+        
         model.eval()
-        all_probs = []
-        all_filenames = []
-
-        sample_idx = 0
-        filenames_list = test_data['train_filenames']
-
+        predictions = {}
+        
         with torch.no_grad():
             for batch in test_loader:
-                data, _ = batch
-                batch_size = data.size(0)
+                data, target = batch
                 data = data.to(self.device)
-
+                filenames = [test_data['train_filenames'][i] for i in range(len(data))]
+                
                 output = model(data)
-                if isinstance(output, tuple):
-                    output = output[0]
-
-                probs = torch.sigmoid(output).cpu().numpy()
-                all_probs.append(probs)
-
-                # Correctly track which dataset samples this batch covers
-                batch_filenames = filenames_list[sample_idx: sample_idx + batch_size]
-                all_filenames.extend(batch_filenames)
-                sample_idx += batch_size
-
-        all_probs = np.vstack(all_probs)
-        class_names = test_data['class_names']
-
-        # Save per-class probabilities (same format as ModelPredictor.save_predictions)
+                
+                # Always multilabel
+                preds = (torch.sigmoid(output) > 0.5).cpu().numpy()
+                
+                # Map predictions to class names
+                for i, filename in enumerate(filenames):
+                    pred_classes = [test_data['class_names'][j] for j in range(len(preds[i])) if preds[i][j]]
+                    predictions[filename] = ','.join(pred_classes) if pred_classes else 'Empty'
+        
+        # Save to CSV
         csv_path = os.path.join(self.output_folder, f'predictions_{test_name}.csv')
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['filename'] + class_names)
-            for filename, row_probs in zip(all_filenames, all_probs):
-                writer.writerow([filename] + [f"{p:.6f}" for p in row_probs])
-
-        print(f"Saved {len(all_filenames)} predictions to {csv_path}")
+            writer.writerow(['filename', 'predicted_class'])
+            for filename, pred_class in predictions.items():
+                writer.writerow([filename, pred_class])
+        
+        print(f"Saved test predictions to {csv_path}")
 

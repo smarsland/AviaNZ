@@ -325,30 +325,25 @@ class CQTProcessor:
     Parameters
     ----------
     n_bins : int
-        Number of frequency bins in the output (default: config.DEFAULT_FREQ_BINS = 224).
-        If fmin × 2^(n_bins/bins_per_octave) would exceed Nyquist, n_bins is clipped
-        automatically and the output is zero-padded back to this shape.
+        Number of frequency bins (default: config.DEFAULT_FREQ_BINS = 224).
     hop_length : int
         Hop size in samples (default: 10 ms × fs).
     fs : int
-        Target sample rate in Hz (audio is resampled to this before CQT).
+        Target sample rate in Hz.
     fmin : float
-        Lowest frequency in Hz (default 32.7 Hz, C1, safely under all NZ bird species).
+        Lowest frequency in Hz. Default 27.5 Hz (A0) covers all NZ bird species
+        with headroom.
     bins_per_octave : int
-        Frequency resolution per octave (default 24 = 2 bins per semitone).
+        Frequency resolution per octave. 24 (= 2 per semitone) with fmin=27.5 Hz
+        and n_bins=224 covers 27.5 Hz to ~16 kHz at 32 kHz sample rate.
     """
 
-    def __init__(self, n_bins, hop_length, fs, fmin=32.7, bins_per_octave=24):
+    def __init__(self, n_bins, hop_length, fs, fmin=27.5, bins_per_octave=24):
+        self.n_bins = n_bins
         self.hop_length = hop_length
         self.fs = fs
         self.fmin = fmin
         self.bins_per_octave = bins_per_octave
-        self._output_bins = n_bins  # desired output rows (may include zero-pad)
-        # Compute the maximum safe bin count for this fs (leave 5% Nyquist headroom)
-        nyquist_safe = fs / 2 * 0.95
-        max_safe = int(np.floor(np.log2(nyquist_safe / fmin) * bins_per_octave))
-        self.n_bins = min(n_bins, max_safe)  # bins actually computed by librosa
-        self._pad_rows = n_bins - self.n_bins  # zero-rows prepended (above Nyquist)
 
     def _load_audio(self, sound_file, start_time=None, end_time=None):
         """Load (optionally sliced) audio, resample to self.fs, and RMS-normalise."""
@@ -383,7 +378,7 @@ class CQTProcessor:
         return audio
 
     def _compute_cqt(self, audio):
-        """Return CQT magnitude array shaped (_output_bins, time_bins), row 0 = highest freq."""
+        """Return CQT magnitude array shaped (freq_bins, time_bins), row 0 = highest freq."""
         import librosa
         C = librosa.cqt(
             audio,
@@ -396,13 +391,7 @@ class CQTProcessor:
         mag = np.abs(C).astype(np.float32)
         # librosa CQT: row 0 = fmin (lowest). Flip so row 0 = highest, matching
         # the rot90 convention of SpectrogramProcessor.
-        mag = np.flipud(mag)
-        # Prepend zero rows for bins that would exceed Nyquist (rows represent
-        # "no signal above Nyquist", consistent with what a real filter would give).
-        if self._pad_rows > 0:
-            pad = np.zeros((self._pad_rows, mag.shape[1]), dtype=np.float32)
-            mag = np.vstack([pad, mag])
-        return mag
+        return np.flipud(mag)
 
     def process_audio_file(self, sound_file):
         try:
