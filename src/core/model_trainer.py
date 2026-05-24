@@ -280,6 +280,7 @@ class Trainer:
         self.bg_subtract = cfg.augmentation.bg_subtract
         self.median_filter = cfg.augmentation.median_filter
         self.no_background = getattr(cfg.augmentation, 'no_background', False)
+        self.use_deltas = getattr(cfg.augmentation, 'use_deltas', False)
         self.per_chunk_norm = cfg.augmentation.per_chunk_norm
         self.spec_transform = cfg.augmentation.spec_transform
         self.mixup_mode = cfg.augmentation.mixup_mode
@@ -412,6 +413,7 @@ class Trainer:
             noise_mode=self.noise_mode,
             background_prob=self.background_prob,
             ast_channel_dir=self.ast_channel_dir,
+            use_deltas=self.use_deltas,
         )
         
         # Create target domain data loader for DANN
@@ -980,6 +982,7 @@ class Trainer:
                 noise_mode='full',
                 background_prob=0.0,
                 ast_channel_dir=self.ast_channel_dir,
+                use_deltas=self.use_deltas,
             )
             
             test_loader_obj1 = torch.utils.data.DataLoader(
@@ -1037,6 +1040,7 @@ class Trainer:
                 noise_mode='full',
                 background_prob=0.0,
                 ast_channel_dir=self.ast_channel_dir,
+                use_deltas=self.use_deltas,
             )
             
             test_loader_obj2 = torch.utils.data.DataLoader(

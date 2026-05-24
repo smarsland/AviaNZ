@@ -68,6 +68,10 @@ Examples:
                        help="Apply background subtraction normalization (works independently)")
     parser.add_argument('--median-filter', action='store_true',
                        help="Apply temporal median filtering (works independently)")
+    parser.add_argument('--deltas', action='store_true', dest='use_deltas',
+                       help="Add delta and delta-delta channels to the spectrogram (3-ch input). "
+                            "Encodes rate-of-change rather than absolute magnitude, improving "
+                            "robustness to recording-level and microphone-response differences.")
     parser.add_argument('--no-background', action='store_true', dest='no_background',
                        help="Ignore all-zero (background/no-bird) training samples")
     parser.add_argument('--use-asl', action='store_true', dest='use_asl',

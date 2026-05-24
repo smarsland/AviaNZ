@@ -236,7 +236,7 @@ class SpectrogramDataset(Dataset):
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3,
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
                  median_filter=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0,
-                 ast_channel_dir=None):
+                 ast_channel_dir=None, use_deltas=False):
         """
         Initialize SpectrogramDataset.
         
@@ -279,6 +279,7 @@ class SpectrogramDataset(Dataset):
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
         self.ast_channel_dir = ast_channel_dir
+        self.use_deltas = use_deltas
         self.rng = np.random.RandomState(21390)
         
         # Cache noise data in memory (WAY faster than loading from disk every time)
@@ -394,7 +395,17 @@ class SpectrogramDataset(Dataset):
         if self.training:
             x = self.apply_specaugment(x)
             assert x.ndim == 3, f"After specaugment should be 3D (H,W,C), got {x.shape}"
-        
+
+        # Delta channels: replace single-channel spectrogram with [spec, Δ, ΔΔ].
+        # Deltas are computed on the log-transformed spectrogram (after all augmentation)
+        # along the time axis, encoding rate-of-change rather than absolute magnitude.
+        # This improves robustness to microphone response and recording-level differences.
+        if self.use_deltas:
+            spec_2d = x[:, :, 0]  # (H, W)
+            delta = self._compute_delta(spec_2d)
+            delta2 = self._compute_delta(delta)
+            x = np.stack([spec_2d, delta, delta2], axis=-1)  # (H, W, 3)
+
         # Append pre-computed AST attention channel if configured.
         # The map was computed at (img_height, img_width); we apply the same temporal
         # roll used on the spectrogram so both channels stay spatially aligned.
@@ -481,6 +492,26 @@ class SpectrogramDataset(Dataset):
         else:
             print(f"Warning: Unknown transform {self.spec_transform}, using linear")
             return sg
+
+    @staticmethod
+    def _compute_delta(spec_2d, width=9):
+        """Compute delta (first-order derivative) along the time axis.
+
+        Uses the standard HTK/MFCC finite-difference formula with a context window
+        of ±N frames.  Width=9 (N=4) matches the torchaudio default.
+
+        Args:
+            spec_2d: (H, W) float32 array — the spectrogram or previous delta.
+            width:   Filter width (must be odd, ≥3).
+
+        Returns:
+            delta: (H, W) float32 array.
+        """
+        from scipy.ndimage import convolve1d
+        N = (width - 1) // 2
+        denom = 2.0 * float(sum(k * k for k in range(1, N + 1)))
+        kernel = np.arange(-N, N + 1, dtype=np.float32)
+        return convolve1d(spec_2d.astype(np.float32), kernel / denom, axis=1, mode='nearest')
 
     def apply_padding_and_add_channels(self, array, is_noise=False):
         """Apply padding and ensure correct number of channels.
@@ -766,7 +797,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        use_class_balancing=False, bg_subtract=False, median_filter=False,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
-                       ast_channel_dir=None):
+                       ast_channel_dir=None, use_deltas=False):
     """
     Create PyTorch DataLoaders for training and validation.
     
@@ -814,6 +845,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         noise_mode=noise_mode,
         background_prob=background_prob,
         ast_channel_dir=ast_channel_dir,
+        use_deltas=use_deltas,
     )
 
     # Only create validation dataset if validation data exists
@@ -832,6 +864,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             noise_mode='full',  # Not used (no noise in validation)
             background_prob=0.0,  # No background replacement for validation
             ast_channel_dir=ast_channel_dir,
+            use_deltas=use_deltas,
         )
     else:
         val_dataset = None

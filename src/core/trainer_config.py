@@ -56,6 +56,7 @@ class AugmentationConfig:
     bg_subtract: bool = False  # Background subtraction normalization (independent)
     median_filter: bool = False  # Temporal median filtering (independent)
     no_background: bool = False  # Drop all-zero (background) training samples
+    use_deltas: bool = False  # Add delta + delta-delta channels (3-ch input; encodes rate-of-change)
     per_chunk_norm: bool = False
     spec_transform: str = 'Log'
     mixup_mode: str = 'mixup'
@@ -138,7 +139,7 @@ class TrainerConfig:
                 use_sed_head=getattr(args, 'sed_head', False),
                 use_gated_head=getattr(args, 'gated_head', False),
                 ast_channel_dir=getattr(args, 'ast_channel_dir', None),
-                in_chans=2 if getattr(args, 'ast_channel_dir', None) else 1,
+                in_chans=3 if getattr(args, 'use_deltas', False) else (2 if getattr(args, 'ast_channel_dir', None) else 1),
             ),
             augmentation=AugmentationConfig(
                 mixup_alpha=args.mixup,
@@ -150,6 +151,7 @@ class TrainerConfig:
                 bg_subtract=getattr(args, 'bg_subtract', False),
                 median_filter=getattr(args, 'median_filter', False),
                 no_background=getattr(args, 'no_background', False),
+                use_deltas=getattr(args, 'use_deltas', False),
                 per_chunk_norm=getattr(args, 'per_chunk_norm', False),
                 spec_transform=getattr(args, 'spec_transform', 'Log'),
                 mixup_mode=getattr(args, 'mixup_mode', 'mixup'),
