@@ -181,5 +181,7 @@ class TrainerConfig:
                 test_folder=getattr(args, 'test_folder', None),
                 test_folder2=getattr(args, 'test_folder2', None),
                 visualize_attention=getattr(args, 'visualize_attention', False),
-                viz_samples=getattr(args, 'viz_samples', 3)                eval_only=getattr(args, 'eval_only', False),            )
+                viz_samples=getattr(args, 'viz_samples', 3),
+                eval_only=getattr(args, 'eval_only', False),
+            )
         )
