@@ -357,6 +357,17 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
     name_mapping = load_avianz_name_mapping(mapping_csv)
     proc = AviaNZDataProcessor(name_mapping=name_mapping)
 
+    # Build global mapping: eBird code -> canonical DOC class name.
+    # '/' labels (e.g. 'tui/bellbird') mean either species maps to that class.
+    name_map_ci = {k.lower(): v for k, v in name_mapping.items()}
+    code_to_canonical = {}
+    for rec in records:
+        for label in rec['human_labels']:
+            for part in label.split('/'):
+                part = part.strip()
+                if part in name_map_ci:
+                    code_to_canonical[name_map_ci[part]] = label
+
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
     if with_audio:
@@ -446,10 +457,17 @@ def build_avianz_dataset(records, avianz_raw, output_folder, seed, mapping_csv, 
                 seg_data, seg_sr = sf.read(wav_file, start=start_frame, stop=stop_frame)
                 sf.write(os.path.join(audio_dir, f'{basename}.wav'), seg_data, seg_sr)
 
-            # Use the DOC human label — both datasets must have identical class names.
+            # Map this AviaNZ segment's own annotated species into canonical
+            # DOC class names. Only classes that are actually in this clip's
+            # annotation are included — nothing is copied from the DOC record.
+            avianz_class_names = list(dict.fromkeys(
+                code_to_canonical[code]
+                for code in seg_codes
+                if code in code_to_canonical
+            )) or [rec['human_labels'][0]]
             avianz_labels.append({
                 'filename': f'{basename}.npy',
-                'class_names': rec['human_labels'],
+                'class_names': avianz_class_names,
                 'source_file': wav_file,
                 'start_time': start,
                 'end_time': end,
@@ -625,7 +643,15 @@ def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_sea
     spec_proc = make_spec_processor(sg_type, window_type, sg_scale)
     name_mapping = load_avianz_name_mapping(mapping_csv)
     proc = AviaNZDataProcessor(name_mapping=name_mapping)
+    # Case-insensitive lookup: human label string -> eBird code.
+    # Used to check which of rec['human_labels'] are actually present in a
+    # matched AviaNZ segment, so we don't propagate species2+ labels that
+    # aren't confirmed in the AviaNZ audio.
+    name_map_ci = {k.lower(): v for k, v in name_mapping.items()}
 
+    def _codes_for_label(label):
+        """eBird codes for a human label, splitting on '/' for uncertain labels."""
+        return {name_map_ci[p.strip()] for p in label.split('/') if p.strip() in name_map_ci}
     data_dir = os.path.join(avianz_out, 'data')
     os.makedirs(data_dir, exist_ok=True)
     if with_audio:

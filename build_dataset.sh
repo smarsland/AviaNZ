@@ -16,7 +16,7 @@ OVERWRITE=false
 BACKGROUND_N_FLAG=""
 SPEC_TYPE_FLAG="--spec-type Reassigned"
 WINDOW_TYPE_FLAG="--window-type Hamming"
-SG_SCALE_FLAG="--sg-scale Linear"
+SG_SCALE_FLAG="--sg-scale mel"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
