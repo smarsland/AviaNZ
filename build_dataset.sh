@@ -13,20 +13,20 @@ set -e
 
 FREQ_MASK_FLAG=""
 OVERWRITE=false
-BACKGROUND_N_FLAG=""
-SPEC_TYPE_FLAG="--spec-type Reassigned"
-WINDOW_TYPE_FLAG="--window-type Hamming"
-SG_SCALE_FLAG="--sg-scale mel"
+BACKGROUND_N=""
+SPEC_TYPE="Reassigned"
+WINDOW_TYPE="Hamming"
+SG_SCALE="Mel Frequency"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --freq-mask) FREQ_MASK_FLAG="--freq-mask"; shift ;;
         --overwrite) OVERWRITE=true; shift ;;
-        --background-n) BACKGROUND_N_FLAG="--background-n $2"; shift 2 ;;
-        --no-background) BACKGROUND_N_FLAG="--background-n 0"; shift ;;
-        --spec-type) SPEC_TYPE_FLAG="--spec-type $2"; shift 2 ;;
-        --window-type) WINDOW_TYPE_FLAG="--window-type $2"; shift 2 ;;
-        --sg-scale) SG_SCALE_FLAG="--sg-scale $2"; shift 2 ;;
+        --background-n) BACKGROUND_N="$2"; shift 2 ;;
+        --no-background) BACKGROUND_N="0"; shift ;;
+        --spec-type) SPEC_TYPE="$2"; shift 2 ;;
+        --window-type) WINDOW_TYPE="$2"; shift 2 ;;
+        --sg-scale) SG_SCALE="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; echo "Valid options: --freq-mask, --overwrite, --background-n N, --no-background, --spec-type {Standard,Multi-tapered,Reassigned}, --window-type {Hann,Hamming,Blackman,BlackmanHarris}, --sg-scale {Linear,'Mel Frequency','Bark Frequency'}"; exit 1 ;;
     esac
 done
@@ -57,9 +57,9 @@ echo "  AviaNZ raw : $AVIANZ_RAW"
 echo "  Output     : $MATCHED_BASE"
 echo "  With audio : yes"
 echo "  Freq mask  : ${FREQ_MASK_FLAG:-no}"
-  echo "  Spec type  : ${SPEC_TYPE_FLAG}"
-  echo "  Window     : ${WINDOW_TYPE_FLAG}"
-  echo "  Scale      : ${SG_SCALE_FLAG}"
+  echo "  Spec type  : ${SPEC_TYPE}"
+  echo "  Window     : ${WINDOW_TYPE}"
+  echo "  Scale      : ${SG_SCALE}"
 echo "  Overwrite  : $OVERWRITE"
 echo "============================================================"
 echo ""
@@ -78,10 +78,10 @@ if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/la
         --fixed-length \
         --with-audio \
         ${FREQ_MASK_FLAG:+$FREQ_MASK_FLAG} \
-        ${BACKGROUND_N_FLAG:+$BACKGROUND_N_FLAG} \
-        ${SPEC_TYPE_FLAG:+$SPEC_TYPE_FLAG} \
-        ${WINDOW_TYPE_FLAG:+$WINDOW_TYPE_FLAG} \
-        ${SG_SCALE_FLAG:+$SG_SCALE_FLAG}
+        ${BACKGROUND_N:+--background-n "$BACKGROUND_N"} \
+        --spec-type "$SPEC_TYPE" \
+        --window-type "$WINDOW_TYPE" \
+        --sg-scale "$SG_SCALE"
 else
     echo "=== Step 1: matched datasets already exist, skipping (use --overwrite to force) ==="
 fi
