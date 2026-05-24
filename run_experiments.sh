@@ -10,6 +10,8 @@ set -e
 #   3. DOC matched train — background subtraction + median filter
 #   4. AviaNZ matched train — normal RegNet (domain-shift comparison vs run 1)
 #   5. DOC matched train — no background samples (train on labelled-only)
+#   6. DOC matched train — delta + delta-delta channels (3-ch input, recording-condition robustness)
+#   7. AviaNZ matched train — delta + delta-delta channels
 #
 # Results land in $OUTPUT and are picked up by scripts/analyze_all_results.py.
 #
@@ -115,6 +117,17 @@ run_experiment regnet avianz "$AVIANZ_TRAIN" boxcox \
 #    background samples are helping regularisation or just adding noise.
 run_experiment regnet doc "$DOC_TRAIN" boxcox_nobg \
     --spec-transform "Box-Cox" --no-background
+
+# ── 6. Delta channels: add Δ and ΔΔ spectral channels (3-ch input) ────────────
+#    Encodes temporal rate-of-change in the spectrogram, making the model more
+#    robust to recording-condition differences (mic response, room acoustics).
+#    Matches Kaytoo's 3-channel input strategy.
+run_experiment regnet doc "$DOC_TRAIN" boxcox_deltas \
+    --spec-transform "Box-Cox" --deltas
+
+# ── 7. Delta channels on AviaNZ ───────────────────────────────────────────────
+run_experiment regnet avianz "$AVIANZ_TRAIN" boxcox_deltas \
+    --spec-transform "Box-Cox" --deltas
 
 echo ""
 echo "============================================================"

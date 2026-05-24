@@ -1163,11 +1163,7 @@ class Trainer:
         """Load saved model from output_folder and run test evaluation only."""
         input_size = (self.img_height, self.img_width)
 
-        # Load training data so we have class names and the label space needed
-        # to remap test-set labels correctly.
-        data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-        self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
-        self.num_classes = self.data['nclasses']
+        # self.data and self.num_classes are already set by __init__; don't reload.
         print(f"--eval-only: {self.num_classes} classes from {self.data_folder}")
 
         # Build model skeleton (same arch, no pretrained BirdCLEF weights)
@@ -1207,7 +1203,11 @@ class Trainer:
             print("WARNING: --eval-only with no --test-folder specified; nothing to evaluate.")
             return {}
 
-        evaluator = EvaluationManager(self.output_folder, self.data['class_names'], is_multilabel=True)
+        # Save eval-only results into a subdirectory so they don't mix with the
+        # training-run outputs and are easy to find.
+        eval_out = os.path.join(self.output_folder, 'matched_eval')
+        os.makedirs(eval_out, exist_ok=True)
+        evaluator = EvaluationManager(eval_out, self.data['class_names'], is_multilabel=True)
 
         if self.test_folder:
             print(f"\n{'='*60}")
@@ -1232,7 +1232,7 @@ class Trainer:
             test_name1 = Path(self.test_folder).parent.name
             print(f"  samples={len(test_dataset1)}")
             evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', device=self.device)
-            self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1)
+            self._save_predictions_to(model, test_loader_obj1, test_data1, test_name1, eval_out)
 
         if self.test_folder2:
             print(f"\n{'='*60}")
@@ -1257,8 +1257,9 @@ class Trainer:
             test_name2 = Path(self.test_folder2).parent.name
             print(f"  samples={len(test_dataset2)}")
             evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
-            self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
+            self._save_predictions_to(model, test_loader_obj2, test_data2, test_name2, eval_out)
 
+        print(f"\n--eval-only: results saved to {eval_out}")
         return {}
 
     def _save_model(self, model, best=False):
@@ -1325,7 +1326,11 @@ class Trainer:
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
     
-    def _save_test_predictions(self, model, test_loader, test_data, test_name):
+    def _save_predictions_to(self, model, test_loader, test_data, test_name, out_dir):
+        """Like _save_test_predictions but writes to an explicit directory."""
+        self._save_test_predictions(model, test_loader, test_data, test_name, out_dir=out_dir)
+
+    def _save_test_predictions(self, model, test_loader, test_data, test_name, out_dir=None):
         """Save test predictions (per-class probabilities + ground truth) to CSV.
 
         Ground truth is stored as true_CLASSNAME columns so that
@@ -1364,7 +1369,7 @@ class Trainer:
         all_labels = np.vstack(all_labels)
         class_names = test_data['class_names']
 
-        csv_path = os.path.join(self.output_folder, f'predictions_{test_name}.csv')
+        csv_path = os.path.join(out_dir or self.output_folder, f'predictions_{test_name}.csv')
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['filename'] + class_names + [f'true_{c}' for c in class_names])
