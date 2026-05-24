@@ -118,6 +118,9 @@ Examples:
                        help="Path to test data folder (evaluated after training)")
     parser.add_argument('--test-folder2', type=str, default=None,
                        help="Path to second test data folder (evaluated after training)")
+    parser.add_argument('--eval-only', action='store_true', dest='eval_only',
+                       help="Skip training; load saved model from output_folder and evaluate "
+                            "on --test-folder / --test-folder2.")
     
     # Visualization
     parser.add_argument('--visualize-attention', action='store_true',

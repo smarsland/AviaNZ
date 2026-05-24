@@ -310,6 +310,7 @@ class Trainer:
         self.test_folder2 = cfg.evaluation.test_folder2
         self.visualize_attention = cfg.evaluation.visualize_attention
         self.viz_samples = cfg.evaluation.viz_samples
+        self.eval_only = getattr(cfg.evaluation, 'eval_only', False)
         
         # Set random seed
         if self.seed is not None:
@@ -473,6 +474,10 @@ class Trainer:
     
     def train(self):
         """Train model (AST or RegNetY)."""
+        # --eval-only: skip training entirely, reload saved model, run test evaluation
+        if self.eval_only:
+            return self._eval_only()
+
         # CRITICAL: Verify CUDA is actually available before starting
         if not torch.cuda.is_available():
             cuda_visible = os.environ.get('CUDA_VISIBLE_DEVICES', 'not set')
@@ -1153,6 +1158,108 @@ class Trainer:
             scale = (total / self.kbird_prior).clamp(min=1.0)
             return (p / scale).clamp(0.0, 1.0)
         return torch.sigmoid(output)
+
+    def _eval_only(self):
+        """Load saved model from output_folder and run test evaluation only."""
+        input_size = (self.img_height, self.img_width)
+
+        # Load training data so we have class names and the label space needed
+        # to remap test-set labels correctly.
+        data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
+        self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
+        self.num_classes = self.data['nclasses']
+        print(f"--eval-only: {self.num_classes} classes from {self.data_folder}")
+
+        # Build model skeleton (same arch, no pretrained BirdCLEF weights)
+        if self.model_type == 'regnet':
+            model = RegNetModel(
+                self.num_classes,
+                pretrained_path=None,
+                model_name=self.model_name,
+                use_sed_head=self.use_sed_head,
+                use_gated_head=self.use_gated_head,
+                in_chans=self.in_chans,
+            ).to(self.device)
+        else:
+            model = AST(self.num_classes, input_size=input_size, dropout=self.dropout,
+                       use_reconstruction=self.use_reconstruction, use_adapters=self.use_adapters,
+                       per_chunk_norm=self.per_chunk_norm,
+                       use_cnn_adapter=self.use_cnn_adapter,
+                       use_sed_head=self.use_sed_head).to(self.device)
+            model.interpolate_pos_embed(input_size)
+
+        # Load the saved weights — prefer _best, fall back to final
+        best_path = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
+        final_path = os.path.join(self.output_folder, f'{self.model_type}_model.pt')
+        ckpt_path = best_path if os.path.exists(best_path) else final_path
+        if not os.path.exists(ckpt_path):
+            raise FileNotFoundError(
+                f"--eval-only: no saved model found in {self.output_folder}\n"
+                f"  Looked for: {best_path}\n"
+                f"              {final_path}"
+            )
+        print(f"--eval-only: loading weights from {ckpt_path}")
+        state_dict = torch.load(ckpt_path, map_location=self.device, weights_only=True)
+        model.load_state_dict(state_dict)
+        model.eval()
+
+        if not self.test_folder and not self.test_folder2:
+            print("WARNING: --eval-only with no --test-folder specified; nothing to evaluate.")
+            return {}
+
+        evaluator = EvaluationManager(self.output_folder, self.data['class_names'], is_multilabel=True)
+
+        if self.test_folder:
+            print(f"\n{'='*60}")
+            print(f"Evaluating on test set 1: {self.test_folder}")
+            print(f"{'='*60}")
+            test_loader1 = DataLoader(self.test_folder, noise_folder=None)
+            test_data1 = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
+            test_data1 = _remap_labels_to_train_space(test_data1, self.data)
+            test_dataset1 = SpectrogramDataset(
+                test_data1['train_filenames'], test_data1['train_labels'],
+                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
+                noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
+                training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
+                median_filter=self.median_filter, use_temporal_roll=False,
+                noise_mode='full', background_prob=0.0,
+                ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
+            )
+            test_loader_obj1 = torch.utils.data.DataLoader(
+                test_dataset1, batch_size=self.batch_size, shuffle=False,
+                num_workers=2, pin_memory=torch.cuda.is_available()
+            )
+            test_name1 = Path(self.test_folder).parent.name
+            print(f"  samples={len(test_dataset1)}")
+            evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', device=self.device)
+            self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1)
+
+        if self.test_folder2:
+            print(f"\n{'='*60}")
+            print(f"Evaluating on test set 2: {self.test_folder2}")
+            print(f"{'='*60}")
+            test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
+            test_data2 = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
+            test_data2 = _remap_labels_to_train_space(test_data2, self.data)
+            test_dataset2 = SpectrogramDataset(
+                test_data2['train_filenames'], test_data2['train_labels'],
+                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
+                noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
+                training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
+                median_filter=self.median_filter, use_temporal_roll=False,
+                noise_mode='full', background_prob=0.0,
+                ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
+            )
+            test_loader_obj2 = torch.utils.data.DataLoader(
+                test_dataset2, batch_size=self.batch_size, shuffle=False,
+                num_workers=2, pin_memory=torch.cuda.is_available()
+            )
+            test_name2 = Path(self.test_folder2).parent.name
+            print(f"  samples={len(test_dataset2)}")
+            evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
+            self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
+
+        return {}
 
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'

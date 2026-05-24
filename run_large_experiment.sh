@@ -35,6 +35,10 @@ LARGE_AVIANZ_TRAIN="$LARGE_BASE/avianz_split/train"
 LARGE_AVIANZ_TEST="$LARGE_BASE/avianz_split/test"
 LARGE_DOC_TEST="$LARGE_BASE/doc_split/test"
 
+MATCHED_BASE="$BASE/matched"
+MATCHED_AVIANZ_TEST="$MATCHED_BASE/avianz_split/test"
+MATCHED_DOC_TEST="$MATCHED_BASE/doc_split/test"
+
 TESTS_BASE="$BASE/large_tests"
 
 # ── Training hyperparameters ──────────────────────────────────────────────────
@@ -60,6 +64,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
     check_path "$LARGE_AVIANZ_TRAIN"
     check_path "$LARGE_AVIANZ_TEST"
     check_path "$LARGE_DOC_TEST"
+    check_path "$MATCHED_AVIANZ_TEST"
+    check_path "$MATCHED_DOC_TEST"
 fi
 
 run_cmd() {
@@ -72,17 +78,21 @@ run_cmd() {
 echo ""
 echo "############################################################"
 echo "  Large dataset experiments"
-echo "  DOC train     : $LARGE_DOC_TRAIN"
-echo "  AviaNZ train  : $LARGE_AVIANZ_TRAIN"
-echo "  Test set 1    : $LARGE_AVIANZ_TEST"
-echo "  Test set 2    : $LARGE_DOC_TEST"
+echo "  DOC train       : $LARGE_DOC_TRAIN"
+echo "  AviaNZ train    : $LARGE_AVIANZ_TRAIN"
+echo "  Large test 1    : $LARGE_AVIANZ_TEST"
+echo "  Large test 2    : $LARGE_DOC_TEST"
+echo "  Matched test 1  : $MATCHED_AVIANZ_TEST"
+echo "  Matched test 2  : $MATCHED_DOC_TEST"
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "  DRY RUN — no commands will be executed"
 fi
 echo "############################################################"
 echo ""
 
-mkdir -p "$TESTS_BASE"
+if [ "$DRY_RUN" -eq 0 ]; then
+    mkdir -p "$TESTS_BASE"
+fi
 
 # ── RegNet on large DOC ───────────────────────────────────────────────────────
 RUN_NAME="${MODEL_TYPE}_on_large_doc_boxcox"
@@ -108,6 +118,17 @@ else
         --spec-transform "Box-Cox"
 fi
 
+# Reload the just-trained (or previously-trained) model and evaluate on matched splits
+echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_DOC_TRAIN" "$OUT_DIR" \
+    --eval-only \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox"
+
 # ── RegNet on large AviaNZ ────────────────────────────────────────────────────
 RUN_NAME="${MODEL_TYPE}_on_large_avianz_boxcox"
 OUT_DIR="$TESTS_BASE/$RUN_NAME"
@@ -132,16 +153,21 @@ else
         --spec-transform "Box-Cox"
 fi
 
+# Reload the just-trained (or previously-trained) model and evaluate on matched splits
 echo ""
-echo "############################################################"
-echo "  All large training runs complete."
-echo "  Run  python3 scripts/analyze_all_results.py  to compare."
-echo "############################################################"
-echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_AVIANZ_TRAIN" "$OUT_DIR" \
+    --eval-only \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox"
 
 echo ""
 echo "############################################################"
-echo "  All large-doc training runs complete."
+echo "  All large training runs complete."
+echo "  Results (large + matched splits) are in $TESTS_BASE"
 echo "  Run  python3 scripts/analyze_all_results.py  to compare."
 echo "############################################################"
 echo ""
