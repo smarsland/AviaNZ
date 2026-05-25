@@ -80,8 +80,8 @@ Examples:
     parser.add_argument('--class-weights', action='store_true', dest='class_weights',
                        help="Weight per-class loss by inverse frequency to prevent rare species from "
                             "being overwhelmed by the majority-class gradient")
-    parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'None'],
-                       help="Spectrogram transformation (default: Log)")
+    parser.add_argument('--spec-transform', type=str, default='Log', choices=['Log', 'PCEN', 'Box-Cox', 'LogMinMax', 'None'],
+                       help="Spectrogram transformation (default: Log). LogMinMax = log then per-clip min-max to [0,1] (Kaytoo-style)")
     
     # Transfer learning
     parser.add_argument('--pretrained', type=str, default=None,

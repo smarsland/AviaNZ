@@ -488,7 +488,21 @@ class SpectrogramDataset(Dataset):
             lam = 0.5
             sg_transformed = boxcox(sg_flat, lam)
             return np.reshape(sg_transformed, size)
-        
+
+        elif self.spec_transform == "LogMinMax":
+            # Kaytoo-style normalization: log → per-clip min-max to [0, 1].
+            # The per-clip rescaling removes recording-level and microphone-gain
+            # differences between DOC and AviaNZ, which Box-Cox alone does not do.
+            sg = np.maximum(sg, 0.0)
+            sg = np.log(sg + LOG_OFFSET)
+            sg_min = sg.min()
+            sg_max = sg.max()
+            if sg_max - sg_min > 1e-6:
+                sg = (sg - sg_min) / (sg_max - sg_min)
+            else:
+                sg = np.zeros_like(sg)
+            return sg
+
         else:
             print(f"Warning: Unknown transform {self.spec_transform}, using linear")
             return sg
