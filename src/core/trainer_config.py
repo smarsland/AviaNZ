@@ -96,6 +96,7 @@ class EvaluationConfig:
     visualize_attention: bool = False
     viz_samples: int = 3
     eval_only: bool = False
+    checkpoint: Optional[str] = None
 
 
 @dataclass
@@ -183,5 +184,6 @@ class TrainerConfig:
                 visualize_attention=getattr(args, 'visualize_attention', False),
                 viz_samples=getattr(args, 'viz_samples', 3),
                 eval_only=getattr(args, 'eval_only', False),
+                checkpoint=getattr(args, 'checkpoint', None),
             )
         )

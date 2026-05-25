@@ -311,6 +311,7 @@ class Trainer:
         self.visualize_attention = cfg.evaluation.visualize_attention
         self.viz_samples = cfg.evaluation.viz_samples
         self.eval_only = getattr(cfg.evaluation, 'eval_only', False)
+        self.checkpoint_path = getattr(cfg.evaluation, 'checkpoint', None)
         
         # Set random seed
         if self.seed is not None:
@@ -1184,16 +1185,21 @@ class Trainer:
                        use_sed_head=self.use_sed_head).to(self.device)
             model.interpolate_pos_embed(input_size)
 
-        # Load the saved weights — prefer _best, fall back to final
-        best_path = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
-        final_path = os.path.join(self.output_folder, f'{self.model_type}_model.pt')
-        ckpt_path = best_path if os.path.exists(best_path) else final_path
-        if not os.path.exists(ckpt_path):
-            raise FileNotFoundError(
-                f"--eval-only: no saved model found in {self.output_folder}\n"
-                f"  Looked for: {best_path}\n"
-                f"              {final_path}"
-            )
+        # Load the saved weights: explicit --checkpoint overrides folder lookup
+        if self.checkpoint_path:
+            ckpt_path = self.checkpoint_path
+            if not os.path.exists(ckpt_path):
+                raise FileNotFoundError(f"--checkpoint: file not found: {ckpt_path}")
+        else:
+            best_path = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
+            final_path = os.path.join(self.output_folder, f'{self.model_type}_model.pt')
+            ckpt_path = best_path if os.path.exists(best_path) else final_path
+            if not os.path.exists(ckpt_path):
+                raise FileNotFoundError(
+                    f"--eval-only: no saved model found in {self.output_folder}\n"
+                    f"  Looked for: {best_path}\n"
+                    f"              {final_path}"
+                )
         print(f"--eval-only: loading weights from {ckpt_path}")
         state_dict = torch.load(ckpt_path, map_location=self.device, weights_only=True)
         model.load_state_dict(state_dict)

@@ -40,6 +40,7 @@ MATCHED_AVIANZ_TEST="$MATCHED_BASE/avianz_split/test"
 MATCHED_DOC_TEST="$MATCHED_BASE/doc_split/test"
 
 TESTS_BASE="$BASE/large_tests"
+MATCHED_TESTS_BASE="$BASE/matched_tests"
 
 # ── Training hyperparameters ──────────────────────────────────────────────────
 EPOCHS=100
@@ -119,11 +120,14 @@ else
 fi
 
 # Reload the just-trained (or previously-trained) model and evaluate on matched splits
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
 echo ""
 echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
 run_cmd python train.py \
-    "$LARGE_DOC_TRAIN" "$OUT_DIR" \
+    "$LARGE_DOC_TRAIN" "$MATCHED_OUT_DIR" \
     --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
     --test-folder  "$MATCHED_AVIANZ_TEST" \
     --test-folder2 "$MATCHED_DOC_TEST" \
     --model-type   "$MODEL_TYPE" \
@@ -154,11 +158,14 @@ else
 fi
 
 # Reload the just-trained (or previously-trained) model and evaluate on matched splits
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
 echo ""
 echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
 run_cmd python train.py \
-    "$LARGE_AVIANZ_TRAIN" "$OUT_DIR" \
+    "$LARGE_AVIANZ_TRAIN" "$MATCHED_OUT_DIR" \
     --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
     --test-folder  "$MATCHED_AVIANZ_TEST" \
     --test-folder2 "$MATCHED_DOC_TEST" \
     --model-type   "$MODEL_TYPE" \
@@ -167,7 +174,8 @@ run_cmd python train.py \
 echo ""
 echo "############################################################"
 echo "  All large training runs complete."
-echo "  Results (large + matched splits) are in $TESTS_BASE"
+echo "  Large results   : $TESTS_BASE"
+echo "  Matched results : $MATCHED_TESTS_BASE"
 echo "  Run  python3 scripts/analyze_all_results.py  to compare."
 echo "############################################################"
 echo ""

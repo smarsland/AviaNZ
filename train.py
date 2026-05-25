@@ -121,6 +121,9 @@ Examples:
     parser.add_argument('--eval-only', action='store_true', dest='eval_only',
                        help="Skip training; load saved model from output_folder and evaluate "
                             "on --test-folder / --test-folder2.")
+    parser.add_argument('--checkpoint', type=str, default=None,
+                       help="Path to a .pt model file to load for --eval-only, overriding "
+                            "the default <output_folder>/<model>_model.pt lookup.")
     
     # Visualization
     parser.add_argument('--visualize-attention', action='store_true',
