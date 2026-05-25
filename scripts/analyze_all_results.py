@@ -70,6 +70,39 @@ def load_from_result_json(results_dir):
             results.append(row)
             continue
 
+        if data.get('type') == 'finetuned':
+            model = data.get('model', 'kaytoo_finetuned')
+            row = {
+                'name': name,
+                'train_dataset': 'finetuned',
+                'method': 'finetuned',
+                'config': model,
+                'category': 'Kaytoo (Finetuned)',
+                'seed': data.get('seed', 0),
+                'test1_name': data.get('test1_name', 'unknown'),
+                'test2_name': data.get('test2_name', 'unknown'),
+                'test1_acc': data.get('test1_acc', np.nan),
+                'test1_acc_labelled': data.get('test1_acc_labelled', np.nan),
+                'test1_acc_background': data.get('test1_acc_background', np.nan),
+                'test1_macro_precision': np.nan,
+                'test1_macro_recall': np.nan,
+                'test1_macro_f1': np.nan,
+                'test1_jaccard': np.nan,
+                'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+                'test2_acc': data.get('test2_acc', np.nan),
+                'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
+                'test2_acc_background': data.get('test2_acc_background', np.nan),
+                'test2_macro_precision': np.nan,
+                'test2_macro_recall': np.nan,
+                'test2_macro_f1': np.nan,
+                'test2_jaccard': np.nan,
+                'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+                'status': data.get('status', 'unknown'),
+            }
+            _read_adaptive_from_dir(result_file.parent, row)
+            results.append(row)
+            continue
+
         train_dataset = parts[0]
         method_type = parts[1]
         config_parts = []
@@ -149,17 +182,26 @@ def _extract_report_metrics(report):
 def _metrics_from_csv(csv_path: Path) -> dict:
     """Compute metrics at both threshold=0.5 and oracle per-class thresholds.
 
+    Macro averages are restricted to classes that actually appear (have at least
+    one positive ground-truth label) in the test set, so absent classes don't
+    dilute precision/recall/f1.
+
     Returns a dict with keys:
-        half_f1, half_acc, half_acc_labelled
-        oracle_f1, oracle_acc, oracle_acc_labelled
+        half_precision, half_recall, half_f1, half_jaccard,
+        half_acc, half_acc_labelled,
+        oracle_precision, oracle_recall, oracle_f1, oracle_jaccard,
+        oracle_acc, oracle_acc_labelled
     All NaN when no true_ columns are present.
     """
     from sklearn.metrics import f1_score as _f1
     from sklearn.metrics import precision_recall_fscore_support as _prf
+    from sklearn.metrics import jaccard_score as _jaccard
 
     nan_result = {k: np.nan for k in (
-        'half_f1', 'half_acc', 'half_acc_labelled',
-        'oracle_f1', 'oracle_acc', 'oracle_acc_labelled',
+        'half_precision', 'half_recall', 'half_f1', 'half_jaccard',
+        'half_acc', 'half_acc_labelled',
+        'oracle_precision', 'oracle_recall', 'oracle_f1', 'oracle_jaccard',
+        'oracle_acc', 'oracle_acc_labelled',
     )}
 
     df = pd.read_csv(csv_path, index_col='filename')
@@ -172,15 +214,28 @@ def _metrics_from_csv(csv_path: Path) -> dict:
     trues = df[true_cols].values.astype(np.int32)
     labelled = trues.sum(axis=1) > 0
 
+    # Only average over classes that actually appear in the ground truth
+    present = trues.sum(axis=0) > 0
+    present_idx = np.where(present)[0]
+
     def _acc(preds):
         correct = np.all(preds == trues, axis=1)
         a = correct.mean() * 100
         al = correct[labelled].mean() * 100 if labelled.any() else np.nan
         return a, al
 
+    def _macro(preds):
+        if len(present_idx) == 0:
+            return np.nan, np.nan, np.nan, np.nan
+        t = trues[:, present_idx]
+        p = preds[:, present_idx]
+        prec, rec, f1, _ = _prf(t, p, average='macro', zero_division=0)
+        jac = float(_jaccard(t, p, average='macro', zero_division=0))
+        return float(prec), float(rec), float(f1), jac
+
     # --- threshold 0.5 ---
     preds_half = (probs >= 0.5).astype(int)
-    _, _, f1_half, _ = _prf(trues, preds_half, average='macro', zero_division=0)
+    prec_half, rec_half, f1_half, jac_half = _macro(preds_half)
     acc_half, acc_lab_half = _acc(preds_half)
 
     # --- oracle per-class thresholds ---
@@ -197,41 +252,48 @@ def _metrics_from_csv(csv_path: Path) -> dict:
                 best = f
                 thresholds[c] = t
     preds_oracle = (probs >= thresholds[np.newaxis, :]).astype(int)
-    _, _, f1_oracle, _ = _prf(trues, preds_oracle, average='macro', zero_division=0)
+    prec_oracle, rec_oracle, f1_oracle, jac_oracle = _macro(preds_oracle)
     acc_oracle, acc_lab_oracle = _acc(preds_oracle)
 
     return {
-        'half_f1':             float(f1_half),
+        'half_precision':      prec_half,
+        'half_recall':         rec_half,
+        'half_f1':             f1_half,
+        'half_jaccard':        jac_half,
         'half_acc':            float(acc_half),
         'half_acc_labelled':   float(acc_lab_half),
-        'oracle_f1':           float(f1_oracle),
+        'oracle_precision':    prec_oracle,
+        'oracle_recall':       rec_oracle,
+        'oracle_f1':           f1_oracle,
+        'oracle_jaccard':      jac_oracle,
         'oracle_acc':          float(acc_oracle),
         'oracle_acc_labelled': float(acc_lab_oracle),
     }
 
 
 def _read_adaptive_from_dir(exp_dir: Path, row: dict):
-    """Populate adaptive_* and (when missing) half_* metrics in *row* from predictions CSVs."""
+    """Populate adaptive_* and (when missing) half_* metrics in *row* from predictions CSVs.
+
+    Precision, recall, f1 and jaccard are all computed only over the classes
+    that actually appear in the test set ground truth.
+    """
     csvs = sorted(exp_dir.glob('predictions_*.csv'))
     if not csvs:
         return
-    slot_pairs = [
-        ('test1_macro_f1', 'test1_acc', 'test1_acc_labelled',
-         'test1_adaptive_f1', 'test1_adaptive_acc', 'test1_adaptive_acc_labelled'),
-        ('test2_macro_f1', 'test2_acc', 'test2_acc_labelled',
-         'test2_adaptive_f1', 'test2_adaptive_acc', 'test2_adaptive_acc_labelled'),
-    ]
-    for slots, csv_path in zip(slot_pairs, csvs):
-        s_f1, s_acc, s_acl, s_af1, s_aacc, s_aacl = slots
+    prefixes = ['test1', 'test2']
+    for prefix, csv_path in zip(prefixes, csvs):
         m = _metrics_from_csv(csv_path)
-        # always write oracle metrics
-        row[s_af1]  = m['oracle_f1']
-        row[s_aacc] = m['oracle_acc']
-        row[s_aacl] = m['oracle_acc_labelled']
-        # fill half metrics only when missing (pretrained models lack report JSON)
-        if np.isnan(row.get(s_f1,  np.nan)): row[s_f1]  = m['half_f1']
-        if np.isnan(row.get(s_acc, np.nan)): row[s_acc] = m['half_acc']
-        if np.isnan(row.get(s_acl, np.nan)): row[s_acl] = m['half_acc_labelled']
+        # always write oracle (adaptive-threshold) metrics
+        row[f'{prefix}_adaptive_f1']             = m['oracle_f1']
+        row[f'{prefix}_adaptive_acc']            = m['oracle_acc']
+        row[f'{prefix}_adaptive_acc_labelled']   = m['oracle_acc_labelled']
+        # fill half-threshold metrics when not already set by a report JSON
+        if np.isnan(row.get(f'{prefix}_macro_precision', np.nan)): row[f'{prefix}_macro_precision'] = m['half_precision']
+        if np.isnan(row.get(f'{prefix}_macro_recall',    np.nan)): row[f'{prefix}_macro_recall']    = m['half_recall']
+        if np.isnan(row.get(f'{prefix}_macro_f1',        np.nan)): row[f'{prefix}_macro_f1']        = m['half_f1']
+        if np.isnan(row.get(f'{prefix}_jaccard',         np.nan)): row[f'{prefix}_jaccard']         = m['half_jaccard']
+        if np.isnan(row.get(f'{prefix}_acc',             np.nan)): row[f'{prefix}_acc']             = m['half_acc']
+        if np.isnan(row.get(f'{prefix}_acc_labelled',    np.nan)): row[f'{prefix}_acc_labelled']    = m['half_acc_labelled']
 
 
 def _read_reports_from_dir(report_dir, model, row):
