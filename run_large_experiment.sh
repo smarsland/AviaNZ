@@ -171,6 +171,191 @@ run_cmd python train.py \
     --model-type   "$MODEL_TYPE" \
     --spec-transform "Box-Cox"
 
+# ── RegNet on large DOC — k-bird prior ───────────────────────────────────────
+RUN_NAME="${MODEL_TYPE}_on_large_doc_boxcox_kbird4"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
+
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
+    echo ""
+    echo "============================================================"
+    echo "  $RUN_NAME"
+    echo "============================================================"
+    run_cmd python train.py \
+        "$LARGE_DOC_TRAIN" "$OUT_DIR" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
+        --visualize-attention \
+        --viz-samples  "$VIZ_SAMPLES" \
+        --epochs       "$EPOCHS" \
+        --patience     "$PATIENCE" \
+        --mixup        "$MIXUP" \
+        --model-type   "$MODEL_TYPE" \
+        --spec-transform "Box-Cox" --kbird-prior 4.0
+fi
+
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
+echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_DOC_TRAIN" "$MATCHED_OUT_DIR" \
+    --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox" --kbird-prior 4.0
+
+# ── RegNet on large DOC — background subtraction + median filter ──────────────
+RUN_NAME="${MODEL_TYPE}_on_large_doc_boxcox_bgmed"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
+
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
+    echo ""
+    echo "============================================================"
+    echo "  $RUN_NAME"
+    echo "============================================================"
+    run_cmd python train.py \
+        "$LARGE_DOC_TRAIN" "$OUT_DIR" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
+        --visualize-attention \
+        --viz-samples  "$VIZ_SAMPLES" \
+        --epochs       "$EPOCHS" \
+        --patience     "$PATIENCE" \
+        --mixup        "$MIXUP" \
+        --model-type   "$MODEL_TYPE" \
+        --spec-transform "Box-Cox" --bg-subtract --median-filter
+fi
+
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
+echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_DOC_TRAIN" "$MATCHED_OUT_DIR" \
+    --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox" --bg-subtract --median-filter
+
+# ── RegNet on large DOC — no background samples ───────────────────────────────
+RUN_NAME="${MODEL_TYPE}_on_large_doc_boxcox_nobg"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
+
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
+    echo ""
+    echo "============================================================"
+    echo "  $RUN_NAME"
+    echo "============================================================"
+    run_cmd python train.py \
+        "$LARGE_DOC_TRAIN" "$OUT_DIR" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
+        --visualize-attention \
+        --viz-samples  "$VIZ_SAMPLES" \
+        --epochs       "$EPOCHS" \
+        --patience     "$PATIENCE" \
+        --mixup        "$MIXUP" \
+        --model-type   "$MODEL_TYPE" \
+        --spec-transform "Box-Cox" --no-background
+fi
+
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
+echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_DOC_TRAIN" "$MATCHED_OUT_DIR" \
+    --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox" --no-background
+
+# ── RegNet on large DOC — delta + delta-delta channels ────────────────────────
+RUN_NAME="${MODEL_TYPE}_on_large_doc_boxcox_deltas"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
+
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
+    echo ""
+    echo "============================================================"
+    echo "  $RUN_NAME"
+    echo "============================================================"
+    run_cmd python train.py \
+        "$LARGE_DOC_TRAIN" "$OUT_DIR" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
+        --visualize-attention \
+        --viz-samples  "$VIZ_SAMPLES" \
+        --epochs       "$EPOCHS" \
+        --patience     "$PATIENCE" \
+        --mixup        "$MIXUP" \
+        --model-type   "$MODEL_TYPE" \
+        --spec-transform "Box-Cox" --deltas
+fi
+
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
+echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_DOC_TRAIN" "$MATCHED_OUT_DIR" \
+    --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox" --deltas
+
+# ── RegNet on large AviaNZ — delta + delta-delta channels ─────────────────────
+RUN_NAME="${MODEL_TYPE}_on_large_avianz_boxcox_deltas"
+OUT_DIR="$TESTS_BASE/$RUN_NAME"
+
+if [ -f "$OUT_DIR/${MODEL_TYPE}_model.pt" ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  [skip] $RUN_NAME (already trained)"
+else
+    echo ""
+    echo "============================================================"
+    echo "  $RUN_NAME"
+    echo "============================================================"
+    run_cmd python train.py \
+        "$LARGE_AVIANZ_TRAIN" "$OUT_DIR" \
+        --test-folder  "$LARGE_AVIANZ_TEST" \
+        --test-folder2 "$LARGE_DOC_TEST" \
+        --visualize-attention \
+        --viz-samples  "$VIZ_SAMPLES" \
+        --epochs       "$EPOCHS" \
+        --patience     "$PATIENCE" \
+        --mixup        "$MIXUP" \
+        --model-type   "$MODEL_TYPE" \
+        --spec-transform "Box-Cox" --deltas
+fi
+
+MATCHED_OUT_DIR="$MATCHED_TESTS_BASE/$RUN_NAME"
+[ "$DRY_RUN" -eq 0 ] && mkdir -p "$MATCHED_OUT_DIR"
+echo ""
+echo "  -- Reloading $RUN_NAME → evaluate on matched test splits --"
+run_cmd python train.py \
+    "$LARGE_AVIANZ_TRAIN" "$MATCHED_OUT_DIR" \
+    --eval-only \
+    --checkpoint   "$OUT_DIR/${MODEL_TYPE}_model.pt" \
+    --test-folder  "$MATCHED_AVIANZ_TEST" \
+    --test-folder2 "$MATCHED_DOC_TEST" \
+    --model-type   "$MODEL_TYPE" \
+    --spec-transform "Box-Cox" --deltas
+
 echo ""
 echo "############################################################"
 echo "  All large training runs complete."
