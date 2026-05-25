@@ -550,15 +550,32 @@ def main():
 
     # Save bird map CSV (needed by inference)
     bird_map_deploy = deploy_dir / 'finetuned_kaytoo_bird_map.csv'
+    # Build bird map with the exact columns BirdNamer expects:
+    # CommonName, eBird, ScientificName, ExtraName, TrainSamples, ValSamples
+    # Pull as much info as possible from the pretrained bird map; fall back to
+    # the eBird code for anything that isn't in it.
+    pretrained_bm = bird_map_df.set_index('eBird') if 'eBird' in bird_map_df.columns else pd.DataFrame()
     rows_out = []
     for code in all_codes:
-        # Look up common name from birdnames if available
-        common = code
-        try:
-            common = birdnames.ebird_to_common(code)
-        except Exception:
-            pass
-        rows_out.append({'eBird': code, 'CommonName': common})
+        if not pretrained_bm.empty and code in pretrained_bm.index:
+            row = pretrained_bm.loc[code]
+            rows_out.append({
+                'CommonName':     row.get('CommonName', code),
+                'eBird':          code,
+                'ScientificName': row.get('ScientificName', code),
+                'ExtraName':      row.get('ExtraName', code),
+                'TrainSamples':   0,
+                'ValSamples':     0,
+            })
+        else:
+            rows_out.append({
+                'CommonName':     code,
+                'eBird':          code,
+                'ScientificName': code,
+                'ExtraName':      code,
+                'TrainSamples':   0,
+                'ValSamples':     0,
+            })
     pd.DataFrame(rows_out).to_csv(bird_map_deploy, index=False)
     print(f"  Saved bird map → {bird_map_deploy}")
 
