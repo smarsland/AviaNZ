@@ -379,6 +379,7 @@ def main():
 
     from bird_naming_utils import BirdNamer
     from kaytoo_infer import DefaultConfig, ModelParameters, Models
+    import kaytoo_train_2_07 as _kt
     from kaytoo_train_2_07 import (
         AudioConfig,
         TrainingParameters,
@@ -389,6 +390,17 @@ def main():
         load_pt_model,
         save_model_config,
     )
+
+    # Patch pl.Trainer in kaytoo's own namespace so that DDP always uses
+    # find_unused_parameters=True.  This is needed because the backbone is
+    # frozen for the first few epochs, leaving those parameters unused in the
+    # forward pass.  We must NOT touch kaytoo_train_2_07.py itself.
+    _OrigTrainer = pl.Trainer
+    class _FTTrainer(_OrigTrainer):
+        def __init__(self, *args, **kwargs):
+            kwargs.setdefault('strategy', 'ddp_find_unused_parameters_true')
+            super().__init__(*args, **kwargs)
+    _kt.pl.Trainer = _FTTrainer
 
     if args.cpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = ''
