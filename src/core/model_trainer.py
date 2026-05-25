@@ -1209,9 +1209,7 @@ class Trainer:
             print("WARNING: --eval-only with no --test-folder specified; nothing to evaluate.")
             return {}
 
-        # Save eval-only results into a subdirectory so they don't mix with the
-        # training-run outputs and are easy to find.
-        eval_out = os.path.join(self.output_folder, 'matched_eval')
+        eval_out = self.output_folder
         os.makedirs(eval_out, exist_ok=True)
         evaluator = EvaluationManager(eval_out, self.data['class_names'], is_multilabel=True)
 

@@ -7,7 +7,7 @@ set -e
 #   - Takes up to 1000 samples per species from each dataset independently
 #   - Does NOT do record-for-record matching or use the corrections CSV
 #   - Uses the best-performing model's spectrogram settings:
-#       Reassigned spectrogram, Hamming window, Linear frequency scale
+#       Standard spectrogram, Hamming window, Mel frequency scale
 #   - Includes audio so Kaytoo and BirdNET can be evaluated
 #
 # Usage:
@@ -20,9 +20,9 @@ set -e
 OVERWRITE_FLAG=""
 MAX_PER_SPECIES=300
 NO_AUDIO_FLAG=""
-SPEC_TYPE="Reassigned"
+SPEC_TYPE="Standard"
 WINDOW_TYPE="Hamming"
-SG_SCALE="Linear"
+SG_SCALE="Mel Frequency"
 MIN_PER_CLASS=50
 TEST_RATIO=0.25
 

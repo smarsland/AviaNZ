@@ -14,7 +14,7 @@ set -e
 FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N=""
-SPEC_TYPE="Reassigned"
+SPEC_TYPE="Standard"
 WINDOW_TYPE="Hamming"
 SG_SCALE="Mel Frequency"
 
