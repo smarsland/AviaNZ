@@ -56,6 +56,7 @@ def load_from_result_json(results_dir):
                 'test1_macro_f1': np.nan,
                 'test1_jaccard': np.nan,
                 'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+                'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -64,6 +65,7 @@ def load_from_result_json(results_dir):
                 'test2_macro_f1': np.nan,
                 'test2_jaccard': np.nan,
                 'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+                'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
                 'status': data.get('status', 'unknown'),
             }
             _read_adaptive_from_dir(result_file.parent, row)
@@ -89,6 +91,7 @@ def load_from_result_json(results_dir):
                 'test1_macro_f1': np.nan,
                 'test1_jaccard': np.nan,
                 'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+                'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -97,6 +100,7 @@ def load_from_result_json(results_dir):
                 'test2_macro_f1': np.nan,
                 'test2_jaccard': np.nan,
                 'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+                'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
                 'status': data.get('status', 'unknown'),
             }
             _read_adaptive_from_dir(result_file.parent, row)
@@ -147,6 +151,7 @@ def load_from_result_json(results_dir):
             'test1_macro_f1': np.nan,
             'test1_jaccard': np.nan,
             'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+            'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
             'test2_acc': data.get('test2_acc', np.nan),
             'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
             'test2_acc_background': data.get('test2_acc_background', np.nan),
@@ -155,6 +160,7 @@ def load_from_result_json(results_dir):
             'test2_macro_f1': np.nan,
             'test2_jaccard': np.nan,
             'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+            'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
             'status': data.get('status', 'unknown'),
         }
         _read_adaptive_from_dir(result_file.parent, row)
@@ -179,8 +185,9 @@ def _extract_report_metrics(report):
     }
 
 
-def _metrics_from_csv(csv_path: Path) -> dict:
-    """Compute metrics at both threshold=0.5 and oracle per-class thresholds.
+def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> dict:
+    """Compute metrics at threshold=0.5, self-tuned oracle thresholds, and optionally
+    cross-tuned thresholds supplied via *apply_thresholds*.
 
     Macro averages are restricted to classes that actually appear (have at least
     one positive ground-truth label) in the test set, so absent classes don't
@@ -190,7 +197,9 @@ def _metrics_from_csv(csv_path: Path) -> dict:
         half_precision, half_recall, half_f1, half_jaccard,
         half_acc, half_acc_labelled,
         oracle_precision, oracle_recall, oracle_f1, oracle_jaccard,
-        oracle_acc, oracle_acc_labelled
+        oracle_acc, oracle_acc_labelled,
+        oracle_thresholds,           # 1-D array of per-class thresholds
+        cross_f1, cross_acc, cross_acc_labelled  (only when apply_thresholds given)
     All NaN when no true_ columns are present.
     """
     from sklearn.metrics import f1_score as _f1
@@ -202,7 +211,9 @@ def _metrics_from_csv(csv_path: Path) -> dict:
         'half_acc', 'half_acc_labelled',
         'oracle_precision', 'oracle_recall', 'oracle_f1', 'oracle_jaccard',
         'oracle_acc', 'oracle_acc_labelled',
+        'cross_f1', 'cross_acc', 'cross_acc_labelled',
     )}
+    nan_result['oracle_thresholds'] = None
 
     df = pd.read_csv(csv_path, index_col='filename')
     class_cols = [c for c in df.columns if not c.startswith('true_')]
@@ -238,7 +249,7 @@ def _metrics_from_csv(csv_path: Path) -> dict:
     prec_half, rec_half, f1_half, jac_half = _macro(preds_half)
     acc_half, acc_lab_half = _acc(preds_half)
 
-    # --- oracle per-class thresholds ---
+    # --- oracle per-class thresholds (tuned on this same split) ---
     candidates = np.linspace(0.0, 1.0, 201)
     thresholds = np.full(probs.shape[1], 0.5, dtype=np.float32)
     for c in range(probs.shape[1]):
@@ -255,7 +266,7 @@ def _metrics_from_csv(csv_path: Path) -> dict:
     prec_oracle, rec_oracle, f1_oracle, jac_oracle = _macro(preds_oracle)
     acc_oracle, acc_lab_oracle = _acc(preds_oracle)
 
-    return {
+    result = {
         'half_precision':      prec_half,
         'half_recall':         rec_half,
         'half_f1':             f1_half,
@@ -268,11 +279,30 @@ def _metrics_from_csv(csv_path: Path) -> dict:
         'oracle_jaccard':      jac_oracle,
         'oracle_acc':          float(acc_oracle),
         'oracle_acc_labelled': float(acc_lab_oracle),
+        'oracle_thresholds':   thresholds,
+        'cross_f1':            np.nan,
+        'cross_acc':           np.nan,
+        'cross_acc_labelled':  np.nan,
     }
+
+    # --- cross thresholds: tuned on the other split, applied here ---
+    if apply_thresholds is not None and len(apply_thresholds) == probs.shape[1]:
+        preds_cross = (probs >= apply_thresholds[np.newaxis, :]).astype(int)
+        _, _, f1_cross, _ = _macro(preds_cross)
+        acc_cross, acc_lab_cross = _acc(preds_cross)
+        result['cross_f1']           = f1_cross
+        result['cross_acc']          = float(acc_cross)
+        result['cross_acc_labelled'] = float(acc_lab_cross)
+
+    return result
 
 
 def _read_adaptive_from_dir(exp_dir: Path, row: dict):
-    """Populate adaptive_* and (when missing) half_* metrics in *row* from predictions CSVs.
+    """Populate adaptive_*, cross_*, and (when missing) half_* metrics in *row*
+    from predictions CSVs.
+
+    - adaptive (self-tuned): thresholds tuned on the same split they are evaluated on.
+    - cross-tuned: thresholds tuned on the *other* split, then applied to this split.
 
     Precision, recall, f1 and jaccard are all computed only over the classes
     that actually appear in the test set ground truth.
@@ -281,12 +311,29 @@ def _read_adaptive_from_dir(exp_dir: Path, row: dict):
     if not csvs:
         return
     prefixes = ['test1', 'test2']
-    for prefix, csv_path in zip(prefixes, csvs):
-        m = _metrics_from_csv(csv_path)
-        # always write oracle (adaptive-threshold) metrics
+
+    # First pass: compute self-tuned metrics and collect oracle thresholds.
+    metrics_list = [_metrics_from_csv(csv_path) for csv_path in csvs]
+
+    # Second pass: apply each split's oracle thresholds to the *other* split.
+    for i, (prefix, m) in enumerate(zip(prefixes, metrics_list)):
+        other_idx = 1 - i
+        other_thresholds = metrics_list[other_idx]['oracle_thresholds'] if len(metrics_list) > 1 else None
+        if other_thresholds is not None:
+            m_cross = _metrics_from_csv(csvs[i], apply_thresholds=other_thresholds)
+            m['cross_f1']           = m_cross['cross_f1']
+            m['cross_acc']          = m_cross['cross_acc']
+            m['cross_acc_labelled'] = m_cross['cross_acc_labelled']
+
+    for prefix, m in zip(prefixes, metrics_list):
+        # always write oracle (self-tuned adaptive-threshold) metrics
         row[f'{prefix}_adaptive_f1']             = m['oracle_f1']
         row[f'{prefix}_adaptive_acc']            = m['oracle_acc']
         row[f'{prefix}_adaptive_acc_labelled']   = m['oracle_acc_labelled']
+        # cross-tuned metrics (other split's thresholds applied here)
+        row[f'{prefix}_cross_f1']                = m['cross_f1']
+        row[f'{prefix}_cross_acc']               = m['cross_acc']
+        row[f'{prefix}_cross_acc_labelled']      = m['cross_acc_labelled']
         # fill half-threshold metrics when not already set by a report JSON
         if np.isnan(row.get(f'{prefix}_macro_precision', np.nan)): row[f'{prefix}_macro_precision'] = m['half_precision']
         if np.isnan(row.get(f'{prefix}_macro_recall',    np.nan)): row[f'{prefix}_macro_recall']    = m['half_recall']
@@ -339,10 +386,12 @@ def _empty_row(name, train_dataset, model, transform):
         'test1_macro_precision': np.nan, 'test1_macro_recall': np.nan,
         'test1_macro_f1': np.nan, 'test1_jaccard': np.nan,
         'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+        'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
         'test2_acc': np.nan, 'test2_acc_labelled': np.nan, 'test2_acc_background': np.nan,
         'test2_macro_precision': np.nan, 'test2_macro_recall': np.nan,
         'test2_macro_f1': np.nan, 'test2_jaccard': np.nan,
         'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+        'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
         'status': 'unknown',
     }
 
@@ -404,12 +453,18 @@ def create_overview_table(df, output_dir):
     """Create CSV with ALL results"""
     cols = [
         'name', 'train_dataset', 'method', 'config', 'category',
+        # F1 scores immediately after identifiers
+        'test1_macro_f1', 'test1_adaptive_f1', 'test1_cross_f1',
+        'test2_macro_f1', 'test2_adaptive_f1', 'test2_cross_f1',
+        # then the rest
         'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
-        'test1_macro_precision', 'test1_macro_recall', 'test1_macro_f1', 'test1_jaccard',
-        'test1_adaptive_f1',
+        'test1_macro_precision', 'test1_macro_recall', 'test1_jaccard',
+        'test1_adaptive_acc', 'test1_adaptive_acc_labelled',
+        'test1_cross_acc', 'test1_cross_acc_labelled',
         'test2_name', 'test2_acc', 'test2_acc_labelled', 'test2_acc_background',
-        'test2_macro_precision', 'test2_macro_recall', 'test2_macro_f1', 'test2_jaccard',
-        'test2_adaptive_f1',
+        'test2_macro_precision', 'test2_macro_recall', 'test2_jaccard',
+        'test2_adaptive_acc', 'test2_adaptive_acc_labelled',
+        'test2_cross_acc', 'test2_cross_acc_labelled',
         'status',
     ]
     cols = [c for c in cols if c in df.columns]
@@ -695,72 +750,93 @@ def print_model_comparison(df):
             't1':     _fmt(row.get('test1_acc',                   np.nan)),
             't1lab':  _fmt(row.get('test1_acc_labelled',           np.nan)),
             't1f1':   _fmtf(row.get('test1_macro_f1',             np.nan)),
+            # self-tuned (oracle) for test1
             't1af1':  _fmtf(row.get('test1_adaptive_f1',          np.nan)),
             't1a':    _fmt(row.get('test1_adaptive_acc',           np.nan)),
             't1alab': _fmt(row.get('test1_adaptive_acc_labelled',  np.nan)),
+            # cross-tuned for test1 (thresholds tuned on test2, applied to test1)
+            't1xf1':  _fmtf(row.get('test1_cross_f1',             np.nan)),
+            't1x':    _fmt(row.get('test1_cross_acc',              np.nan)),
+            't1xlab': _fmt(row.get('test1_cross_acc_labelled',     np.nan)),
             't2':     _fmt(row.get('test2_acc',                   np.nan)),
             't2lab':  _fmt(row.get('test2_acc_labelled',           np.nan)),
             't2f1':   _fmtf(row.get('test2_macro_f1',             np.nan)),
+            # self-tuned (oracle) for test2
             't2af1':  _fmtf(row.get('test2_adaptive_f1',          np.nan)),
             't2a':    _fmt(row.get('test2_adaptive_acc',           np.nan)),
             't2alab': _fmt(row.get('test2_adaptive_acc_labelled',  np.nan)),
+            # cross-tuned for test2 (thresholds tuned on test1, applied to test2)
+            't2xf1':  _fmtf(row.get('test2_cross_f1',             np.nan)),
+            't2x':    _fmt(row.get('test2_cross_acc',              np.nan)),
+            't2xlab': _fmt(row.get('test2_cross_acc_labelled',     np.nan)),
             't1n':    str(row.get('test1_name', '?')),
             't2n':    str(row.get('test2_name', '?')),
         }
 
-    rows = []
-    exp_names = {}  # label -> exp_name, for tuned lookup
-    # ---- Best REGNET (matched / sweep datasets) ----------------------------
-    regnet_df = df[
-        (df['category'] == 'REGNET') &
-        (~df['train_dataset'].isin(['large_doc', 'large_avianz']))
-    ].copy()
-    regnet_df = regnet_df.dropna(subset=['test1_acc', 'test2_acc'])
-    if not regnet_df.empty:
-        regnet_df['_avg'] = (regnet_df['test1_acc'] + regnet_df['test2_acc']) / 2
-        best = regnet_df.sort_values('_avg', ascending=False).iloc[0]
-        rows.append(('Best REGNET (matched)', best['name'], _collect(best)))
-    else:
-        rows.append(('Best REGNET (matched)', '(no results)', {}))
+    def _build_rows(sort_col1, sort_col2):
+        """Return rows list ranked by avg of sort_col1+sort_col2 for REGNET groups."""
+        rows = []
 
-    # ---- Best REGNET on large DOC dataset -----------------------------------
-    large_df = df[
-        (df['category'] == 'REGNET') &
-        (df['train_dataset'] == 'large_doc')
-    ].copy()
-    large_df = large_df.dropna(subset=['test1_acc', 'test2_acc'])
-    if not large_df.empty:
-        large_df['_avg'] = (large_df['test1_acc'] + large_df['test2_acc']) / 2
-        best_large = large_df.sort_values('_avg', ascending=False).iloc[0]
-        rows.append(('Best REGNET (large DOC)', best_large['name'], _collect(best_large)))
-    # skip silently if not yet run
+        # ---- Top-3 REGNET (matched) -----------------------------------------
+        base_df = df[
+            (df['category'] == 'REGNET') &
+            (~df['train_dataset'].isin(['large_doc', 'large_avianz']))
+        ].copy()
+        base_df = base_df.dropna(subset=[sort_col1, sort_col2])
+        if not base_df.empty:
+            base_df['_avg'] = (base_df[sort_col1] + base_df[sort_col2]) / 2
+            for rank, (_, r) in enumerate(base_df.sort_values('_avg', ascending=False).head(3).iterrows(), 1):
+                rows.append((f'REGNET #{rank} (matched)', r['name'], _collect(r)))
+        else:
+            rows.append(('REGNET (matched)', '(no results)', {}))
 
-    # ---- Kaytoo pretrained --------------------------------------------------
-    k_df = df[df['category'] == 'Kaytoo (Pretrained)']
-    if not k_df.empty:
-        rows.append(('Kaytoo (Pretrained)', '', _collect(k_df.iloc[0])))
-    else:
-        rows.append(('Kaytoo (Pretrained)', '(no results)', {}))
+        # ---- Top-3 REGNET (large DOC) ---------------------------------------
+        large_df = df[
+            (df['category'] == 'REGNET') &
+            (df['train_dataset'] == 'large_doc')
+        ].copy()
+        large_df = large_df.dropna(subset=[sort_col1, sort_col2])
+        if not large_df.empty:
+            large_df['_avg'] = (large_df[sort_col1] + large_df[sort_col2]) / 2
+            for rank, (_, r) in enumerate(large_df.sort_values('_avg', ascending=False).head(3).iterrows(), 1):
+                rows.append((f'REGNET #{rank} (large DOC)', r['name'], _collect(r)))
 
-    # ---- BirdNET pretrained -------------------------------------------------
-    b_df = df[df['category'] == 'BirdNET (Pretrained)']
-    if not b_df.empty:
-        rows.append(('BirdNET (Pretrained)', '', _collect(b_df.iloc[0])))
-    else:
-        rows.append(('BirdNET (Pretrained)', '(no results)', {}))
+        # ---- Kaytoo pretrained ----------------------------------------------
+        k_df = df[df['category'] == 'Kaytoo (Pretrained)']
+        if not k_df.empty:
+            rows.append(('Kaytoo (Pretrained)', '', _collect(k_df.iloc[0])))
+        else:
+            rows.append(('Kaytoo (Pretrained)', '(no results)', {}))
+
+        # ---- BirdNET pretrained ---------------------------------------------
+        b_df = df[df['category'] == 'BirdNET (Pretrained)']
+        if not b_df.empty:
+            rows.append(('BirdNET (Pretrained)', '', _collect(b_df.iloc[0])))
+        else:
+            rows.append(('BirdNET (Pretrained)', '(no results)', {}))
+
+        return rows
+
+    # Build per-table row lists ranked by the metric that table displays
+    rows_half   = _build_rows('test1_macro_f1',    'test2_macro_f1')
+    rows_t1tune = _build_rows('test1_adaptive_f1', 'test2_cross_f1')
+    rows_t2tune = _build_rows('test1_cross_f1',    'test2_adaptive_f1')
 
     # ---- Print --------------------------------------------------------------
-    # Determine test-set names from first row that has them
+    # Determine test-set names from the first populated row across any table
     t1n = t2n = '?'
-    for _, _, m in rows:
-        if m:
-            t1n = m['t1n']
-            t2n = m['t2n']
+    for rows in (rows_half, rows_t1tune, rows_t2tune):
+        for _, _, m in rows:
+            if m:
+                t1n = m['t1n']
+                t2n = m['t2n']
+                break
+        if t1n != '?':
             break
 
     W = 88
 
-    def _print_table(title, acc_key1, acl_key1, f1_key1, acc_key2, acl_key2, f1_key2, f1_label, note):
+    def _print_table(title, rows, acc_key1, acl_key1, f1_key1, acc_key2, acl_key2, f1_key2, f1_label, note):
         print("\n" + "=" * W)
         print(f" {title}")
         print("=" * W)
@@ -786,18 +862,28 @@ def print_model_comparison(df):
         print("=" * W)
 
     _print_table(
-        title="RESULTS — threshold 0.5",
+        title="RESULTS — threshold 0.5  (ranked by avg macro-F1 @ 0.5)",
+        rows=rows_half,
         acc_key1='t1', acl_key1='t1lab', f1_key1='t1f1',
         acc_key2='t2', acl_key2='t2lab', f1_key2='t2f1',
         f1_label='F1',
         note="F1  = macro-F1 at fixed threshold 0.5",
     )
     _print_table(
-        title="RESULTS — oracle adaptive thresholds (upper bound)",
+        title=f"RESULTS — {t1n} thresholds applied to both  (ranked by avg F1†)",
+        rows=rows_t1tune,
         acc_key1='t1a', acl_key1='t1alab', f1_key1='t1af1',
+        acc_key2='t2x', acl_key2='t2xlab', f1_key2='t2xf1',
+        f1_label='F1†',
+        note=f"F1† = macro-F1 with per-class thresholds tuned on {t1n}, applied to both",
+    )
+    _print_table(
+        title=f"RESULTS — {t2n} thresholds applied to both  (ranked by avg F1‡)",
+        rows=rows_t2tune,
+        acc_key1='t1x', acl_key1='t1xlab', f1_key1='t1xf1',
         acc_key2='t2a', acl_key2='t2alab', f1_key2='t2af1',
-        f1_label='F1*',
-        note="F1* = macro-F1 with per-class threshold tuned on the same split",
+        f1_label='F1‡',
+        note=f"F1‡ = macro-F1 with per-class thresholds tuned on {t2n}, applied to both",
     )
     print()
 
