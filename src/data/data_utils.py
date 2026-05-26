@@ -361,17 +361,19 @@ class SpectrogramDataset(Dataset):
             data = self._mix_noise_2d(data)
 
         # Apply spectrogram transformation on the 2D raw data, before padding.
-        # This ensures normalization (e.g. LogMinMax min-max) is computed only from
-        # the real signal, and zero-padded columns will land at the noise floor (≈0)
-        # rather than distorting the normalization range.
-        data = self.apply_spec_transform(data)
-
-        # Background subtraction / median filter must also run before padding.
-        # Both operations estimate statistics across the time axis; padding zeros
-        # would corrupt those estimates (bg_subtract's bottom-10% would be all zeros,
-        # and then z-score normalization would make the padding non-zero).
-        if self.bg_subtract or self.median_filter:
+        # For LogMinMax, background subtraction must happen between the log step and
+        # the min-max step: bg_subtract needs log-domain data where background has a
+        # meaningful non-zero level.  After min-max normalization the background is
+        # already mapped to 0, making bg_subtract a no-op.
+        # For all other transforms, bg_subtract runs after the transform as before.
+        if self.spec_transform == "LogMinMax" and (self.bg_subtract or self.median_filter):
+            data = self.apply_spec_transform_log_only(data)
             data = normalize_spectrogram(data, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
+            data = self.apply_spec_transform_minmax_only(data)
+        else:
+            data = self.apply_spec_transform(data)
+            if self.bg_subtract or self.median_filter:
+                data = normalize_spectrogram(data, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
 
         # Pad to fixed size with 0 (= silence / noise floor in transform space) and add channel dim
         x = self.apply_padding_and_add_channels(data)
@@ -441,6 +443,24 @@ class SpectrogramDataset(Dataset):
             y = torch.zeros_like(y)
         
         return x, y
+
+    def apply_spec_transform_log_only(self, sg):
+        """First half of LogMinMax: log + top_db clamp, without the min-max step."""
+        LOG_OFFSET = 1e-7
+        TOP_DB_NATS = 18.4206
+        sg = np.maximum(sg, 0.0)
+        sg = np.log(sg + LOG_OFFSET)
+        sg_max = sg.max()
+        sg = np.maximum(sg, sg_max - TOP_DB_NATS)
+        return sg
+
+    def apply_spec_transform_minmax_only(self, sg):
+        """Second half of LogMinMax: per-clip min-max normalization to [0, 1]."""
+        sg_min = sg.min()
+        sg_max = sg.max()
+        if sg_max - sg_min > 1e-6:
+            return (sg - sg_min) / (sg_max - sg_min)
+        return np.zeros_like(sg)
 
     def apply_spec_transform(self, sg):
         """Apply spectrogram transformation (log, PCEN, etc.).
