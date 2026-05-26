@@ -317,7 +317,7 @@ class SpectrogramDataset(Dataset):
             print(f"Median filtering: enabled")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
-        print(f"Time-axis padding: RANDOM SAMPLING (samples from per-frequency distribution, no repetition/silence artifacts)")
+        print(f"Time-axis padding: ZERO PADDING")
         print(f"Final image size: {img_height}x{final_width}")
         print(f"AST patches (16x16): {height_patches}x{width_patches} = {total_patches} total patches")
     
@@ -352,37 +352,38 @@ class SpectrogramDataset(Dataset):
         if self.training and self.background_prob > 0 and self.rng.rand() < self.background_prob:
             data = get_background_spectrogram(data)
             replace_with_background = True
-        
-        # Process the spectrogram
+
+        # Noise mixing must happen in the raw power domain (before log transform).
+        # Do not noise-mix all-zero-label (background) samples or background replacements.
+        is_all_zero_label = bool((self.labels[idx].sum() == 0).item())
+        if (self.training and not is_all_zero_label and not replace_with_background
+                and len(self.noise_filenames) > 0 and self.noise_ratio > 0):
+            data = self._mix_noise_2d(data)
+
+        # Apply spectrogram transformation on the 2D raw data, before padding.
+        # This ensures normalization (e.g. LogMinMax min-max) is computed only from
+        # the real signal, and zero-padded columns will land at the noise floor (≈0)
+        # rather than distorting the normalization range.
+        data = self.apply_spec_transform(data)
+
+        # Pad to fixed size with 0 (= silence / noise floor in transform space) and add channel dim
         x = self.apply_padding_and_add_channels(data)
         assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
-        
+
         # Apply temporal roll (random circular shift along time axis) during training
         # shift_amount is tracked so the AST attention channel can be rolled identically.
         shift_amount = 0
         if self.use_temporal_roll and self.training:
             shift_amount = self.rng.randint(0, x.shape[1])
             x = np.roll(x, shift_amount, axis=1)
-        
+
         x = self.apply_crop(x)
         assert x.ndim == 3, f"After crop should be 3D (H,W,C), got {x.shape}"
-        
+
         # Apply width downsampling if specified
         if self.width_downsizing and self.width_downsizing > 1:
             x = x[:, ::self.width_downsizing, :]
             assert x.ndim == 3, f"After downsampling should be 3D (H,W,C), got {x.shape}"
-        
-        # Apply noise mixing if training
-        # Do not noise-mix explicit background/noise samples (all-zero labels)
-        # They should remain pure negatives to teach rejection.
-        is_all_zero_label = bool((self.labels[idx].sum() == 0).item())
-        if self.training and (not is_all_zero_label) and len(self.noise_filenames) > 0 and self.noise_ratio > 0:
-            x = self.mix_with_noise(x)
-            assert x.ndim == 3, f"After noise mix should be 3D (H,W,C), got {x.shape}"
-        
-        # Apply spectrogram transformation
-        x = self.apply_spec_transform(x)
-        assert x.ndim == 3, f"After transform should be 3D (H,W,C), got {x.shape}"
         
         # Apply preprocessing if enabled (both options work independently)
         if self.bg_subtract or self.median_filter:
@@ -490,13 +491,17 @@ class SpectrogramDataset(Dataset):
             return np.reshape(sg_transformed, size)
 
         elif self.spec_transform == "LogMinMax":
-            # Kaytoo-style normalization: log → per-clip min-max to [0, 1].
-            # The per-clip rescaling removes recording-level and microphone-gain
-            # differences between DOC and AviaNZ, which Box-Cox alone does not do.
+            # Kaytoo-style normalization: log → top_db clamp → per-clip min-max to [0,1].
+            # top_db=80: crush everything more than 80 dB below the peak to the noise
+            # floor.  In natural-log space 80 dB = 80*ln(10)/10 ≈ 18.42 nats.
+            # This means zero-padded columns (log ≈ -16) map to ≈0 after normalization,
+            # making them indistinguishable from the noise floor — same as Kaytoo.
+            TOP_DB_NATS = 18.4206  # 80 * ln(10) / 10
             sg = np.maximum(sg, 0.0)
             sg = np.log(sg + LOG_OFFSET)
-            sg_min = sg.min()
             sg_max = sg.max()
+            sg = np.maximum(sg, sg_max - TOP_DB_NATS)
+            sg_min = sg.min()
             if sg_max - sg_min > 1e-6:
                 sg = (sg - sg_min) / (sg_max - sg_min)
             else:
@@ -530,13 +535,11 @@ class SpectrogramDataset(Dataset):
     def apply_padding_and_add_channels(self, array, is_noise=False):
         """Apply padding and ensure correct number of channels.
         
-        Time axis padding: Sample from per-frequency-band distribution
-        - For each frequency row, randomly sample from existing values to fill padding
-        - Preserves per-frequency statistics without creating repetition or silence artifacts
-        - Creates statistically-similar but temporally-incoherent padding
-        - Distribution is consistent across training/validation/test (RNG state doesn't matter)
-        
-        Frequency axis: zero-padding (different recordings may have different freq ranges)
+        Both axes use zero-padding.  Zero-valued columns produce near-zero
+        conv activations, so Grad-CAM correctly ignores the padded region.
+        Random-sample padding produces non-zero activations that GAP spreads
+        uniform gradient weight over, causing Grad-CAM to spuriously highlight
+        padding — even though the model learns nothing from it.
         """
         if len(array.shape) == 2:
             array = np.expand_dims(array, axis=-1)
@@ -548,20 +551,10 @@ class SpectrogramDataset(Dataset):
             pad_h = self.img_height - h
             array = np.concatenate([array, np.zeros((pad_h, w, c))], axis=0)
         
-        # Time axis (width): PAD WITH RANDOM SAMPLES FROM PER-FREQUENCY DISTRIBUTION
+        # Time axis (width): zero-pad
         if w < self.img_width:
             pad_w = self.img_width - w
-            # For each frequency band, sample from existing values
-            padded_section = np.zeros((array.shape[0], pad_w, c))
-            for row in range(array.shape[0]):
-                for ch in range(c):
-                    # Sample from this frequency band's existing values
-                    padded_section[row, :, ch] = self.rng.choice(
-                        array[row, :, ch], 
-                        size=pad_w, 
-                        replace=True
-                    )
-            array = np.concatenate([array, padded_section], axis=1)
+            array = np.concatenate([array, np.zeros((array.shape[0], pad_w, c))], axis=1)
 
         # Channel axis: pad with zeros if needed
         if c < self.channels:
@@ -571,6 +564,46 @@ class SpectrogramDataset(Dataset):
             array = array[:, :, :self.channels]
 
         return array
+
+    def _mix_noise_2d(self, bird_2d):
+        """Mix noise into a raw power spectrogram (2D) before any log transform.
+
+        Noise mixing must happen in the linear power domain: log(a*sig + b*noise)
+        is not the same as a*log(sig) + b*log(noise).  This method is called on
+        the raw 2D array before apply_spec_transform so the math is correct.
+        """
+        if not self.noise_cache or self.noise_ratio <= 0:
+            return bird_2d
+
+        actual_ratio = np.clip(self.noise_ratio, 0.0, 0.95)
+        noise_2d = self.noise_cache[self.rng.randint(0, len(self.noise_cache))]
+
+        h_sig, w_sig = bird_2d.shape
+        h_n, w_n = noise_2d.shape
+
+        # Align frequency axis: truncate or zero-pad
+        if h_n > h_sig:
+            noise_2d = noise_2d[:h_sig, :]
+        elif h_n < h_sig:
+            noise_2d = np.concatenate([noise_2d, np.zeros((h_sig - h_n, w_n))], axis=0)
+
+        # Align time axis: random crop or tile
+        if w_n >= w_sig:
+            start = self.rng.randint(0, w_n - w_sig + 1)
+            noise_2d = noise_2d[:, start:start + w_sig]
+        else:
+            reps = int(np.ceil(w_sig / w_n))
+            noise_2d = np.tile(noise_2d, (1, reps))[:, :w_sig]
+
+        bird_linear = np.maximum(bird_2d, 0.0)
+        noise_linear = np.maximum(noise_2d, 0.0)
+
+        bird_energy = np.sqrt(np.mean(bird_linear ** 2))
+        noise_energy = np.sqrt(np.mean(noise_linear ** 2))
+        if noise_energy > 1e-8:
+            noise_linear = noise_linear * (bird_energy / noise_energy)
+
+        return (1.0 - actual_ratio) * bird_linear + actual_ratio * noise_linear
 
     def mix_with_noise(self, bird_spectrogram):
         """Mix bird spectrogram with noise spectrogram.

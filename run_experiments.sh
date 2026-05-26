@@ -90,44 +90,23 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "DRY RUN — no commands will be executed"
 fi
 
-# ── 1. Baseline: RegNet on matched DOC data (Box-Cox) ────────────────────────
-run_experiment regnet doc "$DOC_TRAIN" boxcox \
-    --spec-transform "Box-Cox"
-
-# ── 2. K-bird prior: soft constraint that ≤4 species are active per segment ──
-#    Probabilities are normalised so their sum never exceeds k=4, encoding the
-#    prior that at most ~4 birds call simultaneously.  Unlike the old k*softmax
-#    approach this does not force competition between classes.
-run_experiment regnet doc "$DOC_TRAIN" boxcox_kbird4 \
+run_experiment regnet doc "$DOC_TRAIN" baseline_doc \
     --spec-transform "Box-Cox" --kbird-prior 4.0
 
-# ── 3. Background normalisation: median filter + background subtraction ───────
-run_experiment regnet doc "$DOC_TRAIN" boxcox_bgmed \
-    --spec-transform "Box-Cox" --bg-subtract --median-filter
+run_experiment regnet doc "$DOC_TRAIN" bgmed_doc \
+    --spec-transform "Box-Cox" --bg-subtract --median-filter --kbird-prior 4.0
 
-# ── 4. AviaNZ domain-shift comparison ────────────────────────────────────────
-#    Same as run 1 but trained on AviaNZ matched data.  The gap between this and
-#    run 1 (DOC) on the two test sets quantifies cross-dataset domain shift.
-run_experiment regnet avianz "$AVIANZ_TRAIN" boxcox \
-    --spec-transform "Box-Cox"
+run_experiment regnet avianz "$AVIANZ_TRAIN" baseline_avianz \
+    --spec-transform "Box-Cox" --kbird-prior 4.0 
 
-# ── 5. No-background: ignore all-zero (silence) training samples ──────────────
-#    Removes the background class from training entirely so the model only sees
-#    segments with at least one labelled species.  Useful to check whether the
-#    background samples are helping regularisation or just adding noise.
-run_experiment regnet doc "$DOC_TRAIN" boxcox_nobg \
-    --spec-transform "Box-Cox" --no-background
+run_experiment regnet doc "$DOC_TRAIN" no_background_doc \
+    --spec-transform "Box-Cox" --no-background --bg-subtract --median-filter --kbird-prior 4.0
 
-# ── 6. Delta channels: add Δ and ΔΔ spectral channels (3-ch input) ────────────
-#    Encodes temporal rate-of-change in the spectrogram, making the model more
-#    robust to recording-condition differences (mic response, room acoustics).
-#    Matches Kaytoo's 3-channel input strategy.
-run_experiment regnet doc "$DOC_TRAIN" boxcox_deltas \
-    --spec-transform "Box-Cox" --deltas
+run_experiment regnet doc "$DOC_TRAIN" delta_doc \
+    --spec-transform "Box-Cox" --deltas --kbird-prior 4.0
 
-# ── 7. Delta channels on AviaNZ ───────────────────────────────────────────────
-run_experiment regnet avianz "$AVIANZ_TRAIN" boxcox_deltas \
-    --spec-transform "Box-Cox" --deltas
+run_experiment regnet doc "$DOC_TRAIN" sed_head_doc \
+    --spec-transform "Box-Cox" --kbird-prior 4.0 --sed-head
 
 echo ""
 echo "============================================================"
