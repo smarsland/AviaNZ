@@ -107,7 +107,8 @@ run_experiment regnet doc "$DOC_TRAIN" baseline_doc \
 
 # run_experiment regnet doc "$DOC_TRAIN" sed_head_doc \
 #     --spec-transform "Box-Cox" --kbird-prior 4.0 --sed-head
-
+run_experiment regnet doc "$DOC_TRAIN" logminmax_doc \
+    --spec-transform "LogMinMax" --kbird-prior 4.0
 echo ""
 echo "============================================================"
 echo " All matched experiments complete."
