@@ -93,20 +93,20 @@ fi
 run_experiment regnet doc "$DOC_TRAIN" baseline_doc \
     --spec-transform "Box-Cox" --kbird-prior 4.0
 
-run_experiment regnet doc "$DOC_TRAIN" bgmed_doc \
-    --spec-transform "Box-Cox" --bg-subtract --median-filter --kbird-prior 4.0
+# run_experiment regnet doc "$DOC_TRAIN" bgmed_doc \
+#     --spec-transform "Box-Cox" --bg-subtract --median-filter --kbird-prior 4.0
 
-run_experiment regnet avianz "$AVIANZ_TRAIN" baseline_avianz \
-    --spec-transform "Box-Cox" --kbird-prior 4.0 
+# run_experiment regnet avianz "$AVIANZ_TRAIN" baseline_avianz \
+#     --spec-transform "Box-Cox" --kbird-prior 4.0 
 
-run_experiment regnet doc "$DOC_TRAIN" no_background_doc \
-    --spec-transform "Box-Cox" --no-background --bg-subtract --median-filter --kbird-prior 4.0
+# run_experiment regnet doc "$DOC_TRAIN" no_background_doc \
+#     --spec-transform "Box-Cox" --no-background --bg-subtract --median-filter --kbird-prior 4.0
 
-run_experiment regnet doc "$DOC_TRAIN" delta_doc \
-    --spec-transform "Box-Cox" --deltas --kbird-prior 4.0
+# run_experiment regnet doc "$DOC_TRAIN" delta_doc \
+#     --spec-transform "Box-Cox" --deltas --kbird-prior 4.0
 
-run_experiment regnet doc "$DOC_TRAIN" sed_head_doc \
-    --spec-transform "Box-Cox" --kbird-prior 4.0 --sed-head
+# run_experiment regnet doc "$DOC_TRAIN" sed_head_doc \
+#     --spec-transform "Box-Cox" --kbird-prior 4.0 --sed-head
 
 echo ""
 echo "============================================================"
