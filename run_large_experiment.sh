@@ -43,7 +43,7 @@ TESTS_BASE="$BASE/large_tests"
 MATCHED_TESTS_BASE="$BASE/matched_tests"
 
 # ── Training hyperparameters ──────────────────────────────────────────────────
-EPOCHS=100
+EPOCHS=40
 PATIENCE=15
 MIXUP=0.25
 MODEL_TYPE="regnet"
