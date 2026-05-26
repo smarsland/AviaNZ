@@ -4,14 +4,17 @@ set -e
 # Train RegNet models on the matched dataset and evaluate on both test sets.
 # Run after build_dataset.sh.
 #
-# Four runs:
-#   1. DOC matched train — normal RegNet (Box-Cox, baseline)
-#   2. DOC matched train — k-bird prior (max-4 normalisation; soft species-count constraint)
-#   3. DOC matched train — background subtraction + median filter
-#   4. AviaNZ matched train — normal RegNet (domain-shift comparison vs run 1)
-#   5. DOC matched train — no background samples (train on labelled-only)
-#   6. DOC matched train — delta + delta-delta channels (3-ch input, recording-condition robustness)
-#   7. AviaNZ matched train — delta + delta-delta channels
+# Ten runs (all on DOC matched train):
+#    1. baseline             — Log transform
+#    2. boxcox               — Box-Cox transform
+#    3. kbird2               — baseline + k-bird prior 2
+#    4. kbird4               — baseline + k-bird prior 4
+#    5. bgsub                — baseline + background subtraction
+#    6. bgmed                — baseline + background subtraction + median filter
+#    7. no_background        — baseline + no background samples
+#    8. delta                — baseline + delta + delta-delta channels
+#    9. sed_head             — baseline + SED head
+#   10. logminmax            — LogMinMax transform (Kaytoo-style)
 #
 # Results land in $OUTPUT and are picked up by scripts/analyze_all_results.py.
 #
@@ -38,7 +41,7 @@ AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TRAIN="${MATCHED}/doc_split/train"
 DOC_TEST="${MATCHED}/doc_split/test"
 
-EPOCHS=100
+EPOCHS=30
 PATIENCE=15
 MIXUP=0.25
 VIZ_SAMPLES=3
@@ -90,25 +93,45 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "DRY RUN — no commands will be executed"
 fi
 
-run_experiment regnet doc "$DOC_TRAIN" baseline_doc \
-    --spec-transform "Box-Cox" --kbird-prior 4.0
+# 1. Baseline — Log transform (default)
+run_experiment regnet doc "$DOC_TRAIN" baseline \
+    --spec-transform "Log"
 
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_doc \
-#     --spec-transform "Box-Cox" --bg-subtract --median-filter --kbird-prior 4.0
+# 2. Alternative — Box-Cox transform
+run_experiment regnet doc "$DOC_TRAIN" boxcox \
+    --spec-transform "Box-Cox"
 
-# run_experiment regnet avianz "$AVIANZ_TRAIN" baseline_avianz \
-#     --spec-transform "Box-Cox" --kbird-prior 4.0 
+# 3. Baseline + k-bird prior of 2
+run_experiment regnet doc "$DOC_TRAIN" kbird2 \
+    --spec-transform "Log" --kbird-prior 2.0
 
-# run_experiment regnet doc "$DOC_TRAIN" no_background_doc \
-#     --spec-transform "Box-Cox" --no-background --bg-subtract --median-filter --kbird-prior 4.0
+# 4. Baseline + k-bird prior of 4
+run_experiment regnet doc "$DOC_TRAIN" kbird4 \
+    --spec-transform "Log" --kbird-prior 4.0
 
-# run_experiment regnet doc "$DOC_TRAIN" delta_doc \
-#     --spec-transform "Box-Cox" --deltas --kbird-prior 4.0
+# 5. Baseline + background subtraction
+run_experiment regnet doc "$DOC_TRAIN" bgsub \
+    --spec-transform "Log" --bg-subtract
 
-# run_experiment regnet doc "$DOC_TRAIN" sed_head_doc \
-#     --spec-transform "Box-Cox" --kbird-prior 4.0 --sed-head
-run_experiment regnet doc "$DOC_TRAIN" logminmax_doc \
-    --spec-transform "LogMinMax" --kbird-prior 4.0
+# 6. Baseline + background subtraction + median filter
+run_experiment regnet doc "$DOC_TRAIN" bgmed \
+    --spec-transform "Log" --bg-subtract --median-filter
+
+# 7. Baseline + no background samples
+run_experiment regnet doc "$DOC_TRAIN" no_background \
+    --spec-transform "Log" --no-background
+
+# 8. Baseline + delta + delta-delta channels
+run_experiment regnet doc "$DOC_TRAIN" delta \
+    --spec-transform "Log" --deltas
+
+# 9. Baseline + SED head
+run_experiment regnet doc "$DOC_TRAIN" sed_head \
+    --spec-transform "Log" --sed-head
+
+# 10. Baseline — LogMinMax transform (Kaytoo-style)
+run_experiment regnet doc "$DOC_TRAIN" logminmax \
+    --spec-transform "LogMinMax"
 echo ""
 echo "============================================================"
 echo " All matched experiments complete."

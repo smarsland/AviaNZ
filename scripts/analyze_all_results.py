@@ -350,7 +350,7 @@ def _empty_row(name, train_dataset, model, transform):
 def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz|combined)_(.+)$')
     pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
@@ -421,7 +421,7 @@ def create_overview_table(df, output_dir):
 
 def create_per_class_table(viz_dir, output_dir):
     """Create per_class_metrics.csv: one row per (experiment, test split, class)."""
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz)_(.+)$')
+    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz|combined)_(.+)$')
     rows = []
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
