@@ -366,6 +366,13 @@ class SpectrogramDataset(Dataset):
         # rather than distorting the normalization range.
         data = self.apply_spec_transform(data)
 
+        # Background subtraction / median filter must also run before padding.
+        # Both operations estimate statistics across the time axis; padding zeros
+        # would corrupt those estimates (bg_subtract's bottom-10% would be all zeros,
+        # and then z-score normalization would make the padding non-zero).
+        if self.bg_subtract or self.median_filter:
+            data = normalize_spectrogram(data, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
+
         # Pad to fixed size with 0 (= silence / noise floor in transform space) and add channel dim
         x = self.apply_padding_and_add_channels(data)
         assert x.ndim == 3, f"After padding should be 3D (H,W,C), got {x.shape}"
@@ -384,13 +391,6 @@ class SpectrogramDataset(Dataset):
         if self.width_downsizing and self.width_downsizing > 1:
             x = x[:, ::self.width_downsizing, :]
             assert x.ndim == 3, f"After downsampling should be 3D (H,W,C), got {x.shape}"
-        
-        # Apply preprocessing if enabled (both options work independently)
-        if self.bg_subtract or self.median_filter:
-            # Convert (H, W, C) to (H, W) for normalization
-            x_2d = x[:, :, 0] if x.shape[2] == 1 else x[:, :, 0]  # Take first channel
-            x_2d = normalize_spectrogram(x_2d, median_filter=self.median_filter, bg_subtract=self.bg_subtract)
-            x[:, :, 0] = x_2d  # Put back in the channel
         
         # SpecAugment (time/frequency masking) during training
         if self.training:
