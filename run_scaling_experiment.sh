@@ -5,13 +5,13 @@
 # (built by build_scaling_dataset.sh) at increasing sample budgets, and
 # evaluate on the matched human-reviewed test sets.
 #
-# For each N in {100, 200, 300, 500, 750, 1000, 1500, 2000, 2500, 3000}:
-#   - train on doc_large (3000/class) subsampled to N/class at train time
+# For each N in {100, 200, 300, 500, 750, 1000, 1500, 2000}:
+#   - train on doc_large (2000/class) subsampled to N/class at train time
 #   - evaluate on matched AviaNZ test and matched DOC test
 #   - results written to ${SCALING_TESTS}/regnet_on_doc_scaling_N{N}/
 #
 # Prerequisites:
-#   bash build_scaling_dataset.sh   # builds ${SCALING}/doc_large at 3000/class
+#   bash build_scaling_dataset.sh   # builds ${SCALING}/doc_large at 2000/class
 #
 # Usage:
 #   bash run_scaling_experiment.sh
@@ -29,7 +29,7 @@ SCALING_TESTS="${BASE}/scaling_tests"
 PRETRAINED="BirdClefModels/model_fold0.pth"
 SEED="${SEED:-0}"
 
-N_VALUES=(100 200 300 500 750 1000 1500 2000 2500 3000)
+N_VALUES=(100 200 300 500 750 1000 1500 2000)
 
 # --- sanity checks ---
 check_path() { [[ -d "$1" ]] || { echo "ERROR: directory not found: $1"; exit 1; }; }
