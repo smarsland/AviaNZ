@@ -11,7 +11,7 @@ set -e
 #    4. kbird4               — baseline + k-bird prior 4
 #    5. bgsub                — baseline + background subtraction
 #    6. bgmed                — baseline + background subtraction + median filter
-#    7. no_background        — baseline + no background samples
+#    7. nobg                 — baseline + no background samples
 #    8. delta                — baseline + delta + delta-delta channels
 #    9. sed_head             — baseline + SED head
 #   10. logminmax            — LogMinMax transform (Kaytoo-style)
@@ -118,7 +118,7 @@ run_experiment regnet doc "$DOC_TRAIN" bgmed \
     --spec-transform "Log" --bg-subtract --median-filter
 
 # 7. Baseline + no background samples
-run_experiment regnet doc "$DOC_TRAIN" no_background \
+run_experiment regnet doc "$DOC_TRAIN" nobg \
     --spec-transform "Log" --no-background
 
 # 8. Baseline + delta + delta-delta channels

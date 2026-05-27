@@ -189,9 +189,7 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     """Compute metrics at threshold=0.5, self-tuned oracle thresholds, and optionally
     cross-tuned thresholds supplied via *apply_thresholds*.
 
-    Macro averages are restricted to classes that actually appear (have at least
-    one positive ground-truth label) in the test set, so absent classes don't
-    dilute precision/recall/f1.
+    Reads the CSV exactly once regardless of how many threshold sets are evaluated.
 
     Returns a dict with keys:
         half_precision, half_recall, half_f1, half_jaccard,
@@ -250,18 +248,24 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     acc_half, acc_lab_half = _acc(preds_half)
 
     # --- oracle per-class thresholds (tuned on this same split) ---
-    candidates = np.linspace(0.0, 1.0, 201)
+    # Vectorized: for each class, try all candidate thresholds at once.
+    candidates = np.linspace(0.0, 1.0, 201, dtype=np.float32)
     thresholds = np.full(probs.shape[1], 0.5, dtype=np.float32)
     for c in range(probs.shape[1]):
-        best = -1.0
-        for t in candidates:
-            p = (probs[:, c] >= t).astype(int)
-            if p.sum() == 0:
-                continue
-            f = _f1(trues[:, c], p, zero_division=0)
-            if f > best:
-                best = f
-                thresholds[c] = t
+        tc = trues[:, c]
+        pc = probs[:, c]
+        # preds_all: shape (201, n_samples)
+        preds_all = (pc[np.newaxis, :] >= candidates[:, np.newaxis]).astype(np.int32)
+        pos_mask = preds_all.sum(axis=1) > 0
+        if not pos_mask.any():
+            continue
+        tp = (preds_all * tc[np.newaxis, :]).sum(axis=1).astype(np.float32)
+        fp = (preds_all * (1 - tc)[np.newaxis, :]).sum(axis=1).astype(np.float32)
+        fn = ((1 - preds_all) * tc[np.newaxis, :]).sum(axis=1).astype(np.float32)
+        denom = 2 * tp + fp + fn
+        f1s = np.where(denom > 0, 2 * tp / denom, 0.0)
+        f1s[~pos_mask] = -1.0
+        thresholds[c] = candidates[np.argmax(f1s)]
     preds_oracle = (probs >= thresholds[np.newaxis, :]).astype(int)
     prec_oracle, rec_oracle, f1_oracle, jac_oracle = _macro(preds_oracle)
     acc_oracle, acc_lab_oracle = _acc(preds_oracle)
@@ -286,6 +290,7 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     }
 
     # --- cross thresholds: tuned on the other split, applied here ---
+    # probs/trues already loaded above — no re-read needed
     if apply_thresholds is not None and len(apply_thresholds) == probs.shape[1]:
         preds_cross = (probs >= apply_thresholds[np.newaxis, :]).astype(int)
         _, _, f1_cross, _ = _macro(preds_cross)
@@ -312,18 +317,20 @@ def _read_adaptive_from_dir(exp_dir: Path, row: dict):
         return
     prefixes = ['test1', 'test2']
 
-    # First pass: compute self-tuned metrics and collect oracle thresholds.
+    # Single pass per CSV: compute self-tuned oracle thresholds.
     metrics_list = [_metrics_from_csv(csv_path) for csv_path in csvs]
 
     # Second pass: apply each split's oracle thresholds to the *other* split.
-    for i, (prefix, m) in enumerate(zip(prefixes, metrics_list)):
-        other_idx = 1 - i
-        other_thresholds = metrics_list[other_idx]['oracle_thresholds'] if len(metrics_list) > 1 else None
-        if other_thresholds is not None:
-            m_cross = _metrics_from_csv(csvs[i], apply_thresholds=other_thresholds)
-            m['cross_f1']           = m_cross['cross_f1']
-            m['cross_acc']          = m_cross['cross_acc']
-            m['cross_acc_labelled'] = m_cross['cross_acc_labelled']
+    # _metrics_from_csv reads the CSV again here, but the oracle threshold search
+    # is skipped (apply_thresholds provided), so it is much cheaper than the first pass.
+    if len(metrics_list) == 2:
+        for i in range(2):
+            other_thresholds = metrics_list[1 - i]['oracle_thresholds']
+            if other_thresholds is not None:
+                cross = _metrics_from_csv(csvs[i], apply_thresholds=other_thresholds)
+                metrics_list[i]['cross_f1']           = cross['cross_f1']
+                metrics_list[i]['cross_acc']          = cross['cross_acc']
+                metrics_list[i]['cross_acc_labelled'] = cross['cross_acc_labelled']
 
     for prefix, m in zip(prefixes, metrics_list):
         # always write oracle (self-tuned adaptive-threshold) metrics
