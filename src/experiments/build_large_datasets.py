@@ -90,10 +90,17 @@ def build_doc_large(
     fixed_length=True, target_time_bins=None,
     with_audio=True,
     sg_type=None, window_type=None, sg_scale=None,
+    restrict_classes=None,
 ):
     """
     Scan the DOC folder structure and extract up to max_per_species spectrograms
     per eBird code.  Labels are normalised common names (lowercase).
+
+    Args:
+        restrict_classes: If provided (set/list of normalised common names), skip
+                          any species that doesn't map to one of these labels.
+                          Use this to build a class-filtered dataset in one pass
+                          instead of building everything then filtering.
 
     Returns list of label dicts compatible with labels.json.
     """
@@ -113,6 +120,7 @@ def build_doc_large(
     rng = random.Random(seed)
     labels = []
     skipped_unmapped = []
+    restrict_set = set(restrict_classes) if restrict_classes else None
 
     for species_code, file_list in sorted(species_files.items()):
         # Map eBird code to normalised common name
@@ -121,6 +129,10 @@ def build_doc_large(
             skipped_unmapped.append(species_code)
             continue
         label = norm_key(common_name)
+
+        # Skip species not in the allowed set (if a filter is given)
+        if restrict_set is not None and label not in restrict_set:
+            continue
 
         # Randomly sample up to max_per_species
         if len(file_list) > max_per_species:
@@ -520,6 +532,7 @@ def main():
             sg_type=args.spec_type,
             window_type=args.window_type,
             sg_scale=args.sg_scale,
+            restrict_classes=restrict_classes,
         )
     else:
         print('\n=== Step 1: DOC large dataset already exists, loading ===')
