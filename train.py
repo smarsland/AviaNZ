@@ -101,6 +101,11 @@ Examples:
     parser.add_argument('--per-chunk-norm', action='store_true', dest='per_chunk_norm',
                        help="Per-clip min-max normalization (replaces global AudioSet stats). AST only.")
 
+    # Data scaling
+    parser.add_argument('--max-samples-per-class', type=int, default=None, dest='max_samples_per_class',
+                       help="Randomly subsample training data to at most N samples per class "
+                            "(applied before training; useful for scaling experiments)")
+
     # Multi-label output constraint
     parser.add_argument('--kbird-prior', type=float, default=0.0, dest='kbird_prior',
                        help="When > 0, normalise sigmoid probabilities so their sum never exceeds k, "

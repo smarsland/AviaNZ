@@ -20,6 +20,7 @@ class TrainingConfig:
     patience: int = 0
     seed: Optional[int] = None
     resume_checkpoint: Optional[str] = None
+    max_samples_per_class: Optional[int] = None  # Subsample training data per class (scaling experiments)
 
 
 @dataclass
@@ -122,7 +123,8 @@ class TrainerConfig:
                 weight_decay=getattr(args, 'weight_decay', config.DEFAULT_WEIGHT_DECAY),
                 patience=args.patience,
                 seed=getattr(args, 'seed', None),
-                resume_checkpoint=getattr(args, 'resume_checkpoint', None)
+                resume_checkpoint=getattr(args, 'resume_checkpoint', None),
+                max_samples_per_class=getattr(args, 'max_samples_per_class', None),
             ),
             model=ModelConfig(
                 model_type=getattr(args, 'model_type', 'ast'),

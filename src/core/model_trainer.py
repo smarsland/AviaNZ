@@ -373,6 +373,11 @@ class Trainer:
             self.data['train_labels'] = train_labels[keep]
             print(f"--no-background: kept {keep.sum()} / {len(keep)} training samples (dropped {(~keep).sum()} background)")
 
+        # Subsample training data per class for scaling experiments.
+        max_per_class = cfg.training.max_samples_per_class
+        if max_per_class is not None:
+            self.data = self._subsample_per_class(self.data, max_per_class)
+
         # Optionally include noise spectrograms as explicit all-zero training samples.
         # This is useful for soundscape-style inference even if you evaluate with --birds-only,
         # because it improves calibration and reduces false positives on weak/ambiguous bird activity.
@@ -451,6 +456,56 @@ class Trainer:
             weights = 1.0 + is_bg * (self.background_weight - 1.0)
             return (per_sample * weights).mean()
         return per_sample.mean()
+
+    def _subsample_per_class(self, data, max_per_class):
+        """Randomly subsample training data so each class has at most max_per_class examples.
+
+        Background (all-zero) samples are left untouched.  For multi-label samples the
+        union of per-class selections is kept, so a multi-label sample survives if it is
+        selected for *any* of its active classes.
+        """
+        import random as _random
+        train_filenames = list(data['train_filenames'])
+        train_labels = np.array(data['train_labels'], dtype=np.float32)
+        n_samples, n_classes = train_labels.shape
+
+        rng = _random.Random(self.seed if self.seed is not None else 42)
+
+        is_labeled = train_labels.sum(axis=1) > 0
+        bg_indices = [i for i in range(n_samples) if not is_labeled[i]]
+        labeled_indices = [i for i in range(n_samples) if is_labeled[i]]
+
+        # Group labeled samples by class
+        class_to_indices = {}
+        for idx in labeled_indices:
+            for c in range(n_classes):
+                if train_labels[idx, c] > 0:
+                    if c not in class_to_indices:
+                        class_to_indices[c] = []
+                    class_to_indices[c].append(idx)
+
+        kept_labeled = set()
+        for c, indices in class_to_indices.items():
+            if len(indices) > max_per_class:
+                indices = rng.sample(indices, max_per_class)
+            kept_labeled.update(indices)
+
+        kept_labeled = sorted(kept_labeled)
+        all_kept = sorted(bg_indices + kept_labeled)
+
+        data = dict(data)
+        data['train_filenames'] = [train_filenames[i] for i in all_kept]
+        data['train_labels'] = train_labels[all_kept]
+
+        class_names = data.get('class_names', [])
+        new_labels = data['train_labels']
+        print(f"--max-samples-per-class {max_per_class}: {n_samples} → {len(all_kept)} training samples "
+              f"({len(bg_indices)} background kept)")
+        for c in range(n_classes):
+            cnt = int(new_labels[:, c].sum())
+            name = class_names[c] if c < len(class_names) else str(c)
+            print(f"    {name}: {cnt}")
+        return data
 
     def _compute_class_weights(self):
         """Compute inverse frequency weights for each class (for multilabel BCE loss)."""
