@@ -132,10 +132,11 @@ class CnnAdapter(nn.Module):
     Learns a residual correction: output = input + f(input).
     The final 1x1 conv is zero-initialized so the adapter starts as identity.
     """
-    def __init__(self, num_layers=2, hidden_channels=32):
+    def __init__(self, in_chans=1, num_layers=2, hidden_channels=32):
         super().__init__()
+        self.in_chans = in_chans
         layers = []
-        in_ch = 1
+        in_ch = in_chans
         for _ in range(num_layers):
             layers += [
                 nn.Conv2d(in_ch, hidden_channels, kernel_size=3, padding=1),
@@ -143,7 +144,7 @@ class CnnAdapter(nn.Module):
                 nn.ReLU(inplace=True),
             ]
             in_ch = hidden_channels
-        layers.append(nn.Conv2d(hidden_channels, 1, kernel_size=1))
+        layers.append(nn.Conv2d(hidden_channels, in_chans, kernel_size=1))
         self.net = nn.Sequential(*layers)
         nn.init.zeros_(self.net[-1].weight)
         nn.init.zeros_(self.net[-1].bias)
@@ -627,7 +628,7 @@ class RegNetModel(nn.Module):
             self.pooling = nn.AdaptiveAvgPool2d(1)
             self.classifier = nn.Linear(backbone_out, num_classes)
 
-        self.cnn_adapter = CnnAdapter() if use_cnn_adapter else None
+        self.cnn_adapter = CnnAdapter(in_chans=in_chans) if use_cnn_adapter else None
 
         if pretrained_path:
             self._load_pretrained_weights(pretrained_path, freeze_backbone, freeze_stages)
