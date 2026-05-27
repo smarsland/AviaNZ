@@ -93,319 +93,319 @@ if [ "$DRY_RUN" -eq 1 ]; then
     echo "DRY RUN — no commands will be executed"
 fi
 
-# # 1. Baseline — Log transform (default)
-# run_experiment regnet doc "$DOC_TRAIN" baseline \
-#     --spec-transform "Log"
-
-# # 2. Alternative — Box-Cox transform
-# run_experiment regnet doc "$DOC_TRAIN" boxcox \
-#     --spec-transform "Box-Cox"
-
-# # 3. Baseline + k-bird prior of 2
-# run_experiment regnet doc "$DOC_TRAIN" kbird2 \
-#     --spec-transform "Log" --kbird-prior 2.0
-
-# # 4. Baseline + k-bird prior of 4
-# run_experiment regnet doc "$DOC_TRAIN" kbird4 \
-#     --spec-transform "Log" --kbird-prior 4.0
-
-# # 5. Baseline + background subtraction
-# run_experiment regnet doc "$DOC_TRAIN" bgsub \
-#     --spec-transform "Log" --bg-subtract
-
-# # 6. Baseline + background subtraction + median filter
-# run_experiment regnet doc "$DOC_TRAIN" bgmed \
-#     --spec-transform "Log" --bg-subtract --median-filter
-
-# # 7. Baseline + no background samples
-# run_experiment regnet doc "$DOC_TRAIN" no_background \
-#     --spec-transform "Log" --no-background
-
-# # 8. Baseline + delta + delta-delta channels
-# run_experiment regnet doc "$DOC_TRAIN" delta \
-#     --spec-transform "Log" --deltas
-
-# # 9. Baseline + SED head
-# run_experiment regnet doc "$DOC_TRAIN" sed_head \
-#     --spec-transform "Log" --sed-head
-
-# # 10. Baseline — LogMinMax transform (Kaytoo-style)
-# run_experiment regnet doc "$DOC_TRAIN" logminmax \
-#     --spec-transform "LogMinMax"
-
-# # ======================================================================
-# # EXTENDED EXPERIMENTS (11–100)
-# #
-# # Groups:
-# #   A (11–25)  — bgsub combinations   (best single-flag on avianz)
-# #   B (26–35)  — bgmed combinations   (joint-best single-flag on avianz)
-# #   C (36–45)  — no-background combos (third-best single-flag)
-# #   D (46–55)  — LogMinMax combos     (Kaytoo-style pipeline)
-# #   E (56–62)  — PCEN transform       (never tested)
-# #   F (63–71)  — loss-function variants on baseline
-# #   G (72–76)  — CNN adapter
-# #   H (77–80)  — additional k-bird prior values
-# #   I (81–83)  — freeze-stages variants
-# #   K (84–100) — large multi-flag combinations
-# # ======================================================================
-
-# # ─── Group A: bgsub combinations (11–25) ──────────────────────────────
-
-# # 11. Background subtraction + delta channels
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas \
-#     --spec-transform "Log" --bg-subtract --deltas
-
-# # 12. Background subtraction + no background samples
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_nobg \
-#     --spec-transform "Log" --bg-subtract --no-background
-
-# # 13. Background subtraction + SED head
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_sedhead \
-#     --spec-transform "Log" --bg-subtract --sed-head
-
-# # 14. Background subtraction + gated head
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_gated \
-#     --spec-transform "Log" --bg-subtract --gated-head
-
-# # 15. Background subtraction + Asymmetric Loss
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_asl \
-#     --spec-transform "Log" --bg-subtract --use-asl
-
-# # 16. Background subtraction + class weights
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_classw \
-#     --spec-transform "Log" --bg-subtract --class-weights
-
-# # 17. Background subtraction + k-bird prior 2
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_kbird2 \
-#     --spec-transform "Log" --bg-subtract --kbird-prior 2.0
-
-# # 18. Background subtraction + k-bird prior 4
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_kbird4 \
-#     --spec-transform "Log" --bg-subtract --kbird-prior 4.0
-
-# # 19. Background subtraction + CNN adapter
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_cnnadapter \
-#     --spec-transform "Log" --bg-subtract --cnn-adapter
-
-# # 20. Background subtraction + deltas + no background
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_nobg \
-#     --spec-transform "Log" --bg-subtract --deltas --no-background
-
-# # 21. Background subtraction + deltas + SED head
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_sedhead \
-#     --spec-transform "Log" --bg-subtract --deltas --sed-head
+# 1. Baseline — Log transform (default)
+run_experiment regnet doc "$DOC_TRAIN" baseline \
+    --spec-transform "Log"
+
+# 2. Alternative — Box-Cox transform
+run_experiment regnet doc "$DOC_TRAIN" boxcox \
+    --spec-transform "Box-Cox"
+
+# 3. Baseline + k-bird prior of 2
+run_experiment regnet doc "$DOC_TRAIN" kbird2 \
+    --spec-transform "Log" --kbird-prior 2.0
+
+# 4. Baseline + k-bird prior of 4
+run_experiment regnet doc "$DOC_TRAIN" kbird4 \
+    --spec-transform "Log" --kbird-prior 4.0
+
+# 5. Baseline + background subtraction
+run_experiment regnet doc "$DOC_TRAIN" bgsub \
+    --spec-transform "Log" --bg-subtract
+
+# 6. Baseline + background subtraction + median filter
+run_experiment regnet doc "$DOC_TRAIN" bgmed \
+    --spec-transform "Log" --bg-subtract --median-filter
+
+# 7. Baseline + no background samples
+run_experiment regnet doc "$DOC_TRAIN" no_background \
+    --spec-transform "Log" --no-background
+
+# 8. Baseline + delta + delta-delta channels
+run_experiment regnet doc "$DOC_TRAIN" delta \
+    --spec-transform "Log" --deltas
+
+# 9. Baseline + SED head
+run_experiment regnet doc "$DOC_TRAIN" sed_head \
+    --spec-transform "Log" --sed-head
+
+# 10. Baseline — LogMinMax transform (Kaytoo-style)
+run_experiment regnet doc "$DOC_TRAIN" logminmax \
+    --spec-transform "LogMinMax"
+
+# ======================================================================
+# EXTENDED EXPERIMENTS (11–100)
+#
+# Groups:
+#   A (11–25)  — bgsub combinations   (best single-flag on avianz)
+#   B (26–35)  — bgmed combinations   (joint-best single-flag on avianz)
+#   C (36–45)  — no-background combos (third-best single-flag)
+#   D (46–55)  — LogMinMax combos     (Kaytoo-style pipeline)
+#   E (56–62)  — PCEN transform       (never tested)
+#   F (63–71)  — loss-function variants on baseline
+#   G (72–76)  — CNN adapter
+#   H (77–80)  — additional k-bird prior values
+#   I (81–83)  — freeze-stages variants
+#   K (84–100) — large multi-flag combinations
+# ======================================================================
+
+# ─── Group A: bgsub combinations (11–25) ──────────────────────────────
+
+# 11. Background subtraction + delta channels
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas \
+    --spec-transform "Log" --bg-subtract --deltas
+
+# 12. Background subtraction + no background samples
+run_experiment regnet doc "$DOC_TRAIN" bgsub_nobg \
+    --spec-transform "Log" --bg-subtract --no-background
+
+# 13. Background subtraction + SED head
+run_experiment regnet doc "$DOC_TRAIN" bgsub_sedhead \
+    --spec-transform "Log" --bg-subtract --sed-head
+
+# 14. Background subtraction + gated head
+run_experiment regnet doc "$DOC_TRAIN" bgsub_gated \
+    --spec-transform "Log" --bg-subtract --gated-head
+
+# 15. Background subtraction + Asymmetric Loss
+run_experiment regnet doc "$DOC_TRAIN" bgsub_asl \
+    --spec-transform "Log" --bg-subtract --use-asl
+
+# 16. Background subtraction + class weights
+run_experiment regnet doc "$DOC_TRAIN" bgsub_classw \
+    --spec-transform "Log" --bg-subtract --class-weights
+
+# 17. Background subtraction + k-bird prior 2
+run_experiment regnet doc "$DOC_TRAIN" bgsub_kbird2 \
+    --spec-transform "Log" --bg-subtract --kbird-prior 2.0
+
+# 18. Background subtraction + k-bird prior 4
+run_experiment regnet doc "$DOC_TRAIN" bgsub_kbird4 \
+    --spec-transform "Log" --bg-subtract --kbird-prior 4.0
+
+# 19. Background subtraction + CNN adapter
+run_experiment regnet doc "$DOC_TRAIN" bgsub_cnnadapter \
+    --spec-transform "Log" --bg-subtract --cnn-adapter
+
+# 20. Background subtraction + deltas + no background
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_nobg \
+    --spec-transform "Log" --bg-subtract --deltas --no-background
+
+# 21. Background subtraction + deltas + SED head
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_sedhead \
+    --spec-transform "Log" --bg-subtract --deltas --sed-head
 
-# # 22. Background subtraction + deltas + ASL
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_asl \
-#     --spec-transform "Log" --bg-subtract --deltas --use-asl
+# 22. Background subtraction + deltas + ASL
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_asl \
+    --spec-transform "Log" --bg-subtract --deltas --use-asl
 
-# # 23. Background subtraction + deltas + class weights
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_classw \
-#     --spec-transform "Log" --bg-subtract --deltas --class-weights
+# 23. Background subtraction + deltas + class weights
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_classw \
+    --spec-transform "Log" --bg-subtract --deltas --class-weights
 
-# # 24. Background subtraction + deltas + k-bird prior 2
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_kbird2 \
-#     --spec-transform "Log" --bg-subtract --deltas --kbird-prior 2.0
+# 24. Background subtraction + deltas + k-bird prior 2
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_kbird2 \
+    --spec-transform "Log" --bg-subtract --deltas --kbird-prior 2.0
 
-# # 25. Background subtraction + deltas + gated head
-# run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_gated \
-#     --spec-transform "Log" --bg-subtract --deltas --gated-head
+# 25. Background subtraction + deltas + gated head
+run_experiment regnet doc "$DOC_TRAIN" bgsub_deltas_gated \
+    --spec-transform "Log" --bg-subtract --deltas --gated-head
 
-# # ─── Group B: bgmed combinations (26–35) ──────────────────────────────
+# ─── Group B: bgmed combinations (26–35) ──────────────────────────────
 
-# # 26. bgmed + delta channels
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_deltas \
-#     --spec-transform "Log" --bg-subtract --median-filter --deltas
+# 26. bgmed + delta channels
+run_experiment regnet doc "$DOC_TRAIN" bgmed_deltas \
+    --spec-transform "Log" --bg-subtract --median-filter --deltas
 
-# # 27. bgmed + no background
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_nobg \
-#     --spec-transform "Log" --bg-subtract --median-filter --no-background
+# 27. bgmed + no background
+run_experiment regnet doc "$DOC_TRAIN" bgmed_nobg \
+    --spec-transform "Log" --bg-subtract --median-filter --no-background
 
-# # 28. bgmed + SED head
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_sedhead \
-#     --spec-transform "Log" --bg-subtract --median-filter --sed-head
+# 28. bgmed + SED head
+run_experiment regnet doc "$DOC_TRAIN" bgmed_sedhead \
+    --spec-transform "Log" --bg-subtract --median-filter --sed-head
 
-# # 29. bgmed + gated head
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_gated \
-#     --spec-transform "Log" --bg-subtract --median-filter --gated-head
+# 29. bgmed + gated head
+run_experiment regnet doc "$DOC_TRAIN" bgmed_gated \
+    --spec-transform "Log" --bg-subtract --median-filter --gated-head
 
-# # 30. bgmed + Asymmetric Loss
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_asl \
-#     --spec-transform "Log" --bg-subtract --median-filter --use-asl
+# 30. bgmed + Asymmetric Loss
+run_experiment regnet doc "$DOC_TRAIN" bgmed_asl \
+    --spec-transform "Log" --bg-subtract --median-filter --use-asl
 
-# # 31. bgmed + class weights
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_classw \
-#     --spec-transform "Log" --bg-subtract --median-filter --class-weights
+# 31. bgmed + class weights
+run_experiment regnet doc "$DOC_TRAIN" bgmed_classw \
+    --spec-transform "Log" --bg-subtract --median-filter --class-weights
 
-# # 32. bgmed + k-bird prior 2
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_kbird2 \
-#     --spec-transform "Log" --bg-subtract --median-filter --kbird-prior 2.0
+# 32. bgmed + k-bird prior 2
+run_experiment regnet doc "$DOC_TRAIN" bgmed_kbird2 \
+    --spec-transform "Log" --bg-subtract --median-filter --kbird-prior 2.0
 
-# # 33. bgmed + k-bird prior 4
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_kbird4 \
-#     --spec-transform "Log" --bg-subtract --median-filter --kbird-prior 4.0
+# 33. bgmed + k-bird prior 4
+run_experiment regnet doc "$DOC_TRAIN" bgmed_kbird4 \
+    --spec-transform "Log" --bg-subtract --median-filter --kbird-prior 4.0
 
-# # 34. bgmed + deltas + no background
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_deltas_nobg \
-#     --spec-transform "Log" --bg-subtract --median-filter --deltas --no-background
+# 34. bgmed + deltas + no background
+run_experiment regnet doc "$DOC_TRAIN" bgmed_deltas_nobg \
+    --spec-transform "Log" --bg-subtract --median-filter --deltas --no-background
 
-# # 35. bgmed + deltas + ASL
-# run_experiment regnet doc "$DOC_TRAIN" bgmed_deltas_asl \
-#     --spec-transform "Log" --bg-subtract --median-filter --deltas --use-asl
+# 35. bgmed + deltas + ASL
+run_experiment regnet doc "$DOC_TRAIN" bgmed_deltas_asl \
+    --spec-transform "Log" --bg-subtract --median-filter --deltas --use-asl
 
-# # ─── Group C: no-background combinations (36–45) ──────────────────────
+# ─── Group C: no-background combinations (36–45) ──────────────────────
 
-# # 36. No background + delta channels
-# run_experiment regnet doc "$DOC_TRAIN" nobg_deltas \
-#     --spec-transform "Log" --no-background --deltas
+# 36. No background + delta channels
+run_experiment regnet doc "$DOC_TRAIN" nobg_deltas \
+    --spec-transform "Log" --no-background --deltas
 
-# # 37. No background + SED head
-# run_experiment regnet doc "$DOC_TRAIN" nobg_sedhead \
-#     --spec-transform "Log" --no-background --sed-head
+# 37. No background + SED head
+run_experiment regnet doc "$DOC_TRAIN" nobg_sedhead \
+    --spec-transform "Log" --no-background --sed-head
 
-# # 38. No background + gated head
-# run_experiment regnet doc "$DOC_TRAIN" nobg_gated \
-#     --spec-transform "Log" --no-background --gated-head
+# 38. No background + gated head
+run_experiment regnet doc "$DOC_TRAIN" nobg_gated \
+    --spec-transform "Log" --no-background --gated-head
 
-# # 39. No background + Asymmetric Loss
-# run_experiment regnet doc "$DOC_TRAIN" nobg_asl \
-#     --spec-transform "Log" --no-background --use-asl
+# 39. No background + Asymmetric Loss
+run_experiment regnet doc "$DOC_TRAIN" nobg_asl \
+    --spec-transform "Log" --no-background --use-asl
 
-# # 40. No background + class weights
-# run_experiment regnet doc "$DOC_TRAIN" nobg_classw \
-#     --spec-transform "Log" --no-background --class-weights
+# 40. No background + class weights
+run_experiment regnet doc "$DOC_TRAIN" nobg_classw \
+    --spec-transform "Log" --no-background --class-weights
 
-# # 41. No background + k-bird prior 2
-# run_experiment regnet doc "$DOC_TRAIN" nobg_kbird2 \
-#     --spec-transform "Log" --no-background --kbird-prior 2.0
+# 41. No background + k-bird prior 2
+run_experiment regnet doc "$DOC_TRAIN" nobg_kbird2 \
+    --spec-transform "Log" --no-background --kbird-prior 2.0
 
-# # 42. No background + k-bird prior 4
-# run_experiment regnet doc "$DOC_TRAIN" nobg_kbird4 \
-#     --spec-transform "Log" --no-background --kbird-prior 4.0
+# 42. No background + k-bird prior 4
+run_experiment regnet doc "$DOC_TRAIN" nobg_kbird4 \
+    --spec-transform "Log" --no-background --kbird-prior 4.0
 
-# # 43. No background + deltas + SED head
-# run_experiment regnet doc "$DOC_TRAIN" nobg_deltas_sedhead \
-#     --spec-transform "Log" --no-background --deltas --sed-head
+# 43. No background + deltas + SED head
+run_experiment regnet doc "$DOC_TRAIN" nobg_deltas_sedhead \
+    --spec-transform "Log" --no-background --deltas --sed-head
 
-# # 44. No background + deltas + gated head
-# run_experiment regnet doc "$DOC_TRAIN" nobg_deltas_gated \
-#     --spec-transform "Log" --no-background --deltas --gated-head
+# 44. No background + deltas + gated head
+run_experiment regnet doc "$DOC_TRAIN" nobg_deltas_gated \
+    --spec-transform "Log" --no-background --deltas --gated-head
 
-# # 45. No background + deltas + ASL
-# run_experiment regnet doc "$DOC_TRAIN" nobg_deltas_asl \
-#     --spec-transform "Log" --no-background --deltas --use-asl
+# 45. No background + deltas + ASL
+run_experiment regnet doc "$DOC_TRAIN" nobg_deltas_asl \
+    --spec-transform "Log" --no-background --deltas --use-asl
 
-# # ─── Group D: LogMinMax (Kaytoo-style) combinations (46–55) ───────────
+# ─── Group D: LogMinMax (Kaytoo-style) combinations (46–55) ───────────
 
-# # 46. LogMinMax + delta channels  (Kaytoo spectrogram pipeline)
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas \
-#     --spec-transform "LogMinMax" --deltas
+# 46. LogMinMax + delta channels  (Kaytoo spectrogram pipeline)
+run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas \
+    --spec-transform "LogMinMax" --deltas
 
-# # 47. LogMinMax + deltas + SED head  ← closest to Kaytoo architecture
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_sedhead \
-#     --spec-transform "LogMinMax" --deltas --sed-head
+# 47. LogMinMax + deltas + SED head  ← closest to Kaytoo architecture
+run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_sedhead \
+    --spec-transform "LogMinMax" --deltas --sed-head
 
-# # 48. LogMinMax + deltas + no background
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_nobg \
-#     --spec-transform "LogMinMax" --deltas --no-background
+# 48. LogMinMax + deltas + no background
+run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_nobg \
+    --spec-transform "LogMinMax" --deltas --no-background
 
-# # 49. LogMinMax + deltas + gated head
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_gated \
-#     --spec-transform "LogMinMax" --deltas --gated-head
+# 49. LogMinMax + deltas + gated head
+run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_gated \
+    --spec-transform "LogMinMax" --deltas --gated-head
 
-# # 50. LogMinMax + deltas + ASL
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_asl \
-#     --spec-transform "LogMinMax" --deltas --use-asl
+# 50. LogMinMax + deltas + ASL
+run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_asl \
+    --spec-transform "LogMinMax" --deltas --use-asl
 
-# # 51. LogMinMax + no background
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_nobg \
-#     --spec-transform "LogMinMax" --no-background
+# 51. LogMinMax + no background
+run_experiment regnet doc "$DOC_TRAIN" logminmax_nobg \
+    --spec-transform "LogMinMax" --no-background
 
-# # 52. LogMinMax + SED head
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_sedhead \
-#     --spec-transform "LogMinMax" --sed-head
+# 52. LogMinMax + SED head
+run_experiment regnet doc "$DOC_TRAIN" logminmax_sedhead \
+    --spec-transform "LogMinMax" --sed-head
 
-# # 53. LogMinMax + gated head
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_gated \
-#     --spec-transform "LogMinMax" --gated-head
+# 53. LogMinMax + gated head
+run_experiment regnet doc "$DOC_TRAIN" logminmax_gated \
+    --spec-transform "LogMinMax" --gated-head
 
-# # 54. LogMinMax + class weights
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_classw \
-#     --spec-transform "LogMinMax" --class-weights
+# 54. LogMinMax + class weights
+run_experiment regnet doc "$DOC_TRAIN" logminmax_classw \
+    --spec-transform "LogMinMax" --class-weights
 
-# # 55. LogMinMax + deltas + class weights
-# run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_classw \
-#     --spec-transform "LogMinMax" --deltas --class-weights
+# 55. LogMinMax + deltas + class weights
+run_experiment regnet doc "$DOC_TRAIN" logminmax_deltas_classw \
+    --spec-transform "LogMinMax" --deltas --class-weights
 
-# # ─── Group E: PCEN transform (56–62) ──────────────────────────────────
+# ─── Group E: PCEN transform (56–62) ──────────────────────────────────
 
-# # 56. PCEN transform alone
-# run_experiment regnet doc "$DOC_TRAIN" pcen \
-#     --spec-transform "PCEN"
+# 56. PCEN transform alone
+run_experiment regnet doc "$DOC_TRAIN" pcen \
+    --spec-transform "PCEN"
 
-# # 57. PCEN + delta channels
-# run_experiment regnet doc "$DOC_TRAIN" pcen_deltas \
-#     --spec-transform "PCEN" --deltas
+# 57. PCEN + delta channels
+run_experiment regnet doc "$DOC_TRAIN" pcen_deltas \
+    --spec-transform "PCEN" --deltas
 
-# # 58. PCEN + SED head
-# run_experiment regnet doc "$DOC_TRAIN" pcen_sedhead \
-#     --spec-transform "PCEN" --sed-head
+# 58. PCEN + SED head
+run_experiment regnet doc "$DOC_TRAIN" pcen_sedhead \
+    --spec-transform "PCEN" --sed-head
 
-# # 59. PCEN + gated head
-# run_experiment regnet doc "$DOC_TRAIN" pcen_gated \
-#     --spec-transform "PCEN" --gated-head
+# 59. PCEN + gated head
+run_experiment regnet doc "$DOC_TRAIN" pcen_gated \
+    --spec-transform "PCEN" --gated-head
 
-# # 60. PCEN + no background
-# run_experiment regnet doc "$DOC_TRAIN" pcen_nobg \
-#     --spec-transform "PCEN" --no-background
+# 60. PCEN + no background
+run_experiment regnet doc "$DOC_TRAIN" pcen_nobg \
+    --spec-transform "PCEN" --no-background
 
-# # 61. PCEN + deltas + no background
-# run_experiment regnet doc "$DOC_TRAIN" pcen_deltas_nobg \
-#     --spec-transform "PCEN" --deltas --no-background
+# 61. PCEN + deltas + no background
+run_experiment regnet doc "$DOC_TRAIN" pcen_deltas_nobg \
+    --spec-transform "PCEN" --deltas --no-background
 
-# # 62. PCEN + Asymmetric Loss
-# run_experiment regnet doc "$DOC_TRAIN" pcen_asl \
-#     --spec-transform "PCEN" --use-asl
+# 62. PCEN + Asymmetric Loss
+run_experiment regnet doc "$DOC_TRAIN" pcen_asl \
+    --spec-transform "PCEN" --use-asl
 
-# # ─── Group F: Loss function variants on Log baseline (63–71) ──────────
+# ─── Group F: Loss function variants on Log baseline (63–71) ──────────
 
-# # 63. Asymmetric Loss only
-# run_experiment regnet doc "$DOC_TRAIN" asl \
-#     --spec-transform "Log" --use-asl
+# 63. Asymmetric Loss only
+run_experiment regnet doc "$DOC_TRAIN" asl \
+    --spec-transform "Log" --use-asl
 
-# # 64. Class weights only
-# run_experiment regnet doc "$DOC_TRAIN" classw \
-#     --spec-transform "Log" --class-weights
+# 64. Class weights only
+run_experiment regnet doc "$DOC_TRAIN" classw \
+    --spec-transform "Log" --class-weights
 
-# # 65. ASL + class weights
-# run_experiment regnet doc "$DOC_TRAIN" asl_classw \
-#     --spec-transform "Log" --use-asl --class-weights
+# 65. ASL + class weights
+run_experiment regnet doc "$DOC_TRAIN" asl_classw \
+    --spec-transform "Log" --use-asl --class-weights
 
-# # 66. Deltas + ASL
-# run_experiment regnet doc "$DOC_TRAIN" deltas_asl \
-#     --spec-transform "Log" --deltas --use-asl
+# 66. Deltas + ASL
+run_experiment regnet doc "$DOC_TRAIN" deltas_asl \
+    --spec-transform "Log" --deltas --use-asl
 
-# # 67. Deltas + class weights
-# run_experiment regnet doc "$DOC_TRAIN" deltas_classw \
-#     --spec-transform "Log" --deltas --class-weights
+# 67. Deltas + class weights
+run_experiment regnet doc "$DOC_TRAIN" deltas_classw \
+    --spec-transform "Log" --deltas --class-weights
 
-# # 68. SED head + ASL
-# run_experiment regnet doc "$DOC_TRAIN" sedhead_asl \
-#     --spec-transform "Log" --sed-head --use-asl
+# 68. SED head + ASL
+run_experiment regnet doc "$DOC_TRAIN" sedhead_asl \
+    --spec-transform "Log" --sed-head --use-asl
 
-# # 69. SED head + class weights
-# run_experiment regnet doc "$DOC_TRAIN" sedhead_classw \
-#     --spec-transform "Log" --sed-head --class-weights
+# 69. SED head + class weights
+run_experiment regnet doc "$DOC_TRAIN" sedhead_classw \
+    --spec-transform "Log" --sed-head --class-weights
 
-# # 70. Gated head alone
-# run_experiment regnet doc "$DOC_TRAIN" gated \
-#     --spec-transform "Log" --gated-head
+# 70. Gated head alone
+run_experiment regnet doc "$DOC_TRAIN" gated \
+    --spec-transform "Log" --gated-head
 
-# # 71. Gated head + ASL
-# run_experiment regnet doc "$DOC_TRAIN" gated_asl \
-#     --spec-transform "Log" --gated-head --use-asl
+# 71. Gated head + ASL
+run_experiment regnet doc "$DOC_TRAIN" gated_asl \
+    --spec-transform "Log" --gated-head --use-asl
 
-# # ─── Group G: CNN adapter (72–76) ─────────────────────────────────────
+# ─── Group G: CNN adapter (72–76) ─────────────────────────────────────
 
 # 72. CNN adapter alone
 run_experiment regnet doc "$DOC_TRAIN" cnnadapter \
