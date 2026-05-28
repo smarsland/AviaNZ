@@ -329,7 +329,7 @@ class SpectrogramDataset(Dataset):
         # Load spectrogram data
         file_path = self.filenames[idx]
         try:
-            data = np.load(file_path)
+            data = np.load(file_path, allow_pickle=True)
         except Exception as e:
             raise ValueError(f"Failed to load spectrogram file {file_path}: {e}")
         
