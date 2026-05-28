@@ -29,7 +29,7 @@ SCALING_TESTS="${BASE}/scaling_tests"
 PRETRAINED="BirdClefModels/model_fold0.pth"
 SEED="${SEED:-0}"
 
-N_VALUES=(100 200 300 500 750 1000 1500 2000 2500 3000)  # N samples per class at train time (subsampled from doc_large which has 3000/class)
+N_VALUES=(100 200 300 500 750 1000 1500 2000 2500 3000 4000 5000 6000 7000 8000)  # N samples per class at train time (subsampled from doc_large which has 3000/class)
 
 # --- sanity checks ---
 check_path() { [[ -d "$1" ]] || { echo "ERROR: directory not found: $1"; exit 1; }; }
@@ -51,7 +51,7 @@ echo "  N values      : ${N_VALUES[*]}"
 echo "================================================================"
 
 for N in "${N_VALUES[@]}"; do
-    OUT="${SCALING_TESTS}/regnet_on_doc_scaling_N${N}_seed${SEED}"
+    OUT="${SCALING_TESTS}/regnet_on_doc_scaling_kbird2_N${N}_seed${SEED}"
     echo ""
     echo "------------------------------------------------------------"
     echo " N = ${N}  →  ${OUT}"
@@ -64,6 +64,7 @@ for N in "${N_VALUES[@]}"; do
         --pretrained  "${PRETRAINED}" \
         --spec-transform Log \
         --bg-subtract \
+        --kbird-prior 2.0 \
         --epochs      40 \
         --patience    15 \
         --seed        "${SEED}" \

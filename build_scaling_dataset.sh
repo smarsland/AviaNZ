@@ -21,7 +21,7 @@ set -euo pipefail
 BASE="/local/scratch/freangi"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT="${BASE}/scaling"
-MAX_PER_SPECIES=3000
+MAX_PER_SPECIES=8000
 MAPPING="data/DOC_bird_naming_map.csv"
 
 # The 9 class labels as they appear in the matched dataset labels.json
