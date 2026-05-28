@@ -51,7 +51,7 @@ echo "  N values      : ${N_VALUES[*]}"
 echo "================================================================"
 
 for N in "${N_VALUES[@]}"; do
-    OUT="${SCALING_TESTS}/regnet_on_doc_scaling_kbird2_N${N}_seed${SEED}"
+    OUT="${SCALING_TESTS}/regnet_on_doc_scaling_kbird2_bgsubtract_N${N}_seed${SEED}"
     echo ""
     echo "------------------------------------------------------------"
     echo " N = ${N}  →  ${OUT}"
@@ -63,6 +63,7 @@ for N in "${N_VALUES[@]}"; do
         --model-type  regnet \
         --pretrained  "${PRETRAINED}" \
         --spec-transform Log \
+        --bg-subtract \
         --kbird-prior 2.0 \
         --epochs      40 \
         --patience    15 \
