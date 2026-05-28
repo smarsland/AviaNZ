@@ -63,7 +63,6 @@ for N in "${N_VALUES[@]}"; do
         --model-type  regnet \
         --pretrained  "${PRETRAINED}" \
         --spec-transform Log \
-        --bg-subtract \
         --kbird-prior 2.0 \
         --epochs      40 \
         --patience    15 \
