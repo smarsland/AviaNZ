@@ -52,7 +52,7 @@ def main():
             missing.append(entry['filename'])
             continue
         try:
-            arr = np.load(npy_path)
+            arr = np.load(npy_path, allow_pickle=True)
             if arr.dtype == np.float32:
                 continue
             if np.issubdtype(arr.dtype, np.floating) or np.issubdtype(arr.dtype, np.integer):
@@ -73,7 +73,7 @@ def main():
         for entry in bad_castable + bad_reprocess:
             npy_path = os.path.join(data_dir, entry['filename'])
             try:
-                arr = np.load(npy_path)
+                arr = np.load(npy_path, allow_pickle=True)
                 print(f"  {entry['filename']}  dtype={arr.dtype}  source={entry.get('source_file','?')}")
             except Exception as e:
                 print(f"  {entry['filename']}  UNLOADABLE: {e}  source={entry.get('source_file','?')}")
@@ -85,7 +85,7 @@ def main():
     for entry in bad_castable:
         npy_path = os.path.join(data_dir, entry['filename'])
         try:
-            arr = np.load(npy_path).astype(np.float32)
+            arr = np.load(npy_path, allow_pickle=True).astype(np.float32)
             np.save(npy_path, arr)
             cast_ok += 1
         except Exception as e:
