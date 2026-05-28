@@ -164,7 +164,7 @@ class SpectrogramProcessor:
             return None
 
     def save_spectrogram(self, sg_raw, output_folder, filename):
-        np.save(os.path.join(output_folder, f"{filename}.npy"), sg_raw)
+        np.save(os.path.join(output_folder, f"{filename}.npy"), np.asarray(sg_raw, dtype=np.float32))
 
     def save_example_image(self, sg_raw, output_folder, filename, cmap_name='gray'):
         examples_folder = os.path.join(output_folder, "examples")
@@ -246,7 +246,7 @@ class AudioSetFbankProcessor:
         return feats
 
     def save_spectrogram(self, sg_raw, output_folder, filename):
-        np.save(os.path.join(output_folder, f"{filename}.npy"), sg_raw)
+        np.save(os.path.join(output_folder, f"{filename}.npy"), np.asarray(sg_raw, dtype=np.float32))
 
     def save_example_image(self, sg_raw, output_folder, filename, cmap_name='gray'):
         examples_folder = os.path.join(output_folder, "examples")
@@ -423,7 +423,7 @@ class CQTProcessor:
             return None
 
     def save_spectrogram(self, sg_raw, output_folder, filename):
-        np.save(os.path.join(output_folder, f"{filename}.npy"), sg_raw)
+        np.save(os.path.join(output_folder, f"{filename}.npy"), np.asarray(sg_raw, dtype=np.float32))
 
     def save_example_image(self, sg_raw, output_folder, filename, cmap_name='gray'):
         examples_folder = os.path.join(output_folder, "examples")

@@ -283,8 +283,9 @@ class SpectrogramDataset(Dataset):
         self.rng = np.random.RandomState(21390)
         
         # Cache noise data in memory (WAY faster than loading from disk every time)
+        # Only cache if noise augmentation is actually enabled
         self.noise_cache = []
-        if self.noise_filenames:
+        if self.noise_filenames and self.noise_ratio > 0:
             print(f"Loading {len(self.noise_filenames)} noise files into memory...")
             for noise_file in self.noise_filenames:
                 noise_data = np.load(noise_file)
