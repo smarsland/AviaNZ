@@ -43,7 +43,8 @@ def main():
     files = label_data['files']
     target_time_bins = config.DEFAULT_TIME_BINS
 
-    bad = []
+    bad_castable = []   # numeric dtype (e.g. float64) — just cast in-place
+    bad_reprocess = []  # unloadable or object dtype — need reprocessing from source
     missing = []
     for entry in files:
         npy_path = os.path.join(data_dir, entry['filename'])
@@ -52,19 +53,24 @@ def main():
             continue
         try:
             arr = np.load(npy_path)
-            if arr.dtype != np.float32:
-                bad.append(entry)
+            if arr.dtype == np.float32:
+                continue
+            if np.issubdtype(arr.dtype, np.floating) or np.issubdtype(arr.dtype, np.integer):
+                bad_castable.append(entry)
+            else:
+                bad_reprocess.append(entry)
         except Exception as e:
             print(f"Cannot load {entry['filename']}: {e}")
-            bad.append(entry)
+            bad_reprocess.append(entry)
 
-    print(f"Scanned {len(files)} files: {len(bad)} bad dtype, {len(missing)} missing")
-    if not bad:
+    total_bad = len(bad_castable) + len(bad_reprocess)
+    print(f"Scanned {len(files)} files: {len(bad_castable)} castable, {len(bad_reprocess)} need reprocessing, {len(missing)} missing")
+    if total_bad == 0:
         print("Nothing to repair.")
         return
 
     if args.dry_run:
-        for entry in bad:
+        for entry in bad_castable + bad_reprocess:
             npy_path = os.path.join(data_dir, entry['filename'])
             try:
                 arr = np.load(npy_path)
@@ -73,37 +79,49 @@ def main():
                 print(f"  {entry['filename']}  UNLOADABLE: {e}  source={entry.get('source_file','?')}")
         return
 
-    spec_proc = make_spec_processor(args.spec_type, args.window_type, args.sg_scale)
-
-    repaired = 0
-    failed = 0
-    for entry in bad:
-        source_file = entry.get('source_file')
+    # --- Pass 1: in-place cast for numeric dtypes (fast) ---
+    cast_ok = 0
+    cast_fail = 0
+    for entry in bad_castable:
         npy_path = os.path.join(data_dir, entry['filename'])
+        try:
+            arr = np.load(npy_path).astype(np.float32)
+            np.save(npy_path, arr)
+            cast_ok += 1
+        except Exception as e:
+            print(f"  CAST FAIL {entry['filename']}: {e}")
+            cast_fail += 1
 
-        if not source_file or not os.path.exists(source_file):
-            print(f"  SKIP {entry['filename']}: source_file missing or not found ({source_file})")
-            failed += 1
-            continue
+    print(f"Cast pass: {cast_ok} fixed, {cast_fail} failed")
 
-        sg = spec_proc.process_audio_file(source_file)
-        if sg is None:
-            print(f"  FAIL {entry['filename']}: spec processing returned None for {source_file}")
-            failed += 1
-            continue
-
-        if sg.shape[1] > target_time_bins:
-            sg = trim_spectrogram_to_length(sg, target_time_bins)
-            if sg is None:
-                print(f"  FAIL {entry['filename']}: trim returned None")
-                failed += 1
+    # --- Pass 2: reprocess from source for unloadable / object-dtype files ---
+    if bad_reprocess:
+        spec_proc = make_spec_processor(args.spec_type, args.window_type, args.sg_scale)
+        reprocess_ok = 0
+        reprocess_fail = 0
+        for entry in bad_reprocess:
+            source_file = entry.get('source_file')
+            npy_path = os.path.join(data_dir, entry['filename'])
+            if not source_file or not os.path.exists(source_file):
+                print(f"  SKIP {entry['filename']}: source missing ({source_file})")
+                reprocess_fail += 1
                 continue
+            sg = spec_proc.process_audio_file(source_file)
+            if sg is None:
+                print(f"  FAIL {entry['filename']}: spec processing returned None")
+                reprocess_fail += 1
+                continue
+            if sg.shape[1] > target_time_bins:
+                sg = trim_spectrogram_to_length(sg, target_time_bins)
+                if sg is None:
+                    print(f"  FAIL {entry['filename']}: trim returned None")
+                    reprocess_fail += 1
+                    continue
+            np.save(npy_path, np.asarray(sg, dtype=np.float32))
+            reprocess_ok += 1
+        print(f"Reprocess pass: {reprocess_ok} fixed, {reprocess_fail} failed")
 
-        # save_spectrogram now enforces float32, but be explicit here too
-        np.save(npy_path, np.asarray(sg, dtype=np.float32))
-        repaired += 1
-
-    print(f"\nRepaired {repaired}/{len(bad)} files. Failed: {failed}")
+    print(f"\nDone. Total fixed: {cast_ok + (reprocess_ok if bad_reprocess else 0)}/{total_bad}")
 
 
 if __name__ == '__main__':
