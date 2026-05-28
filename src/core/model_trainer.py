@@ -313,6 +313,15 @@ class Trainer:
         self.eval_only = getattr(cfg.evaluation, 'eval_only', False)
         self.checkpoint_path = getattr(cfg.evaluation, 'checkpoint', None)
         
+        # Setup device FIRST — before any torch.cuda call (including seeding).
+        # In Exclusive Process mode, cudaErrorDevicesUnavailable is process-wide — once any
+        # device fails, the entire CUDA runtime is broken for this process.  We therefore
+        # probe GPUs via nvidia-smi (no CUDA context) BEFORE touching torch.cuda, then pin
+        # CUDA_VISIBLE_DEVICES to the first free GPU so PyTorch only ever sees one device.
+        if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+            chosen = self._pick_free_gpu()
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
+
         # Set random seed
         if self.seed is not None:
             import random
@@ -324,15 +333,6 @@ class Trainer:
                 torch.backends.cudnn.deterministic = True
                 torch.backends.cudnn.benchmark = False
             print(f"Random seed set to: {self.seed}")
-        
-        # Setup device.
-        # In Exclusive Process mode, cudaErrorDevicesUnavailable is process-wide — once any
-        # device fails, the entire CUDA runtime is broken for this process.  We therefore
-        # probe GPUs via nvidia-smi (no CUDA context) BEFORE touching torch.cuda, then pin
-        # CUDA_VISIBLE_DEVICES to the first free GPU so PyTorch only ever sees one device.
-        if 'CUDA_VISIBLE_DEVICES' not in os.environ:
-            chosen = self._pick_free_gpu()
-            os.environ['CUDA_VISIBLE_DEVICES'] = str(chosen)
 
         if not torch.cuda.is_available():
             raise RuntimeError(f"CUDA not available (CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')})")
