@@ -24,8 +24,13 @@ OUTPUT="${BASE}/scaling"
 MAX_PER_SPECIES=5000
 MAPPING="data/DOC_bird_naming_map.csv"
 
-# The 9 class labels (must match those in the matched dataset labels.json)
+# The 9 class labels as they appear in the matched dataset labels.json
+# restrict-classes uses the POST-remap names; label-remap converts DOC names to match
 CLASSES="blackbird,chaffinch,fantail,grey warbler,kaka,morepork,silvereye,tomtit,tui/bellbird"
+
+# DOC name mapping: ebird_to_common gives "New Zealand Kaka", "Tui", "Bellbird"
+# Remap to match the merged labels used in the matched dataset
+LABEL_REMAP="new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird"
 
 echo "============================================================"
 echo " Build scaling dataset (DOC only, 9 classes, ${MAX_PER_SPECIES}/class)"
@@ -42,6 +47,7 @@ PYTHONPATH=. python3 src/experiments/build_large_datasets.py \
     --mapping    "${MAPPING}" \
     --doc-only \
     --restrict-classes "${CLASSES}" \
+    --label-remap      "${LABEL_REMAP}" \
     --max-per-species  "${MAX_PER_SPECIES}" \
     --no-audio \
     --spec-type  Standard \

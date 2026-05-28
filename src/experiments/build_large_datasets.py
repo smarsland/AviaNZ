@@ -91,6 +91,7 @@ def build_doc_large(
     with_audio=True,
     sg_type=None, window_type=None, sg_scale=None,
     restrict_classes=None,
+    label_remap=None,
 ):
     """
     Scan the DOC folder structure and extract up to max_per_species spectrograms
@@ -99,8 +100,11 @@ def build_doc_large(
     Args:
         restrict_classes: If provided (set/list of normalised common names), skip
                           any species that doesn't map to one of these labels.
-                          Use this to build a class-filtered dataset in one pass
-                          instead of building everything then filtering.
+                          Applied AFTER label_remap so remap targets can be used.
+        label_remap: Optional dict mapping normalised label → new label, applied
+                     before restrict_classes.  Use to merge classes or rename:
+                     e.g. {"tui": "tui/bellbird", "bellbird": "tui/bellbird",
+                            "new zealand kaka": "kaka"}
 
     Returns list of label dicts compatible with labels.json.
     """
@@ -121,6 +125,8 @@ def build_doc_large(
     labels = []
     skipped_unmapped = []
     restrict_set = set(restrict_classes) if restrict_classes else None
+    # Per-species sample counts after remapping (for max_per_species cap)
+    label_sample_counts = defaultdict(int)
 
     for species_code, file_list in sorted(species_files.items()):
         # Map eBird code to normalised common name
@@ -130,13 +136,24 @@ def build_doc_large(
             continue
         label = norm_key(common_name)
 
+        # Apply label remapping (merge or rename)
+        if label_remap:
+            label = label_remap.get(label, label)
+
         # Skip species not in the allowed set (if a filter is given)
         if restrict_set is not None and label not in restrict_set:
             continue
 
-        # Randomly sample up to max_per_species
-        if len(file_list) > max_per_species:
-            sampled = rng.sample(file_list, max_per_species)
+        # Respect per-label cap even when multiple eBird codes map to same label
+        already_saved = label_sample_counts[label]
+        remaining_cap = max_per_species - already_saved
+        if remaining_cap <= 0:
+            print(f'  {species_code:12s} ({label:20s}): skipped — cap already reached ({max_per_species})')
+            continue
+
+        # Randomly sample up to remaining_cap from this eBird code's files
+        if len(file_list) > remaining_cap:
+            sampled = rng.sample(file_list, remaining_cap)
         else:
             sampled = list(file_list)
 
@@ -166,6 +183,7 @@ def build_doc_large(
                 'class_names': [label],
                 'source_file': audio_path,
             })
+            label_sample_counts[label] += 1
             saved += 1
 
         print(f'  {species_code:12s} ({label:20s}): '
@@ -441,8 +459,11 @@ def main():
     parser.add_argument('--doc-only', action='store_true',
                         help='Build DOC dataset only (skip AviaNZ and skip common-class filtering).')
     parser.add_argument('--restrict-classes', default=None,
-                        help='Comma-separated list of class names to keep (applied after DOC build). '
+                        help='Comma-separated list of class names to keep (after label-remap). '
                              'Use with --doc-only to restrict to a fixed class vocabulary.')
+    parser.add_argument('--label-remap', default=None,
+                        help='Comma-separated old:new pairs to rename/merge labels before filtering. '
+                             'e.g. "tui:tui/bellbird,bellbird:tui/bellbird,new zealand kaka:kaka"')
     parser.add_argument('--output', required=True,
                         help='Output base directory')
     parser.add_argument('--mapping', default='data/DOC_bird_naming_map.csv',
@@ -495,6 +516,14 @@ def main():
     if args.restrict_classes:
         restrict_classes = [c.strip() for c in args.restrict_classes.split(',') if c.strip()]
 
+    label_remap = None
+    if args.label_remap:
+        label_remap = {}
+        for pair in args.label_remap.split(','):
+            old, new = pair.split(':', 1)
+            label_remap[old.strip()] = new.strip()
+        print(f'  Label remap    : {label_remap}')
+
     print('=' * 70)
     print(' Build large unmatched datasets')
     print('=' * 70)
@@ -533,6 +562,7 @@ def main():
             window_type=args.window_type,
             sg_scale=args.sg_scale,
             restrict_classes=restrict_classes,
+            label_remap=label_remap,
         )
     else:
         print('\n=== Step 1: DOC large dataset already exists, loading ===')
