@@ -21,10 +21,13 @@ def get_background_spectrogram(img):
     # Normalize: z-score normalization per frequency band
     sg_normalized = (img - mu0) / (np.sqrt(var0) + 1e-6)
 
-    for row in range(H):
-        outliers = sg_normalized[row, :] > 4
-        not_outliers = sg_normalized[row, :] <= 4
-        sg_normalized[row, outliers] = np.random.choice(sg_normalized[row, not_outliers], size=np.sum(outliers), replace=True)
+    # Vectorized outlier replacement: replace values > 4 std with the per-row
+    # median of non-outlier values (avoids a slow Python loop over H=224 rows).
+    outlier_mask = sg_normalized > 4  # (H, W)
+    sg_no_outliers = np.where(outlier_mask, np.nan, sg_normalized)
+    row_fill = np.nanmedian(sg_no_outliers, axis=1, keepdims=True)  # (H, 1)
+    row_fill = np.where(np.isnan(row_fill), 0.0, row_fill)
+    sg_normalized = np.where(outlier_mask, row_fill, sg_normalized)
 
     img = (sg_normalized * (np.sqrt(var0) + 1e-6)) + mu0
 
