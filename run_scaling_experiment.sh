@@ -29,7 +29,7 @@ SCALING_TESTS="${BASE}/scaling_tests"
 PRETRAINED="BirdClefModels/model_fold0.pth"
 SEED="${SEED:-0}"
 
-N_VALUES=(100 200 300 500 750 1000 1500 2000)
+N_VALUES=(100 200 300 500 750 1000 1500 2000 2500 3000)  # N samples per class at train time (subsampled from doc_large which has 3000/class)
 
 # --- sanity checks ---
 check_path() { [[ -d "$1" ]] || { echo "ERROR: directory not found: $1"; exit 1; }; }

@@ -5,7 +5,7 @@
 #   blackbird, chaffinch, fantail, grey warbler, kaka,
 #   morepork, silvereye, tomtit, tui/bellbird
 #
-# Saves up to MAX_PER_SPECIES (2000) samples per class so that the
+# Saves up to MAX_PER_SPECIES (3000) samples per class so that the
 # run_scaling_experiment.sh script can subsample down to smaller N
 # at train time using --max-samples-per-class.
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 BASE="/local/scratch/freangi"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT="${BASE}/scaling"
-MAX_PER_SPECIES=5000
+MAX_PER_SPECIES=3000
 MAPPING="data/DOC_bird_naming_map.csv"
 
 # The 9 class labels as they appear in the matched dataset labels.json
