@@ -74,11 +74,15 @@ def pick_free_gpu():
 
     # Prefer GPUs with no active process; among ties prefer lowest memory
     free_gpus = {i: m for i, m in mem_by_idx.items() if i not in occupied}
-    candidates = free_gpus if free_gpus else mem_by_idx
 
-    best_idx = min(candidates, key=lambda i: candidates[i])
-    best_mem = candidates[best_idx]
+    if not free_gpus:
+        lines = [f"  GPU {i}: {mem_by_idx[i]} MiB used" for i in sorted(mem_by_idx)]
+        raise RuntimeError(
+            "All GPUs are occupied (exclusive process mode). "
+            "Try a different server.\n" + "\n".join(lines)
+        )
 
-    status = "no active process" if best_idx not in occupied else "active process (all GPUs occupied)"
-    print(f"Auto-selected GPU {best_idx} ({best_mem} MiB used, {status})")
+    best_idx = min(free_gpus, key=lambda i: free_gpus[i])
+    best_mem = free_gpus[best_idx]
+    print(f"Auto-selected GPU {best_idx} ({best_mem} MiB used, no active process)")
     return best_idx
