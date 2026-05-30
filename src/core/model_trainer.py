@@ -347,10 +347,37 @@ class Trainer:
         if self.patience > 0:
             print(f"Early stopping patience: {self.patience} epochs")
         
-        # Load data (always multilabel)
+        # Load data (always multilabel).
+        # When max_samples_per_class is set we must subsample the *full* dataset
+        # before the train/val split so that the requested N is what actually ends
+        # up in the training set rather than N*0.8 (the post-split training slice).
         data_loader = DataLoader(self.data_folder, noise_folder=self.noise_folder)
-        self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
-        self.num_classes = self.data['nclasses']
+        max_per_class = cfg.training.max_samples_per_class
+        if max_per_class is not None:
+            full = data_loader.load_data(use_multilabel=True, validation_share=0.0)
+            self.num_classes = full['nclasses']
+            # Subsample on the full dataset before splitting
+            full = self._subsample_per_class(full, max_per_class)
+            split = data_loader.split_data(
+                full['train_filenames'],
+                np.array(full['train_labels'], dtype=np.float32),
+                full.get('train_noise_filenames') or [],
+                0.2,
+            )
+            self.data = {
+                'train_filenames':       split[0],
+                'train_labels':          split[1],
+                'test_filenames':        split[2],
+                'test_labels':           split[3],
+                'train_noise_filenames': split[4],
+                'test_noise_filenames':  split[5],
+                'categories':            full['categories'],
+                'class_names':           full['class_names'],
+                'nclasses':              full['nclasses'],
+            }
+        else:
+            self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
+            self.num_classes = self.data['nclasses']
 
         # Compute background rebalancing weight: equalise total gradient contribution
         # of background (all-zero) vs labelled samples.
@@ -372,11 +399,6 @@ class Trainer:
             self.data['train_filenames'] = [f for f, k in zip(self.data['train_filenames'], keep) if k]
             self.data['train_labels'] = train_labels[keep]
             print(f"--no-background: kept {keep.sum()} / {len(keep)} training samples (dropped {(~keep).sum()} background)")
-
-        # Subsample training data per class for scaling experiments.
-        max_per_class = cfg.training.max_samples_per_class
-        if max_per_class is not None:
-            self.data = self._subsample_per_class(self.data, max_per_class)
 
         # Optionally include noise spectrograms as explicit all-zero training samples.
         # This is useful for soundscape-style inference even if you evaluate with --birds-only,
