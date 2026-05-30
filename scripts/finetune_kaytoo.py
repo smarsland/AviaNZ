@@ -354,6 +354,8 @@ def main():
     parser.add_argument('--val-fraction', type=float, default=0.1,
                         help='Fraction of training data held out for validation (default: 0.1)')
     parser.add_argument('--cpu', action='store_true', help='Force CPU training/inference')
+    parser.add_argument('--devices', type=int, default=1,
+                        help='Number of GPUs to use for training (default: 1)')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Score threshold for evaluation (default: 0.5)')
     args = parser.parse_args()
@@ -395,10 +397,12 @@ def main():
     # find_unused_parameters=True.  This is needed because the backbone is
     # frozen for the first few epochs, leaving those parameters unused in the
     # forward pass.  We must NOT touch kaytoo_train_2_07.py itself.
+    _n_devices = args.devices
     _OrigTrainer = pl.Trainer
     class _FTTrainer(_OrigTrainer):
         def __init__(self, *args, **kwargs):
             kwargs.setdefault('strategy', 'ddp_find_unused_parameters_true')
+            kwargs.setdefault('devices', _n_devices)
             super().__init__(*args, **kwargs)
     _kt.pl.Trainer = _FTTrainer
 
