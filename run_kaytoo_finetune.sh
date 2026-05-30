@@ -13,6 +13,7 @@ set -e
 #   ./run_kaytoo_finetune.sh --epochs 20  # override epoch count (default: 10)
 #   ./run_kaytoo_finetune.sh --lr 5e-5    # override peak learning rate
 #   ./run_kaytoo_finetune.sh --gpus 2     # use 2 GPUs (default: 1)
+#   ./run_kaytoo_finetune.sh --gpu 2      # use specific GPU index (default: let PyTorch pick)
 
 CPU_FLAG=""
 LARGE=false
@@ -21,6 +22,7 @@ LR=1e-4
 BATCH_SIZE=16
 NUM_WORKERS=4
 DEVICES=1
+GPU_ID=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
         --batch-size) BATCH_SIZE="$2"; shift 2 ;;
         --workers)    NUM_WORKERS="$2"; shift 2 ;;
         --gpus)       DEVICES="$2"; shift 2 ;;
+        --gpu)        GPU_ID="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -100,6 +103,7 @@ PYTHONPATH="$PWD" "$KAYTOO_PYTHON" scripts/finetune_kaytoo.py \
     --batch-size   "$BATCH_SIZE" \
     --num-workers  "$NUM_WORKERS" \
     --devices      "$DEVICES" \
+    ${GPU_ID:+--gpu-id "$GPU_ID"} \
     $CPU_FLAG
 
 echo ""

@@ -356,6 +356,8 @@ def main():
     parser.add_argument('--cpu', action='store_true', help='Force CPU training/inference')
     parser.add_argument('--devices', type=int, default=1,
                         help='Number of GPUs to use for training (default: 1)')
+    parser.add_argument('--gpu-id', type=int, default=None,
+                        help='GPU index to use (sets CUDA_VISIBLE_DEVICES; default: let PyTorch pick)')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Score threshold for evaluation (default: 0.5)')
     args = parser.parse_args()
@@ -393,21 +395,26 @@ def main():
         save_model_config,
     )
 
+    # Pin GPU / disable GPU before importing torch so CUDA sees the right device.
+    if args.cpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''
+    elif args.gpu_id is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+
     # Patch pl.Trainer in kaytoo's own namespace so that DDP always uses
-    # find_unused_parameters=True.  This is needed because the backbone is
-    # frozen for the first few epochs, leaving those parameters unused in the
-    # forward pass.  We must NOT touch kaytoo_train_2_07.py itself.
+    # find_unused_parameters=True when running multi-GPU.  For a single device
+    # we use strategy='auto' so PL picks SingleDeviceStrategy — that avoids
+    # NCCL / process-group init entirely.  We must NOT touch kaytoo_train_2_07.py.
     _n_devices = args.devices
     _OrigTrainer = pl.Trainer
     class _FTTrainer(_OrigTrainer):
         def __init__(self, *args, **kwargs):
-            kwargs.setdefault('strategy', 'ddp_find_unused_parameters_true')
+            n = kwargs.get('devices', _n_devices)
+            if isinstance(n, int) and n > 1:
+                kwargs.setdefault('strategy', 'ddp_find_unused_parameters_true')
             kwargs.setdefault('devices', _n_devices)
             super().__init__(*args, **kwargs)
     _kt.pl.Trainer = _FTTrainer
-
-    if args.cpu:
-        os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
     # ------------------------------------------------------------------
     # Labels / mapping
