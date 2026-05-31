@@ -860,6 +860,8 @@ class Trainer:
                     with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
                         if self.use_reconstruction:
                             output, recon = model(data)
+                        elif self.use_sed_head:
+                            output, frame_logits = model(data)
                         elif self.use_gated_head:
                             output, gate_logit = model(data)
                         else:
@@ -873,6 +875,15 @@ class Trainer:
                             target_spec = (target_spec - config.AST_MEAN) / config.AST_STD
                             recon_loss = F.mse_loss(recon, target_spec)
                             loss = loss + self.recon_weight * recon_loss
+
+                        if self.use_sed_head:
+                            # Two-way loss: clip-level (attention-weighted) + segment mean.
+                            # Mirrors Kaytoo's BCEFocal2WayLoss which supervises both the
+                            # final attention-pooled logit and the raw per-frame mean logit,
+                            # giving the attention weights a gradient signal to localise birds.
+                            frame_logits = torch.clamp(frame_logits, min=-80.0, max=80.0)
+                            aux_loss = self._background_weighted_loss(criterion, frame_logits, target)
+                            loss = loss + aux_loss
 
                         if self.use_gated_head:
                             is_bird = (target.sum(dim=1) > 0).float()

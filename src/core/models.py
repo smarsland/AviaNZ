@@ -122,8 +122,9 @@ class TemporalAttentionHead(nn.Module):
         x = F.relu(self.proj(x))                           # (B, proj_dim, T')
         attn = torch.softmax(self.attn_conv(x), dim=-1)    # (B, K, T')
         cls = self.cls_conv(x)                              # (B, K, T')
-        logits = (attn * cls).sum(dim=-1)                  # (B, K)
-        return logits
+        logits = (attn * cls).sum(dim=-1)                  # (B, K) — clip-level (attention-weighted)
+        frame_logits = cls.mean(dim=-1)                    # (B, K) — segment mean (two-way aux target)
+        return logits, frame_logits
 
 
 class CnnAdapter(nn.Module):
@@ -704,7 +705,9 @@ class RegNetModel(nn.Module):
             x = self.cnn_adapter(x)
         if self.use_sed_head:
             features = self.backbone.forward_features(x)   # (B, C, F', T')
-            logits = self.sed_head(features)
+            logits, frame_logits = self.sed_head(features)
+            if self.training:
+                return logits, frame_logits
             return logits
 
         features = self.backbone(x)
