@@ -666,7 +666,7 @@ class RegNetModel(nn.Module):
                     if 'classifier' not in new_key and 'fc' not in new_key:
                         backbone_dict[new_key] = v
         else:
-            # Own-trained checkpoint: raw state dict (backbone keys at top level)
+            # Own-trained checkpoint: raw state dict with 'backbone.<k>' keys
             state_dict = checkpoint
             if 'classifier.weight' in state_dict:
                 orig_num_classes = state_dict['classifier.weight'].shape[0]
@@ -674,10 +674,14 @@ class RegNetModel(nn.Module):
             else:
                 print("  Original model: own-trained (class count unknown)")
             print(f"  Target model: {self.num_classes} classes (your dataset)")
-            backbone_dict = {
-                k: v for k, v in state_dict.items()
-                if 'classifier' not in k and 'fc' not in k
-            }
+            backbone_dict = {}
+            for k, v in state_dict.items():
+                if k.startswith('backbone.'):
+                    new_key = k.replace('backbone.', '')
+                    if 'classifier' not in new_key and 'fc' not in new_key:
+                        backbone_dict[new_key] = v
+                elif 'classifier' not in k and 'fc' not in k:
+                    backbone_dict[k] = v
         
         # Drop any keys whose shape doesn't match the current model (e.g. stem
         # conv when in_chans != 1); strict=False skips missing/extra keys but
