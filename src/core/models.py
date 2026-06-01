@@ -647,17 +647,37 @@ class RegNetModel(nn.Module):
         sys.modules['__main__'].CFG = CFG
         
         checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
-        
-        orig_num_classes = checkpoint['model_state_dict']['classifier.weight'].shape[0]
-        print(f"  Original model: {orig_num_classes} classes (BirdClef)")
-        print(f"  Target model: {self.num_classes} classes (your dataset)")
-        
-        backbone_dict = {}
-        for k, v in checkpoint['model_state_dict'].items():
-            if k.startswith('backbone.'):
-                new_key = k.replace('backbone.', '')
-                if 'classifier' not in new_key and 'fc' not in new_key:
-                    backbone_dict[new_key] = v
+
+        # Support two checkpoint formats:
+        #   1. BirdClef format: {'model_state_dict': {'backbone.<k>': v, ...}, ...}
+        #   2. Own-trained format: raw state dict saved by model_trainer (keys
+        #      are bare backbone keys, e.g. 'stem.conv.weight', plus
+        #      'classifier.weight' / 'classifier.bias')
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            # BirdClef-style wrapped checkpoint
+            state_dict = checkpoint['model_state_dict']
+            orig_num_classes = state_dict['classifier.weight'].shape[0]
+            print(f"  Original model: {orig_num_classes} classes (BirdClef)")
+            print(f"  Target model: {self.num_classes} classes (your dataset)")
+            backbone_dict = {}
+            for k, v in state_dict.items():
+                if k.startswith('backbone.'):
+                    new_key = k.replace('backbone.', '')
+                    if 'classifier' not in new_key and 'fc' not in new_key:
+                        backbone_dict[new_key] = v
+        else:
+            # Own-trained checkpoint: raw state dict (backbone keys at top level)
+            state_dict = checkpoint
+            if 'classifier.weight' in state_dict:
+                orig_num_classes = state_dict['classifier.weight'].shape[0]
+                print(f"  Original model: {orig_num_classes} classes (own-trained)")
+            else:
+                print("  Original model: own-trained (class count unknown)")
+            print(f"  Target model: {self.num_classes} classes (your dataset)")
+            backbone_dict = {
+                k: v for k, v in state_dict.items()
+                if 'classifier' not in k and 'fc' not in k
+            }
         
         # Drop any keys whose shape doesn't match the current model (e.g. stem
         # conv when in_chans != 1); strict=False skips missing/extra keys but
