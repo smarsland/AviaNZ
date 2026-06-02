@@ -106,11 +106,18 @@ def load_matched_baselines(matched_dir):
     return result
 
 
-def make_figure(points, baselines, panel_specs, col_map, suptitle, seeds, seed_colors):
+def make_figure(points, baselines, panel_specs, col_map, suptitle, seeds, seed_colors,
+                points_ft=None):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     fig.suptitle(suptitle, fontsize=13)
 
     all_ns = sorted(set(p[0] for s in seeds for p in points[s]))
+    if points_ft:
+        for s in points_ft:
+            all_ns = sorted(set(all_ns) | {p[0] for p in points_ft[s]})
+
+    # Muted versions of seed_colors for the ft series
+    ft_colors = ['#85c1e9', '#82e0aa', '#76d7c4', '#c39bd3']
 
     for row_i, col_i, key, title, ylabel in panel_specs:
         ax = axes[row_i][col_i]
@@ -120,9 +127,19 @@ def make_figure(points, baselines, panel_specs, col_map, suptitle, seeds, seed_c
             pts = points[seed]
             ns   = [p[0] for p in pts]
             vals = [p[idx] for p in pts]
-            label = f'RegNet (seed {seed})' if len(seeds) > 1 else 'RegNet (full DOC)'
+            label = f'RegNet noisy DOC (seed {seed})' if len(seeds) > 1 else 'RegNet noisy DOC'
             ax.plot(ns, vals, 'o-', color=seed_colors[si % len(seed_colors)],
                     linewidth=2, markersize=5, label=label, zorder=3)
+
+        if points_ft:
+            ft_seeds = sorted(points_ft.keys())
+            for si, seed in enumerate(ft_seeds):
+                pts = points_ft[seed]
+                ns   = [p[0] for p in pts]
+                vals = [p[idx] for p in pts]
+                label = f'RegNet noisy DOC + finetune (seed {seed})' if len(ft_seeds) > 1 else 'RegNet noisy DOC + finetune'
+                ax.plot(ns, vals, 's--', color=ft_colors[si % len(ft_colors)],
+                        linewidth=2, markersize=5, label=label, zorder=3)
 
         for bname, bvals in baselines.items():
             bval = bvals.get(key)
@@ -148,13 +165,23 @@ def make_figure(points, baselines, panel_specs, col_map, suptitle, seeds, seed_c
 
 
 def main():
-    results_dir = sys.argv[1] if len(sys.argv) > 1 else 'scaling_tests'
+    import argparse
+    ap = argparse.ArgumentParser(description='Plot data-scaling curves')
+    ap.add_argument('results_dir', nargs='?', default='scaling_tests')
+    ap.add_argument('matched_dir', nargs='?', default=None,
+                    help='Path to matched_tests dir (auto-detected if omitted)')
+    ap.add_argument('--model', default='regnet', choices=['regnet', 'ast'],
+                    help='Which model family to plot (default: regnet)')
+    args = ap.parse_args()
+
+    results_dir = args.results_dir
     csv_path = os.path.join(results_dir, 'analysis', 'all_results.csv')
     out_dir  = os.path.join(results_dir, 'analysis')
+    model_type = args.model
 
     # Resolve matched_tests dir (explicit arg or auto-detect sibling)
-    if len(sys.argv) > 2:
-        matched_dir = sys.argv[2]
+    if args.matched_dir:
+        matched_dir = args.matched_dir
     else:
         candidate = os.path.join(os.path.dirname(os.path.abspath(results_dir)),
                                  'matched_tests')
@@ -168,15 +195,22 @@ def main():
         reader = csv.DictReader(f)
         rows = list(reader)
 
-    # Extract scaling rows
-    pattern = re.compile(r'regnet_on_doc_scaling_.*?N(\d+)_seed(\d+)')
+    # Extract scaling rows — separate regular (noisy DOC) from fine-tuned series
+    # Regular: {model}_on_doc_scaling_..._N{n}_seed{s}  (no _ft_ before N)
+    # Finetune: {model}_on_doc_scaling_..._ft_N{n}_seed{s}
     # tuple indices:
     #  0=N, 1=avianz_f1, 2=doc_f1, 3=avianz_adaptive_f1, 4=doc_adaptive_f1,
     #  5=avianz_acc, 6=doc_acc, 7=avianz_adaptive_acc, 8=doc_adaptive_acc,
     #  9=avianz_acc_lab, 10=doc_acc_lab, 11=avianz_adaptive_acc_lab, 12=doc_adaptive_acc_lab
-    points = {}
+    scaling_prefix = f'{model_type}_on_doc_scaling_'
+    points    = {}   # regular scaling runs
+    points_ft = {}   # fine-tuned-from-DOC runs
     for row in rows:
-        m = pattern.search(row['name'])
+        name = row['name']
+        if scaling_prefix not in name:
+            continue
+        is_ft = '_ft_N' in name
+        m = re.search(r'N(\d+)_seed(\d+)', name)
         if not m:
             continue
         n    = int(m.group(1))
@@ -199,14 +233,24 @@ def main():
             )
         except (ValueError, KeyError):
             continue
-        points.setdefault(seed, []).append(entry)
+        if is_ft:
+            points_ft.setdefault(seed, []).append(entry)
+        else:
+            points.setdefault(seed, []).append(entry)
 
-    if not points:
+    if not points and not points_ft:
         print('No scaling rows found in CSV.')
         sys.exit(1)
 
     for seed in points:
         points[seed].sort(key=lambda x: x[0])
+    for seed in points_ft:
+        points_ft[seed].sort(key=lambda x: x[0])
+
+    if not points:
+        # Only ft runs present — use them as the primary series
+        points = points_ft
+        points_ft = {}
 
     # Baselines
     baselines = {}
@@ -252,7 +296,8 @@ def main():
 
     seeds = sorted(points.keys())
     seed_colors = ['#2980b9', '#27ae60', '#16a085', '#8e44ad']
-    SUPTITLE = ('RegNetY-008 — Data Scaling on Noisy DOC Labels (N samples/class)\n'
+    model_label = 'RegNetY-008' if model_type == 'regnet' else 'AST'
+    SUPTITLE = (f'{model_label} — Data Scaling on Noisy DOC Labels (N samples/class)\n'
                 'Evaluated on Human-Reviewed Matched Test Sets')
 
     col_map = {
@@ -277,8 +322,9 @@ def main():
         (1, 0, 'avianz_adaptive_f1',  'AviaNZ test set (reviewed) — macro-F1 (tuned thr)',  'macro-F1 (tuned)'),
         (1, 1, 'doc_adaptive_f1',     'DOC test set (reviewed) — macro-F1 (tuned thr)',     'macro-F1 (tuned)'),
     ]
-    fig1 = make_figure(points, baselines, f1_panels, col_map, SUPTITLE + '\nmacro-F1', seeds, seed_colors)
-    out1 = os.path.join(out_dir, 'scaling_curve_f1.png')
+    pfx = f'{model_type}_'
+    fig1 = make_figure(points, baselines, f1_panels, col_map, SUPTITLE + '\nmacro-F1', seeds, seed_colors, points_ft=points_ft)
+    out1 = os.path.join(out_dir, f'{pfx}scaling_curve_f1.png')
     fig1.savefig(out1, dpi=150, bbox_inches='tight')
     plt.close(fig1)
     print(f'Saved: {out1}')
@@ -290,8 +336,8 @@ def main():
         (1, 0, 'avianz_adaptive_acc',  'AviaNZ test set (reviewed) — accuracy (tuned thr)',  'accuracy (tuned)'),
         (1, 1, 'doc_adaptive_acc',     'DOC test set (reviewed) — accuracy (tuned thr)',     'accuracy (tuned)'),
     ]
-    fig2 = make_figure(points, baselines, acc_panels, col_map, SUPTITLE + '\nExact Accuracy — all samples', seeds, seed_colors)
-    out2 = os.path.join(out_dir, 'scaling_curve_acc.png')
+    fig2 = make_figure(points, baselines, acc_panels, col_map, SUPTITLE + '\nExact Accuracy — all samples', seeds, seed_colors, points_ft=points_ft)
+    out2 = os.path.join(out_dir, f'{pfx}scaling_curve_acc.png')
     fig2.savefig(out2, dpi=150, bbox_inches='tight')
     plt.close(fig2)
     print(f'Saved: {out2}')
@@ -303,8 +349,8 @@ def main():
         (1, 0, 'avianz_adaptive_acc_lab',  'AviaNZ test set (reviewed) — accuracy (tuned thr, labelled)',  'accuracy (tuned, labelled)'),
         (1, 1, 'doc_adaptive_acc_lab',     'DOC test set (reviewed) — accuracy (tuned thr, labelled)',     'accuracy (tuned, labelled)'),
     ]
-    fig3 = make_figure(points, baselines, acc_lab_panels, col_map, SUPTITLE + '\nExact Accuracy — labelled samples only', seeds, seed_colors)
-    out3 = os.path.join(out_dir, 'scaling_curve_acc_labelled.png')
+    fig3 = make_figure(points, baselines, acc_lab_panels, col_map, SUPTITLE + '\nExact Accuracy — labelled samples only', seeds, seed_colors, points_ft=points_ft)
+    out3 = os.path.join(out_dir, f'{pfx}scaling_curve_acc_labelled.png')
     fig3.savefig(out3, dpi=150, bbox_inches='tight')
     plt.close(fig3)
     print(f'Saved: {out3}')
