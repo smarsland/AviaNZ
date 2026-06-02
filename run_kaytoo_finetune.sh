@@ -45,13 +45,11 @@ KAYTOO_PYTHON="${KAYTOO_ROOT}/venv_kay/bin/python"
 MAPPING="data/DOC_bird_naming_map.csv"
 
 if [ "$LARGE" = true ]; then
-    AVIANZ_TRAIN="${OUTPUT_BASE}/large/avianz_split/train"
     AVIANZ_TEST="${OUTPUT_BASE}/large/avianz_split/test"
     DOC_TRAIN="${OUTPUT_BASE}/large/doc_split/train"
     DOC_TEST="${OUTPUT_BASE}/large/doc_split/test"
     OUTPUT="${OUTPUT_BASE}/large_tests/kaytoo_finetuned_seed0"
 else
-    AVIANZ_TRAIN="${OUTPUT_BASE}/matched/avianz_split/train"
     AVIANZ_TEST="${OUTPUT_BASE}/matched/avianz_split/test"
     DOC_TRAIN="${OUTPUT_BASE}/matched/doc_split/train"
     DOC_TEST="${OUTPUT_BASE}/matched/doc_split/test"
@@ -63,7 +61,6 @@ echo " Kaytoo fine-tuning + evaluation"
 echo "============================================================"
 echo "  Kaytoo root   : $KAYTOO_ROOT"
 echo "  Python        : $KAYTOO_PYTHON"
-echo "  AviaNZ train  : $AVIANZ_TRAIN"
 echo "  AviaNZ test   : $AVIANZ_TEST"
 echo "  DOC train     : $DOC_TRAIN"
 echo "  DOC test      : $DOC_TEST"
@@ -80,7 +77,7 @@ if [ ! -f "$KAYTOO_PYTHON" ]; then
     exit 1
 fi
 
-for SPLIT_DIR in "$AVIANZ_TRAIN" "$AVIANZ_TEST" "$DOC_TRAIN" "$DOC_TEST"; do
+for SPLIT_DIR in "$AVIANZ_TEST" "$DOC_TRAIN" "$DOC_TEST"; do
     if [ ! -d "${SPLIT_DIR}/audio" ]; then
         echo "ERROR: audio/ subfolder missing from $SPLIT_DIR"
         echo "Re-run build_dataset.sh (it saves audio automatically)."
@@ -91,7 +88,6 @@ done
 mkdir -p "$OUTPUT"
 
 PYTHONPATH="$PWD" "$KAYTOO_PYTHON" scripts/finetune_kaytoo.py \
-    --avianz-train "$AVIANZ_TRAIN" \
     --avianz-test  "$AVIANZ_TEST" \
     --doc-train    "$DOC_TRAIN" \
     --doc-test     "$DOC_TEST" \

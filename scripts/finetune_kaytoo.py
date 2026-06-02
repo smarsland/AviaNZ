@@ -329,8 +329,6 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 def main():
     parser = argparse.ArgumentParser(
         description='Fine-tune Kaytoo on a matched training set and evaluate.')
-    parser.add_argument('--avianz-train', required=True,
-                        help='AviaNZ training split folder (labels.json + audio/)')
     parser.add_argument('--doc-train', required=True,
                         help='DOC training split folder (labels.json + audio/)')
     parser.add_argument('--avianz-test', required=True,
@@ -425,15 +423,11 @@ def main():
     birdnames = BirdNamer(bird_map_df)
 
     # ------------------------------------------------------------------
-    # Build combined training DataFrame from both splits
+    # Build training DataFrame from corrected DOC labels only
     # ------------------------------------------------------------------
     print("\n=== Preparing training data ===")
-    avianz_df = build_training_df(args.avianz_train, label_to_ebird)
-    doc_df    = build_training_df(args.doc_train, label_to_ebird)
-    combined_df = pd.concat([avianz_df, doc_df], ignore_index=True)
-    print(f"  AviaNZ train: {len(avianz_df)} samples")
-    print(f"  DOC train:    {len(doc_df)} samples")
-    print(f"  Combined:     {len(combined_df)} samples")
+    combined_df = build_training_df(args.doc_train, label_to_ebird)
+    print(f"  DOC train:    {len(combined_df)} samples")
 
     # Collect all eBird codes present in the training data
     all_codes = sorted({code for codes in combined_df['_all_codes'] for code in codes})

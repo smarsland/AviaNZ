@@ -27,7 +27,7 @@ set -euo pipefail
 
 BASE="/local/scratch/freangi"
 MATCHED="${BASE}/matched"
-MATCHED_AVIANZ_TRAIN="${MATCHED}/avianz_split/train"
+MATCHED_MERGED_TRAIN="${MATCHED}/merged_train"
 MATCHED_AVIANZ_TEST="${MATCHED}/avianz_split/test"
 MATCHED_DOC_TEST="${MATCHED}/doc_split/test"
 SCALING_TESTS="${BASE}/scaling_tests"
@@ -37,7 +37,7 @@ N_VALUES=(${N_VALUES:-8000})
 
 # --- sanity checks ---
 check_path() { [[ -d "$1" ]] || { echo "ERROR: directory not found: $1"; exit 1; }; }
-check_path "${MATCHED_AVIANZ_TRAIN}"
+check_path "${MATCHED_MERGED_TRAIN}"
 check_path "${MATCHED_AVIANZ_TEST}"
 check_path "${MATCHED_DOC_TEST}"
 
@@ -45,7 +45,7 @@ mkdir -p "${SCALING_TESTS}"
 
 echo "================================================================"
 echo " AST scaling fine-tune: DOC-trained → corrected labels"
-echo "  Fine-tune train : ${MATCHED_AVIANZ_TRAIN}"
+echo "  Fine-tune train : ${MATCHED_MERGED_TRAIN}"
 echo "  AviaNZ test     : ${MATCHED_AVIANZ_TEST}"
 echo "  DOC test        : ${MATCHED_DOC_TEST}"
 echo "  Output root     : ${SCALING_TESTS}"
@@ -71,7 +71,7 @@ for N in "${N_VALUES[@]}"; do
     fi
 
     PYTHONPATH=. python3 train.py \
-        "${MATCHED_AVIANZ_TRAIN}" \
+        "${MATCHED_MERGED_TRAIN}" \
         "${OUT}" \
         --model-type   ast \
         --pretrained   "${CKPT}" \
