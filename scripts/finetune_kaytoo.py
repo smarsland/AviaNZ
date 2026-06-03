@@ -533,6 +533,27 @@ def main():
     _kt.paths = _Paths()
 
     # ------------------------------------------------------------------
+    # Freeze backbone at training start.
+    #
+    # Kaytoo's TrainingModel.on_train_epoch_end has an UNFREEZE step at
+    # epoch == EPOCHS_TO_UNFREEZE_BACKBONE, but there is no corresponding
+    # initial FREEZE anywhere in the code.  Without this patch the backbone
+    # trains from epoch 0 on ~750 samples, causing catastrophic forgetting.
+    # ------------------------------------------------------------------
+    _orig_on_fit_start = getattr(_kt.TrainingModel, 'on_fit_start', None)
+
+    def _ft_on_fit_start(self):
+        if _orig_on_fit_start is not None:
+            _orig_on_fit_start(self)
+        for param in self.model.encoder.parameters():
+            param.requires_grad = False
+        n = sum(1 for _ in self.model.encoder.parameters())
+        print(f"Fine-tuning: backbone frozen ({n} parameter tensors, "
+              f"will unfreeze at epoch {self.epoch_to_unfreeze_backbone})")
+
+    _kt.TrainingModel.on_fit_start = _ft_on_fit_start
+
+    # ------------------------------------------------------------------
     # Fine-tune
     # ------------------------------------------------------------------
     print("\n=== Fine-tuning ===")
