@@ -1,17 +1,24 @@
 """
-Fine-tune the pre-trained Kaytoo model on a matched/corrected training set and
-then evaluate it on the test sets, producing outputs in the same format as
+Fine-tune the pre-trained Kaytoo model on the corrected DOC matched training
+set and evaluate it on both test sets, producing outputs in the same format as
 evaluate_kaytoo.py so that plain Kaytoo and fine-tuned Kaytoo can be compared
 directly with analyze_all_results.py.
 
-Each training split folder must contain:
+Training uses ONLY the corrected DOC matched train split (doc_split/train).
+AviaNZ data is used for evaluation only.
+
+The training folder must contain:
   labels.json   - with class_names field per sample (same format as test sets)
   audio/        - .wav files named file_XXXXXXXX.wav
 
+Both labelled samples AND background (no-bird) samples are included in training
+so the model retains its ability to suppress false positives.
+
 Usage:
     python scripts/finetune_kaytoo.py \\
-        /path/to/avianz_split/train /path/to/avianz_split/test \\
-        /path/to/doc_split/train    /path/to/doc_split/test \\
+        --doc-train   /path/to/doc_split/train \\
+        --avianz-test /path/to/avianz_split/test \\
+        --doc-test    /path/to/doc_split/test \\
         --kaytoo-root /path/to/Kaytoo \\
         --mapping     data/DOC_bird_naming_map.csv \\
         --output      results/kaytoo_finetuned_seed0 \\
@@ -123,7 +130,15 @@ def build_training_df(train_folder, label_to_ebird):
                     ebird_codes.add(code)
 
         if not ebird_codes:
-            # background / unlabelled sample — skip during fine-tuning
+            # background / no-bird sample — include with all-zero bird labels
+            # so the model keeps learning to suppress false positives.
+            rows.append({
+                'filepath': str(wav_path),
+                'primary_label': 'nocall',
+                'secondary_labels': [],
+                'centres': [],
+                '_all_codes': [],
+            })
             continue
 
         rows.append({
@@ -134,8 +149,11 @@ def build_training_df(train_folder, label_to_ebird):
             '_all_codes': sorted(ebird_codes),
         })
 
+    labelled = sum(1 for r in rows if r['primary_label'] != 'nocall')
+    background = len(rows) - labelled
     if not rows:
-        raise ValueError(f"No usable labelled samples found in {train_folder}")
+        raise ValueError(f"No usable samples found in {train_folder}")
+    print(f"  {labelled} labelled samples, {background} background samples")
 
     df = pd.DataFrame(rows)
     return df

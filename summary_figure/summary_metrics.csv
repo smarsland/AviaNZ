@@ -7,5 +7,9 @@ regnet_on_doc_bgsub,"RegNet
 +BgSub",ours,REGNET,0.1892,0.358,0.1824,49.1018,26.4516,25.4491,18.0645,0.472,0.6316,0.3528,71.0843,46.1078,76.1446,53.8922
 kaytoo_pretrained_seed0,"Kaytoo
 (pretrained)",kaytoo,Kaytoo (Pretrained),0.3049,0.4861,0.3522,35.9281,34.1935,40.1198,42.5806,0.5011,0.6307,0.4238,51.5663,43.7126,68.6747,53.2934
+kaytoo_finetuned_seed0,"Kaytoo
+(finetuned)",kaytoo,Kaytoo (Finetuned),0.045,0.3091,0.2461,11.3772,17.4194,39.521,15.4839,0.0914,0.3969,0.323,23.3735,30.5389,44.8193,37.1257
 regnet_on_doc_scaling_kbird2_bgsubtract_N8000_seed0,"RegNet
 Scale N=8k",ours,REGNET,0.3561,0.4665,0.2468,39.8204,37.4194,38.024,52.2581,0.4476,0.5453,0.4389,41.9277,58.6826,68.1928,57.485
+regnet_on_doc_scaling_kbird2_bgsubtract_ft_N8000_seed0,"RegNet
+N=8k+FT",ours,REGNET,0.2169,0.4325,0.2731,56.2874,15.4839,45.509,42.5806,0.541,0.6408,0.5193,69.6386,52.0958,72.0482,67.6647
