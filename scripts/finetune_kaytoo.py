@@ -551,6 +551,23 @@ def main():
 
     def _ft_init(self, *args, **kwargs):
         _orig_init(self, *args, **kwargs)
+        # BirdSoundModel.__init__ (and TrainingModel.__init__) only load
+        # encoder.* keys from the pretrained checkpoint, leaving fc1
+        # randomly initialised.  fc1 is (in_features × in_features) — the
+        # same shape regardless of num_classes — so the pretrained weights
+        # transfer directly.  Without this, ~2M fc1 parameters must be
+        # learned from ~750 samples, which causes catastrophic degradation.
+        if pretrained_path:
+            _ckpt = torch.load(str(pretrained_path), map_location='cpu')
+            _sd = _ckpt.get('state_dict', _ckpt)
+            _fc1_sd = {k[len('fc1.'):]: v
+                       for k, v in _sd.items() if k.startswith('fc1.')}
+            if _fc1_sd:
+                self.model.fc1.load_state_dict(_fc1_sd, strict=True)
+                print(f"[FT] Loaded pretrained fc1 ({len(_fc1_sd)} tensors).")
+            else:
+                print("[FT] WARNING: no fc1.* keys in pretrained checkpoint — fc1 is random.")
+        # Freeze encoder (fc1 is warm-started, att_block trains from scratch)
         for param in self.model.encoder.parameters():
             param.requires_grad = False
         n_frozen = sum(1 for _ in self.model.encoder.parameters())
