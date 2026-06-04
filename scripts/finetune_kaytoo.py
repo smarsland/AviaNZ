@@ -506,20 +506,25 @@ def main():
     print(f"  DataLoaders ready ({len(ds_train)} train, {len(ds_val)} val).")
 
     # ------------------------------------------------------------------
-    # Find the pretrained checkpoint from Kaytoo's models/ directory
+    # Find the pretrained checkpoint using ModelParameters — the same
+    # path-finding logic used by evaluate_kaytoo.py / inference.  This
+    # is reliable: if evaluation inference works, this will find the
+    # correct .pt file automatically.
     # ------------------------------------------------------------------
-    models_dir = Path(kaytoo_root) / 'models'
-    pt_files = list(models_dir.rglob('*.pt'))
-    ckpt_files = list(models_dir.rglob('*.ckpt'))
-    pretrained_path = None
-    if ckpt_files:
-        pretrained_path = str(max(ckpt_files, key=lambda p: p.stat().st_mtime))
+    use_case_train = {
+        'project_root': kaytoo_root,
+        'experiment': None,
+        'cpu_only': args.cpu,
+        'num_cores': 1,
+        'naming_scheme': 'eBird',
+    }
+    _pretrained_params = ModelParameters(options=use_case_train)
+    if _pretrained_params.parameters:
+        pretrained_path = _pretrained_params.parameters[0]['pt_path']
         print(f"  Using pretrained checkpoint: {pretrained_path}")
-    elif pt_files:
-        pretrained_path = str(max(pt_files, key=lambda p: p.stat().st_mtime))
-        print(f"  Using pretrained .pt weights: {pretrained_path}")
     else:
-        print("  WARNING: No pretrained model found in models/. Training from scratch.")
+        pretrained_path = None
+        print("  WARNING: No pretrained model found via ModelParameters. Training from scratch.")
 
     # Temporary paths object (duck-typing FilePaths)
     class _Paths:
@@ -533,25 +538,26 @@ def main():
     _kt.paths = _Paths()
 
     # ------------------------------------------------------------------
-    # Freeze backbone at training start.
+    # Freeze backbone at training start via __init__ patching.
     #
-    # Kaytoo's TrainingModel.on_train_epoch_end has an UNFREEZE step at
-    # epoch == EPOCHS_TO_UNFREEZE_BACKBONE, but there is no corresponding
-    # initial FREEZE anywhere in the code.  Without this patch the backbone
-    # trains from epoch 0 on ~750 samples, causing catastrophic forgetting.
+    # Kaytoo's TrainingModel.on_train_epoch_end has an UNFREEZE step but
+    # there is NO corresponding initial FREEZE anywhere in the code, so
+    # the backbone trains from epoch 0 on ~750 samples.  Patching __init__
+    # directly (rather than a PL hook) ensures the freeze fires at model
+    # construction before PL's fit() loop begins.
     # ------------------------------------------------------------------
-    _orig_on_fit_start = getattr(_kt.TrainingModel, 'on_fit_start', None)
+    _orig_init = _kt.TrainingModel.__init__
+    _ft_unfreeze_epoch = train_cfg.EPOCHS_TO_UNFREEZE_BACKBONE
 
-    def _ft_on_fit_start(self):
-        if _orig_on_fit_start is not None:
-            _orig_on_fit_start(self)
+    def _ft_init(self, *args, **kwargs):
+        _orig_init(self, *args, **kwargs)
         for param in self.model.encoder.parameters():
             param.requires_grad = False
-        n = sum(1 for _ in self.model.encoder.parameters())
-        print(f"Fine-tuning: backbone frozen ({n} parameter tensors, "
-              f"will unfreeze at epoch {self.epoch_to_unfreeze_backbone})")
+        n_frozen = sum(1 for _ in self.model.encoder.parameters())
+        print(f"[FT] Encoder frozen ({n_frozen} tensors). "
+              f"Will unfreeze at epoch {_ft_unfreeze_epoch}.")
 
-    _kt.TrainingModel.on_fit_start = _ft_on_fit_start
+    _kt.TrainingModel.__init__ = _ft_init
 
     # ------------------------------------------------------------------
     # Fine-tune

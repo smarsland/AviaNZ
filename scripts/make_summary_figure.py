@@ -68,6 +68,12 @@ MODELS = [
         "kaytoo",
     ),
     (
+        "ast_on_doc_scaling_N8000_seed0",
+        "scaling_tests/analysis/all_results.csv",
+        "AST\nN=8k",
+        "ours",
+    ),
+    (
         "ast_on_doc_scaling_ft_N8000_seed0",
         "scaling_tests/analysis/all_results.csv",
         "AST\nN=8k+FT",
