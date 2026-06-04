@@ -551,12 +551,8 @@ def main():
 
     def _ft_init(self, *args, **kwargs):
         _orig_init(self, *args, **kwargs)
-        # BirdSoundModel.__init__ (and TrainingModel.__init__) only load
-        # encoder.* keys from the pretrained checkpoint, leaving fc1
-        # randomly initialised.  fc1 is (in_features × in_features) — the
-        # same shape regardless of num_classes — so the pretrained weights
-        # transfer directly.  Without this, ~2M fc1 parameters must be
-        # learned from ~750 samples, which causes catastrophic degradation.
+        # BirdSoundModel only loads encoder.* from pretrained; fc1 is randomly
+        # initialised despite having the same shape. Load it explicitly.
         if pretrained_path:
             _ckpt = torch.load(str(pretrained_path), map_location='cpu')
             _sd = _ckpt.get('state_dict', _ckpt)
@@ -566,13 +562,23 @@ def main():
                 self.model.fc1.load_state_dict(_fc1_sd, strict=True)
                 print(f"[FT] Loaded pretrained fc1 ({len(_fc1_sd)} tensors).")
             else:
-                print("[FT] WARNING: no fc1.* keys in pretrained checkpoint — fc1 is random.")
-        # Freeze encoder (fc1 is warm-started, att_block trains from scratch)
+                print("[FT] WARNING: no fc1.* keys in pretrained checkpoint.")
+        # Freeze everything except the two tiny output layers in att_block:
+        #   att_block.attention   (~38K params, Conv1d)
+        #   att_block.classify.output  (~6K params, Linear 704→N)
+        # The big Linear(1408→704) in att_block.classify.linear is frozen
+        # because training ~1M random params on ~750 samples causes collapse.
+        # Total trainable: ~44K params — feasible on this dataset size.
         for param in self.model.encoder.parameters():
             param.requires_grad = False
-        n_frozen = sum(1 for _ in self.model.encoder.parameters())
-        print(f"[FT] Encoder frozen ({n_frozen} tensors). "
-              f"Will unfreeze at epoch {_ft_unfreeze_epoch}.")
+        for param in self.model.fc1.parameters():
+            param.requires_grad = False
+        for param in self.model.att_block.classify.linear.parameters():
+            param.requires_grad = False
+        n_trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        n_total     = sum(p.numel() for p in self.model.parameters())
+        print(f"[FT] Frozen encoder + fc1 + att_block.classify.linear. "
+              f"Trainable: {n_trainable:,} / {n_total:,} params.")
 
     _kt.TrainingModel.__init__ = _ft_init
 
