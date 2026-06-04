@@ -447,9 +447,17 @@ def main():
     combined_df = build_training_df(args.doc_train, label_to_ebird)
     print(f"  DOC train:    {len(combined_df)} samples")
 
-    # Collect all eBird codes present in the training data
-    all_codes = sorted({code for codes in combined_df['_all_codes'] for code in codes})
-    print(f"  Unique species: {len(all_codes)} -> {all_codes}")
+    # Use the FULL pretrained class vocabulary (not just the 9 training species).
+    # This keeps num_classes == pretrained num_classes so every att_block weight
+    # transfers from the pretrained model, preserving output calibration.
+    # Training labels will be non-zero only for the 9 species we have data for;
+    # the other columns stay zero and produce no gradient signal.
+    pretrained_ebirds = [str(r).strip() for r in bird_map_df['eBird']
+                         if pd.notna(r) and str(r).strip()]
+    all_codes = pretrained_ebirds
+    print(f"  Using pretrained vocabulary: {len(all_codes)} species")
+    train_species = sorted({code for codes in combined_df['_all_codes'] for code in codes})
+    print(f"  Training species ({len(train_species)}): {train_species}")
 
     # Encode to one-hot
     train_encoded = encode_training_df(combined_df, all_codes)
@@ -551,34 +559,22 @@ def main():
 
     def _ft_init(self, *args, **kwargs):
         _orig_init(self, *args, **kwargs)
-        # BirdSoundModel only loads encoder.* from pretrained; fc1 is randomly
-        # initialised despite having the same shape. Load it explicitly.
+        # num_classes matches pretrained so BirdSoundModel already loaded
+        # encoder from the checkpoint.  Also load the remaining layers
+        # (fc1, bn0, att_block) that BirdSoundModel skips.
         if pretrained_path:
             _ckpt = torch.load(str(pretrained_path), map_location='cpu')
             _sd = _ckpt.get('state_dict', _ckpt)
-            _fc1_sd = {k[len('fc1.'):]: v
-                       for k, v in _sd.items() if k.startswith('fc1.')}
-            if _fc1_sd:
-                self.model.fc1.load_state_dict(_fc1_sd, strict=True)
-                print(f"[FT] Loaded pretrained fc1 ({len(_fc1_sd)} tensors).")
-            else:
-                print("[FT] WARNING: no fc1.* keys in pretrained checkpoint.")
-        # Freeze everything except the two tiny output layers in att_block:
-        #   att_block.attention   (~38K params, Conv1d)
-        #   att_block.classify.output  (~6K params, Linear 704→N)
-        # The big Linear(1408→704) in att_block.classify.linear is frozen
-        # because training ~1M random params on ~750 samples causes collapse.
-        # Total trainable: ~44K params — feasible on this dataset size.
+            missing, unexpected = self.model.load_state_dict(_sd, strict=False)
+            print(f"[FT] Loaded full pretrained model weights "
+                  f"(missing={len(missing)}, unexpected={len(unexpected)}).")
+        # Freeze encoder for first N epochs; everything else (fc1, att_block)
+        # is warm-started from pretrained and will fine-tune with small LR.
         for param in self.model.encoder.parameters():
-            param.requires_grad = False
-        for param in self.model.fc1.parameters():
-            param.requires_grad = False
-        for param in self.model.att_block.classify.linear.parameters():
             param.requires_grad = False
         n_trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         n_total     = sum(p.numel() for p in self.model.parameters())
-        print(f"[FT] Frozen encoder + fc1 + att_block.classify.linear. "
-              f"Trainable: {n_trainable:,} / {n_total:,} params.")
+        print(f"[FT] Encoder frozen. Trainable: {n_trainable:,} / {n_total:,} params.")
 
     _kt.TrainingModel.__init__ = _ft_init
 
