@@ -11,7 +11,7 @@
 # Both models use background subtraction and kbird-prior=2.0, matching the
 # best-performing configuration in the scaling experiments.
 #
-# Outputs (under ${SCALING_TESTS}):
+# Outputs (under ${ALL_SPECIES_TESTS}):
 #   regnet_all_species_bgsubtract_seed{SEED}/   – RegNet checkpoint
 #   ast_all_species_bgsubtract_seed{SEED}/      – AST checkpoint
 #
@@ -30,7 +30,7 @@ ALL_SPECIES_TRAIN="${BASE}/scaling_all_species/doc_large"
 MATCHED="${BASE}/matched"
 MATCHED_AVIANZ_TEST="${MATCHED}/avianz_split/test"
 MATCHED_DOC_TEST="${MATCHED}/doc_split/test"
-SCALING_TESTS="${BASE}/scaling_tests"
+ALL_SPECIES_TESTS="${BASE}/all_species_tests"
 PRETRAINED="BirdClefModels/model_fold0.pth"
 SEED="${SEED:-0}"
 # Set MODELS=regnet or MODELS=ast to run only one architecture.
