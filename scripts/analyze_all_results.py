@@ -242,10 +242,34 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         jac = float(_jaccard(t, p, average='macro', zero_division=0))
         return float(prec), float(rec), float(f1), jac
 
-    # --- threshold 0.5 ---
-    preds_half = (probs >= 0.5).astype(int)
-    prec_half, rec_half, f1_half, jac_half = _macro(preds_half)
-    acc_half, acc_lab_half = _acc(preds_half)
+    # --- threshold 0.5, restricted to test-set classes ---
+    # For models trained on a superset vocabulary (e.g. 120 classes), kbird
+    # normalisation across all classes suppresses individual class probs well
+    # below 0.5, even for confident predictions.  Restricting to the classes
+    # that actually appear in the test set (present_idx) before thresholding
+    # matches how evaluate_kaytoo.py evaluates Kaytoo (which only scores over
+    # valid_cols = test-set eBird codes).  Without this restriction, fixed-
+    # threshold F1 is near-zero for large-vocabulary models while adaptive F1
+    # is reasonable — a misleading asymmetry.
+    if len(present_idx) > 0:
+        probs_restricted = probs[:, present_idx]
+        trues_restricted = trues[:, present_idx]
+        labelled_restricted = trues_restricted.sum(axis=1) > 0
+        preds_restricted = (probs_restricted >= 0.5).astype(int)
+        _p, _r, _f, _ = _prf(trues_restricted, preds_restricted,
+                              average='macro', zero_division=0)
+        prec_half, rec_half, f1_half = float(_p), float(_r), float(_f)
+        jac_half = float(_jaccard(trues_restricted, preds_restricted,
+                                  average='macro', zero_division=0))
+        correct_restricted = np.all(preds_restricted == trues_restricted, axis=1)
+        acc_half = float(correct_restricted.mean() * 100)
+        acc_lab_half = float(
+            correct_restricted[labelled_restricted].mean() * 100
+            if labelled_restricted.any() else np.nan
+        )
+    else:
+        prec_half = rec_half = f1_half = jac_half = np.nan
+        acc_half = acc_lab_half = np.nan
 
     # --- oracle per-class thresholds (tuned on this same split) ---
     # Vectorized: for each class, try all candidate thresholds at once.
@@ -407,6 +431,7 @@ def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
     standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz|combined)_(.+)$')
+    all_species_pattern = re.compile(r'^(ast|regnet)_all_species_(.+?)_seed(\d+)$')
     pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():
@@ -425,6 +450,17 @@ def load_from_viz_dir(viz_dir):
         if m:
             model, train_dataset, transform = m.groups()
             row = _empty_row(exp_dir.name, train_dataset, model, transform)
+            _read_reports_from_dir(exp_dir, model, row)
+            _read_adaptive_from_dir(exp_dir, row)
+            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
+            results.append(row)
+            continue
+
+        m = all_species_pattern.match(exp_dir.name)
+        if m:
+            model, transform, seed = m.groups()
+            row = _empty_row(exp_dir.name, 'all_species', model, transform)
+            row['seed'] = int(seed)
             _read_reports_from_dir(exp_dir, model, row)
             _read_adaptive_from_dir(exp_dir, row)
             row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'

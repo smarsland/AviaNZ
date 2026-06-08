@@ -293,11 +293,10 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
         npy_name = wav_name.replace('.wav', '.npy')
         npy_path = str(Path(test_folder) / 'data' / npy_name)
-        raw_rec = {'filename': npy_path, 'gt_classes': gt_labels}
-        for cls in dataset_class_names:
-            codes = cls_to_ebird_codes.get(cls, [])
-            cls_scores = [float(row[c]) for c in codes if c in row.index and not pd.isna(row[c])]
-            raw_rec[cls] = max(cls_scores) if cls_scores else 0.0
+        raw_rec = {'filename': npy_path, 'gt_ebird_codes': gt_codes_flat}
+        for ebird_code in species_cols:
+            val = row[ebird_code] if ebird_code in row.index and not pd.isna(row[ebird_code]) else 0.0
+            raw_rec[ebird_code] = float(val)
         raw_score_records.append(raw_rec)
 
     n = len(results)
@@ -765,12 +764,13 @@ def main():
             continue
         split_name = result['dataset_name']
         csv_path = output_path / f'predictions_{split_name}.csv'
-        class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes', 'gt_classes'))
+        class_cols = sorted(c for c in raw_records[0]
+                             if c not in ('filename', 'gt_codes', 'gt_classes', 'gt_ebird_codes'))
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])
             for rec in raw_records:
-                gt_set = set(rec.get('gt_classes', []))
+                gt_set = set(rec.get('gt_ebird_codes', []))
                 writer.writerow(
                     [rec['filename']]
                     + [f"{rec.get(c, 0.0):.6f}" for c in class_cols]

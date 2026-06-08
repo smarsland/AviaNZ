@@ -91,6 +91,30 @@ MODELS = [
         "RegNet +BgSub\nN=8k (finetuned)",
         "ours",
     ),
+    (
+        "ast_all_species_bgsubtract_seed0",
+        "all_species_tests/analysis/all_results.csv",
+        "AST +BgSub\nAll Species",
+        "ours",
+    ),
+    (
+        "ast_all_species_bgsubtract_ft_seed0",
+        "all_species_tests/analysis/all_results.csv",
+        "AST +BgSub\nAll Species (ft)",
+        "ours",
+    ),
+    (
+        "regnet_all_species_bgsubtract_seed0",
+        "all_species_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nAll Species",
+        "ours",
+    ),
+    (
+        "regnet_all_species_bgsubtract_ft_seed0",
+        "all_species_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nAll Species (ft)",
+        "ours",
+    ),
 ]
 
 # ─────────────────────────────────────────────
