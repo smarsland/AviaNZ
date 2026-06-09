@@ -27,6 +27,7 @@ set -euo pipefail
 
 BASE="/local/scratch/freangi"
 MATCHED="${BASE}/matched"
+MATCHED_AVIANZ_TRAIN="${MATCHED}/avianz_split/train"
 MATCHED_DOC_TRAIN="${MATCHED}/doc_split/train"
 MATCHED_AVIANZ_TEST="${MATCHED}/avianz_split/test"
 MATCHED_DOC_TEST="${MATCHED}/doc_split/test"

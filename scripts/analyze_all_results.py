@@ -219,8 +219,23 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     if not true_cols:
         return nan_result
 
-    probs = df[class_cols].values.astype(np.float32)
-    trues = df[true_cols].values.astype(np.int32)
+    probs_raw = df[class_cols].values.astype(np.float32)
+    trues     = df[true_cols].values.astype(np.int32)
+
+    # Build an aligned probability matrix in the test-set class space.
+    # When the model was trained on a different vocabulary (e.g. kiwi/kakapo)
+    # but the test set has different classes (e.g. blackbird/chaffinch), the
+    # prediction columns and true_ columns will have different names.
+    # For each true_ column, look for a matching prediction column by name;
+    # if absent, the model has no prediction for that class → treat as 0.
+    true_class_names = [c[len('true_'):] for c in true_cols]
+    pred_name_to_idx = {c: i for i, c in enumerate(class_cols)}
+    probs = np.zeros((probs_raw.shape[0], len(true_cols)), dtype=np.float32)
+    for j, tc in enumerate(true_class_names):
+        if tc in pred_name_to_idx:
+            probs[:, j] = probs_raw[:, pred_name_to_idx[tc]]
+        # else: stays 0 — model has no output for this test class
+
     labelled = trues.sum(axis=1) > 0
 
     # Only average over classes that actually appear in the ground truth
@@ -450,7 +465,7 @@ def load_from_viz_dir(viz_dir):
     """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
     results = []
     standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz|combined)_(.+)$')
-    all_species_pattern = re.compile(r'^(ast|regnet)_all_species_(.+?)_seed(\d+)$')
+    all_species_pattern = re.compile(r'^(ast|regnet)_(?:avianz_)?all_species_(.+?)_seed(\d+)$')
     pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
     for exp_dir in sorted(Path(viz_dir).iterdir()):
         if not exp_dir.is_dir():

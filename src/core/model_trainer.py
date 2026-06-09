@@ -1059,8 +1059,8 @@ class Trainer:
             print(f"Evaluating on test set 1: {self.test_folder}")
             print(f"{'='*60}")
             test_loader1 = DataLoader(self.test_folder, noise_folder=None)
-            test_data1 = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
-            test_data1 = _remap_labels_to_train_space(test_data1, self.data)
+            test_data1_orig = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
+            test_data1 = _remap_labels_to_train_space(test_data1_orig, self.data)
 
             test_dataset1 = SpectrogramDataset(
                 test_data1['train_filenames'], test_data1['train_labels'],
@@ -1109,16 +1109,16 @@ class Trainer:
                     device=self.device,
                     class_names=self.data['class_names']
                 )
-            # Save predictions to CSV
-            self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1)
+            # Save predictions to CSV (pass original test data so true_ columns use test-set vocabulary)
+            self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1, orig_test_data=test_data1_orig)
         
         if self.test_folder2:
             print(f"\n{'='*60}")
             print(f"Evaluating on test set 2: {self.test_folder2}")
             print(f"{'='*60}")
             test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
-            test_data2 = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
-            test_data2 = _remap_labels_to_train_space(test_data2, self.data)
+            test_data2_orig = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
+            test_data2 = _remap_labels_to_train_space(test_data2_orig, self.data)
 
             test_dataset2 = SpectrogramDataset(
                 test_data2['train_filenames'], test_data2['train_labels'],
@@ -1151,8 +1151,8 @@ class Trainer:
             print(f"DEBUG TEST2 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
             evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
             
-            # Save predictions to CSV
-            self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2)
+            # Save predictions to CSV (pass original test data so true_ columns use test-set vocabulary)
+            self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2, orig_test_data=test_data2_orig)
             
             # Generate attention visualizations if requested
             if self.visualize_attention:
@@ -1306,8 +1306,8 @@ class Trainer:
             print(f"Evaluating on test set 1: {self.test_folder}")
             print(f"{'='*60}")
             test_loader1 = DataLoader(self.test_folder, noise_folder=None)
-            test_data1 = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
-            test_data1 = _remap_labels_to_train_space(test_data1, self.data)
+            test_data1_orig = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
+            test_data1 = _remap_labels_to_train_space(test_data1_orig, self.data)
             test_dataset1 = SpectrogramDataset(
                 test_data1['train_filenames'], test_data1['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
@@ -1324,15 +1324,15 @@ class Trainer:
             test_name1 = Path(self.test_folder).parent.name
             print(f"  samples={len(test_dataset1)}")
             evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', device=self.device)
-            self._save_predictions_to(model, test_loader_obj1, test_data1, test_name1, eval_out)
+            self._save_predictions_to(model, test_loader_obj1, test_data1, test_name1, eval_out, orig_test_data=test_data1_orig)
 
         if self.test_folder2:
             print(f"\n{'='*60}")
             print(f"Evaluating on test set 2: {self.test_folder2}")
             print(f"{'='*60}")
             test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
-            test_data2 = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
-            test_data2 = _remap_labels_to_train_space(test_data2, self.data)
+            test_data2_orig = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
+            test_data2 = _remap_labels_to_train_space(test_data2_orig, self.data)
             test_dataset2 = SpectrogramDataset(
                 test_data2['train_filenames'], test_data2['train_labels'],
                 self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
@@ -1349,7 +1349,7 @@ class Trainer:
             test_name2 = Path(self.test_folder2).parent.name
             print(f"  samples={len(test_dataset2)}")
             evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
-            self._save_predictions_to(model, test_loader_obj2, test_data2, test_name2, eval_out)
+            self._save_predictions_to(model, test_loader_obj2, test_data2, test_name2, eval_out, orig_test_data=test_data2_orig)
 
         print(f"\n--eval-only: results saved to {eval_out}")
         return {}
@@ -1418,16 +1418,19 @@ class Trainer:
         plt.savefig(os.path.join(self.output_folder, 'training_curves.png'))
         plt.close()
     
-    def _save_predictions_to(self, model, test_loader, test_data, test_name, out_dir):
+    def _save_predictions_to(self, model, test_loader, test_data, test_name, out_dir, orig_test_data=None):
         """Like _save_test_predictions but writes to an explicit directory."""
-        self._save_test_predictions(model, test_loader, test_data, test_name, out_dir=out_dir)
+        self._save_test_predictions(model, test_loader, test_data, test_name, out_dir=out_dir, orig_test_data=orig_test_data)
 
-    def _save_test_predictions(self, model, test_loader, test_data, test_name, out_dir=None):
+    def _save_test_predictions(self, model, test_loader, test_data, test_name, out_dir=None, orig_test_data=None):
         """Save test predictions (per-class probabilities + ground truth) to CSV.
 
-        Ground truth is stored as true_CLASSNAME columns so that
-        scripts/tune_thresholds.py can run locally without access to the
-        original data directory.
+        Prediction columns use the model's training class vocabulary.
+        Ground-truth (true_*) columns use the ORIGINAL test-set class vocabulary
+        (from orig_test_data when provided, otherwise falls back to training vocab).
+        This ensures that when a model is evaluated on a test set with a different
+        vocabulary, all test-set classes appear as true_ columns and the F1/accuracy
+        metrics in analyze_all_results.py are computed over the full test vocabulary.
         """
         import csv
 
@@ -1459,13 +1462,27 @@ class Trainer:
 
         all_probs = np.vstack(all_probs)
         all_labels = np.vstack(all_labels)
-        class_names = test_data['class_names']
+        pred_class_names = test_data['class_names']  # model's training vocabulary
+
+        # Determine ground-truth vocabulary and labels for true_ columns.
+        # Use orig_test_data (test-set vocabulary) when available so that
+        # test classes absent from the model's training vocab still appear.
+        if orig_test_data is not None and list(orig_test_data.get('class_names', [])) != list(pred_class_names):
+            true_class_names = orig_test_data['class_names']
+            true_labels_arr  = orig_test_data['train_labels']  # (N, n_test_classes)
+            n_test_only  = sum(1 for c in true_class_names if c not in set(pred_class_names))
+            n_train_only = sum(1 for c in pred_class_names  if c not in set(true_class_names))
+            print(f"  [predictions CSV] test-only classes in true_ cols: {n_test_only}, "
+                  f"train-only classes (pred cols only, no true_): {n_train_only}")
+        else:
+            true_class_names = pred_class_names
+            true_labels_arr  = all_labels
 
         csv_path = os.path.join(out_dir or self.output_folder, f'predictions_{test_name}.csv')
         with open(csv_path, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['filename'] + class_names + [f'true_{c}' for c in class_names])
-            for filename, row_probs, row_labels in zip(all_filenames, all_probs, all_labels):
+            writer.writerow(['filename'] + pred_class_names + [f'true_{c}' for c in true_class_names])
+            for filename, row_probs, row_labels in zip(all_filenames, all_probs, true_labels_arr):
                 writer.writerow(
                     [filename]
                     + [f"{p:.6f}" for p in row_probs]

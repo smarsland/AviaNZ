@@ -115,6 +115,30 @@ MODELS = [
         "RegNet +BgSub\nAll Species (finetuned)",
         "ours",
     ),
+    (
+        "ast_avianz_all_species_bgsubtract_seed0",
+        "avianz_all_species_tests/analysis/all_results.csv",
+        "AST +BgSub\nAviaNZ All Species",
+        "ours",
+    ),
+    (
+        "ast_avianz_all_species_bgsubtract_ft_seed0",
+        "avianz_all_species_tests/analysis/all_results.csv",
+        "AST +BgSub\nAviaNZ All Species (finetuned)",
+        "ours",
+    ),
+    (
+        "regnet_avianz_all_species_bgsubtract_seed0",
+        "avianz_all_species_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nAviaNZ All Species",
+        "ours",
+    ),
+    (
+        "regnet_avianz_all_species_bgsubtract_ft_seed0",
+        "avianz_all_species_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nAviaNZ All Species (finetuned)",
+        "ours",
+    ),
 ]
 
 # ─────────────────────────────────────────────
