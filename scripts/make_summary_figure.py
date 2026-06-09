@@ -100,7 +100,7 @@ MODELS = [
     (
         "ast_all_species_bgsubtract_ft_seed0",
         "all_species_tests/analysis/all_results.csv",
-        "AST +BgSub\nAll Species (ft)",
+        "AST +BgSub\nAll Species (finetuned)",
         "ours",
     ),
     (
@@ -112,7 +112,7 @@ MODELS = [
     (
         "regnet_all_species_bgsubtract_ft_seed0",
         "all_species_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nAll Species (ft)",
+        "RegNet +BgSub\nAll Species (finetuned)",
         "ours",
     ),
 ]
@@ -172,114 +172,99 @@ def fmt(v, is_pct=False):
 
 
 # ─────────────────────────────────────────────
-#  Bar style catalogue (test split × threshold)
+#  3-condition layout
+#   1. DOC (self-tuned)          – DOC thresholds evaluated on DOC
+#   2. AviaNZ (DOC thresholds)   – DOC thresholds evaluated on AviaNZ (cross)
+#   3. AviaNZ (self-tuned)       – AviaNZ thresholds evaluated on AviaNZ
 # ─────────────────────────────────────────────
 
-_CONDITIONS = [
-    ("avianz", "fixed"),
-    ("avianz", "tuned"),
-    ("doc",    "fixed"),
-    ("doc",    "tuned"),
+_CONDITIONS_3 = [
+    {
+        "label": "DOC  (self-tuned)",
+        "cols": {
+            "macro_f1":     "test2_adaptive_f1",
+            "overall_acc":  "test2_adaptive_acc",
+            "labelled_acc": "test2_adaptive_acc_labelled",
+        },
+        "color": "#27AE60",
+        "edge":  "#1E8449",
+    },
+    {
+        "label": "AviaNZ  (DOC thresholds)",
+        "cols": {
+            "macro_f1":     "test1_cross_f1",
+            "overall_acc":  "test1_cross_acc",
+            "labelled_acc": "test1_cross_acc_labelled",
+        },
+        "color": "#E67E22",
+        "edge":  "#873600",
+    },
+    {
+        "label": "AviaNZ  (self-tuned)",
+        "cols": {
+            "macro_f1":     "test1_adaptive_f1",
+            "overall_acc":  "test1_adaptive_acc",
+            "labelled_acc": "test1_adaptive_acc_labelled",
+        },
+        "color": "#3498DB",
+        "edge":  "#1A5276",
+    },
 ]
 
-BAR_STYLES = {
-    ("avianz", "fixed"): {"color": "#4A90D9", "hatch": "",    "edgecolor": "#1A5276", "label": "AviaNZ – Fixed threshold"},
-    ("avianz", "tuned"): {"color": "#86BBE8", "hatch": "///", "edgecolor": "#1A5276", "label": "AviaNZ – Tuned thresholds"},
-    ("doc",    "fixed"): {"color": "#58B07A", "hatch": "",    "edgecolor": "#1E8449", "label": "DOC – Fixed threshold"},
-    ("doc",    "tuned"): {"color": "#A8D8B9", "hatch": "///", "edgecolor": "#1E8449", "label": "DOC – Tuned thresholds"},
-}
-
-_METRIC_COLS = {
-    "macro_f1": {
-        ("avianz", "fixed"): "test1_macro_f1",
-        ("avianz", "tuned"): "test1_adaptive_f1",
-        ("doc",    "fixed"): "test2_macro_f1",
-        ("doc",    "tuned"): "test2_adaptive_f1",
-    },
-    "overall_acc": {
-        ("avianz", "fixed"): "test1_acc",
-        ("avianz", "tuned"): "test1_adaptive_acc",
-        ("doc",    "fixed"): "test2_acc",
-        ("doc",    "tuned"): "test2_adaptive_acc",
-    },
-    "labelled_acc": {
-        ("avianz", "fixed"): "test1_acc_labelled",
-        ("avianz", "tuned"): "test1_adaptive_acc_labelled",
-        ("doc",    "fixed"): "test2_acc_labelled",
-        ("doc",    "tuned"): "test2_adaptive_acc_labelled",
-    },
-}
-
 _METRIC_META = {
-    "macro_f1":     ("Macro F1",           "Macro F1 Score",                0.75, False, "summary_macro_f1.png"),
-    "overall_acc":  ("Exact Accuracy (%)", "Overall Exact Accuracy",         90,   True,  "summary_overall_acc.png"),
-    "labelled_acc": ("Exact Accuracy (%)", "Labelled-only Exact Accuracy",   90,   True,  "summary_labelled_acc.png"),
+    "macro_f1":     ("Macro F1",           "Macro F1 Score",               0.85, False, "summary_macro_f1.png"),
+    "overall_acc":  ("Exact Accuracy (%)", "Overall Exact Accuracy",        90,   True,  "summary_overall_acc.png"),
+    "labelled_acc": ("Exact Accuracy (%)", "Labelled-only Exact Accuracy",  90,   True,  "summary_labelled_acc.png"),
 }
 
 
 # ─────────────────────────────────────────────
-#  Per-metric figure (one per measure, 4 subplots)
+#  Per-metric figure (single panel, 3 bars per model)
 # ─────────────────────────────────────────────
-
-_COND_TITLE = {
-    ("avianz", "fixed"): "AviaNZ — Fixed threshold (0.5)",
-    ("avianz", "tuned"): "AviaNZ — Tuned thresholds",
-    ("doc",    "fixed"): "DOC — Fixed threshold (0.5)",
-    ("doc",    "tuned"): "DOC — Tuned thresholds",
-}
-
-
-def _draw_subplot(ax, df, col, ylabel, ymax, title, color, edgecolor, is_pct=False):
-    """Draw a single subplot: one bar per model."""
-    n = len(df)
-    x = np.arange(n)
-    w = 0.65
-
-    for i, (_, row) in enumerate(df.iterrows()):
-        kind = row["kind"]
-        shade = {"kaytoo": "#FFF3E0", "birdnet": "#FDECEA"}.get(kind)
-        if shade:
-            ax.axvspan(x[i] - 0.5, x[i] + 0.5, color=shade, alpha=0.40, zorder=0)
-
-        v = row.get(col, float("nan"))
-        if is_pct and not pd.isna(v) and v <= 1.0:
-            v *= 100
-        if not pd.isna(v):
-            bar_color = KIND_COLOR[kind]
-            bar_edge  = KIND_EDGE[kind]
-            ax.bar(x[i], v, width=w, color=bar_color, edgecolor=bar_edge,
-                   linewidth=1.0, zorder=3)
-            ax.text(x[i], v + ymax * 0.012,
-                    f"{v:.2f}" if not is_pct else f"{v:.1f}",
-                    ha="center", va="bottom", fontsize=7.5, zorder=5)
-
-    ax.set_title(title, fontsize=10, fontweight="bold", pad=6)
-    ax.set_ylabel(ylabel, fontsize=9)
-    ax.set_xticks(x)
-    ax.set_xticklabels(df["short_label"], fontsize=8, ha="center")
-    ax.set_xlim(-0.7, n - 0.3)
-    ax.set_ylim(0, ymax * 1.15)
-    ax.yaxis.grid(True, linestyle="--", alpha=0.45, zorder=0)
-    ax.set_axisbelow(True)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-
 
 def make_metric_figure(df: pd.DataFrame, out_dir: Path, metric: str):
-    """3 files × 4 subplots: one subplot per (split × threshold) condition."""
-    cols = _METRIC_COLS[metric]
-    ylabel, suptitle, ymax, is_pct, fname = _METRIC_META[metric]
+    """1×3 figure: one panel per condition, shared y-axis of model names."""
+    xlabel, suptitle, xmax, is_pct, fname = _METRIC_META[metric]
 
-    fig, axes = plt.subplots(2, 2, figsize=(22, 11))
-    axes_flat = [axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]]
+    n = len(df)
+    bar_h = 0.6
+    y = np.arange(n)
 
-    for ax, cond in zip(axes_flat, _CONDITIONS):
-        col   = cols[cond]
-        style = BAR_STYLES[cond]
-        _draw_subplot(ax, df, col, ylabel, ymax,
-                      _COND_TITLE[cond],
-                      style["color"], style["edgecolor"],
-                      is_pct=is_pct)
+    fig, axes = plt.subplots(1, 3, figsize=(18, max(7, n * 0.75)),
+                             sharey=True)
+
+    for ax, cond in zip(axes, _CONDITIONS_3):
+        col = cond["cols"][metric]
+
+        for i, (_, row) in enumerate(df.iterrows()):
+            kind = row["kind"]
+            shade = {"kaytoo": "#FFF3E0", "birdnet": "#FDECEA"}.get(kind)
+            if shade:
+                ax.axhspan(i - 0.5, i + 0.5, color=shade, alpha=0.55, zorder=0)
+
+            v = row.get(col, float("nan"))
+            if is_pct and not pd.isna(v) and v <= 1.0:
+                v *= 100
+            if not pd.isna(v):
+                ax.barh(i, v, height=bar_h, color=KIND_COLOR[kind],
+                        edgecolor=KIND_EDGE[kind], linewidth=0.8, zorder=3)
+                ax.text(v + xmax * 0.015, i,
+                        f"{v:.2f}" if not is_pct else f"{v:.1f}",
+                        ha="left", va="center", fontsize=7.5, zorder=5)
+
+        ax.set_title(cond["label"], fontsize=10, fontweight="bold", pad=7)
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_xlim(0, xmax * 1.25)
+        ax.set_ylim(-0.6, n - 0.4)
+        ax.invert_yaxis()
+        ax.xaxis.grid(True, linestyle="--", alpha=0.45, zorder=0)
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # Only leftmost panel shows model labels
+    axes[0].set_yticks(y)
+    axes[0].set_yticklabels(df["short_label"], fontsize=9)
 
     kind_patches = [
         mpatches.Patch(facecolor=KIND_COLOR[k], edgecolor=KIND_EDGE[k],
@@ -289,10 +274,10 @@ def make_metric_figure(df: pd.DataFrame, out_dir: Path, metric: str):
         for k in ["birdnet", "kaytoo", "ours"]
     ]
     fig.legend(handles=kind_patches, loc="lower center",
-               bbox_to_anchor=(0.5, 0.01), ncol=3, fontsize=9, frameon=True)
+               bbox_to_anchor=(0.5, 0.0), ncol=3, fontsize=9, frameon=True)
 
-    fig.suptitle(suptitle, fontsize=13, fontweight="bold", y=1.01)
-    plt.tight_layout(rect=[0, 0.05, 1, 1])
+    fig.suptitle(suptitle, fontsize=13, fontweight="bold")
+    plt.tight_layout(rect=[0, 0.06, 1, 1])
     out_path = out_dir / fname
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -373,12 +358,14 @@ def make_csv(df: pd.DataFrame, out_dir: Path):
     """Export a tidy CSV with the metrics for all 8 models."""
     keep = [
         "name", "short_label", "kind", "category",
-        "test1_macro_f1", "test1_adaptive_f1", "test1_cross_f1",
+        "test1_adaptive_f1", "test1_cross_f1",
         "test1_acc", "test1_acc_labelled",
         "test1_adaptive_acc", "test1_adaptive_acc_labelled",
-        "test2_macro_f1", "test2_adaptive_f1", "test2_cross_f1",
+        "test1_cross_acc", "test1_cross_acc_labelled",
+        "test2_adaptive_f1", "test2_cross_f1",
         "test2_acc", "test2_acc_labelled",
         "test2_adaptive_acc", "test2_adaptive_acc_labelled",
+        "test2_cross_acc", "test2_cross_acc_labelled",
     ]
     out = df[[c for c in keep if c in df.columns]].copy()
     out.columns = [c.replace("test1_", "avianz_").replace("test2_", "doc_")

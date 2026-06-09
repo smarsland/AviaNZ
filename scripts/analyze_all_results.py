@@ -272,10 +272,14 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         acc_half = acc_lab_half = np.nan
 
     # --- oracle per-class thresholds (tuned on this same split) ---
-    # Vectorized: for each class, try all candidate thresholds at once.
+    # Only tune thresholds for classes that actually appear in the ground truth
+    # (present_idx).  Non-present classes get threshold=1.0 so they never fire.
+    # Without this, a class with all-zero ground truth gets a near-zero threshold
+    # (f1=0 at any firing threshold beats f1=-1 at silence), causing it to fire
+    # on every sample including background → exact-match accuracy craters to 0%.
     candidates = np.linspace(0.0, 1.0, 201, dtype=np.float32)
-    thresholds = np.full(probs.shape[1], 0.5, dtype=np.float32)
-    for c in range(probs.shape[1]):
+    thresholds = np.full(probs.shape[1], 1.0, dtype=np.float32)  # default: never fire
+    for c in present_idx:
         tc = trues[:, c]
         pc = probs[:, c]
         # preds_all: shape (201, n_samples)
@@ -291,8 +295,16 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         f1s[~pos_mask] = -1.0
         thresholds[c] = candidates[np.argmax(f1s)]
     preds_oracle = (probs >= thresholds[np.newaxis, :]).astype(int)
+    # Accuracy uses only the present_idx columns (same restriction as F1) so
+    # non-present classes that happen to have probs < 1.0 don't penalise it.
+    preds_oracle_restricted = preds_oracle[:, present_idx]
+    trues_oracle_restricted = trues[:, present_idx]
+    labelled_oracle = trues_oracle_restricted.sum(axis=1) > 0
+    correct_oracle = np.all(preds_oracle_restricted == trues_oracle_restricted, axis=1)
+    acc_oracle     = float(correct_oracle.mean() * 100)
+    acc_lab_oracle = float(correct_oracle[labelled_oracle].mean() * 100
+                           if labelled_oracle.any() else np.nan)
     prec_oracle, rec_oracle, f1_oracle, jac_oracle = _macro(preds_oracle)
-    acc_oracle, acc_lab_oracle = _acc(preds_oracle)
 
     result = {
         'half_precision':      prec_half,
@@ -318,10 +330,17 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     if apply_thresholds is not None and len(apply_thresholds) == probs.shape[1]:
         preds_cross = (probs >= apply_thresholds[np.newaxis, :]).astype(int)
         _, _, f1_cross, _ = _macro(preds_cross)
-        acc_cross, acc_lab_cross = _acc(preds_cross)
+        # Restrict accuracy to present_idx columns only (same reason as oracle)
+        preds_cross_r = preds_cross[:, present_idx]
+        trues_cross_r = trues[:, present_idx]
+        labelled_cross = trues_cross_r.sum(axis=1) > 0
+        correct_cross  = np.all(preds_cross_r == trues_cross_r, axis=1)
+        acc_cross      = float(correct_cross.mean() * 100)
+        acc_lab_cross  = float(correct_cross[labelled_cross].mean() * 100
+                               if labelled_cross.any() else np.nan)
         result['cross_f1']           = f1_cross
-        result['cross_acc']          = float(acc_cross)
-        result['cross_acc_labelled'] = float(acc_lab_cross)
+        result['cross_acc']          = acc_cross
+        result['cross_acc_labelled'] = acc_lab_cross
 
     return result
 

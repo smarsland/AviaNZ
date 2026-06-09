@@ -242,8 +242,14 @@ def build_avianz_large(
     # ebird_code -> set of segment keys that contain that species
     species_to_keys = defaultdict(set)
 
-    wav_files = proc.find_wav_files(avianz_raw)
-    print(f'AviaNZ: scanning {len(wav_files)} wav files ...')
+    if isinstance(avianz_raw, (list, tuple)):
+        avianz_raw_list = avianz_raw
+    else:
+        avianz_raw_list = [avianz_raw]
+    wav_files = []
+    for raw_dir in avianz_raw_list:
+        wav_files.extend(proc.find_wav_files(raw_dir))
+    print(f'AviaNZ: scanning {len(wav_files)} wav files across {len(avianz_raw_list)} source folder(s) ...')
 
     for wav_file in wav_files:
         data_file = wav_file + '.data'
@@ -452,12 +458,16 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument('--doc-raw', required=True,
-                        help='Raw DOC dataset root (NZBirds folder)')
-    parser.add_argument('--avianz-raw', default=None,
-                        help='Raw AviaNZ dataset root (Joe_MoDone folder). Not required when --doc-only.')
+    parser.add_argument('--doc-raw', default=None,
+                        help='Raw DOC dataset root (NZBirds folder). Required unless --avianz-only.')
+    parser.add_argument('--avianz-raw', default=None, action='append',
+                        help='Raw AviaNZ dataset folder. Repeat to include multiple folders. '
+                             'Not required when --doc-only.')
     parser.add_argument('--doc-only', action='store_true',
                         help='Build DOC dataset only (skip AviaNZ and skip common-class filtering).')
+    parser.add_argument('--avianz-only', action='store_true',
+                        help='Build AviaNZ dataset only (skip DOC and common-class filtering). '
+                             'Requires --avianz-raw; --doc-raw is not needed.')
     parser.add_argument('--restrict-classes', default=None,
                         help='Comma-separated list of class names to keep (after label-remap). '
                              'Use with --doc-only to restrict to a fixed class vocabulary.')
@@ -501,8 +511,12 @@ def main():
     )
     args = parser.parse_args()
 
-    if not args.doc_only and args.avianz_raw is None:
-        parser.error('--avianz-raw is required unless --doc-only is specified')
+    if args.avianz_only and args.doc_only:
+        parser.error('--avianz-only and --doc-only are mutually exclusive')
+    if not args.avianz_only and args.doc_raw is None:
+        parser.error('--doc-raw is required unless --avianz-only is specified')
+    if not args.doc_only and not args.avianz_only and args.avianz_raw is None:
+        parser.error('--avianz-raw is required unless --doc-only or --avianz-only is specified')
 
     with_audio = not args.no_audio
     target_time_bins = config.DEFAULT_TIME_BINS  # 1024
@@ -530,6 +544,7 @@ def main():
     print(f'  DOC raw        : {args.doc_raw}')
     print(f'  AviaNZ raw     : {args.avianz_raw}')
     print(f'  Doc only       : {args.doc_only}')
+    print(f'  AviaNZ only    : {args.avianz_only}')
     if restrict_classes:
         print(f'  Restrict to    : {restrict_classes}')
     print(f'  Output         : {args.output}')
@@ -545,6 +560,48 @@ def main():
 
     # Load name mapping
     ebird_to_common, _common_to_ebird = load_bird_name_mapping(args.mapping)
+
+    # -----------------------------------------------------------------------
+    # AviaNZ-only path: build AviaNZ dataset and exit.
+    # (No DOC, no common-class filtering — Trainer does its own 80/20 split.)
+    # -----------------------------------------------------------------------
+    if args.avianz_only:
+        if args.overwrite or not os.path.exists(os.path.join(avianz_out, 'labels.json')):
+            print('\n=== AviaNZ-only: building AviaNZ large dataset ===')
+            os.makedirs(avianz_out, exist_ok=True)
+            avianz_labels = build_avianz_large(
+                args.avianz_raw, avianz_out, args.mapping, ebird_to_common,
+                max_per_species=args.max_per_species,
+                seed=args.seed,
+                fixed_length=True, target_time_bins=target_time_bins,
+                with_audio=with_audio,
+                sg_type=args.spec_type,
+                window_type=args.window_type,
+                sg_scale=args.sg_scale,
+            )
+        else:
+            print('\n=== AviaNZ-only: dataset already exists, loading ===')
+            with open(os.path.join(avianz_out, 'labels.json')) as f:
+                avianz_labels = json.load(f)['files']
+
+        if restrict_classes:
+            restrict_set = set(restrict_classes)
+            before = len(avianz_labels)
+            avianz_labels = [e for e in avianz_labels
+                             if any(c in restrict_set for c in e.get('class_names', []))]
+            print(f'\n--restrict-classes: kept {len(avianz_labels)} / {before} samples '
+                  f'matching {sorted(restrict_set)}')
+
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+
+        categories = sorted({c for e in avianz_labels for c in e.get('class_names', [])})
+        print('\n' + '=' * 70)
+        print(' Done (avianz-only mode).')
+        print(f'  AviaNZ dataset : {avianz_out}')
+        print(f'  Samples        : {len(avianz_labels)}')
+        print(f'  Classes ({len(categories)}): {categories}')
+        print('=' * 70)
+        return
 
     # -----------------------------------------------------------------------
     # Step 1: build raw DOC dataset
@@ -600,7 +657,7 @@ def main():
         print('\n=== Step 2: build AviaNZ large dataset ===')
         os.makedirs(avianz_out, exist_ok=True)
         avianz_labels = build_avianz_large(
-            args.avianz_raw, avianz_out, args.mapping, ebird_to_common,
+            args.avianz_raw, avianz_out, args.mapping, ebird_to_common,  # type: ignore[arg-type]
             max_per_species=args.max_per_species,
             seed=args.seed,
             fixed_length=True, target_time_bins=target_time_bins,
