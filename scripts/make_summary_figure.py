@@ -166,6 +166,9 @@ def load_data(workspace: Path) -> pd.DataFrame:
     frames = []
     for (name, csv_rel, label, kind) in MODELS:
         csv_path = workspace / csv_rel
+        if not csv_path.exists():
+            print(f"  WARNING: '{name}' skipped — CSV not found: {csv_rel}")
+            continue
         df = pd.read_csv(csv_path)
         row = df[df["name"] == name]
         if row.empty:

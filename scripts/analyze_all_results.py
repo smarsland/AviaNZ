@@ -212,6 +212,7 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         'cross_f1', 'cross_acc', 'cross_acc_labelled',
     )}
     nan_result['oracle_thresholds'] = None
+    nan_result['oracle_class_names'] = None
 
     df = pd.read_csv(csv_path, index_col='filename')
     class_cols = [c for c in df.columns if not c.startswith('true_')]
@@ -335,6 +336,7 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         'oracle_acc':          float(acc_oracle),
         'oracle_acc_labelled': float(acc_lab_oracle),
         'oracle_thresholds':   thresholds,
+        'oracle_class_names':  true_class_names,
         'cross_f1':            np.nan,
         'cross_acc':           np.nan,
         'cross_acc_labelled':  np.nan,
@@ -377,6 +379,20 @@ def _read_adaptive_from_dir(exp_dir: Path, row: dict):
 
     # Single pass per CSV: compute self-tuned oracle thresholds.
     metrics_list = [_metrics_from_csv(csv_path) for csv_path in csvs]
+
+    # Save per-class oracle thresholds alongside each predictions CSV.
+    for csv_path, m in zip(csvs, metrics_list):
+        thresholds = m.get('oracle_thresholds')
+        class_names = m.get('oracle_class_names')
+        if thresholds is not None and class_names is not None:
+            thresh_path = csv_path.with_name(
+                csv_path.stem.replace('predictions_', 'thresholds_') + '.csv'
+            )
+            thresh_df = pd.DataFrame({
+                'class': class_names,
+                'threshold': thresholds,
+            })
+            thresh_df.to_csv(thresh_path, index=False, float_format='%.4f')
 
     # Second pass: apply each split's oracle thresholds to the *other* split.
     # _metrics_from_csv reads the CSV again here, but the oracle threshold search
