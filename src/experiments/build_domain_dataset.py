@@ -138,13 +138,15 @@ def main():
             train_dir,
         )
 
-    # Per-domain test sets (so Grad-CAM samples each domain separately)
+    # Per-domain test sets placed at avianz_split/test and doc_split/test so that
+    # train.py's Path(test_folder).parent.name gives 'avianz_split' and 'doc_split',
+    # producing distinct attention_avianz_split/ and attention_doc_split/ output dirs.
     for domain_label, split_name in [(AVIANZ_LABEL, "avianz_split"), (DOC_LABEL, "doc_split")]:
-        out_dir = output / f"domain_test_{domain_label}"
+        out_dir = output / split_name / "test"
         if not args.overwrite and (out_dir / "labels.json").exists():
-            print(f"  [skip] domain_test_{domain_label} already exists (use --overwrite to force)")
+            print(f"  [skip] {split_name}/test already exists (use --overwrite to force)")
             continue
-        print(f"\n=== Building domain_test_{domain_label} ===")
+        print(f"\n=== Building {split_name}/test ===")
         build_single_domain(
             matched / split_name / "test",
             domain_label,
@@ -153,8 +155,8 @@ def main():
 
     print(f"\nDone.")
     print(f"  Train        : {output / 'domain_train'}")
-    print(f"  Test AviaNZ  : {output / 'domain_test_avianz'}")
-    print(f"  Test DOC     : {output / 'domain_test_doc'}")
+    print(f"  Test AviaNZ  : {output / 'avianz_split' / 'test'}")
+    print(f"  Test DOC     : {output / 'doc_split' / 'test'}")
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ if [ ! -d "${DOMAIN}/domain_train" ] || [ ! -f "${DOMAIN}/domain_train/labels.js
     exit 1
 fi
 
-if [ ! -d "${DOMAIN}/domain_test_avianz" ] || [ ! -d "${DOMAIN}/domain_test_doc" ]; then
+if [ ! -d "${DOMAIN}/avianz_split/test" ] || [ ! -d "${DOMAIN}/doc_split/test" ]; then
     echo "ERROR: Per-domain test sets not found at ${DOMAIN}. Run build_domain_dataset.sh first."
     exit 1
 fi
@@ -54,8 +54,8 @@ CMD=(
     python train.py
     "${DOMAIN}/domain_train"
     "$OUTPUT"
-    --test-folder  "${DOMAIN}/domain_test_avianz"
-    --test-folder2 "${DOMAIN}/domain_test_doc"
+    --test-folder  "${DOMAIN}/avianz_split/test"
+    --test-folder2 "${DOMAIN}/doc_split/test"
     --model-type  regnet
     --epochs      30
     --patience    15
@@ -72,6 +72,6 @@ fi
 echo ""
 echo "============================================================"
 echo " Done. Results in: $OUTPUT"
-echo " Grad-CAM heatmaps in: ${OUTPUT}/attention_domain_test_avianz/"
-echo "                  and: ${OUTPUT}/attention_domain_test_doc/"
+echo " Grad-CAM heatmaps in: ${OUTPUT}/attention_avianz_split/"
+echo "                  and: ${OUTPUT}/attention_doc_split/"
 echo "============================================================"
