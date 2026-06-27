@@ -26,7 +26,7 @@ DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 # Separate root so output lands at ${OUTPUT}/doc_large (the builder always uses
 # that subfolder name) without clobbering the 9-class scaling dataset.
 OUTPUT="${BASE}/scaling_all_species"
-MAX_PER_SPECIES=2000
+MAX_PER_SPECIES=20000
 MAPPING="data/DOC_bird_naming_map.csv"
 
 # Label remaps to align DOC names with the matched-test vocabulary.

@@ -5,8 +5,6 @@
 # 2000 segments/class max) built by build_avianz_all_species_dataset.sh.
 #
 # This is the AviaNZ-domain counterpart to run_all_species_experiment.sh.
-# The hypothesis: pre-training on a large in-domain AviaNZ dataset produces
-# better features for AviaNZ-test transfer than DOC-only pre-training.
 #
 # Both models use background subtraction and kbird-prior=2.0, matching the
 # best-performing configuration in the scaling experiments.
