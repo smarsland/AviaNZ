@@ -358,6 +358,97 @@ def build_avianz_large(
 
 
 # ---------------------------------------------------------------------------
+# Combined (DOC + AviaNZ) dataset builder
+# ---------------------------------------------------------------------------
+
+def build_combined(
+    doc_labels, avianz_labels,
+    doc_out, avianz_out,
+    combined_out,
+    max_per_species=5000,
+    seed=42,
+):
+    """
+    Pool DOC and AviaNZ label lists, apply a combined per-species cap, and
+    save the result as a single dataset under combined_out/combined_large/.
+
+    Filenames are renumbered to avoid collisions between the two source
+    datasets.  Source .npy files are symlinked (falling back to copy) so no
+    extra disk space is used.
+
+    Returns (combined_labels, combined_large_path).
+    """
+    rng = random.Random(seed)
+
+    # --- pool and cap ---
+    by_species = defaultdict(list)
+    for entry in doc_labels + avianz_labels:
+        primary = entry['class_names'][0] if entry.get('class_names') else '__bg__'
+        by_species[primary].append(entry)
+
+    capped = []
+    for species, entries in sorted(by_species.items()):
+        rng.shuffle(entries)
+        kept = entries[:max_per_species]
+        capped.extend(kept)
+        if len(entries) > max_per_species:
+            print(f'  {species:<30s}: {len(entries):>6,} → {max_per_species:>6,} (capped)')
+        else:
+            print(f'  {species:<30s}: {len(entries):>6,}')
+
+    rng.shuffle(capped)
+
+    # --- renumber and symlink ---
+    combined_large = os.path.join(combined_out, 'combined_large')
+    data_dir = os.path.join(combined_large, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+
+    src_data_dirs = [
+        os.path.join(doc_out, 'data'),
+        os.path.join(avianz_out, 'data'),
+    ]
+
+    combined_labels = []
+    for i, entry in enumerate(capped):
+        new_basename = f'file_{i:08d}'
+        old_fname = entry['filename']
+
+        linked = False
+        for src_dir in src_data_dirs:
+            src_npy = os.path.join(src_dir, old_fname)
+            if os.path.exists(src_npy):
+                dst_npy = os.path.join(data_dir, f'{new_basename}.npy')
+                if not os.path.exists(dst_npy):
+                    try:
+                        os.symlink(src_npy, dst_npy)
+                    except OSError:
+                        shutil.copy2(src_npy, dst_npy)
+                linked = True
+                break
+
+        if not linked:
+            print(f'  WARNING: source file not found for {old_fname}, skipping')
+            continue
+
+        combined_labels.append({**entry, 'filename': f'{new_basename}.npy'})
+
+    categories = sorted({c for e in combined_labels for c in e.get('class_names', [])})
+    payload = {
+        'files': combined_labels,
+        'categories': categories,
+        'num_classes': len(categories),
+        'dataset': 'combined_large',
+    }
+    labels_path = os.path.join(combined_large, 'labels.json')
+    with open(labels_path, 'w') as f:
+        json.dump(payload, f, indent=2)
+
+    print(f'\nCombined dataset: {len(combined_labels)} samples, '
+          f'{len(categories)} classes → {labels_path}')
+    return combined_labels, combined_large
+
+
+# ---------------------------------------------------------------------------
 # Splitting
 # ---------------------------------------------------------------------------
 
@@ -490,6 +581,11 @@ def main():
                         help='Skip saving audio files (Kaytoo/BirdNET eval will not work)')
     parser.add_argument('--overwrite', action='store_true',
                         help='Re-build even if output folders already exist')
+    parser.add_argument('--combined-out', default=None,
+                        help='If set, merge DOC and AviaNZ labels into a single combined dataset '
+                             'saved under <combined-out>/combined_large/ with a per-species cap of '
+                             '--max-per-species applied across both sources.  Requires both '
+                             '--doc-raw and --avianz-raw.  The Trainer does its own 80/20 split.')
     parser.add_argument('--class-filter', action='store_true',
                         help='Filter to the intersection of DOC and AviaNZ classes '
                              '(only keep species present in both with >= min-per-class samples). '
@@ -513,6 +609,10 @@ def main():
 
     if args.avianz_only and args.doc_only:
         parser.error('--avianz-only and --doc-only are mutually exclusive')
+    if args.combined_out and (args.doc_only or args.avianz_only):
+        parser.error('--combined-out cannot be used with --doc-only or --avianz-only')
+    if args.combined_out and (args.doc_raw is None or args.avianz_raw is None):
+        parser.error('--combined-out requires both --doc-raw and --avianz-raw')
     if not args.avianz_only and args.doc_raw is None:
         parser.error('--doc-raw is required unless --avianz-only is specified')
     if not args.doc_only and not args.avianz_only and args.avianz_raw is None:
@@ -670,6 +770,36 @@ def main():
         print('\n=== Step 2: AviaNZ large dataset already exists, loading ===')
         with open(os.path.join(avianz_out, 'labels.json')) as f:
             avianz_labels = json.load(f)['files']
+
+    # -----------------------------------------------------------------------
+    # Combined-out path: merge DOC + AviaNZ into one dataset and exit.
+    # (No domain-split logic — the Trainer does its own 80/20 split.)
+    # -----------------------------------------------------------------------
+    if args.combined_out:
+        os.makedirs(args.combined_out, exist_ok=True)
+        combined_large = os.path.join(args.combined_out, 'combined_large')
+        if args.overwrite or not os.path.exists(os.path.join(combined_large, 'labels.json')):
+            print('\n=== Combined: merging DOC + AviaNZ into single dataset ===')
+            combined_labels, combined_large = build_combined(
+                doc_labels, avianz_labels,
+                doc_out, avianz_out,
+                args.combined_out,
+                max_per_species=args.max_per_species,
+                seed=args.seed,
+            )
+        else:
+            print('\n=== Combined: dataset already exists, skipping ===')
+            with open(os.path.join(combined_large, 'labels.json')) as f:
+                combined_labels = json.load(f)['files']
+
+        categories = sorted({c for e in combined_labels for c in e.get('class_names', [])})
+        print('\n' + '=' * 70)
+        print(' Done (combined mode).')
+        print(f'  Combined dataset : {combined_large}')
+        print(f'  Samples          : {len(combined_labels)}')
+        print(f'  Classes ({len(categories)}): {categories}')
+        print('=' * 70)
+        return
 
     # -----------------------------------------------------------------------
     # Step 3: (optionally) filter to common classes
