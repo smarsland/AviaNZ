@@ -30,8 +30,9 @@ def count_annotations_in_data_file(data_path):
 
 
 def collect_species_in_data_file(data_path):
-    """Return set of species names found in a .wav.data file."""
-    species = set()
+    """Return Counter of species -> segment count found in a .wav.data file."""
+    from collections import Counter
+    species = Counter()
     try:
         with open(data_path, 'r', errors='replace') as f:
             data = json.load(f)
@@ -44,9 +45,9 @@ def collect_species_in_data_file(data_path):
                 if isinstance(labels, list):
                     for lab in labels:
                         if isinstance(lab, dict) and 'species' in lab:
-                            species.add(lab['species'])
+                            species[lab['species']] += 1
                         elif isinstance(lab, list) and len(lab) > 0:
-                            species.add(str(lab[0]))
+                            species[str(lab[0])] += 1
     except Exception:
         pass
     return species
@@ -54,10 +55,11 @@ def collect_species_in_data_file(data_path):
 
 def scan_folder(top_folder, show_species=False):
     """Walk a top-level folder and return stats."""
+    from collections import Counter
     wav_count = 0
     annotated_count = 0
     segment_count = 0
-    species_set = set()
+    species_counts = Counter()
 
     for root, dirs, files in os.walk(top_folder, followlinks=False):
         # Skip hidden dirs
@@ -71,9 +73,9 @@ def scan_folder(top_folder, show_species=False):
                     segs = count_annotations_in_data_file(data_path)
                     segment_count += segs
                     if show_species:
-                        species_set |= collect_species_in_data_file(data_path)
+                        species_counts += collect_species_in_data_file(data_path)
 
-    return wav_count, annotated_count, segment_count, species_set
+    return wav_count, annotated_count, segment_count, species_counts
 
 
 def main():
@@ -121,7 +123,7 @@ def main():
             try:
                 results[name] = future.result()
             except Exception as e:
-                results[name] = (0, 0, 0, set())
+                results[name] = (0, 0, 0, {})
                 print(f"\n  Warning: error scanning {name}: {e}", file=sys.stderr)
 
     print()  # clear progress line
@@ -137,7 +139,7 @@ def main():
     print('-' * len(header))
 
     total_wav = total_ann = total_seg = 0
-    for name, (wav_count, annotated_count, segment_count, species_set) in sorted_results:
+    for name, (wav_count, annotated_count, segment_count, species_counts) in sorted_results:
         total_wav += wav_count
         total_ann += annotated_count
         total_seg += segment_count
@@ -145,12 +147,24 @@ def main():
         if annotated_count == 0:
             line += "  (no AviaNZ data)"
         print(line)
-        if args.show_species and species_set:
-            sp_sorted = sorted(species_set)
-            print(f"  {'Species:':<{col_w-2}} {', '.join(sp_sorted)}")
+        if args.show_species and species_counts:
+            for sp, cnt in sorted(species_counts.items(), key=lambda x: -x[1]):
+                print(f"    {sp:<{col_w-4}} {cnt:>10,}")
 
     print('-' * len(header))
     print(f"{'TOTAL':<{col_w}}  {total_wav:>8,}  {total_ann:>10,}  {total_seg:>10,}")
+
+    if args.show_species:
+        from collections import Counter
+        global_species: Counter = Counter()
+        for _, (_, _, _, species_counts) in sorted_results:
+            global_species += species_counts
+        if global_species:
+            print()
+            print(f"{'Species':<{col_w}}  {'Segments':>10}")
+            print('-' * (col_w + 14))
+            for sp, cnt in sorted(global_species.items(), key=lambda x: -x[1]):
+                print(f"{sp:<{col_w}}  {cnt:>10,}")
 
 
 if __name__ == '__main__':
