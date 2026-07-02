@@ -78,6 +78,7 @@ PYTHONPATH=. python3 src/experiments/build_large_datasets.py \
     --combined-out   "${OUTPUT}" \
     --mapping        "${MAPPING}" \
     --max-per-species "${MAX_PER_SPECIES}" \
+    --label-remap "new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird" \
     --no-audio \
     --spec-type   Standard \
     --window-type Hamming \

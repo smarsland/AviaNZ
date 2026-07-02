@@ -92,51 +92,39 @@ MODELS = [
         "ours",
     ),
     (
-        "ast_all_species_bgsubtract_seed0",
-        "all_species_tests/analysis/all_results.csv",
-        "AST +BgSub\nAll Species",
+        "ast_full_doc_bgsubtract_seed0",
+        "full_doc_tests/analysis/all_results.csv",
+        "AST +BgSub\nFull DOC",
         "ours",
     ),
     (
-        "ast_all_species_bgsubtract_ft_seed0",
-        "all_species_tests/analysis/all_results.csv",
-        "AST +BgSub\nAll Species (finetuned)",
+        "regnet_full_doc_bgsubtract_seed0",
+        "full_doc_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nFull DOC",
         "ours",
     ),
     (
-        "regnet_all_species_bgsubtract_seed0",
-        "all_species_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nAll Species",
+        "ast_combined_bgsubtract_seed0",
+        "combined_tests/analysis/all_results.csv",
+        "AST +BgSub\nCombined",
         "ours",
     ),
     (
-        "regnet_all_species_bgsubtract_ft_seed0",
-        "all_species_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nAll Species (finetuned)",
+        "ast_combined_bgsubtract_ft_seed0",
+        "combined_tests/analysis/all_results.csv",
+        "AST +BgSub\nCombined (finetuned)",
         "ours",
     ),
     (
-        "ast_avianz_all_species_bgsubtract_seed0",
-        "avianz_all_species_tests/analysis/all_results.csv",
-        "AST +BgSub\nAviaNZ All Species",
+        "regnet_combined_bgsubtract_seed0",
+        "combined_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nCombined",
         "ours",
     ),
     (
-        "ast_avianz_all_species_bgsubtract_ft_seed0",
-        "avianz_all_species_tests/analysis/all_results.csv",
-        "AST +BgSub\nAviaNZ All Species (finetuned)",
-        "ours",
-    ),
-    (
-        "regnet_avianz_all_species_bgsubtract_seed0",
-        "avianz_all_species_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nAviaNZ All Species",
-        "ours",
-    ),
-    (
-        "regnet_avianz_all_species_bgsubtract_ft_seed0",
-        "avianz_all_species_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nAviaNZ All Species (finetuned)",
+        "regnet_combined_bgsubtract_ft_seed0",
+        "combined_tests/analysis/all_results.csv",
+        "RegNet +BgSub\nCombined (finetuned)",
         "ours",
     ),
 ]
@@ -210,6 +198,7 @@ _CONDITIONS_3 = [
         "label": "DOC  (self-tuned)",
         "cols": {
             "macro_f1":     "test2_adaptive_f1",
+            "micro_f1":     "test2_adaptive_micro_f1",
             "overall_acc":  "test2_adaptive_acc",
             "labelled_acc": "test2_adaptive_acc_labelled",
         },
@@ -220,6 +209,7 @@ _CONDITIONS_3 = [
         "label": "AviaNZ  (DOC thresholds)",
         "cols": {
             "macro_f1":     "test1_cross_f1",
+            "micro_f1":     "test1_cross_micro_f1",
             "overall_acc":  "test1_cross_acc",
             "labelled_acc": "test1_cross_acc_labelled",
         },
@@ -230,6 +220,7 @@ _CONDITIONS_3 = [
         "label": "AviaNZ  (self-tuned)",
         "cols": {
             "macro_f1":     "test1_adaptive_f1",
+            "micro_f1":     "test1_adaptive_micro_f1",
             "overall_acc":  "test1_adaptive_acc",
             "labelled_acc": "test1_adaptive_acc_labelled",
         },
@@ -240,6 +231,7 @@ _CONDITIONS_3 = [
 
 _METRIC_META = {
     "macro_f1":     ("Macro F1",           "Macro F1 Score",               0.85, False, "summary_macro_f1.png"),
+    "micro_f1":     ("Micro F1",           "Micro F1 Score",               0.95, False, "summary_micro_f1.png"),
     "overall_acc":  ("Exact Accuracy (%)", "Overall Exact Accuracy",        90,   True,  "summary_overall_acc.png"),
     "labelled_acc": ("Exact Accuracy (%)", "Labelled-only Exact Accuracy",  90,   True,  "summary_labelled_acc.png"),
 }
@@ -403,6 +395,242 @@ def make_csv(df: pd.DataFrame, out_dir: Path):
 
 
 # ─────────────────────────────────────────────
+#  Per-species breakdown
+# ─────────────────────────────────────────────
+
+# The 9 matched test species (normalised common names as used in RegNet CSVs)
+_TEST_SPECIES = [
+    "blackbird", "chaffinch", "fantail", "grey warbler",
+    "kaka", "morepork", "silvereye", "tomtit", "tui/bellbird",
+]
+
+# Standard remap applied when building matched/scaling datasets
+_LABEL_REMAP = {
+    "new zealand kaka": "kaka",
+    "tui":              "tui/bellbird",
+    "bellbird":         "tui/bellbird",
+}
+
+
+def _build_ebird_to_species(workspace: Path) -> dict:
+    """Return dict: eBird_code → normalised test-species name (None if not a test species)."""
+    import re as _re
+
+    def _norm(t):
+        t = str(t).strip().lower().replace("-", " ").replace("_", " ")
+        return " ".join(t.split())
+
+    map_path = workspace / "data" / "DOC_bird_naming_map.csv"
+    df = pd.read_csv(map_path)
+    result = {}
+    for _, row in df.iterrows():
+        ebird  = _norm(row["eBird"])
+        common = _norm(row["CommonName"])
+        label  = _LABEL_REMAP.get(common, common)
+        if label in _TEST_SPECIES:
+            result[ebird] = label
+    return result
+
+
+def _per_species_metrics(csv_path: Path,
+                          ebird_to_species: dict | None = None,
+                          pred_remap: dict | None = None) -> dict:
+    """Compute per-species F1, micro-F1 (=F1 for binary), binary accuracy,
+    labelled-only accuracy at oracle thresholds.
+
+    If *ebird_to_species* is provided (Kaytoo case), prediction/true_ columns
+    are eBird codes and are remapped; tui+bellbird are merged by max probability.
+    If *pred_remap* is provided (combined dataset case), prediction columns are
+    remapped before scoring.
+
+    Returns dict: species_name → {'f1', 'acc', 'acc_labelled', 'count'}.
+    """
+    df = pd.read_csv(csv_path, index_col="filename")
+    pred_cols_raw = [c for c in df.columns if not c.startswith("true_")]
+    true_cols_raw = [c for c in df.columns if c.startswith("true_")]
+
+    # Apply pred_remap if given (e.g. combined dataset: tui→tui/bellbird)
+    if pred_remap:
+        # build merged prediction columns by max across remapped sources
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for c in pred_cols_raw:
+            groups[pred_remap.get(c, c)].append(c)
+        remapped_preds = {target: df[srcs].max(axis=1) for target, srcs in groups.items()}
+        df = pd.concat([pd.DataFrame(remapped_preds, index=df.index),
+                        df[true_cols_raw]], axis=1)
+        pred_cols_raw = list(remapped_preds.keys())
+
+    # All-sample labelled mask (at least one species positive across all species)
+    all_trues = df[true_cols_raw].values
+    globally_labelled = all_trues.sum(axis=1) > 0
+
+    n = len(df)
+    results = {}
+
+    for sp in _TEST_SPECIES:
+        if ebird_to_species is not None:
+            # Kaytoo: columns are eBird codes
+            matching_pred = [c for c in pred_cols_raw
+                             if ebird_to_species.get(c) == sp]
+            matching_true = [c for c in true_cols_raw
+                             if ebird_to_species.get(c[5:]) == sp]
+        else:
+            # RegNet / remapped: columns are normalised common names
+            matching_pred = [sp] if sp in pred_cols_raw else []
+            matching_true = [f"true_{sp}"] if f"true_{sp}" in true_cols_raw else []
+
+        if not matching_true:
+            continue
+
+        trues = (df[matching_true].values.sum(axis=1) > 0).astype(np.int32)
+        count = int(trues.sum())
+
+        if not matching_pred:
+            results[sp] = {"f1": 0.0, "acc": 0.0, "acc_labelled": 0.0, "count": count}
+            continue
+
+        probs = df[matching_pred].max(axis=1).values.astype(np.float32)
+
+        # Oracle threshold: maximise per-class F1
+        candidates = np.linspace(0.0, 1.0, 201, dtype=np.float32)
+        preds_all  = (probs[np.newaxis, :] >= candidates[:, np.newaxis]).astype(np.int32)
+        tp_all = (preds_all * trues[np.newaxis, :]).sum(axis=1).astype(np.float32)
+        fp_all = (preds_all * (1 - trues)[np.newaxis, :]).sum(axis=1).astype(np.float32)
+        fn_all = ((1 - preds_all) * trues[np.newaxis, :]).sum(axis=1).astype(np.float32)
+        denom  = 2 * tp_all + fp_all + fn_all
+        f1s    = np.where(denom > 0, 2 * tp_all / denom, 0.0)
+        # Require at least one positive prediction to break ties
+        f1s[preds_all.sum(axis=1) == 0] = -1.0
+        best = int(np.argmax(f1s))
+
+        preds = preds_all[best]
+        tp = float((preds * trues).sum())
+        tn = float(((1 - preds) * (1 - trues)).sum())
+
+        acc = (tp + tn) / n * 100
+        acc_lab = (
+            float(np.mean(preds[globally_labelled] == trues[globally_labelled]) * 100)
+            if globally_labelled.any() else np.nan
+        )
+
+        results[sp] = {
+            "f1":          float(f1s[best]) if f1s[best] >= 0 else 0.0,
+            "acc":         acc,
+            "acc_labelled": acc_lab,
+            "count":       count,
+        }
+
+    return results
+
+
+def make_per_species_figure(workspace: Path, out_dir: Path):
+    """Per-species F1 / accuracy / acc_labelled:
+    Full-DOC RegNet, Combined RegNet, Kaytoo (pretrained)."""
+
+    STANDARD_REMAP = {
+        "new zealand kaka": "kaka",
+        "tui": "tui/bellbird",
+        "bellbird": "tui/bellbird",
+    }
+
+    MODELS = [
+        {
+            "label": "RegNet +BgSub\n(full DOC)",
+            "csv":   workspace / "full_doc_tests/regnet_full_doc_bgsubtract_seed0/predictions_doc_split.csv",
+            "color": "#5DADE2",
+            "edge":  "#1A5276",
+            "remap": None,
+            "ebird": None,
+        },
+        {
+            "label": "RegNet +BgSub\n(combined)",
+            "csv":   workspace / "combined_tests/regnet_combined_bgsubtract_seed0/predictions_doc_split.csv",
+            "color": "#A9CCE3",
+            "edge":  "#1A5276",
+            "remap": STANDARD_REMAP,
+            "ebird": None,
+        },
+        {
+            "label": "Kaytoo\n(pretrained)",
+            "csv":   workspace / "matched_tests/kaytoo_pretrained_seed0/predictions_doc_split.csv",
+            "color": KIND_COLOR["kaytoo"],
+            "edge":  KIND_EDGE["kaytoo"],
+            "remap": None,
+            "ebird": True,  # signals eBird-code columns
+        },
+    ]
+
+    ebird_map = _build_ebird_to_species(workspace)
+
+    model_metrics = []
+    for m in MODELS:
+        if not m["csv"].exists():
+            print(f"  WARNING: per-species figure — not found: {m['csv']}")
+            model_metrics.append(None)
+            continue
+        model_metrics.append(_per_species_metrics(
+            m["csv"],
+            ebird_to_species=ebird_map if m["ebird"] else None,
+            pred_remap=m["remap"],
+        ))
+
+    # Order species by count in DOC test (from first available model)
+    ref = next(mm for mm in model_metrics if mm is not None)
+    counts = {sp: ref.get(sp, {}).get("count", 0) for sp in _TEST_SPECIES}
+    ordered = sorted(_TEST_SPECIES, key=lambda s: -counts[s])
+
+    METRICS = [
+        ("f1",          "F1 Score (oracle threshold)",              False, "summary_per_species_f1.png"),
+        ("acc",         "Binary Accuracy, % (oracle threshold)",    True,  "summary_per_species_acc.png"),
+        ("acc_labelled","Labelled-only Accuracy, % (oracle threshold)", True, "summary_per_species_acc_labelled.png"),
+    ]
+
+    n_models = len(MODELS)
+    n_species = len(ordered)
+    bar_h = 0.7 / n_models
+    offsets = np.linspace(-(n_models - 1) / 2, (n_models - 1) / 2, n_models) * bar_h
+    y = np.arange(n_species)
+
+    for metric, xlabel, is_pct, fname in METRICS:
+        fig, ax = plt.subplots(figsize=(8, max(5, n_species * n_models * 0.28 + 1.5)))
+
+        all_vals = []
+        for mi, (m, mm) in enumerate(zip(MODELS, model_metrics)):
+            if mm is None:
+                continue
+            vals = [mm.get(sp, {}).get(metric, 0.0) for sp in ordered]
+            all_vals.extend(v for v in vals if v is not None and not np.isnan(v))
+            ax.barh(y + offsets[mi], vals, bar_h,
+                    label=m["label"].replace("\n", " "),
+                    color=m["color"], edgecolor=m["edge"], linewidth=0.8, zorder=3)
+
+        ax.set_yticks(y)
+        ax.set_yticklabels(
+            [f"{sp}  (n={counts[sp]})" for sp in ordered],
+            fontsize=9,
+        )
+        ax.invert_yaxis()
+        ax.set_xlabel(xlabel, fontsize=10)
+        xmax = max(all_vals) * 1.05 if all_vals else (1.0 if not is_pct else 100)
+        xmin = min(all_vals) * 0.95 if all_vals else 0
+        ax.set_xlim(xmin, xmax)
+        ax.set_title(f"Per-species {xlabel.split('(')[0].strip()} — DOC test split",
+                     fontsize=11, fontweight="bold")
+        ax.legend(fontsize=8, loc="lower right")
+        ax.xaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        plt.tight_layout()
+        out_path = out_dir / fname
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"✓ {out_path.relative_to(out_dir.parent.parent)}")
+
+
+# ─────────────────────────────────────────────
 #  Main
 # ─────────────────────────────────────────────
 
@@ -424,10 +652,11 @@ def main():
     print(f"  {len(df)} models loaded\n")
 
     print("Creating outputs…")
-    for metric in ("macro_f1", "overall_acc", "labelled_acc"):
+    for metric in ("macro_f1", "micro_f1", "overall_acc", "labelled_acc"):
         make_metric_figure(df, out_dir, metric)
     make_table(df, out_dir)
     make_csv(df, out_dir)
+    make_per_species_figure(workspace, out_dir)
 
     print(f"\nDone → {out_dir}")
 

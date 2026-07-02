@@ -23,7 +23,7 @@ import pandas as pd
 import seaborn as sns
 
 
-def load_from_result_json(results_dir):
+def load_from_result_json(results_dir, pred_remap=None):
     """Load experiments written by run_matched_experiments.sh and evaluate_kaytoo.py."""
     results = []
     for result_file in sorted(Path(results_dir).glob('*/result.json')):
@@ -54,21 +54,23 @@ def load_from_result_json(results_dir):
                 'test1_macro_precision': np.nan,
                 'test1_macro_recall': np.nan,
                 'test1_macro_f1': np.nan,
+                'test1_micro_f1': np.nan,
                 'test1_jaccard': np.nan,
-                'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
-                'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
+                'test1_adaptive_f1': np.nan, 'test1_adaptive_micro_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+                'test1_cross_f1': np.nan, 'test1_cross_micro_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
                 'test2_macro_precision': np.nan,
                 'test2_macro_recall': np.nan,
                 'test2_macro_f1': np.nan,
+                'test2_micro_f1': np.nan,
                 'test2_jaccard': np.nan,
-                'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
-                'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
+                'test2_adaptive_f1': np.nan, 'test2_adaptive_micro_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+                'test2_cross_f1': np.nan, 'test2_cross_micro_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
                 'status': data.get('status', 'unknown'),
             }
-            _read_adaptive_from_dir(result_file.parent, row)
+            _read_adaptive_from_dir(result_file.parent, row, pred_remap=pred_remap)
             results.append(row)
             continue
 
@@ -89,21 +91,23 @@ def load_from_result_json(results_dir):
                 'test1_macro_precision': np.nan,
                 'test1_macro_recall': np.nan,
                 'test1_macro_f1': np.nan,
+                'test1_micro_f1': np.nan,
                 'test1_jaccard': np.nan,
-                'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
-                'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
+                'test1_adaptive_f1': np.nan, 'test1_adaptive_micro_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+                'test1_cross_f1': np.nan, 'test1_cross_micro_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
                 'test2_acc': data.get('test2_acc', np.nan),
                 'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
                 'test2_acc_background': data.get('test2_acc_background', np.nan),
                 'test2_macro_precision': np.nan,
                 'test2_macro_recall': np.nan,
                 'test2_macro_f1': np.nan,
+                'test2_micro_f1': np.nan,
                 'test2_jaccard': np.nan,
-                'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
-                'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
+                'test2_adaptive_f1': np.nan, 'test2_adaptive_micro_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+                'test2_cross_f1': np.nan, 'test2_cross_micro_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
                 'status': data.get('status', 'unknown'),
             }
-            _read_adaptive_from_dir(result_file.parent, row)
+            _read_adaptive_from_dir(result_file.parent, row, pred_remap=pred_remap)
             results.append(row)
             continue
 
@@ -149,21 +153,23 @@ def load_from_result_json(results_dir):
             'test1_macro_precision': np.nan,
             'test1_macro_recall': np.nan,
             'test1_macro_f1': np.nan,
+            'test1_micro_f1': np.nan,
             'test1_jaccard': np.nan,
-            'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
-            'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
+            'test1_adaptive_f1': np.nan, 'test1_adaptive_micro_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+            'test1_cross_f1': np.nan, 'test1_cross_micro_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
             'test2_acc': data.get('test2_acc', np.nan),
             'test2_acc_labelled': data.get('test2_acc_labelled', np.nan),
             'test2_acc_background': data.get('test2_acc_background', np.nan),
             'test2_macro_precision': np.nan,
             'test2_macro_recall': np.nan,
             'test2_macro_f1': np.nan,
+            'test2_micro_f1': np.nan,
             'test2_jaccard': np.nan,
-            'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
-            'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
+            'test2_adaptive_f1': np.nan, 'test2_adaptive_micro_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+            'test2_cross_f1': np.nan, 'test2_cross_micro_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
             'status': data.get('status', 'unknown'),
         }
-        _read_adaptive_from_dir(result_file.parent, row)
+        _read_adaptive_from_dir(result_file.parent, row, pred_remap=pred_remap)
         results.append(row)
     return results
 
@@ -185,7 +191,36 @@ def _extract_report_metrics(report):
     }
 
 
-def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> dict:
+def _apply_pred_remap(df: pd.DataFrame, pred_remap: dict) -> pd.DataFrame:
+    """Remap prediction columns in-place: merge multiple source columns into a
+    single target column by taking the max probability.
+    e.g. {"tui": "tui/bellbird", "bellbird": "tui/bellbird"} merges both into
+    one column named "tui/bellbird", which can then match true_tui/bellbird.
+    Only affects prediction (non-true_) columns.
+    """
+    from collections import defaultdict
+    pred_cols = [c for c in df.columns if not c.startswith('true_')]
+    true_cols = [c for c in df.columns if c.startswith('true_')]
+
+    groups = defaultdict(list)
+    for col in pred_cols:
+        groups[pred_remap.get(col, col)].append(col)
+
+    new_pred = {}
+    for target, sources in groups.items():
+        if len(sources) == 1 and sources[0] == target:
+            new_pred[target] = df[sources[0]]
+        else:
+            new_pred[target] = df[sources].max(axis=1)
+
+    result = pd.DataFrame(new_pred, index=df.index)
+    for tc in true_cols:
+        result[tc] = df[tc]
+    return result
+
+
+def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None,
+                      pred_remap: dict = None) -> dict:
     """Compute metrics at threshold=0.5, self-tuned oracle thresholds, and optionally
     cross-tuned thresholds supplied via *apply_thresholds*.
 
@@ -215,6 +250,8 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     nan_result['oracle_class_names'] = None
 
     df = pd.read_csv(csv_path, index_col='filename')
+    if pred_remap:
+        df = _apply_pred_remap(df, pred_remap)
     class_cols = [c for c in df.columns if not c.startswith('true_')]
     true_cols  = [c for c in df.columns if c.startswith('true_')]
     if not true_cols:
@@ -258,6 +295,14 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         jac = float(_jaccard(t, p, average='macro', zero_division=0))
         return float(prec), float(rec), float(f1), jac
 
+    def _micro_f1(preds):
+        if len(present_idx) == 0:
+            return np.nan
+        t = trues[:, present_idx]
+        p = preds[:, present_idx]
+        _, _, f1, _ = _prf(t, p, average='micro', zero_division=0)
+        return float(f1)
+
     # --- threshold 0.5, restricted to test-set classes ---
     # For models trained on a superset vocabulary (e.g. 120 classes), kbird
     # normalisation across all classes suppresses individual class probs well
@@ -275,6 +320,9 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         _p, _r, _f, _ = _prf(trues_restricted, preds_restricted,
                               average='macro', zero_division=0)
         prec_half, rec_half, f1_half = float(_p), float(_r), float(_f)
+        _, _, micro_f1_half, _ = _prf(trues_restricted, preds_restricted,
+                                      average='micro', zero_division=0)
+        micro_f1_half = float(micro_f1_half)
         jac_half = float(_jaccard(trues_restricted, preds_restricted,
                                   average='macro', zero_division=0))
         correct_restricted = np.all(preds_restricted == trues_restricted, axis=1)
@@ -284,7 +332,7 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
             if labelled_restricted.any() else np.nan
         )
     else:
-        prec_half = rec_half = f1_half = jac_half = np.nan
+        prec_half = rec_half = f1_half = micro_f1_half = jac_half = np.nan
         acc_half = acc_lab_half = np.nan
 
     # --- oracle per-class thresholds (tuned on this same split) ---
@@ -321,23 +369,27 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     acc_lab_oracle = float(correct_oracle[labelled_oracle].mean() * 100
                            if labelled_oracle.any() else np.nan)
     prec_oracle, rec_oracle, f1_oracle, jac_oracle = _macro(preds_oracle)
+    micro_f1_oracle = _micro_f1(preds_oracle)
 
     result = {
         'half_precision':      prec_half,
         'half_recall':         rec_half,
         'half_f1':             f1_half,
+        'half_micro_f1':       micro_f1_half,
         'half_jaccard':        jac_half,
         'half_acc':            float(acc_half),
         'half_acc_labelled':   float(acc_lab_half),
         'oracle_precision':    prec_oracle,
         'oracle_recall':       rec_oracle,
         'oracle_f1':           f1_oracle,
+        'oracle_micro_f1':     micro_f1_oracle,
         'oracle_jaccard':      jac_oracle,
         'oracle_acc':          float(acc_oracle),
         'oracle_acc_labelled': float(acc_lab_oracle),
         'oracle_thresholds':   thresholds,
         'oracle_class_names':  true_class_names,
         'cross_f1':            np.nan,
+        'cross_micro_f1':      np.nan,
         'cross_acc':           np.nan,
         'cross_acc_labelled':  np.nan,
     }
@@ -347,6 +399,7 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
     if apply_thresholds is not None and len(apply_thresholds) == probs.shape[1]:
         preds_cross = (probs >= apply_thresholds[np.newaxis, :]).astype(int)
         _, _, f1_cross, _ = _macro(preds_cross)
+        micro_f1_cross = _micro_f1(preds_cross)
         # Restrict accuracy to present_idx columns only (same reason as oracle)
         preds_cross_r = preds_cross[:, present_idx]
         trues_cross_r = trues[:, present_idx]
@@ -356,13 +409,14 @@ def _metrics_from_csv(csv_path: Path, apply_thresholds: np.ndarray = None) -> di
         acc_lab_cross  = float(correct_cross[labelled_cross].mean() * 100
                                if labelled_cross.any() else np.nan)
         result['cross_f1']           = f1_cross
+        result['cross_micro_f1']     = micro_f1_cross
         result['cross_acc']          = acc_cross
         result['cross_acc_labelled'] = acc_lab_cross
 
     return result
 
 
-def _read_adaptive_from_dir(exp_dir: Path, row: dict):
+def _read_adaptive_from_dir(exp_dir: Path, row: dict, pred_remap: dict = None):
     """Populate adaptive_*, cross_*, and (when missing) half_* metrics in *row*
     from predictions CSVs.
 
@@ -378,7 +432,7 @@ def _read_adaptive_from_dir(exp_dir: Path, row: dict):
     prefixes = ['test1', 'test2']
 
     # Single pass per CSV: compute self-tuned oracle thresholds.
-    metrics_list = [_metrics_from_csv(csv_path) for csv_path in csvs]
+    metrics_list = [_metrics_from_csv(csv_path, pred_remap=pred_remap) for csv_path in csvs]
 
     # Save per-class oracle thresholds alongside each predictions CSV.
     for csv_path, m in zip(csvs, metrics_list):
@@ -395,33 +449,41 @@ def _read_adaptive_from_dir(exp_dir: Path, row: dict):
             thresh_df.to_csv(thresh_path, index=False, float_format='%.4f')
 
     # Second pass: apply each split's oracle thresholds to the *other* split.
-    # _metrics_from_csv reads the CSV again here, but the oracle threshold search
-    # is skipped (apply_thresholds provided), so it is much cheaper than the first pass.
     if len(metrics_list) == 2:
         for i in range(2):
             other_thresholds = metrics_list[1 - i]['oracle_thresholds']
             if other_thresholds is not None:
-                cross = _metrics_from_csv(csvs[i], apply_thresholds=other_thresholds)
+                cross = _metrics_from_csv(csvs[i], apply_thresholds=other_thresholds,
+                                          pred_remap=pred_remap)
                 metrics_list[i]['cross_f1']           = cross['cross_f1']
+                metrics_list[i]['cross_micro_f1']     = cross['cross_micro_f1']
                 metrics_list[i]['cross_acc']          = cross['cross_acc']
                 metrics_list[i]['cross_acc_labelled'] = cross['cross_acc_labelled']
 
     for prefix, m in zip(prefixes, metrics_list):
         # always write oracle (self-tuned adaptive-threshold) metrics
         row[f'{prefix}_adaptive_f1']             = m['oracle_f1']
+        row[f'{prefix}_adaptive_micro_f1']       = m['oracle_micro_f1']
         row[f'{prefix}_adaptive_acc']            = m['oracle_acc']
         row[f'{prefix}_adaptive_acc_labelled']   = m['oracle_acc_labelled']
         # cross-tuned metrics (other split's thresholds applied here)
         row[f'{prefix}_cross_f1']                = m['cross_f1']
+        row[f'{prefix}_cross_micro_f1']          = m['cross_micro_f1']
         row[f'{prefix}_cross_acc']               = m['cross_acc']
         row[f'{prefix}_cross_acc_labelled']      = m['cross_acc_labelled']
-        # fill half-threshold metrics when not already set by a report JSON
-        if np.isnan(row.get(f'{prefix}_macro_precision', np.nan)): row[f'{prefix}_macro_precision'] = m['half_precision']
-        if np.isnan(row.get(f'{prefix}_macro_recall',    np.nan)): row[f'{prefix}_macro_recall']    = m['half_recall']
-        if np.isnan(row.get(f'{prefix}_macro_f1',        np.nan)): row[f'{prefix}_macro_f1']        = m['half_f1']
-        if np.isnan(row.get(f'{prefix}_jaccard',         np.nan)): row[f'{prefix}_jaccard']         = m['half_jaccard']
-        if np.isnan(row.get(f'{prefix}_acc',             np.nan)): row[f'{prefix}_acc']             = m['half_acc']
-        if np.isnan(row.get(f'{prefix}_acc_labelled',    np.nan)): row[f'{prefix}_acc_labelled']    = m['half_acc_labelled']
+        # fill half-threshold metrics from predictions CSV.
+        # When pred_remap is set the pre-baked report JSONs used wrong labels,
+        # so always overwrite; otherwise only fill if not already set by a report JSON.
+        def _set(key, val):
+            if pred_remap or np.isnan(row.get(key, np.nan)):
+                row[key] = val
+        _set(f'{prefix}_macro_precision', m['half_precision'])
+        _set(f'{prefix}_macro_recall',    m['half_recall'])
+        _set(f'{prefix}_macro_f1',        m['half_f1'])
+        _set(f'{prefix}_micro_f1',        m['half_micro_f1'])
+        _set(f'{prefix}_jaccard',         m['half_jaccard'])
+        _set(f'{prefix}_acc',             m['half_acc'])
+        _set(f'{prefix}_acc_labelled',    m['half_acc_labelled'])
 
 
 def _read_reports_from_dir(report_dir, model, row):
@@ -466,79 +528,58 @@ def _empty_row(name, train_dataset, model, transform):
         'test1_acc': np.nan, 'test1_acc_labelled': np.nan, 'test1_acc_background': np.nan,
         'test1_macro_precision': np.nan, 'test1_macro_recall': np.nan,
         'test1_macro_f1': np.nan, 'test1_jaccard': np.nan,
-        'test1_adaptive_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
-        'test1_cross_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
+        'test1_adaptive_f1': np.nan, 'test1_adaptive_micro_f1': np.nan, 'test1_adaptive_acc': np.nan, 'test1_adaptive_acc_labelled': np.nan,
+        'test1_cross_f1': np.nan, 'test1_cross_micro_f1': np.nan, 'test1_cross_acc': np.nan, 'test1_cross_acc_labelled': np.nan,
         'test2_acc': np.nan, 'test2_acc_labelled': np.nan, 'test2_acc_background': np.nan,
         'test2_macro_precision': np.nan, 'test2_macro_recall': np.nan,
-        'test2_macro_f1': np.nan, 'test2_jaccard': np.nan,
-        'test2_adaptive_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
-        'test2_cross_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
+        'test2_macro_f1': np.nan, 'test2_micro_f1': np.nan, 'test2_jaccard': np.nan,
+        'test2_adaptive_f1': np.nan, 'test2_adaptive_micro_f1': np.nan, 'test2_adaptive_acc': np.nan, 'test2_adaptive_acc_labelled': np.nan,
+        'test2_cross_f1': np.nan, 'test2_cross_micro_f1': np.nan, 'test2_cross_acc': np.nan, 'test2_cross_acc_labelled': np.nan,
         'status': 'unknown',
     }
 
 
-def load_from_viz_dir(viz_dir):
-    """Load experiments written by run_experiments.sh (model_on_dataset_transform layout)."""
+def load_from_exp_dirs(results_dir, pred_remap=None):
+    """Load all experiment subdirectories that contain predictions CSVs or
+    multilabel report JSONs.  No regex needed — if the files are there, it's
+    an experiment."""
     results = []
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz|combined)_(.+)$')
-    all_species_pattern = re.compile(r'^(ast|regnet)_(?:avianz_)?all_species_(.+?)_seed(\d+)$')
-    pseudo_pattern = re.compile(r'^(ast|regnet)_pseudo_([a-z]+)_to_([a-z]+)_(.+)_pct(\d+)$')
-    for exp_dir in sorted(Path(viz_dir).iterdir()):
-        if not exp_dir.is_dir():
+    for exp_dir in sorted(Path(results_dir).iterdir()):
+        if not exp_dir.is_dir() or exp_dir.name == 'analysis':
             continue
 
-        # Ensemble directories: ensemble_all, ensemble_avianz, ensemble_doc, etc.
-        if exp_dir.name.startswith('ensemble'):
-            row = _empty_row(exp_dir.name, 'all', 'ensemble', exp_dir.name)
-            row['category'] = 'ENSEMBLE'
-            _read_reports_from_dir(exp_dir, 'ensemble', row)
-            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
-            results.append(row)
+        # Pseudo-label runs store final results in a phase3 subdir
+        report_dir = exp_dir / 'phase3_pseudo_target'
+        if not report_dir.is_dir():
+            report_dir = exp_dir
+
+        has_data = (
+            any(report_dir.glob('predictions_*.csv')) or
+            any(report_dir.glob('*_multilabel_report.json'))
+        )
+        if not has_data:
             continue
 
-        m = standard_pattern.match(exp_dir.name)
-        if m:
-            model, train_dataset, transform = m.groups()
-            row = _empty_row(exp_dir.name, train_dataset, model, transform)
-            _read_reports_from_dir(exp_dir, model, row)
-            _read_adaptive_from_dir(exp_dir, row)
-            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
-            results.append(row)
-            continue
+        name = exp_dir.name
+        model = 'ast' if name.startswith('ast') else 'regnet' if name.startswith('regnet') else 'unknown'
+        seed_m = re.search(r'_seed(\d+)$', name)
+        seed = int(seed_m.group(1)) if seed_m else 0
 
-        m = all_species_pattern.match(exp_dir.name)
-        if m:
-            model, transform, seed = m.groups()
-            row = _empty_row(exp_dir.name, 'all_species', model, transform)
-            row['seed'] = int(seed)
-            _read_reports_from_dir(exp_dir, model, row)
-            _read_adaptive_from_dir(exp_dir, row)
-            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
-            results.append(row)
-            continue
-
-        m = pseudo_pattern.match(exp_dir.name)
-        if m:
-            model, source_dataset, target_dataset, transform, pct_int = m.groups()
-            final_dir = exp_dir / 'phase3_pseudo_target'
-            if not final_dir.is_dir():
-                continue
-            row = _empty_row(exp_dir.name, f'pseudo_{source_dataset}_to_{target_dataset}_pct{pct_int}', model, transform)
-            row['category'] = f'{model.upper()} Pseudo'
-            _read_reports_from_dir(final_dir, model, row)
-            _read_adaptive_from_dir(exp_dir, row)
-            row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
-            results.append(row)
+        row = _empty_row(name, name, model, name)
+        row['seed'] = seed
+        _read_reports_from_dir(report_dir, model, row)
+        _read_adaptive_from_dir(exp_dir, row, pred_remap=pred_remap)
+        row['status'] = 'completed' if not (np.isnan(row['test1_acc']) and np.isnan(row['test2_acc'])) else 'incomplete'
+        results.append(row)
 
     return results
 
 
-def load_all_results(results_dir, viz_dir=None):
+def load_all_results(results_dir, pred_remap=None):
     results = []
     if Path(results_dir).exists():
-        results.extend(load_from_result_json(results_dir))
-    if viz_dir and Path(viz_dir).exists():
-        results.extend(load_from_viz_dir(viz_dir))
+        results.extend(load_from_result_json(results_dir, pred_remap=pred_remap))
+        results.extend(load_from_exp_dirs(results_dir, pred_remap=pred_remap))
     return pd.DataFrame(results)
 
 
@@ -547,8 +588,8 @@ def create_overview_table(df, output_dir):
     cols = [
         'name', 'train_dataset', 'method', 'config', 'category',
         # F1 scores immediately after identifiers
-        'test1_macro_f1', 'test1_adaptive_f1', 'test1_cross_f1',
-        'test2_macro_f1', 'test2_adaptive_f1', 'test2_cross_f1',
+        'test1_macro_f1', 'test1_micro_f1', 'test1_adaptive_f1', 'test1_adaptive_micro_f1', 'test1_cross_f1', 'test1_cross_micro_f1',
+        'test2_macro_f1', 'test2_micro_f1', 'test2_adaptive_f1', 'test2_adaptive_micro_f1', 'test2_cross_f1', 'test2_cross_micro_f1',
         # then the rest
         'test1_name', 'test1_acc', 'test1_acc_labelled', 'test1_acc_background',
         'test1_macro_precision', 'test1_macro_recall', 'test1_jaccard',
@@ -567,17 +608,15 @@ def create_overview_table(df, output_dir):
     print(f"✓ all_results.csv ({len(df_out)} experiments)")
 
 
-def create_per_class_table(viz_dir, output_dir):
+def create_per_class_table(results_dir, output_dir):
     """Create per_class_metrics.csv: one row per (experiment, test split, class)."""
-    standard_pattern = re.compile(r'^(ast|regnet)_on_(avianz|doc|merged|large_doc|large_avianz|combined)_(.+)$')
     rows = []
-    for exp_dir in sorted(Path(viz_dir).iterdir()):
-        if not exp_dir.is_dir():
+    for exp_dir in sorted(Path(results_dir).iterdir()):
+        if not exp_dir.is_dir() or exp_dir.name == 'analysis':
             continue
-        m = standard_pattern.match(exp_dir.name)
-        if not m:
+        if not any(exp_dir.glob('*_multilabel_report.json')):
             continue
-        model, train_dataset, _ = m.groups()
+        model = 'ast' if exp_dir.name.startswith('ast') else 'regnet' if exp_dir.name.startswith('regnet') else 'unknown'
         for report_file in sorted(exp_dir.glob('*_multilabel_report.json')):
             stem = report_file.stem.replace('_multilabel_report', '')
             if '_model' in stem:
@@ -594,7 +633,6 @@ def create_per_class_table(viz_dir, output_dir):
                     continue
                 rows.append({
                     'experiment': exp_dir.name,
-                    'train_dataset': train_dataset,
                     'test_split': test_split,
                     'class': class_name,
                     'tp': metrics.get('tp', np.nan),
@@ -981,13 +1019,34 @@ def print_model_comparison(df):
     print()
 
 
+# Standard NZ bird label remap — matches what all build scripts use.
+_STANDARD_REMAP = 'new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird'
+
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze all experimental results')
     parser.add_argument('results_dir',
                         help='Output directory (e.g. /local/scratch/freangi/matched_tests). '
                              'Scans for both result.json and *_multilabel_report.json automatically.')
     parser.add_argument('--output', '-o', default=None, help='Output directory for analysis files')
+    parser.add_argument('--pred-remap', default=None,
+                        help='Comma-separated list of old:new prediction column remaps, '
+                             'e.g. "tui:tui/bellbird,bellbird:tui/bellbird,new zealand kaka:kaka". '
+                             'Multiple source columns mapping to the same target are merged by max.')
+    parser.add_argument('--merge', action='store_true',
+                        help=f'Apply the standard NZ bird label remap ({_STANDARD_REMAP}). '
+                             'Use this when evaluating models trained without --label-remap '
+                             '(e.g. the combined dataset).')
     args = parser.parse_args()
+
+    pred_remap = None
+    remap_str = args.pred_remap or (_STANDARD_REMAP if args.merge else None)
+    if remap_str:
+        pred_remap = {}
+        for pair in remap_str.split(','):
+            old, new = pair.split(':')
+            pred_remap[old.strip()] = new.strip()
+        print(f'  Pred remap: {pred_remap}')
 
     results_dir = Path(args.results_dir)
     output_dir = Path(args.output) if args.output else results_dir / 'analysis'
@@ -1002,7 +1061,7 @@ def main():
     sns.set_style("whitegrid")
 
     print("Loading all results...")
-    df = load_all_results(results_dir, viz_dir=results_dir)
+    df = load_all_results(results_dir, pred_remap=pred_remap)
     print(f"  {len(df)} experiments loaded")
     if df.empty:
         print("  No experiments found — nothing to analyze.")

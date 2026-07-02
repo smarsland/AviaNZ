@@ -31,6 +31,16 @@ COMBINED_TESTS="${BASE}/combined_tests"
 PRETRAINED="BirdClefModels/model_fold0.pth"
 SEED="${SEED:-0}"
 MODELS="${MODELS:-both}"
+BG_SUBTRACT="${BG_SUBTRACT:-1}"   # set BG_SUBTRACT=0 to skip background subtraction
+
+# Build the config tag and optional flag
+if [[ "${BG_SUBTRACT}" == "1" ]]; then
+    CONFIG_TAG="bgsubtract"
+    BG_FLAG="--bg-subtract"
+else
+    CONFIG_TAG="nobgsub"
+    BG_FLAG=""
+fi
 
 # --- sanity checks ---
 check_path() { [[ -d "$1" ]] || { echo "ERROR: directory not found: $1"; exit 1; }; }
@@ -53,7 +63,7 @@ echo "================================================================"
 # ── RegNet ──────────────────────────────────────────────────────────
 if [[ "${MODELS}" != "ast" ]]; then
     [[ -f "${PRETRAINED}" ]] || { echo "ERROR: pretrained weights not found: ${PRETRAINED}"; exit 1; }
-    OUT="${COMBINED_TESTS}/regnet_combined_bgsubtract_seed${SEED}"
+    OUT="${COMBINED_TESTS}/regnet_combined_${CONFIG_TAG}_seed${SEED}"
     echo ""
     echo "------------------------------------------------------------"
     echo " RegNet  →  ${OUT}"
@@ -65,7 +75,7 @@ if [[ "${MODELS}" != "ast" ]]; then
         --model-type  regnet \
         --pretrained  "${PRETRAINED}" \
         --spec-transform Log \
-        --bg-subtract \
+        ${BG_FLAG} \
         --kbird-prior 2.0 \
         --epochs      40 \
         --patience    15 \
@@ -78,7 +88,7 @@ fi
 
 # ── AST ─────────────────────────────────────────────────────────────
 if [[ "${MODELS}" != "regnet" ]]; then
-    OUT="${COMBINED_TESTS}/ast_combined_bgsubtract_seed${SEED}"
+    OUT="${COMBINED_TESTS}/ast_combined_${CONFIG_TAG}_seed${SEED}"
     echo ""
     echo "------------------------------------------------------------"
     echo " AST  →  ${OUT}"
@@ -89,7 +99,7 @@ if [[ "${MODELS}" != "regnet" ]]; then
         "${OUT}" \
         --model-type   ast \
         --spec-transform Log \
-        --bg-subtract \
+        ${BG_FLAG} \
         --kbird-prior  2.0 \
         --epochs       40 \
         --patience     15 \

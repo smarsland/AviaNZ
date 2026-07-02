@@ -74,3 +74,5 @@ summary_figure*
 all_species_tests*
 avianz_all_species_tests*
 domain_tests*
+combined_tests*
+full_doc_tests*
