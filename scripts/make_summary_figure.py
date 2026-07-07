@@ -127,6 +127,12 @@ MODELS = [
         "RegNet +BgSub\nCombined (finetuned)",
         "ours",
     ),
+    (
+        "regnet_combined_nobgsub_seed0",
+        "combined_tests/analysis/all_results.csv",
+        "RegNet\nCombined (no BgSub)",
+        "ours",
+    ),
 ]
 
 # ─────────────────────────────────────────────
