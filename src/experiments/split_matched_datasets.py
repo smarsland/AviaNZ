@@ -176,6 +176,139 @@ def compute_species_distribution(train_files, test_files):
     return distribution
 
 
+def get_doc_recording_group(source_file):
+    """
+    Extract the recording-level group key from a DOC source file path.
+
+    Different DOC subsets use different naming conventions:
+
+    - DOC_001_Tier1:
+        ``Z141_BIRM_131220_085924_015.flac``  →  station prefix ``Z141``
+        The first token before the first ``_`` is the recording-station ID.
+        Multiple clips from the same station share a station ID and should
+        never be split across train/test to avoid spatial data leakage.
+
+    - DOC_002_DuncanBayParinga:
+        ``010E78EB-3FD7-4F46-A61B-DA949F282C1C_27.flac``  →  ``010E78EB-…-DA949F282C1C``
+        The trailing ``_N`` (integer offset / segment index) is stripped.
+        The remaining UUID is the recording-session identifier.
+
+    - DOC_003_XenoCanto:
+        ``nezbel1_858135_2.flac``  →  ``nezbel1_858135``
+        The last ``_N`` segment suffix is stripped, leaving the species-code
+        plus XenoCanto recording ID as the group key.
+
+    For any other path the bare filename (without extension) is returned as
+    its own group, so every clip is treated as an independent recording.
+    """
+    import re as _re
+    basename = os.path.splitext(os.path.basename(source_file))[0]
+
+    if 'DOC_001_Tier1' in source_file:
+        # Z141_BIRM_131220_085924_015 → 'Z141'
+        return basename.split('_')[0]
+
+    if 'DOC_002_DuncanBayParinga' in source_file:
+        # 010E78EB-3FD7-4F46-A61B-DA949F282C1C_27 → UUID without trailing _N
+        return _re.sub(r'_\d+$', '', basename)
+
+    if 'DOC_003_XenoCanto' in source_file:
+        # nezbel1_858135_2 → 'nezbel1_858135'
+        return _re.sub(r'_\d+$', '', basename)
+
+    # Fallback: each file is its own group
+    return basename
+
+
+def split_doc_by_recording(files, test_ratio, random_state=42):
+    """
+    Split DOC data at the recording level to prevent spatial / temporal data leakage.
+
+    Analogous to :func:`split_avianz_by_file`:
+    - All clips from the same recording station / session go to either train
+      OR test, never both.
+    - Stratification ensures every species with more than one recording group
+      is represented in both splits.
+
+    Returns:
+        train_files, test_files, species_distribution
+    """
+    rng = random.Random(random_state)
+
+    # Assign each entry to its recording group
+    groups = defaultdict(list)
+    for entry in files:
+        source_file = entry.get('source_file', entry.get('filename', ''))
+        group_key = get_doc_recording_group(source_file)
+        groups[group_key].append(entry)
+
+    group_keys = list(groups.keys())
+
+    if len(group_keys) < 2:
+        print("Warning: DOC has fewer than 2 recording groups; all data going to train")
+        return files, [], {}
+
+    n_test_target = max(1, int(len(group_keys) * test_ratio))
+    if n_test_target >= len(group_keys):
+        n_test_target = len(group_keys) - 1
+
+    # Build species → recording-groups mapping (ignore unlabelled entries)
+    species_to_groups = defaultdict(set)
+    for gk, entries in groups.items():
+        for entry in entries:
+            for cls in entry.get('class_names', []):
+                if cls:
+                    species_to_groups[cls].add(gk)
+
+    test_groups = set()
+
+    # Stratification: for each species with >1 group, ensure ≥1 group ends in test
+    all_shuffled = list(group_keys)
+    rng.shuffle(all_shuffled)
+
+    for species in sorted(species_to_groups):
+        sp_groups = species_to_groups[species]
+        if len(sp_groups) < 2:
+            continue
+        if any(g in test_groups for g in sp_groups):
+            continue
+        candidates = [g for g in all_shuffled if g in sp_groups]
+        if candidates:
+            test_groups.add(candidates[0])
+
+    # Fill remaining test slots
+    for g in all_shuffled:
+        if len(test_groups) >= n_test_target:
+            break
+        test_groups.add(g)
+
+    train_files = []
+    test_files = []
+    for gk, entries in groups.items():
+        if gk in test_groups:
+            test_files.extend(entries)
+        else:
+            train_files.extend(entries)
+
+    rng.shuffle(train_files)
+    rng.shuffle(test_files)
+
+    species_dist = compute_species_distribution(train_files, test_files)
+
+    print(f"\nDOC recording-level split (stratified):")
+    print(f"  Total recording groups: {len(group_keys)}")
+    print(f"  Train groups: {len(group_keys) - len(test_groups)} ({len(train_files)} clips)")
+    print(f"  Test groups:  {len(test_groups)} ({len(test_files)} clips)")
+
+    for species, grps in species_to_groups.items():
+        if len(grps) == 1:
+            only_group = next(iter(grps))
+            if only_group not in test_groups:
+                print(f"  Note: '{species}' has only 1 recording group — all samples go to train")
+
+    return train_files, test_files, species_dist
+
+
 def split_doc_by_distribution(files, target_distribution, random_state=42):
     """
     Split DOC data to match the species distribution from AviaNZ split.
@@ -373,6 +506,16 @@ def save_split_report(output_base, avianz_train, avianz_test, doc_train, doc_tes
     # Get file-level statistics for AviaNZ
     avianz_train_files = set(e.get('source_file') for e in avianz_train)
     avianz_test_files = set(e.get('source_file') for e in avianz_test)
+
+    # Get recording-group statistics for DOC
+    doc_train_groups = set(
+        get_doc_recording_group(e.get('source_file', e.get('filename', '')))
+        for e in doc_train
+    )
+    doc_test_groups = set(
+        get_doc_recording_group(e.get('source_file', e.get('filename', '')))
+        for e in doc_test
+    )
     
     # Calculate actual ratios
     avianz_total = len(avianz_train) + len(avianz_test)
@@ -384,7 +527,7 @@ def save_split_report(output_base, avianz_train, avianz_test, doc_train, doc_tes
             'random_seed': random_seed,
             'split_method': {
                 'avianz': 'file_level_grouped',
-                'doc': 'distribution_matched'
+                'doc': 'recording_level_grouped'
             }
         },
         'avianz': {
@@ -406,6 +549,9 @@ def save_split_report(output_base, avianz_train, avianz_test, doc_train, doc_tes
             'test_samples': len(doc_test),
             'actual_train_ratio': len(doc_train) / doc_total if doc_total > 0 else 0,
             'actual_test_ratio': len(doc_test) / doc_total if doc_total > 0 else 0,
+            'total_recording_groups': len(doc_train_groups) + len(doc_test_groups),
+            'train_recording_groups': len(doc_train_groups),
+            'test_recording_groups': len(doc_test_groups),
             'species_distribution': doc_dist
         },
         'distribution_comparison': {}
@@ -496,13 +642,13 @@ def main():
     avianz_train, avianz_test, avianz_dist = split_avianz_by_file(
         avianz_files, args.test_ratio, args.seed
     )
-    
-    # Split DOC to match distribution
+
+    # Split DOC at the recording level (station / session / XenoCanto ID)
     print("\n" + "="*70)
-    print("STEP 2: Split DOC to match AviaNZ distribution")
+    print("STEP 2: Split DOC at the recording level")
     print("="*70)
-    doc_train, doc_test, doc_dist = split_doc_by_distribution(
-        doc_files, avianz_dist, args.seed
+    doc_train, doc_test, doc_dist = split_doc_by_recording(
+        doc_files, args.test_ratio, args.seed
     )
     
     # Print comparison
@@ -542,8 +688,7 @@ def main():
     doc_split_info = {
         'test_ratio': args.test_ratio,
         'random_seed': args.seed,
-        'split_method': 'distribution_matched',
-        'target_distribution': avianz_dist,
+        'split_method': 'recording_level_grouped',
         'achieved_distribution': doc_dist
     }
     save_split(doc_train, doc_output, 'train', doc_metadata, doc_split_info)
