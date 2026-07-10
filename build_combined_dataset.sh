@@ -22,11 +22,13 @@ set -euo pipefail
 BASE="/local/scratch/freangi"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 DRIVE="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02"
+DRIVE1="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_01"
+DRIVE3="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03"
 
 # Scratch space for the intermediate per-source datasets.
 # Combined output lands at ${OUTPUT}/combined_large.
 OUTPUT="${BASE}/combined_dataset"
-MAX_PER_SPECIES="${MAX_PER_SPECIES:-5000}"
+MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
 MAPPING="data/DOC_bird_naming_map.csv"
 OVERWRITE_FLAG=""
 
@@ -36,6 +38,8 @@ fi
 
 # All annotated AviaNZ folders, excluding Joe_MoDone? (matched-test source)
 # and non-bird sources (bats, NZBirds).
+# ECS_acoustic_01 and ECS_acoustic_03 are scanned as whole-drive roots so that
+# any annotated subfolders are picked up automatically.
 AVIANZ_FOLDERS=(
     "${DRIVE}/Remutaka20"
     "${DRIVE}/Bittern_Harry"
@@ -53,6 +57,8 @@ AVIANZ_FOLDERS=(
     "${DRIVE}/Morepork Annotations"
     "${DRIVE}/AR4 kokako survey"
     "${DRIVE}/2017_Rawhiti playback experiment"
+    "${DRIVE1}"
+    "${DRIVE3}"
 )
 
 # Build --avianz-raw flags for each folder.

@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
 """
-Produce publication-ready summary figures comparing 8 key experiments.
+Produce publication-ready summary figures comparing key experiments.
 
-The 8 models (in narrative order) are:
-  1. BirdNet (pretrained)             – external reference baseline
-  2. RegNet Baseline                  – our plain model on corrected DOC labels
-  3. RegNet + BgSub                   – +background subtraction augmentation
-  4. Kaytoo (pretrained)              – THE model to beat (trained on all DOC, noisy labels)
-  5. Kaytoo (finetuned)               – Kaytoo fine-tuned on corrected labels
-  6. AST finetuned N=8k               – transformer architecture for comparison
-  7. RegNet Scale N=8k                – CNN scales up with noisy DOC data
-  8. RegNet Scale N=7k + Finetune     – DOC scaling + fine-tune on corrected labels
-
-Outputs two figures:
-  summary_f1.png        – Macro F1 (fixed threshold | tuned thresholds)
-  summary_accuracy.png  – Accuracy (overall | labelled-only)
+Models (in narrative order):
+  1. BirdNET (pretrained)            – external reference baseline
+  2. RegNet Baseline                 – trained on corrected matched DOC labels
+  3. RegNet +BgSub                   – + background subtraction
+  4. Kaytoo (pretrained)             – reference model trained on all DOC (noisy)
+  5. Kaytoo (finetuned)              – Kaytoo fine-tuned on corrected labels
+  6. RegNet +BgSub Full DOC          – all DOC species, no AviaNZ
+  7. RegNet +BgSub Combined          – DOC + all available AviaNZ data
+  8. RegNet +BgSub Combined (ft)     – combined pre-train → matched fine-tune
 
 Usage:
     python3 scripts/make_summary_figure.py [--out-dir summary_figure]
@@ -68,51 +64,9 @@ MODELS = [
         "kaytoo",
     ),
     (
-        "ast_on_doc_scaling_N8000_seed0",
-        "scaling_tests/analysis/all_results.csv",
-        "AST +BgSub\nN=8k",
-        "ours",
-    ),
-    (
-        "ast_on_doc_scaling_ft_N8000_seed0",
-        "scaling_tests/analysis/all_results.csv",
-        "AST +BgSub\nN=8k (finetuned)",
-        "ours",
-    ),
-    (
-        "regnet_on_doc_scaling_kbird2_bgsubtract_N8000_seed0",
-        "scaling_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nN=8k",
-        "ours",
-    ),
-    (
-        "regnet_on_doc_scaling_kbird2_bgsubtract_ft_N8000_seed0",
-        "scaling_tests/analysis/all_results.csv",
-        "RegNet +BgSub\nN=8k (finetuned)",
-        "ours",
-    ),
-    (
-        "ast_full_doc_bgsubtract_seed0",
-        "full_doc_tests/analysis/all_results.csv",
-        "AST +BgSub\nFull DOC",
-        "ours",
-    ),
-    (
         "regnet_full_doc_bgsubtract_seed0",
         "full_doc_tests/analysis/all_results.csv",
         "RegNet +BgSub\nFull DOC",
-        "ours",
-    ),
-    (
-        "ast_combined_bgsubtract_seed0",
-        "combined_tests/analysis/all_results.csv",
-        "AST +BgSub\nCombined",
-        "ours",
-    ),
-    (
-        "ast_combined_bgsubtract_ft_seed0",
-        "combined_tests/analysis/all_results.csv",
-        "AST +BgSub\nCombined (finetuned)",
         "ours",
     ),
     (
@@ -125,12 +79,6 @@ MODELS = [
         "regnet_combined_bgsubtract_ft_seed0",
         "combined_tests/analysis/all_results.csv",
         "RegNet +BgSub\nCombined (finetuned)",
-        "ours",
-    ),
-    (
-        "regnet_combined_nobgsub_seed0",
-        "combined_tests/analysis/all_results.csv",
-        "RegNet\nCombined (no BgSub)",
         "ours",
     ),
 ]
