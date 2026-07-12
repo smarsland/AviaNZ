@@ -721,6 +721,9 @@ def main():
             restrict_classes=restrict_classes,
             label_remap=label_remap,
         )
+        # Write labels.json immediately so it is never missing even if a later
+        # step (AviaNZ build, combined merge) is interrupted.
+        write_labels_json(doc_out, doc_labels, 'DOC_large')
     else:
         print('\n=== Step 1: DOC large dataset already exists, loading ===')
         with open(os.path.join(doc_out, 'labels.json')) as f:
@@ -766,6 +769,9 @@ def main():
             window_type=args.window_type,
             sg_scale=args.sg_scale,
         )
+        # Write labels.json immediately so it is never missing if a later step
+        # is interrupted.
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
     else:
         print('\n=== Step 2: AviaNZ large dataset already exists, loading ===')
         with open(os.path.join(avianz_out, 'labels.json')) as f:

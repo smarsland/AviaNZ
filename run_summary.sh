@@ -86,7 +86,8 @@ fi
 # ── Step 2: Build combined dataset (also produces doc_large as a subset) ─
 header "Step 2 / 7 — Build combined dataset (produces doc_large subset too)"
 COMBINED_MARKER="${BASE}/combined_dataset/combined_large/labels.json"
-if [[ "$OVERWRITE" -eq 1 || ! -f "$COMBINED_MARKER" ]]; then
+DOC_LARGE_MARKER="${BASE}/combined_dataset/doc_large/labels.json"
+if [[ "$OVERWRITE" -eq 1 || ! -f "$COMBINED_MARKER" || ! -f "$DOC_LARGE_MARKER" ]]; then
     run bash build_combined_dataset.sh ${OVERWRITE:+--overwrite}
 else
     echo "  [skip] combined dataset — already exists"
