@@ -530,7 +530,10 @@ def make_per_species_figure(workspace: Path, out_dir: Path):
         ))
 
     # Order species by count in DOC test (from first available model)
-    ref = next(mm for mm in model_metrics if mm is not None)
+    ref = next((mm for mm in model_metrics if mm is not None), None)
+    if ref is None:
+        print("  WARNING: per-species figure skipped — no prediction CSVs found")
+        return
     counts = {sp: ref.get(sp, {}).get("count", 0) for sp in _TEST_SPECIES}
     ordered = sorted(_TEST_SPECIES, key=lambda s: -counts[s])
 

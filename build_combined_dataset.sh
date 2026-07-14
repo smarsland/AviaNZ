@@ -28,7 +28,7 @@ DRIVE3="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03"
 # Scratch space for the intermediate per-source datasets.
 # Combined output lands at ${OUTPUT}/combined_large.
 OUTPUT="${BASE}/combined_dataset"
-MAX_PER_SPECIES="${MAX_PER_SPECIES:-3000}"
+MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
 MAPPING="data/DOC_bird_naming_map.csv"
 OVERWRITE_FLAG=""
 
