@@ -181,6 +181,17 @@ _CONDITIONS_3 = [
         "color": "#3498DB",
         "edge":  "#1A5276",
     },
+    {
+        "label": "Both  (self-tuned avg)",
+        "cols": {
+            "macro_f1":     "both_adaptive_f1",
+            "micro_f1":     "both_adaptive_micro_f1",
+            "overall_acc":  "both_adaptive_acc",
+            "labelled_acc": "both_adaptive_acc_labelled",
+        },
+        "color": "#8E44AD",
+        "edge":  "#5B2C6F",
+    },
 ]
 
 _METRIC_META = {
@@ -203,7 +214,7 @@ def make_metric_figure(df: pd.DataFrame, out_dir: Path, metric: str):
     bar_h = 0.6
     y = np.arange(n)
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, max(7, n * 0.75)),
+    fig, axes = plt.subplots(1, 4, figsize=(24, max(7, n * 0.75)),
                              sharey=True)
 
     for ax, cond in zip(axes, _CONDITIONS_3):
@@ -276,30 +287,33 @@ def make_table(df: pd.DataFrame, out_dir: Path):
     )
 
     header_fixed = (
-        "| Model | AviaNZ F1 | DOC F1 | AviaNZ Acc | AviaNZ Acc (lab) | DOC Acc | DOC Acc (lab) |"
+        "| Model | AviaNZ F1 | DOC F1 | Both F1 | AviaNZ Acc | AviaNZ Acc (lab) | DOC Acc | DOC Acc (lab) |"
     )
-    sep_fixed = "| --- | --- | --- | --- | --- | --- | --- |"
+    sep_fixed = "| --- | --- | --- | --- | --- | --- | --- | --- |"
     header_tuned = (
-        "| Model | AviaNZ F1† | DOC F1† | AviaNZ Acc† | AviaNZ Acc† (lab) | DOC Acc† | DOC Acc† (lab) |"
+        "| Model | AviaNZ F1† | DOC F1† | Both F1† | AviaNZ Acc† | AviaNZ Acc† (lab) | DOC Acc† | DOC Acc† (lab) |"
     )
 
     def _row_fixed(r):
         a1 = fmt(r["test1_macro_f1"])
         a2 = fmt(r["test2_macro_f1"])
+        v1, v2 = r["test1_macro_f1"], r["test2_macro_f1"]
+        a_both = fmt(float("nan") if pd.isna(v1) or pd.isna(v2) else (v1 + v2) / 2)
         a3 = fmt(r["test1_acc"], is_pct=True)
         a4 = fmt(r["test1_acc_labelled"], is_pct=True)
         a5 = fmt(r["test2_acc"], is_pct=True)
         a6 = fmt(r["test2_acc_labelled"], is_pct=True)
-        return f"| {r['short_label'].replace(chr(10), ' ')} | {a1} | {a2} | {a3} | {a4} | {a5} | {a6} |"
+        return f"| {r['short_label'].replace(chr(10), ' ')} | {a1} | {a2} | {a_both} | {a3} | {a4} | {a5} | {a6} |"
 
     def _row_tuned(r):
         a1 = fmt(r["test1_adaptive_f1"])
         a2 = fmt(r["test2_adaptive_f1"])
+        a_both = fmt(r.get("both_adaptive_f1", float("nan")))
         a3 = fmt(r["test1_adaptive_acc"], is_pct=True)
         a4 = fmt(r["test1_adaptive_acc_labelled"], is_pct=True)
         a5 = fmt(r["test2_adaptive_acc"], is_pct=True)
         a6 = fmt(r["test2_adaptive_acc_labelled"], is_pct=True)
-        return f"| {r['short_label'].replace(chr(10), ' ')} | {a1} | {a2} | {a3} | {a4} | {a5} | {a6} |"
+        return f"| {r['short_label'].replace(chr(10), ' ')} | {a1} | {a2} | {a_both} | {a3} | {a4} | {a5} | {a6} |"
 
     lines.append("## Threshold = 0.5 (fixed)\n")
     lines.append(header_fixed)
@@ -339,6 +353,7 @@ def make_csv(df: pd.DataFrame, out_dir: Path):
         "test2_acc", "test2_acc_labelled",
         "test2_adaptive_acc", "test2_adaptive_acc_labelled",
         "test2_cross_acc", "test2_cross_acc_labelled",
+        "both_adaptive_f1", "both_adaptive_acc", "both_adaptive_acc_labelled",
     ]
     out = df[[c for c in keep if c in df.columns]].copy()
     out.columns = [c.replace("test1_", "avianz_").replace("test2_", "doc_")
@@ -607,6 +622,11 @@ def main():
     print("Loading data…")
     df = load_data(workspace)
     print(f"  {len(df)} models loaded\n")
+
+    # Pre-compute average of both test sets (each with self-tuned thresholds)
+    for _suf in ["f1", "micro_f1", "acc", "acc_labelled"]:
+        _c1, _c2 = f"test1_adaptive_{_suf}", f"test2_adaptive_{_suf}"
+        df[f"both_adaptive_{_suf}"] = df[[_c1, _c2]].mean(axis=1)
 
     print("Creating outputs…")
     for metric in ("macro_f1", "micro_f1", "overall_acc", "labelled_acc"):
