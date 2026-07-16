@@ -596,6 +596,15 @@ def main():
                        help="Random seed for reproducibility (default: 42)")
     parser.add_argument('--overwrite', action='store_true',
                        help="Overwrite existing splits")
+    parser.add_argument('--no-location-grouping', action='store_true',
+                       dest='no_location_grouping',
+                       help="Split DOC by species distribution instead of grouping by "
+                            "recording station/session/location (removes spatial leakage "
+                            "prevention). Useful for studying the effect of location grouping.")
+    parser.add_argument('--suffix', type=str, default='',
+                       help="Suffix appended to output folder names: "
+                            "avianz_split{suffix}/ and doc_split{suffix}/. "
+                            "Use e.g. '_noloc' to keep the original splits intact.")
     
     args = parser.parse_args()
     
@@ -615,6 +624,8 @@ def main():
     print(f"Output base: {args.output_base}")
     print(f"Test ratio: {args.test_ratio:.1%}")
     print(f"Random seed: {args.seed}")
+    print(f"Location grouping: {'disabled' if args.no_location_grouping else 'enabled'}")
+    print(f"Output suffix: '{args.suffix}' (folders: avianz_split{args.suffix}/, doc_split{args.suffix}/)")
     print("="*70)
     
     # Load datasets
@@ -643,13 +654,22 @@ def main():
         avianz_files, args.test_ratio, args.seed
     )
 
-    # Split DOC at the recording level (station / session / XenoCanto ID)
+    # Split DOC — either by recording location or by species distribution
     print("\n" + "="*70)
-    print("STEP 2: Split DOC at the recording level")
-    print("="*70)
-    doc_train, doc_test, doc_dist = split_doc_by_recording(
-        doc_files, args.test_ratio, args.seed
-    )
+    if args.no_location_grouping:
+        print("STEP 2: Split DOC by species distribution (no location grouping)")
+        print("="*70)
+        doc_train, doc_test, doc_dist = split_doc_by_distribution(
+            doc_files, avianz_dist, args.seed
+        )
+        doc_split_method = 'distribution_matched'
+    else:
+        print("STEP 2: Split DOC at the recording level")
+        print("="*70)
+        doc_train, doc_test, doc_dist = split_doc_by_recording(
+            doc_files, args.test_ratio, args.seed
+        )
+        doc_split_method = 'recording_level_grouped'
     
     # Print comparison
     print_distribution_comparison(avianz_dist, doc_dist)
@@ -659,8 +679,8 @@ def main():
                      avianz_dist, doc_dist, args.test_ratio, args.seed)
     
     # Create output folders
-    avianz_output = os.path.join(args.output_base, "avianz_split")
-    doc_output = os.path.join(args.output_base, "doc_split")
+    avianz_output = os.path.join(args.output_base, f"avianz_split{args.suffix}")
+    doc_output = os.path.join(args.output_base, f"doc_split{args.suffix}")
     
     for folder in [avianz_output, doc_output]:
         if os.path.exists(folder) and not args.overwrite:
@@ -688,7 +708,7 @@ def main():
     doc_split_info = {
         'test_ratio': args.test_ratio,
         'random_seed': args.seed,
-        'split_method': 'recording_level_grouped',
+        'split_method': doc_split_method,
         'achieved_distribution': doc_dist
     }
     save_split(doc_train, doc_output, 'train', doc_metadata, doc_split_info)

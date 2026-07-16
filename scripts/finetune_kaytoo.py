@@ -340,14 +340,141 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
 
 # ---------------------------------------------------------------------------
+# Eval-only helper
+# ---------------------------------------------------------------------------
+
+def _eval_only_kaytoo(args, output_path, deploy_dir, kaytoo_root):
+    """
+    Skip training; load saved fine-tune deploy artifacts and run evaluation.
+    Called when ``--eval-only`` is passed.  Requires a prior training run that
+    produced ``deploy/finetuned_kaytoo.pt``, ``finetuned_kaytoo_bird_map.csv``
+    and ``finetuned_kaytoo_config.yaml`` inside *output_path*.
+    """
+    import yaml
+
+    deploy_pt       = deploy_dir / 'finetuned_kaytoo.pt'
+    bird_map_deploy = deploy_dir / 'finetuned_kaytoo_bird_map.csv'
+    config_deploy   = deploy_dir / 'finetuned_kaytoo_config.yaml'
+
+    for _f in [deploy_pt, bird_map_deploy, config_deploy]:
+        if not _f.exists():
+            print(f"ERROR: --eval-only: missing deploy file: {_f}")
+            print("Run without --eval-only first to train and save the model.")
+            sys.exit(1)
+
+    print(f"--eval-only: loading deploy artifacts from {deploy_dir}")
+
+    sys.path.insert(0, kaytoo_root)
+    from bird_naming_utils import BirdNamer
+    from kaytoo_infer import DefaultConfig, Models
+
+    label_to_ebird = build_label_to_ebird(args.mapping)
+
+    ft_birdnames = BirdNamer(pd.read_csv(bird_map_deploy))
+    cfg_infer = DefaultConfig(bird_namer=ft_birdnames, options={
+        'project_root': kaytoo_root,
+        'cpu_only': args.cpu,
+        'num_cores': 1,
+        'naming_scheme': 'eBird',
+    })
+
+    class _FTModelParameters:
+        def __init__(self):
+            with open(config_deploy, 'r') as f_cfg:
+                mc = yaml.load(f_cfg, Loader=yaml.FullLoader)
+            mc['pt_path'] = deploy_pt
+            mc['pcen'] = False
+            mc['ckpt_path'] = None
+            self.parameters = [mc]
+
+    ft_params = _FTModelParameters()
+    ft_models = Models(config=cfg_infer, model_parameters=ft_params)
+
+    all_results = []
+    for test_folder, split_label in [
+        (args.avianz_test, Path(args.avianz_test).resolve().parent.name),
+        (args.doc_test,    Path(args.doc_test).resolve().parent.name),
+    ]:
+        print(f"\n{'='*60}")
+        print(f"Dataset: {split_label}")
+        print(f"{'='*60}")
+        result = evaluate_folder(
+            test_folder, split_label, ft_models, label_to_ebird,
+            threshold=args.threshold,
+        )
+        if result:
+            all_results.append(result)
+
+    result_json = {
+        'name': output_path.name,
+        'type': 'finetuned',
+        'model': 'kaytoo_finetuned',
+        'seed': 0,
+        'status': 'completed',
+        'eval_only': True,
+    }
+    if len(all_results) >= 1:
+        result_json['test1_name']           = all_results[0]['dataset_name']
+        result_json['test1_acc']            = all_results[0]['accuracy']
+        result_json['test1_acc_labelled']   = all_results[0].get('accuracy_labelled', float('nan'))
+        result_json['test1_acc_background'] = all_results[0].get('accuracy_background', float('nan'))
+    if len(all_results) >= 2:
+        result_json['test2_name']           = all_results[1]['dataset_name']
+        result_json['test2_acc']            = all_results[1]['accuracy']
+        result_json['test2_acc_labelled']   = all_results[1].get('accuracy_labelled', float('nan'))
+        result_json['test2_acc_background'] = all_results[1].get('accuracy_background', float('nan'))
+
+    with open(output_path / 'result.json', 'w') as f:
+        json.dump(result_json, f, indent=2)
+    print(f"\nSaved result.json → {output_path / 'result.json'}")
+
+    for result in all_results:
+        raw_records = result.get('raw_score_records', [])
+        if not raw_records:
+            continue
+        split_name = result['dataset_name']
+        csv_path = output_path / f'predictions_{split_name}.csv'
+        class_cols = sorted(c for c in raw_records[0]
+                            if c not in ('filename', 'gt_codes', 'gt_classes', 'gt_ebird_codes'))
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])
+            for rec in raw_records:
+                gt_set = set(rec.get('gt_ebird_codes', []))
+                writer.writerow(
+                    [rec['filename']]
+                    + [f"{rec.get(c, 0.0):.6f}" for c in class_cols]
+                    + [int(c in gt_set) for c in class_cols]
+                )
+        print(f"Saved {len(raw_records)} raw score rows → {csv_path.name}")
+
+    with open(output_path / 'predictions.json', 'w') as f:
+        json.dump(
+            [{k: v for k, v in r.items() if k != 'raw_score_records'} for r in all_results],
+            f, indent=2,
+        )
+    print(f"Saved predictions.json → {output_path / 'predictions.json'}")
+
+    print("\n" + "="*60)
+    print("SUMMARY")
+    print("="*60)
+    for r in all_results:
+        print(f"  {r['dataset_name']:30s}  acc={r['accuracy']:.1f}%"
+              f"  labelled={r.get('accuracy_labelled', float('nan')):.1f}%"
+              f"  background={r.get('accuracy_background', float('nan')):.1f}%")
+    print("="*60)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
         description='Fine-tune Kaytoo on a matched training set and evaluate.')
-    parser.add_argument('--doc-train', required=True,
-                        help='DOC training split folder (labels.json + audio/)')
+    parser.add_argument('--doc-train', default=None,
+                        help='DOC training split folder (labels.json + audio/). '
+                             'Required unless --eval-only is used.')
     parser.add_argument('--avianz-test', required=True,
                         help='AviaNZ test split folder')
     parser.add_argument('--doc-test', required=True,
@@ -375,7 +502,14 @@ def main():
                         help='GPU index to use (sets CUDA_VISIBLE_DEVICES; default: let PyTorch pick)')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Score threshold for evaluation (default: 0.5)')
+    parser.add_argument('--eval-only', action='store_true',
+                        help='Skip training; load saved model from --output/deploy/ '
+                             'and evaluate on --avianz-test / --doc-test. '
+                             'Does not require --doc-train.')
     args = parser.parse_args()
+
+    if not args.eval_only and args.doc_train is None:
+        parser.error('--doc-train is required unless --eval-only is used')
 
     output_path = Path(args.output)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -386,10 +520,15 @@ def main():
     deploy_dir = output_path / 'deploy'
     deploy_dir.mkdir(parents=True, exist_ok=True)
 
+    kaytoo_root = str(Path(args.kaytoo_root).resolve())
+
+    if args.eval_only:
+        _eval_only_kaytoo(args, output_path, deploy_dir, kaytoo_root)
+        return
+
     # ------------------------------------------------------------------
     # Set up Kaytoo imports
     # ------------------------------------------------------------------
-    kaytoo_root = str(Path(args.kaytoo_root).resolve())
     sys.path.insert(0, kaytoo_root)
 
     import torch
