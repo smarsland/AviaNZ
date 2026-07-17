@@ -201,11 +201,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9850299401197605,
+    "accuracy": 0.9910179640718563,
     "support": 0,
     "tp": 0,
-    "fp": 5,
-    "tn": 329,
+    "fp": 3,
+    "tn": 331,
     "fn": 0
   },
   "brown teal": {
@@ -396,14 +396,14 @@
     "fn": 0
   },
   "fantail": {
-    "precision": 0.2,
+    "precision": 0.2857142857142857,
     "recall": 0.2,
-    "f1-score": 0.2,
-    "accuracy": 0.9520958083832335,
+    "f1-score": 0.23529411764705882,
+    "accuracy": 0.9610778443113772,
     "support": 10,
     "tp": 2,
-    "fp": 8,
-    "tn": 316,
+    "fp": 5,
+    "tn": 319,
     "fn": 8
   },
   "glossy ibis": {
@@ -1001,15 +1001,15 @@
     "fn": 0
   },
   "silvereye": {
-    "precision": 0.625,
-    "recall": 0.2564102564102564,
-    "f1-score": 0.36363636363636365,
-    "accuracy": 0.8952095808383234,
+    "precision": 0.5714285714285714,
+    "recall": 0.20512820512820512,
+    "f1-score": 0.3018867924528302,
+    "accuracy": 0.8892215568862275,
     "support": 39,
-    "tp": 10,
+    "tp": 8,
     "fp": 6,
     "tn": 289,
-    "fn": 29
+    "fn": 31
   },
   "skylark": {
     "precision": 0.0,
@@ -1048,11 +1048,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9940119760479041,
+    "accuracy": 0.9970059880239521,
     "support": 0,
     "tp": 0,
-    "fp": 2,
-    "tn": 332,
+    "fp": 1,
+    "tn": 333,
     "fn": 0
   },
   "south island saddleback": {
@@ -1199,15 +1199,15 @@
     "fn": 0
   },
   "tui/bellbird": {
-    "precision": 0.6666666666666666,
-    "recall": 0.045454545454545456,
-    "f1-score": 0.0851063829787234,
-    "accuracy": 0.8712574850299402,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.8652694610778443,
     "support": 44,
-    "tp": 2,
+    "tp": 0,
     "fp": 1,
     "tn": 289,
-    "fn": 42
+    "fn": 44
   },
   "turkey": {
     "precision": 0.0,
@@ -1353,25 +1353,25 @@
     "fn": 0
   },
   "macro avg": {
-    "precision": 0.02405149051490515,
-    "recall": 0.012949381242064168,
-    "f1-score": 0.01180303292394626,
-    "accuracy": 0.9952777372085098,
+    "precision": 0.018892760356174987,
+    "recall": 0.012162904845831674,
+    "f1-score": 0.01089602612300969,
+    "accuracy": 0.9953264203300715,
     "support": 182
   },
   "micro avg": {
-    "precision": 0.39655172413793105,
-    "recall": 0.12637362637362637,
-    "f1-score": 0.19166666666666668,
-    "accuracy": 0.9952777372085098,
+    "precision": 0.3958333333333333,
+    "recall": 0.1043956043956044,
+    "f1-score": 0.16521739130434782,
+    "accuracy": 0.9953264203300716,
     "support": 182
   },
   "exact_match_accuracy": 0.5239520958083832,
-  "exact_match_accuracy_labelled": 0.14193548387096774,
-  "exact_match_accuracy_background": 0.8547486033519553,
+  "exact_match_accuracy_labelled": 0.12258064516129032,
+  "exact_match_accuracy_background": 0.8715083798882681,
   "num_samples": 334,
   "num_labelled_samples": 155,
   "num_background_samples": 179,
-  "hamming_loss": 0.004722262791490191,
-  "jaccard_score": 0.06736526946107785
+  "hamming_loss": 0.004673579669928435,
+  "jaccard_score": 0.05688622754491018
 }

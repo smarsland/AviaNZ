@@ -80,11 +80,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9978858350951374,
+    "accuracy": 1.0,
     "support": 0,
     "tp": 0,
-    "fp": 1,
-    "tn": 472,
+    "fp": 0,
+    "tn": 473,
     "fn": 0
   },
   "banded rail": {
@@ -264,15 +264,15 @@
     "fn": 0
   },
   "chaffinch": {
-    "precision": 0.6666666666666666,
-    "recall": 0.16666666666666666,
-    "f1-score": 0.26666666666666666,
-    "accuracy": 0.9767441860465116,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.9725158562367865,
     "support": 12,
-    "tp": 2,
+    "tp": 0,
     "fp": 1,
     "tn": 460,
-    "fn": 10
+    "fn": 12
   },
   "chatham island warbler": {
     "precision": 0.0,
@@ -366,11 +366,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9936575052854123,
+    "accuracy": 0.9915433403805497,
     "support": 0,
     "tp": 0,
-    "fp": 3,
-    "tn": 470,
+    "fp": 4,
+    "tn": 469,
     "fn": 0
   },
   "eastern rosella": {
@@ -465,11 +465,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 1.0,
+    "accuracy": 0.9978858350951374,
     "support": 0,
     "tp": 0,
-    "fp": 0,
-    "tn": 473,
+    "fp": 1,
+    "tn": 472,
     "fn": 0
   },
   "grey teal": {
@@ -484,15 +484,15 @@
     "fn": 0
   },
   "grey warbler": {
-    "precision": 0.5,
-    "recall": 0.047619047619047616,
-    "f1-score": 0.08695652173913043,
-    "accuracy": 0.9556025369978859,
+    "precision": 1.0,
+    "recall": 0.14285714285714285,
+    "f1-score": 0.25,
+    "accuracy": 0.9619450317124736,
     "support": 21,
-    "tp": 1,
-    "fp": 1,
-    "tn": 451,
-    "fn": 20
+    "tp": 3,
+    "fp": 0,
+    "tn": 452,
+    "fn": 18
   },
   "gull": {
     "precision": 0.0,
@@ -528,25 +528,25 @@
     "fn": 0
   },
   "kaka": {
-    "precision": 0.5,
+    "precision": 0.4444444444444444,
     "recall": 0.5714285714285714,
-    "f1-score": 0.5333333333333333,
-    "accuracy": 0.985200845665962,
+    "f1-score": 0.5,
+    "accuracy": 0.9830866807610994,
     "support": 7,
     "tp": 4,
-    "fp": 4,
-    "tn": 462,
+    "fp": 5,
+    "tn": 461,
     "fn": 3
   },
   "kakapo": {
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9957716701902748,
+    "accuracy": 0.9978858350951374,
     "support": 0,
     "tp": 0,
-    "fp": 2,
-    "tn": 471,
+    "fp": 1,
+    "tn": 472,
     "fn": 0
   },
   "kea": {
@@ -682,15 +682,15 @@
     "fn": 0
   },
   "morepork": {
-    "precision": 0.0,
-    "recall": 0.0,
-    "f1-score": 0.0,
-    "accuracy": 0.9112050739957717,
+    "precision": 1.0,
+    "recall": 0.023809523809523808,
+    "f1-score": 0.046511627906976744,
+    "accuracy": 0.9133192389006343,
     "support": 42,
-    "tp": 0,
+    "tp": 1,
     "fp": 0,
     "tn": 431,
-    "fn": 42
+    "fn": 41
   },
   "mottled petrel": {
     "precision": 0.0,
@@ -784,11 +784,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9704016913319239,
+    "accuracy": 0.9725158562367865,
     "support": 0,
     "tp": 0,
-    "fp": 14,
-    "tn": 459,
+    "fp": 13,
+    "tn": 460,
     "fn": 0
   },
   "north island kokako": {
@@ -1001,14 +1001,14 @@
     "fn": 0
   },
   "silvereye": {
-    "precision": 0.9444444444444444,
+    "precision": 1.0,
     "recall": 0.6296296296296297,
-    "f1-score": 0.7555555555555555,
-    "accuracy": 0.9767441860465116,
+    "f1-score": 0.7727272727272727,
+    "accuracy": 0.9788583509513742,
     "support": 27,
     "tp": 17,
-    "fp": 1,
-    "tn": 445,
+    "fp": 0,
+    "tn": 446,
     "fn": 10
   },
   "skylark": {
@@ -1037,11 +1037,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9978858350951374,
+    "accuracy": 1.0,
     "support": 0,
     "tp": 0,
-    "fp": 1,
-    "tn": 472,
+    "fp": 0,
+    "tn": 473,
     "fn": 0
   },
   "south island robin": {
@@ -1125,11 +1125,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9957716701902748,
+    "accuracy": 0.9936575052854123,
     "support": 0,
     "tp": 0,
-    "fp": 2,
-    "tn": 471,
+    "fp": 3,
+    "tn": 470,
     "fn": 0
   },
   "starling": {
@@ -1166,25 +1166,25 @@
     "fn": 0
   },
   "tomtit": {
-    "precision": 0.5,
-    "recall": 0.375,
-    "f1-score": 0.42857142857142855,
-    "accuracy": 0.9661733615221987,
+    "precision": 0.4166666666666667,
+    "recall": 0.3125,
+    "f1-score": 0.35714285714285715,
+    "accuracy": 0.9619450317124736,
     "support": 16,
-    "tp": 6,
-    "fp": 6,
-    "tn": 451,
-    "fn": 10
+    "tp": 5,
+    "fp": 7,
+    "tn": 450,
+    "fn": 11
   },
   "tree weta": {
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.813953488372093,
+    "accuracy": 0.8245243128964059,
     "support": 0,
     "tp": 0,
-    "fp": 88,
-    "tn": 385,
+    "fp": 83,
+    "tn": 390,
     "fn": 0
   },
   "tufted guineafowl": {
@@ -1199,15 +1199,15 @@
     "fn": 0
   },
   "tui/bellbird": {
-    "precision": 1.0,
-    "recall": 0.016129032258064516,
-    "f1-score": 0.031746031746031744,
-    "accuracy": 0.8710359408033826,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "accuracy": 0.8668076109936576,
     "support": 62,
-    "tp": 1,
-    "fp": 0,
-    "tn": 411,
-    "fn": 61
+    "tp": 0,
+    "fp": 1,
+    "tn": 410,
+    "fn": 62
   },
   "turkey": {
     "precision": 0.0,
@@ -1235,11 +1235,11 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9957716701902748,
+    "accuracy": 0.9978858350951374,
     "support": 0,
     "tp": 0,
-    "fp": 2,
-    "tn": 471,
+    "fp": 1,
+    "tn": 472,
     "fn": 0
   },
   "weka": {
@@ -1345,33 +1345,33 @@
     "precision": 0.0,
     "recall": 0.0,
     "f1-score": 0.0,
-    "accuracy": 0.9788583509513742,
+    "accuracy": 0.9809725158562368,
     "support": 0,
     "tp": 0,
-    "fp": 10,
-    "tn": 463,
+    "fp": 9,
+    "tn": 464,
     "fn": 0
   },
   "macro avg": {
-    "precision": 0.036133694670280034,
-    "recall": 0.015590114298480414,
-    "f1-score": 0.018451188652673277,
-    "accuracy": 0.9930559136458172,
+    "precision": 0.034101174345076785,
+    "recall": 0.014563707145007956,
+    "f1-score": 0.01701665385726645,
+    "accuracy": 0.9931590436411764,
     "support": 221
   },
   "micro avg": {
-    "precision": 0.12955465587044535,
-    "recall": 0.14479638009049775,
-    "f1-score": 0.13675213675213677,
-    "accuracy": 0.9930559136458172,
+    "precision": 0.1297071129707113,
+    "recall": 0.14027149321266968,
+    "f1-score": 0.13478260869565217,
+    "accuracy": 0.9931590436411764,
     "support": 221
   },
-  "exact_match_accuracy": 0.266384778012685,
-  "exact_match_accuracy_labelled": 0.13333333333333333,
-  "exact_match_accuracy_background": 0.34812286689419797,
+  "exact_match_accuracy": 0.2727272727272727,
+  "exact_match_accuracy_labelled": 0.11666666666666667,
+  "exact_match_accuracy_background": 0.36860068259385664,
   "num_samples": 473,
   "num_labelled_samples": 180,
   "num_background_samples": 293,
-  "hamming_loss": 0.006944086354182781,
-  "jaccard_score": 0.05884425651867512
+  "hamming_loss": 0.00684095635882363,
+  "jaccard_score": 0.05461592670894996
 }

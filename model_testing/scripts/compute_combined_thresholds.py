@@ -98,8 +98,8 @@ def compute_combined_thresholds(model_dir: Path) -> pd.DataFrame:
         tc = col_true[mask].astype(np.int32)
         pc = probs_all[mask, ci]
 
-        if tc.sum() == 0:
-            # Class is always negative in labelled samples → keep default 0.5
+        if tc.sum() < 10:
+            # Class appears in test sets but has very few samples → keep default 0.5
             continue
 
         # Vectorised F1 over all threshold candidates
