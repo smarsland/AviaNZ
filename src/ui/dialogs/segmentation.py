@@ -303,20 +303,33 @@ class SegmentationDialog(QDialog):
     def populateNNModels(self):
         import os
         import glob
+        models = []  # list of (display_name, (dir_path, stem))
+
+        # Legacy Models/ directory (.pth files)
         models_dir = 'Models'
-        json_files = glob.glob(os.path.join(models_dir, '*_config.json'))
-        models = []
-        for json_file in json_files:
-            base_name = os.path.basename(json_file).replace('_config.json', '')
-            pth_path = os.path.join(models_dir, base_name + '.pth')
-            
-            if os.path.exists(pth_path):
-                models.append((base_name, base_name))
-        
+        for json_file in glob.glob(os.path.join(models_dir, '*_config.json')):
+            stem = os.path.basename(json_file).replace('_config.json', '')
+            if os.path.exists(os.path.join(models_dir, stem + '.pth')):
+                models.append((stem, (models_dir, stem)))
+
+        # model_testing/ subdirectories (.pt or .pth files)
+        for json_file in glob.glob(os.path.join('model_testing', '*', '*_config.json')):
+            d = os.path.dirname(json_file)
+            stem = os.path.basename(json_file).replace('_config.json', '')
+            # Accept stem.pth, stem.pt, or stem_best.pt
+            candidates = [
+                stem + '.pth', stem + '.pt', stem + '_best.pt',
+            ]
+            for c in candidates:
+                if os.path.exists(os.path.join(d, c)):
+                    display = f"{stem} ({os.path.basename(d)})"
+                    models.append((display, (d, stem)))
+                    break
+
         models.sort()
         if models:
-            for config_name, model_name in models:
-                self.nnModel.addItem(config_name, model_name)
+            for display_name, data in models:
+                self.nnModel.addItem(display_name, data)
         else:
             self.nnModel.addItem("No models found")
 

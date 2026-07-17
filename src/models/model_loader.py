@@ -44,9 +44,18 @@ def loadModel(nn_name, dirnn):
     h5_path = os.path.join(dirnn, nn_name + '.h5')
     weights_h5_path = os.path.join(dirnn, nn_name + '.weights.h5')
     
+    # Also accept .pt extension and stem_best.pt fallback
+    pt_path = os.path.join(dirnn, nn_name + '.pt')
+    best_pt_path = os.path.join(dirnn, nn_name + '_best.pt')
+    if not os.path.isfile(pth_path):
+        if os.path.isfile(pt_path):
+            pth_path = pt_path
+        elif os.path.isfile(best_pt_path):
+            pth_path = best_pt_path
+
     # Priority 1: Load native PyTorch model
     if os.path.isfile(pth_path):
-        print(f"Loading PyTorch model: {nn_name}.pth")
+        print(f"Loading PyTorch model: {os.path.basename(pth_path)}")
         loaded = torch.load(pth_path, map_location='cpu', weights_only=False)
         
         if hasattr(loaded, 'eval'):
@@ -101,6 +110,38 @@ def loadModel(nn_name, dirnn):
                     num_classes = config.get('num_classes', 2)
                     model = architectures.CNNModel(input_size[0], input_size[1], num_classes)
                     model.load_state_dict(loaded)
+                elif model_type == 'RegNet':
+                    import timm
+                    import torch.nn as nn
+                    num_classes = config.get('num_classes', 2)
+                    model_name_timm = config.get('model_name', 'regnety_008')
+                    model = timm.create_model(model_name_timm, pretrained=False,
+                                             in_chans=1, drop_rate=0.0, drop_path_rate=0.0)
+                    backbone_out = model.head.fc.in_features
+                    model.head.fc = nn.Identity()
+                    # Attach pooling + classifier to match training architecture
+                    model.pooling = nn.AdaptiveAvgPool2d(1)
+                    model.classifier = nn.Linear(backbone_out, num_classes)
+                    # Wrap in a small module that matches the forward pass used at training
+                    class _RegNetWrapper(nn.Module):
+                        def __init__(self, backbone, pooling, classifier):
+                            super().__init__()
+                            self.backbone = backbone
+                            self.pooling = pooling
+                            self.classifier = classifier
+                        def forward(self, x):
+                            features = self.backbone(x)
+                            if isinstance(features, dict):
+                                features = features['features']
+                            if len(features.shape) == 4:
+                                features = self.pooling(features)
+                                features = features.view(features.size(0), -1)
+                            return self.classifier(features)
+                    wrapper = _RegNetWrapper(model, model.pooling, model.classifier)
+                    missing_keys, unexpected_keys = wrapper.load_state_dict(loaded, strict=False)
+                    if missing_keys:
+                        print(f"  Missing keys (may be OK): {missing_keys[:3]}")
+                    model = wrapper
                 else:
                     raise ValueError(f"Unknown model_type: {model_type}")
                 

@@ -5227,26 +5227,39 @@ class ManualInterface(QMainWindow):
                 import torch
                 from src.models import model_loader, inference
                 
-                config_name = filtname
-                model_name = settings.get("nnModelFile")
+                model_data = settings.get("nnModelFile")
                 min_confidence = settings["nnConfidence"]
-                
-                if config_name == "No models found" or not model_name:
-                    msg = MessagePopup("w", "No Models", "No models available in the Models directory!")
+
+                if filtname == "No models found" or not model_data:
+                    msg = MessagePopup("w", "No Models", "No models available!")
                     msg.exec()
                     return
-                
-                config_path = os.path.join('Models', f'{config_name}_config.json')
-                
+
+                # model_data is (dir_path, stem) for new models or a plain string for legacy
+                if isinstance(model_data, tuple):
+                    model_dir, model_stem = model_data
+                else:
+                    model_dir, model_stem = 'Models', model_data
+
+                config_path = os.path.join(model_dir, f'{model_stem}_config.json')
                 if not os.path.exists(config_path):
-                    msg = MessagePopup("w", "Config Missing", f"Config file not found: {config_path}")
+                    msg = MessagePopup("w", "Config Missing", f"Config not found: {config_path}")
                     msg.exec()
                     return
-                
+
                 with open(config_path, 'r') as f:
                     model_config = json.load(f)
-                
-                model = model_loader.loadModel(model_name, 'Models')
+
+                # Load per-class thresholds if available (overrides uniform min_confidence)
+                import pandas as pd
+                per_class_thresholds = None
+                thresh_path = os.path.join(model_dir, 'thresholds_combined.csv')
+                if os.path.exists(thresh_path):
+                    thresh_df = pd.read_csv(thresh_path)
+                    per_class_thresholds = dict(zip(thresh_df['class'], thresh_df['threshold'].astype(float)))
+                    print(f"Loaded per-class thresholds from {thresh_path}")
+
+                model = model_loader.loadModel(model_stem, model_dir)
                 model.eval()
                 
                 model_sample_rate = model_config.get('sample_rate', 32000)
@@ -5385,7 +5398,12 @@ class ManualInterface(QMainWindow):
                         # Check each class independently, create segment for each above threshold
                         for class_idx, prob in enumerate(probs):
                             prob = np.clip(prob, 0.0, 1.0)
-                            if prob >= min_confidence:
+                            class_name = class_names[class_idx] if class_idx < len(class_names) else None
+                            if per_class_thresholds and class_name and class_name in per_class_thresholds:
+                                thr = per_class_thresholds[class_name]
+                            else:
+                                thr = min_confidence
+                            if prob >= thr:
                                 certainty = int(prob * 100)
                                 newSegments.append([[start_time, end_time], certainty, class_idx])
                     else:

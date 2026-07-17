@@ -1,0 +1,1291 @@
+#!/usr/bin/env python3
+"""
+Clean cross-dataset experiment pipeline.
+"""
+
+import argparse
+import os
+import sys
+import json
+import subprocess
+from pathlib import Path
+from datetime import datetime
+import pandas as pd
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
+import signal
+import shutil
+import time
+import socket
+import threading
+
+from src.core import config
+
+
+def copy_result_files(output_dir, results_dir, experiment_name):
+    """
+    Copy small result files (JSONs, CSVs) to shared results directory.
+    Keeps large model files (.pt) in the original output directory.
+    
+    Args:
+        output_dir: Original experiment output directory (contains model files)
+        results_dir: Shared results directory for small files
+        experiment_name: Name of the experiment (for subdirectory)
+    """
+    if results_dir is None:
+        return  # No shared directory specified, keep all files in output_dir
+    
+    output_dir = Path(output_dir)
+    results_dir = Path(results_dir)
+    
+    # Create experiment subdirectory in shared results
+    exp_results_dir = results_dir / experiment_name
+    exp_results_dir.mkdir(parents=True, exist_ok=True)
+    
+    # List of small files to copy (exclude large .pt model files)
+    small_file_patterns = [
+        'result.json',
+        'training_history.json',
+        '*_config.json',
+        '*_report.json',
+        '*_metrics.csv',
+        'predictions_*.csv',
+        '*.png',
+    ]
+    
+    copied_files = []
+    for pattern in small_file_patterns:
+        for src_file in output_dir.glob(pattern):
+            dst_file = exp_results_dir / src_file.name
+            shutil.copy2(src_file, dst_file)
+            copied_files.append(src_file.name)
+    
+    if copied_files:
+        print(f"  ✓ Copied {len(copied_files)} result files to {exp_results_dir}")
+        print(f"    Files: {', '.join(copied_files)}")
+
+
+# ============================================================================
+# DISTRIBUTED LOCKING WITH HEARTBEAT
+# ============================================================================
+
+class ExperimentLock:
+    """
+    Distributed lock with heartbeat for multi-machine coordination.
+    
+    Uses atomic directory creation + heartbeat file to distinguish
+    "running" from "crashed and safe to reclaim".
+    """
+    
+    HEARTBEAT_INTERVAL = 30  # Update every 30 seconds
+    STALE_THRESHOLD = 90     # Consider stale after 90 seconds of no heartbeat
+    
+    def __init__(self, lock_dir):
+        self.lock_dir = Path(lock_dir)
+        self.host_file = self.lock_dir / 'host.txt'
+        self.pid_file = self.lock_dir / 'pid.txt'
+        self.heartbeat_file = self.lock_dir / 'heartbeat.txt'
+        self.heartbeat_thread = None
+        self.stop_heartbeat = threading.Event()
+    
+    def acquire(self):
+        """
+        Try to acquire lock. Returns True if successful, False if locked by another process.
+        Automatically reclaims stale locks (heartbeat > 90s old).
+        """
+        try:
+            # Try atomic directory creation
+            self.lock_dir.mkdir(parents=False, exist_ok=False)
+            
+            # Success! Write lock metadata
+            self.host_file.write_text(socket.gethostname())
+            self.pid_file.write_text(str(os.getpid()))
+            self._update_heartbeat()
+            
+            # Start heartbeat thread
+            self._start_heartbeat()
+            return True
+            
+        except FileExistsError:
+            # Lock exists - check if stale
+            if self.heartbeat_file.exists():
+                try:
+                    heartbeat_age = time.time() - self.heartbeat_file.stat().st_mtime
+                    
+                    if heartbeat_age > self.STALE_THRESHOLD:
+                        # Stale lock - reclaim it
+                        host = self.host_file.read_text().strip() if self.host_file.exists() else "unknown"
+                        pid = self.pid_file.read_text().strip() if self.pid_file.exists() else "unknown"
+                        print(f"    Reclaiming stale lock (host={host}, pid={pid}, age={heartbeat_age:.0f}s)")
+                        
+                        shutil.rmtree(self.lock_dir, ignore_errors=True)
+                        
+                        # Retry acquisition
+                        self.lock_dir.mkdir(parents=False, exist_ok=False)
+                        self.host_file.write_text(socket.gethostname())
+                        self.pid_file.write_text(str(os.getpid()))
+                        self._update_heartbeat()
+                        self._start_heartbeat()
+                        return True
+                    else:
+                        # Fresh lock - another machine is actively running
+                        return False
+                        
+                except Exception as e:
+                    print(f"    Warning: Error checking heartbeat: {e}")
+                    return False
+            else:
+                # No heartbeat file - corrupted lock, reclaim it
+                print(f"    Reclaiming corrupted lock (no heartbeat)")
+                shutil.rmtree(self.lock_dir, ignore_errors=True)
+                
+                # Retry acquisition
+                self.lock_dir.mkdir(parents=False, exist_ok=False)
+                self.host_file.write_text(socket.gethostname())
+                self.pid_file.write_text(str(os.getpid()))
+                self._update_heartbeat()
+                self._start_heartbeat()
+                return True
+    
+    def release(self):
+        """Release the lock."""
+        self._stop_heartbeat()
+        if self.lock_dir.exists():
+            shutil.rmtree(self.lock_dir, ignore_errors=True)
+    
+    def _update_heartbeat(self):
+        """Write current timestamp to heartbeat file."""
+        self.heartbeat_file.write_text(str(time.time()))
+    
+    def _start_heartbeat(self):
+        """Start background thread that updates heartbeat."""
+        self.stop_heartbeat.clear()
+        self.heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+        self.heartbeat_thread.start()
+    
+    def _stop_heartbeat(self):
+        """Stop heartbeat thread."""
+        if self.heartbeat_thread:
+            self.stop_heartbeat.set()
+            self.heartbeat_thread.join(timeout=1)
+    
+    def _heartbeat_loop(self):
+        """Background loop that updates heartbeat every HEARTBEAT_INTERVAL seconds."""
+        while not self.stop_heartbeat.wait(self.HEARTBEAT_INTERVAL):
+            try:
+                self._update_heartbeat()
+            except Exception:
+                pass  # Ignore errors, lock will become stale if we can't write
+
+
+def get_available_gpus():
+    """Detect available GPUs using nvidia-smi (no CUDA initialization)."""
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            print("No CUDA support detected")
+            return []
+        
+        total_gpus = torch.cuda.device_count()
+        print(f"Detected {total_gpus} GPUs, checking availability...")
+        
+        # Use nvidia-smi to check GPU memory usage (no CUDA init)
+        try:
+            import subprocess as sp
+            result = sp.run(['nvidia-smi', '--query-gpu=index,memory.used,memory.total', 
+                           '--format=csv,noheader,nounits'], 
+                          capture_output=True, text=True, timeout=5)
+            
+            if result.returncode == 0:
+                available_gpus = []
+                for line in result.stdout.strip().split('\n'):
+                    parts = line.split(', ')
+                    if len(parts) >= 3:
+                        gpu_id = int(parts[0])
+                        mem_used = int(parts[1])
+                        mem_total = int(parts[2])
+                        
+                        # Consider GPU available if <100 MiB memory used (nearly idle)
+                        # Old threshold was 10% which passes GPU with crashed CUDA contexts
+                        if mem_used < 100:
+                            available_gpus.append(gpu_id)
+                            print(f"  ✓ GPU {gpu_id}: Available ({mem_used}/{mem_total} MiB used)")
+                        else:
+                            usage_pct = (mem_used / mem_total) * 100 if mem_total > 0 else 100
+                            print(f"  ✗ GPU {gpu_id}: Busy ({mem_used}/{mem_total} MiB, {usage_pct:.0f}% used)")
+                
+                if available_gpus:
+                    print(f"Using {len(available_gpus)} GPU(s): {available_gpus}")
+                    return available_gpus
+                else:
+                    print("❌ No available GPUs found (all busy)")
+                    print("   Waiting 30 seconds for GPUs to free up...")
+                    time.sleep(30)
+                    # Retry once
+                    return get_available_gpus()
+            
+            # Fallback: nvidia-smi failed, use all GPUs
+            print("nvidia-smi check failed, using all detected GPUs")
+            return list(range(total_gpus))
+            
+        except Exception as e:
+            # Fallback: use all GPUs
+            print(f"GPU availability check failed ({e}), using all detected GPUs")
+            return list(range(total_gpus))
+        
+    except Exception as e:
+        print(f"GPU detection failed: {e}")
+        return []
+
+
+def run_experiments_parallel(experiments, n_workers, gpu_pool):
+    """Run experiments in parallel using one worker per GPU."""
+    if n_workers == 1:
+        # Sequential execution
+        results = []
+        try:
+            for exp_config in experiments:
+                gpu_id = gpu_pool[0] if gpu_pool else None
+                result = run_experiment_with_gpu(exp_config, gpu_id)
+                if result:
+                    results.append(result)
+        except KeyboardInterrupt:
+            print("\n⚠️  Ctrl+C detected! Stopping...")
+            sys.exit(1)
+        return results
+    
+    # Parallel execution - ONE WORKER PER GPU
+    # Group experiments by assigned GPU to ensure no GPU conflicts
+    import multiprocessing as mp
+    from collections import defaultdict
+    
+    gpu_to_experiments = defaultdict(list)
+    for i, exp_config in enumerate(experiments):
+        gpu_id = gpu_pool[i % len(gpu_pool)] if gpu_pool else None
+        gpu_to_experiments[gpu_id].append(exp_config)
+    
+    print(f"Experiments per GPU:")
+    for gpu_id, exps in gpu_to_experiments.items():
+        print(f"  GPU {gpu_id}: {len(exps)} experiments")
+    
+    # Create one executor per GPU with max_workers=1 to serialize GPU usage
+    results = []
+    ctx = mp.get_context('spawn')
+    
+    # Use ThreadPoolExecutor to manage per-GPU workers
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def run_gpu_queue(gpu_id, exp_list):
+        """Run all experiments for a single GPU sequentially."""
+        gpu_results = []
+        for exp_config in exp_list:
+            try:
+                result = run_experiment_with_gpu(exp_config, gpu_id)
+                if result:
+                    gpu_results.append(result)
+                    print(f"✓ Completed: {result.get('name', 'unknown')}")
+            except Exception as e:
+                exp_name = exp_config.get('name', 'unknown')
+                seed = exp_config.get('seed', 42)
+                name_with_seed = f"{exp_name}_seed{seed}"
+                output_folder = exp_config.get('output_folder', 'unknown')
+                error_log = Path(output_folder) / name_with_seed / 'experiment_error.log'
+                
+                # Check if this is a CUDA device error (GPU busy/unavailable)
+                error_str = str(e).lower()
+                is_cuda_device_error = (
+                    'cuda-capable device' in error_str or 
+                    'device unavailable' in error_str or
+                    'cudaerrorsdevicesunavailable' in error_str.replace(' ', '') or
+                    'cuda device unavailable' in error_str
+                )
+                
+                if is_cuda_device_error:
+                    # CUDA device error - GPU is messed up, but other GPUs might work
+                    print("\n\n" + "⚠️ "*35, flush=True)
+                    print(f"⚠️  GPU {gpu_id} UNAVAILABLE - skipping remaining experiments on this GPU", flush=True)
+                    print(f"⚠️  Failed experiment: {name_with_seed}", flush=True)
+                    print(f"⚠️  Error: {type(e).__name__}: {e}", flush=True)
+                    print(f"⚠️  Other GPUs will continue running", flush=True)
+                    print("⚠️ "*35 + "\n", flush=True)
+                    # Don't raise - just skip this GPU's remaining experiments
+                    break
+                else:
+                    # Real training error - stop everything
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    print("\n\n" + "🔥"*35, flush=True)
+                    print("🔥" + " "*68 + "🔥", flush=True)
+                    print("🔥" + " "*15 + "!!! EXPERIMENT CRASHED !!!" + " "*27 + "🔥", flush=True)
+                    print("🔥" + " "*68 + "🔥", flush=True)
+                    print("🔥"*35, flush=True)
+                    print(f"\n💀 FAILED: {name_with_seed}", flush=True)
+                    print(f"💀 Error: {type(e).__name__}: {e}", flush=True)
+                    print(f"📄 Error log: {error_log}", flush=True)
+                    print("\n" + "🔥"*35, flush=True)
+                    print("🔥  STOPPING ALL EXPERIMENTS - GPU busy or other fatal error  🔥", flush=True)
+                    print("🔥  Fix the error above, then rerun the script                🔥", flush=True)
+                    print("🔥  The script will automatically retry failed experiments    🔥", flush=True)
+                    print("🔥"*35 + "\n\n", flush=True)
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    raise  # Re-raise to stop this GPU's queue
+        return gpu_results
+    
+    try:
+        # Run one thread per GPU, each processing its queue sequentially
+        with ThreadPoolExecutor(max_workers=len(gpu_pool)) as executor:
+            futures = {}
+            for gpu_id, exp_list in gpu_to_experiments.items():
+                future = executor.submit(run_gpu_queue, gpu_id, exp_list)
+                futures[future] = gpu_id
+            
+            # Wait for all GPU queues to complete
+            for future in futures:
+                try:
+                    gpu_results = future.result()
+                    results.extend(gpu_results)
+                except Exception as e:
+                    gpu_id = futures[future]
+                    
+                    # Check if this is a CUDA device error
+                    error_str = str(e).lower()
+                    is_cuda_device_error = (
+                        'cuda-capable device' in error_str or 
+                        'device unavailable' in error_str or
+                        'cudaerrorsdevicesunavailable' in error_str.replace(' ', '') or
+                        'cuda device unavailable' in error_str
+                    )
+                    
+                    if is_cuda_device_error:
+                        # GPU failed but others can continue
+                        print(f"\n⚠️  GPU {gpu_id} queue failed with CUDA error, continuing with other GPUs", flush=True)
+                        continue
+                    
+                    # Real error - stop everything
+                    print(f"\n🔥 GPU {gpu_id} queue failed: {e}", flush=True)
+                    
+                    # Kill all running processes
+                    print("🔥 Terminating all running experiments...", flush=True)
+                    try:
+                        import subprocess as sp
+                        my_pid = os.getpid()
+                        
+                        result = sp.run(['pgrep', '-P', str(my_pid)], capture_output=True, text=True)
+                        child_pids = result.stdout.strip().split('\n') if result.stdout.strip() else []
+                        
+                        all_pids = set(child_pids)
+                        for child_pid in child_pids:
+                            result = sp.run(['pgrep', '-P', child_pid], capture_output=True, text=True)
+                            if result.stdout.strip():
+                                all_pids.update(result.stdout.strip().split('\n'))
+                        
+                        for pid in all_pids:
+                            try:
+                                pid_int = int(pid)
+                                print(f"   Terminating PID {pid_int}", flush=True)
+                                os.kill(pid_int, signal.SIGTERM)
+                            except (ValueError, ProcessLookupError):
+                                pass
+                        
+                        print("🔥 All child processes terminated.", flush=True)
+                    except Exception as kill_err:
+                        print(f"⚠  Warning: Error during cleanup: {kill_err}", flush=True)
+                    
+                    sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n⚠️  Ctrl+C detected! Stopping all workers...")
+        # Cancel all pending futures
+        for future in futures:
+            future.cancel()
+        # Force shutdown with wait=False to kill running workers immediately
+        executor.shutdown(wait=False, cancel_futures=True)
+        print("✓ All workers stopped.")
+        sys.exit(1)
+    finally:
+        # Only do graceful shutdown if not already shut down
+        try:
+            executor.shutdown(wait=False)
+        except Exception as e:
+            # Don't silence - log what went wrong
+            print(f"Warning: Executor shutdown issue: {e}")
+    
+    return results
+
+
+def run_experiment_with_gpu(config_dict, gpu_id=None):
+    """Wrapper to run experiment with specific GPU assignment."""
+    # Quick check if experiment is already complete (before GPU verification)
+    name = config_dict['name']
+    seed = config_dict.get('seed', 42)
+    name_with_seed = f"{name}_seed{seed}"
+    
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name_with_seed
+        shared_result_file = shared_result_dir / 'result.json'
+        
+        if shared_result_file.exists():
+            print(f"✓ {name_with_seed} - skipping (result.json exists in shared results)")
+            with open(shared_result_file) as f:
+                return json.load(f)
+    
+    # Not complete - verify GPU is available before starting
+    if gpu_id is not None:
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Check GPU memory usage
+                import subprocess as sp
+                result = sp.run(['nvidia-smi', '--query-gpu=index,memory.used,memory.total', 
+                               '--format=csv,noheader,nounits'], 
+                              capture_output=True, text=True, timeout=5)
+                
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        parts = line.split(', ')
+                        if len(parts) >= 3 and int(parts[0]) == gpu_id:
+                            mem_used = int(parts[1])
+                            mem_total = int(parts[2])
+                            usage_pct = (mem_used / mem_total) * 100 if mem_total > 0 else 100
+                            
+                            if usage_pct >= 10:
+                                if attempt < max_retries - 1:
+                                    wait_time = 10 * (attempt + 1)  # 10s, 20s, 30s
+                                    print(f"⚠️  GPU {gpu_id} busy ({usage_pct:.1f}% used), waiting {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                                    time.sleep(wait_time)
+                                else:
+                                    print(f"❌ GPU {gpu_id} still busy after {max_retries} attempts ({usage_pct:.1f}% used)")
+                                    raise RuntimeError(f"GPU {gpu_id} unavailable after {max_retries} retries")
+                            else:
+                                # Only print if we're actually running (not skipping)
+                                # Suppress the verbose "available" message for cleaner logs
+                                break
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠️  GPU check failed: {e}, retrying in 5s...")
+                    time.sleep(5)
+                else:
+                    print(f"⚠️  GPU verification failed: {e}, proceeding anyway...")
+                    break
+    
+    # Prepare environment with GPU assignment
+    env = os.environ.copy()
+    if gpu_id is not None:
+        env['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
+    
+    config_dict = config_dict.copy()
+    config_dict['env'] = env
+    config_dict['assigned_gpu'] = gpu_id
+    
+    return run_experiment(config_dict)
+
+
+def run_experiment(config_dict):
+    """
+    Run a single training + evaluation experiment.
+    
+    Returns: dict with results
+    """
+    name = config_dict['name']
+    seed = config_dict.get('seed', 42)
+    
+    # Always add seed to name for consistency across multiple trials
+    name = f"{name}_seed{seed}"
+    
+    output_dir = Path(config_dict['output_folder']) / name
+    
+    # Check if already complete or in progress (check shared results directory ONLY)
+    if config_dict.get('results_dir'):
+        shared_result_dir = Path(config_dict['results_dir']) / name
+        shared_result_file = shared_result_dir / 'result.json'
+        
+        # ATOMIC CHECK: Only result.json presence matters, not directory
+        # (This is a duplicate check - already done in run_experiment_with_gpu)
+        # But we keep it for safety in case run_experiment is called directly
+        if shared_result_file.exists():
+            with open(shared_result_file) as f:
+                return json.load(f)
+        
+        # LOCKING: Use heartbeat-based distributed lock
+        shared_result_dir.mkdir(parents=True, exist_ok=True)
+        lock = ExperimentLock(shared_result_dir / '.lock')
+        
+        if not lock.acquire():
+            print(f"  ⚠ {name} - skipping (locked by another machine)")
+            return {
+                'name': name,
+                'type': config_dict.get('type', 'baseline'),
+                'seed': seed,
+                'status': 'locked_by_other_machine'
+            }
+        
+        print(f"  ✓ Claimed lock: {name}")
+    else:
+        lock = None
+    
+    # Check if experiment already completed successfully (result.json exists locally)
+    result_file = output_dir / 'result.json'
+    
+    if result_file.exists():
+        print(f"✓ {name} - skipping (already completed successfully)")
+        with open(result_file) as f:
+            result = json.load(f)
+        # Release lock if we acquired one
+        if lock:
+            lock.release()
+            print(f"  ✓ Released experiment lock")
+        return result
+    
+    # If output directory exists but no result.json, it's a failed/partial run - clean it up
+    if output_dir.exists():
+        print(f"⚠ {name} - cleaning up partial/failed run from previous attempt")
+        shutil.rmtree(output_dir)
+        print(f"  ✓ Removed {output_dir}")
+    
+    # Create fresh output directory
+    output_dir.mkdir(parents=True)
+    
+    # Build command - use train.py with config
+    if config_dict.get('is_ast'):
+        # AST model with pretrained weights (AudioSet or ImageNet)
+        cmd = [
+            'python3', 'train.py',
+            config_dict['train'],
+            str(output_dir),
+            '--model-type', 'ast',
+            '--test-folder', config_dict['test1'],
+            '--test-folder2', config_dict['test2'],
+            '--epochs', str(config_dict['epochs']),
+            '--batch-size', str(config_dict['batch_size']),
+            '--patience', '15',
+            '--spec-transform', 'Log',
+            '--mixup', str(config_dict.get('mixup', 0.25)),
+            '--seed', str(config_dict.get('seed', 42))
+        ]
+        # Add pretrained weights if specified
+        if config_dict.get('model'):
+            cmd.extend(['--pretrained', config_dict['model']])
+        # Add DANN if requested
+        if config_dict.get('use_dann'):
+            cmd.append('--use-dann')
+            cmd.extend(['--target-folder', config_dict['target']])
+            cmd.extend(['--lambda-domain', str(config_dict.get('lambda_domain', 0.3))])
+    elif config_dict['type'] == 'baseline':
+        cmd = [
+            'python3', 'train.py',
+            config_dict['train'],
+            str(output_dir),
+            '--model-type', 'regnet',
+            '--pretrained', config_dict['model'],
+            '--test-folder', config_dict['test1'],
+            '--test-folder2', config_dict['test2'],
+            '--epochs', str(config_dict['epochs']),
+            '--batch-size', str(config_dict['batch_size']),
+            '--patience', '15',
+            '--spec-transform', config_dict['spec_transform'],
+            '--mixup', str(config_dict.get('mixup', 0.25)),
+        ]
+        
+        if config_dict.get('bg_subtract'):
+            cmd.append('--bg-subtract')
+        if config_dict.get('median_filter'):
+            cmd.append('--median-filter')
+        if config_dict.get('noise', 0) > 0:
+            cmd.extend(['--noise', str(config_dict['noise'])])
+            if config_dict.get('noise_folder'):
+                cmd.extend(['--noise-folder', config_dict['noise_folder']])
+        if config_dict.get('seed'):
+            cmd.extend(['--seed', str(config_dict['seed'])])
+    
+    
+    elif config_dict['type'] == 'dann':
+        cmd = [
+            'python3', 'train.py',
+            config_dict['source'],
+            str(output_dir),
+            '--model-type', 'regnet',
+            '--pretrained', config_dict['model'],
+            '--test-folder', config_dict['test1'],
+            '--test-folder2', config_dict['test2'],
+            '--epochs', str(config_dict['epochs']),
+            '--batch-size', str(config_dict['batch_size']),
+            '--patience', '15',
+            '--spec-transform', config_dict['spec_transform'],
+            '--mixup', str(config_dict.get('mixup', 0.25)),
+            '--use-dann',
+            '--target-folder', config_dict['target'],
+            '--lambda-domain', str(config_dict.get('lambda_domain', 0.3)),
+        ]
+        
+        if config_dict.get('bg_subtract'):
+            cmd.append('--bg-subtract')
+        if config_dict.get('median_filter'):
+            cmd.append('--median-filter')
+        if config_dict.get('seed'):
+            cmd.extend(['--seed', str(config_dict['seed'])])
+    
+    else:
+        raise ValueError(f"Unknown experiment type: {config_dict['type']}")
+    
+    # Run with GPU environment (MUST use subprocess for proper CUDA_VISIBLE_DEVICES isolation)
+    env = config_dict.get('env', os.environ)
+    assigned_gpu = config_dict.get('assigned_gpu', 'not set')
+    cuda_visible = env.get('CUDA_VISIBLE_DEVICES', 'not set')
+    
+    print(f"\n{'='*70}")
+    print(f"STARTING: {name}")
+    print(f"GPU: {assigned_gpu} (CUDA_VISIBLE_DEVICES={cuda_visible})")
+    print(f"{'='*70}")
+    print(f"Command: {' '.join(cmd)}")
+    print(f"{'='*70}\n")
+    
+    # Create output directory and error log file
+    output_dir.mkdir(parents=True, exist_ok=True)
+    error_log = output_dir / 'experiment_error.log'
+    
+    try:
+        # Stream output to BOTH terminal AND log file in real-time
+        with open(error_log, 'w') as log_f:
+            log_f.write(f"=== EXPERIMENT LOG: {name} ===\n")
+            log_f.write(f"Command: {' '.join(cmd)}\n")
+            log_f.write(f"GPU: {env.get('CUDA_VISIBLE_DEVICES', 'not set')}\n")
+            log_f.write(f"Started: {datetime.now()}\n\n")
+            log_f.flush()
+            
+            # Run subprocess with output going to BOTH terminal and log file
+            # Use Popen for real-time streaming
+            import subprocess as sp
+            process = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.STDOUT, text=True, 
+                             env=env, bufsize=1, start_new_session=True)
+            
+            # Read and forward output line-by-line in real-time
+            # Prefix each line with experiment name for parallel clarity
+            for line in process.stdout:
+                prefixed = f"[{name}] {line}"
+                print(prefixed, end='')  # Print to terminal with prefix
+                log_f.write(line)        # Write original to log
+                log_f.flush()
+            
+            # Wait for process to complete
+            returncode = process.wait()
+            log_f.write(f"\n=== EXIT CODE: {returncode} ===\n")
+            
+            # CRITICAL: Wait for GPU to fully release CUDA context
+            # The subprocess has exited, but CUDA cleanup is asynchronous
+            # Without this delay, the next experiment on this GPU will fail with "device busy"
+            # After crashes or errors, CUDA contexts can linger for 10-20 seconds
+            import time
+            if returncode != 0:
+                print(f"[{name}] ⏳ Experiment failed, waiting 20 seconds for GPU cleanup...", flush=True)
+                time.sleep(20)
+            else:
+                print(f"[{name}] ⏳ Waiting 10 seconds for GPU to fully release...", flush=True)
+                time.sleep(10)
+            print(f"[{name}] ✓ GPU should be available now", flush=True)
+            
+    except KeyboardInterrupt:
+        print(f"\n⚠️  Interrupted experiment: {name}")
+        if 'process' in locals():
+            process.terminate()
+            process.wait(timeout=5)
+        with open(error_log, 'a') as log_f:
+            log_f.write(f"\n=== INTERRUPTED BY USER ===\n")
+        raise
+    
+    if returncode != 0:
+        error_msg = f"Training failed for {name} with exit code {returncode}"
+        
+        # FAIL LOUDLY - Print massive error banner WITH FLUSH
+        sys.stdout.flush()
+        sys.stderr.flush()
+        print("\n" + "🔥"*35, flush=True)
+        print("🔥" + " "*68 + "🔥", flush=True)
+        print("🔥" + " "*20 + "EXPERIMENT FAILED" + " "*31 + "🔥", flush=True)
+        print("🔥" + " "*68 + "🔥", flush=True)
+        print("🔥"*35, flush=True)
+        print(f"\n💀 FAILED EXPERIMENT: {name}", flush=True)
+        print(f"💀 Exit code: {returncode}", flush=True)
+        print(f"📄 Full error log: {error_log}", flush=True)
+        print("\n" + "🔥"*35, flush=True)
+        print("🔥  Stopping ALL experiments - fix this error before continuing  🔥", flush=True)
+        print("🔥"*35 + "\n", flush=True)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        
+        # Write failure marker
+        with open(error_log, 'a') as log_f:
+            log_f.write(f"\n=== EXPERIMENT FAILED ===\n")
+            log_f.write(f"Error: {error_msg}\n")
+        
+        # Remove lock directory if experiment failed (so it can be retried)
+        if config_dict.get('results_dir'):
+            shared_result_dir = Path(config_dict['results_dir']) / name
+            lock_dir = shared_result_dir / '.lock'
+            if lock_dir.exists():
+                shutil.rmtree(lock_dir, ignore_errors=True)
+        
+        raise RuntimeError(error_msg)
+    
+    # Create result.json by reading training history and test reports
+    result_data = {
+        'name': name,
+        'type': config_dict.get('type', 'baseline'),
+        'seed': seed,
+        'output_folder': str(output_dir),
+        'status': 'completed'
+    }
+    
+    # Load training history for train/val accuracies
+    history_file = output_dir / 'training_history.json'
+    if history_file.exists():
+        with open(history_file) as f:
+            history = json.load(f)
+            if 'val_acc' in history and history['val_acc']:
+                val_accs = [v for v in history['val_acc'] if v is not None]
+                if val_accs:
+                    best_epoch = val_accs.index(max(val_accs))
+                    result_data['best_val_acc'] = max(val_accs) * 100
+                    
+                    if 'train_acc' in history and history['train_acc']:
+                        train_accs = [v for v in history['train_acc'] if v is not None]
+                        if len(train_accs) > best_epoch:
+                            result_data['best_train_acc'] = train_accs[best_epoch] * 100
+    
+    # Determine test set names - use full folder name (e.g., 'avianz_split' not 'split')
+    test1_path = Path(config_dict['test1'])
+    test2_path = Path(config_dict['test2'])
+    
+    # Extract parent folder name which should match the test report filename
+    test1_name = test1_path.parent.name
+    test2_name = test2_path.parent.name
+    
+    result_data['test1_name'] = test1_name
+    result_data['test2_name'] = test2_name
+    
+    # Load test results from evaluation reports
+    # Files are named like: ast_test_{folder_name}_multilabel_report.json
+    for report_file in output_dir.glob('*_multilabel_report.json'):
+        report_name = report_file.stem.replace('_multilabel_report', '')
+        
+        with open(report_file) as f:
+            report = json.load(f)
+            
+            # FAIL FAST: Require exact_match_accuracy to be present
+            if 'exact_match_accuracy' not in report:
+                raise KeyError(f"Missing 'exact_match_accuracy' in {report_file.name}. Report keys: {list(report.keys())}")
+            
+            exact_acc = report['exact_match_accuracy'] * 100
+            
+            # Match by checking if test folder name is in the report filename
+            if test1_name in report_name:
+                result_data['test1_acc'] = exact_acc
+            elif test2_name in report_name:
+                result_data['test2_acc'] = exact_acc
+    
+    # Save result.json
+    with open(result_file, 'w') as f:
+        json.dump(result_data, f, indent=2)
+    
+    # Copy result files to shared directory if specified
+    if config_dict.get('results_dir'):
+        copy_result_files(output_dir, config_dict['results_dir'], name)
+    
+    # Release lock if we acquired one
+    if lock:
+        lock.release()
+        print(f"  ✓ Released experiment lock")
+    
+    return result_data
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Run all cross-dataset experiments')
+    parser.add_argument('--avianz-train', required=True, help='Waitākere training data folder')
+    parser.add_argument('--avianz-test', required=True, help='Waitākere test data folder')
+    parser.add_argument('--doc-train', required=True, help='DOC training data folder')
+    parser.add_argument('--doc-test', required=True, help='DOC test data folder')
+    parser.add_argument('--merged-train', default=None, help='Merged training data folder (DOC + Waitākere) - optional')
+    parser.add_argument('--output', required=True, help='Output folder for all experiments (model files)')
+    parser.add_argument('--results-dir', default=None, help='Shared results directory for small files (JSONs, CSVs). If not specified, saves to output folder.')
+    parser.add_argument('--noise-folder', default=None, help='Noise folder (optional, for noise sweep)')
+    parser.add_argument('--model', default='BirdClefModels/model_fold0.pth', help='Pretrained model')
+    parser.add_argument('--epochs', type=int, default=100, help='Training epochs')
+    parser.add_argument('--batch-size', type=int, default=16, help='Batch size')
+    parser.add_argument('--mixup', type=float, default=0.25, help='Mixup alpha')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[42], 
+                       help='Random seeds for multiple trials')
+    parser.add_argument('--parallel', type=int, default=0,
+                       help='Number of experiments to run in parallel (default: 0 = auto-detect from GPU count)')
+    parser.add_argument('--gpu-ids', type=int, nargs='+', default=None,
+                       help='Specific GPU IDs to use (e.g., --gpu-ids 0 1 2). If not specified, auto-detects all available GPUs.')
+    
+    args = parser.parse_args()
+    
+    # Validate paths
+    for path in [args.avianz_train, args.avianz_test, args.doc_train, args.doc_test]:
+        if not os.path.exists(path):
+            print(f"ERROR: Path not found: {path}")
+            sys.exit(1)
+    
+    if args.merged_train and not os.path.exists(args.merged_train):
+        print(f"ERROR: Merged train path not found: {args.merged_train}")
+        sys.exit(1)
+    
+    if not os.path.exists(args.model):
+        print(f"ERROR: Model not found: {args.model}")
+        sys.exit(1)
+    
+    output_folder = Path(args.output)
+    output_folder.mkdir(parents=True, exist_ok=True)
+    
+    # Setup GPU pool for parallel execution
+    print(f"\n{'='*70}")
+    print(f" GPU SETUP")
+    print(f"{'='*70}")
+    
+    if args.gpu_ids is not None:
+        gpu_pool = args.gpu_ids
+        print(f"Using user-specified GPU IDs: {gpu_pool}")
+    else:
+        gpu_pool = get_available_gpus()
+    
+    # CRITICAL: Require at least one GPU for training
+    if not gpu_pool:
+        print("\n" + "="*70)
+        print(" ERROR: NO USABLE GPUs DETECTED")
+        print("="*70)
+        print(" This pipeline requires GPU for training.")
+        print()
+        print(" Possible causes:")
+        print("   - All GPUs are busy (check 'nvidia-smi')")
+        print("   - No NVIDIA GPU in this machine")
+        print("   - CUDA drivers not installed")
+        print("   - PyTorch not compiled with CUDA support")
+        print()
+        print(" Solution:")
+        print("   - Free up a GPU, or")
+        print("   - Specify a free GPU with --gpu-ids N")
+        print("="*70)
+        sys.exit(1)
+    
+    # Determine worker count
+    if args.parallel == 0:
+        # Auto-detect: use number of GPUs
+        n_workers = len(gpu_pool)
+        print(f"Auto-detect: {n_workers} workers for {len(gpu_pool)} GPUs")
+    else:
+        n_workers = args.parallel
+        print(f"User-specified: {n_workers} workers")
+    
+    print(f"\n{'='*70}")
+    print(f" PARALLEL EXECUTION SETUP")
+    print(f"{'='*70}")
+    print(f" Workers: {n_workers}")
+    print(f" GPUs: {gpu_pool}")
+    print(f"{'='*70}\n")
+    
+    all_results = []
+    all_experiments = []
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 1: NORMALIZATION COMPARISON
+    # =========================================================================
+    print("\n" + "="*70)
+    print(" EXPERIMENT SUITE 1: NORMALIZATION COMPARISON")
+    print("="*70)
+    print(" Goal: Find which normalization reduces domain shift most")
+    print(" Methods: Log, Log+median+bg_subtract, Log+bg_subtract,")
+    print("          Log+median, PCEN, Box-Cox")
+    print(f" Seeds: {args.seeds}")
+    print(f" Total: 6 methods × 2 directions × {len(args.seeds)} seeds = {6 * 2 * len(args.seeds)} experiments")
+    print("="*70 + "\n")
+    
+    normalization_configs = [
+        {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': True},
+        {'name': 'Log+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': False},
+        {'name': 'Log+median', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': True},
+        {'name': 'PCEN', 'spec_transform': 'PCEN', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Box-Cox', 'spec_transform': 'Box-Cox', 'bg_subtract': False, 'median_filter': False},
+    ]
+    
+    for seed in args.seeds:
+        for norm_config in normalization_configs:
+            # Waitākere → DOC
+            all_experiments.append({
+                **norm_config,
+                'name': f"avianz_baseline_{norm_config['name']}",
+                'type': 'baseline',
+                'train': args.avianz_train,
+                'test1': args.avianz_test,
+                'test2': args.doc_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'noise': 0.0,
+                'noise_folder': args.noise_folder,
+                'seed': seed,
+            })
+            
+            # DOC → Waitākere
+            all_experiments.append({
+                **norm_config,
+                'name': f"doc_baseline_{norm_config['name']}",
+                'type': 'baseline',
+                'train': args.doc_train,
+                'test1': args.doc_test,
+                'test2': args.avianz_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'noise': 0.0,
+                'noise_folder': args.noise_folder,
+                'seed': seed,
+            })
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL NEURAL NETWORKS (DANN)
+    # =========================================================================
+    print("\n" + "="*70)
+    print(" EXPERIMENT SUITE 2: DOMAIN ADVERSARIAL TRAINING (DANN)")
+    print("="*70)
+    print(" Goal: Test if DANN reduces domain shift with/without normalization")
+    print(" Variants: (1) plain Log, (2) Log+median+bg_subtract")
+    print(f" Seeds: {args.seeds}")
+    print(f" Total: 2 variants × 2 directions × {len(args.seeds)} seeds = {2 * 2 * len(args.seeds)} experiments")
+    print("="*70 + "\n")
+    
+    dann_configs = [
+        {'name': 'Log', 'bg_subtract': False, 'median_filter': False},
+        {'name': 'Log+median+bg_subtract', 'bg_subtract': True, 'median_filter': True},
+    ]
+    
+    for seed in args.seeds:
+        for dann_config in dann_configs:
+            # Waitākere → DOC with DANN
+            all_experiments.append({
+                'name': f"avianz_dann_{dann_config['name']}",
+                'type': 'dann',
+                'source': args.avianz_train,
+                'target': args.doc_train,
+                'test1': args.avianz_test,
+                'test2': args.doc_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'spec_transform': 'Log',
+                'bg_subtract': dann_config['bg_subtract'],
+                'median_filter': dann_config['median_filter'],
+                'lambda_domain': 0.3,
+                'seed': seed,
+            })
+            
+            # DOC → Waitākere with DANN
+            all_experiments.append({
+                'name': f"doc_dann_{dann_config['name']}",
+                'type': 'dann',
+                'source': args.doc_train,
+                'target': args.avianz_train,
+                'test1': args.doc_test,
+                'test2': args.avianz_test,
+                'model': args.model,
+                'output_folder': output_folder,
+                'epochs': args.epochs,
+                'batch_size': args.batch_size,
+                'mixup': args.mixup,
+                'spec_transform': 'Log',
+                'bg_subtract': dann_config['bg_subtract'],
+                'median_filter': dann_config['median_filter'],
+                'lambda_domain': 0.3,
+                'seed': seed,
+            })
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP
+    # =========================================================================
+    if args.noise_folder and os.path.exists(args.noise_folder):
+        print("\n" + "="*70)
+        print(" EXPERIMENT SUITE 3: NOISE INTENSITY SWEEP")
+        print("="*70)
+        print(" Goal: Test optimal noise mixing ratio")
+        print(" Using: Log baseline (no normalization)")
+        print(" Levels: 0.0, 0.2, 0.4, 0.6, 0.8")
+        print(f" Seeds: {args.seeds}")
+        print(f" Total: 5 levels × 2 directions × {len(args.seeds)} seeds = {5 * 2 * len(args.seeds)} experiments")
+        print("="*70 + "\n")
+        
+        noise_levels = [0.0, 0.2, 0.4, 0.6, 0.8]
+        
+        for seed in args.seeds:
+            for noise_level in noise_levels:
+                # Waitākere → DOC
+                all_experiments.append({
+                    'name': f"avianz_baseline_Log_intensity{noise_level}",
+                    'type': 'baseline',
+                    'train': args.avianz_train,
+                    'test1': args.avianz_test,
+                    'test2': args.doc_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'spec_transform': 'Log',
+                    'bg_subtract': False,
+                    'median_filter': False,
+                    'noise': noise_level,
+                    'noise_folder': args.noise_folder,
+                    'seed': seed,
+                })
+                
+                # DOC → Waitākere
+                all_experiments.append({
+                    'name': f"doc_baseline_Log_intensity{noise_level}",
+                    'type': 'baseline',
+                    'train': args.doc_train,
+                    'test1': args.doc_test,
+                    'test2': args.avianz_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'spec_transform': 'Log',
+                    'bg_subtract': False,
+                    'median_filter': False,
+                    'noise': noise_level,
+                    'noise_folder': args.noise_folder,
+                    'seed': seed,
+                })
+        
+        # =====================================================================
+        # EXPERIMENT SUITE 4: NOISE VARIETY SWEEP
+        # =====================================================================
+        print("\n" + "="*70)
+        print(" EXPERIMENT SUITE 4: NOISE VARIETY SWEEP")
+        print("="*70)
+        print(" Goal: Test if more noise variety improves robustness")
+        print(" Using: Log baseline (no normalization), fixed noise ratio 0.2")
+        print(" Levels: 1, 10, 100, 1000, all available noise files")
+        print(f" Seeds: {args.seeds}")
+        print(f" Total: ~5 levels × 2 directions × {len(args.seeds)} seeds = ~{5 * 2 * len(args.seeds)} experiments")
+        print("="*70 + "\n")
+        
+        # Count available noise files
+        noise_data_dir = Path(args.noise_folder) / 'data'
+        if noise_data_dir.exists():
+            total_noise_files = len(list(noise_data_dir.glob('*.npy')))
+            print(f"Total available noise files: {total_noise_files}\n")
+            
+            variety_levels = [1, 10, 100, 1000]
+            # Add total if not already in list
+            if total_noise_files not in variety_levels and total_noise_files > 0:
+                variety_levels.append(total_noise_files)
+            
+            # Filter out levels larger than available
+            variety_levels = [n for n in variety_levels if n <= total_noise_files]
+            
+            # Pre-create all noise subsets (not parallelizable)
+            print("Creating noise subsets...")
+            for n_noise in variety_levels:
+                noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
+                
+                if not noise_subset_dir.exists():
+                    print(f"  Creating noise subset: {n_noise} files")
+                    noise_subset_dir.mkdir(parents=True, exist_ok=True)
+                    (noise_subset_dir / 'data').mkdir(exist_ok=True)
+                    
+                    # Randomly sample n files
+                    import random
+                    all_noise_files = list(noise_data_dir.glob('*.npy'))
+                    selected_files = random.sample(all_noise_files, min(n_noise, len(all_noise_files)))
+                    
+                    for f in selected_files:
+                        import shutil
+                        shutil.copy(f, noise_subset_dir / 'data' / f.name)
+                    
+                    # Copy labels if exists
+                    labels_file = Path(args.noise_folder) / 'labels.json'
+                    if labels_file.exists():
+                        import shutil
+                        shutil.copy(labels_file, noise_subset_dir / 'labels.json')
+            print("✓ All noise subsets ready\n")
+            
+            # Now add all experiments to queue
+            for seed in args.seeds:
+                for n_noise in variety_levels:
+                    noise_subset_dir = Path(args.noise_folder).parent / f'noise_subset_{n_noise}'
+                    
+                    # Waitākere → DOC
+                    all_experiments.append({
+                        'name': f"avianz_baseline_Log_variety{n_noise}",
+                        'type': 'baseline',
+                        'train': args.avianz_train,
+                        'test1': args.avianz_test,
+                        'test2': args.doc_test,
+                        'model': args.model,
+                        'output_folder': output_folder,
+                        'epochs': args.epochs,
+                        'batch_size': args.batch_size,
+                        'mixup': args.mixup,
+                        'spec_transform': 'Log',
+                        'bg_subtract': False,
+                        'median_filter': False,
+                        'noise': 0.2,  # Fixed ratio
+                        'noise_folder': str(noise_subset_dir),
+                        'seed': seed,
+                    })
+                    
+                    # DOC → Waitākere
+                    all_experiments.append({
+                        'name': f"doc_baseline_Log_variety{n_noise}",
+                        'type': 'baseline',
+                        'train': args.doc_train,
+                        'test1': args.doc_test,
+                        'test2': args.avianz_test,
+                        'model': args.model,
+                        'output_folder': output_folder,
+                        'epochs': args.epochs,
+                        'batch_size': args.batch_size,
+                        'mixup': args.mixup,
+                        'spec_transform': 'Log',
+                        'bg_subtract': False,
+                        'median_filter': False,
+                        'noise': 0.2,  # Fixed ratio
+                        'noise_folder': str(noise_subset_dir),
+                        'seed': seed,
+                    })
+        else:
+            print(f"⚠ Noise data directory not found: {noise_data_dir}")
+    else:
+        print("\n⚠ Skipping noise experiments (no noise folder provided)")
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 5: AST BASELINE (DIFFERENT ARCHITECTURE)
+    # =========================================================================
+    print("\n" + "="*70)
+    print(" EXPERIMENT SUITE 5: AST BASELINE")
+    print("="*70)
+    print(" Goal: Compare AST architecture to BirdCLEF fine-tuning")
+    print(" Using: Audio Spectrogram Transformer (AST) with Log transform")
+    print(f" Seeds: {args.seeds}")
+    print(f" Total: 2 directions × {len(args.seeds)} seeds = {2 * len(args.seeds)} experiments")
+    print("="*70 + "\n")
+    
+    # AST experiments: loop over all seeds (like other experiments)
+    for seed in args.seeds:
+        # Waitākere → DOC (AST trained from scratch on Waitākere)
+        all_experiments.append({
+            'name': 'avianz_ast_baseline',
+            'train': args.avianz_train,
+            'test1': args.avianz_test,
+            'test2': args.doc_test,
+            'output_folder': output_folder,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'mixup': args.mixup,
+            'seed': seed,
+            'is_ast': True,
+        })
+        
+        # DOC → Waitākere (AST trained from scratch on DOC)
+        all_experiments.append({
+            'name': 'doc_ast_baseline',
+            'train': args.doc_train,
+            'test1': args.doc_test,
+            'test2': args.avianz_test,
+            'output_folder': output_folder,
+            'epochs': args.epochs,
+            'batch_size': args.batch_size,
+            'mixup': args.mixup,
+            'seed': seed,
+            'is_ast': True,
+        })
+    
+    # =========================================================================
+    # EXPERIMENT SUITE 6: MERGED DATASET TRAINING
+    # =========================================================================
+    if args.merged_train:
+        print("\n" + "="*70)
+        print(" EXPERIMENT SUITE 6: MERGED DATASET TRAINING")
+        print("="*70)
+        print(" Goal: Evaluate if training on combined DOC+Waitākere data")
+        print("       improves cross-domain performance")
+        print(" Using: Log baseline and Log+median+bg_subtract preprocessing")
+        print(f" Seeds: {args.seeds}")
+        print(f" Total: 2 methods × {len(args.seeds)} seeds = {2 * len(args.seeds)} experiments")
+        print("="*70 + "\n")
+        
+        merged_configs = [
+            {'name': 'Log', 'spec_transform': 'Log', 'bg_subtract': False, 'median_filter': False},
+            {'name': 'Log+median+bg_subtract', 'spec_transform': 'Log', 'bg_subtract': True, 'median_filter': True},
+        ]
+        
+        for seed in args.seeds:
+            for merge_config in merged_configs:
+                # Merged → both test sets
+                all_experiments.append({
+                    **merge_config,
+                    'name': f"merged_baseline_{merge_config['name']}",
+                    'type': 'baseline',
+                    'train': args.merged_train,
+                    'test1': args.doc_test,
+                    'test2': args.avianz_test,
+                    'model': args.model,
+                    'output_folder': output_folder,
+                    'epochs': args.epochs,
+                    'batch_size': args.batch_size,
+                    'mixup': args.mixup,
+                    'noise': 0.0,
+                    'noise_folder': args.noise_folder,
+                    'seed': seed,
+                })
+    else:
+        print("\n⚠ Skipping merged dataset experiments (no --merged-train provided)")
+    
+    # =========================================================================
+    # RUN ALL EXPERIMENTS IN PARALLEL
+    # =========================================================================
+    print(f"\n{'='*70}")
+    print(f" RUNNING ALL EXPERIMENTS")
+    print(f"{'='*70}")
+    print(f" Total queued: {len(all_experiments)}")
+    print(f" Parallel workers: {n_workers}")
+    print(f"{'='*70}\n")
+    
+    # Add results_dir to all experiment configs
+    for exp in all_experiments:
+        exp['results_dir'] = args.results_dir
+    
+    all_results = run_experiments_parallel(all_experiments, n_workers, gpu_pool)
+    
+    # =========================================================================
+    # GENERATE SUMMARY
+    # =========================================================================
+    print("\n" + "="*70)
+    print(" ALL EXPERIMENTS COMPLETE")
+    print("="*70)
+    print(f" Total experiments run: {len(all_results)}")
+    print(f" Results saved to: {output_folder}")
+    print("="*70 + "\n")
+    
+    # Save all results
+    results_file = output_folder / 'all_results.json'
+    with open(results_file, 'w') as f:
+        json.dump(all_results, f, indent=2)
+    print(f"✓ Saved: {results_file}")
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⚠️  Interrupted by user. Exiting...")
+        sys.exit(1)
