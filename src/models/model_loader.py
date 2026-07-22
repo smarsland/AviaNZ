@@ -44,14 +44,18 @@ def loadModel(nn_name, dirnn):
     h5_path = os.path.join(dirnn, nn_name + '.h5')
     weights_h5_path = os.path.join(dirnn, nn_name + '.weights.h5')
     
-    # Also accept .pt extension and stem_best.pt fallback
+    # Also accept .pt extensions. Prefer stem_best.pt: model_trainer saves the
+    # best-validation checkpoint as {stem}_best.pt and the final-epoch weights as
+    # {stem}.pt, and the thresholds/metrics are all computed from the best
+    # checkpoint (see model_trainer._save_model / eval reload). So _best.pt is the
+    # weights the gate thresholds actually correspond to; fall back to plain .pt.
     pt_path = os.path.join(dirnn, nn_name + '.pt')
     best_pt_path = os.path.join(dirnn, nn_name + '_best.pt')
     if not os.path.isfile(pth_path):
-        if os.path.isfile(pt_path):
-            pth_path = pt_path
-        elif os.path.isfile(best_pt_path):
+        if os.path.isfile(best_pt_path):
             pth_path = best_pt_path
+        elif os.path.isfile(pt_path):
+            pth_path = pt_path
 
     # Priority 1: Load native PyTorch model
     if os.path.isfile(pth_path):
