@@ -10,7 +10,7 @@ SplitWav
 *.swp
 
 # models
-*.pt
+#*.pt
 Models/*
 
 # ignore temp files produced during analysis
