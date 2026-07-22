@@ -48,15 +48,49 @@ class Segment:
         if len(self.keys) > len(set(self.keys)):
             raise ValueError("non-unique species detected")
     
+    @staticmethod
+    def migrate_label_format(label):
+        """Convert an old-format label (a bare species string) to the new dict format.
+
+        Mirrors AviaNZ core's migrateLabelFormat (src/core/annotation.py):
+          - dict            -> returned unchanged
+          - "Don't Know"    -> certainty 0
+          - trailing '?'    -> certainty 50 (uncertain), '?' stripped
+          - any other string-> certainty 100
+        """
+        if isinstance(label, dict):
+            return label
+        if label == "Don't Know":
+            return {"species": "Don't Know", "certainty": 0}
+        if isinstance(label, str) and label.endswith('?'):
+            return {"species": label[:-1], "certainty": 50}
+        return {"species": label, "certainty": 100}
+
     @classmethod
     def from_list(cls, data):
-        """Create a Segment from legacy list format [start_time, end_time, freq_low, freq_high, labels]."""
+        """Create a Segment from legacy list format [start_time, end_time, freq_low, freq_high, labels].
+
+        Tolerates old-format annotation labels where labels are bare strings
+        (e.g. ["Kakapo(B)3"]) or a single string, migrating them to the new
+        dict format before validation.
+        """
         if not isinstance(data, (list, tuple)):
             raise ValueError("from_list expects a list or tuple")
         if len(data) != 5:
             raise ValueError(f"from_list requires 5 elements, got {len(data)}")
-        return cls(start_time=data[0], end_time=data[1], freq_low=data[2], 
-                   freq_high=data[3], labels=data[4])
+
+        labels = data[4]
+        # Old format: a single bare species string instead of a list.
+        if isinstance(labels, str):
+            labels = [labels]
+        if isinstance(labels, list):
+            labels = [cls.migrate_label_format(lab) for lab in labels]
+            # Empty label list -> unknown, matching AviaNZ core behaviour.
+            if len(labels) == 0:
+                labels = [{"species": "Don't Know", "certainty": 0}]
+
+        return cls(start_time=data[0], end_time=data[1], freq_low=data[2],
+                   freq_high=data[3], labels=labels)
     
     def __repr__(self):
         return f"Segment({self.start_time}, {self.end_time}, {self.freq_low}, {self.freq_high}, {len(self.labels)} labels)"
