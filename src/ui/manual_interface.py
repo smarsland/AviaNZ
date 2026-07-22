@@ -5410,104 +5410,50 @@ class ManualInterface(QMainWindow):
                     self.statusLeft.setText(f'Running NN inference... clip {k+1}/{n_clips}')
                     QApplication.processEvents()
 
-                # Apply post-processing if enabled
-                if settings.get("nnPostProcess", True) and raw_detections:
-                    print('Post-processing enabled')
-                    
-                    # Group detections that overlap in time (using a small tolerance)
-                    detection_groups = []
-                    if raw_detections:
-                        # Sort by start time
-                        raw_detections.sort(key=lambda x: x[0])
-                        
-                        # Group overlapping detections
-                        current_group = [raw_detections[0]]
-                        for detection in raw_detections[1:]:
-                            last_end = max([d[1] for d in current_group])
-                            # If this detection overlaps with the current group (within tolerance)
-                            if detection[0] <= last_end + 0.01:  # 10ms tolerance
-                                current_group.append(detection)
-                            else:
-                                # Start a new group
-                                detection_groups.append(current_group)
-                                current_group = [detection]
-                        if current_group:
-                            detection_groups.append(current_group)
-                    
-                    # Convert grouped detections to segments
-                    grouped_segments = []
-                    for group in detection_groups:
-                        # Determine segment boundaries (min start, max end)
-                        start_time = min([d[0] for d in group])
-                        end_time = max([d[1] for d in group])
-                        
-                        # Collect labels with max certainty for each class
-                        label_dict = {}
-                        for detection in group:
-                            class_idx = detection[2]
-                            certainty = detection[3]
-                            if class_idx not in label_dict or certainty > label_dict[class_idx]:
-                                label_dict[class_idx] = certainty
-                        
-                        # Convert to the expected format: [[start, end], {class_idx: certainty, ...}]
-                        grouped_segments.append([[start_time, end_time], label_dict])
-                    
-                    # Now apply PostProcess
-                    print('Running PostProcess...')
-                    # Extract just time ranges for PostProcess
-                    segments_for_pp = [seg[0] for seg in grouped_segments]
-                    
-                    # Store the label mappings before merging
-                    segment_labels = {tuple(seg[0]): seg[1] for seg in grouped_segments}
-                    
-                    post = segmentation.PostProcess(
-                        configdir=self.configdir,
-                        audioData=self.sp.audio_data.data,
-                        sampleRate=self.sp.audio_data.sample_rate,
-                        segments=segments_for_pp,
-                        subfilter={},
-                        cert=0
-                    )
-                    if settings["rain"]:
-                        post.rainClick()
-                        print(f'After rain removal: {len(post.segments)} segments')
-                    post.joinGaps(maxgap=settings["maxgap"])
-                    print(f'Segments remaining after merge (gap <={settings["maxgap"]:.2f} secs): {len(post.segments)}')
-                    post.deleteShort(minlength=settings["minlen"])
-                    print(f'Segments remaining after deleting short (<{settings["minlen"]:.2f} secs): {len(post.segments)}')
-                    
-                    # Map merged segments back to their labels
-                    merged_segments = []
-                    for pp_seg in post.segments:
-                        seg_start, seg_end = pp_seg[0][0], pp_seg[0][1]
-                        
-                        # Find all original labels that overlap with this merged segment
-                        labels = {}
-                        for orig_start, orig_end in segment_labels.keys():
-                            # Check if original segment overlaps with merged segment
-                            if not (orig_end <= seg_start or orig_start >= seg_end):
-                                for class_idx, certainty in segment_labels[(orig_start, orig_end)].items():
-                                    if class_idx not in labels or certainty > labels[class_idx]:
-                                        labels[class_idx] = certainty
-                        
-                        if labels:
-                            merged_segments.append([[seg_start, seg_end], labels])
+                # Fold detections into per-species time segments.
+                #
+                # A multilabel model can fire several species in the same window;
+                # each species becomes its OWN segment spanning exactly when that
+                # species is active (segments for different species may overlap in
+                # time). Merging contiguous windows of the SAME species is intrinsic
+                # to turning frame-wise predictions into segments, so it always runs.
+                # The post-processing checkbox only controls time-domain cleanup:
+                #   - bridge gaps up to maxgap between runs of the same species
+                #   - drop runs shorter than minlen
+                from collections import defaultdict
+                do_pp = settings.get("nnPostProcess", True)
+                maxgap = settings["maxgap"] if do_pp else 0.0
+                minlen = settings["minlen"] if do_pp else 0.0
+
+                by_class = defaultdict(list)
+                for start_time, end_time, class_idx, certainty in raw_detections:
+                    by_class[class_idx].append([start_time, end_time, certainty])
+
+                newSegments = []  # each: [[start, end], {class_idx: certainty}]
+                for class_idx, dets in by_class.items():
+                    dets.sort(key=lambda d: d[0])
+                    cur_start, cur_end, cur_cert = dets[0]
+                    runs = []
+                    for s, e, c in dets[1:]:
+                        # Same run if this window touches/overlaps the current one,
+                        # allowing a bridgeable gap of up to maxgap (+ small tolerance).
+                        if s <= cur_end + maxgap + 0.01:
+                            cur_end = max(cur_end, e)
+                            cur_cert = max(cur_cert, c)
                         else:
-                            # If no labels found (shouldn't happen), use the PP segment with empty labels
-                            merged_segments.append([[seg_start, seg_end], {}])
-                    
-                    newSegments = merged_segments
-                    print(f'Post-processing complete: {len(newSegments)} segments with labels')
-                else:
-                    print('Post-processing disabled or no detections found')
-                    # Don't group detections - keep each detection as a separate segment
-                    # Convert raw_detections directly to segments without grouping
-                    newSegments = []
-                    for detection in raw_detections:
-                        start_time, end_time, class_idx, certainty = detection
-                        # Each detection becomes its own segment with a single label
-                        newSegments.append([[start_time, end_time], {class_idx: certainty}])
-                    print(f'Keeping {len(newSegments)} raw detections as separate segments')
+                            runs.append((cur_start, cur_end, cur_cert))
+                            cur_start, cur_end, cur_cert = s, e, c
+                    runs.append((cur_start, cur_end, cur_cert))
+
+                    for s, e, c in runs:
+                        if do_pp and (e - s) < minlen:
+                            continue
+                        newSegments.append([[s, e], {class_idx: c}])
+
+                newSegments.sort(key=lambda seg: seg[0][0])
+                print(f'NN produced {len(newSegments)} per-species segments from '
+                      f'{len(raw_detections)} raw detections across {len(by_class)} species '
+                      f'(post-processing {"on" if do_pp else "off"})')
             else:
                 # Other algorithms (Default, Median Clipping, etc.)
                 print(f'Segments detected: {len(newSegments)}')
@@ -5561,7 +5507,9 @@ class ManualInterface(QMainWindow):
 
                     label_list = []
 
-                    # seg[1] is a dictionary mapping class_idx -> certainty
+                    # seg[1] is a dictionary mapping class_idx -> certainty.
+                    # Model certainties are probabilities in [0, 1]; AviaNZ stores
+                    # certainty on a 0-100 scale, so convert here.
                     for class_idx, certainty in seg[1].items():
                         if class_names and 0 <= class_idx < len(class_names):
                             species_label = class_names[class_idx]
@@ -5570,7 +5518,7 @@ class ManualInterface(QMainWindow):
 
                         label_list.append({
                             "species": species_label,
-                            "certainty": certainty
+                            "certainty": round(float(certainty) * 100, 1)
                         })
 
                     # Only add segment if it has at least one label
@@ -5600,9 +5548,11 @@ class ManualInterface(QMainWindow):
             self.segmentDialog.undo.setEnabled(True)
             self.statusLeft.setText('Ready')
         
-        # ONLY consolidate overlapping segments if post-processing is enabled
-        # If post-processing is disabled, we want to keep the raw detections separate
-        if settings.get("nnPostProcess", True) and len(self.segments) > 1:
+        # NN_Model already produces per-species segments (see above), and those are
+        # meant to overlap in time when different species are simultaneously active.
+        # This pass merges ANY overlapping segments into one multi-label segment, so
+        # it must NOT run for NN_Model or it would collapse the per-species results.
+        if alg != 'NN_Model' and settings.get("nnPostProcess", True) and len(self.segments) > 1:
             self.statusLeft.setText('Consolidating detections...')
             QApplication.processEvents()
 
