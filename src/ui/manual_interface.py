@@ -5225,7 +5225,11 @@ class ManualInterface(QMainWindow):
                 from src.models import model_loader, inference
                 
                 model_data = settings.get("nnModelFile")
-                min_confidence = settings["nnConfidence"]
+                # Default gate used only as a fallback: when a model ships per-class
+                # thresholds (thresholds_combined.csv) those override this entirely
+                # for multilabel models. It still applies to single-label models and
+                # to any model without a threshold table.
+                min_confidence = 0.5
 
                 if filtname == "No models found" or not model_data:
                     msg = MessagePopup("w", "No Models", "No models available!")
@@ -5410,49 +5414,46 @@ class ManualInterface(QMainWindow):
                     self.statusLeft.setText(f'Running NN inference... clip {k+1}/{n_clips}')
                     QApplication.processEvents()
 
-                # Fold detections into per-species time segments.
+                # Build multilabel segments, one per detection window.
                 #
-                # A multilabel model can fire several species in the same window;
-                # each species becomes its OWN segment spanning exactly when that
-                # species is active (segments for different species may overlap in
-                # time). Merging contiguous windows of the SAME species is intrinsic
-                # to turning frame-wise predictions into segments, so it always runs.
-                # The post-processing checkbox only controls time-domain cleanup:
-                #   - bridge gaps up to maxgap between runs of the same species
-                #   - drop runs shorter than minlen
-                from collections import defaultdict
+                # Detections from the same window share a (start, end); we collect
+                # every species that fired in that window into a single multilabel
+                # segment ({class_idx: certainty}). This is the raw output when
+                # post-processing is off.
                 do_pp = settings.get("nnPostProcess", True)
-                maxgap = settings["maxgap"] if do_pp else 0.0
-                minlen = settings["minlen"] if do_pp else 0.0
 
-                by_class = defaultdict(list)
+                window_labels = {}  # (start, end) -> {class_idx: max certainty}
                 for start_time, end_time, class_idx, certainty in raw_detections:
-                    by_class[class_idx].append([start_time, end_time, certainty])
+                    labels = window_labels.setdefault((start_time, end_time), {})
+                    if class_idx not in labels or certainty > labels[class_idx]:
+                        labels[class_idx] = certainty
 
-                newSegments = []  # each: [[start, end], {class_idx: certainty}]
-                for class_idx, dets in by_class.items():
-                    dets.sort(key=lambda d: d[0])
-                    cur_start, cur_end, cur_cert = dets[0]
-                    runs = []
-                    for s, e, c in dets[1:]:
-                        # Same run if this window touches/overlaps the current one,
-                        # allowing a bridgeable gap of up to maxgap (+ small tolerance).
-                        if s <= cur_end + maxgap + 0.01:
-                            cur_end = max(cur_end, e)
-                            cur_cert = max(cur_cert, c)
-                        else:
-                            runs.append((cur_start, cur_end, cur_cert))
-                            cur_start, cur_end, cur_cert = s, e, c
-                    runs.append((cur_start, cur_end, cur_cert))
-
-                    for s, e, c in runs:
-                        if do_pp and (e - s) < minlen:
-                            continue
-                        newSegments.append([[s, e], {class_idx: c}])
-
+                newSegments = [[list(win), labels] for win, labels in window_labels.items()]
                 newSegments.sort(key=lambda seg: seg[0][0])
-                print(f'NN produced {len(newSegments)} per-species segments from '
-                      f'{len(raw_detections)} raw detections across {len(by_class)} species '
+
+                # Post-processing: merge windows that overlap or sit within maxgap of
+                # each other, unioning their species labels (max certainty per class),
+                # then drop anything shorter than minlen.
+                if do_pp and newSegments:
+                    maxgap = settings["maxgap"]
+                    minlen = settings["minlen"]
+
+                    merged = [newSegments[0]]
+                    for seg in newSegments[1:]:
+                        (cur_start, cur_end), cur_labels = merged[-1]
+                        (seg_start, seg_end), seg_labels = seg
+                        if seg_start <= cur_end + maxgap + 0.01:
+                            merged[-1][0][1] = max(cur_end, seg_end)
+                            for cls, cert in seg_labels.items():
+                                if cls not in cur_labels or cert > cur_labels[cls]:
+                                    cur_labels[cls] = cert
+                        else:
+                            merged.append(seg)
+
+                    newSegments = [seg for seg in merged if (seg[0][1] - seg[0][0]) >= minlen]
+
+                print(f'NN produced {len(newSegments)} multilabel segments from '
+                      f'{len(raw_detections)} raw detections '
                       f'(post-processing {"on" if do_pp else "off"})')
             else:
                 # Other algorithms (Default, Median Clipping, etc.)

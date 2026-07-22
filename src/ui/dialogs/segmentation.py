@@ -132,12 +132,6 @@ class SegmentationDialog(QDialog):
         self.nnModel = QComboBox()
         self.populateNNModels()
 
-        self.nnConfidencelabel = QLabel("Minimum Confidence (%)")
-        self.nnConfidence = QDoubleSpinBox()
-        self.nnConfidence.setRange(0, 100)
-        self.nnConfidence.setSingleStep(5)
-        self.nnConfidence.setValue(50)
-
         self.nnPostProcess = QCheckBox("Enable post-processing (merge/filter segments)")
         self.nnPostProcess.setChecked(True)
 
@@ -220,8 +214,6 @@ class SegmentationDialog(QDialog):
 
         Box.addWidget(self.nnModellabel)
         Box.addWidget(self.nnModel)
-        Box.addWidget(self.nnConfidencelabel)
-        Box.addWidget(self.nnConfidence)
         Box.addWidget(self.nnPostProcess)
 
         self.medSize = QSlider(Qt.Orientation.Horizontal)
@@ -396,8 +388,6 @@ class SegmentationDialog(QDialog):
         elif alg == "NN_Model":
             self.nnModellabel.show()
             self.nnModel.show()
-            self.nnConfidencelabel.show()
-            self.nnConfidence.show()
             self.nnPostProcess.show()
             self.rain.show()
             self.maxgaplbl.show()
@@ -454,5 +444,5 @@ class SegmentationDialog(QDialog):
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": filtname, "rain": self.rain.isChecked(),
                     "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value(),
-                    "wind": self.wind.currentText(), "nnConfidence": self.nnConfidence.value()/100, "nnModelFile": model_filename, "nnPostProcess": self.nnPostProcess.isChecked()}
+                    "wind": self.wind.currentText(), "nnModelFile": model_filename, "nnPostProcess": self.nnPostProcess.isChecked()}
         return(alg, settings)
