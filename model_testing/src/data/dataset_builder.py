@@ -1223,7 +1223,7 @@ Examples:
   python dataset_builder.py doc "Sound Files/NZ bird sounds" "Sound Files/DOC_wav" --format wav --max-samples 100
   
   # Process environmental noise audio
-  python src/data/dataset_builder.py noise /path/to/freefield/audio output/noise --samples 1000
+  python model_testing/src/data/dataset_builder.py noise /path/to/freefield/audio output/noise --samples 1000
   
   # Custom spectrogram parameters
   python dataset_builder.py avianz "Sound Files/GSK" "Sound Files/GSK_spec" --window 0.025 --hop 0.010 --freq-bins 128

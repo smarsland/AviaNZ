@@ -17,7 +17,7 @@ AviaNZ folder layout expected:
     avianz_raw/**/*.wav  +  *.wav.data  (annotation files)
 
 Usage:
-    python src/experiments/build_large_datasets.py \\
+    python model_testing/src/experiments/build_large_datasets.py \\
         --doc-raw /path/to/NZBirds \\
         --avianz-raw /path/to/Joe_MoDone \\
         --output /path/to/large \\

@@ -62,7 +62,7 @@ echo "============================================================"
 
 mkdir -p "${OUTPUT}"
 
-PYTHONPATH=. python3 src/experiments/build_large_datasets.py \
+PYTHONPATH=. python3 model_testing/src/experiments/build_large_datasets.py \
     --doc-raw        "${DOC_RAW}" \
     "${AVIANZ_ARGS[@]}" \
     --output         "${OUTPUT}" \

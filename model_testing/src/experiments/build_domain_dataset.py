@@ -6,7 +6,7 @@ rather than the bird species. Used to train a domain classifier to understand
 what visual differences exist between AviaNZ and DOC spectrograms.
 
 Usage:
-    PYTHONPATH="$PWD" python3 src/experiments/build_domain_dataset.py \\
+    PYTHONPATH="$PWD" python3 model_testing/src/experiments/build_domain_dataset.py \\
         /path/to/matched \\
         /path/to/domain_output
 """
