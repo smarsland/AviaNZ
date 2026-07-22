@@ -29,7 +29,7 @@ DRIVE="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02"
 KAYTOO_ROOT="$(pwd)/../Kaytoo"
 KAYTOO_PYTHON="${KAYTOO_ROOT}/venv_kay/bin/python"
 PRETRAINED="BirdClefModels/model_fold0.pth"
-MAPPING="data/DOC_bird_naming_map.csv"
+MAPPING="model_testing/data/DOC_bird_naming_map.csv"
 SEED=0
 
 MATCHED="${BASE}/matched"

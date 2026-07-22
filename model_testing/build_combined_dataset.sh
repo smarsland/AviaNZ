@@ -29,7 +29,7 @@ DRIVE3="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03"
 # Combined output lands at ${OUTPUT}/combined_large.
 OUTPUT="${BASE}/combined_dataset"
 MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
-MAPPING="data/DOC_bird_naming_map.csv"
+MAPPING="model_testing/data/DOC_bird_naming_map.csv"
 OVERWRITE_FLAG=""
 
 if [[ "${1:-}" == "--overwrite" ]]; then
