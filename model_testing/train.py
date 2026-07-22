@@ -5,9 +5,9 @@ Always uses multilabel classification.
 """
 import argparse
 import os
-from src.core.model_trainer import Trainer
-from src.core.trainer_config import TrainerConfig
-from src.core import config
+from model_testing.src.core.model_trainer import Trainer
+from model_testing.src.core.trainer_config import TrainerConfig
+from model_testing.src.core import config
 
 
 def main():

@@ -10,7 +10,7 @@ import matplotlib.cm as cm
 import os
 from pathlib import Path
 from matplotlib.axes import Axes
-from src.core import config
+from model_testing.src.core import config
 
 
 class GradCAM:

@@ -19,7 +19,7 @@ import time
 import socket
 import threading
 
-from src.core import config
+from model_testing.src.core import config
 
 
 def copy_result_files(output_dir, results_dir, experiment_name):

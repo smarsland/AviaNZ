@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import soundfile as sf
 import warnings
 from PIL import Image
-from src.core import config
+from model_testing.src.core import config
 from . import spectrogram
 import torch
 import torchaudio
@@ -74,8 +74,25 @@ class SpectrogramProcessor:
         
         self.window_width = int(window_seconds * fs)
         self.window_inc = int(hop_seconds * fs)
-        
+
         self.sp = spectrogram.Spectrogram(window_width=self.window_width, incr=self.window_inc)
+
+    def get_metadata(self):
+        """Return the exact build-time spectrogram settings, JSON-serialisable.
+
+        This is written into the dataset's labels.json so the trainer can record
+        the REAL spectrogram params in the model config (rather than copying
+        config.py defaults, which silently drift from what the data was built
+        with).  Inference must reproduce these settings exactly.
+        """
+        return {
+            'processor': 'spectrogram',
+            'sample_rate': self.fs,
+            'window_seconds': self.window_seconds,
+            'hop_seconds': self.hop_seconds,
+            'freq_bins': self.freq_bins,
+            'spectrogram_params': dict(self.spec_params),
+        }
 
     def process_audio_file(self, sound_file):
         try:
@@ -186,6 +203,16 @@ class AudioSetFbankProcessor:
         self.frame_length_ms = float(frame_length_ms)
         self.frame_shift_ms = float(frame_shift_ms)
         self.num_mel_bins = int(num_mel_bins)
+
+    def get_metadata(self):
+        """Return the exact build-time fbank settings (see SpectrogramProcessor.get_metadata)."""
+        return {
+            'processor': 'fbank',
+            'sample_rate': self.target_sample_rate,
+            'frame_length_ms': self.frame_length_ms,
+            'frame_shift_ms': self.frame_shift_ms,
+            'num_mel_bins': self.num_mel_bins,
+        }
 
     def process_audio_file(self, sound_file):
         return self._process(sound_file, start_time=None, end_time=None)
@@ -357,6 +384,18 @@ class CQTProcessor:
         max_safe = int(np.floor(np.log2(nyquist_safe / fmin) * bins_per_octave))
         self.n_bins = min(n_bins, max_safe)  # bins actually computed by librosa
         self._pad_rows = n_bins - self.n_bins  # zero-rows prepended (above Nyquist)
+
+    def get_metadata(self):
+        """Return the exact build-time CQT settings (see SpectrogramProcessor.get_metadata)."""
+        return {
+            'processor': 'cqt',
+            'sample_rate': self.fs,
+            'hop_seconds': self.hop_length / self.fs,
+            'freq_bins': self._output_bins,
+            'fmin': self.fmin,
+            'bins_per_octave': self.bins_per_octave,
+            'spectrogram_params': {'sgType': 'Bandpass'},
+        }
 
     def _load_audio(self, sound_file, start_time=None, end_time=None):
         """Load (optionally sliced) audio, resample to self.fs, and RMS-normalise."""

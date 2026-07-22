@@ -6,7 +6,7 @@
   "time_bins": 1024,
   "spectrogram_params": {
     "windowType": "Hamming",
-    "sgType": "Reassigned",
+    "sgType": "Standard",
     "sgScale": "Mel Frequency",
     "mean_normalise": false,
     "equal_loudness": false,

@@ -16,10 +16,10 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 from torch.utils.data import DataLoader as TorchDataLoader
-from src.core.models import AST, CNNModel, SpectrogramDecoder, RegNetModel
-from src.data.data_utils import SpectrogramDataset
-from src.data.normalizer import normalize_spectrogram
-from src.core import config
+from model_testing.src.core.models import AST, CNNModel, SpectrogramDecoder, RegNetModel
+from model_testing.src.data.data_utils import SpectrogramDataset
+from model_testing.src.data.normalizer import normalize_spectrogram
+from model_testing.src.core import config
 
 
 class ModelPredictor:

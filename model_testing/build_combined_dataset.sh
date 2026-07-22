@@ -41,23 +41,8 @@ fi
 # ECS_acoustic_01 and ECS_acoustic_03 are scanned as whole-drive roots so that
 # any annotated subfolders are picked up automatically.
 AVIANZ_FOLDERS=(
-    "${DRIVE}/Remutaka20"
-    "${DRIVE}/Bittern_Harry"
-    "${DRIVE}/SOIK_FiordlandTokoeka"
-    "${DRIVE}/Remutaka21"
-    "${DRIVE}/RakiuraTokoeka"
-    "${DRIVE}/MA_PILOT_2018_ARS"
-    "${DRIVE}/Datasets_NP"
-    "${DRIVE}/Rurudone"
-    "${DRIVE}/Waiheke"
-    "${DRIVE}/GSK"
-    "${DRIVE}/Ruru_Tinakari1"
-    "${DRIVE}/Nirosha"
-    "${DRIVE}/Kakapo Recordings Andrew Digby"
-    "${DRIVE}/Morepork Annotations"
-    "${DRIVE}/AR4 kokako survey"
-    "${DRIVE}/2017_Rawhiti playback experiment"
     "${DRIVE1}"
+    "${DRIVE2}"
     "${DRIVE3}"
 )
 

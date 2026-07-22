@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import ASTModel
 import timm
-from src.core import config
+from model_testing.src.core import config
 
 
 class GradientReversalLayer(nn.Module):

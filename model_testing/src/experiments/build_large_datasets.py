@@ -34,17 +34,18 @@ from collections import defaultdict
 import numpy as np
 import soundfile as sf
 
-from src.core import config
-from src.data.dataset_builder import AviaNZDataProcessor
-from src.experiments.analyze_dataset_quality import load_bird_name_mapping, norm_key
-from src.experiments.build_matched_datasets import (
+from model_testing.src.core import config
+from model_testing.src.data.dataset_builder import AviaNZDataProcessor
+from model_testing.src.experiments.analyze_dataset_quality import load_bird_name_mapping, norm_key
+from model_testing.src.experiments.build_matched_datasets import (
     filter_to_common_classes,
     load_avianz_name_mapping,
     make_spec_processor,
+    spec_processor_metadata,
     trim_spectrogram_to_length,
     write_labels_json,
 )
-from src.experiments.split_matched_datasets import split_avianz_by_file
+from model_testing.src.experiments.split_matched_datasets import split_avianz_by_file
 
 
 # Species labels to skip in AviaNZ annotations.
@@ -367,6 +368,7 @@ def build_combined(
     combined_out,
     max_per_species=5000,
     seed=42,
+    spec_metadata=None,
 ):
     """
     Pool DOC and AviaNZ label lists, apply a combined per-species cap, and
@@ -439,6 +441,10 @@ def build_combined(
         'num_classes': len(categories),
         'dataset': 'combined_large',
     }
+    # Record the exact spectrogram settings the data was built with so the
+    # trainer can put the REAL params in the model config (not config.py defaults).
+    if spec_metadata is not None:
+        payload['spectrogram_config'] = spec_metadata
     labels_path = os.path.join(combined_large, 'labels.json')
     with open(labels_path, 'w') as f:
         json.dump(payload, f, indent=2)
@@ -658,6 +664,10 @@ def main():
     print(f'  Overwrite      : {args.overwrite}')
     print('=' * 70)
 
+    # Exact spectrogram settings the data is built with — recorded into every
+    # labels.json so the trainer can put the REAL params in the model config.
+    spec_meta = spec_processor_metadata(args.spec_type, args.window_type, args.sg_scale)
+
     # Load name mapping
     ebird_to_common, _common_to_ebird = load_bird_name_mapping(args.mapping)
 
@@ -692,7 +702,7 @@ def main():
             print(f'\n--restrict-classes: kept {len(avianz_labels)} / {before} samples '
                   f'matching {sorted(restrict_set)}')
 
-        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large', spec_metadata=spec_meta)
 
         categories = sorted({c for e in avianz_labels for c in e.get('class_names', [])})
         print('\n' + '=' * 70)
@@ -723,7 +733,7 @@ def main():
         )
         # Write labels.json immediately so it is never missing even if a later
         # step (AviaNZ build, combined merge) is interrupted.
-        write_labels_json(doc_out, doc_labels, 'DOC_large')
+        write_labels_json(doc_out, doc_labels, 'DOC_large', spec_metadata=spec_meta)
     else:
         print('\n=== Step 1: DOC large dataset already exists, loading ===')
         with open(os.path.join(doc_out, 'labels.json')) as f:
@@ -742,7 +752,7 @@ def main():
             print(f'\n--restrict-classes: kept {len(doc_labels)} / {before} samples '
                   f'matching {sorted(restrict_set)}')
 
-        write_labels_json(doc_out, doc_labels, 'DOC_large')
+        write_labels_json(doc_out, doc_labels, 'DOC_large', spec_metadata=spec_meta)
 
         categories = sorted({c for e in doc_labels for c in e.get('class_names', [])})
         print('\n' + '=' * 70)
@@ -771,7 +781,7 @@ def main():
         )
         # Write labels.json immediately so it is never missing if a later step
         # is interrupted.
-        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large', spec_metadata=spec_meta)
     else:
         print('\n=== Step 2: AviaNZ large dataset already exists, loading ===')
         with open(os.path.join(avianz_out, 'labels.json')) as f:
@@ -792,6 +802,7 @@ def main():
                 args.combined_out,
                 max_per_species=args.max_per_species,
                 seed=args.seed,
+                spec_metadata=spec_meta,
             )
         else:
             print('\n=== Combined: dataset already exists, skipping ===')
@@ -836,14 +847,14 @@ def main():
             all_categories.update(e.get('class_names', []))
         categories = sorted(all_categories)
         print(f'  Final category set ({len(categories)} classes): {categories}')
-        write_labels_json(doc_out, doc_labels, 'DOC_large')
-        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+        write_labels_json(doc_out, doc_labels, 'DOC_large', spec_metadata=spec_meta)
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large', spec_metadata=spec_meta)
     else:
         print('\n=== Step 3: keeping all DOC classes (default — use --class-filter to restrict) ===')
         print(f'  Keeping all {len(full_doc_cats)} DOC classes for training')
         categories = full_doc_cats
-        write_labels_json(doc_out, doc_labels, 'DOC_large')
-        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large')
+        write_labels_json(doc_out, doc_labels, 'DOC_large', spec_metadata=spec_meta)
+        write_labels_json(avianz_out, avianz_labels, 'AviaNZ_large', spec_metadata=spec_meta)
 
     # -----------------------------------------------------------------------
     # Step 4: split into train / test

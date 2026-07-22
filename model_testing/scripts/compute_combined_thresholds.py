@@ -98,8 +98,8 @@ def compute_combined_thresholds(model_dir: Path) -> pd.DataFrame:
         tc = col_true[mask].astype(np.int32)
         pc = probs_all[mask, ci]
 
-        if tc.sum() < 10:
-            # Class appears in test sets but has very few samples → keep default 0.5
+        if tc.sum() == 0:
+            # Class appears in test sets but has no positive samples → keep default 0.5
             continue
 
         # Vectorised F1 over all threshold candidates
@@ -115,9 +115,14 @@ def compute_combined_thresholds(model_dir: Path) -> pd.DataFrame:
         f1s   = np.where(denom > 0, 2 * tp / denom, 0.0)
         f1s[~pos_mask] = -1.0
 
-        thresholds[ci] = candidates[np.argmax(f1s)]
         best_f1 = f1s[np.argmax(f1s)]
-        print(f"  {class_name}: threshold={thresholds[ci]:.4f}  F1={best_f1:.3f}")
+        
+        if best_f1 < 0.05:
+            thresholds[ci] = 0.5
+        else:
+            thresholds[ci] = candidates[np.argmax(f1s)]
+
+        print(f"  {class_name}: positive count={tc.sum()} threshold={thresholds[ci]:.4f}  F1={best_f1:.3f}")
 
     result = pd.DataFrame({"class": all_class_names, "threshold": thresholds})
     return result

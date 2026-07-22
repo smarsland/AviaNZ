@@ -1,14 +1,14 @@
 class,threshold
 australasian bittern,0.0200
-australasian crested grebe,0.0000
+australasian crested grebe,0.5000
 australasian gannet,0.5050
 australasian harrier,0.1400
 australasian shoveler,0.0050
 australian brown quail,0.0200
 australian magpie,0.1000
 banded dotterel,0.0500
-banded rail,0.0000
-bellbird,0.0000
+banded rail,0.5000
+bellbird,0.5000
 bittern,0.1500
 black billed gull,0.0450
 black fronted tern,0.1150
@@ -24,19 +24,19 @@ canada goose,0.1600
 caspian tern,0.0600
 cattle egret,0.5000
 chaffinch,0.2100
-chatham island warbler,0.0000
+chatham island warbler,0.5000
 chatham robin,0.5000
 chukor,0.5000
 common diving petrel,0.0050
-common pheasant,0.0000
+common pheasant,0.5000
 cook's petrel,0.1000
 crimson rosella,0.1550
-domestic chicken,0.0000
+domestic chicken,0.5000
 dunnock,0.1000
 eastern rosella,0.0400
-fairy tern,0.0000
+fairy tern,0.5000
 fantail,0.3700
-glossy ibis,0.0000
+glossy ibis,0.5000
 goldfinch,0.0350
 great spotted kiwi,0.1300
 greenfinch,0.1150
@@ -54,7 +54,7 @@ kereru,0.2000
 little black shag,0.0250
 little blue penguin,0.0950
 little egret,0.5000
-little owl,0.0000
+little owl,0.5000
 little shag,0.5000
 little spotted kiwi,0.0750
 long tailed cuckoo,0.2000
@@ -66,7 +66,7 @@ mottled petrel,0.0200
 nankeen night heron,0.0100
 new zealand falcon,0.2350
 new zealand fernbird,0.0800
-new zealand kaka,0.0150
+new zealand kaka,0.5000
 new zealand kingfisher,0.2950
 new zealand pipit,0.1250
 new zealand scaup,0.5000
@@ -74,8 +74,8 @@ north island brown kiwi,0.1900
 north island kokako,0.0600
 north island robin,0.1950
 north island saddleback,0.0750
-okarito brown kiwi,0.0000
-orange fronted parakeet,0.0000
+okarito brown kiwi,0.5000
+orange fronted parakeet,0.5000
 oystercatcher,0.0700
 paradise shelduck,0.1050
 parakeet,0.2500
@@ -95,7 +95,7 @@ skylark,0.2950
 song thrush,0.2450
 south island pied oystercatcher,0.3750
 south island robin,0.2200
-south island saddleback,0.0000
+south island saddleback,0.5000
 southern black backed gull,0.1250
 southern brown kiwi,0.1700
 spotless crake,0.2250
@@ -104,12 +104,12 @@ spotted shag,0.5000
 spur winged plover,0.0400
 starling,0.0200
 stitchbird,0.4100
-takahe,0.0000
+takahe,0.5000
 tomtit,0.2850
 tree weta,0.4200
 tufted guineafowl,0.0450
 tui/bellbird,0.2350
-turkey,0.0000
+turkey,0.5000
 turnstone,0.5000
 variable oystercatcher,0.6200
 weka,0.2450
@@ -120,5 +120,5 @@ white heron,0.0050
 whitehead,0.2650
 wrybill,0.0150
 yellow crowned parakeet,0.0800
-yellow eyed penguin,0.0000
+yellow eyed penguin,0.5000
 yellowhammer,0.3950

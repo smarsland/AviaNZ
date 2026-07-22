@@ -5111,9 +5111,6 @@ class ManualInterface(QMainWindow):
             elif alg == 'Median Clipping':
                 newSegments = seg.medianClip(settings["medThr"], minSegment=self.config['minSegment'])
                 newSegments = seg.checkSegmentOverlap(newSegments)
-                # will also remove too short segments (medSize is set in ms because sliders limited to int)
-                # print("before length", newSegments)
-                # newSegments = seg.deleteShort(newSegments, minlength=medSize/1000)
             elif alg == 'Harma':
                 newSegments = seg.Harma(float(str(settings["HarmaThr1"])),float(str(settings["HarmaThr2"])),minSegment=self.config['minSegment'])
                 newSegments = seg.checkSegmentOverlap(newSegments)
@@ -5122,7 +5119,7 @@ class ManualInterface(QMainWindow):
                 newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'Fundamental Frequency':
                 newSegments = seg.yinSegs(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
-                                                         int(str(settings["FFwindow"])))
+                                                        int(str(settings["FFwindow"])))
                 newSegments = seg.checkSegmentOverlap(newSegments)
             elif alg == 'FIR':
                 newSegments = seg.segmentByFIR(float(str(settings["FIRThr1"])))
@@ -5150,8 +5147,8 @@ class ManualInterface(QMainWindow):
                         NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
                     post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
-                                               tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=subfilter, NNmodel=NNmodel, cert=50)
+                                            tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
+                                            subfilter=subfilter, NNmodel=NNmodel, cert=50)
                     if NNmodel:
                         print('Post-processing with NN')
                         post.NN()
@@ -5195,8 +5192,8 @@ class ManualInterface(QMainWindow):
                         NNmodel = self.NNDicts.get(speciesData['NN']['NN_name'])
 
                     post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, sampleRate=self.sp.audio_data.sample_rate,
-                                               tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=subfilter, NNmodel=NNmodel, cert=50)
+                                            tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
+                                            subfilter=subfilter, NNmodel=NNmodel, cert=50)
                     if NNmodel:
                         print('Post-processing with NN')
                         post.NN()
@@ -5286,7 +5283,12 @@ class ManualInterface(QMainWindow):
                 else:
                     audio_for_inference = self.sp.audio_data.data
                     inference_sr = current_sample_rate
-                
+
+                # RMS-normalise the audio exactly as the training pipeline does
+                rms = np.sqrt(np.mean(audio_for_inference**2))
+                if rms > 1e-8:
+                    audio_for_inference = audio_for_inference / rms * 0.1
+
                 spec_params = model_config.get('spectrogram_params', {})
                 current_params = {
                     'windowType': self.config['windowType'],
@@ -5309,126 +5311,155 @@ class ManualInterface(QMainWindow):
                 window_width = int(window_seconds * inference_sr)
                 incr = int(hop_seconds * inference_sr)
                 
-                # Always compute a fresh spectrogram from the (potentially resampled) audio
-                self.statusLeft.setText('Computing spectrogram with model parameters...')
-                QApplication.processEvents()
-                
-                # Create temporary spectrogram object for inference
-                import src.core.spectrogram as spectrogram
-                import src.core.audio_data as audio_data
-                temp_sp = spectrogram.Spectrogram(window_width, incr)
-                temp_sp.audio_data = audio_data.AudioData(
-                    data=audio_for_inference,
-                    sample_rate=inference_sr,
-                    sample_format='float32',
-                    sample_size=32,
-                    channels=1
-                )
-                
-                _ = temp_sp.spectrogram(
-                    window_width=window_width,
-                    incr=incr,
-                    window=spec_params.get('windowType', 'Hann'),
-                    sgType=spec_params.get('sgType', 'Standard'),
-                    sgScale=spec_params.get('sgScale', 'Linear'),
-                    nfilters=spec_params.get('nfilters', 128),
-                    mean_normalise=spec_params.get('mean_normalise', True),
-                    equal_loudness=spec_params.get('equal_loudness', False),
-                    onesided=True
-                )
-                
                 self.statusLeft.setText('Running NN inference...')
                 QApplication.processEvents()
-                
+
+                import src.core.spectrogram as spectrogram
+                import src.core.audio_data as audio_data
+                from model_testing.src.data.normalizer import normalize_spectrogram
+                import torch.nn.functional as F
+
                 time_bins = model_config.get('time_bins', 400)
                 freq_bins = model_config.get('freq_bins', 128)
                 spec_transform = model_config.get('spec_transform', 'Log')
-                
-                # Use the built-in normalisedSpec method for log transform
-                if spec_transform == 'Log':
-                    sg = temp_sp.normalisedSpec("Log")
-                else:
-                    sg = temp_sp.sg.copy()
-                
-                # Rotate to match training format: (time, freq) -> (freq, time)
-                # .copy() needed because rot90 creates negative strides
-                sg = np.rot90(sg).copy()
-                
-                # Now sg is (freq, time)
-                if sg.shape[0] < freq_bins:
-                    freq_bins = sg.shape[0]
-                
-                total_time_frames = sg.shape[1]  # Time is now dimension 1
-                predictions = []
-                segment_times = []
-                
-                for start_frame in range(0, total_time_frames, time_bins):
-                    end_frame = min(start_frame + time_bins, total_time_frames)
-                    
-                    # Extract in (freq, time) format
-                    if end_frame - start_frame < time_bins:
-                        segment = np.zeros((freq_bins, time_bins))
-                        actual_frames = end_frame - start_frame
-                        segment[:, :actual_frames] = sg[:freq_bins, start_frame:end_frame]
-                    else:
-                        segment = sg[:freq_bins, start_frame:end_frame]
-                    
-                    # Reshape to (1, freq, time, 1) - model normalizes internally
-                    segment = segment.reshape(1, freq_bins, time_bins, 1)
-                    
-                    pred = inference.predict_batch(model, segment)
-                    predictions.append(pred[0])
-                    
-                    start_time = start_frame * incr / inference_sr
-                    end_time = end_frame * incr / inference_sr
-                    segment_times.append((start_time, end_time))
-                
-                newSegments = []
+                bg_subtract = model_config.get('bg_subtract', False)
+                median_filter = model_config.get('median_filter', False)
                 multilabel = model_config.get('multilabel', False)
                 class_names = model_config.get('class_names', [])
-                
-                for i, (pred, (start_time, end_time)) in enumerate(zip(predictions, segment_times)):
-                    # Convert logits to probabilities
+                LOG_OFFSET = 1e-7
+
+                # Process the file one CLIP at a time
+                clip_hop_samples = time_bins * incr
+                clip_len_samples = (time_bins - 1) * incr + window_width
+                n_audio = len(audio_for_inference)
+                n_clips = max(1, int(np.ceil(max(1, n_audio - window_width + 1) / clip_hop_samples)))
+
+                # Store detections in a consistent format regardless of multilabel/single label
+                raw_detections = []  # Each entry: [start_time, end_time, class_idx, certainty]
+
+                for k in range(n_clips):
+                    s0 = k * clip_hop_samples
+                    clip = audio_for_inference[s0:s0 + clip_len_samples]
+                    if len(clip) <= window_width:
+                        break
+
+                    clip_sp = spectrogram.Spectrogram(window_width, incr)
+                    clip_sp.audio_data = audio_data.AudioData(
+                        data=clip, sample_rate=inference_sr,
+                        sample_format='float32', sample_size=32, channels=1)
+                    clip_sp.spectrogram(
+                        window_width=window_width, incr=incr,
+                        window=spec_params.get('windowType', 'Hann'),
+                        sgType=spec_params.get('sgType', 'Standard'),
+                        sgScale=spec_params.get('sgScale', 'Linear'),
+                        nfilters=spec_params.get('nfilters', 128),
+                        mean_normalise=spec_params.get('mean_normalise', True),
+                        equal_loudness=spec_params.get('equal_loudness', False),
+                        onesided=True)
+
+                    # (time, freq) -> (freq, time), row 0 = highest frequency
+                    raw = np.rot90(clip_sp.sg).copy()
+                    fb = min(freq_bins, raw.shape[0])
+                    actual_frames = min(raw.shape[1], time_bins)
+
+                    # Match training preprocessing
+                    if spec_transform == 'Log':
+                        proc = np.log(np.maximum(raw[:fb], 0.0) + LOG_OFFSET)
+                    elif spec_transform in ('None', None):
+                        proc = np.asarray(raw[:fb], dtype=np.float32)
+                    else:
+                        print(f"Warning: spec_transform '{spec_transform}' not implemented for inference, using Log")
+                        proc = np.log(np.maximum(raw[:fb], 0.0) + LOG_OFFSET)
+
+                    if bg_subtract or median_filter:
+                        proc = normalize_spectrogram(
+                            proc, median_filter=median_filter, bg_subtract=bg_subtract)
+
+                    # Zero-pad the time axis
+                    segment = np.zeros((fb, time_bins), dtype=np.float32)
+                    segment[:, :actual_frames] = proc[:, :actual_frames]
+                    segment = segment.reshape(1, fb, time_bins, 1)
+
+                    logits = inference.predict_batch(model, segment)[0]
+                    pred_tensor = torch.from_numpy(logits)
+
+                    start_time = s0 / inference_sr
+                    end_time = (s0 + actual_frames * incr) / inference_sr
+
+                    # Handle both multilabel and single label predictions consistently
                     if multilabel:
-                        # Multilabel: apply sigmoid to get independent probabilities
-                        import torch.nn.functional as F
-                        pred_tensor = torch.from_numpy(pred)
                         probs = torch.sigmoid(pred_tensor).numpy()
-                        
-                        # Check each class independently, create segment for each above threshold
+                        # For multilabel, each class can be detected independently
                         for class_idx, prob in enumerate(probs):
-                            prob = np.clip(prob, 0.0, 1.0)
-                            class_name = class_names[class_idx] if class_idx < len(class_names) else None
-                            if per_class_thresholds and class_name and class_name in per_class_thresholds:
-                                thr = per_class_thresholds[class_name]
+                            prob = float(np.clip(prob, 0.0, 1.0))
+                            if per_class_thresholds is not None:
+                                cname = class_names[class_idx] if class_idx < len(class_names) else None
+                                thr = per_class_thresholds.get(cname, 1.0)
                             else:
                                 thr = min_confidence
                             if prob >= thr:
-                                certainty = int(prob * 100)
-                                newSegments.append([[start_time, end_time], certainty, class_idx])
+                                raw_detections.append([start_time, end_time, class_idx, prob])
                     else:
-                        # Single-label: apply softmax to get probabilities
-                        import torch.nn.functional as F
-                        pred_tensor = torch.from_numpy(pred)
+                        # Single label: only the most probable class
                         probs = F.softmax(pred_tensor, dim=0).numpy()
-                        
-                        max_prob_idx = np.argmax(probs)
-                        max_prob = probs[max_prob_idx]
-                        max_prob = np.clip(max_prob, 0.0, 1.0)
-                        
+                        max_idx = int(np.argmax(probs))
+                        max_prob = float(np.clip(probs[max_idx], 0.0, 1.0))
                         if max_prob >= min_confidence:
-                            certainty = int(max_prob * 100)
-                            newSegments.append([[start_time, end_time], certainty, max_prob_idx])
-                
-                print(f'Segments detected (above {int(min_confidence*100)}% confidence): {len(newSegments)}')
-                if len(newSegments) > 0:
-                    print(f'  Example segments: {newSegments[:3]}')
-                
+                            raw_detections.append([start_time, end_time, max_idx, max_prob])
+
+                    self.statusLeft.setText(f'Running NN inference... clip {k+1}/{n_clips}')
+                    QApplication.processEvents()
+
                 # Apply post-processing if enabled
-                if settings.get("nnPostProcess", True):
-                    print('Post-processing...')
-                    # Extract just time ranges and certainties for PostProcess
-                    segments_for_pp = [seg[0] for seg in newSegments]
+                if settings.get("nnPostProcess", True) and raw_detections:
+                    print('Post-processing enabled')
+                    
+                    # Group detections that overlap in time (using a small tolerance)
+                    detection_groups = []
+                    if raw_detections:
+                        # Sort by start time
+                        raw_detections.sort(key=lambda x: x[0])
+                        
+                        # Group overlapping detections
+                        current_group = [raw_detections[0]]
+                        for detection in raw_detections[1:]:
+                            last_end = max([d[1] for d in current_group])
+                            # If this detection overlaps with the current group (within tolerance)
+                            if detection[0] <= last_end + 0.01:  # 10ms tolerance
+                                current_group.append(detection)
+                            else:
+                                # Start a new group
+                                detection_groups.append(current_group)
+                                current_group = [detection]
+                        if current_group:
+                            detection_groups.append(current_group)
+                    
+                    # Convert grouped detections to segments
+                    grouped_segments = []
+                    for group in detection_groups:
+                        # Determine segment boundaries (min start, max end)
+                        start_time = min([d[0] for d in group])
+                        end_time = max([d[1] for d in group])
+                        
+                        # Collect labels with max certainty for each class
+                        label_dict = {}
+                        for detection in group:
+                            class_idx = detection[2]
+                            certainty = detection[3]
+                            if class_idx not in label_dict or certainty > label_dict[class_idx]:
+                                label_dict[class_idx] = certainty
+                        
+                        # Convert to the expected format: [[start, end], {class_idx: certainty, ...}]
+                        grouped_segments.append([[start_time, end_time], label_dict])
+                    
+                    # Now apply PostProcess
+                    print('Running PostProcess...')
+                    # Extract just time ranges for PostProcess
+                    segments_for_pp = [seg[0] for seg in grouped_segments]
+                    
+                    # Store the label mappings before merging
+                    segment_labels = {tuple(seg[0]): seg[1] for seg in grouped_segments}
+                    
                     post = segmentation.PostProcess(
                         configdir=self.configdir,
                         audioData=self.sp.audio_data.data,
@@ -5445,32 +5476,46 @@ class ManualInterface(QMainWindow):
                     post.deleteShort(minlength=settings["minlen"])
                     print(f'Segments remaining after deleting short (<{settings["minlen"]:.2f} secs): {len(post.segments)}')
                     
-                    # Map merged segments back to their original detections
-                    # After merging, use the highest certainty from any component segment
+                    # Map merged segments back to their labels
                     merged_segments = []
                     for pp_seg in post.segments:
                         seg_start, seg_end = pp_seg[0][0], pp_seg[0][1]
-                        # Find all original detections that overlap with this merged segment
-                        overlapping = [s for s in newSegments 
-                                     if not (s[0][1] <= seg_start or s[0][0] >= seg_end)]
-                        if overlapping:
-                            max_cert = max(s[1] for s in overlapping)
-                            class_idx = overlapping[0][2]
+                        
+                        # Find all original labels that overlap with this merged segment
+                        labels = {}
+                        for orig_start, orig_end in segment_labels.keys():
+                            # Check if original segment overlaps with merged segment
+                            if not (orig_end <= seg_start or orig_start >= seg_end):
+                                for class_idx, certainty in segment_labels[(orig_start, orig_end)].items():
+                                    if class_idx not in labels or certainty > labels[class_idx]:
+                                        labels[class_idx] = certainty
+                        
+                        if labels:
+                            merged_segments.append([[seg_start, seg_end], labels])
                         else:
-                            max_cert = 50
-                            class_idx = 0
-                        merged_segments.append([[seg_start, seg_end], max_cert, class_idx])
+                            # If no labels found (shouldn't happen), use the PP segment with empty labels
+                            merged_segments.append([[seg_start, seg_end], {}])
+                    
                     newSegments = merged_segments
+                    print(f'Post-processing complete: {len(newSegments)} segments with labels')
                 else:
-                    print('Post-processing disabled')
+                    print('Post-processing disabled or no detections found')
+                    # Don't group detections - keep each detection as a separate segment
+                    # Convert raw_detections directly to segments without grouping
+                    newSegments = []
+                    for detection in raw_detections:
+                        start_time, end_time, class_idx, certainty = detection
+                        # Each detection becomes its own segment with a single label
+                        newSegments.append([[start_time, end_time], {class_idx: certainty}])
+                    print(f'Keeping {len(newSegments)} raw detections as separate segments')
             else:
                 # Other algorithms (Default, Median Clipping, etc.)
                 print(f'Segments detected: {len(newSegments)}')
                 if len(newSegments) > 0:
                     print('Post-processing...')
                     post = segmentation.PostProcess(configdir=self.configdir, audioData=self.sp.audio_data.data, 
-                                                   sampleRate=self.sp.audio_data.sample_rate, 
-                                                   segments=newSegments, subfilter={}, cert=0)
+                                                sampleRate=self.sp.audio_data.sample_rate, 
+                                                segments=newSegments, subfilter={}, cert=0)
                     if settings["rain"]:
                         post.rainClick()
                         print(f'After rain removal: {len(post.segments)} segments')
@@ -5509,22 +5554,39 @@ class ManualInterface(QMainWindow):
             elif alg == 'NN_Model':
                 y1 = 0
                 y2 = inference_sr // 2
+
                 for seg in newSegments:
                     start_time = seg[0][0]
                     end_time = seg[0][1]
-                    certainty = seg[1]
-                    class_idx = seg[2]
-                    
-                    # Use actual species name from class_names if available
-                    if class_names and 0 <= class_idx < len(class_names):
-                        species_label = class_names[class_idx]
+
+                    label_list = []
+
+                    # seg[1] is a dictionary mapping class_idx -> certainty
+                    for class_idx, certainty in seg[1].items():
+                        if class_names and 0 <= class_idx < len(class_names):
+                            species_label = class_names[class_idx]
+                        else:
+                            species_label = f"Class_{class_idx}"
+
+                        label_list.append({
+                            "species": species_label,
+                            "certainty": certainty
+                        })
+
+                    # Only add segment if it has at least one label
+                    if label_list:
+                        self.addSegment(
+                            start_time + self.startRead,
+                            end_time + self.startRead,
+                            y1,
+                            y2,
+                            label_list,
+                            index=-1,
+                            coordsAbsolute=True
+                        )
+                        self.segmentsToSave = True
                     else:
-                        species_label = f"Class_{class_idx}"
-                    labels = [{"species": species_label, "certainty": certainty}]
-                    
-                    self.addSegment(start_time + self.startRead, end_time + self.startRead, y1, y2,
-                            labels, index=-1, coordsAbsolute=True)
-                    self.segmentsToSave = True
+                        print(f"Warning: segment at {start_time}-{end_time} has no labels, skipping")
             else:
                 for seg in newSegments:
                     if isinstance(seg[0], (list, tuple)):
@@ -5537,6 +5599,63 @@ class ManualInterface(QMainWindow):
 
             self.segmentDialog.undo.setEnabled(True)
             self.statusLeft.setText('Ready')
+        
+        # ONLY consolidate overlapping segments if post-processing is enabled
+        # If post-processing is disabled, we want to keep the raw detections separate
+        if settings.get("nnPostProcess", True) and len(self.segments) > 1:
+            self.statusLeft.setText('Consolidating detections...')
+            QApplication.processEvents()
+
+            # Use orderTime() to get sorted indices and create a sorted list
+            sortOrder = self.segments.orderTime()
+            sorted_segs = [self.segments[i] for i in sortOrder]
+
+            merged_list = []
+            if sorted_segs:
+                curr = sorted_segs[0]
+                for next_seg in sorted_segs[1:]:
+                    # Merge if they overlap in time (even partially)
+                    if next_seg.start_time < curr.end_time:
+                        # Update current bounds to encompass both detections
+                        curr.end_time = max(curr.end_time, next_seg.end_time)
+                        curr.freq_low = min(curr.freq_low, next_seg.freq_low)
+                        curr.freq_high = max(curr.freq_high, next_seg.freq_high)
+
+                        # Merge labels from the next segment into the current one
+                        for nl in next_seg.labels:
+                            found = False
+                            for el in curr.labels:
+                                if el.get('species') == nl.get('species') and \
+                                el.get('calltype') == nl.get('calltype'):
+                                    # Update certainty to the maximum found between detections
+                                    el['certainty'] = max(el['certainty'], nl['certainty'])
+                                    found = True
+                                    break
+                            if not found:
+                                curr.labels.append(nl)
+                    else:
+                        # No overlap, store current merged segment and start a new one
+                        merged_list.append(curr)
+                        curr = next_seg
+                merged_list.append(curr)
+
+            # Clear UI objects and segments list, then rebuild with consolidated data
+            self.removeSegments(delete=True)
+            self.segments.extend(merged_list)
+
+            # Redraw merged segments on the UI
+            for seg in self.segments:
+                # Add back to UI without adding to the data list redundantly
+                self.addSegment(seg.start_time, seg.end_time, seg.freq_low, seg.freq_high,
+                                seg.labels, saveSeg=False, coordsAbsolute=True)
+
+            # Cleanup selection and update status
+            if self.box1id > -1:
+                self.deselectSegment(self.box1id)
+            self.segmentsToSave = True
+            self.refreshFileColor()
+            self.statusLeft.setText('Ready')
+
         print('Segmentation finished at %s' % (time.time() - opstartingtime))
 
     def segment_undo(self):

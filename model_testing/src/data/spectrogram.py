@@ -736,7 +736,7 @@ class Spectrogram:
 
         # Compute the set of multi-tapered spectrograms
         starts = range(0, len(self.audio_data.data) - window_width, incr)
-        from src.utils import dpss
+        from model_testing.src.utils import dpss
         [tapers, eigen] = dpss.dpss(window_width, 2.5, K)
         sg = np.zeros((len(starts), window_width, K), dtype=complex)
         for k in range(K):
@@ -884,7 +884,7 @@ class Spectrogram:
 
     def formants(self,ncoeff=None):
         # First look at formants. Snell and Milinazzo '93 method
-        from src.utils import levinson_durban_recursion
+        from model_testing.src.utils import levinson_durban_recursion
 
         if ncoeff is None:
             # TODO

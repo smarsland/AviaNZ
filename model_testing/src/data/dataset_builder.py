@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 import shutil
 import zipfile
-from src.core import config
+from model_testing.src.core import config
 from . import wavio
 from .spectrogram_utils import SpectrogramProcessor, AudioSetFbankProcessor, smart_overwrite_folder
 from .data_pipeline import Segment
@@ -584,8 +584,12 @@ class AviaNZDataProcessor(BaseDataProcessor):
         all_species = sorted(species_counts.keys())
         
         dataset_name = 'AviaNZ' if not chunk_duration else 'AviaNZ_Chunked'
-        self.save_labels(output_folder, labels, all_species, dataset_name, 
-                        {'species_counts': species_counts, 'chunk_duration': chunk_duration})
+        extra_metadata = {'species_counts': species_counts, 'chunk_duration': chunk_duration}
+        # Record the exact spectrogram settings the data was built with so the
+        # trainer can put the REAL params in the model config (not config.py defaults).
+        if self.spec_processor is not None and hasattr(self.spec_processor, 'get_metadata'):
+            extra_metadata['spectrogram_config'] = self.spec_processor.get_metadata()
+        self.save_labels(output_folder, labels, all_species, dataset_name, extra_metadata)
         
         if chunk_duration:
             print(f"\nSaved {file_count} chunked spectrograms")

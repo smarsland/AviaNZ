@@ -35,16 +35,16 @@ import pandas as pd
 import soundfile as sf
 import numpy as np
 
-from src.core import config
-from src.experiments.analyze_dataset_quality import (
+from model_testing.src.core import config
+from model_testing.src.experiments.analyze_dataset_quality import (
     build_group_cache,
     is_poor_quality,
     load_bird_name_mapping,
     normalize_species_name_to_codes,
     parse_species_list_to_codes,
 )
-from src.data.dataset_builder import AviaNZDataProcessor
-from src.data.spectrogram_utils import SpectrogramProcessor, CQTProcessor, apply_freq_mask
+from model_testing.src.data.dataset_builder import AviaNZDataProcessor
+from model_testing.src.data.spectrogram_utils import SpectrogramProcessor, CQTProcessor, apply_freq_mask
 
 
 def normalize_label(label):
@@ -171,6 +171,18 @@ def make_spec_processor(sg_type=None, window_type=None, sg_scale=None):
         fs=config.DEFAULT_SAMPLE_RATE,
         spec_params=spec_params,
     )
+
+
+def spec_processor_metadata(sg_type=None, window_type=None, sg_scale=None):
+    """Return the JSON-serialisable build-time spectrogram settings for the
+    processor that make_spec_processor(...) would create for these arguments.
+
+    Kept as a thin wrapper over make_spec_processor so the recorded metadata can
+    never drift from the processor that actually built the data.  This is written
+    into labels.json under 'spectrogram_config' so the trainer records the real
+    settings in the model config instead of copying config.py defaults.
+    """
+    return make_spec_processor(sg_type, window_type, sg_scale).get_metadata()
 
 
 def parse_reviewed_csv(csv_path, mapping_csv):
@@ -740,7 +752,7 @@ def add_background_samples_avianz(avianz_labels, avianz_raw, avianz_out, all_sea
     return extra_labels
 
 
-def write_labels_json(output_folder, labels, dataset_name):
+def write_labels_json(output_folder, labels, dataset_name, spec_metadata=None):
     species_counts = defaultdict(int)
     all_codes = set()
     for e in labels:
@@ -756,6 +768,10 @@ def write_labels_json(output_folder, labels, dataset_name):
         'dataset': dataset_name,
         'species_counts': dict(species_counts),
     }
+    # Record the exact spectrogram settings the data was built with so the
+    # trainer can put the REAL params in the model config (not config.py defaults).
+    if spec_metadata is not None:
+        payload['spectrogram_config'] = spec_metadata
     out = os.path.join(output_folder, 'labels.json')
     with open(out, 'w') as f:
         json.dump(payload, f, indent=2)
@@ -941,8 +957,9 @@ def main():
         avianz_labels = avianz_labels + avianz_background
 
     print('\n=== Step 4: write labels.json ===')
-    write_labels_json(doc_out, doc_labels_final, 'DOC_matched')
-    write_labels_json(avianz_out, avianz_labels, 'AviaNZ_matched')
+    spec_meta = spec_processor_metadata(args.spec_type, args.window_type, args.sg_scale)
+    write_labels_json(doc_out, doc_labels_final, 'DOC_matched', spec_metadata=spec_meta)
+    write_labels_json(avianz_out, avianz_labels, 'AviaNZ_matched', spec_metadata=spec_meta)
 
     # Compute and report spectrogram statistics
     print('\n=== Step 5: compute spectrogram statistics ===')
