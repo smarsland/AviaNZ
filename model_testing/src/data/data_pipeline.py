@@ -89,8 +89,15 @@ class Segment:
             if len(labels) == 0:
                 labels = [{"species": "Don't Know", "certainty": 0}]
 
-        return cls(start_time=data[0], end_time=data[1], freq_low=data[2],
-                   freq_high=data[3], labels=labels)
+        # Old annotations sometimes carry negative freq bounds (e.g. a low bound
+        # of -1 meaning "full band"). Frequency is metadata only — extraction
+        # uses the time bounds — so clamp negatives to 0 rather than discard an
+        # otherwise-valid segment and its labels.
+        freq_low = max(0, data[2]) if data[2] is not None else 0
+        freq_high = max(0, data[3]) if data[3] is not None else 0
+
+        return cls(start_time=data[0], end_time=data[1], freq_low=freq_low,
+                   freq_high=freq_high, labels=labels)
     
     def __repr__(self):
         return f"Segment({self.start_time}, {self.end_time}, {self.freq_low}, {self.freq_high}, {len(self.labels)} labels)"
