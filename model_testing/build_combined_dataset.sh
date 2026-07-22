@@ -21,8 +21,8 @@ set -euo pipefail
 
 BASE="/local/scratch/freangi"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
-DRIVE="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02"
 DRIVE1="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_01"
+DRIVE2="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02"
 DRIVE3="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03"
 
 # Scratch space for the intermediate per-source datasets.
