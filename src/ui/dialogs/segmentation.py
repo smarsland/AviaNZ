@@ -293,32 +293,8 @@ class SegmentationDialog(QDialog):
             self.changeBoxes("Default")
 
     def populateNNModels(self):
-        import os
-        import glob
-        models = []  # list of (display_name, (dir_path, stem))
-
-        # Legacy Models/ directory (.pth files)
-        models_dir = 'Models'
-        for json_file in glob.glob(os.path.join(models_dir, '*_config.json')):
-            stem = os.path.basename(json_file).replace('_config.json', '')
-            if os.path.exists(os.path.join(models_dir, stem + '.pth')):
-                models.append((stem, (models_dir, stem)))
-
-        # model_testing/ subdirectories (.pt or .pth files)
-        for json_file in glob.glob(os.path.join('model_testing', '*', '*_config.json')):
-            d = os.path.dirname(json_file)
-            stem = os.path.basename(json_file).replace('_config.json', '')
-            # Accept stem.pth, stem.pt, or stem_best.pt
-            candidates = [
-                stem + '.pth', stem + '.pt', stem + '_best.pt',
-            ]
-            for c in candidates:
-                if os.path.exists(os.path.join(d, c)):
-                    display = f"{stem} ({os.path.basename(d)})"
-                    models.append((display, (d, stem)))
-                    break
-
-        models.sort()
+        from src.core import nn_segmenter
+        models = nn_segmenter.discover_models()  # list of (display_name, (dir_path, stem))
         if models:
             for display_name, data in models:
                 self.nnModel.addItem(display_name, data)

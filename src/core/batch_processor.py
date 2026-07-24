@@ -65,8 +65,9 @@ class BatchProcessor:
                  wind="None", mergeSyllables=False, 
                  overwrite=None, overwriteSpecies=True, overwriteAll=False,
                  timeWindow_s=0, timeWindow_e=0,
-                 protocolSize=15, protocolInterval=300, 
+                 protocolSize=15, protocolInterval=300,
                  maxgap=1, minlen=0.2, maxlen=10,
+                 nnModel=None, nnPostProcess=True,
                  testmode=False):
         
         # Configuration
@@ -105,7 +106,6 @@ class BatchProcessor:
             'maxlen': maxlen
         }
 
-        # Process species list
         if isinstance(recognisers, list):
             self.species = recognisers.copy()
         else:
@@ -116,22 +116,53 @@ class BatchProcessor:
             self.anySound = True
             self.species.remove("Any sound")
 
+        # NN mode: the UI sends "NN" as the recogniser. In this mode a single
+        # trained model classifies everything, so the wavelet-filter path is
+        # bypassed entirely (see process_files / detectNN).
+        self.nnMode = "NN" in self.species
+        self.nnModel = nnModel            # (dir_path, stem) or None to auto-pick
+        self.nnPostProcess = nnPostProcess
+        self.nn_segmenter = None
+
         # Initialize detector classes
         self.bird_detector = bird_detector.BirdDetector(self.config, self.configdir)
         self.bat_detector = bat_detector.BatDetector()
 
     def process_files(self):
         """Main processing method. Returns 0 on success, 1 on error."""
-        filters = [self.FilterDicts[name] for name in self.species]
-        
-        samplerate = set([filt["SampleRate"] for filt in filters])
-        if len(samplerate) > 1:
-            print("Multiple sample rates required: ", samplerate)
-            print("Audio will be resampled as needed for each filter group")
 
-        speciesStr = " & ".join(self.species)
+        if self.nnMode:
+            # NN mode bypasses the wavelet filters: load the single model once
+            # (reused across all files) and skip filter/NNDict setup.
+            from src.core import nn_segmenter
 
-        self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
+            filters = []
+            self.NNDicts = {}
+
+            if self.nnModel is None:
+                models = nn_segmenter.discover_models()
+                if not models:
+                    print("No NN models found - cannot run NN batch processing")
+                    return 1
+                speciesStr, self.nnModel = models[0]
+                print(f"No model specified, using first found: {speciesStr}")
+            else:
+                speciesStr = f"{self.nnModel[1]} ({os.path.basename(self.nnModel[0])})"
+
+            model_dir, model_stem = self.nnModel
+            print(f"Loading NN model {model_stem} from {model_dir}")
+            self.nn_segmenter = nn_segmenter.NNSegmenter(model_dir, model_stem)
+        else:
+            filters = [self.FilterDicts[name] for name in self.species]
+
+            samplerate = set([filt["SampleRate"] for filt in filters])
+            if len(samplerate) > 1:
+                print("Multiple sample rates required: ", samplerate)
+                print("Audio will be resampled as needed for each filter group")
+
+            speciesStr = " & ".join(self.species)
+
+            self.NNDicts = self.ConfigLoader.getNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
         allsoundfiles = self.get_files_to_process()
         total = len(allsoundfiles)
@@ -305,7 +336,9 @@ class BatchProcessor:
         if self.testmode:
             self.segments_nonn = annotation.SegmentList()
 
-        if self.options['intermittent']:
+        if self.nnMode:
+            self.detectNN()
+        elif self.options['intermittent']:
             self.addRegularSegments(filename, self.options['protocolSize'], self.options['protocolInterval'])
         else:
             self.detectFile(filters)
@@ -351,6 +384,33 @@ class BatchProcessor:
                 segments_nonn=segments_nonn,
                 check_cancelled=self.callbacks.check_cancelled
             )
+
+    def detectNN(self):
+        """Run the NN model over the loaded file and add detections to self.segments.
+
+        Whole-file audio is fed to the segmenter, which processes it clip-by-clip
+        internally (so no manual paging is needed). Detection times are relative to
+        the start of the file, which is already the absolute time axis in batch mode.
+        """
+        audio = self.sp.audio_data.data
+        if audio is None:
+            print("No audio data available for NN detection, skipping")
+            return
+
+        results = self.nn_segmenter.run(
+            audio,
+            self.sp.audio_data.sample_rate,
+            do_post_process=self.nnPostProcess,
+            maxgap=self.options['maxgap'],
+            minlen=self.options['minlen'],
+            progress_cb=None)
+
+        for r in results:
+            seg = annotation.Segment(
+                start_time=r["start"], end_time=r["end"],
+                freq_low=r["freq_low"], freq_high=r["freq_high"],
+                labels=r["labels"])
+            self.segments.addSegment(seg)
 
     def loadFile(self, filename, bats=False, anysound=False, impMask=False):
         """Load audio file and prepare for processing."""

@@ -105,15 +105,18 @@ class BatchInterface(QMainWindow):
         self.process.setExclusive(True)
         self.usefilters = QRadioButton("Specify filters")
         self.process.addButton(self.usefilters)
-        self.usefilters.setChecked(True)
         #self.anysound = QRadioButton("Any sound")
         #self.process.addButton(self.anysound)
         self.batfilter = QRadioButton("NZ Bats")
         self.process.addButton(self.batfilter)
+        self.useNN = QRadioButton("Use NN")
+        self.useNN.setChecked(True)
+        self.process.addButton(self.useNN)
         #self.anysound.clicked.connect(self.useFilters)
         self.batfilter.clicked.connect(self.useFilters)
         self.usefilters.clicked.connect(self.useFilters)
-        self.hasFilters = False
+        self.useNN.clicked.connect(self.useFilters)
+        self.hasFilters = True
         self.hasFiles = False
 
         self.w_speLabel1 = QLabel("Select one or more recognisers to use:")
@@ -125,6 +128,19 @@ class BatchInterface(QMainWindow):
         self.w_spe1.addItems(spp)
         self.w_spe1.addItem("Any sound")
         self.w_spe1.itemClicked.connect(self.countFilters)
+
+        # NN model selection (shown only in "Use NN" mode)
+        from src.core import nn_segmenter
+        self.w_nnModelLabel = QLabel("Select NN model to use:")
+        self.w_nnModel = QComboBox()
+        self.nnModels = nn_segmenter.discover_models()  # (display_name, (dir, stem))
+        if self.nnModels:
+            for display_name, data in self.nnModels:
+                self.w_nnModel.addItem(display_name, data)
+        else:
+            self.w_nnModel.addItem("No models found")
+        self.nnPostProcess = QCheckBox("Enable post-processing (merge/filter segments)")
+        self.nnPostProcess.setChecked(True)
 
         self.subset = QCheckBox("Process all recordings") 
         self.subset.clicked.connect(self.showTime)
@@ -207,9 +223,13 @@ class BatchInterface(QMainWindow):
         self.buttonSp.addWidget(self.usefilters)
         #self.buttonSp.addWidget(self.anysound)
         self.buttonSp.addWidget(self.batfilter)
+        self.buttonSp.addWidget(self.useNN)
         self.formSp.addLayout(self.buttonSp)
         self.formSp.addWidget(self.w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
+        self.formSp.addWidget(self.w_nnModelLabel)
+        self.formSp.addWidget(self.w_nnModel)
+        self.formSp.addWidget(self.nnPostProcess)
         self.boxSp.setLayout(self.formSp)
         self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=4)
 
@@ -288,6 +308,8 @@ class BatchInterface(QMainWindow):
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
         #self.fillSpeciesBoxes()  # update the boxes to match the initial position
+        # Set initial widget visibility to match the default (Use NN) mode
+        self.useFilters()
         self.show()
 
     def createMenu(self):
@@ -341,12 +363,21 @@ class BatchInterface(QMainWindow):
         #           self.exportToDOCDB()
         #      Is that what we want? I figured it would just be doing the detection. 
 
+        self.w_processButton.setEnabled(False)
+
+        nnModel = None
         if self.batfilter.isChecked():
             species = "NZ Bats_NP"
-            self.w_processButton.setEnabled(True)
+        elif self.useNN.isChecked():
+            species = "NN"
+            nnModel = self.w_nnModel.currentData()
+            if nnModel is None:
+                msg = MessagePopup("w", "No Models", "No NN models available to run!")
+                msg.exec()
+                self.w_processButton.setEnabled(True)
+                return(1)
         else:
             selected = self.w_spe1.selectedItems()
-            self.w_processButton.setEnabled(False)
             species = []
             for s in selected:
                 species.append(s.text())
@@ -369,11 +400,13 @@ class BatchInterface(QMainWindow):
             overwriteAll=self.overwriteAll.isChecked(),
             timeWindow_s=timeWindow_s, 
             timeWindow_e=timeWindow_e, 
-            protocolSize=self.protocolSize.value(), 
-            protocolInterval=self.protocolInterval.value(), 
-            maxgap=self.maxgap.value(), 
-            minlen=self.minlen.value(), 
-            maxlen=self.maxlen.value()
+            protocolSize=self.protocolSize.value(),
+            protocolInterval=self.protocolInterval.value(),
+            maxgap=self.maxgap.value(),
+            minlen=self.minlen.value(),
+            maxlen=self.maxlen.value(),
+            nnModel=nnModel,
+            nnPostProcess=self.nnPostProcess.isChecked()
         )
 
         # Set up threading
@@ -536,11 +569,16 @@ class BatchInterface(QMainWindow):
 
     def useFilters(self):
         """Enable or disable selection of filters"""
+        # NN model picker is only relevant in "Use NN" mode
+        useNN = self.useNN.isChecked()
+        self.w_nnModelLabel.setVisible(useNN)
+        self.w_nnModel.setVisible(useNN)
+        self.nnPostProcess.setVisible(useNN)
+
         if self.usefilters.isChecked():
             self.w_speLabel1.setStyleSheet("color: black")
             self.w_spe1.setEnabled(True)
         else:
-            # Bats 
             self.w_speLabel1.setStyleSheet("color: gray")
             for i in range(self.w_spe1.count()):
                 it = self.w_spe1.item(i)
@@ -550,7 +588,7 @@ class BatchInterface(QMainWindow):
 
     def countFilters(self):
         """ Update process message and buttons based on whether filters and files are selected"""
-        if len(self.w_spe1.selectedItems()) > 0 or self.batfilter.isChecked(): # or self.anysound.isChecked():
+        if len(self.w_spe1.selectedItems()) > 0 or self.batfilter.isChecked() or self.useNN.isChecked():
             self.hasFilters = True
         else:
             self.hasFilters = False

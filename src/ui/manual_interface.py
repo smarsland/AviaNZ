@@ -5042,6 +5042,18 @@ class ManualInterface(QMainWindow):
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
         self.segmentDialog.activate.clicked.connect(self.segment)
 
+    def _getNNSegmenter(self, model_dir, model_stem):
+        """ Return an NNSegmenter for the given model, loading it once and caching
+            it so repeated segmentations don't reload the (expensive) model.
+        """
+        from src.core import nn_segmenter
+        key = (model_dir, model_stem)
+        if getattr(self, '_nnSegmenterCache', None) is None:
+            self._nnSegmenterCache = {}
+        if key not in self._nnSegmenterCache:
+            self._nnSegmenterCache[key] = nn_segmenter.NNSegmenter(model_dir, model_stem)
+        return self._nnSegmenterCache[key]
+
     def segment(self):
         """ Listener for the segmentation dialog. Calls the relevant segmenter.
         """
@@ -5219,17 +5231,9 @@ class ManualInterface(QMainWindow):
                 else:
                     newSegments = self.findMatches(float(str(settings["CCThr1"])))
             elif alg == 'NN_Model':
-                import json
-                import os
-                import torch
-                from src.models import model_loader, inference
-                
+                from src.core import nn_segmenter
+
                 model_data = settings.get("nnModelFile")
-                # Default gate used only as a fallback: when a model ships per-class
-                # thresholds (thresholds_combined.csv) those override this entirely
-                # for multilabel models. It still applies to single-label models and
-                # to any model without a threshold table.
-                min_confidence = 0.5
 
                 if filtname == "No models found" or not model_data:
                     msg = MessagePopup("w", "No Models", "No models available!")
@@ -5242,219 +5246,28 @@ class ManualInterface(QMainWindow):
                 else:
                     model_dir, model_stem = 'Models', model_data
 
-                config_path = os.path.join(model_dir, f'{model_stem}_config.json')
-                if not os.path.exists(config_path):
-                    msg = MessagePopup("w", "Config Missing", f"Config not found: {config_path}")
+                def _nn_status(message):
+                    self.statusLeft.setText(message)
+                    QApplication.processEvents()
+
+                try:
+                    segmenter = self._getNNSegmenter(model_dir, model_stem)
+                except FileNotFoundError as e:
+                    msg = MessagePopup("w", "Config Missing", str(e))
                     msg.exec()
                     return
 
-                with open(config_path, 'r') as f:
-                    model_config = json.load(f)
-
-                # Load per-class thresholds if available (overrides uniform min_confidence)
-                import pandas as pd
-                per_class_thresholds = None
-                thresh_path = os.path.join(model_dir, 'thresholds_combined.csv')
-                if os.path.exists(thresh_path):
-                    thresh_df = pd.read_csv(thresh_path)
-                    per_class_thresholds = dict(zip(thresh_df['class'], thresh_df['threshold'].astype(float)))
-                    print(f"Loaded per-class thresholds from {thresh_path}")
-
-                model = model_loader.loadModel(model_stem, model_dir)
-                model.eval()
-                
-                model_sample_rate = model_config.get('sample_rate', 32000)
-                current_sample_rate = self.sp.audio_data.sample_rate
-                
-                # Resample audio if needed (without modifying original)
-                if current_sample_rate != model_sample_rate:
-                    self.statusLeft.setText(f'Resampling audio from {current_sample_rate} Hz to {model_sample_rate} Hz...')
-                    QApplication.processEvents()
-                    
-                    import src.core.spectrogram as spectrogram
-                    import src.core.audio_data as audio_data
-                    temp_sp = spectrogram.Spectrogram(self.sp.window_width, self.sp.incr)
-                    temp_sp.audio_data = audio_data.AudioData(
-                        data=self.sp.audio_data.data.copy(),
-                        sample_rate=current_sample_rate,
-                        sample_format='float32',
-                        sample_size=32,
-                        channels=1
-                    )
-                    temp_sp.resample(model_sample_rate)
-                    audio_for_inference = temp_sp.audio_data.data
-                    inference_sr = model_sample_rate
-                else:
-                    audio_for_inference = self.sp.audio_data.data
-                    inference_sr = current_sample_rate
-
-                # RMS-normalise the audio exactly as the training pipeline does
-                rms = np.sqrt(np.mean(audio_for_inference**2))
-                if rms > 1e-8:
-                    audio_for_inference = audio_for_inference / rms * 0.1
-
-                spec_params = model_config.get('spectrogram_params', {})
-                current_params = {
-                    'windowType': self.config['windowType'],
-                    'sgType': self.config['sgType'],
-                    'sgScale': self.config['sgScale'],
-                    'mean_normalise': self.config['sgMeanNormalise'],
-                    'equal_loudness': self.config['sgEqualLoudness'],
-                    'nfilters': self.config['nfilters']
-                }
-                
-                needs_recompute = False
-                for key, value in spec_params.items():
-                    if key in current_params and current_params[key] != value:
-                        needs_recompute = True
-                        break
-                
-                window_seconds = model_config.get('window_seconds', 0.025)
-                hop_seconds = model_config.get('hop_seconds', 0.01)
-                
-                window_width = int(window_seconds * inference_sr)
-                incr = int(hop_seconds * inference_sr)
-                
-                self.statusLeft.setText('Running NN inference...')
-                QApplication.processEvents()
-
-                import src.core.spectrogram as spectrogram
-                import src.core.audio_data as audio_data
-                from model_testing.src.data.normalizer import normalize_spectrogram
-                import torch.nn.functional as F
-
-                time_bins = model_config.get('time_bins', 400)
-                freq_bins = model_config.get('freq_bins', 128)
-                spec_transform = model_config.get('spec_transform', 'Log')
-                bg_subtract = model_config.get('bg_subtract', False)
-                median_filter = model_config.get('median_filter', False)
-                multilabel = model_config.get('multilabel', False)
-                class_names = model_config.get('class_names', [])
-                LOG_OFFSET = 1e-7
-
-                # Process the file one CLIP at a time
-                clip_hop_samples = time_bins * incr
-                clip_len_samples = (time_bins - 1) * incr + window_width
-                n_audio = len(audio_for_inference)
-                n_clips = max(1, int(np.ceil(max(1, n_audio - window_width + 1) / clip_hop_samples)))
-
-                # Store detections in a consistent format regardless of multilabel/single label
-                raw_detections = []  # Each entry: [start_time, end_time, class_idx, certainty]
-
-                for k in range(n_clips):
-                    s0 = k * clip_hop_samples
-                    clip = audio_for_inference[s0:s0 + clip_len_samples]
-                    if len(clip) <= window_width:
-                        break
-
-                    clip_sp = spectrogram.Spectrogram(window_width, incr)
-                    clip_sp.audio_data = audio_data.AudioData(
-                        data=clip, sample_rate=inference_sr,
-                        sample_format='float32', sample_size=32, channels=1)
-                    clip_sp.spectrogram(
-                        window_width=window_width, incr=incr,
-                        window=spec_params.get('windowType', 'Hann'),
-                        sgType=spec_params.get('sgType', 'Standard'),
-                        sgScale=spec_params.get('sgScale', 'Linear'),
-                        nfilters=spec_params.get('nfilters', 128),
-                        mean_normalise=spec_params.get('mean_normalise', True),
-                        equal_loudness=spec_params.get('equal_loudness', False),
-                        onesided=True)
-
-                    # (time, freq) -> (freq, time), row 0 = highest frequency
-                    raw = np.rot90(clip_sp.sg).copy()
-                    fb = min(freq_bins, raw.shape[0])
-                    actual_frames = min(raw.shape[1], time_bins)
-
-                    # Match training preprocessing
-                    if spec_transform == 'Log':
-                        proc = np.log(np.maximum(raw[:fb], 0.0) + LOG_OFFSET)
-                    elif spec_transform in ('None', None):
-                        proc = np.asarray(raw[:fb], dtype=np.float32)
-                    else:
-                        print(f"Warning: spec_transform '{spec_transform}' not implemented for inference, using Log")
-                        proc = np.log(np.maximum(raw[:fb], 0.0) + LOG_OFFSET)
-
-                    if bg_subtract or median_filter:
-                        proc = normalize_spectrogram(
-                            proc, median_filter=median_filter, bg_subtract=bg_subtract)
-
-                    # Zero-pad the time axis
-                    segment = np.zeros((fb, time_bins), dtype=np.float32)
-                    segment[:, :actual_frames] = proc[:, :actual_frames]
-                    segment = segment.reshape(1, fb, time_bins, 1)
-
-                    logits = inference.predict_batch(model, segment)[0]
-                    pred_tensor = torch.from_numpy(logits)
-
-                    start_time = s0 / inference_sr
-                    end_time = (s0 + actual_frames * incr) / inference_sr
-
-                    # Handle both multilabel and single label predictions consistently
-                    if multilabel:
-                        probs = torch.sigmoid(pred_tensor).numpy()
-                        # For multilabel, each class can be detected independently
-                        for class_idx, prob in enumerate(probs):
-                            prob = float(np.clip(prob, 0.0, 1.0))
-                            if per_class_thresholds is not None:
-                                cname = class_names[class_idx] if class_idx < len(class_names) else None
-                                thr = per_class_thresholds.get(cname, 1.0)
-                            else:
-                                thr = min_confidence
-                            if prob >= thr:
-                                raw_detections.append([start_time, end_time, class_idx, prob])
-                    else:
-                        # Single label: only the most probable class
-                        probs = F.softmax(pred_tensor, dim=0).numpy()
-                        max_idx = int(np.argmax(probs))
-                        max_prob = float(np.clip(probs[max_idx], 0.0, 1.0))
-                        if max_prob >= min_confidence:
-                            raw_detections.append([start_time, end_time, max_idx, max_prob])
-
-                    self.statusLeft.setText(f'Running NN inference... clip {k+1}/{n_clips}')
-                    QApplication.processEvents()
-
-                # Build multilabel segments, one per detection window.
-                #
-                # Detections from the same window share a (start, end); we collect
-                # every species that fired in that window into a single multilabel
-                # segment ({class_idx: certainty}). This is the raw output when
-                # post-processing is off.
-                do_pp = settings.get("nnPostProcess", True)
-
-                window_labels = {}  # (start, end) -> {class_idx: max certainty}
-                for start_time, end_time, class_idx, certainty in raw_detections:
-                    labels = window_labels.setdefault((start_time, end_time), {})
-                    if class_idx not in labels or certainty > labels[class_idx]:
-                        labels[class_idx] = certainty
-
-                newSegments = [[list(win), labels] for win, labels in window_labels.items()]
-                newSegments.sort(key=lambda seg: seg[0][0])
-
-                # Post-processing: merge windows that overlap or sit within maxgap of
-                # each other, unioning their species labels (max certainty per class),
-                # then drop anything shorter than minlen.
-                if do_pp and newSegments:
-                    maxgap = settings["maxgap"]
-                    minlen = settings["minlen"]
-
-                    merged = [newSegments[0]]
-                    for seg in newSegments[1:]:
-                        (cur_start, cur_end), cur_labels = merged[-1]
-                        (seg_start, seg_end), seg_labels = seg
-                        if seg_start <= cur_end + maxgap + 0.01:
-                            merged[-1][0][1] = max(cur_end, seg_end)
-                            for cls, cert in seg_labels.items():
-                                if cls not in cur_labels or cert > cur_labels[cls]:
-                                    cur_labels[cls] = cert
-                        else:
-                            merged.append(seg)
-
-                    newSegments = [seg for seg in merged if (seg[0][1] - seg[0][0]) >= minlen]
-
-                print(f'NN produced {len(newSegments)} multilabel segments from '
-                      f'{len(raw_detections)} raw detections '
-                      f'(post-processing {"on" if do_pp else "off"})')
+                _nn_status('Running NN inference...')
+                # nn_segments times are relative to the start of the loaded audio
+                # (self.startRead is added below when creating the segments).
+                nn_segments = segmenter.run(
+                    self.sp.audio_data.data,
+                    self.sp.audio_data.sample_rate,
+                    do_post_process=settings.get("nnPostProcess", True),
+                    maxgap=settings["maxgap"],
+                    minlen=settings["minlen"],
+                    progress_cb=_nn_status)
+                newSegments = nn_segments
             else:
                 # Other algorithms (Default, Median Clipping, etc.)
                 print(f'Segments detected: {len(newSegments)}')
@@ -5499,43 +5312,20 @@ class ManualInterface(QMainWindow):
                                 [{"species": filtspecies, "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             elif alg == 'NN_Model':
-                y1 = 0
-                y2 = inference_sr // 2
-
-                for seg in newSegments:
-                    start_time = seg[0][0]
-                    end_time = seg[0][1]
-
-                    label_list = []
-
-                    # seg[1] is a dictionary mapping class_idx -> certainty.
-                    # Model certainties are probabilities in [0, 1]; AviaNZ stores
-                    # certainty on a 0-100 scale, so convert here.
-                    for class_idx, certainty in seg[1].items():
-                        if class_names and 0 <= class_idx < len(class_names):
-                            species_label = class_names[class_idx]
-                        else:
-                            species_label = f"Class_{class_idx}"
-
-                        label_list.append({
-                            "species": species_label,
-                            "certainty": round(float(certainty) * 100, 1)
-                        })
-
-                    # Only add segment if it has at least one label
-                    if label_list:
-                        self.addSegment(
-                            start_time + self.startRead,
-                            end_time + self.startRead,
-                            y1,
-                            y2,
-                            label_list,
-                            index=-1,
-                            coordsAbsolute=True
-                        )
-                        self.segmentsToSave = True
-                    else:
-                        print(f"Warning: segment at {start_time}-{end_time} has no labels, skipping")
+                # nn_segments already carry species labels, 0-100 certainties, and
+                # freq bounds (see nn_segmenter). Times are relative to the loaded
+                # audio, so add self.startRead to place them on the absolute axis.
+                for seg in nn_segments:
+                    self.addSegment(
+                        seg["start"] + self.startRead,
+                        seg["end"] + self.startRead,
+                        seg["freq_low"],
+                        seg["freq_high"],
+                        seg["labels"],
+                        index=-1,
+                        coordsAbsolute=True
+                    )
+                    self.segmentsToSave = True
             else:
                 for seg in newSegments:
                     if isinstance(seg[0], (list, tuple)):
