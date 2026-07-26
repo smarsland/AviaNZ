@@ -1417,13 +1417,56 @@ class Trainer:
         print(f"\n--eval-only: results saved to {eval_out}")
         return {}
 
+    def _dataset_spectrogram_config(self):
+        """Return the spectrogram settings recorded in the training dataset's
+        labels.json, as a dict ready to merge into the saved model config.
+
+        The dataset builders write SpectrogramProcessor.get_metadata() into
+        labels.json under 'spectrogram_config'.  Returns {} for older datasets
+        that predate that, in which case config.py's defaults stand and the
+        caller is warned.
+        """
+        labels_path = os.path.join(self.data_folder, 'labels.json')
+        try:
+            with open(labels_path) as f:
+                meta = json.load(f).get('spectrogram_config')
+        except (OSError, ValueError) as e:
+            print(f"WARNING: could not read {labels_path} ({e}); model config will "
+                  f"use config.py spectrogram defaults, which may not match the data.")
+            return {}
+
+        if not meta:
+            print(f"WARNING: {labels_path} has no 'spectrogram_config' (dataset built "
+                  f"before that was recorded). Falling back to config.py defaults "
+                  f"(sgType={config.SPECTROGRAM_PARAMS['sgType']}) — verify this matches "
+                  f"how the data was actually built before deploying the model.")
+            return {}
+
+        out = {}
+        for key in ('sample_rate', 'window_seconds', 'hop_seconds',
+                    'freq_bins', 'spectrogram_params'):
+            if key in meta:
+                out[key] = meta[key]
+        print(f"Model config: spectrogram settings taken from the dataset "
+              f"(sgType={out.get('spectrogram_params', {}).get('sgType', '?')}, "
+              f"sgScale={out.get('spectrogram_params', {}).get('sgScale', '?')})")
+        return out
+
     def _save_model(self, model, best=False):
         filename = f'{self.model_type}_model_best.pt' if best else f'{self.model_type}_model.pt'
         torch.save(model.state_dict(), os.path.join(self.output_folder, filename))
         
         # Always save configuration for model deployment
         model_config = config.get_model_config()
-        
+
+        # Override the spectrogram settings with the ones the DATA was actually
+        # built with. config.get_model_config() returns config.py's static
+        # defaults (notably sgType='Reassigned'), which silently disagree with
+        # any dataset built with a different --spec-type. Inference reads this
+        # file to reproduce the training spectrogram, so a stale sgType here
+        # makes the deployed model score real calls against the wrong transform.
+        model_config.update(self._dataset_spectrogram_config())
+
         # Override with actual dimensions used during training
         model_config['freq_bins'] = self.img_height
         model_config['time_bins'] = self.img_width

@@ -208,6 +208,7 @@ def build_avianz_large(
     fixed_length=True, target_time_bins=None,
     with_audio=True,
     sg_type=None, window_type=None, sg_scale=None,
+    label_remap=None, exclude_source_files=None,
 ):
     """
     Scan AviaNZ annotation files and extract up to max_per_species spectrograms
@@ -218,6 +219,16 @@ def build_avianz_large(
       Phase 2 – for each species independently sample up to max_per_species
                  segment keys; take the union of selected keys.
       Phase 3 – process and save each unique segment exactly once.
+
+    Args:
+        label_remap: Optional dict mapping normalised label → new label.  MUST be
+            the same dict passed to build_doc_large, otherwise the two sources
+            contribute different names for the same species and the combined
+            dataset ends up with duplicate heads (e.g. 'bellbird' alongside
+            'tui/bellbird'), splitting the training signal.
+        exclude_source_files: Optional set of realpath'd wav paths to skip
+            entirely.  Used to keep the matched AviaNZ *test* files out of the
+            combined training pool.
 
     Returns list of label dicts compatible with labels.json.
     """
@@ -252,6 +263,20 @@ def build_avianz_large(
         wav_files.extend(proc.find_wav_files(raw_dir))
     print(f'AviaNZ: scanning {len(wav_files)} wav files across {len(avianz_raw_list)} source folder(s) ...')
 
+    # Drop held-out test recordings before any work is done on them.
+    if exclude_source_files:
+        before = len(wav_files)
+        wav_files = [w for w in wav_files
+                     if os.path.realpath(w) not in exclude_source_files]
+        n_excluded = before - len(wav_files)
+        print(f'AviaNZ: excluded {n_excluded} / {before} wav files '
+              f'({len(exclude_source_files)} paths in the exclusion list)')
+        if n_excluded == 0:
+            print('  WARNING: the exclusion list matched NOTHING. Held-out test '
+                  'recordings are probably still in the training pool. Check that '
+                  'the paths in the exclusion list resolve to the same locations '
+                  'as the --avianz-raw scan roots.')
+
     for wav_file in wav_files:
         data_file = wav_file + '.data'
         if not os.path.exists(data_file):
@@ -279,6 +304,10 @@ def build_avianz_large(
                 common = ebird_to_common.get(norm_key(code))
                 if common:
                     lbl = norm_key(common)
+                    # Same remap as build_doc_large, so both sources agree on
+                    # the class vocabulary (see docstring).
+                    if label_remap:
+                        lbl = label_remap.get(lbl, lbl)
                     if lbl not in common_labels:
                         common_labels.append(lbl)
 
@@ -356,6 +385,38 @@ def build_avianz_large(
     print(f'\nAviaNZ large: total {len(labels)} samples '
           f'(failed={failed}, trimmed={trimmed})')
     return labels
+
+
+# ---------------------------------------------------------------------------
+# Held-out recording exclusion
+# ---------------------------------------------------------------------------
+
+def load_exclusion_list(paths):
+    """Read one or more exclusion lists and return a set of realpath'd wav paths.
+
+    Each path may be either a dataset labels.json (the 'source_file' of every
+    entry is collected) or a plain text file with one wav path per line.
+    Returns an empty set when *paths* is falsy.
+    """
+    if not paths:
+        return set()
+
+    excluded = set()
+    for p in paths:
+        if not os.path.exists(p):
+            raise FileNotFoundError(f'--exclude-source-files: not found: {p}')
+        if p.endswith('.json'):
+            with open(p) as f:
+                payload = json.load(f)
+            entries = payload['files'] if isinstance(payload, dict) else payload
+            found = {e['source_file'] for e in entries if e.get('source_file')}
+        else:
+            with open(p) as f:
+                found = {line.strip() for line in f if line.strip()}
+        print(f'  exclusion list {p}: {len(found)} unique source recordings')
+        excluded.update(os.path.realpath(x) for x in found)
+
+    return excluded
 
 
 # ---------------------------------------------------------------------------
@@ -570,7 +631,13 @@ def main():
                              'Use with --doc-only to restrict to a fixed class vocabulary.')
     parser.add_argument('--label-remap', default=None,
                         help='Comma-separated old:new pairs to rename/merge labels before filtering. '
-                             'e.g. "tui:tui/bellbird,bellbird:tui/bellbird,new zealand kaka:kaka"')
+                             'e.g. "tui:tui/bellbird,bellbird:tui/bellbird,new zealand kaka:kaka". '
+                             'Applied to BOTH the DOC and AviaNZ sources.')
+    parser.add_argument('--exclude-source-files', default=None, action='append',
+                        help='Path to a labels.json (or a plain text file of wav paths) whose '
+                             'source recordings must be kept OUT of the AviaNZ build. Repeat to '
+                             'pass several. Point this at matched/avianz_split/test/labels.json '
+                             'so the held-out test recordings never enter the training pool.')
     parser.add_argument('--output', required=True,
                         help='Output base directory')
     parser.add_argument('--mapping', default='data/DOC_bird_naming_map.csv',
@@ -644,6 +711,11 @@ def main():
             label_remap[old.strip()] = new.strip()
         print(f'  Label remap    : {label_remap}')
 
+    exclude_source_files = load_exclusion_list(args.exclude_source_files)
+    if exclude_source_files:
+        print(f'  Exclude wavs   : {len(exclude_source_files)} recordings '
+              f'from {len(args.exclude_source_files)} list(s)')
+
     print('=' * 70)
     print(' Build large unmatched datasets')
     print('=' * 70)
@@ -688,6 +760,8 @@ def main():
                 sg_type=args.spec_type,
                 window_type=args.window_type,
                 sg_scale=args.sg_scale,
+                label_remap=label_remap,
+                exclude_source_files=exclude_source_files,
             )
         else:
             print('\n=== AviaNZ-only: dataset already exists, loading ===')
@@ -778,6 +852,8 @@ def main():
             sg_type=args.spec_type,
             window_type=args.window_type,
             sg_scale=args.sg_scale,
+            label_remap=label_remap,
+            exclude_source_files=exclude_source_files,
         )
         # Write labels.json immediately so it is never missing if a later step
         # is interrupted.

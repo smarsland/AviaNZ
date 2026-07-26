@@ -18,37 +18,43 @@ import numpy as np
 import pandas as pd
 
 
-def compute_combined_thresholds(model_dir: Path) -> pd.DataFrame:
-    # Prefer predictions_val.csv (covers all training classes with ground truth)
-    # over the matched test-split CSVs (only 9 classes have ground truth there).
-    val_file = model_dir / "predictions_val.csv"
-    if val_file.exists():
-        pred_files = [val_file]
-        print(f"Using validation predictions (all classes): {val_file.name}")
-    else:
-        pred_files = sorted(model_dir.glob("predictions_*.csv"))
-        print(f"No predictions_val.csv found — using test split CSVs ({len(pred_files)} files).")
-        print(f"  Note: only the 9 matched test species will be tuned; the rest")
-        print(f"  default to 0.5.  Re-run training/eval to generate predictions_val.csv.")
-    if not pred_files:
-        raise FileNotFoundError(f"No predictions_*.csv found in {model_dir}")
-
-    # ── 1. Load all prediction CSVs ──────────────────────────────────────────
-    all_probs = []   # list of DataFrames (one row = one sample, columns = class names)
-    all_trues = []   # list of DataFrames (one row = one sample, columns = class names)
-
-    for path in pred_files:
+def _load_prediction_frames(prediction_csvs):
+    all_probs = []
+    all_trues = []
+    for path in prediction_csvs:
         df = pd.read_csv(path, index_col="filename")
-        pred_cols  = [c for c in df.columns if not c.startswith("true_")]
-        true_cols  = [c for c in df.columns if c.startswith("true_")]
+        pred_cols = [c for c in df.columns if not c.startswith("true_")]
+        true_cols = [c for c in df.columns if c.startswith("true_")]
 
         probs_df = df[pred_cols].copy()
         trues_df = df[true_cols].copy()
-        # Strip the "true_" prefix so columns can be aligned with pred columns
-        trues_df.columns = [c[len("true_"):] for c in trues_df.columns]
+        trues_df.columns = [c[len("true_"): ] for c in trues_df.columns]
 
         all_probs.append(probs_df)
         all_trues.append(trues_df)
+    return all_probs, all_trues
+
+
+def compute_combined_thresholds(model_dir: Path, prediction_csvs=None) -> pd.DataFrame:
+    if prediction_csvs is None:
+        # Prefer predictions_val.csv (covers all training classes with ground truth)
+        # over the matched test-split CSVs (only 9 classes have ground truth there).
+        val_file = model_dir / "predictions_val.csv"
+        if val_file.exists():
+            prediction_csvs = [val_file]
+            print(f"Using validation predictions (all classes): {val_file.name}")
+        else:
+            prediction_csvs = sorted(model_dir.glob("predictions_*.csv"))
+            print(f"No predictions_val.csv found — using test split CSVs ({len(prediction_csvs)} files).")
+            print(f"  Note: only the 9 matched test species will be tuned; the rest")
+            print(f"  default to 0.5.  Re-run training/eval to generate predictions_val.csv.")
+    if not prediction_csvs:
+        raise FileNotFoundError(f"No predictions_*.csv found in {model_dir}")
+
+    prediction_csvs = [Path(p) for p in prediction_csvs]
+
+    # ── 1. Load all prediction CSVs ──────────────────────────────────────────
+    all_probs, all_trues = _load_prediction_frames(prediction_csvs)
 
     # ── 2. Collect the union of all class names ───────────────────────────────
     all_class_names = []
@@ -128,29 +134,61 @@ def compute_combined_thresholds(model_dir: Path) -> pd.DataFrame:
     return result
 
 
+def apply_thresholds_to_csv(csv_path: Path, thresholds_df: pd.DataFrame, out_path: Path = None):
+    csv_path = Path(csv_path)
+    thresholds_df = thresholds_df.copy()
+    thresholds_df = thresholds_df.reset_index(drop=True)
+    if out_path is None:
+        out_path = csv_path.with_name(csv_path.stem + "_thresholded.csv")
+    else:
+        out_path = Path(out_path)
+
+    df = pd.read_csv(csv_path, index_col="filename")
+    pred_cols = [c for c in df.columns if not c.startswith("true_")]
+    out_df = df.copy()
+
+    for _, row in thresholds_df.iterrows():
+        class_name = row['class']
+        if class_name in out_df.columns:
+            out_df[class_name] = (out_df[class_name] >= row['threshold']).astype(int)
+
+    out_df.to_csv(out_path, index=True)
+    print(f"Saved thresholded predictions → {out_path}")
+    return out_path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model_dir", nargs="?",
                         default="model_testing/regnet_combined_bgsubtract_seed0",
                         help="Directory containing predictions_*.csv and model config")
+    parser.add_argument("--prediction-csv", dest="prediction_csvs", action="append", default=[],
+                        help="Optional CSV file(s) to use for threshold tuning. Defaults to predictions_val.csv in the model dir, or all predictions_*.csv files if no validation file exists.")
+    parser.add_argument("--apply-to", type=str, default=None,
+                        help="Optional prediction CSV to threshold using the computed thresholds")
+    parser.add_argument("--apply-out", type=str, default=None,
+                        help="Output path for the thresholded CSV. Defaults to <input>_thresholded.csv")
     args = parser.parse_args()
 
     model_dir = Path(args.model_dir)
     if not model_dir.exists():
         raise SystemExit(f"Directory not found: {model_dir}")
 
+    prediction_csvs = args.prediction_csvs or None
     print(f"Computing combined thresholds from: {model_dir}")
-    thresholds_df = compute_combined_thresholds(model_dir)
+    thresholds_df = compute_combined_thresholds(model_dir, prediction_csvs=prediction_csvs)
 
     out_path = model_dir / "thresholds_combined.csv"
     thresholds_df.to_csv(out_path, index=False, float_format="%.4f")
     print(f"\nSaved {len(thresholds_df)} thresholds → {out_path}")
 
+    if args.apply_to:
+        apply_thresholds_to_csv(args.apply_to, thresholds_df, out_path=args.apply_out)
+
     # Summary
-    labelled = thresholds_df[thresholds_df["threshold"] < 1.0]
     tuned = thresholds_df[(thresholds_df["threshold"] != 0.5)]
-    print(f"  Classes with tuned thresholds (appeared in test sets): {len(tuned)}")
-    print(f"  Classes using default 0.5 threshold (no test data):    "
+    print(f"  Classes with tuned thresholds (appeared in validation data): {len(tuned)}")
+    print(f"  Classes using default 0.5 threshold (no validation data):    "
           f"{len(thresholds_df) - len(tuned)}")
 
 

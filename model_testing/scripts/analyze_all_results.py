@@ -426,10 +426,21 @@ def _read_adaptive_from_dir(exp_dir: Path, row: dict, pred_remap: dict = None):
     Precision, recall, f1 and jaccard are all computed only over the classes
     that actually appear in the test set ground truth.
     """
-    csvs = sorted(exp_dir.glob('predictions_*.csv'))
+    # predictions_val.csv is the trainer's internal 80/20 validation split, not a
+    # test set. It must be excluded: it would occupy a test1/test2 slot, and
+    # (because it sorts last but still counts) it used to push len(csvs) to 3,
+    # which silently skipped the cross-threshold block below and left every
+    # *_cross_* metric NaN — blanking the "other split's thresholds" panel of the
+    # summary figure and the two ranked tables in print_model_comparison().
+    csvs = [p for p in sorted(exp_dir.glob('predictions_*.csv'))
+            if p.name != 'predictions_val.csv']
     if not csvs:
         return
     prefixes = ['test1', 'test2']
+    if len(csvs) > 2:
+        print(f'  WARNING: {exp_dir.name} has {len(csvs)} test prediction CSVs '
+              f'({[p.name for p in csvs]}); only the first two are used as '
+              f'test1/test2 and cross-threshold metrics are skipped.')
 
     # Single pass per CSV: compute self-tuned oracle thresholds.
     metrics_list = [_metrics_from_csv(csv_path, pred_remap=pred_remap) for csv_path in csvs]
