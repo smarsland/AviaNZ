@@ -11,6 +11,9 @@ set -e
 #   ./build_dataset.sh --background-n 500  # add 500 background samples (default: 1000)
 #   ./build_dataset.sh --no-background     # skip background samples entirely
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N=""
@@ -35,8 +38,8 @@ AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT_BASE="/local/scratch/freangi"
 
-REVIEWED_CSV="model_testing/data/doc_reviewed.csv"
-MAPPING="model_testing/data/DOC_bird_naming_map.csv"
+REVIEWED_CSV="$REPO_ROOT/model_testing/data/doc_reviewed.csv"
+MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 
 MATCHED_BASE="${OUTPUT_BASE}/matched"
 DOC_MATCHED="${MATCHED_BASE}/doc_matched"
@@ -69,7 +72,7 @@ STEP1_RAN=false
 if [ "$OVERWRITE" = true ] || [ ! -d "$DOC_MATCHED" ] || [ ! -f "$DOC_MATCHED/labels.json" ] || [ ! -d "$AVIANZ_MATCHED" ] || [ ! -f "$AVIANZ_MATCHED/labels.json" ]; then
     STEP1_RAN=true
     echo "=== Step 1: building matched datasets ==="
-    PYTHONPATH="$PWD" python3 model_testing/src/experiments/build_matched_datasets.py \
+    PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/build_matched_datasets.py" \
         --reviewed-csv "$REVIEWED_CSV" \
         --doc-raw      "$DOC_RAW" \
         --avianz-raw   "$AVIANZ_RAW" \
@@ -95,7 +98,7 @@ done
 if [ "$SPLIT_MISSING" = true ] || [ "$STEP1_RAN" = true ]; then
     echo ""
     echo "=== Step 2: splitting datasets ==="
-    PYTHONPATH="$PWD" python3 model_testing/src/experiments/split_matched_datasets.py \
+    PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/split_matched_datasets.py" \
         "$AVIANZ_MATCHED" \
         "$DOC_MATCHED" \
         "$MATCHED_BASE" \
@@ -104,7 +107,7 @@ if [ "$SPLIT_MISSING" = true ] || [ "$STEP1_RAN" = true ]; then
         --overwrite
     echo ""
     echo "=== Validating splits ==="
-    PYTHONPATH="$PWD" python3 model_testing/src/experiments/validate_splits.py \
+    PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/validate_splits.py" \
         "$AVIANZ_SPLIT_BASE/train" "$AVIANZ_SPLIT_BASE/test" \
         "$DOC_SPLIT_BASE/train"   "$DOC_SPLIT_BASE/test"
     STEP2_RAN=true
@@ -118,7 +121,7 @@ fi
 if [ "$OVERWRITE" = true ] || [ "$STEP2_RAN" = true ] || [ ! -d "$MERGED_TRAIN" ] || [ ! -f "$MERGED_TRAIN/labels.json" ]; then
     echo ""
     echo "=== Step 3: merging training datasets ==="
-    PYTHONPATH="$PWD" python3 model_testing/src/experiments/merge_datasets.py \
+    PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/merge_datasets.py" \
         "$DOC_SPLIT_BASE/train" \
         "$AVIANZ_SPLIT_BASE/train" \
         "$MERGED_TRAIN" \

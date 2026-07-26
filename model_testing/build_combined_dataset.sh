@@ -19,6 +19,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 BASE="/local/scratch/freangi"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 DRIVE1="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_01"
@@ -29,7 +32,7 @@ DRIVE3="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03"
 # Combined output lands at ${OUTPUT}/combined_large.
 OUTPUT="${BASE}/combined_dataset"
 MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
-MAPPING="model_testing/data/DOC_bird_naming_map.csv"
+MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 OVERWRITE_FLAG=""
 
 if [[ "${1:-}" == "--overwrite" ]]; then
@@ -62,7 +65,7 @@ echo "============================================================"
 
 mkdir -p "${OUTPUT}"
 
-PYTHONPATH=. python3 model_testing/src/experiments/build_large_datasets.py \
+PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/build_large_datasets.py" \
     --doc-raw        "${DOC_RAW}" \
     "${AVIANZ_ARGS[@]}" \
     --output         "${OUTPUT}" \
