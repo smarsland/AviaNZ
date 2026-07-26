@@ -5,7 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-BASE="/local/scratch/freangi"
+BASE="${AVIA_NZ_BASE:-$SCRIPT_DIR/output}"
+KAYTOO_ROOT="${KAYTOO_ROOT:-$REPO_ROOT/../Kaytoo}"
+DOC_RAW_DIR_OVERRIDE="${DOC_RAW_DIR:-}"
+AVIANZ_RAW_DIR_OVERRIDE="${AVIANZ_RAW_DIR:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base) BASE="$2"; shift 2 ;;
+    --doc-raw) DOC_RAW_DIR_OVERRIDE="$2"; shift 2 ;;
+    --avianz-raw) AVIANZ_RAW_DIR_OVERRIDE="$2"; shift 2 ;;
+    --kaytoo-root) KAYTOO_ROOT="$2"; shift 2 ;;
+    *) echo "Unknown option: $1"; exit 1 ;;
+  esac
+done
+
 MATCHED="${BASE}/matched"
 AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TRAIN="${MATCHED}/doc_split/train"
@@ -20,17 +34,17 @@ mkdir -p "$OUT_KAYTOO" "$OUT_BIRDNET" "$OUT_REGNET_DOC" "$OUT_REGNET_COMBINED"
 
 if [[ ! -f "$MATCHED/avianz_split/test/labels.json" || ! -f "$MATCHED/doc_split/test/labels.json" ]]; then
     echo "Building matched datasets..."
-    bash build_dataset.sh --overwrite
+    AVIA_NZ_BASE="$BASE" DOC_RAW_DIR="${DOC_RAW_DIR_OVERRIDE}" AVIANZ_RAW_DIR="${AVIANZ_RAW_DIR_OVERRIDE}" bash build_dataset.sh --overwrite
 fi
 
 if [[ ! -f "$BASE/combined_dataset/combined_large/labels.json" ]]; then
     echo "Building combined dataset..."
-    bash build_combined_dataset.sh --overwrite
+    AVIA_NZ_BASE="$BASE" DOC_RAW_DIR="${DOC_RAW_DIR_OVERRIDE}" bash build_combined_dataset.sh --overwrite
 fi
 
 echo "Running: Kaytoo only"
 python3 scripts/evaluate_kaytoo.py "$AVIANZ_TEST" "$DOC_TEST" \
-  --kaytoo-root "$REPO_ROOT/../Kaytoo" \
+  --kaytoo-root "$KAYTOO_ROOT" \
   --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
   --output "$OUT_KAYTOO"
 
