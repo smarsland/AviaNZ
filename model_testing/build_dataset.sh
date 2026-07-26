@@ -38,6 +38,18 @@ AVIANZ_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Joe_MoDone?"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 OUTPUT_BASE="/local/scratch/freangi"
 
+if [[ ! -d "$DOC_RAW" ]]; then
+    echo "ERROR: DOC raw data directory not found: $DOC_RAW"
+    echo "Mount or update the path in this script before running the build."
+    exit 1
+fi
+
+if [[ ! -d "$AVIANZ_RAW" ]]; then
+    echo "ERROR: AviaNZ raw data directory not found: $AVIANZ_RAW"
+    echo "Mount or update the path in this script before running the build."
+    exit 1
+fi
+
 REVIEWED_CSV="$REPO_ROOT/model_testing/data/doc_reviewed.csv"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 

@@ -18,6 +18,16 @@ OUT_REGNET_COMBINED="${BASE}/combined_tests/regnet_combined_bgsubtract_seed0"
 
 mkdir -p "$OUT_KAYTOO" "$OUT_BIRDNET" "$OUT_REGNET_DOC" "$OUT_REGNET_COMBINED"
 
+if [[ ! -f "$MATCHED/avianz_split/test/labels.json" || ! -f "$MATCHED/doc_split/test/labels.json" ]]; then
+    echo "Building matched datasets..."
+    bash build_dataset.sh --overwrite
+fi
+
+if [[ ! -f "$BASE/combined_dataset/combined_large/labels.json" ]]; then
+    echo "Building combined dataset..."
+    bash build_combined_dataset.sh --overwrite
+fi
+
 echo "Running: Kaytoo only"
 python3 scripts/evaluate_kaytoo.py "$AVIANZ_TEST" "$DOC_TEST" \
   --kaytoo-root "$REPO_ROOT/../Kaytoo" \

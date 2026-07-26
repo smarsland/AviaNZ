@@ -25,6 +25,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BASE="/local/scratch/freangi"
 DOC_RAW="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/NZBirds"
 DRIVE1="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_01"
+
+if [[ ! -d "$DOC_RAW" ]]; then
+    echo "ERROR: DOC raw data directory not found: $DOC_RAW"
+    echo "Mount or update the path in this script before running the build."
+    exit 1
+fi
 DRIVE2="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02"
 DRIVE3="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_03"
 
