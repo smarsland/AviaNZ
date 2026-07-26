@@ -1384,6 +1384,36 @@ class Trainer:
         )
         self._save_test_predictions(model, val_loader_obj, val_data_for_pred, 'val', out_dir=eval_out)
 
+        # Write a compact summary JSON for downstream scripts and rerun tracking.
+        result_data = {
+            'name': Path(self.output_folder).name,
+            'type': self.model_type,
+            'seed': getattr(self, 'seed', None),
+            'output_folder': str(self.output_folder),
+            'status': 'completed',
+        }
+        if self.test_folder:
+            result_data['test1_name'] = Path(self.test_folder).parent.name
+        if self.test_folder2:
+            result_data['test2_name'] = Path(self.test_folder2).parent.name
+
+        # Best-effort metrics from the evaluation manager outputs.
+        for report_file in Path(eval_out).glob('*_multilabel_report.json'):
+            report_name = report_file.stem.replace('_multilabel_report', '')
+            with open(report_file) as f:
+                report = json.load(f)
+            if 'exact_match_accuracy' in report:
+                acc = report['exact_match_accuracy'] * 100
+                if result_data.get('test1_name') and result_data['test1_name'] in report_name:
+                    result_data['test1_acc'] = acc
+                elif result_data.get('test2_name') and result_data['test2_name'] in report_name:
+                    result_data['test2_acc'] = acc
+
+        result_json_path = Path(eval_out) / 'result.json'
+        with open(result_json_path, 'w') as f:
+            json.dump(result_data, f, indent=2)
+        print(f"Saved summary JSON to {result_json_path}")
+
         print(f"\n--eval-only: results saved to {eval_out}")
         return {}
 
