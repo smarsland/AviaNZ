@@ -22,7 +22,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-BASE="${AVIA_NZ_BASE:-$REPO_ROOT/model_testing/output}"
+BASE="${AVIA_NZ_BASE:-${AVIA_NZ_OUTPUT_ROOT:-/local/scratch/freangi}}"
 DOC_RAW="${DOC_RAW_DIR:-}"
 DRIVE1="${AVIANZ_DRIVE1:-}"
 DRIVE2="${AVIANZ_DRIVE2:-}"

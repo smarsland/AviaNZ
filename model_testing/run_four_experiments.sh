@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-BASE="${AVIA_NZ_BASE:-$SCRIPT_DIR/output}"
+BASE="${AVIA_NZ_BASE:-${AVIA_NZ_OUTPUT_ROOT:-/local/scratch/freangi}}"
 KAYTOO_ROOT="${KAYTOO_ROOT:-$REPO_ROOT/../Kaytoo}"
 DOC_RAW_DIR_OVERRIDE="${DOC_RAW_DIR:-}"
 AVIANZ_RAW_DIR_OVERRIDE="${AVIANZ_RAW_DIR:-}"
@@ -31,6 +31,12 @@ OUT_REGNET_DOC="${BASE}/matched_tests/regnet_on_doc_bgsub"
 OUT_REGNET_COMBINED="${BASE}/combined_tests/regnet_combined_bgsubtract_seed0"
 
 mkdir -p "$OUT_KAYTOO" "$OUT_BIRDNET" "$OUT_REGNET_DOC" "$OUT_REGNET_COMBINED"
+
+echo "Using output base: $BASE"
+echo "Using matched data: $MATCHED"
+echo "Using DOC raw: ${DOC_RAW_DIR_OVERRIDE:-<default>}"
+echo "Using AviaNZ raw: ${AVIANZ_RAW_DIR_OVERRIDE:-<default>}"
+echo "Using Kaytoo root: $KAYTOO_ROOT"
 
 if [[ ! -f "$MATCHED/avianz_split/test/labels.json" || ! -f "$MATCHED/doc_split/test/labels.json" ]]; then
     echo "Building matched datasets..."
