@@ -29,6 +29,8 @@ OUT_KAYTOO="${BASE}/matched_tests/kaytoo_pretrained_seed0"
 OUT_BIRDNET="${BASE}/matched_tests/birdnet_pretrained_seed0"
 OUT_REGNET_DOC="${BASE}/matched_tests/regnet_on_doc_bgsub"
 OUT_REGNET_COMBINED="${BASE}/combined_tests/regnet_combined_bgsubtract_seed0"
+PRETRAINED_MODEL="${AVIA_NZ_PRETRAINED_PATH:-${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}}"
+COMBINED_DATASET="${BASE}/combined_dataset/combined_large"
 
 mkdir -p "$OUT_KAYTOO" "$OUT_BIRDNET" "$OUT_REGNET_DOC" "$OUT_REGNET_COMBINED"
 
@@ -37,6 +39,8 @@ echo "Using matched data: $MATCHED"
 echo "Using DOC raw: ${DOC_RAW_DIR_OVERRIDE:-<default>}"
 echo "Using AviaNZ raw: ${AVIANZ_RAW_DIR_OVERRIDE:-<default>}"
 echo "Using Kaytoo root: $KAYTOO_ROOT"
+echo "Using pretrained checkpoint: $PRETRAINED_MODEL"
+echo "Using combined dataset: $COMBINED_DATASET"
 
 if [[ ! -f "$MATCHED/avianz_split/test/labels.json" || ! -f "$MATCHED/doc_split/test/labels.json" ]]; then
     echo "Building matched datasets..."
@@ -54,13 +58,14 @@ python3 scripts/evaluate_kaytoo.py "$AVIANZ_TEST" "$DOC_TEST" \
   --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
   --output "$OUT_KAYTOO"
 
-echo "Running: BirdNET only"
+echo "Running: BirdNET pretrained baseline"
 python3 scripts/evaluate_birdnet.py "$AVIANZ_TEST" "$DOC_TEST" \
   --output "$OUT_BIRDNET"
 
 echo "Running: RegNet on DOC"
 python3 train.py "$DOC_TRAIN" "$OUT_REGNET_DOC" \
   --model-type regnet \
+  --pretrained "$PRETRAINED_MODEL" \
   --spec-transform Log \
   --bg-subtract \
   --kbird-prior 2.0 \
@@ -68,10 +73,10 @@ python3 train.py "$DOC_TRAIN" "$OUT_REGNET_DOC" \
   --test-folder "$AVIANZ_TEST" \
   --test-folder2 "$DOC_TEST"
 
-echo "Running: RegNet on combined DOC+AviaNZ"
-python3 train.py "$BASE/combined_dataset/combined_large" "$OUT_REGNET_COMBINED" \
+echo "Running: RegNet on full combined DOC+AviaNZ"
+python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
   --model-type regnet \
-  --pretrained BirdClefModels/model_fold0.pth \
+  --pretrained "$PRETRAINED_MODEL" \
   --spec-transform Log \
   --bg-subtract \
   --kbird-prior 2.0 \
