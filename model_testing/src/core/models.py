@@ -1,9 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import ASTModel
 import timm
 from model_testing.src.core import config
+
+try:
+    from transformers import ASTModel
+except ImportError:  # pragma: no cover - optional dependency
+    ASTModel = None
 
 
 class GradientReversalLayer(nn.Module):
@@ -268,6 +272,8 @@ class AST(nn.Module):
         self.input_size = input_size if input_size else (128, 512)
         self.use_sed_head = use_sed_head
 
+        if ASTModel is None:
+            raise ImportError("transformers is required to use the AST model")
         self.ast = ASTModel.from_pretrained("MIT/ast-finetuned-audioset-10-10-0.4593")
 
         if use_adapters:

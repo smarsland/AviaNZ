@@ -5,6 +5,13 @@ Always uses multilabel classification.
 """
 import argparse
 import os
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from model_testing.src.core.model_trainer import Trainer
 from model_testing.src.core.trainer_config import TrainerConfig
 from model_testing.src.core import config
