@@ -14,32 +14,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-find_existing_dir() {
-    local name="$1"
-    shift
-    local candidate
-    for candidate in "$@"; do
-        if [[ -n "$candidate" && -d "$candidate" ]]; then
-            echo "$candidate"
-            return 0
-        fi
-    done
-
-    local search_root
-    for search_root in /data /mnt /media /home /workspace /srv /tmp; do
-        if [[ -d "$search_root" ]]; then
-            local found
-            found="$(find "$search_root" -maxdepth 6 -type d -name "$name" 2>/dev/null | head -n 1)"
-            if [[ -n "$found" ]]; then
-                echo "$found"
-                return 0
-            fi
-        fi
-    done
-
-    return 1
-}
-
 FREQ_MASK_FLAG=""
 OVERWRITE=false
 BACKGROUND_N=""
@@ -66,32 +40,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-AVIANZ_RAW="${AVIANZ_RAW_DIR:-$AVIANZ_RAW_OVERRIDE}"
-DOC_RAW="${DOC_RAW_DIR:-$DOC_RAW_OVERRIDE}"
-OUTPUT_BASE="${AVIA_NZ_BASE:-$OUTPUT_BASE_OVERRIDE}"
-OUTPUT_BASE="${OUTPUT_BASE_OVERRIDE:-${AVIA_NZ_BASE:-${AVIA_NZ_OUTPUT_ROOT:-/local/scratch/freangi}}}"
+SERVER_ROOT="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02"
 
-mkdir -p "$OUTPUT_BASE"
-
-if [[ -z "$DOC_RAW" ]]; then
-    DOC_RAW="$(find_existing_dir 'NZBirds' "$REPO_ROOT/../NZBirds" "$REPO_ROOT/NZBirds" /mnt/NZBirds /data/NZBirds /mnt/data/NZBirds /media/NZBirds /workspace/NZBirds || true)"
-fi
-
-if [[ -z "$AVIANZ_RAW" ]]; then
-    AVIANZ_RAW="$(find_existing_dir 'Joe_MoDone*' "$REPO_ROOT/../Joe_MoDone" "$REPO_ROOT/../Joe_MoDone?" /mnt/Joe_MoDone /data/Joe_MoDone /mnt/data/Joe_MoDone /media/Joe_MoDone /workspace/Joe_MoDone || true)"
-fi
+DOC_RAW="${DOC_RAW_OVERRIDE:-${DOC_RAW_DIR:-$SERVER_ROOT/NZBirds}}"
+AVIANZ_RAW="${AVIANZ_RAW_OVERRIDE:-${AVIANZ_RAW_DIR:-$SERVER_ROOT/Joe_MoDone?}}"
+OUTPUT_BASE="${OUTPUT_BASE_OVERRIDE:-${AVIA_NZ_BASE:-/local/scratch/freangi}}"
 
 if [[ ! -d "$DOC_RAW" ]]; then
     echo "ERROR: DOC raw data directory not found: $DOC_RAW"
-    echo "Mount or update the path in this script before running the build."
+    echo "Pass --doc-raw PATH or set DOC_RAW_DIR."
     exit 1
 fi
 
 if [[ ! -d "$AVIANZ_RAW" ]]; then
     echo "ERROR: AviaNZ raw data directory not found: $AVIANZ_RAW"
-    echo "Mount or update the path in this script before running the build."
+    echo "Pass --avianz-raw PATH or set AVIANZ_RAW_DIR."
     exit 1
 fi
+
+mkdir -p "$OUTPUT_BASE"
 
 REVIEWED_CSV="$REPO_ROOT/model_testing/data/doc_reviewed.csv"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"

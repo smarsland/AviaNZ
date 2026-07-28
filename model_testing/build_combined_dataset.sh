@@ -22,11 +22,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-BASE="${AVIA_NZ_BASE:-${AVIA_NZ_OUTPUT_ROOT:-/local/scratch/freangi}}"
-DOC_RAW="${DOC_RAW_DIR:-}"
-DRIVE1="${AVIANZ_DRIVE1:-}"
-DRIVE2="${AVIANZ_DRIVE2:-}"
-DRIVE3="${AVIANZ_DRIVE3:-}"
+SERVER_PREFIX="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic"
+
+BASE="${AVIA_NZ_BASE:-/local/scratch/freangi}"
+DOC_RAW="${DOC_RAW_DIR:-${SERVER_PREFIX}_02/NZBirds}"
+DRIVE1="${AVIANZ_DRIVE1:-${SERVER_PREFIX}_01}"
+DRIVE2="${AVIANZ_DRIVE2:-${SERVER_PREFIX}_02}"
+DRIVE3="${AVIANZ_DRIVE3:-${SERVER_PREFIX}_03}"
+OVERWRITE_FLAG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -40,24 +43,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$DOC_RAW" ]]; then
-    DOC_RAW="$(find /data /mnt /media /home /workspace /srv /tmp -maxdepth 6 -type d -name 'NZBirds' 2>/dev/null | head -n 1 || true)"
-fi
-
 if [[ ! -d "$DOC_RAW" ]]; then
     echo "ERROR: DOC raw data directory not found: $DOC_RAW"
-    echo "Mount or update the path in this script before running the build."
+    echo "Pass --doc-raw PATH or set DOC_RAW_DIR."
     exit 1
-fi
-
-if [[ -z "$DRIVE1" ]]; then
-    DRIVE1="$(find /data /mnt /media /home /workspace /srv /tmp -maxdepth 6 -type d -name 'ECS_acoustic_01' 2>/dev/null | head -n 1 || true)"
-fi
-if [[ -z "$DRIVE2" ]]; then
-    DRIVE2="$(find /data /mnt /media /home /workspace /srv /tmp -maxdepth 6 -type d -name 'ECS_acoustic_02' 2>/dev/null | head -n 1 || true)"
-fi
-if [[ -z "$DRIVE3" ]]; then
-    DRIVE3="$(find /data /mnt /media /home /workspace /srv /tmp -maxdepth 6 -type d -name 'ECS_acoustic_03' 2>/dev/null | head -n 1 || true)"
 fi
 
 # Scratch space for the intermediate per-source datasets.
@@ -65,7 +54,6 @@ fi
 OUTPUT="${BASE}/combined_dataset"
 MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
-OVERWRITE_FLAG=""
 
 # All annotated AviaNZ folders, excluding Joe_MoDone? (matched-test source)
 # and non-bird sources (bats, NZBirds).

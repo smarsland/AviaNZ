@@ -117,7 +117,7 @@ def aggregate_to_file(pred_df):
     return per_file, species_cols
 
 
-def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold=0.5):
+def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold=0.5, cores=4):
     """Run Kaytoo inference on one test folder and return accuracy statistics.
     
     Predictions are thresholded at `threshold` per class (multi-label), then
@@ -160,7 +160,7 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
         print("  No audio files found, skipping.")
         return None
 
-    pred_df = kaytoo_inference(audio_files, models, model_idx=0, cores=1)
+    pred_df = kaytoo_inference(audio_files, models, model_idx=0, cores=cores)
     per_file_df, species_cols = aggregate_to_file(pred_df)
 
     valid_cols = [c for c in test_ebird_codes_ordered if c in species_cols]
@@ -369,6 +369,8 @@ def main():
     parser.add_argument('--cpu', action='store_true', help='Force CPU inference')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Score threshold for multi-label prediction (default: 0.5)')
+    parser.add_argument('--cores', type=int, default=4,
+                        help='Worker threads for Kaytoo inference (default: 4)')
     args = parser.parse_args()
 
     output_path = Path(args.output)
@@ -387,7 +389,7 @@ def main():
         'project_root': str(args.kaytoo_root),
         'experiment': None,
         'cpu_only': args.cpu,
-        'num_cores': 1,
+        'num_cores': args.cores,
         'naming_scheme': 'eBird',
     }
 
@@ -406,7 +408,8 @@ def main():
         print(f"\n{'='*60}")
         print(f"Dataset: {name}")
         print(f"{'='*60}")
-        result = evaluate_folder(folder, name, models, label_to_ebird, threshold=args.threshold)
+        result = evaluate_folder(folder, name, models, label_to_ebird,
+                                 threshold=args.threshold, cores=args.cores)
         if result:
             all_results.append(result)
 
