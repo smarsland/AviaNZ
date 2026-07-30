@@ -49,6 +49,7 @@ AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TRAIN="${MATCHED}/doc_split/train"
 DOC_TEST="${MATCHED}/doc_split/test"
 COMBINED_DATASET="${BASE}/combined_dataset/combined_large"
+COMBINED_DOC_HALF="${BASE}/combined_dataset/doc_large"
 
 OUT_KAYTOO="${BASE}/matched_tests/kaytoo_pretrained_seed0"
 OUT_BIRDNET="${BASE}/matched_tests/birdnet_pretrained_seed0"
@@ -137,7 +138,7 @@ fi
 if should_run regnet_doc "$OUT_REGNET_DOC/training_history.json"; then
   echo ""
   echo ">>> 3/4 RegNet + bgsub, DOC only"
-  python3 train.py "$DOC_TRAIN" "$OUT_REGNET_DOC" \
+  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
