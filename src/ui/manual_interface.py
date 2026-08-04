@@ -269,7 +269,7 @@ class ManualInterface(QMainWindow):
                 raise OSError("No input file, cannot continue")
             else:
                 # pop up a dialog to select file
-                firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
+                firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV, FLAC, or BMP files (*.wav *.flac *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
                 while firstFile == '':
                     msg = MessagePopup("w", "Select Sound File", "Choose a sound file to proceed.\nDo you want to continue?")
                     msg.setStandardButtons(QMessageBox.StandardButton.No)
@@ -277,7 +277,7 @@ class ManualInterface(QMainWindow):
                     msg.button(QMessageBox.StandardButton.No).setText("Exit")
                     reply = msg.exec()
                     if reply == 2:
-                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
+                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV, FLAC, or BMP files (*.wav *.flac *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp);; FLAC files (*.flac)")
                     else:
                         sys.exit()
 
