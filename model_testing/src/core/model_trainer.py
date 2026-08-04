@@ -307,7 +307,6 @@ class Trainer:
         
         # Evaluation configuration
         self.test_folder = cfg.evaluation.test_folder
-        self.test_folder2 = cfg.evaluation.test_folder2
         self.visualize_attention = cfg.evaluation.visualize_attention
         self.viz_samples = cfg.evaluation.viz_samples
         self.eval_only = getattr(cfg.evaluation, 'eval_only', False)
@@ -1062,123 +1061,6 @@ class Trainer:
         }
         self._save_test_predictions(model, self.val_loader, val_data_for_pred, 'val')
 
-        # Evaluate on test sets if provided (for DANN experiments)
-        if self.test_folder:
-            print(f"\n{'='*60}")
-            print(f"Evaluating on test set 1: {self.test_folder}")
-            print(f"{'='*60}")
-            test_loader1 = DataLoader(self.test_folder, noise_folder=None)
-            test_data1_orig = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
-            test_data1 = _remap_labels_to_train_space(test_data1_orig, self.data)
-
-            test_dataset1 = SpectrogramDataset(
-                test_data1['train_filenames'], test_data1['train_labels'],
-                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
-                noise_filenames=None,
-                noise_ratio=0.0,
-                spec_transform=self.spec_transform,
-                training=False,
-                width_downsizing=None,
-                bg_subtract=self.bg_subtract,
-                median_filter=self.median_filter,
-                use_temporal_roll=False,
-                noise_mode='full',
-                background_prob=0.0,
-                ast_channel_dir=self.ast_channel_dir,
-                use_deltas=self.use_deltas,
-            )
-            
-            test_loader_obj1 = torch.utils.data.DataLoader(
-                test_dataset1,
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=2,
-                pin_memory=True if torch.cuda.is_available() else False
-            )
-            
-            # Evaluate and save predictions
-            test_name1 = Path(self.test_folder).parent.name
-            print(f"DEBUG TEST1: folder={self.test_folder}, name={test_name1}, samples={len(test_dataset1)}, first_file={test_dataset1.filenames[0] if len(test_dataset1.filenames) > 0 else 'NONE'}")
-            print(f"DEBUG TEST1 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
-            evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', device=self.device)
-            
-            
-            # Generate attention visualizations if requested
-            if self.visualize_attention:
-                print(f"\n{'='*60}")
-                print(f"Generating attention visualizations for test set 1")
-                print(f"{'='*60}")
-                viz_folder = os.path.join(self.output_folder, f'attention_{test_name1}')
-                visualize_attention(
-                    model, 
-                    test_loader_obj1, 
-                    viz_folder,
-                    model_type=self.model_type,
-                    num_samples=self.viz_samples,
-                    device=self.device,
-                    class_names=self.data['class_names']
-                )
-            # Save predictions to CSV (pass original test data so true_ columns use test-set vocabulary)
-            self._save_test_predictions(model, test_loader_obj1, test_data1, test_name1, orig_test_data=test_data1_orig)
-        
-        if self.test_folder2:
-            print(f"\n{'='*60}")
-            print(f"Evaluating on test set 2: {self.test_folder2}")
-            print(f"{'='*60}")
-            test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
-            test_data2_orig = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
-            test_data2 = _remap_labels_to_train_space(test_data2_orig, self.data)
-
-            test_dataset2 = SpectrogramDataset(
-                test_data2['train_filenames'], test_data2['train_labels'],
-                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
-                noise_filenames=None,
-                noise_ratio=0.0,
-                spec_transform=self.spec_transform,
-                training=False,
-                width_downsizing=None,
-                bg_subtract=self.bg_subtract,
-                median_filter=self.median_filter,
-                use_temporal_roll=False,
-                noise_mode='full',
-                background_prob=0.0,
-                ast_channel_dir=self.ast_channel_dir,
-                use_deltas=self.use_deltas,
-            )
-            
-            test_loader_obj2 = torch.utils.data.DataLoader(
-                test_dataset2,
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=2,
-                pin_memory=True if torch.cuda.is_available() else False
-            )
-            
-            # Evaluate and save predictions
-            test_name2 = Path(self.test_folder2).parent.name
-            print(f"DEBUG TEST2: folder={self.test_folder2}, name={test_name2}, samples={len(test_dataset2)}, first_file={test_dataset2.filenames[0] if len(test_dataset2.filenames) > 0 else 'NONE'}")
-            print(f"DEBUG TEST2 CONFIG: bg_subtract={self.bg_subtract}, median_filter={self.median_filter}")
-            evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
-            
-            # Save predictions to CSV (pass original test data so true_ columns use test-set vocabulary)
-            self._save_test_predictions(model, test_loader_obj2, test_data2, test_name2, orig_test_data=test_data2_orig)
-            
-            # Generate attention visualizations if requested
-            if self.visualize_attention:
-                print(f"\n{'='*60}")
-                print(f"Generating attention visualizations for test set 2")
-                print(f"{'='*60}")
-                viz_folder = os.path.join(self.output_folder, f'attention_{test_name2}')
-                visualize_attention(
-                    model, 
-                    test_loader_obj2, 
-                    viz_folder,
-                    model_type=self.model_type,
-                    num_samples=self.viz_samples,
-                    device=self.device,
-                    class_names=self.data['class_names']
-                )
-
         print(f"Best Val Acc: {best_val_acc:.4f} at epoch {best_epoch}")
         print(f"\n{'='*60}")
         print(f"✓ TRAINING COMPLETE")
@@ -1302,7 +1184,7 @@ class Trainer:
         model.load_state_dict(state_dict)
         model.eval()
 
-        if not self.test_folder and not self.test_folder2:
+        if not self.test_folder:
             print("WARNING: --eval-only with no --test-folder specified; nothing to evaluate.")
             return {}
 
@@ -1310,55 +1192,29 @@ class Trainer:
         os.makedirs(eval_out, exist_ok=True)
         evaluator = EvaluationManager(eval_out, self.data['class_names'], is_multilabel=True)
 
-        if self.test_folder:
-            print(f"\n{'='*60}")
-            print(f"Evaluating on test set 1: {self.test_folder}")
-            print(f"{'='*60}")
-            test_loader1 = DataLoader(self.test_folder, noise_folder=None)
-            test_data1_orig = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
-            test_data1 = _remap_labels_to_train_space(test_data1_orig, self.data)
-            test_dataset1 = SpectrogramDataset(
-                test_data1['train_filenames'], test_data1['train_labels'],
-                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
-                noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
-                training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
-                median_filter=self.median_filter, use_temporal_roll=False,
-                noise_mode='full', background_prob=0.0,
-                ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
-            )
-            test_loader_obj1 = torch.utils.data.DataLoader(
-                test_dataset1, batch_size=self.batch_size, shuffle=False,
-                num_workers=2, pin_memory=torch.cuda.is_available()
-            )
-            test_name1 = Path(self.test_folder).parent.name
-            print(f"  samples={len(test_dataset1)}")
-            evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name1}', device=self.device)
-            self._save_predictions_to(model, test_loader_obj1, test_data1, test_name1, eval_out, orig_test_data=test_data1_orig)
-
-        if self.test_folder2:
-            print(f"\n{'='*60}")
-            print(f"Evaluating on test set 2: {self.test_folder2}")
-            print(f"{'='*60}")
-            test_loader2 = DataLoader(self.test_folder2, noise_folder=None)
-            test_data2_orig = test_loader2.load_data(use_multilabel=True, validation_share=0.0)
-            test_data2 = _remap_labels_to_train_space(test_data2_orig, self.data)
-            test_dataset2 = SpectrogramDataset(
-                test_data2['train_filenames'], test_data2['train_labels'],
-                self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
-                noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
-                training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
-                median_filter=self.median_filter, use_temporal_roll=False,
-                noise_mode='full', background_prob=0.0,
-                ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
-            )
-            test_loader_obj2 = torch.utils.data.DataLoader(
-                test_dataset2, batch_size=self.batch_size, shuffle=False,
-                num_workers=2, pin_memory=torch.cuda.is_available()
-            )
-            test_name2 = Path(self.test_folder2).parent.name
-            print(f"  samples={len(test_dataset2)}")
-            evaluator.evaluate_model(model, test_loader_obj2, f'{self.model_type}_test_{test_name2}', device=self.device)
-            self._save_predictions_to(model, test_loader_obj2, test_data2, test_name2, eval_out, orig_test_data=test_data2_orig)
+        print(f"\n{'='*60}")
+        print(f"Evaluating on: {self.test_folder}")
+        print(f"{'='*60}")
+        test_loader1 = DataLoader(self.test_folder, noise_folder=None)
+        test_data1_orig = test_loader1.load_data(use_multilabel=True, validation_share=0.0)
+        test_data1 = _remap_labels_to_train_space(test_data1_orig, self.data)
+        test_dataset1 = SpectrogramDataset(
+            test_data1['train_filenames'], test_data1['train_labels'],
+            self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
+            noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
+            training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
+            median_filter=self.median_filter, use_temporal_roll=False,
+            noise_mode='full', background_prob=0.0,
+            ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
+        )
+        test_loader_obj1 = torch.utils.data.DataLoader(
+            test_dataset1, batch_size=self.batch_size, shuffle=False,
+            num_workers=2, pin_memory=torch.cuda.is_available()
+        )
+        test_name = Path(self.test_folder).parent.name
+        print(f"  samples={len(test_dataset1)}")
+        evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name}', device=self.device)
+        self._save_predictions_to(model, test_loader_obj1, test_data1, test_name, eval_out, orig_test_data=test_data1_orig)
 
         # Save raw validation predictions for threshold tuning over all classes.
         print(f"\n{'='*60}")
@@ -1390,26 +1246,19 @@ class Trainer:
             'type': self.model_type,
             'seed': getattr(self, 'seed', None),
             'output_folder': str(self.output_folder),
+            'test_name': test_name,
             'status': 'completed',
         }
-        if self.test_folder:
-            result_data['test1_name'] = Path(self.test_folder).parent.name
-        if self.test_folder2:
-            result_data['test2_name'] = Path(self.test_folder2).parent.name
 
-        # Best-effort metrics from the evaluation manager outputs.
-        for report_file in Path(eval_out).glob('*_multilabel_report.json'):
-            report_name = report_file.stem.replace('_multilabel_report', '')
+        # Best-effort accuracy from the report written above.
+        report_file = Path(eval_out) / f'{self.model_type}_test_{test_name}_multilabel_report.json'
+        if report_file.exists():
             with open(report_file) as f:
                 report = json.load(f)
             if 'exact_match_accuracy' in report:
-                acc = report['exact_match_accuracy'] * 100
-                if result_data.get('test1_name') and result_data['test1_name'] in report_name:
-                    result_data['test1_acc'] = acc
-                elif result_data.get('test2_name') and result_data['test2_name'] in report_name:
-                    result_data['test2_acc'] = acc
+                result_data['exact_match_accuracy'] = report['exact_match_accuracy'] * 100
 
-        result_json_path = Path(eval_out) / 'result.json'
+        result_json_path = Path(eval_out) / f'result_{test_name}.json'
         with open(result_json_path, 'w') as f:
             json.dump(result_data, f, indent=2)
         print(f"Saved summary JSON to {result_json_path}")

@@ -42,6 +42,16 @@ AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TEST="${MATCHED}/doc_split/test"
 COMBINED_DATASET="${BASE}/combined_dataset/combined_large"
 COMBINED_DOC_HALF="${BASE}/combined_dataset/doc_large"
+COMBINED_AVIANZ_TEST="${BASE}/combined_dataset/avianz_split/test"
+COMBINED_DOC_TEST="${BASE}/combined_dataset/doc_split/test"
+
+# All four evaluation datasets; the shell script owns this list.
+FOUR_TEST_FOLDERS=(
+  "$DOC_TEST"
+  "$AVIANZ_TEST"
+  "$COMBINED_DOC_TEST"
+  "$COMBINED_AVIANZ_TEST"
+)
 
 OUT_ROOT="${BASE}/model_tests"
 OUT_KAYTOO="${OUT_ROOT}/kaytoo_pretrained_seed0"
@@ -105,53 +115,79 @@ else
 fi
 
 # ------------------------------------------------------------- 1. Kaytoo
-if should_run kaytoo "$OUT_KAYTOO/result.json"; then
+if should_run kaytoo "$OUT_KAYTOO/eval_done"; then
   echo ""
   echo ">>> 1/4 Kaytoo pretrained"
   mkdir -p "$OUT_KAYTOO"
-  python3 scripts/evaluate_kaytoo.py "$AVIANZ_TEST" "$DOC_TEST" \
-    --kaytoo-root "$KAYTOO_ROOT" \
-    --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
-    --cores "$KAYTOO_CORES" \
-    --output "$OUT_KAYTOO"
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    python3 scripts/evaluate_kaytoo.py "$folder" \
+      --kaytoo-root "$KAYTOO_ROOT" \
+      --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
+      --cores "$KAYTOO_CORES" \
+      --output "$OUT_KAYTOO"
+  done
+  touch "$OUT_KAYTOO/eval_done"
 fi
 
 # ------------------------------------------------------------ 2. BirdNET
-if should_run birdnet "$OUT_BIRDNET/result.json"; then
+if should_run birdnet "$OUT_BIRDNET/eval_done"; then
   echo ""
   echo ">>> 2/4 BirdNET pretrained"
   mkdir -p "$OUT_BIRDNET"
-  python3 scripts/evaluate_birdnet.py "$AVIANZ_TEST" "$DOC_TEST" \
-    --output "$OUT_BIRDNET"
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    python3 scripts/evaluate_birdnet.py "$folder" \
+      --output "$OUT_BIRDNET"
+  done
+  touch "$OUT_BIRDNET/eval_done"
 fi
 
 # -------------------------------------------------------- 3. RegNet / DOC
 if should_run regnet_doc "$OUT_REGNET_DOC/training_history.json"; then
   echo ""
-  echo ">>> 3/4 RegNet + bgsub, DOC only"
+  echo ">>> 3/4 RegNet + bgsub, DOC only — training"
   python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
     --bg-subtract \
     --kbird-prior 2.0 \
-    --epochs 40 --patience 15 --seed 0 \
-    --test-folder "$AVIANZ_TEST" \
-    --test-folder2 "$DOC_TEST"
+    --epochs 40 --patience 15 --seed 0
 fi
+
+echo ""
+echo ">>> 3/4 RegNet + bgsub, DOC only — evaluation"
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+done
 
 # --------------------------------------------------- 4. RegNet / combined
 if should_run regnet_combined "$OUT_REGNET_COMBINED/training_history.json"; then
   echo ""
-  echo ">>> 4/4 RegNet + bgsub, combined DOC + AviaNZ"
+  echo ">>> 4/4 RegNet + bgsub, combined DOC + AviaNZ — training"
   python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
     --bg-subtract \
     --kbird-prior 2.0 \
-    --epochs 40 --patience 15 --seed 0 \
-    --test-folder "$AVIANZ_TEST" \
-    --test-folder2 "$DOC_TEST"
+    --epochs 40 --patience 15 --seed 0
 fi
+
+echo ""
+echo ">>> 4/4 RegNet + bgsub, combined DOC + AviaNZ — evaluation"
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+done
 
