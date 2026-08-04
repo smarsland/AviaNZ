@@ -74,7 +74,7 @@ done
 echo "============================================================"
 echo " Build combined DOC + AviaNZ dataset (${MAX_PER_SPECIES}/class max)"
 echo "  DOC raw    : ${DOC_RAW}"
-echo "  AviaNZ src : ${#AVIANZ_FOLDERS[@]} folders (excl. Joe_MoDone?)"
+echo "  AviaNZ src : ${#AVIANZ_FOLDERS[@]} folders"
 echo "  Output     : ${OUTPUT}/combined_large"
 echo "  Mapping    : ${MAPPING}"
 echo "============================================================"

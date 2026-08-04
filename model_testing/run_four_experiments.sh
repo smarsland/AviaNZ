@@ -2,20 +2,15 @@
 set -euo pipefail
 
 # Run the four comparison experiments:
-#   1. Kaytoo pretrained, on its own
-#   2. BirdNET pretrained, on its own
+#   1. Kaytoo pretrained
+#   2. BirdNET pretrained
 #   3. RegNet + bg-subtract + kbird-prior 2, trained on DOC only
-#   4. RegNet + bg-subtract + kbird-prior 2, trained on combined DOC + AviaNZ
-#
-# Every stage is resumable: a stage that has already written its results is
-# skipped. Nothing is rebuilt or retrained unless it is actually missing.
+#   4. RegNet + bg-subtract + kbird-prior 2, trained on DOC + AviaNZ
 #
 # Usage:
 #   bash run_four_experiments.sh
-#   bash run_four_experiments.sh --only kaytoo
-#   bash run_four_experiments.sh --only regnet_doc,regnet_combined
-#   bash run_four_experiments.sh --force            # redo everything
-#   bash run_four_experiments.sh --rebuild-data     # rebuild datasets from raw
+#   bash run_four_experiments.sh --force
+#   bash run_four_experiments.sh --rebuild-data
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -28,7 +23,6 @@ AVIANZ_RAW_DIR_OVERRIDE="${AVIANZ_RAW_DIR:-}"
 KAYTOO_CORES="${KAYTOO_CORES:-4}"
 FORCE=false
 REBUILD_DATA=false
-ONLY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,7 +31,6 @@ while [[ $# -gt 0 ]]; do
     --avianz-raw) AVIANZ_RAW_DIR_OVERRIDE="$2"; shift 2 ;;
     --kaytoo-root) KAYTOO_ROOT="$2"; shift 2 ;;
     --kaytoo-cores) KAYTOO_CORES="$2"; shift 2 ;;
-    --only) ONLY="$2"; shift 2 ;;
     --force) FORCE=true; shift ;;
     --rebuild-data) REBUILD_DATA=true; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -46,36 +39,34 @@ done
 
 MATCHED="${BASE}/matched"
 AVIANZ_TEST="${MATCHED}/avianz_split/test"
-DOC_TRAIN="${MATCHED}/doc_split/train"
 DOC_TEST="${MATCHED}/doc_split/test"
 COMBINED_DATASET="${BASE}/combined_dataset/combined_large"
 COMBINED_DOC_HALF="${BASE}/combined_dataset/doc_large"
 
-OUT_KAYTOO="${BASE}/matched_tests/kaytoo_pretrained_seed0"
-OUT_BIRDNET="${BASE}/matched_tests/birdnet_pretrained_seed0"
-OUT_REGNET_DOC="${BASE}/matched_tests/regnet_on_doc_bgsub"
-OUT_REGNET_COMBINED="${BASE}/combined_tests/regnet_combined_bgsubtract_seed0"
+OUT_ROOT="${BASE}/model_tests"
+OUT_KAYTOO="${OUT_ROOT}/kaytoo_pretrained_seed0"
+OUT_BIRDNET="${OUT_ROOT}/birdnet_pretrained_seed0"
+OUT_REGNET_DOC="${OUT_ROOT}/regnet_on_doc_bgsub"
+OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
-# A stage is done if its completion marker exists.
-#   evaluate_kaytoo.py / evaluate_birdnet.py -> result.json
-#   train.py                                 -> training_history.json
+# Run a stage unless its completion marker exists.
 should_run() {
-  local stage="$1" marker="$2"
-  if [[ -n "$ONLY" && ",$ONLY," != *",$stage,"* ]]; then
-    echo "--- $stage: not selected by --only, skipping"
-    return 1
-  fi
+  local stage="$1"
+  local marker="$2"
+
   if [[ "$FORCE" == false && -f "$marker" ]]; then
     echo "--- $stage: already done ($marker), skipping"
     return 1
   fi
+
   return 0
 }
 
 echo "============================================================"
 echo " Output base   : $BASE"
+echo " Experiments   : $OUT_ROOT"
 echo " Matched data  : $MATCHED"
 echo " Combined data : $COMBINED_DATASET"
 echo " Kaytoo root   : $KAYTOO_ROOT"
@@ -164,16 +155,3 @@ if should_run regnet_combined "$OUT_REGNET_COMBINED/training_history.json"; then
     --test-folder2 "$DOC_TEST"
 fi
 
-echo ""
-echo "============================================================"
-echo " All four experiments accounted for."
-echo "   Kaytoo   : $OUT_KAYTOO"
-echo "   BirdNET  : $OUT_BIRDNET"
-echo "   RegNet   : $OUT_REGNET_DOC"
-echo "   Combined : $OUT_REGNET_COMBINED"
-echo ""
-echo " Next:"
-echo "   python3 scripts/analyze_all_results.py $BASE/matched_tests --output $BASE/matched_tests/analysis"
-echo "   python3 scripts/analyze_all_results.py $BASE/combined_tests --output $BASE/combined_tests/analysis"
-echo "   python3 scripts/make_summary_figure.py"
-echo "============================================================"

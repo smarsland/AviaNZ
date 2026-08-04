@@ -139,25 +139,9 @@ else
     STEP2_RAN=false
 fi
 
-# Step 3: merge train sets (spectrograms only; audio not needed for training)
-if [ "$OVERWRITE" = true ] || [ "$STEP2_RAN" = true ] || [ ! -d "$MERGED_TRAIN" ] || [ ! -f "$MERGED_TRAIN/labels.json" ]; then
-    echo ""
-    echo "=== Step 3: merging training datasets ==="
-    PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/merge_datasets.py" \
-        "$DOC_SPLIT_BASE/train" \
-        "$AVIANZ_SPLIT_BASE/train" \
-        "$MERGED_TRAIN" \
-        --symlink \
-        --no-audio
-else
-    echo ""
-    echo "=== Step 3: merged training dataset already exists, skipping ==="
-fi
-
 echo ""
 echo "============================================================"
 echo " Done."
 echo "  DOC      train/test : $DOC_SPLIT_BASE"
 echo "  AviaNZ   train/test : $AVIANZ_SPLIT_BASE"
-echo "  Merged   train      : $MERGED_TRAIN"
 echo "============================================================"
