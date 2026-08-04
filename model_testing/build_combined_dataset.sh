@@ -120,9 +120,9 @@ PYTHONPATH="$REPO_ROOT" python3 \
     --max-per-species "${MAX_PER_SPECIES}" \
     --exclude-source-files "${MATCHED_AVIANZ}" \
     --label-remap "new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird" \
-    --spec-type Reassigned \
+    --spec-type Standard \
     --window-type Hamming \
-    --sg-scale Linear \
+    --sg-scale Mel Frequency \
     ${OVERWRITE_FLAG}
 
 
