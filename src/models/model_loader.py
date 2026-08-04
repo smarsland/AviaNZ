@@ -29,6 +29,8 @@ import torch
 import json
 import os
 
+from src.utils.device import get_device
+
 
 def loadModel(nn_name, dirnn):
     """ Smart model loader that handles both PyTorch and legacy TensorFlow models.
@@ -58,11 +60,13 @@ def loadModel(nn_name, dirnn):
             pth_path = pt_path
 
     # Priority 1: Load native PyTorch model
+    device = get_device()
     if os.path.isfile(pth_path):
         print(f"Loading PyTorch model: {os.path.basename(pth_path)}")
         loaded = torch.load(pth_path, map_location='cpu', weights_only=False)
         
         if hasattr(loaded, 'eval'):
+            loaded = loaded.to(device)
             loaded.eval()
             return loaded
         elif isinstance(loaded, dict):
@@ -114,6 +118,7 @@ def loadModel(nn_name, dirnn):
                     num_classes = config.get('num_classes', 2)
                     model = architectures.CNNModel(input_size[0], input_size[1], num_classes)
                     model.load_state_dict(loaded)
+                    model = model.to(device)
                 elif model_type.lower() == 'regnet':
                     from model_testing.src.core.models import RegNetModel
 
@@ -140,6 +145,7 @@ def loadModel(nn_name, dirnn):
                 else:
                     raise ValueError(f"Unknown model_type: {model_type}")
                 
+                model = model.to(device)
                 model.eval()
                 return model
             else:
@@ -175,6 +181,7 @@ def loadModel(nn_name, dirnn):
         
         try:
             model = convert_tf_model_to_pytorch(json_path, weights_path)
+            model = model.to(device)
             model.eval()
             
             print(f"    ✓ Conversion successful!")

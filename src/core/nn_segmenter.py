@@ -111,7 +111,10 @@ class NNSegmenter:
                 zip(thresh_df['class'], thresh_df['threshold'].astype(float)))
             print(f"Loaded per-class thresholds from {thresh_path}")
 
+        from src.utils.device import get_device
+
         self.model = model_loader.loadModel(model_stem, model_dir)
+        self.model = self.model.to(get_device())
         self.model.eval()
 
         # Cache the frequently-used config values.
