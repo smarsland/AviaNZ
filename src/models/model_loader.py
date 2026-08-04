@@ -28,7 +28,7 @@
 import torch
 import json
 import os
-
+from src.utils.device import get_device
 
 def loadModel(nn_name, dirnn):
     """ Smart model loader that handles both PyTorch and legacy TensorFlow models.
@@ -43,6 +43,8 @@ def loadModel(nn_name, dirnn):
     config_json_path = os.path.join(dirnn, nn_name + '_config.json')
     h5_path = os.path.join(dirnn, nn_name + '.h5')
     weights_h5_path = os.path.join(dirnn, nn_name + '.weights.h5')
+
+    device = get_device()
     
     # Priority 1: Load native PyTorch model
     if os.path.isfile(pth_path):
@@ -50,6 +52,7 @@ def loadModel(nn_name, dirnn):
         loaded = torch.load(pth_path, map_location='cpu', weights_only=False)
         
         if hasattr(loaded, 'eval'):
+            loaded.to(device)
             loaded.eval()
             return loaded
         elif isinstance(loaded, dict):
@@ -103,7 +106,8 @@ def loadModel(nn_name, dirnn):
                     model.load_state_dict(loaded)
                 else:
                     raise ValueError(f"Unknown model_type: {model_type}")
-                
+
+                model.to(device)
                 model.eval()
                 return model
             else:

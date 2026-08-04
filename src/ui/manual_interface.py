@@ -5226,6 +5226,7 @@ class ManualInterface(QMainWindow):
                 import os
                 import torch
                 from src.models import model_loader, inference
+                from src.utils.device import get_device
                 
                 config_name = filtname
                 model_name = settings.get("nnModelFile")
@@ -5247,6 +5248,7 @@ class ManualInterface(QMainWindow):
                     model_config = json.load(f)
                 
                 model = model_loader.loadModel(model_name, 'Models')
+                model.to(get_device())
                 model.eval()
                 
                 model_sample_rate = model_config.get('sample_rate', 32000)
