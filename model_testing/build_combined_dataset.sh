@@ -122,7 +122,7 @@ PYTHONPATH="$REPO_ROOT" python3 \
     --label-remap "new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird" \
     --spec-type Standard \
     --window-type Hamming \
-    --sg-scale Mel Frequency \
+    --sg-scale "Mel Frequency" \
     ${OVERWRITE_FLAG}
 
 
