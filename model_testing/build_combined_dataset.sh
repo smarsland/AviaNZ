@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # build_combined_dataset.sh
 #
-# Build a single training dataset that merges DOC data (all species from
-# NZBirds) with AviaNZ data from every annotated folder EXCEPT Joe_MoDone?
-# (which is reserved for matched-test evaluation).
+# Build DOC + AviaNZ training datasets and merge their training splits.
 #
-# Up to MAX_PER_SPECIES samples per class are kept across the combined pool,
-# so abundant species are balanced while rare species contribute everything
-# they have.
+# Output:
+#   ${OUTPUT}/doc_large/
+#   ${OUTPUT}/avianz_large/
+#   ${OUTPUT}/doc_split/
+#   ${OUTPUT}/avianz_split/
+#   ${OUTPUT}/merged_train/
 #
-# Output: ${OUTPUT}/combined_large/   (labels.json + data/)
-# The Trainer does its own 80/20 train/val split internally.
+# AviaNZ recordings in matched/avianz_matched are excluded because they are
+# reserved for matched-test evaluation.
 #
 # Usage:
 #   bash build_combined_dataset.sh
@@ -26,74 +27,106 @@ SERVER_PREFIX="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic"
 
 BASE="${AVIA_NZ_BASE:-/local/scratch/freangi}"
 DOC_RAW="${DOC_RAW_DIR:-${SERVER_PREFIX}_02/NZBirds}"
+
 DRIVE1="${AVIANZ_DRIVE1:-${SERVER_PREFIX}_01}"
 DRIVE2="${AVIANZ_DRIVE2:-${SERVER_PREFIX}_02}"
 DRIVE3="${AVIANZ_DRIVE3:-${SERVER_PREFIX}_03}"
+
+MATCHED_AVIANZ="${BASE}/matched/avianz_matched/labels.json"
+
 OVERWRITE_FLAG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --overwrite) OVERWRITE_FLAG="--overwrite"; shift ;;
-        --doc-raw) DOC_RAW="$2"; shift 2 ;;
-        --output-base) BASE="$2"; shift 2 ;;
-        --avianz-drive1) DRIVE1="$2"; shift 2 ;;
-        --avianz-drive2) DRIVE2="$2"; shift 2 ;;
-        --avianz-drive3) DRIVE3="$2"; shift 2 ;;
-        *) echo "Unknown option: $1"; exit 1 ;;
+        --overwrite)
+            OVERWRITE_FLAG="--overwrite"
+            shift
+            ;;
+        --doc-raw)
+            DOC_RAW="$2"
+            shift 2
+            ;;
+        --output-base)
+            BASE="$2"
+            shift 2
+            ;;
+        --avianz-drive1)
+            DRIVE1="$2"
+            shift 2
+            ;;
+        --avianz-drive2)
+            DRIVE2="$2"
+            shift 2
+            ;;
+        --avianz-drive3)
+            DRIVE3="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
     esac
 done
 
 if [[ ! -d "$DOC_RAW" ]]; then
     echo "ERROR: DOC raw data directory not found: $DOC_RAW"
-    echo "Pass --doc-raw PATH or set DOC_RAW_DIR."
     exit 1
 fi
 
-# Scratch space for the intermediate per-source datasets.
-# Combined output lands at ${OUTPUT}/combined_large.
+if [[ ! -f "$MATCHED_AVIANZ" ]]; then
+    echo "ERROR: matched AviaNZ labels not found: $MATCHED_AVIANZ"
+    exit 1
+fi
+
+
 OUTPUT="${BASE}/combined_dataset"
 MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 
-# All annotated AviaNZ folders, excluding Joe_MoDone? (matched-test source)
-# and non-bird sources (bats, NZBirds).
-# ECS_acoustic_01 and ECS_acoustic_03 are scanned as whole-drive roots so that
-# any annotated subfolders are picked up automatically.
+
 AVIANZ_FOLDERS=(
     "${DRIVE1}"
     "${DRIVE2}"
     "${DRIVE3}"
 )
 
-# Build --avianz-raw flags for each folder.
 AVIANZ_ARGS=()
 for FOLDER in "${AVIANZ_FOLDERS[@]}"; do
     AVIANZ_ARGS+=( "--avianz-raw" "${FOLDER}" )
 done
 
+
 echo "============================================================"
-echo " Build combined DOC + AviaNZ dataset (${MAX_PER_SPECIES}/class max)"
-echo "  DOC raw    : ${DOC_RAW}"
-echo "  AviaNZ src : ${#AVIANZ_FOLDERS[@]} folders"
-echo "  Output     : ${OUTPUT}/combined_large"
-echo "  Mapping    : ${MAPPING}"
+echo " Build DOC + AviaNZ merged training dataset"
+echo "  DOC raw       : ${DOC_RAW}"
+echo "  AviaNZ src    : ${#AVIANZ_FOLDERS[@]} folders"
+echo "  Excluding     : ${MATCHED_AVIANZ}"
+echo "  Output        : ${OUTPUT}"
+echo "  Max/species   : ${MAX_PER_SPECIES}"
+echo "  Mapping       : ${MAPPING}"
 echo "============================================================"
+
 
 mkdir -p "${OUTPUT}"
 
-PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/model_testing/src/experiments/build_large_datasets.py" \
-    --doc-raw        "${DOC_RAW}" \
+
+PYTHONPATH="$REPO_ROOT" python3 \
+"$REPO_ROOT/model_testing/src/experiments/build_large_datasets.py" \
+    --doc-raw "${DOC_RAW}" \
     "${AVIANZ_ARGS[@]}" \
-    --output         "${OUTPUT}" \
-    --combined-out   "${OUTPUT}" \
-    --mapping        "${MAPPING}" \
+    --output "${OUTPUT}" \
+    --mapping "${MAPPING}" \
     --max-per-species "${MAX_PER_SPECIES}" \
+    --exclude-source-files "${MATCHED_AVIANZ}" \
     --label-remap "new zealand kaka:kaka,tui:tui/bellbird,bellbird:tui/bellbird" \
-    --no-audio \
-    --spec-type   Standard \
+    --spec-type Reassigned \
     --window-type Hamming \
-    --sg-scale    "Mel Frequency" \
+    --sg-scale Linear \
     ${OVERWRITE_FLAG}
 
+
 echo ""
-echo "Done. Training data at: ${OUTPUT}/combined_large"
+echo "Done."
+echo "Merged training dataset:"
+echo "  ${OUTPUT}/merged_train"
