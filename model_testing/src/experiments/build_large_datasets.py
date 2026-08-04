@@ -821,13 +821,22 @@ def main():
     # -----------------------------------------------------------------------
     print('\n=== Step 5: save splits ===')
 
-    print('\nSaving AviaNZ splits ...')
-    save_split(avianz_train, avianz_out, avianz_split_base, 'train', categories)
-    save_split(avianz_test, avianz_out, avianz_split_base, 'test', categories)
+    avianz_categories = sorted({
+        c
+        for e in avianz_labels
+        for c in e.get('class_names', [])
+    })
 
-    print('\nSaving DOC splits ...')
-    save_split(doc_train, doc_out, doc_split_base, 'train', categories)
-    save_split(doc_test, doc_out, doc_split_base, 'test', categories)
+    doc_categories = sorted({
+        c
+        for e in doc_labels
+        for c in e.get('class_names', [])
+    })
+
+    save_split(avianz_train, avianz_out, avianz_split_base, 'train', avianz_categories)
+    save_split(avianz_test, avianz_out, avianz_split_base, 'test', avianz_categories)
+    save_split(doc_train, doc_out, doc_split_base, 'train', doc_categories)
+    save_split(doc_test, doc_out, doc_split_base, 'test', doc_categories)
 
     # -----------------------------------------------------------------------
     # Step 6: merge training splits
