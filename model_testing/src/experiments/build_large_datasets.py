@@ -836,13 +836,20 @@ def main():
 
     merged_train = os.path.join(args.output, 'merged_train')
 
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
     subprocess.run(
-        f"PYTHONPATH={os.path.dirname(os.path.dirname(os.path.dirname(__file__)))} "
-        f"python {os.path.join(os.path.dirname(__file__), 'merge_datasets.py')} "
-        f"{doc_split_base}/train "
-        f"{avianz_split_base}/train "
-        f"{merged_train} "
-        f"--no-audio"
+        [
+            "python",
+            os.path.join(os.path.dirname(__file__), "merge_datasets.py"),
+            f"{doc_split_base}/train",
+            f"{avianz_split_base}/train",
+            merged_train,
+            "--no-audio",
+        ],
+        env=env,
+        check=True,
     )
 
     print(f'  Merged train: {merged_train}')
