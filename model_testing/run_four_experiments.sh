@@ -121,13 +121,15 @@ fi
 if should_run kaytoo "$OUT_KAYTOO/eval_done"; then
   echo ""
   echo ">>> 1/4 Kaytoo pretrained"
-  mkdir -p "$OUT_KAYTOO"
   for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(basename "$(dirname "$(dirname "$folder")")")__$(basename "$(dirname "$folder")")"
+    out_dir="$OUT_KAYTOO/$dataset_key"
+    mkdir -p "$out_dir"
     python3 scripts/evaluate_kaytoo.py "$folder" \
       --kaytoo-root "$KAYTOO_ROOT" \
       --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
       --cores "$KAYTOO_CORES" \
-      --output "$OUT_KAYTOO"
+      --output "$out_dir"
   done
   touch "$OUT_KAYTOO/eval_done"
 fi
@@ -136,10 +138,12 @@ fi
 if should_run birdnet "$OUT_BIRDNET/eval_done"; then
   echo ""
   echo ">>> 2/4 BirdNET pretrained"
-  mkdir -p "$OUT_BIRDNET"
   for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(basename "$(dirname "$(dirname "$folder")")")__$(basename "$(dirname "$folder")")"
+    out_dir="$OUT_BIRDNET/$dataset_key"
+    mkdir -p "$out_dir"
     python3 scripts/evaluate_birdnet.py "$folder" \
-      --output "$OUT_BIRDNET"
+      --output "$out_dir"
   done
   touch "$OUT_BIRDNET/eval_done"
 fi

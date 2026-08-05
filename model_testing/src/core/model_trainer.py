@@ -1211,7 +1211,7 @@ class Trainer:
             test_dataset1, batch_size=self.batch_size, shuffle=False,
             num_workers=2, pin_memory=torch.cuda.is_available()
         )
-        test_name = Path(self.test_folder).parent.name
+        test_name = Path(self.test_folder).parent.parent.name + "__" + Path(self.test_folder).parent.name
         print(f"  samples={len(test_dataset1)}")
         evaluator.evaluate_model(model, test_loader_obj1, f'{self.model_type}_test_{test_name}', device=self.device)
         self._save_predictions_to(model, test_loader_obj1, test_data1, test_name, eval_out, orig_test_data=test_data1_orig)
