@@ -104,7 +104,10 @@ else
   echo "--- matched datasets: present, skipping build"
 fi
 
-if [[ "$REBUILD_DATA" == true || ! -f "$COMBINED_DATASET/labels.json" ]]; then
+if [[ "$REBUILD_DATA" == true \
+   || ! -f "$COMBINED_DATASET/labels.json" \
+   || ! -f "$COMBINED_AVIANZ_TEST/labels.json" \
+   || ! -f "$COMBINED_DOC_TEST/labels.json" ]]; then
   echo ""
   echo ">>> Combined dataset"
   AVIA_NZ_BASE="$BASE" \
