@@ -800,68 +800,80 @@ def main():
     # -----------------------------------------------------------------------
     # Step 4: split into train / test
     # -----------------------------------------------------------------------
-    print('\n=== Step 4: split datasets ===')
-
-    # AviaNZ: file-level stratified split (prevents data leakage)
-    print('\nAviaNZ file-level split ...')
-    avianz_train, avianz_test, _ = split_avianz_by_file(
-        avianz_labels, args.test_ratio, random_state=args.seed
+    splits_exist = all(
+        os.path.exists(os.path.join(base, split, 'labels.json'))
+        for base in (avianz_split_base, doc_split_base)
+        for split in ('train', 'test')
     )
-    print(f'  AviaNZ train: {len(avianz_train)}, test: {len(avianz_test)}')
 
-    # DOC: stratified random split by primary species
-    print('\nDOC stratified split ...')
-    doc_train, doc_test = split_doc_stratified(
-        doc_labels, test_ratio=args.test_ratio, seed=args.seed
-    )
-    print(f'  DOC train: {len(doc_train)}, test: {len(doc_test)}')
+    if args.overwrite or not splits_exist:
+        print('\n=== Step 4: split datasets ===')
 
-    # -----------------------------------------------------------------------
-    # Step 5: save splits
-    # -----------------------------------------------------------------------
-    print('\n=== Step 5: save splits ===')
+        # AviaNZ: file-level stratified split (prevents data leakage)
+        print('\nAviaNZ file-level split ...')
+        avianz_train, avianz_test, _ = split_avianz_by_file(
+            avianz_labels, args.test_ratio, random_state=args.seed
+        )
+        print(f'  AviaNZ train: {len(avianz_train)}, test: {len(avianz_test)}')
 
-    avianz_categories = sorted({
-        c
-        for e in avianz_labels
-        for c in e.get('class_names', [])
-    })
+        # DOC: stratified random split by primary species
+        print('\nDOC stratified split ...')
+        doc_train, doc_test = split_doc_stratified(
+            doc_labels, test_ratio=args.test_ratio, seed=args.seed
+        )
+        print(f'  DOC train: {len(doc_train)}, test: {len(doc_test)}')
 
-    doc_categories = sorted({
-        c
-        for e in doc_labels
-        for c in e.get('class_names', [])
-    })
+        # -----------------------------------------------------------------------
+        # Step 5: save splits
+        # -----------------------------------------------------------------------
+        print('\n=== Step 5: save splits ===')
 
-    save_split(avianz_train, avianz_out, avianz_split_base, 'train', avianz_categories)
-    save_split(avianz_test, avianz_out, avianz_split_base, 'test', avianz_categories)
-    save_split(doc_train, doc_out, doc_split_base, 'train', doc_categories)
-    save_split(doc_test, doc_out, doc_split_base, 'test', doc_categories)
+        avianz_categories = sorted({
+            c
+            for e in avianz_labels
+            for c in e.get('class_names', [])
+        })
+
+        doc_categories = sorted({
+            c
+            for e in doc_labels
+            for c in e.get('class_names', [])
+        })
+
+        save_split(avianz_train, avianz_out, avianz_split_base, 'train', avianz_categories)
+        save_split(avianz_test, avianz_out, avianz_split_base, 'test', avianz_categories)
+        save_split(doc_train, doc_out, doc_split_base, 'train', doc_categories)
+        save_split(doc_test, doc_out, doc_split_base, 'test', doc_categories)
+    else:
+        print('\n=== Steps 4-5: splits already exist, skipping (use --overwrite to force) ===')
 
     # -----------------------------------------------------------------------
     # Step 6: merge training splits
     # -----------------------------------------------------------------------
-    print('\n=== Step 6: merge training splits ===')
-
     merged_train = os.path.join(args.output, 'merged_train')
 
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    if args.overwrite or not os.path.exists(os.path.join(merged_train, 'labels.json')):
+        print('\n=== Step 6: merge training splits ===')
 
-    subprocess.run(
-        [
-            "python",
-            os.path.join(os.path.dirname(__file__), "merge_datasets.py"),
-            f"{doc_split_base}/train",
-            f"{avianz_split_base}/train",
-            merged_train,
-            "--no-audio",
-        ],
-        env=env,
-        check=True,
-    )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
-    print(f'  Merged train: {merged_train}')
+        subprocess.run(
+            [
+                "python",
+                os.path.join(os.path.dirname(__file__), "merge_datasets.py"),
+                f"{doc_split_base}/train",
+                f"{avianz_split_base}/train",
+                merged_train,
+                "--no-audio",
+            ],
+            env=env,
+            check=True,
+        )
+
+        print(f'  Merged train: {merged_train}')
+    else:
+        print('\n=== Step 6: merged_train already exists, skipping (use --overwrite to force) ===')
 
     # -----------------------------------------------------------------------
     # Summary
