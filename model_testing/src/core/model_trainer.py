@@ -1172,15 +1172,39 @@ class Trainer:
             if not os.path.exists(ckpt_path):
                 raise FileNotFoundError(f"--checkpoint: file not found: {ckpt_path}")
         else:
-            best_path = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
+            best_path  = os.path.join(self.output_folder, f'{self.model_type}_model_best.pt')
             final_path = os.path.join(self.output_folder, f'{self.model_type}_model.pt')
-            ckpt_path = best_path if os.path.exists(best_path) else final_path
-            if not os.path.exists(ckpt_path):
+
+            if os.path.exists(best_path) and os.path.exists(final_path):
+                # Verify the best checkpoint was saved with the same class count as the
+                # current model.  If the dataset was rebuilt since the last training run
+                # the best checkpoint may have a stale output-layer shape, which would
+                # cause load_state_dict to succeed (if num_classes happens to match the
+                # stale count) but produce garbage/NaN predictions at inference time.
+                sd_best = torch.load(best_path, map_location='cpu', weights_only=True)
+                classifier_key = next((k for k in sd_best if 'classifier' in k and 'weight' in k), None)
+                if classifier_key is not None:
+                    ckpt_classes = sd_best[classifier_key].shape[0]
+                    if ckpt_classes != self.num_classes:
+                        print(f"  WARNING: best checkpoint has {ckpt_classes} output classes "
+                              f"but current model has {self.num_classes}. "
+                              f"Using final checkpoint instead.")
+                        ckpt_path = final_path
+                    else:
+                        ckpt_path = best_path
+                else:
+                    ckpt_path = best_path
+            elif os.path.exists(best_path):
+                ckpt_path = best_path
+            elif os.path.exists(final_path):
+                ckpt_path = final_path
+            else:
                 raise FileNotFoundError(
                     f"--eval-only: no saved model found in {self.output_folder}\n"
                     f"  Looked for: {best_path}\n"
                     f"              {final_path}"
                 )
+
         print(f"--eval-only: loading weights from {ckpt_path}")
         state_dict = torch.load(ckpt_path, map_location=self.device, weights_only=True)
         model.load_state_dict(state_dict)
