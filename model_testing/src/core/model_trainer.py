@@ -698,7 +698,9 @@ class Trainer:
                     p = torch.sigmoid(out.float())                     # [B, C]
                     total = p.sum(dim=1, keepdim=True).clamp(min=1e-7) # [B, 1]
                     scale = (total / _k).clamp(min=1.0)  # >=1 when over-predicting
-                    p_norm = (p / scale).clamp(1e-7, 1.0 - 1e-7)
+                    # nan_to_num before clamp: torch.clamp passes NaN through unchanged
+                    # which would trigger the CUDA-side assertion in binary_cross_entropy.
+                    p_norm = (p / scale).nan_to_num(nan=0.5).clamp(1e-7, 1.0 - 1e-7)
                     return F.binary_cross_entropy(p_norm, tgt.float(), reduction='none')
             print(f"Using k-bird prior (max-{self.kbird_prior:.1f} normalisation)")
         elif self.use_asl:
@@ -807,7 +809,7 @@ class Trainer:
                     target_features = model.get_features(target_data)
                     
                     # Classification loss (only on source domain with labels - always multilabel)
-                    source_output = torch.clamp(source_output, min=-80.0, max=80.0)
+                    source_output = torch.nan_to_num(source_output, nan=0.0, posinf=80.0, neginf=-80.0)
                     class_loss = self._background_weighted_loss(criterion, source_output, source_target)
                     
                     # Domain adaptation loss
@@ -866,7 +868,7 @@ class Trainer:
                         else:
                             output = model(data)
 
-                        output = torch.clamp(output, min=-80.0, max=80.0)
+                        output = torch.nan_to_num(output, nan=0.0, posinf=80.0, neginf=-80.0)
                         loss = self._background_weighted_loss(criterion, output, target)
 
                         if self.use_reconstruction:
@@ -880,7 +882,7 @@ class Trainer:
                             # Mirrors Kaytoo's BCEFocal2WayLoss which supervises both the
                             # final attention-pooled logit and the raw per-frame mean logit,
                             # giving the attention weights a gradient signal to localise birds.
-                            frame_logits = torch.clamp(frame_logits, min=-80.0, max=80.0)
+                            frame_logits = torch.nan_to_num(frame_logits, nan=0.0, posinf=80.0, neginf=-80.0)
                             aux_loss = self._background_weighted_loss(criterion, frame_logits, target)
                             loss = loss + aux_loss
 
