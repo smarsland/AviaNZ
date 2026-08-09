@@ -378,6 +378,31 @@ class Trainer:
             self.data = data_loader.load_data(use_multilabel=True, validation_share=0.2)
             self.num_classes = self.data['nclasses']
 
+        # Spot-check a sample of training spectrograms to catch bad data early.
+        _sample_files = self.data['train_filenames'][:20]
+        _bad_files = []
+        for _f in _sample_files:
+            try:
+                _sg = np.load(_f, allow_pickle=True)
+                if not np.isfinite(_sg).all():
+                    _bad_files.append((_f, 'NaN/Inf'))
+                elif _sg.max() < 1e-6:
+                    _bad_files.append((_f, f'all-near-zero max={_sg.max():.2e}'))
+                elif _sg.min() < -100:
+                    _bad_files.append((_f, f'suspicious negative min={_sg.min():.2e} '
+                                      f'(already log-transformed?)'))
+            except Exception as e:
+                _bad_files.append((_f, str(e)))
+        if _bad_files:
+            print(f"\n  ⚠️  WARNING: {len(_bad_files)}/20 sampled training files look suspicious:")
+            for _f, _reason in _bad_files[:5]:
+                print(f"    {_reason}  →  {_f}")
+            print("  This may cause NaN predictions or training instability.\n")
+        else:
+            _sg_sample = np.load(_sample_files[0], allow_pickle=True)
+            print(f"  Training data spot-check OK (sample range: "
+                  f"[{_sg_sample.min():.3f}, {_sg_sample.max():.3f}])")
+
         # Compute background rebalancing weight: equalise total gradient contribution
         # of background (all-zero) vs labelled samples.
         if self.rebalance_background:
@@ -726,7 +751,7 @@ class Trainer:
         
         print(f"Starting training for {self.max_epochs} epochs...")
         
-        best_val_acc = 0.0
+        best_val_acc = -1.0   # -1 so even 0.0 F1 at epoch 1 triggers a save
         best_epoch = -1
         epochs_without_improvement = 0
         
@@ -1423,15 +1448,43 @@ class Trainer:
         sample_idx = 0
         filenames_list = test_data['train_filenames']
 
+        _nan_warned = False
         with torch.no_grad():
             for batch in test_loader:
                 data, targets = batch
                 batch_size = data.size(0)
                 data = data.to(self.device)
 
+                # Sanity-check the INPUT before the forward pass.
+                if not _nan_warned and (torch.isnan(data).any() or torch.isinf(data).any()):
+                    print(f"  ⚠️  NaN/Inf in INPUT spectrogram tensor! "
+                          f"nan={torch.isnan(data).sum().item()} "
+                          f"inf={torch.isinf(data).sum().item()} "
+                          f"shape={tuple(data.shape)} "
+                          f"min={data[torch.isfinite(data)].min().item():.3f} "
+                          f"max={data[torch.isfinite(data)].max().item():.3f}")
+
                 output = model(data)
                 if isinstance(output, tuple):
                     output = output[0]
+
+                # Sanity-check the raw logits before applying _get_probs.
+                if not _nan_warned and torch.isnan(output).any():
+                    _nan_warned = True
+                    n_nan = torch.isnan(output).sum().item()
+                    finite = output[torch.isfinite(output)]
+                    print(f"  ⚠️  NaN in model OUTPUT logits! "
+                          f"nan_count={n_nan}/{output.numel()} "
+                          f"finite_range=[{finite.min().item():.3f}, {finite.max().item():.3f}]")
+                    print(f"     Input range: min={data.min().item():.3f} max={data.max().item():.3f}")
+                    # Check per-layer BN running stats for obvious corruption
+                    for name, mod in model.named_modules():
+                        if hasattr(mod, 'running_var'):
+                            bad = (mod.running_var < 0).sum().item()
+                            zero = (mod.running_var == 0).sum().item()
+                            if bad or zero:
+                                print(f"     BN layer '{name}': "
+                                      f"{bad} negative running_var, {zero} zero running_var")
 
                 probs = self._get_probs(output).cpu().numpy()
                 all_probs.append(probs)

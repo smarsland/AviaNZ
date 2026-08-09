@@ -149,15 +149,19 @@ def compute_thresholds(df, n_cands=101):
 # Evaluation
 # ---------------------------------------------------------------------------
 
-def evaluate(test_df, thresholds):
+def evaluate(test_df, thresholds, test_classes_only=False):
     """
     Apply thresholds to test_df and return macro F1, micro F1, exact accuracy.
 
-    Evaluated only on classes that:
-      1. Have a tuned threshold in `thresholds` (had positives in source), AND
-      2. Have at least one positive in the test ground truth.
+    Default mode (test_classes_only=False):
+      Evaluated only on classes that have BOTH a tuned threshold (had positives
+      in the threshold-source split) AND positives in the test ground truth.
 
-    No fallback.  Returns NaN if no classes satisfy both conditions.
+    test_classes_only=True:
+      Evaluated on all classes that have positives in the test ground truth,
+      regardless of whether they appeared in the threshold source.  Classes
+      without a tuned threshold use 0.5.  This answers: "given the test set's
+      own class distribution, how well does each model perform?"
     """
     nan_result = {"macro_f1": np.nan, "micro_f1": np.nan, "exact_acc": np.nan,
                   "n_classes": 0}
@@ -167,18 +171,31 @@ def evaluate(test_df, thresholds):
     if test_df.empty:
         return nan_result
 
-    present = [
-        cls for cls in pred_cols
-        if cls in thresholds
-        and "true_" + cls in test_df.columns
-        and int(test_df["true_" + cls].fillna(0).sum()) > 0
-    ]
+    if test_classes_only:
+        # All pred classes with positives in the test ground truth
+        present = [
+            cls for cls in pred_cols
+            if "true_" + cls in test_df.columns
+            and int(test_df["true_" + cls].fillna(0).sum()) > 0
+        ]
+        # Use tuned threshold if available, else 0.5
+        thresh = {cls: thresholds.get(cls, 0.5) for cls in present}
+    else:
+        # Must have a tuned threshold from the source split
+        present = [
+            cls for cls in pred_cols
+            if cls in thresholds
+            and "true_" + cls in test_df.columns
+            and int(test_df["true_" + cls].fillna(0).sum()) > 0
+        ]
+        thresh = {cls: thresholds[cls] for cls in present}
+
     if not present:
         return nan_result
 
     y_true = test_df[["true_" + c for c in present]].fillna(0).values.astype(np.int32)
     y_pred = np.column_stack([
-        (test_df[cls].values >= thresholds[cls]).astype(np.int32)
+        (test_df[cls].values >= thresh[cls]).astype(np.int32)
         for cls in present
     ])
 
@@ -218,6 +235,10 @@ def main():
     parser.add_argument("--metric", default="macro_f1",
                         choices=["macro_f1", "micro_f1", "exact_acc"],
                         help="Metric to plot (default: macro_f1).")
+    parser.add_argument("--test-classes-only", action="store_true",
+                        help="Evaluate only on classes present in each test set's ground "
+                             "truth.  Classes without a tuned threshold use 0.5.  "
+                             "Produces a separate figure (appends _test_classes to --out).")
     args = parser.parse_args()
 
     if args.model_tests:
@@ -312,7 +333,8 @@ def main():
             test_df = pd.concat(test_frames)
 
             thresholds = compute_thresholds(src_df)
-            metrics    = evaluate(test_df, thresholds)
+            metrics    = evaluate(test_df, thresholds,
+                                  test_classes_only=args.test_classes_only)
             results[ci][exp_name] = metrics[args.metric]
             n = metrics["n_classes"]
             v = metrics[args.metric]
