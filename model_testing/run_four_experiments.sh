@@ -40,7 +40,7 @@ done
 MATCHED="${BASE}/matched"
 AVIANZ_TEST="${MATCHED}/avianz_split/test"
 DOC_TEST="${MATCHED}/doc_split/test"
-COMBINED_DATASET="${BASE}/combined_dataset/combined_large"
+COMBINED_DATASET="${BASE}/combined_dataset/merged_train"
 COMBINED_DOC_HALF="${BASE}/combined_dataset/doc_large"
 COMBINED_AVIANZ_TEST="${BASE}/combined_dataset/avianz_split/test"
 COMBINED_DOC_TEST="${BASE}/combined_dataset/doc_split/test"
