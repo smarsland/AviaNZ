@@ -73,6 +73,8 @@ Examples:
     # Preprocessing
     parser.add_argument('--bg-subtract', action='store_true',
                        help="Apply background subtraction normalization (works independently)")
+    parser.add_argument('--apply-reverb', action='store_true',
+                       help="Apply reverberation to loud noises")
     parser.add_argument('--median-filter', action='store_true',
                        help="Apply temporal median filtering (works independently)")
     parser.add_argument('--deltas', action='store_true', dest='use_deltas',

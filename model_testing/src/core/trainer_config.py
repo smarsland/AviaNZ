@@ -55,6 +55,7 @@ class AugmentationConfig:
     max_noise_samples: Optional[int] = None
     use_temporal_roll: bool = config.DEFAULT_TEMPORAL_ROLL
     bg_subtract: bool = False  # Background subtraction normalization (independent)
+    apply_reverb: bool = False  # Apply reverberation to loud noises (independent)
     median_filter: bool = False  # Temporal median filtering (independent)
     no_background: bool = False  # Drop all-zero (background) training samples
     use_deltas: bool = False  # Add delta + delta-delta channels (3-ch input; encodes rate-of-change)
@@ -152,6 +153,7 @@ class TrainerConfig:
                 max_noise_samples=getattr(args, 'max_noise_samples', None),
                 use_temporal_roll=getattr(args, 'temporal_roll', config.DEFAULT_TEMPORAL_ROLL),
                 bg_subtract=getattr(args, 'bg_subtract', False),
+                apply_reverb=getattr(args, 'apply_reverb', False),
                 median_filter=getattr(args, 'median_filter', False),
                 no_background=getattr(args, 'no_background', False),
                 use_deltas=getattr(args, 'use_deltas', False),

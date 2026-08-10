@@ -278,6 +278,7 @@ class Trainer:
         self.max_noise_samples = cfg.augmentation.max_noise_samples
         self.use_temporal_roll = cfg.augmentation.use_temporal_roll
         self.bg_subtract = cfg.augmentation.bg_subtract
+        self.apply_reverb = cfg.augmentation.apply_reverb
         self.median_filter = cfg.augmentation.median_filter
         self.no_background = getattr(cfg.augmentation, 'no_background', False)
         self.use_deltas = getattr(cfg.augmentation, 'use_deltas', False)
@@ -459,7 +460,7 @@ class Trainer:
             cropping_mode='random', noise_ratio=self.noise_ratio,
             spec_transform=self.spec_transform,
             num_workers=num_workers, width_downsizing=None, mixup_alpha=self.mixup_alpha,
-            use_class_balancing=False, bg_subtract=self.bg_subtract,
+            use_class_balancing=False, bg_subtract=self.bg_subtract, apply_reverb=self.apply_reverb,
             median_filter=self.median_filter,
             use_temporal_roll=self.use_temporal_roll,
             mixup_mode=self.mixup_mode,
@@ -476,7 +477,7 @@ class Trainer:
                 cropping_mode='random', noise_ratio=0.0,  # No noise augmentation for target
                 spec_transform=self.spec_transform,
                 num_workers=num_workers, width_downsizing=None, mixup_alpha=0.0,  # No mixup for target
-                use_class_balancing=False, bg_subtract=self.bg_subtract,
+                use_class_balancing=False, bg_subtract=self.bg_subtract, apply_reverb=self.apply_reverb,
                 median_filter=self.median_filter,
                 use_temporal_roll=self.use_temporal_roll,
                 mixup_mode='mixup',
@@ -1253,7 +1254,7 @@ class Trainer:
             test_data1['train_filenames'], test_data1['train_labels'],
             self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
             noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
-            training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
+            training=False, width_downsizing=None, bg_subtract=self.bg_subtract, apply_reverb=False,
             median_filter=self.median_filter, use_temporal_roll=False,
             noise_mode='full', background_prob=0.0,
             ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
@@ -1280,7 +1281,7 @@ class Trainer:
             val_data_for_pred['train_filenames'], val_data_for_pred['train_labels'],
             self.img_height, self.img_width, config.DEFAULT_CHANNELS, 'center',
             noise_filenames=None, noise_ratio=0.0, spec_transform=self.spec_transform,
-            training=False, width_downsizing=None, bg_subtract=self.bg_subtract,
+            training=False, width_downsizing=None, bg_subtract=self.bg_subtract, apply_reverb=False,
             median_filter=self.median_filter, use_temporal_roll=False,
             noise_mode='full', background_prob=0.0,
             ast_channel_dir=self.ast_channel_dir, use_deltas=self.use_deltas,
@@ -1387,6 +1388,7 @@ class Trainer:
         # Save ALL augmentation/normalization parameters for inference consistency
         model_config['spec_transform'] = self.spec_transform
         model_config['bg_subtract'] = self.bg_subtract
+        model_config['apply_reverb'] = self.apply_reverb
         model_config['median_filter'] = self.median_filter
         
         # Save to JSON

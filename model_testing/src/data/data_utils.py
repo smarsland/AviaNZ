@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from scipy.stats import boxcox
 from scipy.ndimage import label
 from .normalizer import normalize_spectrogram
+from .reverberator import apply_reverb
 
 
 def get_background_spectrogram(img):
@@ -235,7 +236,7 @@ class SpectrogramDataset(Dataset):
     def __init__(self, filenames, labels, img_height, img_width, channels=1,
                  cropping_mode="center", noise_filenames=None, noise_ratio=0.3,
                  spec_transform="Log", training=True, width_downsizing=None, bg_subtract=False,
-                 median_filter=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0,
+                 median_filter=False, apply_reverb=False, use_temporal_roll=True, noise_mode='full', background_prob=0.0,
                  ast_channel_dir=None, use_deltas=False):
         """
         Initialize SpectrogramDataset.
@@ -253,6 +254,7 @@ class SpectrogramDataset(Dataset):
             training: Whether this is training data (affects augmentation)
             width_downsizing: Stride for width downsampling (e.g., 4 means [:, ::4])
             bg_subtract: Whether to apply background subtraction (independent)
+            apply_reverb: Whether to apply reverberation to loud noises (independent)
             median_filter: Whether to apply temporal median filtering (independent)
             use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
             noise_mode: How to extract noise - 'full' (mix entire spectrogram), 'background' (extract quiet segments), 'both' (random 50/50)
@@ -275,6 +277,7 @@ class SpectrogramDataset(Dataset):
         self.width_downsizing = width_downsizing
         self.bg_subtract = bg_subtract
         self.median_filter = median_filter
+        self.apply_reverb = apply_reverb
         self.use_temporal_roll = use_temporal_roll if training else False  # Only roll during training
         self.noise_mode = noise_mode
         self.background_prob = background_prob if training else 0.0
@@ -316,6 +319,8 @@ class SpectrogramDataset(Dataset):
             print(f"Background subtraction: enabled")
         if self.median_filter:
             print(f"Median filtering: enabled")
+        if self.apply_reverb:
+            print(f"Reverberation augmentation: enabled")
         if self.background_prob > 0:
             print(f"⚡ Background replacement: {self.background_prob*100:.1f}% of samples replaced with background (labels zeroed)")
         print(f"Time-axis padding: ZERO PADDING")
@@ -360,6 +365,16 @@ class SpectrogramDataset(Dataset):
         if (self.training and not is_all_zero_label and not replace_with_background
                 and len(self.noise_filenames) > 0 and self.noise_ratio > 0):
             data = self._mix_noise_2d(data)
+
+        # Apply reverberation to the spectrogram
+        if self.training and self.apply_reverb:
+            # randomly choose a range of frequencies to apply reverb to and the type etc
+            freq_start = self.rng.randint(0, data.shape[0]-1)
+            freq_end = self.rng.randint(freq_start+1, data.shape[0])
+            delay_mean = np.random.uniform(5, 15)
+            delay_std = delay_mean # they go hand-in-hand
+            length = 30 # number of time-bins to use at most
+            data = apply_reverb(data, freq_start, freq_end, delay_mean, delay_std, length)
 
         # Apply spectrogram transformation on the 2D raw data, before padding.
         # For LogMinMax, background subtraction must happen between the log step and
@@ -862,7 +877,7 @@ def sparse_collate_fn(batch):
 def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
                        cropping_mode="center", noise_ratio=0.3, spec_transform=None,
                        num_workers=4, width_downsizing=None, mixup_alpha=0.0,
-                       use_class_balancing=False, bg_subtract=False, median_filter=False,
+                       use_class_balancing=False, bg_subtract=False, apply_reverb=False, median_filter=False,
                        use_temporal_roll=True,
                        mixup_mode='mixup', noise_mode='full', background_prob=0.0,
                        ast_channel_dir=None, use_deltas=False):
@@ -883,6 +898,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         mixup_alpha: Mixup alpha parameter (0 = disabled, 0.3-0.5 recommended)
         use_class_balancing: If True, balance classes using WeightedRandomSampler
         bg_subtract: If True, apply background subtraction to spectrograms
+        apply_reverb: If True, apply reverberation augmentation to spectrograms
         median_filter: If True, apply temporal median filtering to spectrograms
         use_temporal_roll: If True, randomly shift spectrogram along time axis (circular) during training
         mixup_mode: Augmentation mode when mixup_alpha > 0: 'mixup', 'cutmix', or 'both' (default: 'mixup')
@@ -908,6 +924,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
         training=True,
         width_downsizing=width_downsizing,
         bg_subtract=bg_subtract,
+        apply_reverb=apply_reverb,
         median_filter=median_filter,
         use_temporal_roll=use_temporal_roll,
         noise_mode=noise_mode,
@@ -927,6 +944,7 @@ def create_data_loaders(data, batch_size, img_height, img_width, channels=1,
             training=False,
             width_downsizing=width_downsizing,
             bg_subtract=bg_subtract,
+            apply_reverb=False,
             median_filter=median_filter,
             use_temporal_roll=False,  # Never roll validation data
             noise_mode='full',  # Not used (no noise in validation)

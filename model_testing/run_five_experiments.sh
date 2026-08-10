@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run the four comparison experiments:
+# Run the five comparison experiments:
 #   1. Kaytoo pretrained
 #   2. BirdNET pretrained
 #   3. RegNet + bg-subtract + kbird-prior 2, trained on DOC only
 #   4. RegNet + bg-subtract + kbird-prior 2, trained on DOC + AviaNZ
+#   5. RegNet + bg-subtract + kbird-prior 2 + apply-reverb, trained on DOC only
 #
 # Usage:
-#   bash run_four_experiments.sh
-#   bash run_four_experiments.sh --force
-#   bash run_four_experiments.sh --rebuild-data
+#   bash run_five_experiments.sh
+#   bash run_five_experiments.sh --force
+#   bash run_five_experiments.sh --rebuild-data
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -58,6 +59,7 @@ OUT_KAYTOO="${OUT_ROOT}/kaytoo_pretrained_seed0"
 OUT_BIRDNET="${OUT_ROOT}/birdnet_pretrained_seed0"
 OUT_REGNET_DOC="${OUT_ROOT}/regnet_on_doc_bgsub"
 OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
+OUT_REGNET_DOC_REVERB="${OUT_ROOT}/regnet_on_doc_bgsub_reverb"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
@@ -109,7 +111,7 @@ fi
 
 # ------------------------------------------------------------- 1. Kaytoo
 echo ""
-echo ">>> 1/4 Kaytoo pretrained"
+echo ">>> 1/5 Kaytoo pretrained"
 for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   dataset_key="$(get_dataset_key "$folder")"
   marker="$OUT_KAYTOO/$dataset_key/done"
@@ -130,7 +132,7 @@ done
 
 # ------------------------------------------------------------ 2. BirdNET
 echo ""
-echo ">>> 2/4 BirdNET pretrained"
+echo ">>> 2/5 BirdNET pretrained"
 for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   dataset_key="$(get_dataset_key "$folder")"
   marker="$OUT_BIRDNET/$dataset_key/done"
@@ -148,7 +150,7 @@ done
 
 # -------------------------------------------------------- 3. RegNet / DOC
 echo ""
-echo ">>> 3/4 RegNet + bgsub, DOC only"
+echo ">>> 3/5 RegNet + bgsub, DOC only"
 
 # Training
 training_marker="$OUT_REGNET_DOC/training_history.json"
@@ -187,7 +189,7 @@ done
 
 # --------------------------------------------------- 4. RegNet / combined
 echo ""
-echo ">>> 4/4 RegNet + bgsub, combined DOC + AviaNZ"
+echo ">>> 4/5 RegNet + bgsub, combined DOC + AviaNZ"
 
 # Training
 training_marker="$OUT_REGNET_COMBINED/training_history.json"
@@ -219,6 +221,47 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --spec-transform Log \
     --bg-subtract \
     --kbird-prior 2.0 \
+    --seed 0 \
+    --eval-only --test-folder "$folder"
+  touch "$marker"
+done
+
+# --------------------------------------------------- 5. RegNet / DOC + reverb
+echo ""
+echo ">>> 5/5 RegNet + bgsub + apply-reverb, DOC only"
+
+# Training
+training_marker="$OUT_REGNET_DOC_REVERB/training_history.json"
+if [[ "$FORCE" == false && -f "$training_marker" ]]; then
+  echo "  Training already done, skipping"
+else
+  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC_REVERB" \
+    --model-type regnet \
+    --pretrained "$PRETRAINED_MODEL" \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --apply-reverb \
+    --epochs 40 --patience 15 --seed 0
+fi
+
+# Evaluation
+for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+  dataset_key="$(get_dataset_key "$folder")"
+  marker="$OUT_REGNET_DOC_REVERB/$dataset_key/done"
+  
+  if [[ "$FORCE" == false && -f "$marker" ]]; then
+    echo "  Skipping $dataset_key (already evaluated)"
+    continue
+  fi
+  
+  mkdir -p "$(dirname "$marker")"
+  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC_REVERB" \
+    --model-type regnet \
+    --spec-transform Log \
+    --bg-subtract \
+    --kbird-prior 2.0 \
+    --apply-reverb \
     --seed 0 \
     --eval-only --test-folder "$folder"
   touch "$marker"
