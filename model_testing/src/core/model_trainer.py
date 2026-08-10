@@ -893,7 +893,25 @@ class Trainer:
                         else:
                             output = model(data)
 
-                        output = torch.nan_to_num(output, nan=0.0, posinf=80.0, neginf=-80.0)
+                            if not torch.isfinite(output).all():
+                                print(f"\nFUCKED AT epoch={epoch+1}, batch={batch_idx}")
+                                print("input finite:", torch.isfinite(data).all().item())
+                                print("output NaN:", torch.isnan(output).sum().item())
+                                print("output Inf:", torch.isinf(output).sum().item())
+
+                                for name, p in model.named_parameters():
+                                    if not torch.isfinite(p).all():
+                                        print("BAD WEIGHT:", name)
+                                        break
+
+                                for name, p in model.named_parameters():
+                                    if p.grad is not None and not torch.isfinite(p.grad).all():
+                                        print("BAD GRADIENT:", name)
+                                        break
+
+                                raise RuntimeError("NON-FINITE MODEL OUTPUT")
+
+                        # output = torch.nan_to_num(output, nan=0.0, posinf=80.0, neginf=-80.0)
                         loss = self._background_weighted_loss(criterion, output, target)
 
                         if self.use_reconstruction:
