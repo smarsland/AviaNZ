@@ -187,27 +187,33 @@ if should_run regnet_doc "$OUT_REGNET_DOC/training_history.json"; then
     --epochs 40 --patience 15 --seed 0
 fi
 
-echo ""
-echo ">>> 3/4 RegNet + bgsub, DOC only — evaluation"
-for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-  dataset_key="$(basename "$(dirname "$(dirname "$folder")")")__$(basename "$(dirname "$folder")")"
-  eval_marker="$OUT_REGNET_DOC/$dataset_key/eval_done"
-  
-  if eval_already_done "$OUT_REGNET_DOC" "$dataset_key"; then
-    echo "  Skipping $dataset_key (already evaluated)"
-    continue
-  fi
-  
-  mkdir -p "$(dirname "$eval_marker")"
-  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
-    --model-type regnet \
-    --spec-transform Log \
-    --bg-subtract \
-    --kbird-prior 2.0 \
-    --seed 0 \
-    --eval-only --test-folder "$folder"
-  touch "$eval_marker"
-done
+# Check if evaluation for RegNet DOC is already completely done
+if [[ "$FORCE" == false && -f "$OUT_REGNET_DOC/eval_all_done" ]]; then
+  echo "--- regnet_doc evaluation: already done, skipping"
+else
+  echo ""
+  echo ">>> 3/4 RegNet + bgsub, DOC only — evaluation"
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(basename "$(dirname "$(dirname "$folder")")")__$(basename "$(dirname "$folder")")"
+    eval_marker="$OUT_REGNET_DOC/$dataset_key/eval_done"
+    
+    if [[ "$FORCE" == false && -f "$eval_marker" ]]; then
+      echo "  Skipping $dataset_key (already evaluated)"
+      continue
+    fi
+    
+    mkdir -p "$(dirname "$eval_marker")"
+    python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC" \
+      --model-type regnet \
+      --spec-transform Log \
+      --bg-subtract \
+      --kbird-prior 2.0 \
+      --seed 0 \
+      --eval-only --test-folder "$folder"
+    touch "$eval_marker"
+  done
+  touch "$OUT_REGNET_DOC/eval_all_done"
+fi
 
 # --------------------------------------------------- 4. RegNet / combined
 if should_run regnet_combined "$OUT_REGNET_COMBINED/training_history.json"; then
@@ -222,24 +228,30 @@ if should_run regnet_combined "$OUT_REGNET_COMBINED/training_history.json"; then
     --epochs 40 --patience 15 --seed 0
 fi
 
-echo ""
-echo ">>> 4/4 RegNet + bgsub, combined DOC + AviaNZ — evaluation"
-for folder in "${FOUR_TEST_FOLDERS[@]}"; do
-  dataset_key="$(basename "$(dirname "$(dirname "$folder")")")__$(basename "$(dirname "$folder")")"
-  eval_marker="$OUT_REGNET_COMBINED/$dataset_key/eval_done"
-  
-  if eval_already_done "$OUT_REGNET_COMBINED" "$dataset_key"; then
-    echo "  Skipping $dataset_key (already evaluated)"
-    continue
-  fi
-  
-  mkdir -p "$(dirname "$eval_marker")"
-  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
-    --model-type regnet \
-    --spec-transform Log \
-    --bg-subtract \
-    --kbird-prior 2.0 \
-    --seed 0 \
-    --eval-only --test-folder "$folder"
-  touch "$eval_marker"
-done
+# Check if evaluation for RegNet combined is already completely done
+if [[ "$FORCE" == false && -f "$OUT_REGNET_COMBINED/eval_all_done" ]]; then
+  echo "--- regnet_combined evaluation: already done, skipping"
+else
+  echo ""
+  echo ">>> 4/4 RegNet + bgsub, combined DOC + AviaNZ — evaluation"
+  for folder in "${FOUR_TEST_FOLDERS[@]}"; do
+    dataset_key="$(basename "$(dirname "$(dirname "$folder")")")__$(basename "$(dirname "$folder")")"
+    eval_marker="$OUT_REGNET_COMBINED/$dataset_key/eval_done"
+    
+    if [[ "$FORCE" == false && -f "$eval_marker" ]]; then
+      echo "  Skipping $dataset_key (already evaluated)"
+      continue
+    fi
+    
+    mkdir -p "$(dirname "$eval_marker")"
+    python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_COMBINED" \
+      --model-type regnet \
+      --spec-transform Log \
+      --bg-subtract \
+      --kbird-prior 2.0 \
+      --seed 0 \
+      --eval-only --test-folder "$folder"
+    touch "$eval_marker"
+  done
+  touch "$OUT_REGNET_COMBINED/eval_all_done"
+fi
