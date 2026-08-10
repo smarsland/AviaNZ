@@ -22,6 +22,7 @@ KAYTOO_ROOT="${KAYTOO_ROOT:-$REPO_ROOT/../Kaytoo}"
 DOC_RAW_DIR_OVERRIDE="${DOC_RAW_DIR:-}"
 AVIANZ_RAW_DIR_OVERRIDE="${AVIANZ_RAW_DIR:-}"
 KAYTOO_CORES="${KAYTOO_CORES:-4}"
+KAYTOO_PYTHON="${KAYTOO_PYTHON:-$KAYTOO_ROOT/venv_kay/bin/python}"
 FORCE=false
 REBUILD_DATA=false
 
@@ -122,7 +123,7 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   fi
   
   mkdir -p "$(dirname "$marker")"
-  python3 scripts/evaluate_kaytoo.py "$folder" \
+  "$KAYTOO_PYTHON" scripts/evaluate_kaytoo.py "$folder" \
     --kaytoo-root "$KAYTOO_ROOT" \
     --mapping "$SCRIPT_DIR/data/DOC_bird_naming_map.csv" \
     --cores "$KAYTOO_CORES" \

@@ -87,6 +87,11 @@ SCIENTIFIC_TO_CODE = {
 COMMON_NAME_TO_CODE = {v.lower(): k for k, v in SPECIES_MAPPING.items()}
 
 
+def _common_name_col(common_name):
+    """Normalise a BirdNET common name to a safe CSV column identifier."""
+    return common_name.strip().lower().replace(' ', '_').replace('/', '_').replace("'", '')
+
+
 def label_to_codes(label):
     label = label.strip().lower()
     label = label.replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
@@ -237,20 +242,27 @@ class BirdNETEvaluator:
 
             detections = self.predict_file(wav_file)
 
-            # Collect max confidence per dataset class label (raw scores for threshold tuning)
+            # Collect max confidence per label (raw scores for threshold tuning).
+            # NZ target species → dataset common-name label (e.g. 'fantail').
+            # All other BirdNET species → normalised common-name column.
             max_conf = defaultdict(float)
 
             # Predicted codes: all detections at or above min_confidence that map to a valid code
             pred_codes = set()
             for det in detections:
                 birdnet_species_seen.add(det['scientific_name'])
+                conf = det['confidence']
                 code = SCIENTIFIC_TO_CODE.get(det['scientific_name'])
                 if code:
                     dataset_label = code_to_dataset_label.get(code)
                     if dataset_label:
-                        max_conf[dataset_label] = max(max_conf[dataset_label], det['confidence'])
-                    if det['confidence'] >= self.min_confidence and code in valid_codes:
+                        max_conf[dataset_label] = max(max_conf[dataset_label], conf)
+                    if conf >= self.min_confidence and code in valid_codes:
                         pred_codes.add(code)
+                else:
+                    # Non-target species: record score under normalised common name
+                    col = _common_name_col(det['common_name'])
+                    max_conf[col] = max(max_conf[col], conf)
 
             correct = pred_codes == gt_codes
 
@@ -265,13 +277,20 @@ class BirdNETEvaluator:
                 'correct': correct,
             })
 
-            # Raw score record: npy filename + per-class max confidence (0 if not detected)
+            # Raw score record: npy filename + per-class max confidence (0 if not detected).
+            # Store ALL detected labels (NZ target + non-target) so that plot_results.py
+            # standard mode can penalise BirdNET for spurious non-NZ predictions.
             gt_labels = [lbl for lbl in all_dataset_labels
                          if any(c in valid_codes for c in label_to_codes(lbl)
                                 if c in gt_codes)]
             raw_rec = {'filename': npy_filename, 'gt_classes': gt_labels}
+            # NZ target species (fill 0 when not detected)
             for lbl in all_dataset_labels:
                 raw_rec[lbl] = max_conf.get(lbl, 0.0)
+            # Non-target species (only entries actually detected, rest filled later)
+            for col, score in max_conf.items():
+                if col not in raw_rec:
+                    raw_rec[col] = score
             raw_score_records.append(raw_rec)
 
         n = len(file_results)
@@ -621,7 +640,15 @@ class BirdNETEvaluator:
                     continue
                 split_name = result['dataset_name']
                 csv_path = self.output_folder / f'predictions_{split_name}.csv'
-                class_cols = sorted(c for c in raw_records[0] if c not in ('filename', 'gt_codes', 'gt_classes', 'pred_codes', 'correct'))
+                # Build column list from the union of all records (non-target species
+                # may only appear in some records).
+                _skip = {'filename', 'gt_codes', 'gt_classes', 'pred_codes', 'correct'}
+                class_cols = sorted({c for rec in raw_records for c in rec if c not in _skip})
+                # Fill any missing columns with 0 so every record is complete.
+                for rec in raw_records:
+                    for c in class_cols:
+                        if c not in rec:
+                            rec[c] = 0.0
                 with open(csv_path, 'w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(['filename'] + class_cols + [f'true_{c}' for c in class_cols])

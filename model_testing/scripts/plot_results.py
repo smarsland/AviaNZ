@@ -10,14 +10,18 @@ Six conditions (2 rows x 3 columns):
   Row 2 - matched test sets, thresholds transferred from large sets:
     (4) Matched-DOC test,           thresholds from combined-DOC
     (5) Matched-AviaNZ test,        thresholds from combined-AviaNZ
-    (6) Matched-AviaNZ test,        thresholds from combined-DOC  [cross-domain]
+    (6) Matched combined test,       thresholds from combined (DOC+AviaNZ)
 
 Each model is evaluated on ALL its own classes - no label normalisation.
 Thresholds are computed per-class from the source split and matched to the test
 split by class name.  Each model's CSVs use a consistent label scheme, so
-within-model threshold transfer is exact.  For condition (6), only classes that
-have a tuned threshold from the DOC source AND have positives in the AviaNZ
-test are evaluated - no fallback thresholds for unmatched classes.
+within-model threshold transfer is exact.
+
+Two figures are always produced:
+  <out>           - standard mode: thresholds computed on all source classes.
+  <out>_test_classes - restricted mode: source data is first filtered to only
+                       classes present in the test ground truth before thresholds
+                       are computed, then applied to the test set.
 
 Note: macro F1 is not directly comparable across models with very different
 class counts (BirdNET 9 vs Kaytoo ~85 vs RegNet 120).
@@ -154,14 +158,14 @@ def evaluate(test_df, thresholds, test_classes_only=False):
     Apply thresholds to test_df and return macro F1, micro F1, exact accuracy.
 
     Default mode (test_classes_only=False):
-      Evaluated only on classes that have BOTH a tuned threshold (had positives
-      in the threshold-source split) AND positives in the test ground truth.
+      Evaluated on ALL classes that have a tuned threshold AND a prediction
+      column in test_df.  Classes absent from the test ground truth (no true_
+      column or all-zero true labels) contribute F1=0 to the macro average,
+      penalising models that predict irrelevant species on the test set.
 
     test_classes_only=True:
-      Evaluated on all classes that have positives in the test ground truth,
-      regardless of whether they appeared in the threshold source.  Classes
-      without a tuned threshold use 0.5.  This answers: "given the test set's
-      own class distribution, how well does each model perform?"
+      Evaluated only on classes that have positives in the test ground truth.
+      Classes without a tuned threshold fall back to threshold 0.5.
     """
     nan_result = {"macro_f1": np.nan, "micro_f1": np.nan, "exact_acc": np.nan,
                   "n_classes": 0}
@@ -172,30 +176,31 @@ def evaluate(test_df, thresholds, test_classes_only=False):
         return nan_result
 
     if test_classes_only:
-        # All pred classes with positives in the test ground truth
+        # Only classes with actual positives in the test ground truth.
         present = [
             cls for cls in pred_cols
             if "true_" + cls in test_df.columns
             and int(test_df["true_" + cls].fillna(0).sum()) > 0
         ]
-        # Use tuned threshold if available, else 0.5
         thresh = {cls: thresholds.get(cls, 0.5) for cls in present}
     else:
-        # Must have a tuned threshold from the source split
-        present = [
-            cls for cls in pred_cols
-            if cls in thresholds
-            and "true_" + cls in test_df.columns
-            and int(test_df["true_" + cls].fillna(0).sum()) > 0
-        ]
-        thresh = {cls: thresholds[cls] for cls in present}
+        # All classes the model predicts for which a threshold was tuned.
+        # Missing true_ columns → all-zero ground truth → F1=0 for that class.
+        present = [cls for cls in pred_cols if cls in thresholds]
+        thresh  = {cls: thresholds[cls] for cls in present}
 
     if not present:
         return nan_result
 
-    y_true = test_df[["true_" + c for c in present]].fillna(0).values.astype(np.int32)
+    # Build ground truth: use true_ column when available, zeros otherwise.
+    y_true = np.column_stack([
+        test_df["true_" + cls].fillna(0).values.astype(np.int32)
+        if "true_" + cls in test_df.columns
+        else np.zeros(len(test_df), dtype=np.int32)
+        for cls in present
+    ])
     y_pred = np.column_stack([
-        (test_df[cls].values >= thresh[cls]).astype(np.int32)
+        (test_df[cls].fillna(0).values >= thresh[cls]).astype(np.int32)
         for cls in present
     ])
 
@@ -222,6 +227,137 @@ def evaluate(test_df, thresholds, test_classes_only=False):
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def get_test_classes(test_df):
+    """Return the set of class names that have positives in the test ground truth."""
+    pred_cols = [c for c in test_df.columns if not c.startswith("true_")]
+    return {
+        cls for cls in pred_cols
+        if "true_" + cls in test_df.columns
+        and int(test_df["true_" + cls].fillna(0).sum()) > 0
+    }
+
+
+def restrict_to_classes(df, classes):
+    """Keep only prediction and ground-truth columns for the given class names."""
+    keep = [c for c in df.columns
+            if c in classes or (c.startswith("true_") and c[5:] in classes)]
+    return df[keep] if keep else df.iloc[:, 0:0]
+
+
+def run_conditions(model_data, metric, conditions, test_classes_only=False):
+    """Compute *metric* for every (condition, model) combination.
+
+    When test_classes_only=True the threshold-source DataFrame is restricted
+    to only the classes with positives in the test ground truth before
+    thresholds are computed.
+    """
+    results = [{} for _ in conditions]
+    for ci, (_title, thresh_splits, test_split) in enumerate(conditions):
+        for exp_name, _label, _layout in MODELS:
+            splits = model_data[exp_name]
+
+            src_frames = [splits[s] for s in thresh_splits if splits[s] is not None]
+            if not src_frames:
+                results[ci][exp_name] = np.nan
+                continue
+            src_df = pd.concat(src_frames)
+
+            if isinstance(test_split, list):
+                test_frames = [splits[s] for s in test_split if splits[s] is not None]
+            else:
+                test_frames = [splits[test_split]] if splits[test_split] is not None else []
+            if not test_frames:
+                results[ci][exp_name] = np.nan
+                continue
+            test_df = pd.concat(test_frames)
+
+            if test_classes_only:
+                test_cls = get_test_classes(test_df)
+                src_df   = restrict_to_classes(src_df, test_cls)
+
+            thresholds = compute_thresholds(src_df)
+            metrics    = evaluate(test_df, thresholds,
+                                  test_classes_only=test_classes_only)
+            results[ci][exp_name] = metrics[metric]
+            n = metrics["n_classes"]
+            v = metrics[metric]
+            vs = f"{v:.3f}" if not np.isnan(v) else "nan"
+            print(f"  cond {ci+1}  {exp_name:42s}  {metric}={vs}  n_classes={n}")
+    return results
+
+
+def draw_figure(results, metric, conditions, out_path, note=""):
+    """Draw the 2x3 bar-chart figure and save it to *out_path*."""
+    exp_names = [n for n, _, _ in MODELS]
+    labels    = [lbl for _, lbl, _ in MODELS]
+    x     = np.arange(len(MODELS))
+    bar_w = 0.6
+    ymax  = 115 if metric == "exact_acc" else 1.15
+
+    metric_label = {
+        "macro_f1":  "Macro F1",
+        "micro_f1":  "Micro F1",
+        "exact_acc": "Exact Accuracy (%)",
+    }[metric]
+
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8), sharey=True)
+    axes = axes.flatten()
+
+    for ci, (title, _, _) in enumerate(conditions):
+        ax = axes[ci]
+        vals = [results[ci].get(n, np.nan) for n in exp_names]
+
+        for i, (v, exp_name) in enumerate(zip(vals, exp_names)):
+            if np.isnan(v):
+                ax.bar(i, 0, bar_w, color="#DDDDDD", edgecolor="#AAAAAA",
+                       linewidth=0.8, alpha=0.6)
+                ax.text(i, ymax * 0.02, "N/A", ha="center", va="bottom",
+                        fontsize=8, color="#888888")
+            else:
+                ax.bar(i, v, bar_w,
+                       color=BAR_COLOR[exp_name], edgecolor=BAR_EDGE[exp_name],
+                       linewidth=0.8, zorder=3)
+                ax.text(i, v + ymax * 0.005, f"{v:.3f}",
+                        ha="center", va="bottom", fontsize=8, zorder=5)
+
+        ax.set_title(title, fontsize=9, fontweight="bold", pad=6)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=7.5)
+        ax.set_ylabel(metric_label if ci % 3 == 0 else "", fontsize=9)
+        ax.set_ylim(0, ymax)
+        ax.yaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        if ci == 0:
+            ax.annotate("LARGE TEST SETS\n(oracle thresholds)",
+                        xy=(-0.22, 0.5), xycoords="axes fraction",
+                        fontsize=8, fontweight="bold", color="#555555",
+                        ha="center", va="center", rotation=90)
+        if ci == 3:
+            ax.annotate("MATCHED TEST SETS\n(transferred thresholds)",
+                        xy=(-0.22, 0.5), xycoords="axes fraction",
+                        fontsize=8, fontweight="bold", color="#555555",
+                        ha="center", va="center", rotation=90)
+
+    note_str = f"  |  {note}" if note else ""
+    fig.suptitle(
+        f"Model comparison \u2014 {metric_label}{note_str}\n"
+        "Each model evaluated on all its own classes  |  "
+        "per-class thresholds tuned on source split",
+        fontsize=11, fontweight="bold",
+    )
+    plt.tight_layout(rect=[0.06, 0.02, 1.0, 0.95])
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure saved -> {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -235,10 +371,6 @@ def main():
     parser.add_argument("--metric", default="macro_f1",
                         choices=["macro_f1", "micro_f1", "exact_acc"],
                         help="Metric to plot (default: macro_f1).")
-    parser.add_argument("--test-classes-only", action="store_true",
-                        help="Evaluate only on classes present in each test set's ground "
-                             "truth.  Classes without a tuned threshold use 0.5.  "
-                             "Produces a separate figure (appends _test_classes to --out).")
     args = parser.parse_args()
 
     if args.model_tests:
@@ -305,131 +437,61 @@ def main():
             "matched_avianz",
         ),
         (
-            "Matched-AviaNZ test\n(large-DOC thresholds)\n[cross-domain]",
-            ["combined_doc"],
-            "matched_avianz",
+            "Matched combined test\n(combined thresholds)",
+            ["combined_doc", "combined_avianz"],
+            ["matched_doc", "matched_avianz"],
         ),
     ]
 
-    results = [{} for _ in CONDITIONS]
-
-    for ci, (_title, thresh_splits, test_split) in enumerate(CONDITIONS):
-        for exp_name, _label, _layout in MODELS:
-            splits = model_data[exp_name]
-
-            src_frames = [splits[s] for s in thresh_splits if splits[s] is not None]
-            if not src_frames:
-                results[ci][exp_name] = np.nan
-                continue
-            src_df = pd.concat(src_frames)
-
-            if isinstance(test_split, list):
-                test_frames = [splits[s] for s in test_split if splits[s] is not None]
-            else:
-                test_frames = [splits[test_split]] if splits[test_split] is not None else []
-            if not test_frames:
-                results[ci][exp_name] = np.nan
-                continue
-            test_df = pd.concat(test_frames)
-
-            thresholds = compute_thresholds(src_df)
-            metrics    = evaluate(test_df, thresholds,
-                                  test_classes_only=args.test_classes_only)
-            results[ci][exp_name] = metrics[args.metric]
-            n = metrics["n_classes"]
-            v = metrics[args.metric]
-            vs = f"{v:.3f}" if not np.isnan(v) else "nan"
-            print(f"  cond {ci+1}  {exp_name:42s}  {args.metric}={vs}  n_classes={n}")
-
-    print()
-
-    # ------------------------------------------------------------ print table
     metric_label = {
         "macro_f1":  "Macro F1",
         "micro_f1":  "Micro F1",
         "exact_acc": "Exact Accuracy (%)",
     }[args.metric]
 
-    col_w = 22
-    header = f"{'Condition':<45}" + "".join(
-        f"{lbl.replace(chr(10), ' '):>{col_w}}" for _, lbl, _ in MODELS
-    )
-    sep = "=" * len(header)
-    print(metric_label)
-    print(sep)
-    print(header)
-    print("-" * len(header))
-    for ci, (title, _, _) in enumerate(CONDITIONS):
-        row_label = title.replace("\n", " / ")[:44]
-        vals = "".join(
-            f"{results[ci][n]:>{col_w}.3f}" if not np.isnan(results[ci].get(n, np.nan))
-            else f"{'--':>{col_w}}"
-            for n, _, _ in MODELS
+    for test_classes_only in [False, True]:
+        mode_desc = (
+            "thresholds restricted to test-set classes"
+            if test_classes_only else
+            "standard (all source classes)"
         )
-        print(f"{row_label:<45}{vals}")
-    print(sep)
-    print()
+        print(f"\n=== Mode: {mode_desc} ===")
 
-    # --------------------------------------------------------------- figure
-    exp_names = [n for n, _, _ in MODELS]
-    labels    = [lbl for _, lbl, _ in MODELS]
-    x = np.arange(len(MODELS))
-    bar_w = 0.6
-    ymax = 115 if args.metric == "exact_acc" else 1.15
+        results = run_conditions(model_data, args.metric, CONDITIONS,
+                                 test_classes_only=test_classes_only)
+        print()
 
-    fig, axes = plt.subplots(2, 3, figsize=(14, 8), sharey=True)
-    axes = axes.flatten()
+        # -------------------------------------------------------- print table
+        col_w = 22
+        header = f"{'Condition':<45}" + "".join(
+            f"{lbl.replace(chr(10), ' '):>{col_w}}" for _, lbl, _ in MODELS
+        )
+        sep = "=" * len(header)
+        print(metric_label)
+        print(sep)
+        print(header)
+        print("-" * len(header))
+        for ci, (title, _, _) in enumerate(CONDITIONS):
+            row_label = title.replace("\n", " / ")[:44]
+            vals = "".join(
+                f"{results[ci][n]:>{col_w}.3f}"
+                if not np.isnan(results[ci].get(n, np.nan))
+                else f"{'--':>{col_w}}"
+                for n, _, _ in MODELS
+            )
+            print(f"{row_label:<45}{vals}")
+        print(sep)
+        print()
 
-    for ci, (title, _, _) in enumerate(CONDITIONS):
-        ax = axes[ci]
-        vals = [results[ci].get(n, np.nan) for n in exp_names]
-
-        for i, (v, exp_name) in enumerate(zip(vals, exp_names)):
-            if np.isnan(v):
-                ax.bar(i, 0, bar_w, color="#DDDDDD", edgecolor="#AAAAAA",
-                       linewidth=0.8, alpha=0.6)
-                ax.text(i, ymax * 0.02, "N/A", ha="center", va="bottom",
-                        fontsize=8, color="#888888")
-            else:
-                ax.bar(i, v, bar_w,
-                       color=BAR_COLOR[exp_name], edgecolor=BAR_EDGE[exp_name],
-                       linewidth=0.8, zorder=3)
-                ax.text(i, v + ymax * 0.005, f"{v:.3f}",
-                        ha="center", va="bottom", fontsize=8, zorder=5)
-
-        ax.set_title(title, fontsize=9, fontweight="bold", pad=6)
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize=7.5)
-        ax.set_ylabel(metric_label if ci % 3 == 0 else "", fontsize=9)
-        ax.set_ylim(0, ymax)
-        ax.yaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
-        ax.set_axisbelow(True)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-
-        if ci == 0:
-            ax.annotate("LARGE TEST SETS\n(oracle thresholds)",
-                        xy=(-0.22, 0.5), xycoords="axes fraction",
-                        fontsize=8, fontweight="bold", color="#555555",
-                        ha="center", va="center", rotation=90)
-        if ci == 3:
-            ax.annotate("MATCHED TEST SETS\n(transferred thresholds)",
-                        xy=(-0.22, 0.5), xycoords="axes fraction",
-                        fontsize=8, fontweight="bold", color="#555555",
-                        ha="center", va="center", rotation=90)
-
-    fig.suptitle(
-        f"Model comparison — {metric_label}\n"
-        "Each model evaluated on all its own classes  |  "
-        "per-class thresholds tuned on source split",
-        fontsize=11, fontweight="bold",
-    )
-    plt.tight_layout(rect=[0.06, 0.02, 1.0, 0.95])
-
-    out_path = Path(args.out)
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Figure saved -> {out_path}")
+        # -------------------------------------------------------------- figure
+        base = Path(args.out)
+        if test_classes_only:
+            out_path = base.parent / (base.stem + "_test_classes" + base.suffix)
+        else:
+            out_path = base
+        draw_figure(results, args.metric, CONDITIONS, out_path,
+                    note="thresholds restricted to test-set classes"
+                    if test_classes_only else "")
 
 
 if __name__ == "__main__":
