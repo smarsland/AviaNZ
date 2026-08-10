@@ -891,6 +891,26 @@ class Trainer:
                         elif self.use_gated_head:
                             output, gate_logit = model(data)
                         else:
+                            if not torch.isfinite(data).all():
+                                print(f"\nBAD INPUT: epoch={epoch+1}, batch={batch_idx}")
+
+                                bad = ~torch.isfinite(data)
+                                bad_indices = torch.nonzero(bad)
+
+                                print("data shape:", data.shape)
+                                print("NaN count:", torch.isnan(data).sum().item())
+                                print("Inf count:", torch.isinf(data).sum().item())
+
+                                # Print the filenames for this batch
+                                start = batch_idx * self.batch_size
+                                end = start + data.size(0)
+
+                                print("Batch files:")
+                                for i, f in enumerate(self.data['train_filenames'][start:end]):
+                                    print(f"  {i}: {f}")
+
+                                raise RuntimeError("NON-FINITE INPUT")
+
                             output = model(data)
 
                             if not torch.isfinite(output).all():
