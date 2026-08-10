@@ -90,7 +90,6 @@ def build_doc_large(
     doc_raw, output_folder, ebird_to_common,
     max_per_species=1000, seed=42,
     fixed_length=True, target_time_bins=None,
-    with_audio=True,
     sg_type=None, window_type=None, sg_scale=None,
     restrict_classes=None,
     label_remap=None,
@@ -98,6 +97,10 @@ def build_doc_large(
     """
     Scan the DOC folder structure and extract up to max_per_species spectrograms
     per eBird code.  Labels are normalised common names (lowercase).
+
+    Saves spectrograms only.  Audio is written later (test split only) by
+    write_audio_for_split(), so Kaytoo/BirdNET evaluation does not require
+    reading and writing every training recording to disk.
 
     Args:
         restrict_classes: If provided (set/list of normalised common names), skip
@@ -116,9 +119,6 @@ def build_doc_large(
     spec_proc = make_spec_processor(sg_type, window_type, sg_scale)
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
-    if with_audio:
-        audio_dir = os.path.join(output_folder, 'audio')
-        os.makedirs(audio_dir, exist_ok=True)
 
     species_files = scan_doc_by_species(doc_raw)
     print(f'DOC: found {len(species_files)} species codes in folder structure')
@@ -176,10 +176,6 @@ def build_doc_large(
             basename = f'file_{len(labels):08d}'
             spec_proc.save_spectrogram(sg, data_dir, basename)
 
-            if with_audio:
-                audio_data, audio_sr = sf.read(audio_path)
-                sf.write(os.path.join(audio_dir, f'{basename}.wav'), audio_data, audio_sr)
-
             labels.append({
                 'filename': f'{basename}.npy',
                 'class_names': [label],
@@ -207,7 +203,6 @@ def build_avianz_large(
     avianz_raw, output_folder, mapping_csv, ebird_to_common,
     max_per_species=1000, seed=42,
     fixed_length=True, target_time_bins=None,
-    with_audio=True,
     sg_type=None, window_type=None, sg_scale=None,
     label_remap=None, exclude_source_files=None,
 ):
@@ -220,6 +215,10 @@ def build_avianz_large(
       Phase 2 – for each species independently sample up to max_per_species
                  segment keys; take the union of selected keys.
       Phase 3 – process and save each unique segment exactly once.
+
+    Saves spectrograms only.  Audio is written later (test split only) by
+    write_audio_for_split(), so Kaytoo/BirdNET evaluation does not require
+    reading and writing every training recording to disk.
 
     Args:
         label_remap: Optional dict mapping normalised label → new label.  MUST be
@@ -242,9 +241,6 @@ def build_avianz_large(
 
     data_dir = os.path.join(output_folder, 'data')
     os.makedirs(data_dir, exist_ok=True)
-    if with_audio:
-        audio_dir = os.path.join(output_folder, 'audio')
-        os.makedirs(audio_dir, exist_ok=True)
 
     # -----------------------------------------------------------------------
     # Phase 1: collect unique segments
@@ -364,13 +360,6 @@ def build_avianz_large(
 
         basename = f'file_{len(labels):08d}'
         spec_proc.save_spectrogram(sg, data_dir, basename)
-
-        if with_audio:
-            info = sf.info(wav_file)
-            start_frame = int(start_time * info.samplerate)
-            stop_frame = int(end_time * info.samplerate)
-            seg_data, seg_sr = sf.read(wav_file, start=start_frame, stop=stop_frame)
-            sf.write(os.path.join(audio_dir, f'{basename}.wav'), seg_data, seg_sr)
 
         labels.append({
             'filename': f'{basename}.npy',
@@ -512,6 +501,51 @@ def save_split(entries, src_folder, output_base, split_name, categories):
 
 
 # ---------------------------------------------------------------------------
+# Audio writer (test split only)
+# ---------------------------------------------------------------------------
+
+def write_audio_for_split(entries, audio_out_dir):
+    """Write audio clips for *entries* directly from their original source files.
+
+    Called after the train/test split so that audio is only materialised for
+    the test set (where Kaytoo/BirdNET evaluation needs it), not for the much
+    larger training set.
+
+    Each entry must have 'source_file'.  AviaNZ entries additionally carry
+    'start_time' and 'end_time' for segment extraction; DOC entries omit these
+    and the full file is copied.
+    """
+    os.makedirs(audio_out_dir, exist_ok=True)
+    failed = 0
+    for entry in entries:
+        source_file = entry.get('source_file')
+        if not source_file or not os.path.exists(source_file):
+            failed += 1
+            continue
+        basename = entry['filename'].replace('.npy', '')
+        out_wav = os.path.join(audio_out_dir, f'{basename}.wav')
+        if os.path.exists(out_wav):
+            continue
+        start_time = entry.get('start_time')
+        end_time = entry.get('end_time')
+        try:
+            if start_time is not None and end_time is not None:
+                info = sf.info(source_file)
+                start_frame = int(start_time * info.samplerate)
+                stop_frame = int(end_time * info.samplerate)
+                audio_data, sr = sf.read(source_file, start=start_frame, stop=stop_frame)
+            else:
+                audio_data, sr = sf.read(source_file)
+            sf.write(out_wav, audio_data, sr)
+        except Exception as exc:
+            failed += 1
+            print(f'  WARNING: could not write audio for {source_file}: {exc}')
+
+    if failed:
+        print(f'  WARNING: {failed} audio file(s) could not be written')
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -556,7 +590,8 @@ def main():
                         help='Fraction of data to use for test (default: 0.25)')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--no-audio', action='store_true',
-                        help='Skip saving audio files (Kaytoo/BirdNET eval will not work)')
+                        help='Skip saving audio files for the test splits '
+                             '(Kaytoo/BirdNET evaluation will not work)')
     parser.add_argument('--overwrite', action='store_true',
                         help='Re-build even if output folders already exist')
     parser.add_argument('--class-filter', action='store_true',
@@ -625,7 +660,7 @@ def main():
     print(f'  Max/species    : {args.max_per_species}')
     print(f'  Min/class      : {args.min_per_class}')
     print(f'  Test ratio     : {args.test_ratio}')
-    print(f'  With audio     : {with_audio}')
+    print(f'  With audio     : {with_audio} (test split only)')
     print(f'  Spec type      : {args.spec_type}')
     print(f'  Window         : {args.window_type}')
     print(f'  Scale          : {args.sg_scale}')
@@ -652,7 +687,6 @@ def main():
                 max_per_species=args.max_per_species,
                 seed=args.seed,
                 fixed_length=True, target_time_bins=target_time_bins,
-                with_audio=with_audio,
                 sg_type=args.spec_type,
                 window_type=args.window_type,
                 sg_scale=args.sg_scale,
@@ -694,7 +728,6 @@ def main():
             max_per_species=args.max_per_species,
             seed=args.seed,
             fixed_length=True, target_time_bins=target_time_bins,
-            with_audio=with_audio,
             sg_type=args.spec_type,
             window_type=args.window_type,
             sg_scale=args.sg_scale,
@@ -744,7 +777,6 @@ def main():
             max_per_species=args.max_per_species,
             seed=args.seed,
             fixed_length=True, target_time_bins=target_time_bins,
-            with_audio=with_audio,
             sg_type=args.spec_type,
             window_type=args.window_type,
             sg_scale=args.sg_scale,
@@ -844,6 +876,21 @@ def main():
         save_split(avianz_test, avianz_out, avianz_split_base, 'test', avianz_categories)
         save_split(doc_train, doc_out, doc_split_base, 'train', doc_categories)
         save_split(doc_test, doc_out, doc_split_base, 'test', doc_categories)
+
+        # Write audio only for test splits — Kaytoo/BirdNET need it there;
+        # training uses spectrograms only so no audio is needed for train.
+        if with_audio:
+            print('\n=== Step 5b: write audio for test splits ===')
+            print(f'  AviaNZ test ({len(avianz_test)} samples) ...')
+            write_audio_for_split(
+                avianz_test,
+                os.path.join(avianz_split_base, 'test', 'audio'),
+            )
+            print(f'  DOC test ({len(doc_test)} samples) ...')
+            write_audio_for_split(
+                doc_test,
+                os.path.join(doc_split_base, 'test', 'audio'),
+            )
     else:
         print('\n=== Steps 4-5: splits already exist, skipping (use --overwrite to force) ===')
 
