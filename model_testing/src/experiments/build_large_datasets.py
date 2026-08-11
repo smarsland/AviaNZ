@@ -586,8 +586,8 @@ def main():
     parser.add_argument('--min-per-class', type=int, default=50,
                         help='Minimum samples per class in BOTH datasets to keep the class '
                              '(default: 50)')
-    parser.add_argument('--test-ratio', type=float, default=0.25,
-                        help='Fraction of data to use for test (default: 0.25)')
+    parser.add_argument('--test-ratio', type=float, default=0.05,
+                        help='Fraction of data to use for test (default: 0.05)')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--no-audio', action='store_true',
                         help='Skip saving audio files for the test splits '
