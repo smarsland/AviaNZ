@@ -913,6 +913,7 @@ def main():
                 f"{avianz_split_base}/train",
                 merged_train,
                 "--no-audio",
+                "--symlink",
             ],
             env=env,
             check=True,
