@@ -81,7 +81,7 @@ fi
 
 
 OUTPUT="${BASE}/combined_dataset"
-MAX_PER_SPECIES="${MAX_PER_SPECIES:-10000}"
+MAX_PER_SPECIES="${MAX_PER_SPECIES:-5000}"
 MAPPING="$REPO_ROOT/model_testing/data/DOC_bird_naming_map.csv"
 
 
