@@ -136,6 +136,7 @@ class BirdNETEvaluator:
 
     
     def predict_file(self, wav_path):
+        from birdnetlib.exceptions import AudioFormatError
         recording = Recording(
             self.analyzer,
             str(wav_path),
@@ -143,9 +144,13 @@ class BirdNETEvaluator:
             lon=self.longitude,
             min_conf=self.min_confidence
         )
-        
-        recording.analyze()
-        
+
+        try:
+            recording.analyze()
+        except (AudioFormatError, Exception) as e:
+            print(f"  WARNING: skipping {Path(wav_path).name} — {e}")
+            return []
+
         detections = []
         for detection in recording.detections:
             detections.append({
@@ -155,7 +160,7 @@ class BirdNETEvaluator:
                 'start_time': detection['start_time'],
                 'end_time': detection['end_time']
             })
-        
+
         return detections
     
     def get_top_prediction(self, detections):
