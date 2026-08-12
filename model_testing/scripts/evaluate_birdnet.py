@@ -227,7 +227,19 @@ class BirdNETEvaluator:
 
         # Mapping from BirdNET code (e.g. 'nezfan1') to dataset class name (e.g. 'fantail')
         code_to_dataset_label = {code: name.lower() for code, name in SPECIES_MAPPING.items()}
-        all_dataset_labels = sorted(set(code_to_dataset_label.values()))
+
+        # Collect ALL class names from labels.json so the output CSV tracks the
+        # full ground truth (not just the 9 species BirdNET can predict).  Columns
+        # for unknown species will have prediction = 0, but correct true_ values.
+        def _norm_label_for_csv(lbl):
+            lbl = lbl.strip().lower()
+            return lbl.replace(' / ', '/').replace('/ ', '/').replace(' /', '/')
+
+        _all_gt_label_names = set(code_to_dataset_label.values())
+        for _item in files:
+            for _lbl in _item.get('class_names', []):
+                _all_gt_label_names.add(_norm_label_for_csv(_lbl))
+        all_dataset_labels = sorted(_all_gt_label_names)
 
         print(f"\nRunning BirdNET predictions...")
         for i, file_info in enumerate(files, 1):
@@ -285,10 +297,11 @@ class BirdNETEvaluator:
             # Raw score record: npy filename + per-class max confidence (0 if not detected).
             # Store ALL detected labels (NZ target + non-target) so that plot_results.py
             # standard mode can penalise BirdNET for spurious non-NZ predictions.
-            gt_labels = [lbl for lbl in all_dataset_labels
-                         if any(c in valid_codes for c in label_to_codes(lbl)
-                                if c in gt_codes)]
-            raw_rec = {'filename': npy_filename, 'gt_classes': gt_labels}
+            # Use the full ground truth from labels.json (not just the 9 BirdNET-known
+            # classes) so downstream evaluation accounts for all GT-positive classes.
+            gt_full_labels = [_norm_label_for_csv(lbl)
+                              for lbl in file_info.get('class_names', [])]
+            raw_rec = {'filename': npy_filename, 'gt_classes': gt_full_labels}
             # NZ target species (fill 0 when not detected)
             for lbl in all_dataset_labels:
                 raw_rec[lbl] = max_conf.get(lbl, 0.0)

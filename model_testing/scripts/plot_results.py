@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Single script to produce a 2x3 comparison figure for the 4 NZ bird models.
+Single script to produce a 3x3 comparison figure for the 4 NZ bird models.
 
-Six conditions (2 rows x 3 columns):
+Nine conditions (3 rows x 3 columns):
   Row 1 - large test sets, oracle thresholds tuned on same data:
     (1) Combined-DOC test,          thresholds from combined-DOC
     (2) Combined-AviaNZ test,       thresholds from combined-AviaNZ
@@ -10,7 +10,11 @@ Six conditions (2 rows x 3 columns):
   Row 2 - matched test sets, thresholds transferred from large sets:
     (4) Matched-DOC test,           thresholds from combined-DOC
     (5) Matched-AviaNZ test,        thresholds from combined-AviaNZ
-    (6) Matched combined test,       thresholds from combined (DOC+AviaNZ)
+    (6) Matched combined test,      thresholds from combined (DOC+AviaNZ)
+  Row 3 - matched test sets, oracle thresholds tuned on matched sets:
+    (7) Matched-DOC test,           thresholds from Matched-DOC
+    (8) Matched-AviaNZ test,        thresholds from Matched-AviaNZ
+    (9) Matched combined test,      thresholds from Matched combined
 
 Each model is evaluated on ALL its own classes - no label normalisation.
 Thresholds are computed per-class from the source split and matched to the test
@@ -53,19 +57,22 @@ MODELS = [
     ("kaytoo_pretrained_seed0",          "Kaytoo\n(pretrained)",     "subdir"),
     ("regnet_on_doc_bgsub",              "RegNet+BgSub\n(DOC)",      "flat"),
     ("regnet_combined_bgsubtract_seed0", "RegNet+BgSub\n(combined)", "flat"),
+    ("regnet_on_doc_bgsub_reverb",       "RegNet+BgSub+Reverb\n(DOC)","flat"),
 ]
 
 BAR_COLOR = {
     "birdnet_pretrained_seed0":         "#C44E52",
     "kaytoo_pretrained_seed0":          "#E07A3A",
     "regnet_on_doc_bgsub":              "#2B7BB9",
-    "regnet_combined_bgsubtract_seed0": "#27AE60",
+    "regnet_combined_bgsubtract_seed0": "#2B7BB9",
+    "regnet_on_doc_bgsub_reverb":       "#2B7BB9",
 }
 BAR_EDGE = {
     "birdnet_pretrained_seed0":         "#7B241C",
     "kaytoo_pretrained_seed0":          "#7D3010",
-    "regnet_on_doc_bgsub":              "#1A5276",
+    "regnet_on_doc_bgsub":              "#1E8449",
     "regnet_combined_bgsubtract_seed0": "#1E8449",
+    "regnet_on_doc_bgsub_reverb":       "#1E8449",
 }
 
 
@@ -137,6 +144,8 @@ def compute_thresholds(df, n_cands=101):
         y_true = valid[tc].values.astype(np.int32)
         if y_true.sum() == 0:
             continue  # no positives in source - cannot tune, omit
+        if y_prob.max() <= 0.0:
+            continue  # model never predicts this class - skip threshold tuning
 
         preds = (y_prob[np.newaxis, :] >= candidates[:, np.newaxis]).astype(np.int32)
         tp    = ( preds *  y_true[np.newaxis, :]).sum(axis=1).astype(np.float32)
@@ -175,6 +184,8 @@ def evaluate(test_df, thresholds, test_classes_only=False):
     if test_df.empty:
         return nan_result
 
+    n_uncovered = 0  # GT-positive classes the model has no predictions for
+
     if test_classes_only:
         # Only classes with actual positives in the test ground truth.
         present = [
@@ -189,8 +200,25 @@ def evaluate(test_df, thresholds, test_classes_only=False):
         present = [cls for cls in pred_cols if cls in thresholds]
         thresh  = {cls: thresholds[cls] for cls in present}
 
-    if not present:
+        # GT-positive classes in the test set that the model has no predictions
+        # for (no threshold) contribute F1=0 to the macro average.  Without this,
+        # models with a narrow class vocabulary (e.g. BirdNET with 9 classes) get
+        # an artificially inflated macro F1 on test sets with many more classes.
+        n_uncovered = sum(
+            1 for tc in test_df.columns
+            if tc.startswith("true_")
+            and int(test_df[tc].fillna(0).sum()) > 0
+            and tc[5:] not in present
+        )
+
+    if not present and n_uncovered == 0:
         return nan_result
+
+    if not present:
+        # Model has no predictions at all for this split; all GT-positive classes
+        # contribute F1=0.  Skip the matrix operations.
+        return {"macro_f1": 0.0, "micro_f1": 0.0, "exact_acc": np.nan,
+                "n_classes": n_uncovered}
 
     # Build ground truth: use true_ column when available, zeros otherwise.
     y_true = np.column_stack([
@@ -212,7 +240,7 @@ def evaluate(test_df, thresholds, test_classes_only=False):
         denom = 2 * tp + fp + fn
         per_f1.append(2 * tp / denom if denom > 0 else 0.0)
 
-    macro_f1 = float(np.mean(per_f1))
+    macro_f1 = float(np.mean(per_f1 + [0.0] * n_uncovered)) if (per_f1 or n_uncovered) else 0.0
 
     tp_all  = int(((y_pred == 1) & (y_true == 1)).sum())
     fp_all  = int(((y_pred == 1) & (y_true == 0)).sum())
@@ -223,7 +251,7 @@ def evaluate(test_df, thresholds, test_classes_only=False):
     exact_acc = float(np.all(y_pred == y_true, axis=1).mean() * 100)
 
     return {"macro_f1": macro_f1, "micro_f1": micro_f1, "exact_acc": exact_acc,
-            "n_classes": len(present)}
+            "n_classes": len(present) + n_uncovered}
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +318,7 @@ def run_conditions(model_data, metric, conditions, test_classes_only=False):
 
 
 def draw_figure(results, metric, conditions, out_path, note=""):
-    """Draw the 2x3 bar-chart figure and save it to *out_path*."""
+    """Draw the 3x3 bar-chart figure and save it to *out_path*."""
     exp_names = [n for n, _, _ in MODELS]
     labels    = [lbl for _, lbl, _ in MODELS]
     x     = np.arange(len(MODELS))
@@ -303,7 +331,8 @@ def draw_figure(results, metric, conditions, out_path, note=""):
         "exact_acc": "Exact Accuracy (%)",
     }[metric]
 
-    fig, axes = plt.subplots(2, 3, figsize=(14, 8), sharey=True)
+    # Made figure wider to prevent x-axis label overlap
+    fig, axes = plt.subplots(3, 3, figsize=(16, 12), sharey=True)
     axes = axes.flatten()
 
     for ci, (title, _, _) in enumerate(conditions):
@@ -325,7 +354,7 @@ def draw_figure(results, metric, conditions, out_path, note=""):
 
         ax.set_title(title, fontsize=9, fontweight="bold", pad=6)
         ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize=7.5)
+        ax.set_xticklabels(labels, fontsize=8, rotation=15, ha="right")  # Rotated labels
         ax.set_ylabel(metric_label if ci % 3 == 0 else "", fontsize=9)
         ax.set_ylim(0, ymax)
         ax.yaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
@@ -333,14 +362,14 @@ def draw_figure(results, metric, conditions, out_path, note=""):
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
-        if ci == 0:
-            ax.annotate("LARGE TEST SETS\n(oracle thresholds)",
-                        xy=(-0.22, 0.5), xycoords="axes fraction",
-                        fontsize=8, fontweight="bold", color="#555555",
-                        ha="center", va="center", rotation=90)
-        if ci == 3:
-            ax.annotate("MATCHED TEST SETS\n(transferred thresholds)",
-                        xy=(-0.22, 0.5), xycoords="axes fraction",
+        # Row labels on the left side
+        if ci % 3 == 0:
+            row_label = {
+                0: "LARGE TEST SETS\n(oracle thresholds)",
+                1: "MATCHED TEST SETS\n(transferred thresholds)",
+                2: "MATCHED TEST SETS\n(oracle thresholds)"
+            }[ci // 3]
+            ax.annotate(row_label, xy=(-0.25, 0.5), xycoords="axes fraction",
                         fontsize=8, fontweight="bold", color="#555555",
                         ha="center", va="center", rotation=90)
 
@@ -410,7 +439,12 @@ def main():
     print()
 
     # ---------------------------------------------------------------- compute
+    # CONDITIONS: 3 rows x 3 columns
+    # Row 1: Large test sets, oracle from training data
+    # Row 2: Matched test sets, thresholds transferred from large training
+    # Row 3: Matched test sets, oracle from matched data
     CONDITIONS = [
+        # Row 1: Large test sets with thresholds from training
         (
             "Large-DOC test\n(large-DOC thresholds)",
             ["combined_doc"],
@@ -426,19 +460,36 @@ def main():
             ["combined_doc", "combined_avianz"],
             ["combined_doc", "combined_avianz"],
         ),
+        # Row 2: Matched test sets with transferred thresholds
         (
-            "Matched-DOC test\n(large-DOC thresholds)",
+            "Matched-DOC test\n(transferred thresholds)",
             ["combined_doc"],
             "matched_doc",
         ),
         (
-            "Matched-AviaNZ test\n(large-AviaNZ thresholds)",
+            "Matched-AviaNZ test\n(transferred thresholds)",
             ["combined_avianz"],
             "matched_avianz",
         ),
         (
-            "Matched combined test\n(combined thresholds)",
+            "Matched combined test\n(transferred thresholds)",
             ["combined_doc", "combined_avianz"],
+            ["matched_doc", "matched_avianz"],
+        ),
+        # Row 3: Matched test sets with oracle thresholds from matched data
+        (
+            "Matched-DOC test\n(oracle thresholds)",
+            ["matched_doc"],
+            "matched_doc",
+        ),
+        (
+            "Matched-AviaNZ test\n(oracle thresholds)",
+            ["matched_avianz"],
+            "matched_avianz",
+        ),
+        (
+            "Matched combined test\n(oracle thresholds)",
+            ["matched_doc", "matched_avianz"],
             ["matched_doc", "matched_avianz"],
         ),
     ]
@@ -473,6 +524,9 @@ def main():
         print("-" * len(header))
         for ci, (title, _, _) in enumerate(CONDITIONS):
             row_label = title.replace("\n", " / ")[:44]
+            # Add a separator between rows
+            if ci == 3 or ci == 6:
+                print("-" * len(header))
             vals = "".join(
                 f"{results[ci][n]:>{col_w}.3f}"
                 if not np.isnan(results[ci].get(n, np.nan))
