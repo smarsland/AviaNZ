@@ -494,6 +494,14 @@ def save_split(entries, src_folder, output_base, split_name, categories):
         'num_classes': len(categories),
         'dataset': split_name,
     }
+    src_labels_path = os.path.join(src_folder, 'labels.json')
+    try:
+        with open(src_labels_path) as _f:
+            spec_cfg = json.load(_f).get('spectrogram_config')
+        if spec_cfg:
+            payload['spectrogram_config'] = spec_cfg
+    except (OSError, ValueError):
+        pass
     labels_path = os.path.join(out, 'labels.json')
     with open(labels_path, 'w') as f:
         json.dump(payload, f, indent=2)

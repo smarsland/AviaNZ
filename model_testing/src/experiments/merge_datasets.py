@@ -208,7 +208,23 @@ class DatasetMerger:
             'categories': merged_categories,
             'files': merged_files
         }
-        
+
+        # Propagate spectrogram_config from dataset 1 (both datasets must share
+        # the same spectrogram settings, so dataset 1's config is authoritative).
+        spec_cfg1 = self.labels1.get('spectrogram_config')
+        spec_cfg2 = self.labels2.get('spectrogram_config')
+        if spec_cfg1 and spec_cfg2 and spec_cfg1 != spec_cfg2:
+            print(f"  WARNING: datasets have different spectrogram_config; "
+                  f"using dataset 1's config. Verify both were built with the "
+                  f"same settings before training.")
+        if spec_cfg1:
+            self.merged_labels['spectrogram_config'] = spec_cfg1
+        elif spec_cfg2:
+            self.merged_labels['spectrogram_config'] = spec_cfg2
+        else:
+            print("  WARNING: neither source dataset has spectrogram_config in "
+                  "labels.json; merged dataset will also lack it.")
+
         print(f"  Merged {len(merged_files)} total files")
         print(f"  Categories: {len(merged_categories)}")
         

@@ -59,11 +59,14 @@ def build_domain_split(avianz_folder, doc_folder, output_folder):
                 "original_filename": orig_filename,
             })
 
+    spec_cfg = avianz_labels.get('spectrogram_config') or doc_labels.get('spectrogram_config')
     labels_out = {
         "files": output_files,
         "categories": [AVIANZ_LABEL, DOC_LABEL],
         "num_classes": 2,
     }
+    if spec_cfg:
+        labels_out['spectrogram_config'] = spec_cfg
     with open(output_folder / "labels.json", "w") as f:
         json.dump(labels_out, f, indent=2)
 
@@ -110,6 +113,9 @@ def build_single_domain(source_folder, domain_label, output_folder):
         "categories": [AVIANZ_LABEL, DOC_LABEL],
         "num_classes": 2,
     }
+    spec_cfg = source_labels.get('spectrogram_config')
+    if spec_cfg:
+        labels_out['spectrogram_config'] = spec_cfg
     with open(output_folder / "labels.json", "w") as f:
         json.dump(labels_out, f, indent=2)
 
