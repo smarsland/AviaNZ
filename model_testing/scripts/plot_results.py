@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Single script to produce a 3x3 comparison figure for the 4 NZ bird models.
+Single script to produce 3x3 comparison figures for the 4 NZ bird models.
 
 Nine conditions (3 rows x 3 columns):
   Row 1 - large test sets, oracle thresholds tuned on same data:
@@ -16,24 +16,17 @@ Nine conditions (3 rows x 3 columns):
     (8) Matched-AviaNZ test,        thresholds from Matched-AviaNZ
     (9) Matched combined test,      thresholds from Matched combined
 
-Each model is evaluated on ALL its own classes - no label normalisation.
-Thresholds are computed per-class from the source split and matched to the test
-split by class name.  Each model's CSVs use a consistent label scheme, so
-within-model threshold transfer is exact.
-
-Two figures are always produced:
-  <out>           - standard mode: thresholds computed on all source classes.
-  <out>_test_classes - restricted mode: source data is first filtered to only
-                       classes present in the test ground truth before thresholds
-                       are computed, then applied to the test set.
-
-Note: macro F1 is not directly comparable across models with very different
-class counts (BirdNET 9 vs Kaytoo ~85 vs RegNet 120).
+All models are evaluated against a universal class set: the union of every
+GT-positive class name across all models and all splits.  Macro F1 always
+uses that set as its denominator.  If a model cannot predict a class, its
+contribution is F1=0.  If a class is absent from the current test split,
+true labels are 0, so any prediction above threshold is an FP (F1=0 for
+that class naturally).
 
 Usage:
     python3 scripts/plot_results.py
     python3 scripts/plot_results.py --model-tests /path/to/model_tests
-    python3 scripts/plot_results.py --out figure.png --metric macro_f1
+    python3 scripts/plot_results.py --out figure.png
 """
 
 import argparse
@@ -45,6 +38,85 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+
+# ---------------------------------------------------------------------------
+# Kaytoo label normalisation  (eBird codes → dataset common names)
+# ---------------------------------------------------------------------------
+
+def _load_ebird_to_common(data_dir):
+    """Load DOC naming map; returns {eBird_code: lowercase_common_name}."""
+    csv_path = Path(data_dir) / "DOC_bird_naming_map.csv"
+    if not csv_path.exists():
+        return {}
+    df = pd.read_csv(csv_path)
+    return {
+        str(row["eBird"]).strip(): str(row["CommonName"]).strip().lower()
+        for _, row in df.iterrows()
+        if pd.notna(row.get("eBird")) and pd.notna(row.get("CommonName"))
+    }
+
+# Post-mapping fixes: DOC map names that differ from dataset labels
+_KAYTOO_POST_REMAP = {
+    "new zealand kaka": "kaka",
+    "red-billed gull":  "red billed gull",
+}
+
+
+def _normalize_kaytoo_df(df, ebird_to_common):
+    """Rename Kaytoo eBird-code columns to dataset common names."""
+    def _map(cls):
+        name = ebird_to_common.get(cls, cls)
+        return _KAYTOO_POST_REMAP.get(name, name)
+
+    rename = {}
+    for col in df.columns:
+        cls = col[5:] if col.startswith("true_") else col
+        mapped = _map(cls)
+        if mapped != cls:
+            rename[col] = ("true_" + mapped) if col.startswith("true_") else mapped
+    if rename:
+        df = df.rename(columns=rename)
+
+    # Merge separate tui + bellbird columns → tui/bellbird
+    for cls in ("tui", "bellbird"):
+        if cls in df.columns:
+            if "tui/bellbird" in df.columns:
+                df["tui/bellbird"] = df[["tui/bellbird", cls]].max(axis=1)
+            else:
+                df = df.rename(columns={cls: "tui/bellbird"})
+            if cls in df.columns:
+                df = df.drop(columns=[cls])
+        tc = "true_" + cls
+        if tc in df.columns:
+            if "true_tui/bellbird" in df.columns:
+                df["true_tui/bellbird"] = df[["true_tui/bellbird", tc]].max(axis=1)
+            else:
+                df = df.rename(columns={tc: "true_tui/bellbird"})
+            if tc in df.columns:
+                df = df.drop(columns=[tc])
+
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Canonical ground-truth set
+# ---------------------------------------------------------------------------
+
+def get_canonical_gt(model_data, test_splits):
+    """Return the union of GT-positive class names from all models for the given splits."""
+    if isinstance(test_splits, str):
+        test_splits = [test_splits]
+    canonical = set()
+    for exp_name, _, _ in MODELS:
+        for split in test_splits:
+            df = model_data[exp_name].get(split)
+            if df is None:
+                continue
+            for tc in df.columns:
+                if tc.startswith("true_") and int(df[tc].fillna(0).sum()) > 0:
+                    canonical.add(tc[5:])
+    return canonical
 
 
 # ---------------------------------------------------------------------------
@@ -60,19 +132,20 @@ MODELS = [
     ("regnet_on_doc_bgsub_reverb",       "RegNet+BgSub+Reverb\n(DOC)","flat"),
 ]
 
+# Distinct colors for each model - all clearly different
 BAR_COLOR = {
-    "birdnet_pretrained_seed0":         "#C44E52",
-    "kaytoo_pretrained_seed0":          "#E07A3A",
-    "regnet_on_doc_bgsub":              "#2B7BB9",
-    "regnet_combined_bgsubtract_seed0": "#2B7BB9",
-    "regnet_on_doc_bgsub_reverb":       "#2B7BB9",
+    "birdnet_pretrained_seed0":         "#E74C3C",  # Red
+    "kaytoo_pretrained_seed0":          "#F39C12",  # Orange
+    "regnet_on_doc_bgsub":              "#2E86C1",  # Medium blue
+    "regnet_combined_bgsubtract_seed0": "#1A5276",  # Dark blue
+    "regnet_on_doc_bgsub_reverb":       "#85C1E9",  # Light blue
 }
 BAR_EDGE = {
-    "birdnet_pretrained_seed0":         "#7B241C",
-    "kaytoo_pretrained_seed0":          "#7D3010",
-    "regnet_on_doc_bgsub":              "#1E8449",
-    "regnet_combined_bgsubtract_seed0": "#1E8449",
-    "regnet_on_doc_bgsub_reverb":       "#1E8449",
+    "birdnet_pretrained_seed0":         "#C0392B",
+    "kaytoo_pretrained_seed0":          "#E67E22",
+    "regnet_on_doc_bgsub":              "#1A5276",
+    "regnet_combined_bgsubtract_seed0": "#0E2F44",
+    "regnet_on_doc_bgsub_reverb":       "#5B8CB8",
 }
 
 
@@ -158,23 +231,92 @@ def compute_thresholds(df, n_cands=101):
     return thresholds
 
 
+def compute_thresholds_equal_datasets(doc_df, avianz_df, n_cands=101):
+    """
+    Per-class threshold optimisation giving exactly equal weight to DOC and
+    AviaNZ *among the datasets that have GT positives for that class*.
+
+    Classes present only in one dataset get that dataset's oracle threshold.
+    Classes in both get the threshold maximising the average of the two F1s.
+    """
+    doc_pred_cols  = set(c for c in doc_df.columns   if not c.startswith("true_"))
+    avianz_pred_cols = set(c for c in avianz_df.columns if not c.startswith("true_"))
+    pred_cols = sorted(doc_pred_cols | avianz_pred_cols)
+
+    candidates = np.linspace(0.0, 1.0, n_cands, dtype=np.float32)
+    thresholds = {}
+
+    for cls in pred_cols:
+        tc = "true_" + cls
+
+        # Build per-dataset frames; treat missing true_ column as all-zero GT.
+        def _get(df):
+            if cls not in df.columns:
+                return pd.DataFrame(columns=[cls, tc])
+            if tc not in df.columns:
+                sub = df[[cls]].copy(); sub[tc] = 0
+                return sub.dropna()
+            return df[[cls, tc]].dropna()
+
+        doc   = _get(doc_df)
+        avianz = _get(avianz_df)
+
+        doc_gt   = int(doc[tc].sum())   if not doc.empty   else 0
+        avianz_gt = int(avianz[tc].sum()) if not avianz.empty else 0
+
+        if doc_gt == 0 and avianz_gt == 0:
+            continue
+
+        doc_max   = float(doc[cls].max())   if not doc.empty   else 0.0
+        avianz_max = float(avianz[cls].max()) if not avianz.empty else 0.0
+        if doc_max <= 0.0 and avianz_max <= 0.0:
+            continue
+
+        # Weight only datasets that actually have GT positives for this class.
+        n_with_gt = int(doc_gt > 0) + int(avianz_gt > 0)
+
+        best_f1 = -1.0
+        best_threshold = 0.0
+
+        for threshold in candidates:
+            def f1_for(df):
+                if df.empty:
+                    return 0.0
+                y_prob = df[cls].values.astype(np.float32)
+                y_true = df[tc].values.astype(np.int32)
+                y_pred = (y_prob >= threshold).astype(np.int32)
+                tp = int(((y_pred == 1) & (y_true == 1)).sum())
+                fp = int(((y_pred == 1) & (y_true == 0)).sum())
+                fn = int(((y_pred == 0) & (y_true == 1)).sum())
+                denom = 2 * tp + fp + fn
+                return 2 * tp / denom if denom > 0 else 0.0
+
+            combined_f1 = (
+                (f1_for(doc)   if doc_gt   > 0 else 0.0) +
+                (f1_for(avianz) if avianz_gt > 0 else 0.0)
+            ) / n_with_gt
+
+            if combined_f1 > best_f1:
+                best_f1 = combined_f1
+                best_threshold = float(threshold)
+
+        thresholds[cls] = best_threshold
+
+    return thresholds
+
+
 # ---------------------------------------------------------------------------
 # Evaluation
 # ---------------------------------------------------------------------------
 
-def evaluate(test_df, thresholds, test_classes_only=False):
+def evaluate(test_df, thresholds, canonical_gt=None):
     """
     Apply thresholds to test_df and return macro F1, micro F1, exact accuracy.
 
-    Default mode (test_classes_only=False):
-      Evaluated on ALL classes that have a tuned threshold AND a prediction
-      column in test_df.  Classes absent from the test ground truth (no true_
-      column or all-zero true labels) contribute F1=0 to the macro average,
-      penalising models that predict irrelevant species on the test set.
-
-    test_classes_only=True:
-      Evaluated only on classes that have positives in the test ground truth.
-      Classes without a tuned threshold fall back to threshold 0.5.
+    canonical_gt: set of class names that defines the evaluation universe for
+    this test split (same across all models).  Only classes in canonical_gt
+    that have a tuned threshold are in 'present'; all others contribute F1=0.
+    When None, falls back to the test_df's own true_ columns.
     """
     nan_result = {"macro_f1": np.nan, "micro_f1": np.nan, "exact_acc": np.nan,
                   "n_classes": 0}
@@ -184,26 +326,14 @@ def evaluate(test_df, thresholds, test_classes_only=False):
     if test_df.empty:
         return nan_result
 
-    n_uncovered = 0  # GT-positive classes the model has no predictions for
-
-    if test_classes_only:
-        # Only classes with actual positives in the test ground truth.
-        present = [
-            cls for cls in pred_cols
-            if "true_" + cls in test_df.columns
-            and int(test_df["true_" + cls].fillna(0).sum()) > 0
-        ]
-        thresh = {cls: thresholds.get(cls, 0.5) for cls in present}
+    if canonical_gt is not None:
+        # Restrict to canonical GT classes: consistent denominator across models.
+        present = [cls for cls in pred_cols if cls in thresholds and cls in canonical_gt]
+        thresh  = {cls: thresholds[cls] for cls in present}
+        n_uncovered = sum(1 for cls in canonical_gt if cls not in set(present))
     else:
-        # All classes the model predicts for which a threshold was tuned.
-        # Missing true_ columns → all-zero ground truth → F1=0 for that class.
         present = [cls for cls in pred_cols if cls in thresholds]
         thresh  = {cls: thresholds[cls] for cls in present}
-
-        # GT-positive classes in the test set that the model has no predictions
-        # for (no threshold) contribute F1=0 to the macro average.  Without this,
-        # models with a narrow class vocabulary (e.g. BirdNET with 9 classes) get
-        # an artificially inflated macro F1 on test sets with many more classes.
         n_uncovered = sum(
             1 for tc in test_df.columns
             if tc.startswith("true_")
@@ -255,69 +385,104 @@ def evaluate(test_df, thresholds, test_classes_only=False):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Run conditions
 # ---------------------------------------------------------------------------
 
-def get_test_classes(test_df):
-    """Return the set of class names that have positives in the test ground truth."""
-    pred_cols = [c for c in test_df.columns if not c.startswith("true_")]
-    return {
-        cls for cls in pred_cols
-        if "true_" + cls in test_df.columns
-        and int(test_df["true_" + cls].fillna(0).sum()) > 0
-    }
+def run_conditions(model_data, conditions, all_classes):
+    """
+    Compute all three metrics for every (condition, model) combination.
 
-
-def restrict_to_classes(df, classes):
-    """Keep only prediction and ground-truth columns for the given class names."""
-    keep = [c for c in df.columns
-            if c in classes or (c.startswith("true_") and c[5:] in classes)]
-    return df[keep] if keep else df.iloc[:, 0:0]
-
-
-def run_conditions(model_data, metric, conditions, test_classes_only=False):
-    """Compute *metric* for every (condition, model) combination.
-
-    When test_classes_only=True the threshold-source DataFrame is restricted
-    to only the classes with positives in the test ground truth before
-    thresholds are computed.
+    Returns:
+        results[condition_index][model_name] = {
+            "macro_f1": ...,
+            "micro_f1": ...,
+            "exact_acc": ...,
+        }
     """
     results = [{} for _ in conditions]
+    print(f"  Universal class set: {len(all_classes)} classes")
+
+    canonical_gts = {
+        s: get_canonical_gt(model_data, [s])
+        for s in ("combined_doc", "combined_avianz", "matched_doc", "matched_avianz")
+    }
+
+    for s, cgt in canonical_gts.items():
+        print(f"  canonical GT [{s:25s}]: {len(cgt)} classes")
+    print()
+
     for ci, (_title, thresh_splits, test_split) in enumerate(conditions):
         for exp_name, _label, _layout in MODELS:
             splits = model_data[exp_name]
 
-            src_frames = [splits[s] for s in thresh_splits if splits[s] is not None]
-            if not src_frames:
-                results[ci][exp_name] = np.nan
-                continue
-            src_df = pd.concat(src_frames)
+            src_frames = [
+                splits[s] for s in thresh_splits
+                if splits[s] is not None
+            ]
 
-            if isinstance(test_split, list):
-                test_frames = [splits[s] for s in test_split if splits[s] is not None]
-            else:
-                test_frames = [splits[test_split]] if splits[test_split] is not None else []
-            if not test_frames:
-                results[ci][exp_name] = np.nan
+            if not src_frames:
+                results[ci][exp_name] = {
+                    "macro_f1": np.nan,
+                    "micro_f1": np.nan,
+                    "exact_acc": np.nan,
+                }
                 continue
+
+            test_splits_list = (
+                [test_split]
+                if isinstance(test_split, str)
+                else test_split
+            )
+
+            test_frames = [
+                splits[s] for s in test_splits_list
+                if splits[s] is not None
+            ]
+
+            if not test_frames:
+                results[ci][exp_name] = {
+                    "macro_f1": np.nan,
+                    "micro_f1": np.nan,
+                    "exact_acc": np.nan,
+                }
+                continue
+
+            src_df = pd.concat(src_frames)
             test_df = pd.concat(test_frames)
 
-            if test_classes_only:
-                test_cls = get_test_classes(test_df)
-                src_df   = restrict_to_classes(src_df, test_cls)
+            if isinstance(test_split, str):
+                cgt = canonical_gts.get(test_split)
+            else:
+                cgt = set().union(
+                    *(canonical_gts.get(s, set()) for s in test_split)
+                )
 
             thresholds = compute_thresholds(src_df)
-            metrics    = evaluate(test_df, thresholds,
-                                  test_classes_only=test_classes_only)
-            results[ci][exp_name] = metrics[metric]
-            n = metrics["n_classes"]
-            v = metrics[metric]
-            vs = f"{v:.3f}" if not np.isnan(v) else "nan"
-            print(f"  cond {ci+1}  {exp_name:42s}  {metric}={vs}  n_classes={n}")
+            metrics = evaluate(
+                test_df,
+                thresholds,
+                canonical_gt=cgt
+            )
+
+            results[ci][exp_name] = metrics
+
+            print(
+                f"  cond {ci+1}  "
+                f"{exp_name:42s}  "
+                f"macro={metrics['macro_f1']:.3f}  "
+                f"micro={metrics['micro_f1']:.3f}  "
+                f"exact={metrics['exact_acc']:.3f}  "
+                f"n_classes={metrics['n_classes']}"
+            )
+
     return results
 
 
-def draw_figure(results, metric, conditions, out_path, note=""):
+# ---------------------------------------------------------------------------
+# Drawing
+# ---------------------------------------------------------------------------
+
+def draw_figure(results, metric, conditions, out_path):
     """Draw the 3x3 bar-chart figure and save it to *out_path*."""
     exp_names = [n for n, _, _ in MODELS]
     labels    = [lbl for _, lbl, _ in MODELS]
@@ -331,13 +496,19 @@ def draw_figure(results, metric, conditions, out_path, note=""):
         "exact_acc": "Exact Accuracy (%)",
     }[metric]
 
-    # Made figure wider to prevent x-axis label overlap
+    # Create figure with more space at bottom for legend
     fig, axes = plt.subplots(3, 3, figsize=(16, 12), sharey=True)
     axes = axes.flatten()
 
+    # Adjust spacing - tighter bottom to reduce whitespace
+    plt.subplots_adjust(top=0.93, bottom=0.10, left=0.12, right=0.97, hspace=0.12, wspace=0.12)
+
     for ci, (title, _, _) in enumerate(conditions):
         ax = axes[ci]
-        vals = [results[ci].get(n, np.nan) for n in exp_names]
+        vals = [
+            results[ci].get(n, {}).get(metric, np.nan)
+            for n in exp_names
+        ]
 
         for i, (v, exp_name) in enumerate(zip(vals, exp_names)):
             if np.isnan(v):
@@ -348,39 +519,65 @@ def draw_figure(results, metric, conditions, out_path, note=""):
             else:
                 ax.bar(i, v, bar_w,
                        color=BAR_COLOR[exp_name], edgecolor=BAR_EDGE[exp_name],
-                       linewidth=0.8, zorder=3)
+                       linewidth=1.5, zorder=3)
                 ax.text(i, v + ymax * 0.005, f"{v:.3f}",
                         ha="center", va="bottom", fontsize=8, zorder=5)
 
-        ax.set_title(title, fontsize=9, fontweight="bold", pad=6)
+        ax.set_title(title, fontsize=9, fontweight="bold", pad=4)
         ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize=8, rotation=15, ha="right")  # Rotated labels
-        ax.set_ylabel(metric_label if ci % 3 == 0 else "", fontsize=9)
+        ax.set_xticklabels([])  # Remove x-axis labels
+        ax.set_ylabel("")  # Remove y-axis labels
         ax.set_ylim(0, ymax)
         ax.yaxis.grid(True, linestyle="--", alpha=0.4, zorder=0)
         ax.set_axisbelow(True)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
+        # Remove individual titles for rows 2 and 3
+        if ci >= 3:
+            ax.set_title("")
+
         # Row labels on the left side
         if ci % 3 == 0:
-            row_label = {
-                0: "LARGE TEST SETS\n(oracle thresholds)",
-                1: "MATCHED TEST SETS\n(transferred thresholds)",
-                2: "MATCHED TEST SETS\n(oracle thresholds)"
-            }[ci // 3]
-            ax.annotate(row_label, xy=(-0.25, 0.5), xycoords="axes fraction",
-                        fontsize=8, fontweight="bold", color="#555555",
-                        ha="center", va="center", rotation=90)
+            row_labels = [
+                "Large test sets",
+                "Matched test sets\n(transferred thresholds)",
+                "Matched test sets\n(oracle thresholds)"
+            ]
+            # Position row label closer to the plot
+            ax.annotate(row_labels[ci // 3], 
+                       xy=(-0.2, 0.5), xycoords="axes fraction",
+                       fontsize=9, fontweight="bold", color="black",
+                       ha="center", va="center", rotation=90)
 
-    note_str = f"  |  {note}" if note else ""
+    # Create legend with single row, placed below subplots
+    from matplotlib.patches import Patch
+    legend_elements = []
+    for i, n in enumerate(exp_names):
+        legend_elements.append(
+            Patch(facecolor=BAR_COLOR[n], edgecolor=BAR_EDGE[n], 
+                  label=MODELS[i][1].replace('\n', ' '))
+        )
+    
+    # Place legend close to the subplots with minimal gap
+    legend = fig.legend(handles=legend_elements, 
+                       loc='lower center',
+                       bbox_to_anchor=(0.5, 0.04),
+                       fontsize=10,
+                       frameon=True, 
+                       fancybox=True, 
+                       shadow=True,
+                       ncol=5,  # Single row with 5 columns
+                       handlelength=2.5,
+                       handletextpad=0.8,
+                       borderaxespad=0.5)  # Reduced padding
+
+    # Add title at the very top
     fig.suptitle(
-        f"Model comparison \u2014 {metric_label}{note_str}\n"
-        "Each model evaluated on all its own classes  |  "
-        "per-class thresholds tuned on source split",
-        fontsize=11, fontweight="bold",
+        f"{metric_label}",
+        fontsize=14, fontweight="bold", y=0.99, x=0.5
     )
-    plt.tight_layout(rect=[0.06, 0.02, 1.0, 0.95])
+    
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"Figure saved -> {out_path}")
@@ -397,9 +594,6 @@ def main():
                         help="Path to model_tests/ directory (auto-detected if omitted).")
     parser.add_argument("--out", default="results_figure.png",
                         help="Output figure filename (default: results_figure.png).")
-    parser.add_argument("--metric", default="macro_f1",
-                        choices=["macro_f1", "micro_f1", "exact_acc"],
-                        help="Metric to plot (default: macro_f1).")
     args = parser.parse_args()
 
     if args.model_tests:
@@ -415,7 +609,15 @@ def main():
             sys.exit(1)
 
     print(f"model_tests : {model_tests}")
-    print(f"metric      : {args.metric}\n")
+    print()
+
+    # Load DOC naming map so Kaytoo eBird codes are normalised to common names
+    here = Path(__file__).resolve().parent
+    ebird_to_common = _load_ebird_to_common(here.parent / "data")
+    if ebird_to_common:
+        print(f"Loaded eBird→common mapping ({len(ebird_to_common)} entries)\n")
+    else:
+        print("WARNING: DOC_bird_naming_map.csv not found; Kaytoo labels unchanged\n")
 
     # ------------------------------------------------------------------ load
     ALL_SPLITS = ("combined_doc", "combined_avianz", "matched_doc", "matched_avianz")
@@ -431,6 +633,8 @@ def main():
         for split in ALL_SPLITS:
             csv = find_csv(model_dir, layout, split)
             df  = load_csv(csv)
+            if df is not None and exp_name == "kaytoo_pretrained_seed0":
+                df = _normalize_kaytoo_df(df, ebird_to_common)
             splits[split] = df
             status = f"{len(df)} rows" if df is not None else "missing/empty"
             print(f"  {exp_name:42s}  {split:20s}  {status}")
@@ -440,112 +644,106 @@ def main():
 
     # ---------------------------------------------------------------- compute
     # CONDITIONS: 3 rows x 3 columns
-    # Row 1: Large test sets, oracle from training data
-    # Row 2: Matched test sets, thresholds transferred from large training
+    # Row 1: Large test sets, oracle from same data
+    # Row 2: Matched test sets, thresholds transferred from large sets
     # Row 3: Matched test sets, oracle from matched data
     CONDITIONS = [
-        # Row 1: Large test sets with thresholds from training
-        (
-            "Large-DOC test\n(large-DOC thresholds)",
-            ["combined_doc"],
-            "combined_doc",
-        ),
-        (
-            "Large-AviaNZ test\n(large-AviaNZ thresholds)",
-            ["combined_avianz"],
-            "combined_avianz",
-        ),
-        (
-            "Large combined test\n(combined thresholds)",
-            ["combined_doc", "combined_avianz"],
-            ["combined_doc", "combined_avianz"],
-        ),
-        # Row 2: Matched test sets with transferred thresholds
-        (
-            "Matched-DOC test\n(transferred thresholds)",
-            ["combined_doc"],
-            "matched_doc",
-        ),
-        (
-            "Matched-AviaNZ test\n(transferred thresholds)",
-            ["combined_avianz"],
-            "matched_avianz",
-        ),
-        (
-            "Matched combined test\n(transferred thresholds)",
-            ["combined_doc", "combined_avianz"],
-            ["matched_doc", "matched_avianz"],
-        ),
-        # Row 3: Matched test sets with oracle thresholds from matched data
-        (
-            "Matched-DOC test\n(oracle thresholds)",
-            ["matched_doc"],
-            "matched_doc",
-        ),
-        (
-            "Matched-AviaNZ test\n(oracle thresholds)",
-            ["matched_avianz"],
-            "matched_avianz",
-        ),
-        (
-            "Matched combined test\n(oracle thresholds)",
-            ["matched_doc", "matched_avianz"],
-            ["matched_doc", "matched_avianz"],
-        ),
+        # Row 1
+        ("DOC",      ["combined_doc"],                         "combined_doc"),
+        ("AviaNZ",   ["combined_avianz"],                      "combined_avianz"),
+        ("Combined", ["combined_doc", "combined_avianz"],      ["combined_doc", "combined_avianz"]),
+        # Row 2
+        ("DOC",      ["combined_doc"],                         "matched_doc"),
+        ("AviaNZ",   ["combined_avianz"],                      "matched_avianz"),
+        ("Combined", ["combined_doc", "combined_avianz"],      ["matched_doc", "matched_avianz"]),
+        # Row 3
+        ("DOC",      ["matched_doc"],                          "matched_doc"),
+        ("AviaNZ",   ["matched_avianz"],                       "matched_avianz"),
+        ("Combined", ["matched_doc", "matched_avianz"],        ["matched_doc", "matched_avianz"]),
     ]
 
-    metric_label = {
-        "macro_f1":  "Macro F1",
-        "micro_f1":  "Micro F1",
-        "exact_acc": "Exact Accuracy (%)",
-    }[args.metric]
+    # Build the universal class set once from all loaded data.
+    all_classes = set()
+    for splits in model_data.values():
+        for df in splits.values():
+            if df is None:
+                continue
+            for tc in df.columns:
+                if tc.startswith("true_") and int(df[tc].fillna(0).sum()) > 0:
+                    all_classes.add(tc[5:])
+    print(f"Universal class set: {len(all_classes)} classes\n")
 
-    for test_classes_only in [False, True]:
-        mode_desc = (
-            "thresholds restricted to test-set classes"
-            if test_classes_only else
-            "standard (all source classes)"
-        )
-        print(f"\n=== Mode: {mode_desc} ===")
+    print("\n=== Computing all metrics ===\n")
 
-        results = run_conditions(model_data, args.metric, CONDITIONS,
-                                 test_classes_only=test_classes_only)
-        print()
+    results = run_conditions(
+        model_data,
+        CONDITIONS,
+        all_classes
+    )
 
-        # -------------------------------------------------------- print table
-        col_w = 22
+    # -------------------------------------------------------- print tables
+
+    metrics_to_plot = [
+        ("macro_f1", "Macro F1"),
+        ("micro_f1", "Micro F1"),
+        ("exact_acc", "Exact Accuracy (%)"),
+    ]
+
+    col_w = 22
+
+    for metric, metric_label in metrics_to_plot:
+        print(f"\n{metric_label}")
+        print("=" * 150)
+
         header = f"{'Condition':<45}" + "".join(
-            f"{lbl.replace(chr(10), ' '):>{col_w}}" for _, lbl, _ in MODELS
+            f"{lbl.replace(chr(10), ' '):>{col_w}}"
+            for _, lbl, _ in MODELS
         )
-        sep = "=" * len(header)
-        print(metric_label)
-        print(sep)
+
         print(header)
         print("-" * len(header))
+
         for ci, (title, _, _) in enumerate(CONDITIONS):
-            row_label = title.replace("\n", " / ")[:44]
-            # Add a separator between rows
             if ci == 3 or ci == 6:
                 print("-" * len(header))
+
+            row_label = title.replace("\n", " ")[:44]
+
             vals = "".join(
-                f"{results[ci][n]:>{col_w}.3f}"
-                if not np.isnan(results[ci].get(n, np.nan))
-                else f"{'--':>{col_w}}"
+                (
+                    f"{results[ci][n][metric]:>{col_w}.3f}"
+                    if not np.isnan(results[ci][n][metric])
+                    else f"{'--':>{col_w}}"
+                )
                 for n, _, _ in MODELS
             )
-            print(f"{row_label:<45}{vals}")
-        print(sep)
-        print()
 
-        # -------------------------------------------------------------- figure
-        base = Path(args.out)
-        if test_classes_only:
-            out_path = base.parent / (base.stem + "_test_classes" + base.suffix)
-        else:
-            out_path = base
-        draw_figure(results, args.metric, CONDITIONS, out_path,
-                    note="thresholds restricted to test-set classes"
-                    if test_classes_only else "")
+            print(f"{row_label:<45}{vals}")
+
+        print("=" * 150)
+
+        # ---------------------------------------------------------- figure
+
+        out_path = Path(args.out)
+
+        # If user supplied results_figure.png, make:
+        # results_figure_macro_f1.png
+        # results_figure_micro_f1.png
+        # results_figure_exact_acc.png
+
+        stem = out_path.stem
+        suffix = out_path.suffix
+
+        metric_out = out_path.with_name(
+            f"{stem}_{metric}{suffix}"
+        )
+
+        draw_figure(
+            results,
+            metric,
+            CONDITIONS,
+            metric_out
+        )
 
 
 if __name__ == "__main__":

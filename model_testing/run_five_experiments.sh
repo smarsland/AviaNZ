@@ -60,7 +60,7 @@ OUT_KAYTOO="${OUT_ROOT}/kaytoo_pretrained_seed0"
 OUT_BIRDNET="${OUT_ROOT}/birdnet_pretrained_seed0"
 OUT_REGNET_DOC="${OUT_ROOT}/regnet_on_doc_bgsub"
 OUT_REGNET_COMBINED="${OUT_ROOT}/regnet_combined_bgsubtract_seed0"
-OUT_REGNET_DOC_REVERB="${OUT_ROOT}/regnet_on_doc_bgsub_reverb"
+OUT_REGNET_REVERB="${OUT_ROOT}/regnet_bgsub_reverb"
 
 PRETRAINED_MODEL="${BIRDCLEF_PRETRAINED_PATH:-BirdClefModels/model_fold0.pth}"
 
@@ -227,16 +227,16 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   touch "$marker"
 done
 
-# --------------------------------------------------- 5. RegNet / DOC + reverb
+# --------------------------------------------------- 5. RegNet + reverb
 echo ""
-echo ">>> 5/5 RegNet + bgsub + apply-reverb, DOC only"
+echo ">>> 5/5 RegNet + bgsub + apply-reverb"
 
 # Training
-training_marker="$OUT_REGNET_DOC_REVERB/training_history.json"
+training_marker="$OUT_REGNET_REVERB/training_history.json"
 if [[ "$FORCE" == false && -f "$training_marker" ]]; then
   echo "  Training already done, skipping"
 else
-  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC_REVERB" \
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_REVERB" \
     --model-type regnet \
     --pretrained "$PRETRAINED_MODEL" \
     --spec-transform Log \
@@ -249,7 +249,7 @@ fi
 # Evaluation
 for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   dataset_key="$(get_dataset_key "$folder")"
-  marker="$OUT_REGNET_DOC_REVERB/$dataset_key/done"
+  marker="$OUT_REGNET_REVERB/$dataset_key/done"
   
   if [[ "$FORCE" == false && -f "$marker" ]]; then
     echo "  Skipping $dataset_key (already evaluated)"
@@ -257,7 +257,7 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
   fi
   
   mkdir -p "$(dirname "$marker")"
-  python3 train.py "$COMBINED_DOC_HALF" "$OUT_REGNET_DOC_REVERB" \
+  python3 train.py "$COMBINED_DATASET" "$OUT_REGNET_REVERB" \
     --model-type regnet \
     --spec-transform Log \
     --bg-subtract \
