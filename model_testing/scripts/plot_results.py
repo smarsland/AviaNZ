@@ -1,27 +1,6 @@
 #!/usr/bin/env python3
 """
-Single script to produce 3x3 comparison figures for the 4 NZ bird models.
-
-Nine conditions (3 rows x 3 columns):
-  Row 1 - large test sets, oracle thresholds tuned on same data:
-    (1) Combined-DOC test,          thresholds from combined-DOC
-    (2) Combined-AviaNZ test,       thresholds from combined-AviaNZ
-    (3) Combined (DOC+AviaNZ) test, thresholds from combined (DOC+AviaNZ)
-  Row 2 - matched test sets, thresholds transferred from large sets:
-    (4) Matched-DOC test,           thresholds from combined-DOC
-    (5) Matched-AviaNZ test,        thresholds from combined-AviaNZ
-    (6) Matched combined test,      thresholds from combined (DOC+AviaNZ)
-  Row 3 - matched test sets, oracle thresholds tuned on matched sets:
-    (7) Matched-DOC test,           thresholds from Matched-DOC
-    (8) Matched-AviaNZ test,        thresholds from Matched-AviaNZ
-    (9) Matched combined test,      thresholds from Matched combined
-
-All models are evaluated against a universal class set: the union of every
-GT-positive class name across all models and all splits.  Macro F1 always
-uses that set as its denominator.  If a model cannot predict a class, its
-contribution is F1=0.  If a class is absent from the current test split,
-true labels are 0, so any prediction above threshold is an FP (F1=0 for
-that class naturally).
+Single script to produce 3x3 comparison figures.
 
 Usage:
     python3 scripts/plot_results.py
@@ -129,7 +108,7 @@ MODELS = [
     ("kaytoo_pretrained_seed0",          "Kaytoo\n(pretrained)",     "subdir"),
     ("regnet_on_doc_bgsub",              "RegNet+BgSub\n(DOC)",      "flat"),
     ("regnet_combined_bgsubtract_seed0", "RegNet+BgSub\n(combined)", "flat"),
-    ("regnet_on_doc_bgsub_reverb",       "RegNet+BgSub+Reverb\n(DOC)","flat"),
+    ("regnet_bgsub_reverb",       "RegNet+BgSub+Reverb\n(combined)","flat"),
 ]
 
 # Distinct colors for each model - all clearly different
@@ -138,14 +117,14 @@ BAR_COLOR = {
     "kaytoo_pretrained_seed0":          "#F39C12",  # Orange
     "regnet_on_doc_bgsub":              "#2E86C1",  # Medium blue
     "regnet_combined_bgsubtract_seed0": "#1A5276",  # Dark blue
-    "regnet_on_doc_bgsub_reverb":       "#85C1E9",  # Light blue
+    "regnet_bgsub_reverb":              "#85C1E9",  # Light blue
 }
 BAR_EDGE = {
     "birdnet_pretrained_seed0":         "#C0392B",
     "kaytoo_pretrained_seed0":          "#E67E22",
     "regnet_on_doc_bgsub":              "#1A5276",
     "regnet_combined_bgsubtract_seed0": "#0E2F44",
-    "regnet_on_doc_bgsub_reverb":       "#5B8CB8",
+    "regnet_bgsub_reverb":              "#5B8CB8",
 }
 
 

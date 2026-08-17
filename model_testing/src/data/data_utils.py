@@ -371,9 +371,9 @@ class SpectrogramDataset(Dataset):
             # randomly choose a range of frequencies to apply reverb to and the type etc
             freq_start = self.rng.randint(0, data.shape[0]-1)
             freq_end = self.rng.randint(freq_start+1, data.shape[0])
-            delay_mean = np.random.uniform(5, 15)
+            delay_mean = np.random.uniform(0.01, 30)
             delay_std = delay_mean # they go hand-in-hand
-            length = 30 # number of time-bins to use at most
+            length = 50 # number of time-bins to use at most
             data = apply_reverb(data, freq_start, freq_end, delay_mean, delay_std, length)
 
         # Apply spectrogram transformation on the 2D raw data, before padding.

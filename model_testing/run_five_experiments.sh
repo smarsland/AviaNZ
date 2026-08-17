@@ -262,7 +262,6 @@ for folder in "${FOUR_TEST_FOLDERS[@]}"; do
     --spec-transform Log \
     --bg-subtract \
     --kbird-prior 2.0 \
-    --apply-reverb \
     --seed 0 \
     --eval-only --test-folder "$folder"
   touch "$marker"
