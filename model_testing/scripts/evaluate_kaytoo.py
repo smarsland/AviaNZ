@@ -243,11 +243,9 @@ def evaluate_folder(test_folder, dataset_name, models, label_to_ebird, threshold
 
         # Collect raw per-class scores for ALL Kaytoo species (not just the
         # test-set classes).  This matches how trained-model predictions CSVs
-        # are written (full training-vocab columns), so _metrics_from_csv in
-        # analyze_all_results.py restricts to present_idx (test-set classes)
-        # for a fair comparison with large-vocabulary trained models.
+        # are written (full training-vocab columns).
         npy_name = wav_name.replace('.wav', '.npy')
-        # Store full path so analyze_all_results.py can locate labels.json
+        # Store full path if need to locate labels.json
         npy_path = str(Path(test_folder) / 'data' / npy_name)
         raw_rec = {'filename': npy_path, 'gt_ebird_codes': gt_codes_flat}
         for ebird_code in species_cols:
@@ -417,8 +415,7 @@ def main():
         print("No results to report.")
         return
 
-    # Write standard result.json — same format as trained-model experiments so
-    # analyze_all_results.py picks this up alongside all other results.
+    # Write standard result.json
     result_json = {
         'name': output_path.name,
         'type': 'pretrained',

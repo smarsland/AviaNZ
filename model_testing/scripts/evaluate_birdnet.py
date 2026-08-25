@@ -628,7 +628,7 @@ class BirdNETEvaluator:
             self.evaluate_folder(test_folder, dataset_name)
 
         if len(self.results) > 0:
-            # Write result.json so analyze_all_results.py picks this up
+            # Write result.json with nan
             result_json = {
                 'name': self.output_folder.name,
                 'type': 'pretrained',

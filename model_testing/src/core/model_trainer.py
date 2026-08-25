@@ -1438,7 +1438,7 @@ class Trainer:
         (from orig_test_data when provided, otherwise falls back to training vocab).
         This ensures that when a model is evaluated on a test set with a different
         vocabulary, all test-set classes appear as true_ columns and the F1/accuracy
-        metrics in analyze_all_results.py are computed over the full test vocabulary.
+        metrics are computed over the full test vocabulary.
         """
         import csv
 
