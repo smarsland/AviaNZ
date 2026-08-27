@@ -368,14 +368,11 @@ class SpectrogramDataset(Dataset):
 
         # Apply reverberation to the spectrogram
         if self.training and self.apply_reverb:
-            if np.random.rand() < 0.5:
-                # randomly choose a range of frequencies to apply reverb to and the type etc
-                freq_start = self.rng.randint(0, data.shape[0]-1)
-                freq_end = self.rng.randint(freq_start+1, data.shape[0])
-                delay_mean = np.random.uniform(0.01, 10)
-                delay_std = delay_mean * np.random.uniform(0.5, 1.5)
-                length = np.random.randint(1, 80) # number of time-bins to use at most
-                data = apply_reverb(data, freq_start, freq_end, delay_mean, delay_std, length)
+            delay_mean = self.rng.randint(1, 20)
+            delay_std = delay_mean * self.rng.uniform(0.5, 1.5)
+            length = 50
+            decay = self.rng.uniform(0.0, 1.0)
+            data = apply_reverb(data, delay_mean, delay_std, length, decay)
 
         # Apply spectrogram transformation on the 2D raw data, before padding.
         # For LogMinMax, background subtraction must happen between the log step and
